@@ -22,6 +22,23 @@ export function shortHost(): string {
 
 export const emailEnabled = () => Boolean(process.env.RESEND_API_KEY);
 
+/** Apex host without a leading www (kicksma.sh). */
+export function apexHost(): string {
+  return shortHost().replace(/^www\./, "");
+}
+
+/**
+ * Sender for all email. EMAIL_FROM wins; otherwise "Kicksmash <matches@<apex>>",
+ * which works as soon as the domain is verified in Resend. Localhost falls back
+ * to Resend's sandbox sender.
+ */
+export function emailFrom(): string {
+  if (process.env.EMAIL_FROM) return process.env.EMAIL_FROM;
+  const host = apexHost();
+  if (!host || host.startsWith("localhost") || /^\d+\.\d+\.\d+\.\d+/.test(host)) return `${APP_NAME} <onboarding@resend.dev>`;
+  return `${APP_NAME} <matches@${host}>`;
+}
+
 export const MATCH_CAPACITY = 4;
 export const MAX_TOURNAMENT_CAPACITY = 64;
 /** Matches are considered finished this long after their start time. */

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
-import { baseUrl, emailEnabled } from "@/lib/config";
+import { baseUrl, emailEnabled, emailFrom } from "@/lib/config";
 import { databaseSource, onVercel, sessionSecretSource } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +44,7 @@ export async function GET() {
       sessionSecret: sessionSecretSource(),
       cronSecret: process.env.CRON_SECRET ? "set" : "missing",
       email: emailEnabled() ? "enabled" : "disabled",
+      emailFrom: emailEnabled() ? emailFrom() : null,
       baseUrl: baseUrl(),
       hints,
     },

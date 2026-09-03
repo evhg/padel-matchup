@@ -2,7 +2,7 @@ import "server-only";
 import type { Db } from "@/db";
 import type { Event, Player, Slot } from "@/db/schema";
 import { buildIcs, calendarTitle, googleCalendarUrl } from "@/lib/calendar";
-import { APP_NAME, baseUrl, emailEnabled, shortHost } from "@/lib/config";
+import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isOccupied } from "@/lib/domain/events";
@@ -18,9 +18,9 @@ import { eventUrl, inviteUrl } from "@/lib/share";
  */
 
 function organizerAddress(): string {
-  const from = process.env.EMAIL_FROM || "";
+  const from = emailFrom();
   const m = from.match(/<([^>]+)>/);
-  return (m ? m[1] : from) || `matches@${shortHost()}`;
+  return m ? m[1] : from;
 }
 
 function rosterCount(detail: EventDetail): number {
