@@ -1,7 +1,10 @@
 import "server-only";
 import type { Db } from "@/db";
 import type { Event, Player, Slot } from "@/db/schema";
-import { buildIcs, calendarTitle, googleCalendarUrl } from "@/lib/calendar";
+import { buildIcs, googleCalendarUrl } from "@/lib/calendar";
+import { eventTitleLine, venueWithCourt } from "@/lib/labels";
+import { getOrCreatePersonalToken } from "@/lib/domain/identity";
+import { personalUrl } from "@/lib/personal";
 import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
@@ -9,7 +12,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
-import { eventVars, layout, translatorFor } from "@/lib/email/templates";
+import { layout, translatorFor } from "@/lib/email/templates";
 import { eventUrl, inviteUrl } from "@/lib/share";
 
 /**
@@ -27,19 +30,30 @@ function rosterCount(detail: EventDetail): number {
   return detail.roster.filter(isOccupied).length;
 }
 
-async function common(localeLike: string | null | undefined, ev: Event) {
+async function common(localeLike: string | null | undefined, ev: Event, recipient?: Player | null, db?: Db) {
   const { t, locale } = await translatorFor(localeLike);
   const url = eventUrl(baseUrl(), ev.code);
-  const vars = eventVars(ev, locale, t("event.venueTbd"));
+  const courtNumber = (n: string) => t("event.courtNumber", { n });
+  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
+  const vars = { day: formatEventDay(ev.startsAt, ev.tz, locale), time: formatEventTime(ev.startsAt, ev.tz, locale), venue };
   const footer = t("email.footer", { app: APP_NAME });
   const meta = [
     { label: t("email.when"), value: `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)}` },
-    { label: t("email.where"), value: ev.venueName ?? t("event.venueTbd") },
+    { label: t("email.where"), value: venue },
   ];
-  return { t, locale, url, vars, footer, meta, openLabel: t("email.openMatch") };
+  const title = eventTitleLine(ev, { fallback: t(ev.type === "match" ? "event.match" : "event.tournament"), courtNumber });
+  let personal: { label: string; url: string } | undefined;
+  if (recipient && db) {
+    try {
+      personal = { label: t("email.personalLink"), url: personalUrl(baseUrl(), await getOrCreatePersonalToken(db, recipient.id)) };
+    } catch (e) {
+      console.warn("[notify] personal link unavailable", e);
+    }
+  }
+  return { t, locale, url, vars, footer, meta, openLabel: t("email.openMatch"), title, venue, personal };
 }
 
-function icsFor(ev: Event, title: string, url: string, creator: Player, attendee: { name: string; email: string }, method: "REQUEST" | "CANCEL") {
+function icsFor(ev: Event, title: string, url: string, creator: Player, attendee: { name: string; email: string }, method: "REQUEST" | "CANCEL", extra?: { location?: string; personal?: { label: string; url: string } }) {
   return {
     method,
     content: buildIcs({
@@ -50,6 +64,8 @@ function icsFor(ev: Event, title: string, url: string, creator: Player, attendee
       attendee,
       method,
       domain: shortHost(),
+      location: extra?.location,
+      extraDescription: extra?.personal ? [`${extra.personal.label}: ${extra.personal.url}`] : undefined,
     }),
   };
 }
@@ -59,29 +75,25 @@ export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind
   if (!emailEnabled() || !player.email) return;
   const creator = await getPlayer(db, ev.creatorPlayerId);
   if (!creator) return;
-  const c = await common(player.locale, ev);
-  const title = calendarTitle(ev, c.t(ev.type === "match" ? "event.match" : "event.tournament"));
+  const c = await common(player.locale, ev, player, db);
   const ns = kind === "promoted" ? "email.promotedPlayer" : "email.calendarInvite";
   const { html, text } = layout({
     heading: c.t(`${ns}.heading` as "email.calendarInvite.heading"),
     body: c.t(`${ns}.body` as "email.calendarInvite.body", c.vars),
     meta: c.meta,
-    cta: { label: c.t("event.addToCalendar"), url: googleUrl(ev, title, c.url) },
+    cta: { label: c.t("event.addToCalendar"), url: googleCalendarUrl(ev, { title: c.title, url: c.url, tz: ev.tz, location: c.venue }) },
     footer: c.footer,
     eventUrl: c.url,
     openLabel: c.openLabel,
+    personal: c.personal,
   });
   await sendEmail({
     to: player.email,
     subject: c.t(`${ns}.subject` as "email.calendarInvite.subject", c.vars),
     html,
     text,
-    ics: icsFor(ev, title, c.url, creator, { name: player.displayName, email: player.email }, "REQUEST"),
+    ics: icsFor(ev, c.title, c.url, creator, { name: player.displayName, email: player.email }, "REQUEST", { location: c.venue, personal: c.personal }),
   });
-}
-
-function googleUrl(ev: Event, title: string, url: string) {
-  return googleCalendarUrl(ev, { title, url, tz: ev.tz });
 }
 
 type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" | "promoted";
@@ -93,7 +105,7 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
   const creator = await getPlayer(db, ev.creatorPlayerId);
   if (!creator?.email) return;
   const detail = await getEventDetail(db, ev);
-  const c = await common(creator.locale, ev);
+  const c = await common(creator.locale, ev, creator, db);
   const vars = { ...c.vars, name: actorName, count: rosterCount(detail), capacity: ev.capacity };
   const subjectKey = (kind === "waitlisted" ? "joined" : kind) as Exclude<CreatorKind, "waitlisted">;
   const subject = c.t(`email.creator.${subjectKey}Subject`, vars);
@@ -106,6 +118,7 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
     footer: c.footer,
     eventUrl: c.url,
     openLabel: c.openLabel,
+    personal: c.personal,
   });
   await sendEmail({ to: creator.email, subject, html, text });
 }
@@ -125,8 +138,8 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
   const recipients = participantsWithEmail(detail.roster);
   await Promise.all(
     recipients.map(async (r) => {
-      const c = await common(r.locale, ev);
-      const title = calendarTitle(ev, c.t(ev.type === "match" ? "event.match" : "event.tournament"));
+      const c = await common(r.locale, ev, r.playerId ? await getPlayer(db, r.playerId) : null, db);
+      const title = c.title;
       const { html, text } = layout({
         heading: c.t("email.updated.heading"),
         body: c.t("email.updated.body", c.vars),
@@ -141,7 +154,7 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
         subject: c.t("email.updated.subject", c.vars),
         html,
         text,
-        ics: icsFor(ev, title, c.url, detail.creator, { name: r.name, email: r.email }, "REQUEST"),
+        ics: icsFor(ev, title, c.url, detail.creator, { name: r.name, email: r.email }, "REQUEST", { location: c.venue, personal: c.personal }),
       });
     }),
   );
@@ -154,7 +167,7 @@ export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
   await Promise.all(
     recipients.map(async (r) => {
       const c = await common(r.locale, ev);
-      const title = calendarTitle(ev, c.t(ev.type === "match" ? "event.match" : "event.tournament"));
+      const title = c.title;
       const { html, text } = layout({
         heading: c.t("email.cancelled.heading"),
         body: c.t("email.cancelled.body", { ...c.vars, organizer: detail.creator.displayName }),
@@ -182,7 +195,7 @@ export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string |
   const creator = await getPlayer(db, ev.creatorPlayerId);
   if (!creator) return;
   const c = await common(p.locale, ev);
-  const title = calendarTitle(ev, c.t(ev.type === "match" ? "event.match" : "event.tournament"));
+  const title = c.title;
   const { html, text } = layout({
     heading: c.t("activity.removed", { name: p.displayName }),
     body: c.t("email.footer", { app: APP_NAME }),
@@ -232,4 +245,20 @@ export async function sendScoreReminder(ev: Event, creator: Player): Promise<boo
     openLabel: c.openLabel,
   });
   return sendEmail({ to: creator.email, subject: c.t("email.scoreReminder.subject"), html, text });
+}
+
+/** One-time code for restoring history on a new device. */
+export async function sendEmailCode(email: string, code: string, localeLike: string | null | undefined): Promise<boolean> {
+  if (!emailEnabled()) return false;
+  const { t } = await translatorFor(localeLike);
+  const base = baseUrl();
+  const { html, text } = layout({
+    heading: t("email.code.heading"),
+    body: t("email.code.body", { code }),
+    meta: [{ label: t("email.code.codeLabel"), value: code }],
+    footer: t("email.code.footer"),
+    eventUrl: `${base}/me`,
+    openLabel: t("common.myMatches"),
+  });
+  return sendEmail({ to: email, subject: t("email.code.subject", { code }), html, text });
 }

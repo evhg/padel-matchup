@@ -67,7 +67,7 @@ export async function removeAction(code: string, slotId: string): Promise<Action
 
 export async function reserveAction(
   code: string,
-  input: { name: string; email?: string; phone?: string },
+  input: { name: string; email?: string; phone?: string; slotId?: string },
 ): Promise<ActionResult<{ inviteUrl: string; inviteCode: string; name: string }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
@@ -77,6 +77,7 @@ export async function reserveAction(
       name: input.name,
       email: input.email,
       phone: input.phone,
+      slotId: input.slotId,
     });
     revalidatePath(`/${code}`);
     return { inviteUrl: inviteUrl(baseUrl(), code, slot.inviteCode!), inviteCode: slot.inviteCode!, name: slot.invitedName ?? input.name };

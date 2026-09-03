@@ -15,6 +15,13 @@
       "when": 1788438155965,
       "tag": "0001_americano",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788448826095,
+      "tag": "0002_identity",
+      "breakpoints": true
     }
   ]
 }

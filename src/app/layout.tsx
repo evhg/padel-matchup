@@ -37,6 +37,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale}>
       <body className="min-h-dvh">
+        {/* Per-user manifest: start_url is the visitor's personal link, so a home-screen shortcut is always signed in. */}
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <NextIntlClientProvider messages={messages}>
           {children}
           <IdentitySync player={me} />

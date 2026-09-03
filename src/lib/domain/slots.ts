@@ -179,7 +179,7 @@ export async function removeFromSlot(
 /** Creator reserves a roster slot by name; returns the slot with its personal invite code. */
 export async function reserveSlot(
   db: Db,
-  input: { eventId: string; actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; now?: Date },
+  input: { eventId: string; actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; now?: Date },
 ): Promise<{ slot: Slot; event: Event }> {
   const now = input.now ?? new Date();
   const name = normalizeName(input.name);
@@ -187,13 +187,14 @@ export async function reserveSlot(
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
     assertLive(ev, now);
+    const claimable = and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"]));
     const [target] = await tx
       .select()
       .from(slots)
-      .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"])))
+      .where(input.slotId ? and(claimable, eq(slots.id, input.slotId)) : claimable)
       .orderBy(asc(slots.position))
       .limit(1);
-    if (!target) throw new DomainError("full");
+    if (!target) throw new DomainError(input.slotId ? "invalid" : "full", input.slotId ? "slot_taken" : undefined);
 
     let slot: Slot | undefined;
     for (let attempt = 0; attempt < 5 && !slot; attempt++) {

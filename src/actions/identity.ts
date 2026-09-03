@@ -5,11 +5,14 @@ import { cookies } from "next/headers";
 import { after } from "next/server";
 import { getDb } from "@/db";
 import { LOCALE_COOKIE, toLocale } from "@/i18n/config";
+import { baseUrl, emailEnabled } from "@/lib/config";
+import { consumeEmailCode, findPlayerByPersonalToken, issueEmailCode, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
 import { getPlayer, normalizeEmail, updatePlayer } from "@/lib/domain/players";
 import { getEventByCode } from "@/lib/domain/queries";
-import { sendCalendarInvite } from "@/lib/notify";
-import { getSessionPlayer, setSessionPlayer } from "@/lib/session";
-import { requirePlayer, runA, type ActionResult } from "./shared";
+import { sendCalendarInvite, sendEmailCode } from "@/lib/notify";
+import { personalUrl } from "@/lib/personal";
+import { getSessionPlayer, getSessionPlayerId, setSessionPlayer } from "@/lib/session";
+import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
 export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
 
@@ -43,12 +46,13 @@ export async function updateMyName(name: string): Promise<ActionResult<PublicPla
  * Self-entered email (decision 9). If `eventCode` is given and the player is
  * in that event, a calendar invite goes out right away.
  */
-export async function updateMyEmail(email: string, eventCode?: string): Promise<ActionResult<PublicPlayer>> {
+export async function updateMyEmail(email: string, eventCode?: string): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new Error("no identity");
     const normalized = normalizeEmail(email);
+    const others = normalized ? (await playersWithEmail(db, normalized)).filter((o) => o.id !== me.id) : [];
     const p = (await updatePlayer(db, me.id, { email: normalized })) ?? me;
     if (normalized && eventCode) {
       const detail = await getEventByCode(db, eventCode);
@@ -59,6 +63,59 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
       revalidatePath(`/${eventCode}`);
     }
     revalidatePath("/me");
+    return { ...pub(p), knownElsewhere: others.length > 0 };
+  });
+}
+
+/** Restore step 1: email a 6-digit code if any identity carries that email. */
+export async function requestRestoreCode(email: string): Promise<ActionResult<{ known: boolean; sent: boolean }>> {
+  return runA(async () => {
+    if (!emailEnabled()) throw new ActionFailure("email_disabled");
+    const db = await getDb();
+    const normalized = normalizeEmail(email);
+    if (!normalized) throw new ActionFailure("invalid");
+    const owners = await playersWithEmail(db, normalized);
+    if (owners.length === 0) return { known: false, sent: false };
+    const issued = await issueEmailCode(db, normalized);
+    if (!issued) throw new ActionFailure("too_many");
+    const locale = (await getSessionPlayer(db))?.locale ?? owners[0].locale;
+    const sent = await sendEmailCode(issued.email, issued.code, locale);
+    return { known: true, sent };
+  });
+}
+
+/** Restore step 2: verify the code, merge every identity with that email, sign in as the result. */
+export async function verifyRestoreCode(email: string, code: string): Promise<ActionResult<PublicPlayer>> {
+  return runA(async () => {
+    const db = await getDb();
+    const verified = await consumeEmailCode(db, email, code);
+    const currentId = await getSessionPlayerId();
+    const player = await restoreByEmail(db, verified, currentId);
+    await setSessionPlayer(player.id);
+    revalidatePath("/", "layout");
+    return pub(player);
+  });
+}
+
+export async function rotatePersonalLinkAction(): Promise<ActionResult<{ url: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const token = await rotatePersonalToken(db, me.id);
+    revalidatePath("/me");
+    return { url: personalUrl(baseUrl(), token) };
+  });
+}
+
+/** Called by the personal-link page so the device that opened it gets the cookie. */
+export async function adoptPersonalToken(token: string): Promise<ActionResult<PublicPlayer | null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const p = await findPlayerByPersonalToken(db, token);
+    if (!p) return null;
+    const currentId = await getSessionPlayerId();
+    if (currentId !== p.id) await setSessionPlayer(p.id);
     return pub(p);
   });
 }

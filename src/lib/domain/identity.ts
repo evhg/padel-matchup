@@ -1,0 +1,194 @@
+import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { createHash, randomInt } from "node:crypto";
+import { customAlphabet } from "nanoid";
+import type { Db } from "@/db";
+import { activity, emailCodes, events, players, scores, slots, tournamentMatches, tournamentRounds, venues, type Player } from "@/db/schema";
+import { CODE_ALPHABET } from "@/lib/codes";
+import { DomainError } from "./errors";
+import { normalizeEmail } from "./players";
+
+/**
+ * Cross-device identity without accounts:
+ *  - a personal link (/p/{token}) that signs the player in on any device
+ *  - one-time email codes that prove ownership of an email and merge every
+ *    identity carrying that email into one
+ */
+
+const newToken = customAlphabet(CODE_ALPHABET, 32);
+export const CODE_TTL_MS = 10 * 60 * 1000;
+export const CODE_MAX_ATTEMPTS = 5;
+export const CODES_PER_HOUR = 5;
+
+export const isValidPersonalToken = (s: string) => s.length === 32 && new RegExp(`^[${CODE_ALPHABET}]+$`).test(s);
+
+export async function getOrCreatePersonalToken(db: Db, playerId: string): Promise<string> {
+  const [p] = await db.select({ token: players.personalToken }).from(players).where(eq(players.id, playerId));
+  if (!p) throw new DomainError("not_found");
+  if (p.token) return p.token;
+  return rotatePersonalToken(db, playerId);
+}
+
+export async function rotatePersonalToken(db: Db, playerId: string): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const token = newToken();
+    const [clash] = await db.select({ id: players.id }).from(players).where(eq(players.personalToken, token)).limit(1);
+    if (clash) continue;
+    await db.update(players).set({ personalToken: token }).where(eq(players.id, playerId));
+    return token;
+  }
+  throw new Error("Could not allocate a personal token");
+}
+
+export async function findPlayerByPersonalToken(db: Db, token: string): Promise<Player | null> {
+  if (!isValidPersonalToken(token)) return null;
+  const [p] = await db.select().from(players).where(eq(players.personalToken, token)).limit(1);
+  return p ?? null;
+}
+
+const hashCode = (email: string, code: string) => createHash("sha256").update(`${email}:${code}`).digest("hex");
+
+export async function playersWithEmail(db: Db, email: string): Promise<Player[]> {
+  return db.select().from(players).where(eq(players.email, email)).orderBy(asc(players.createdAt));
+}
+
+/**
+ * Issues a 6-digit code for `email`. Returns null when rate-limited.
+ * The caller decides whether the email is known and whether to send anything.
+ */
+export async function issueEmailCode(db: Db, rawEmail: string, now = new Date()): Promise<{ email: string; code: string } | null> {
+  const email = normalizeEmail(rawEmail);
+  if (!email) throw new DomainError("invalid", "email");
+  const since = new Date(now.getTime() - 60 * 60 * 1000);
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(emailCodes)
+    .where(and(eq(emailCodes.email, email), gt(emailCodes.createdAt, since)));
+  if (Number(n) >= CODES_PER_HOUR) return null;
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  await db.insert(emailCodes).values({ email, codeHash: hashCode(email, code), expiresAt: new Date(now.getTime() + CODE_TTL_MS) });
+  return { email, code };
+}
+
+/** Consumes a valid code; throws DomainError("invalid") on a wrong/expired one. */
+export async function consumeEmailCode(db: Db, rawEmail: string, code: string, now = new Date()): Promise<string> {
+  const email = normalizeEmail(rawEmail);
+  if (!email) throw new DomainError("invalid", "email");
+  const clean = code.replace(/\D/g, "");
+  const candidates = await db
+    .select()
+    .from(emailCodes)
+    .where(and(eq(emailCodes.email, email), isNull(emailCodes.consumedAt), gt(emailCodes.expiresAt, now)))
+    .orderBy(asc(emailCodes.createdAt));
+  const live = candidates.filter((c) => c.attempts < CODE_MAX_ATTEMPTS);
+  if (live.length === 0) throw new DomainError("invalid", "code_expired");
+  const match = clean.length === 6 ? live.find((c) => c.codeHash === hashCode(email, clean)) : undefined;
+  if (!match) {
+    // Counted outside any transaction so a wrong guess is never rolled back.
+    await db
+      .update(emailCodes)
+      .set({ attempts: sql`${emailCodes.attempts} + 1` })
+      .where(
+        inArray(
+          emailCodes.id,
+          live.map((c) => c.id),
+        ),
+      );
+    throw new DomainError("invalid", "code_wrong");
+  }
+  await db.update(emailCodes).set({ consumedAt: now }).where(and(eq(emailCodes.email, email), isNull(emailCodes.consumedAt)));
+  return email;
+}
+
+/**
+ * Folds every player in `from` into `into`: events organized, slots, scores,
+ * activity, venues, tournament pairings and standings. Duplicate membership
+ * in the same event keeps `into`'s slot and frees the other.
+ */
+export async function mergePlayers(db: Db, into: string, from: string[]): Promise<void> {
+  const sources = [...new Set(from)].filter((id) => id !== into);
+  if (sources.length === 0) return;
+  await db.transaction(async (tx) => {
+    const [target] = await tx.select().from(players).where(eq(players.id, into));
+    if (!target) throw new DomainError("not_found");
+    const srcRows = await tx.select().from(players).where(inArray(players.id, sources));
+
+    await tx.update(events).set({ creatorPlayerId: into }).where(inArray(events.creatorPlayerId, sources));
+
+    const mine = await tx.select({ eventId: slots.eventId }).from(slots).where(eq(slots.playerId, into));
+    const mineEvents = new Set(mine.map((m) => m.eventId));
+    const theirs = await tx.select().from(slots).where(inArray(slots.playerId, sources));
+    for (const s of theirs) {
+      if (mineEvents.has(s.eventId)) {
+        const [ev] = await tx.select({ capacity: events.capacity }).from(events).where(eq(events.id, s.eventId));
+        if (ev && s.position > ev.capacity) await tx.delete(slots).where(eq(slots.id, s.id));
+        else
+          await tx
+            .update(slots)
+            .set({ playerId: null, status: "empty", kind: "open", inviteCode: null, invitedName: null, invitedEmail: null, invitedPhone: null, invitedAt: null, lastRemindedAt: null, joinedAt: null, team: null })
+            .where(eq(slots.id, s.id));
+      } else {
+        await tx.update(slots).set({ playerId: into }).where(eq(slots.id, s.id));
+        mineEvents.add(s.eventId);
+      }
+    }
+
+    await tx.update(scores).set({ enteredByPlayerId: into }).where(inArray(scores.enteredByPlayerId, sources));
+    await tx.update(activity).set({ actorPlayerId: into }).where(inArray(activity.actorPlayerId, sources));
+    for (const col of [tournamentMatches.a1, tournamentMatches.a2, tournamentMatches.b1, tournamentMatches.b2] as const) {
+      await tx.update(tournamentMatches).set({ [col.name === "a1" ? "a1" : col.name === "a2" ? "a2" : col.name === "b1" ? "b1" : "b2"]: into } as never).where(inArray(col, sources));
+    }
+    await tx.update(tournamentMatches).set({ enteredByPlayerId: into }).where(inArray(tournamentMatches.enteredByPlayerId, sources));
+
+    const rounds = await tx.select({ id: tournamentRounds.id, resting: tournamentRounds.resting }).from(tournamentRounds);
+    for (const r of rounds) {
+      if (r.resting.some((id) => sources.includes(id))) {
+        await tx.update(tournamentRounds).set({ resting: [...new Set(r.resting.map((id) => (sources.includes(id) ? into : id)))] }).where(eq(tournamentRounds.id, r.id));
+      }
+    }
+    const withStandings = await tx.select({ id: events.id, standings: events.standings }).from(events).where(sql`${events.standings} is not null`);
+    for (const e of withStandings) {
+      if (e.standings?.some((id) => sources.includes(id))) {
+        await tx.update(events).set({ standings: [...new Set(e.standings.map((id) => (sources.includes(id) ? into : id)))] }).where(eq(events.id, e.id));
+      }
+    }
+
+    const myVenues = await tx.select({ name: venues.name }).from(venues).where(eq(venues.creatorPlayerId, into));
+    const names = new Set(myVenues.map((v) => v.name));
+    const theirVenues = await tx.select().from(venues).where(inArray(venues.creatorPlayerId, sources));
+    for (const v of theirVenues) {
+      if (names.has(v.name)) await tx.delete(venues).where(eq(venues.id, v.id));
+      else {
+        await tx.update(venues).set({ creatorPlayerId: into }).where(eq(venues.id, v.id));
+        names.add(v.name);
+      }
+    }
+
+    const patch: Partial<typeof players.$inferInsert> = {};
+    if (!target.email) patch.email = srcRows.find((s) => s.email)?.email ?? null;
+    if (!target.phone) patch.phone = srcRows.find((s) => s.phone)?.phone ?? null;
+    if (Object.keys(patch).length) await tx.update(players).set(patch).where(eq(players.id, into));
+
+    await tx.delete(players).where(inArray(players.id, sources));
+  });
+}
+
+/**
+ * After a code is verified: choose the canonical player for `email`, fold
+ * every other player with that email plus the current device identity into
+ * it, and mark the email verified. Returns the canonical player.
+ */
+export async function restoreByEmail(db: Db, email: string, currentPlayerId: string | null, now = new Date()): Promise<Player> {
+  const owners = await playersWithEmail(db, email);
+  const current = currentPlayerId ? ((await db.select().from(players).where(eq(players.id, currentPlayerId)).limit(1))[0] ?? null) : null;
+  const pool = [...owners];
+  if (current && !pool.some((p) => p.id === current.id)) pool.push(current);
+  if (pool.length === 0) throw new DomainError("not_found");
+  const canonical = pool.find((p) => p.emailVerifiedAt && p.email === email) ?? pool.find((p) => p.email === email) ?? pool[0];
+  await mergePlayers(
+    db,
+    canonical.id,
+    pool.map((p) => p.id),
+  );
+  const [updated] = await db.update(players).set({ email, emailVerifiedAt: canonical.emailVerifiedAt ?? now }).where(eq(players.id, canonical.id)).returning();
+  return updated;
+}

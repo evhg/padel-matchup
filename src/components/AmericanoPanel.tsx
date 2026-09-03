@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
 import { POINTS_PRESETS } from "@/lib/domain/americano";
+import { PlayAgainButton } from "./PlayAgainButton";
 
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
@@ -22,6 +23,7 @@ export function AmericanoPanel({
   participantCount,
   rounds,
   standings,
+  canPlayAgain = false,
 }: {
   code: string;
   isCreator: boolean;
@@ -35,6 +37,7 @@ export function AmericanoPanel({
   participantCount: number;
   rounds: PanelRound[];
   standings: PanelStanding[];
+  canPlayAgain?: boolean;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
@@ -181,6 +184,11 @@ export function AmericanoPanel({
               {t("americano.unlock")}
             </button>
           )}
+        </div>
+      )}
+      {locked && canPlayAgain && (
+        <div className="mt-4 border-t border-line pt-4">
+          <PlayAgainButton code={code} />
         </div>
       )}
     </section>

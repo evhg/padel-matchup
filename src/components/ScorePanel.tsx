@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { tally } from "@/lib/domain/scores";
+import { PlayAgainButton } from "./PlayAgainButton";
 
 type P = { id: string; name: string; team: "a" | "b" | null };
 type S = { setNumber: number; sideA: number; sideB: number };
@@ -16,6 +17,7 @@ export function ScorePanel({
   reason,
   locked,
   enteredBy,
+  canPlayAgain = false,
 }: {
   code: string;
   scores: S[];
@@ -24,6 +26,8 @@ export function ScorePanel({
   reason: "not_started" | "cancelled" | "not_participant" | "locked" | null;
   locked: boolean;
   enteredBy: string | null;
+  /** Creator or participant: offer "Play again next week" once a result exists. */
+  canPlayAgain?: boolean;
 }) {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
@@ -94,6 +98,11 @@ export function ScorePanel({
             </div>
           </div>
           {enteredBy && !locked && <p className="mt-3 text-xs text-faint">{t("score.enteredBy", { name: enteredBy })}</p>}
+          {canPlayAgain && (
+            <div className="mt-4 border-t border-line pt-4">
+              <PlayAgainButton code={code} />
+            </div>
+          )}
         </div>
       )}
 

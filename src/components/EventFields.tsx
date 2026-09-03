@@ -14,6 +14,7 @@ export type EventFormValues = {
   tz: string;
   venueName: string;
   venueMapUrl: string;
+  court: string;
   note: string;
   capacity: number;
   whenFull: "waitlist" | "closed";
@@ -132,6 +133,13 @@ export function EventFields({
       </div>
 
       <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />
+
+      <div className="-mt-2">
+        <label className="label">
+          {t("create.court")} <span className="font-normal">({t("common.optional")})</span>
+        </label>
+        <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
+      </div>
 
       {values.type === "tournament" && (
         <div>

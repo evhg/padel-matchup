@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { CalendarButtons } from "@/components/CalendarButtons";
 import { Header } from "@/components/Header";
 import { InviteActions } from "@/components/InviteActions";
 import { getDb } from "@/db";
@@ -10,6 +11,7 @@ import { isValidInviteCode, isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { formatEventDayLong, formatEventTime, tzLabel } from "@/lib/dates";
 import { getSlotByInviteCode } from "@/lib/domain/queries";
+import { eventTitleLine, venueWithCourt } from "@/lib/labels";
 import { eventUrl } from "@/lib/share";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -55,8 +57,9 @@ export default async function InvitePage({ params, searchParams }: Props) {
   const mine = Boolean(me && slot.playerId === me.id);
   const state: "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled" =
     ev.status === "cancelled" ? "cancelled" : slot.status === "invited" ? "invited" : slot.status === "declined" ? "declined" : (slot.status === "confirmed" || slot.status === "joined") && mine ? "confirmed_mine" : "gone";
-  const venue = ev.venueName ?? t("event.venueTbd");
-  const calendarHref = googleCalendarUrl(ev, { title, url: eventUrl(baseUrl(), code), tz: ev.tz, venueLabel: venue });
+  const courtNumber = (n: string) => t("event.courtNumber", { n });
+  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
+  const calendarHref = googleCalendarUrl(ev, { title: eventTitleLine(ev, { fallback: t(ev.type === "match" ? "event.match" : "event.tournament"), courtNumber }), url: eventUrl(baseUrl(), code), tz: ev.tz, location: venue });
 
   return (
     <>
@@ -98,9 +101,7 @@ export default async function InvitePage({ params, searchParams }: Props) {
             <>
               <h2 className="text-xl font-extrabold text-ok">✓ {t("invitePage.confirmed")}</h2>
               <p className="mt-1 text-sm text-muted">{t("invitePage.confirmedHelp")}</p>
-              <a href={calendarHref} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-4 w-full">
-                📅 {t("event.addToCalendar")}
-              </a>
+              <CalendarButtons googleHref={calendarHref} icsHref={`/${code}/calendar.ics`} className="mt-4" />
               <Link href={eventHref} className="btn-primary mt-2 w-full">
                 {t("invitePage.goToEvent")}
               </Link>

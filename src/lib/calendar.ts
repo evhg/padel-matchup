@@ -2,17 +2,17 @@ import { EVENT_DURATION_MS } from "@/lib/config";
 import { icsStamp } from "@/lib/dates";
 import type { Event } from "@/db/schema";
 
-export type CalendarEvent = Pick<Event, "id" | "code" | "title" | "startsAt" | "venueName" | "venueMapUrl" | "note" | "type" | "icsSequence" | "status">;
+export type CalendarEvent = Pick<Event, "id" | "code" | "title" | "startsAt" | "venueName" | "venueMapUrl" | "court" | "note" | "type" | "icsSequence" | "status">;
 
 export function calendarTitle(ev: Pick<Event, "title" | "type">, fallback: string): string {
   return ev.title?.trim() || fallback;
 }
 
 /** Google Calendar "render" URL — works with zero email. */
-export function googleCalendarUrl(ev: CalendarEvent, opts: { title: string; url: string; tz: string; venueLabel?: string }): string {
+export function googleCalendarUrl(ev: CalendarEvent, opts: { title: string; url: string; tz: string; venueLabel?: string; location?: string }): string {
   const end = new Date(ev.startsAt.getTime() + EVENT_DURATION_MS);
   const details = [ev.note, opts.url].filter(Boolean).join("\n\n");
-  const venue = ev.venueName ?? opts.venueLabel ?? "";
+  const venue = opts.location ?? ev.venueName ?? opts.venueLabel ?? "";
   const location = ev.venueMapUrl ? `${venue} (${ev.venueMapUrl})` : venue;
   const p = new URLSearchParams({
     action: "TEMPLATE",
@@ -51,8 +51,11 @@ export type IcsInput = {
   url: string;
   organizer: { name: string; email: string };
   attendee?: { name: string; email: string };
-  method: "REQUEST" | "CANCEL";
+  method: "REQUEST" | "CANCEL" | "PUBLISH";
   domain: string;
+  /** Extra lines appended to DESCRIPTION (e.g. the recipient's personal link). */
+  extraDescription?: string[];
+  location?: string;
 };
 
 /** Stable UID per event so updates/cancellations replace the original entry. */
@@ -60,6 +63,7 @@ export const icsUid = (eventId: string, domain: string) => `${eventId}@${domain}
 
 export function buildIcs(input: IcsInput): string {
   const { event, title, url, organizer, attendee, method, domain } = input;
+  const location = input.location ?? event.venueName ?? "";
   const end = new Date(event.startsAt.getTime() + EVENT_DURATION_MS);
   const cancelled = method === "CANCEL" || event.status === "cancelled";
   const lines: string[] = [
@@ -75,8 +79,8 @@ export function buildIcs(input: IcsInput): string {
     `DTSTART:${icsStamp(event.startsAt)}`,
     `DTEND:${icsStamp(end)}`,
     `SUMMARY:${icsEscape(title)}`,
-    ...(event.venueName ? [`LOCATION:${icsEscape(event.venueName)}`] : []),
-    `DESCRIPTION:${icsEscape([event.note, url].filter(Boolean).join("\n\n"))}`,
+    ...(location ? [`LOCATION:${icsEscape(location)}`] : []),
+    `DESCRIPTION:${icsEscape([event.note, url, ...(input.extraDescription ?? [])].filter(Boolean).join("\n\n"))}`,
     `URL:${url}`,
     `STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
     `ORGANIZER;CN=${icsEscape(organizer.name)}:mailto:${organizer.email}`,

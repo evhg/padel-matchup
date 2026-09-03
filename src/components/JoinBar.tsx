@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { startTransition, useState, useTransition } from "react";
+import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { joinAction, leaveAction } from "@/actions/slots";
+import { JOIN_EVENT } from "./ReserveSheet";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past";
 
@@ -48,6 +49,19 @@ export function JoinBar({
       });
     });
   };
+
+  // Tapping an open spot in the roster triggers the same flow as the button.
+  const onTap = useRef<() => void>(() => {});
+  onTap.current = () => {
+    if (state !== "join" && state !== "join_waitlist") return;
+    if (hasIdentity) join();
+    else setSheet(true);
+  };
+  useEffect(() => {
+    const h = () => onTap.current();
+    window.addEventListener(JOIN_EVENT, h);
+    return () => window.removeEventListener(JOIN_EVENT, h);
+  }, []);
 
   if (state === "cancelled" || state === "past") return null;
 
