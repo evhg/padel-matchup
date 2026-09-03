@@ -10,6 +10,7 @@ import { shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getEventByCode } from "@/lib/domain/queries";
+import { venueWithCourt } from "@/lib/labels";
 
 export const alt = "Padel match";
 export const size = { width: 1200, height: 630 };
@@ -77,7 +78,7 @@ export default async function OgImage({ params }: { params: Promise<{ code: stri
               <div style={{ fontSize: 132, fontWeight: 800, letterSpacing: -6, lineHeight: 1 }}>{time}</div>
               <div style={{ display: "flex", flexDirection: "column", paddingBottom: 14 }}>
                 <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1 }}>{day}</div>
-                <div style={{ fontSize: 34, color: "#5B6470", maxWidth: 640, overflow: "hidden", whiteSpace: "nowrap" }}>{ev.venueName ?? t("og.venueTbd")}</div>
+                <div style={{ fontSize: 34, color: "#5B6470", maxWidth: 640, overflow: "hidden", whiteSpace: "nowrap" }}>{venueWithCourt(ev, { venueTbd: t("og.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) })}</div>
               </div>
             </div>
           </div>

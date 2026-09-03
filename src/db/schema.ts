@@ -39,14 +39,44 @@ export const activityVerbEnum = pgEnum("activity_verb", [
 // ---------------------------------------------------------------------------
 // players — identity is a UUID in a signed cookie; no auth, no passwords.
 // ---------------------------------------------------------------------------
-export const players = pgTable("players", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  displayName: text("display_name").notNull(),
-  phone: text("phone"),
-  email: text("email"),
-  locale: text("locale").notNull().default("en"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const players = pgTable(
+  "players",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    displayName: text("display_name").notNull(),
+    phone: text("phone"),
+    email: text("email"),
+    /** Set once the player proved ownership of `email` with a one-time code. */
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    /** Long random token behind the personal link /p/{token}; signs in on any device. */
+    personalToken: text("personal_token"),
+    locale: text("locale").notNull().default("en"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("players_personal_token_idx")
+      .on(t.personalToken)
+      .where(sql`${t.personalToken} is not null`),
+    index("players_email_idx").on(t.email),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// email_codes — one-time codes proving ownership of an email (restore/merge).
+// ---------------------------------------------------------------------------
+export const emailCodes = pgTable(
+  "email_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("email_codes_email_idx").on(t.email, t.createdAt)],
+);
 
 // ---------------------------------------------------------------------------
 // events — a match (exactly 4) or a tournament (creator-set capacity).
@@ -65,6 +95,8 @@ export const events = pgTable(
     /** Optional: null means "court TBD". */
     venueName: text("venue_name"),
     venueMapUrl: text("venue_map_url"),
+    /** Optional court within the venue ("3", "Centre court"). */
+    court: text("court"),
     capacity: integer("capacity").notNull(),
     whenFull: whenFullEnum("when_full").notNull().default("waitlist"),
     note: text("note"),
@@ -287,6 +319,7 @@ export type Venue = typeof venues.$inferSelect;
 export type Activity = typeof activity.$inferSelect;
 export type TournamentRound = typeof tournamentRounds.$inferSelect;
 export type TournamentMatch = typeof tournamentMatches.$inferSelect;
+export type EmailCode = typeof emailCodes.$inferSelect;
 export type EventType = Event["type"];
 export type EventStatus = Event["status"];
 export type SlotStatus = Slot["status"];

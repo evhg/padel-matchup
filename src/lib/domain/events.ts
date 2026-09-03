@@ -15,6 +15,7 @@ export type CreateEventInput = {
   /** Optional: empty means "court TBD". */
   venueName?: string | null;
   venueMapUrl?: string | null;
+  court?: string | null;
   capacity?: number;
   whenFull: "waitlist" | "closed";
   note?: string | null;
@@ -81,6 +82,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           tz: input.tz,
           venueName,
           venueMapUrl,
+          court: cleanText(input.court, 40),
           capacity,
           whenFull: input.whenFull === "closed" ? "closed" : "waitlist",
           note: cleanText(input.note, 500),
@@ -129,6 +131,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     tz: src.tz,
     venueName: src.venueName,
     venueMapUrl: src.venueMapUrl,
+    court: src.court,
     capacity: src.capacity,
     whenFull: src.whenFull,
     note: src.note,
@@ -143,6 +146,7 @@ export type UpdateEventInput = {
   tz?: string;
   venueName?: string | null;
   venueMapUrl?: string | null;
+  court?: string | null;
   note?: string | null;
   whenFull?: "waitlist" | "closed";
   capacity?: number;
@@ -185,6 +189,13 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
       const v = cleanText(patch.venueName, 80);
       if (v !== ev.venueName) {
         set.venueName = v;
+        calendarChanged = true;
+      }
+    }
+    if (patch.court !== undefined) {
+      const c = cleanText(patch.court, 40);
+      if (c !== ev.court) {
+        set.court = c;
         calendarChanged = true;
       }
     }

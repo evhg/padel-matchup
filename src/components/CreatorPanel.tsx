@@ -5,8 +5,6 @@ import { useState, useTransition } from "react";
 import { cancelEventAction, updateEventAction } from "@/actions/events";
 import { EmailField } from "./EmailField";
 import { EventFields, type EventFormValues } from "./EventFields";
-import { PlayAgainButton } from "./PlayAgainButton";
-import { ReserveForm, type RolodexItem } from "./ReserveForm";
 import { CopyButton, ShareButtons } from "./ShareSheet";
 import type { VenueOption } from "./VenueCombobox";
 
@@ -14,24 +12,18 @@ export function CreatorPanel({
   code,
   initial,
   venues,
-  rolodex,
-  canReserve,
   creatorEmail,
   emailEnabled,
   manageUrl,
-  inviteTextTemplate,
   isCancelled,
   groupInvite,
 }: {
   code: string;
   initial: EventFormValues;
   venues: VenueOption[];
-  rolodex: RolodexItem[];
-  canReserve: boolean;
   creatorEmail: string | null;
   emailEnabled: boolean;
   manageUrl: string;
-  inviteTextTemplate: string;
   isCancelled: boolean;
   groupInvite: { text: string; count: number; url: string } | null;
 }) {
@@ -51,6 +43,7 @@ export function CreatorPanel({
         tz: values.tz,
         venueName: values.venueName,
         venueMapUrl: values.venueMapUrl,
+        court: values.court,
         note: values.note,
         whenFull: values.whenFull,
         capacity: values.type === "tournament" ? values.capacity : undefined,
@@ -76,16 +69,11 @@ export function CreatorPanel({
         <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
       </div>
 
-      {!isCancelled && (
+      {!isCancelled && groupInvite && groupInvite.count > 1 && (
         <div className="mt-4 border-t border-line pt-4">
-          <ReserveForm code={code} rolodex={rolodex} canReserve={canReserve} inviteTextTemplate={inviteTextTemplate} emailEnabled={emailEnabled} />
-          {groupInvite && groupInvite.count > 1 && (
-            <div className="mt-4 rounded-2xl bg-bg p-3">
-              <div className="font-bold">{t("creator.inviteAll")}</div>
-              <p className="mb-2 text-sm text-muted">{t("creator.inviteAllHelp")}</p>
-              <ShareButtons url={groupInvite.url} text={groupInvite.text} size="sm" />
-            </div>
-          )}
+          <div className="font-bold">{t("creator.inviteAll")}</div>
+          <p className="mb-2 text-sm text-muted">{t("creator.inviteAllHelp")}</p>
+          <ShareButtons url={groupInvite.url} text={groupInvite.text} size="sm" />
         </div>
       )}
 
@@ -123,10 +111,6 @@ export function CreatorPanel({
           )}
         </div>
       )}
-
-      <div className="mt-4 border-t border-line pt-4">
-        <PlayAgainButton code={code} className="btn-ghost w-full" />
-      </div>
 
       <div className="mt-4 border-t border-line pt-4">
         <h3 className="font-extrabold">{t("creator.manageLinkTitle")}</h3>

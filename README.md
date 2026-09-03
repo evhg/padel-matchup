@@ -3,7 +3,7 @@
 Mobile-first web app for organizing padel matches with **zero app installs, zero accounts, zero passwords**. Create a match, share `kicksma.sh/{code}` on WhatsApp or Telegram, friends tap → enter a name once → they're in.
 
 - **Stack:** Next.js 15 (App Router, TypeScript) · Supabase Postgres + Drizzle · Resend · next-intl (EN/RU) · Tailwind v4 · Vercel (Cron + OG images).
-- **Identity:** one-time name entry → player UUID in a signed httpOnly cookie (1 year) + localStorage mirror.
+- **Identity:** one-time name entry → player UUID in a signed httpOnly cookie (1 year) + localStorage mirror. Cross-device: every player has a private **personal link** (`/p/{token}`, shown on My matches, in every email and in the calendar invite) that signs any device in; an email that was used before can **restore** history with a 6-digit code, merging all identities that share it. The home-screen shortcut opens the personal link.
 - **Links:** `/{code}` (4 chars, public) · `/{code}/i/{6}` (personal invite) · `/{code}/manage/{10}` (organizer secret).
 - **Email is optional everywhere.** Without `RESEND_API_KEY` the app runs fully with email features hidden.
 
@@ -180,10 +180,10 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 ## Product rules baked in
 
 - **Match = exactly 4 players.** Tournament = creator-set capacity (4–64) running as an **americano**: the organizer generates rounds on the day (rotating partners, fair sit-outs, 1–N courts), any participant enters per-court points, standings update live, the organizer finalizes to lock.
-- **Fast create:** quick-pick time chips, venue optional ("Court TBD"), the landing page *is* the form, "Play again next week" clones any match in one tap, and an Add-to-Home-Screen prompt gives organizers an app-like shortcut.
+- **Fast create:** quick-pick time chips, venue optional ("Court TBD") with an optional court field (court appears in the page, share text, email and calendar titles), the landing page *is* the form, "Play again next week" appears once a result is in and clones the match in one tap, and an Add-to-Home-Screen prompt gives organizers an app-like shortcut to their personal link.
 - **When full:** per event, waitlist with auto-promotion on dropout (leave / removal / declined invite) or hard close.
 - **Join** is first-come-first-serve and atomic: the event row is locked per mutation and one `UPDATE … WHERE id = (SELECT … LIMIT 1)` claims exactly one slot, so two taps on the last spot resolve cleanly (tested with 12 parallel joins).
-- **Reserved slots** get a personal invite link. The app never messages anyone; organizers get one-tap WhatsApp / Telegram forward buttons with pre-filled localized text. Declined slots become open spots.
+- **Reserved slots** get a personal invite link. The organizer reserves by tapping an open spot in the roster (anyone else tapping it joins). The app never messages anyone; organizers get one-tap WhatsApp / Telegram forward buttons with pre-filled localized text. Declined slots become open spots.
 - **Rolodex:** everyone who ever joined or was invited to your events, with their email/phone reused automatically.
 - **Venue memory:** last-used venue pre-filled, all previous venues in the combobox, free text adds a new one.
 - **Timezone:** default from Vercel's `x-vercel-ip-timezone` (browser zone as fallback), editable, stored UTC.
@@ -195,10 +195,11 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 ```
 src/app/                 routes: / · /new · /[code] · /[code]/share · /[code]/i/[invite] · /[code]/manage/[manage] · /me · /api/cron/hourly
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
-src/actions/             server actions (identity, events, slots, scores)
+src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)
 src/lib/notify.ts        every outbound email; safe no-op without RESEND_API_KEY
-src/lib/calendar.ts      Google Calendar URL + RFC 5545 .ics builder
+src/lib/calendar.ts      Google Calendar URL + RFC 5545 .ics builder (also served at /{code}/calendar.ics)
+src/lib/domain/identity.ts personal tokens, email one-time codes, identity merge
 src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed
 drizzle/                 generated SQL migrations
 messages/{en,ru}.json    all UI, share and email copy

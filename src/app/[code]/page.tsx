@@ -5,11 +5,12 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
+import { CalendarButtons } from "@/components/CalendarButtons";
 import { CreatorPanel } from "@/components/CreatorPanel";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
-import { PlayAgainButton } from "@/components/PlayAgainButton";
+import { OpenSpot, ReserveHost } from "@/components/ReserveSheet";
 import { ScorePanel } from "@/components/ScorePanel";
 import { QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { SlotActions } from "@/components/SlotActions";
@@ -22,6 +23,7 @@ import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
+import { eventTitleLine, venueWithCourt } from "@/lib/labels";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 
 type Props = { params: Promise<{ code: string }> };
@@ -37,7 +39,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ev = detail.event;
   const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
   const occupied = detail.roster.filter(isOccupied).length;
-  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${ev.venueName ?? t("event.venueTbd")} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
+  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
+  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${venue} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
   return {
     title,
     description,
@@ -83,12 +86,14 @@ export default async function EventPage({ params }: Props) {
   const title = calendarTitle(ev, typeLabel);
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
-  const venue = ev.venueName ?? t("event.venueTbd");
+  const courtNumber = (n: string) => t("event.courtNumber", { n });
+  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
   const shareText =
     spotsLeft === 0 && ev.whenFull === "waitlist"
       ? t("shareText.eventFull", { day, time, venue, url })
       : t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  const calendarHref = googleCalendarUrl(ev, { title, url, tz: ev.tz, venueLabel: venue });
+  const calendarHref = googleCalendarUrl(ev, { title: eventTitleLine(ev, { fallback: typeLabel, courtNumber }), url, tz: ev.tz, location: venue });
+  const icsHref = `/${code}/calendar.ics`;
 
   const participants = roster.filter(isOccupied);
   const participantIds = participants.map((s) => s.playerId).filter((x): x is string => Boolean(x));
@@ -98,6 +103,7 @@ export default async function EventPage({ params }: Props) {
   const isTournament = ev.type === "tournament";
   const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
   const nameOf = new Map<string, string>(participants.map((s) => [s.playerId!, s.player?.displayName ?? s.invitedName ?? "?"]));
+  const canPlayAgain = viewer.isCreator || isMember;
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
   const statusChip = cancelled
@@ -127,12 +133,15 @@ export default async function EventPage({ params }: Props) {
     const occupiedSlot = isOccupied(s);
     const inviteHref = s.inviteCode ? inviteUrl(base, code, s.inviteCode) : undefined;
     const stale = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000;
+    const tappable = !occupiedSlot && s.status !== "invited";
     return (
       <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-white" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
         <div className="flex items-center gap-3">
-          <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-white" : "bg-line text-muted"}`}>
-            {occupiedSlot ? name.slice(0, 1).toUpperCase() : isWaitlist ? index + 1 : "·"}
-          </span>
+          {!tappable && (
+            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-white" : "bg-line text-muted"}`}>
+              {occupiedSlot ? name.slice(0, 1).toUpperCase() : isWaitlist ? index + 1 : "·"}
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             {occupiedSlot ? (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -149,10 +158,13 @@ export default async function EventPage({ params }: Props) {
                   {viewer.isCreator && s.invitedAt && <> · {s.lastRemindedAt ? t("creator.remindedAgo", { ago: relativeTime(s.lastRemindedAt, locale, now) }) : t("creator.invitedAgo", { ago: relativeTime(s.invitedAt, locale, now) })}</>}
                 </div>
               </div>
-            ) : s.status === "declined" ? (
-              <span className="font-semibold text-muted">{t("event.declinedOpen", { name })}</span>
             ) : (
-              <span className="font-semibold text-muted">{t("event.openSpot")}</span>
+              <OpenSpot
+                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && (joinState === "join" || (!me && !isMember)) ? "join" : "none"}
+                label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
+                slotId={s.id}
+                position={s.position}
+              />
             )}
           </div>
         </div>
@@ -217,16 +229,7 @@ export default async function EventPage({ params }: Props) {
               <div className="text-sm text-muted">{t("event.pastNoScore")}</div>
             </div>
           )}
-          {!cancelled && !over && (
-            <a href={calendarHref} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-4 w-full">
-              📅 {t("event.addToCalendar")}
-            </a>
-          )}
-          {viewer.isCreator && (started || cancelled) && (
-            <div className="mt-4">
-              <PlayAgainButton code={code} />
-            </div>
-          )}
+          {!cancelled && !over && <CalendarButtons googleHref={calendarHref} icsHref={icsHref} className="mt-4" />}
         </section>
 
         {creatorBanner && (
@@ -245,6 +248,7 @@ export default async function EventPage({ params }: Props) {
             reason={perm.allowed ? null : perm.reason}
             locked={ev.scoreLockedByCreator}
             enteredBy={enteredBy}
+            canPlayAgain={canPlayAgain}
           />
         )}
         {isTournament && tstate && (
@@ -266,6 +270,7 @@ export default async function EventPage({ params }: Props) {
               matches: r.matches.map((m) => ({ id: m.id, court: m.court, a: [nameOf.get(m.a1) ?? "?", nameOf.get(m.a2) ?? "?"], b: [nameOf.get(m.b1) ?? "?", nameOf.get(m.b2) ?? "?"], sideA: m.sideA, sideB: m.sideB })),
             }))}
             standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff }))}
+            canPlayAgain={canPlayAgain}
           />
         )}
 
@@ -276,6 +281,7 @@ export default async function EventPage({ params }: Props) {
             {!cancelled && !over && <span className="text-sm font-semibold text-muted">{t("event.spotsLeft", { count: spotsLeft })}</span>}
           </div>
           <ul className="mt-3 flex flex-col gap-2">{roster.map((s, i) => slotRow(s, i))}</ul>
+          {viewer.isCreator && !cancelled && !over && <ReserveHost code={code} rolodex={rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone }))} inviteTextTemplate={inviteTextTemplate} emailEnabled={emailEnabled()} />}
           {waitlist.length > 0 && (
             <>
               <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wider text-muted">{t("event.waitlist")}</h3>
@@ -318,6 +324,7 @@ export default async function EventPage({ params }: Props) {
               tz: ev.tz,
               venueName: ev.venueName ?? "",
               venueMapUrl: ev.venueMapUrl ?? "",
+              court: ev.court ?? "",
               note: ev.note ?? "",
               capacity: ev.capacity,
               whenFull: ev.whenFull,
@@ -325,12 +332,9 @@ export default async function EventPage({ params }: Props) {
               pointsPerMatch: ev.pointsPerMatch,
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
-            rolodex={rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone }))}
-            canReserve={!cancelled && !over && spotsLeft > 0}
             creatorEmail={creator.email}
             emailEnabled={emailEnabled()}
             manageUrl={manageUrl(base, code, ev.manageCode)}
-            inviteTextTemplate={inviteTextTemplate}
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
           />

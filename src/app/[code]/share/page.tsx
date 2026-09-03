@@ -6,20 +6,30 @@ import { getViewer } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
+import { ScrollTop } from "@/components/ScrollTop";
 import { CopyButton, LinkBox, QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
+import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getEventByCode } from "@/lib/domain/queries";
+import { venueWithCourt } from "@/lib/labels";
+import { personalPath } from "@/lib/personal";
 import { eventUrl, manageUrl } from "@/lib/share";
 
 type Props = { params: Promise<{ code: string }> };
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { code } = await params;
   const t = await getTranslations();
-  return { title: t("share.title"), robots: { index: false } };
+  let tournament = false;
+  if (isValidShareCode(code)) {
+    const db = await getDb();
+    tournament = (await getEventByCode(db, code))?.event.type === "tournament";
+  }
+  return { title: t(tournament ? "share.titleTournament" : "share.titleMatch"), robots: { index: false } };
 }
 
 export default async function SharePage({ params }: Props) {
@@ -32,32 +42,36 @@ export default async function SharePage({ params }: Props) {
   if (!viewer.isCreator) redirect(`/${code}`);
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const ev = detail.event;
+  const isTournament = ev.type === "tournament";
   const url = eventUrl(baseUrl(), code);
   const spotsLeft = detail.roster.filter(isClaimable).length;
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
-  const text = t("shareText.event", { day, time, venue: ev.venueName ?? t("event.venueTbd"), spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
+  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
+  const text = t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
   const mUrl = manageUrl(baseUrl(), code, ev.manageCode);
+  const token = viewer.player ? await getOrCreatePersonalToken(db, viewer.player.id) : null;
 
   return (
     <>
+      <ScrollTop />
       <Header minimal />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="text-center">
-          <div className="mx-auto inline-grid h-14 w-14 place-items-center rounded-full bg-accent text-2xl">🎾</div>
-          <h1 className="mt-3 text-3xl font-extrabold tracking-tight">{t("share.title")}</h1>
-          <p className="mt-1 text-muted">{t("share.subtitle")}</p>
+          <div className="mx-auto inline-grid h-14 w-14 place-items-center rounded-full bg-accent text-2xl">{isTournament ? "🏆" : "🎾"}</div>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-tight">{t(isTournament ? "share.titleTournament" : "share.titleMatch")}</h1>
+          <p className="mt-1 text-muted">{t(isTournament ? "share.subtitleTournament" : "share.subtitle")}</p>
         </section>
         <LinkBox url={url} display={`${shortHost()}/${code}`} />
         <ShareButtons url={url} text={text} />
         <section className="card">
           <QrPanel url={url} hint={t("share.qrHint")} />
         </section>
-        <Link href={`/${code}`} className="btn-secondary w-full text-lg">
-          {t("share.openEvent")} →
+        <Link href={`/${code}`} prefetch={false} className="btn-secondary w-full text-lg">
+          {t(isTournament ? "share.openTournament" : "share.openMatch")} →
         </Link>
 
-        <HomeScreenPrompt />
+        <HomeScreenPrompt personalPath={token ? personalPath(token) : null} />
 
         {emailEnabled() && (
           <section className="card">

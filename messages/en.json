@@ -31,7 +31,29 @@
     "yourName": "Your name",
     "hi": "Hi, {name}",
     "notYou": "Not you?",
-    "nameRequired": "Please enter your name."
+    "nameRequired": "Please enter your name.",
+    "restoreTitle": "Played before? Restore your matches",
+    "restoreHelp": "Enter the email you used before. We'll send a 6-digit code and bring your history to this device.",
+    "sendCode": "Send code",
+    "sending": "Sending…",
+    "codeSent": "Code sent to {email}. Check your inbox (and spam).",
+    "codeLabel": "6-digit code",
+    "verify": "Restore",
+    "restored": "Welcome back, {name}! Your matches are here.",
+    "codeWrong": "That code isn't right or has expired.",
+    "tooMany": "Too many attempts. Try again in an hour.",
+    "notKnown": "We don't know that email yet. Add it on a match page and you're covered next time.",
+    "knownElsewhere": "This email is already used on another device.",
+    "restoreIt": "Restore that history here",
+    "changeEmail": "Different email",
+    "personalLinkTitle": "Your personal link",
+    "personalLinkHelp": "Opens your matches on any phone or laptop, no password. Keep it private: anyone with the link is you.",
+    "copyLink": "Copy",
+    "sendToMe": "Send to myself",
+    "sendToMeText": "🎾 My Kicksmash link (opens my matches on any device): {url}",
+    "resetLink": "Reset link",
+    "resetConfirm": "Reset your personal link? The old one stops working, including home-screen shortcuts.",
+    "emailDisabled": "Email isn't set up on this server."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -49,7 +71,7 @@
     "typeMatch": "Match",
     "typeMatchHelp": "Exactly 4 players",
     "typeTournament": "Tournament",
-    "typeTournamentHelp": "Set your own capacity",
+    "typeTournamentHelp": "4 to 64 players",
     "roundScoringSoon": "Round scoring coming soon",
     "date": "Date",
     "time": "Time",
@@ -63,7 +85,7 @@
     "titleLabel": "Title",
     "titlePlaceholder": "Thursday padel",
     "note": "Note",
-    "notePlaceholder": "Court 3, bring balls, level 3.5…",
+    "notePlaceholder": "Bring balls, level 3.5, parking tips…",
     "capacity": "Players",
     "whenFull": "When full",
     "whenFullWaitlist": "Waitlist",
@@ -84,7 +106,9 @@
     "courtsAuto": "Auto",
     "pointsPerMatch": "Points per match",
     "pointsFree": "Free",
-    "tournamentHelp": "Americano: partners rotate every round, most points wins. Rounds are generated on the day."
+    "tournamentHelp": "Americano: partners rotate every round, most points wins. Rounds are generated on the day.",
+    "court": "Court",
+    "courtPlaceholder": "e.g. 3 or Centre court"
   },
   "share": {
     "title": "Your match is live",
@@ -97,10 +121,15 @@
     "openEvent": "Open the match page",
     "manageTitle": "Organizer link",
     "manageHint": "Private — don't share. Open it on another device to manage this match.",
-    "emailTitle": "Get email notifications",
-    "emailHelp": "Optional. Add your email to get a Google Calendar invite and updates when players join, leave or confirm.",
+    "emailTitle": "Save your organizer link + get notified",
+    "emailHelp": "Drop your email and we'll send you your organizer link (this match, one tap, any device) and put it in your Google Calendar. Being late, or worse, forgetting your own game, is a total no-no in padel. We'll also ping you when players join, leave or confirm.",
     "emailPlaceholder": "you@example.com",
-    "emailSaved": "Saved. We'll email you when something happens."
+    "emailSaved": "Saved. We'll email you when something happens.",
+    "titleMatch": "Your match is live",
+    "titleTournament": "Your tournament is live",
+    "subtitleTournament": "Send the link. Players tap, enter a name, they're in.",
+    "openMatch": "Go to match",
+    "openTournament": "Go to tournament"
   },
   "event": {
     "match": "Padel match",
@@ -142,7 +171,7 @@
     "activity": "Activity",
     "note": "Note",
     "yourEmail": "Your email",
-    "emailReward": "Add your email to get a Google Calendar invite and updates.",
+    "emailReward": "Add your email and we'll drop the match into your Google Calendar and email you your personal link, so your match history follows you to any phone. Being late, or worse, forgetting a game, is a total no-no in padel.",
     "emailSaved": "Saved — calendar invite on its way.",
     "emailSavedNoMail": "Saved.",
     "reservedForYou": "This spot is reserved for you",
@@ -158,7 +187,10 @@
     "startsIn": "Starts {when}",
     "venueTbd": "Court TBD",
     "playAgain": "Play again next week",
-    "playAgainHelp": "Same settings, one week later, fresh link."
+    "playAgainHelp": "Same players' settings, one week later, fresh link.",
+    "courtNumber": "Court {n}",
+    "tapToReserve": "Tap to reserve for someone",
+    "tapToJoin": "Tap to join"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -187,7 +219,9 @@
     "manageLinkTitle": "Organizer link",
     "rolodexHint": "Start typing to pick from players you've played with.",
     "inviteAll": "Send all invites in one message",
-    "inviteAllHelp": "One message listing each person's personal link. Good for a group chat."
+    "inviteAllHelp": "One message listing each person's personal link. Good for a group chat.",
+    "reserveSpot": "Reserve spot {n}",
+    "reserveSheetHelp": "Hold this spot for someone. You'll get a personal link to forward to them."
   },
   "score": {
     "title": "Score",
@@ -227,9 +261,10 @@
     "noScore": "No score",
     "cancelled": "Cancelled",
     "you": "You",
-    "identityHelp": "Your identity lives in this browser. Same name, no password.",
+    "identityHelp": "Your identity lives in this browser, no password. Save your personal link below to use it anywhere.",
     "noIdentity": "Enter your name to see your matches.",
-    "placement": "#{place} of {total}"
+    "placement": "#{place} of {total}",
+    "restoreCta": "Played before on another phone? Restore"
   },
   "notFound": {
     "title": "Link not found",
@@ -336,6 +371,14 @@
       "heading": "Your match is over — what was the score?",
       "body": "Padel {day} at {time} at {venue}. Enter the final score so everyone's history stays up to date. This is the only reminder you'll get.",
       "cta": "Enter score"
+    },
+    "personalLink": "Your personal link (opens your matches on any device)",
+    "code": {
+      "subject": "{code} is your Kicksmash code",
+      "heading": "Your restore code",
+      "body": "Enter this code to bring your matches to the new device. It expires in 10 minutes.",
+      "codeLabel": "Code",
+      "footer": "If you didn't request this, ignore it. Nothing happens without the code."
     }
   },
   "errors": {
@@ -351,15 +394,23 @@
     "locked": "The organizer confirmed the score. Only they can change it.",
     "not_started": "Score entry opens when the match starts.",
     "not_participant": "Only players in this match can enter the score.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "email_disabled": "Email isn't set up on this server.",
+    "too_many": "Too many attempts. Try again later.",
+    "slot_taken": "That spot was just taken."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
-    "body": "Next time it's one tap to your matches, like an app.",
+    "body": "One tap to your matches next time, like an app. The shortcut opens your personal link, so your history comes along.",
     "add": "Add to Home Screen",
     "iosHint": "Tap the Share button below, then \"Add to Home Screen\".",
     "later": "Not now",
-    "done": "Added to home screen"
+    "done": "Added to home screen",
+    "iosSteps": "Tap Share (the square with the arrow), then \"Add to Home Screen\".",
+    "iosTitle": "Two taps in Safari",
+    "notSafari": "Open this page in Safari to add it to your home screen.",
+    "androidSteps": "Open the browser menu (⋮), then \"Add to Home screen\" or \"Install app\".",
+    "gotIt": "Got it"
   },
   "americano": {
     "title": "Americano",
@@ -393,5 +444,10 @@
     "colDiff": "+/-",
     "noRounds": "No rounds yet.",
     "vs": "vs"
+  },
+  "calendar": {
+    "title": "Add to calendar",
+    "google": "Google Calendar",
+    "apple": "Apple / Outlook"
   }
 }

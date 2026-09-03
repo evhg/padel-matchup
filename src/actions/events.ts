@@ -9,7 +9,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
 import { normalizeEmail, updatePlayer } from "@/lib/domain/players";
 import { notifyEventCancelled, notifyEventUpdated, notifyPromotion } from "@/lib/notify";
-import { ActionFailure, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 
 const createSchema = z.object({
   name: z.string().optional(),
@@ -20,6 +20,7 @@ const createSchema = z.object({
   tz: z.string().min(1).max(64),
   venueName: z.string().max(80).optional(),
   venueMapUrl: z.string().max(500).optional(),
+  court: z.string().max(40).optional(),
   note: z.string().max(500).optional(),
   capacity: z.coerce.number().int().min(2).max(64).optional(),
   whenFull: z.enum(["waitlist", "closed"]),
@@ -45,6 +46,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       tz: input.tz,
       venueName: input.venueName,
       venueMapUrl: input.venueMapUrl,
+      court: input.court,
       capacity: input.capacity,
       whenFull: input.whenFull,
       note: input.note,
@@ -70,17 +72,21 @@ const updateSchema = z.object({
   tz: z.string().min(1).max(64).optional(),
   venueName: z.string().max(80).optional(),
   venueMapUrl: z.string().max(500).optional(),
+  court: z.string().max(40).optional(),
   note: z.string().max(500).optional(),
   capacity: z.coerce.number().int().min(2).max(64).optional(),
   whenFull: z.enum(["waitlist", "closed"]).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
-/** "Play again": clone this event one week later and go straight to its share screen. */
+/** "Play again": any participant or the organizer clones this event one week later and becomes its organizer. */
 export async function duplicateEventAction(code: string): Promise<ActionResult<{ code: string }>> {
   let newCode: string | null = null;
   const res = await runA(async () => {
-    const { db, detail, viewer } = await requireCreator(code);
+    const { db, detail } = await loadEvent(code);
+    const viewer = await getViewer(db, detail);
+    const isParticipant = Boolean(viewer.player && detail.roster.some((s) => s.playerId === viewer.player!.id && (s.status === "joined" || s.status === "confirmed")));
+    if (!viewer.isCreator && !isParticipant) throw new ActionFailure("forbidden");
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
     const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
     const { joinEvent } = await import("@/lib/domain/slots");
@@ -104,6 +110,7 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       tz: input.tz,
       venueName: input.venueName,
       venueMapUrl: input.venueMapUrl,
+      court: input.court,
       note: input.note,
       whenFull: input.whenFull,
       capacity: input.capacity,

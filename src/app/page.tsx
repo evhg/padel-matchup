@@ -1,21 +1,9 @@
-import Link from "next/link";
-import { eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { CreateScreen } from "@/components/CreateScreen";
 import { Footer, Header } from "@/components/Header";
-import { getDb } from "@/db";
-import { events } from "@/db/schema";
 
 export default async function Home() {
   const t = await getTranslations();
-  let demoCode: string | null = null;
-  try {
-    const db = await getDb();
-    const [demo] = await db.select({ code: events.code }).from(events).where(eq(events.code, "PLAY")).limit(1);
-    demoCode = demo?.code ?? null;
-  } catch {
-    demoCode = null;
-  }
   return (
     <>
       <Header />
@@ -28,11 +16,6 @@ export default async function Home() {
               <span className="font-semibold">{s}</span>
             </div>
           ))}
-          {demoCode && (
-            <Link href={`/${demoCode}`} className="btn-ghost mt-2 w-full">
-              {t("landing.demo")}
-            </Link>
-          )}
         </section>
       </main>
       <Footer />

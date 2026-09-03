@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { updateMyEmail } from "@/actions/identity";
 import { setCreatorEmailAction } from "@/actions/events";
+import { RestoreWithEmail } from "./RestoreWithEmail";
 
 /**
  * Decision 9: email is optional, never required, and always explained with the
@@ -27,14 +28,24 @@ export function EmailField({
   const t = useTranslations();
   const [email, setEmail] = useState(initial ?? "");
   const [saved, setSaved] = useState(false);
+  const [knownElsewhere, setKnownElsewhere] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [pending, start] = useTransition();
   if (!emailEnabled) return null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const r = mode === "creator" ? await setCreatorEmailAction(code, email) : await updateMyEmail(email, code);
-      if (r.ok) setSaved(true);
+      if (mode === "creator") {
+        const r = await setCreatorEmailAction(code, email);
+        if (r.ok) setSaved(true);
+        return;
+      }
+      const r = await updateMyEmail(email, code);
+      if (r.ok) {
+        setSaved(true);
+        setKnownElsewhere(r.data.knownElsewhere);
+      }
     });
   };
 
@@ -60,6 +71,8 @@ export function EmailField({
           onChange={(e) => {
             setEmail(e.target.value);
             setSaved(false);
+            setKnownElsewhere(false);
+            setRestoring(false);
           }}
         />
         <button type="submit" className="btn-secondary shrink-0" disabled={pending || (!email && !initial)}>
@@ -67,6 +80,20 @@ export function EmailField({
         </button>
       </div>
       {saved && <p className="text-sm font-semibold text-ok">{mode === "creator" ? t("share.emailSaved") : email ? t("event.emailSaved") : t("event.emailSavedNoMail")}</p>}
+      {saved && knownElsewhere && (
+        <div className="rounded-2xl bg-bg p-3">
+          <p className="text-sm text-muted">{t("identity.knownElsewhere")}</p>
+          {restoring ? (
+            <div className="mt-2">
+              <RestoreWithEmail initialEmail={email} compact />
+            </div>
+          ) : (
+            <button type="button" className="mt-1 text-sm link" onClick={() => setRestoring(true)}>
+              {t("identity.restoreIt")} →
+            </button>
+          )}
+        </div>
+      )}
     </form>
   );
 }
