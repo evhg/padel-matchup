@@ -1,0 +1,5 @@
+# Vercel CLI project link (created by `vercel link`)
+.vercel
+
+# Local env files (use `vercel env pull` to regenerate)
+.env*.local
