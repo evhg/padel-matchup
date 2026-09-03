@@ -43,41 +43,59 @@ TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/padel_test pnpm te
 
 ## Environment variables
 
-| Variable | Required in prod | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | ✅ | Supabase **transaction pooler** URL (port 6543). Empty → embedded PGlite (dev only). |
-| `DIRECT_DATABASE_URL` | for migrations | Supabase **direct** URL (port 5432). Used by `pnpm db:migrate` / `db:push`. |
-| `SESSION_SECRET` | ✅ | Signs the identity cookie. ≥ 32 random chars. |
-| `CRON_SECRET` | ✅ | Protects `/api/cron/hourly`. Vercel sends it automatically. |
-| `APP_BASE_URL` | ✅ | `https://kicksma.sh` — used in share links, emails, OG images. |
-| `RESEND_API_KEY` | optional | Enables all email (calendar invites, notifications, reminders). |
-| `EMAIL_FROM` | with Resend | e.g. `Kicksmash <matches@kicksma.sh>` (domain must be verified in Resend). |
+Only **one** variable is required in production: the database URL. Everything else has a safe default.
 
-Generate secrets: `openssl rand -base64 32`
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | ✅ | Supabase **Transaction pooler** string (port 6543), exactly as Supabase's Connect dialog shows it. `POSTGRES_URL` (Vercel ⇄ Supabase integration) works too. Empty → embedded PGlite (local dev only). |
+| `DATABASE_PASSWORD` | if the URL still says `[YOUR-PASSWORD]` | The app substitutes and percent-encodes it for you. |
+| `APP_BASE_URL` | no | Defaults to the Vercel production domain. Set it locally or on other hosts. |
+| `SESSION_SECRET` | recommended | Signs the identity cookie. Without it a stable secret is derived from the database URL. |
+| `CRON_SECRET` | recommended | Protects `/api/cron/hourly`. Vercel sends it automatically when set. |
+| `DIRECT_DATABASE_URL` | no | Direct (5432) URL for `pnpm db:migrate`. Not needed: the app migrates itself on first connection (`AUTO_MIGRATE=false` disables). |
+| `RESEND_API_KEY` | no | Enables all email (calendar invites, notifications, reminders). |
+| `EMAIL_FROM` | with Resend | e.g. `Kicksmash <matches@kicksma.sh>` (domain verified in Resend). |
+
+Generate secrets: `openssl rand -base64 32`. Check a deployment any time at `/api/health` (no secrets returned).
 
 ---
 
 ## Production setup
 
-Everything that can be done from the CLI is. Manual steps only where an account or DNS forces it.
+Two ways. **Option A** needs no terminal at all. **Option B** scripts everything that can be scripted.
 
-### 1. Supabase (≈ 10 min)
+### Option A — browser only (≈ 20 min + DNS)
+
+1. **Supabase** (5 min): https://supabase.com/dashboard/new → create a project, save the database password. Click **Connect** → copy the **Transaction pooler** string (port 6543). Leave `[YOUR-PASSWORD]` in it.
+2. **Vercel** (5 min): https://vercel.com/new → **Import** `evhg/padel-matchup` (the code must be on the repo's default branch). Under **Environment Variables** add:
+   - `DATABASE_URL` = the string from step 1, unchanged
+   - `DATABASE_PASSWORD` = your database password
+   Click **Deploy**. The first request creates the tables automatically.
+3. **Check**: open `https://<your-project>.vercel.app/api/health` → `"database":"connected"`.
+4. **Domain** (5 min + waiting): Vercel → Project → **Settings → Domains → Add** `kicksma.sh` (and `www.kicksma.sh`). Vercel shows the records. At Porkbun → **Domain Management → kicksma.sh → DNS**: delete the parking `ALIAS`/`CNAME` records, then add the `A` record (Host empty) and the `www` `CNAME` with the values Vercel shows. Wait until Vercel says **Valid Configuration**.
+5. Later, optionally: `SESSION_SECRET`, `CRON_SECRET`, `RESEND_API_KEY` + `EMAIL_FROM` in **Settings → Environment Variables**, then **Deployments → ⋯ → Redeploy**.
+
+Cron runs daily at 07:00 UTC out of the box, which is what Vercel's Hobby plan allows. On Pro, change the schedule in `vercel.json` to `0 * * * *` for hourly reminders.
+
+### Option B — CLI
+
+#### 1. Supabase (≈ 10 min)
 
 1. Create a project at https://supabase.com/dashboard/new (or `npx supabase projects create kicksmash --org-id <id> --db-password <pw> --region eu-central-1`). Pick the region closest to your players. Save the DB password.
 2. Project → **Connect** (top bar) → copy two URLs:
    - **Transaction pooler** (`...pooler.supabase.com:6543/postgres`) → `DATABASE_URL`
    - **Direct connection** (`db.<ref>.supabase.co:5432/postgres`) → `DIRECT_DATABASE_URL`
    Append `?sslmode=require` to both if it isn't there.
-3. Put them in `.env` and apply the schema:
+3. Put them in `.env`. The schema is applied automatically on first connection; to do it explicitly:
    ```bash
    pnpm db:migrate     # runs ./drizzle/*.sql against DIRECT_DATABASE_URL
    pnpm db:seed        # optional: example matches PLAY + PAST
    ```
-4. Sanity check: `pnpm dev` now says nothing about PGlite and `/PLAY` loads from Supabase.
+4. Sanity check: `pnpm dev` now says nothing about PGlite and `/api/health` reports `"database":"connected"`.
 
 No Supabase Auth, RLS or storage is used — only Postgres.
 
-### 2. Resend (≈ 15 min incl. DNS)
+#### 2. Resend (≈ 15 min incl. DNS)
 
 Skip this entirely if you don't want email yet; deploy never blocks on it.
 
@@ -97,7 +115,7 @@ Skip this entirely if you don't want email yet; deploy never blocks on it.
 
 Emails sent: calendar invite (.ics, `METHOD:REQUEST`, stable UID) on join/confirm/promotion · updated/cancelled .ics · organizer notices (joined / left / confirmed / declined / promoted) · 24h invitee reminders · one post-match score reminder. All EN + RU by recipient language.
 
-### 3. Deploy to Vercel via CLI (≈ 10 min)
+#### 3. Deploy to Vercel via CLI (≈ 10 min)
 
 ```bash
 pnpm dlx vercel@latest login          # opens the browser; or: vercel login --github
@@ -116,7 +134,7 @@ Token flow for CI / headless machines: create a token at https://vercel.com/acco
 
 Build settings need no changes (`pnpm build`, Node 20+). The migration is **not** run at build time — run `pnpm db:migrate` locally whenever `drizzle/` changes.
 
-### 4. Custom domain `kicksma.sh` at Porkbun (≈ 10 min + DNS propagation)
+#### 4. Custom domain `kicksma.sh` at Porkbun (≈ 10 min + DNS propagation)
 
 Production goes straight to the custom domain; no `*.vercel.app` staging step.
 
@@ -142,9 +160,9 @@ Production goes straight to the custom domain; no `*.vercel.app` staging step.
 
 Also add the Resend records from §2 in the same DNS editor if you skipped them.
 
-### 5. Cron (already configured, ≈ 2 min to verify)
+#### 5. Cron (already configured, ≈ 2 min to verify)
 
-`vercel.json` schedules `GET /api/cron/hourly` every hour. Vercel automatically sends `Authorization: Bearer $CRON_SECRET`, so just make sure `CRON_SECRET` is set in production (step 3).
+`vercel.json` schedules `GET /api/cron/hourly` daily at 07:00 UTC (Hobby-plan safe; on Pro set `0 * * * *` for hourly). Vercel automatically sends `Authorization: Bearer $CRON_SECRET` when that variable is set; without it the endpoint is open but every step is idempotent.
 
 The job does: `open/full → past` transitions · waitlist hygiene · 24h invite reminders (email only, stops on response or start) · the single organizer score reminder (2h after start).
 
@@ -155,7 +173,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://kicksma.sh/api/cron/hourly
 # → {"ok":true,"transitionedToPast":0,"promotions":0,"inviteReminders":0,"scoreReminders":0,...}
 ```
 
-Hobby plan crons may run once a day at best-effort times; Pro runs them on the minute.
+Hobby plan crons run once a day at best-effort times; Pro runs them on the minute.
 
 ---
 

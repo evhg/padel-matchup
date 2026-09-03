@@ -17,16 +17,18 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Hourly Vercel Cron (vercel.json). Guarded by CRON_SECRET.
+ * Vercel Cron (schedule in vercel.json: daily on Hobby, hourly on Pro). Guarded by CRON_SECRET when set.
  *  1. open/full → past transitions
  *  2. waitlist hygiene (fill any empty roster slot from the waitlist)
  *  3. 24h reminders to unconfirmed invitees with an email
  *  4. the single post-match score reminder to organizers
  */
 export async function GET(req: Request) {
+  // Vercel sends "Authorization: Bearer $CRON_SECRET" when the variable is set.
+  // Without it the job still runs; every step is idempotent and rate-limited by DB state.
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (secret && auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const db = await getDb();

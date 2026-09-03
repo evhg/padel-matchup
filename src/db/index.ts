@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { databaseUrl, onVercel } from "@/lib/env";
 import * as schema from "./schema";
 
 export { schema };
@@ -23,10 +25,40 @@ async function createPostgresDb(url: string): Promise<Db> {
     idle_timeout: 20,
     connect_timeout: 10,
   });
-  return drizzle(client, { schema }) as unknown as Db;
+  const db = drizzle(client, { schema }) as unknown as Db;
+  if (process.env.AUTO_MIGRATE !== "false") await autoMigrate(db);
+  return db;
+}
+
+/**
+ * Applies ./drizzle migrations on first connection so a fresh deploy needs no
+ * manual `pnpm db:migrate`. Idempotent; tolerant of two cold starts racing.
+ */
+async function autoMigrate(db: Db): Promise<void> {
+  const { migrate } = await import("drizzle-orm/postgres-js/migrator");
+  const path = await import("node:path");
+  const migrationsFolder = path.join(process.cwd(), "drizzle");
+  try {
+    await migrate(db as never, { migrationsFolder });
+  } catch (e) {
+    const exists = await db
+      .execute(sql`select to_regclass('public.events') as t`)
+      .then((r: unknown) => {
+        const rows = Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []);
+        return Boolean((rows[0] as { t?: string | null } | undefined)?.t);
+      })
+      .catch(() => false);
+    if (!exists) throw e;
+    console.warn("[db] auto-migrate raced another instance; schema is present:", (e as Error).message);
+  }
 }
 
 async function createPgliteDb(): Promise<Db> {
+  if (onVercel()) {
+    throw new Error(
+      "No database configured. Add DATABASE_URL (and DATABASE_PASSWORD) in Vercel → Settings → Environment Variables, then redeploy. See /api/health.",
+    );
+  }
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");
   const { migrate } = await import("drizzle-orm/pglite/migrator");
@@ -47,7 +79,7 @@ async function createPgliteDb(): Promise<Db> {
 export function getDb(): Promise<Db> {
   const g = globalThis as GlobalWithDb;
   if (!g.__padelDb) {
-    const url = process.env.DATABASE_URL;
+    const url = databaseUrl();
     g.__padelDb = url ? createPostgresDb(url) : createPgliteDb();
     g.__padelDb.catch(() => {
       // Allow a retry on next request instead of caching a rejected promise.
@@ -57,4 +89,4 @@ export function getDb(): Promise<Db> {
   return g.__padelDb;
 }
 
-export const usingEmbeddedDb = () => !process.env.DATABASE_URL;
+export const usingEmbeddedDb = () => !databaseUrl();

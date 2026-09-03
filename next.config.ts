@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
   // Make sure the OG-image fonts ship with the serverless function.
   outputFileTracingIncludes: {
     "/[code]/opengraph-image": ["./src/lib/og/fonts/*.ttf"],
+    // Auto-migrate on first connection needs the SQL files at runtime.
+    "/**/*": ["./drizzle/**/*"],
   },
   experimental: {
     serverActions: {

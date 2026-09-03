@@ -3,19 +3,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import type { Db } from "@/db";
 import { getPlayer } from "@/lib/domain/players";
+import { sessionSecret } from "@/lib/env";
 import type { Player } from "@/db/schema";
 
 export const PLAYER_COOKIE = "km_player";
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
-function secret(): string {
-  const s = process.env.SESSION_SECRET;
-  if (s && s.length >= 16) return s;
-  if (process.env.NODE_ENV === "production" && process.env.VERCEL) {
-    throw new Error("SESSION_SECRET must be set in production");
-  }
-  return "dev-only-insecure-session-secret";
-}
+const secret = sessionSecret;
 
 function sign(value: string): string {
   return createHmac("sha256", secret()).update(value).digest("base64url");
