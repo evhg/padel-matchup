@@ -1,6 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
-import { emailEnabled } from "@/lib/config";
+import { emailEnabled, emailFrom } from "@/lib/config";
 
 let client: Resend | null = null;
 
@@ -26,7 +26,7 @@ export type OutgoingEmail = {
 export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
   const r = resend();
   if (!r) return false;
-  const from = process.env.EMAIL_FROM || "Kicksmash <onboarding@resend.dev>";
+  const from = emailFrom();
   try {
     const { error } = await r.emails.send({
       from,

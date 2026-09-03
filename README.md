@@ -54,7 +54,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `CRON_SECRET` | recommended | Protects `/api/cron/hourly`. Vercel sends it automatically when set. |
 | `DIRECT_DATABASE_URL` | no | Direct (5432) URL for `pnpm db:migrate`. Not needed: the app migrates itself on first connection (`AUTO_MIGRATE=false` disables). |
 | `RESEND_API_KEY` | no | Enables all email (calendar invites, notifications, reminders). |
-| `EMAIL_FROM` | with Resend | e.g. `Kicksmash <matches@kicksma.sh>` (domain verified in Resend). |
+| `EMAIL_FROM` | no | Defaults to `Kicksmash <matches@<your domain>>`; the domain must be verified in Resend. |
 
 Generate secrets: `openssl rand -base64 32`. Check a deployment any time at `/api/health` (no secrets returned).
 
