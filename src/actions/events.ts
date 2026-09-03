@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { zonedTimeToUtc } from "@/lib/dates";
-import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
+import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
 import { normalizeEmail, updatePlayer } from "@/lib/domain/players";
 import { notifyEventCancelled, notifyEventUpdated, notifyPromotion } from "@/lib/notify";
 import { ActionFailure, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
@@ -18,11 +18,13 @@ const createSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
   tz: z.string().min(1).max(64),
-  venueName: z.string().min(1).max(80),
+  venueName: z.string().max(80).optional(),
   venueMapUrl: z.string().max(500).optional(),
   note: z.string().max(500).optional(),
   capacity: z.coerce.number().int().min(2).max(64).optional(),
   whenFull: z.enum(["waitlist", "closed"]),
+  courts: z.coerce.number().int().min(1).max(16).nullable().optional(),
+  pointsPerMatch: z.coerce.number().int().min(4).max(99).nullable().optional(),
   joinSelf: z.boolean().optional(),
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
@@ -46,6 +48,8 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       capacity: input.capacity,
       whenFull: input.whenFull,
       note: input.note,
+      courts: input.courts ?? null,
+      pointsPerMatch: input.pointsPerMatch ?? null,
     });
     if (input.joinSelf !== false) {
       // Organizers play too. Skip silently if the match was logged after the fact.
@@ -64,13 +68,29 @@ const updateSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   tz: z.string().min(1).max(64).optional(),
-  venueName: z.string().min(1).max(80).optional(),
+  venueName: z.string().max(80).optional(),
   venueMapUrl: z.string().max(500).optional(),
   note: z.string().max(500).optional(),
   capacity: z.coerce.number().int().min(2).max(64).optional(),
   whenFull: z.enum(["waitlist", "closed"]).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
+
+/** "Play again": clone this event one week later and go straight to its share screen. */
+export async function duplicateEventAction(code: string): Promise<ActionResult<{ code: string }>> {
+  let newCode: string | null = null;
+  const res = await runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
+    const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
+    const { joinEvent } = await import("@/lib/domain/slots");
+    await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => undefined);
+    newCode = ev.code;
+    return { code: ev.code };
+  });
+  if (res.ok && newCode) redirect(`/${newCode}/share`);
+  return res;
+}
 
 export async function updateEventAction(code: string, raw: UpdateEventInput): Promise<ActionResult<null>> {
   return runA(async () => {

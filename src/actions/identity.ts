@@ -77,7 +77,8 @@ export async function restoreIdentity(playerId: string): Promise<ActionResult<Pu
   });
 }
 
-export async function setLocaleAction(locale: string, path?: string): Promise<ActionResult<null>> {
+/** Persists the language choice. The client sets the cookie and refreshes itself. */
+export async function setLocaleAction(locale: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const l = toLocale(locale) ?? "en";
     const store = await cookies();
@@ -85,7 +86,6 @@ export async function setLocaleAction(locale: string, path?: string): Promise<Ac
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (me && me.locale !== l) await updatePlayer(db, me.id, { locale: l });
-    revalidatePath(path ?? "/", "layout");
     return null;
   });
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { removeAction } from "@/actions/slots";
 import { ShareButtons } from "./ShareSheet";
@@ -28,7 +27,6 @@ export function SlotActions({
   stale?: boolean;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
 
@@ -37,7 +35,6 @@ export function SlotActions({
     if (!confirm(msg)) return;
     start(async () => {
       await removeAction(code, slotId);
-      router.refresh();
     });
   };
 

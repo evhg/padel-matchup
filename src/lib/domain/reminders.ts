@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, scores, slots, type Event, type Player, type Slot } from "@/db/schema";
+import { events, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player, type Slot } from "@/db/schema";
 import { EVENT_DURATION_MS, INVITE_REMINDER_INTERVAL_MS, SCORE_REMINDER_DELAY_MS } from "@/lib/config";
 
 /**
@@ -66,7 +66,11 @@ export function isScoreReminderDue(
 export async function findScoreRemindersDue(db: Db, now = new Date()): Promise<{ event: Event; creator: Player }[]> {
   const cutoff = new Date(now.getTime() - SCORE_REMINDER_DELAY_MS);
   const rows = await db
-    .select({ event: events, creator: players, scoreCount: sql<number>`(select count(*) from ${scores} sc where sc.event_id = ${events.id})` })
+    .select({
+      event: events,
+      creator: players,
+      scoreCount: sql<number>`(select count(*) from ${scores} sc where sc.event_id = ${events.id}) + (select count(*) from ${tournamentMatches} tm join ${tournamentRounds} tr on tr.id = tm.round_id where tr.event_id = ${events.id} and tm.side_a is not null)`,
+    })
     .from(events)
     .innerJoin(players, eq(players.id, events.creatorPlayerId))
     .where(and(eq(events.scoreReminderSent, false), inArray(events.status, ["open", "full", "past"]), lte(events.startsAt, cutoff)));

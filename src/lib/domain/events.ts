@@ -12,11 +12,14 @@ export type CreateEventInput = {
   title?: string | null;
   startsAt: Date;
   tz: string;
-  venueName: string;
+  /** Optional: empty means "court TBD". */
+  venueName?: string | null;
   venueMapUrl?: string | null;
   capacity?: number;
   whenFull: "waitlist" | "closed";
   note?: string | null;
+  courts?: number | null;
+  pointsPerMatch?: number | null;
 };
 
 function cleanText(v: string | null | undefined, max: number): string | null {
@@ -56,7 +59,6 @@ export async function rememberVenue(db: Db, creatorPlayerId: string, name: strin
 
 export async function createEvent(db: Db, input: CreateEventInput): Promise<Event> {
   const venueName = cleanText(input.venueName, 80);
-  if (!venueName) throw new DomainError("invalid", "venue");
   if (!isValidTimeZone(input.tz)) throw new DomainError("invalid", "tz");
   if (!(input.startsAt instanceof Date) || Number.isNaN(input.startsAt.getTime())) throw new DomainError("invalid", "startsAt");
   const capacity = resolveCapacity(input.type, input.capacity);
@@ -85,6 +87,8 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           creatorPlayerId: input.creatorPlayerId,
           manageCode: newManageCode(),
           status: "open",
+          courts: input.type === "tournament" && input.courts ? Math.max(1, Math.min(16, Math.round(input.courts))) : null,
+          pointsPerMatch: input.type === "tournament" && input.pointsPerMatch ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
         })
         .returning();
     }
@@ -99,8 +103,37 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
       })),
     );
     await tx.insert(activity).values({ eventId: event.id, actorPlayerId: input.creatorPlayerId, verb: "created" });
-    await rememberVenue(tx, input.creatorPlayerId, venueName, venueMapUrl);
+    if (venueName) await rememberVenue(tx, input.creatorPlayerId, venueName, venueMapUrl);
     return event;
+  });
+}
+
+/** Next occurrence of the same weekday/time strictly after `now`. */
+export function nextWeekAfter(startsAt: Date, now = new Date()): Date {
+  const week = 7 * 24 * 3600 * 1000;
+  let t = startsAt.getTime() + week;
+  while (t <= now.getTime()) t += week;
+  return new Date(t);
+}
+
+/** "Play again": clone an event one week later with the same settings; the organizer joins automatically. */
+export async function duplicateEvent(db: Db, input: { sourceEventId: string; creatorPlayerId: string; now?: Date }): Promise<Event> {
+  const now = input.now ?? new Date();
+  const [src] = await db.select().from(events).where(eq(events.id, input.sourceEventId)).limit(1);
+  if (!src) throw new DomainError("not_found");
+  return createEvent(db, {
+    creatorPlayerId: input.creatorPlayerId,
+    type: src.type,
+    title: src.title,
+    startsAt: nextWeekAfter(src.startsAt, now),
+    tz: src.tz,
+    venueName: src.venueName,
+    venueMapUrl: src.venueMapUrl,
+    capacity: src.capacity,
+    whenFull: src.whenFull,
+    note: src.note,
+    courts: src.courts,
+    pointsPerMatch: src.pointsPerMatch,
   });
 }
 
@@ -108,7 +141,7 @@ export type UpdateEventInput = {
   title?: string | null;
   startsAt?: Date;
   tz?: string;
-  venueName?: string;
+  venueName?: string | null;
   venueMapUrl?: string | null;
   note?: string | null;
   whenFull?: "waitlist" | "closed";
@@ -150,7 +183,6 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     }
     if (patch.venueName !== undefined) {
       const v = cleanText(patch.venueName, 80);
-      if (!v) throw new DomainError("invalid", "venue");
       if (v !== ev.venueName) {
         set.venueName = v;
         calendarChanged = true;
@@ -209,7 +241,7 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
       await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: pid, verb: "promoted" });
     }
     await tx.insert(activity).values({ eventId: ev.id, actorPlayerId, verb: "updated" });
-    if (set.venueName || set.venueMapUrl !== undefined) {
+    if ((set.venueName || set.venueMapUrl !== undefined) && updated.venueName) {
       await rememberVenue(tx, ev.creatorPlayerId, updated.venueName, updated.venueMapUrl);
     }
     await recomputeStatus(tx, updated);

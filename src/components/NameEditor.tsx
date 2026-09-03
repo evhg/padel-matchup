@@ -1,13 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { updateMyName } from "@/actions/identity";
 
 export function NameEditor({ name }: { name: string }) {
   const t = useTranslations();
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   const [pending, start] = useTransition();
@@ -17,7 +15,6 @@ export function NameEditor({ name }: { name: string }) {
     start(async () => {
       await updateMyName(value);
       setEditing(false);
-      router.refresh();
     });
   };
   if (!editing) {

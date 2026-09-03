@@ -30,11 +30,11 @@ function rosterCount(detail: EventDetail): number {
 async function common(localeLike: string | null | undefined, ev: Event) {
   const { t, locale } = await translatorFor(localeLike);
   const url = eventUrl(baseUrl(), ev.code);
-  const vars = eventVars(ev, locale);
+  const vars = eventVars(ev, locale, t("event.venueTbd"));
   const footer = t("email.footer", { app: APP_NAME });
   const meta = [
     { label: t("email.when"), value: `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)}` },
-    { label: t("email.where"), value: ev.venueName },
+    { label: t("email.where"), value: ev.venueName ?? t("event.venueTbd") },
   ];
   return { t, locale, url, vars, footer, meta, openLabel: t("email.openMatch") };
 }

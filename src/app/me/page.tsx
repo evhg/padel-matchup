@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
+import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
 import { NameEditor } from "@/components/NameEditor";
 import { NameGate } from "@/components/NameGate";
 import { getDb } from "@/db";
@@ -44,6 +45,8 @@ export default async function MePage() {
     const outcomeChip =
       ev.status === "cancelled" ? (
         <span className="chip-danger">{t("me.cancelled")}</span>
+      ) : m.placement ? (
+        <span className={m.placement === 1 ? "chip-open" : "chip-muted"}>{t("me.placement", { place: m.placement, total: ev.standings?.length ?? m.playerCount })}</span>
       ) : m.outcome === "won" ? (
         <span className="chip-open">{t("score.won")}</span>
       ) : m.outcome === "lost" ? (
@@ -65,7 +68,7 @@ export default async function MePage() {
               {isWaitlist && <span className="chip-full">{t("me.waitlist")}</span>}
             </div>
             <div className="truncate text-sm text-muted">
-              {formatEventDay(ev.startsAt, ev.tz, locale)} · {ev.venueName}
+              {formatEventDay(ev.startsAt, ev.tz, locale)} · {ev.venueName ?? t("event.venueTbd")}
             </div>
             {m.scores.length > 0 ? (
               <div className="mt-1 flex items-center gap-2">
@@ -94,6 +97,7 @@ export default async function MePage() {
           <NameEditor name={me.displayName} />
           <p className="mt-2 text-xs text-faint">{t("me.identityHelp")}</p>
         </section>
+        <HomeScreenPrompt />
 
         {upcoming.length === 0 && past.length === 0 ? (
           <section className="card text-center">

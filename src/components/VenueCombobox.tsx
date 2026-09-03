@@ -29,7 +29,7 @@ export function VenueCombobox({
   return (
     <div className="relative">
       <label htmlFor={id} className="label">
-        {t("create.venue")}
+        {t("create.venue")} <span className="font-normal">({t("common.optional")})</span>
       </label>
       <input
         id={id}
@@ -44,7 +44,6 @@ export function VenueCombobox({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         maxLength={80}
-        required
       />
       {open && (matches.length > 0 || (value.trim() && !exact)) && (
         <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-2xl border border-line bg-white shadow-card">
@@ -74,6 +73,7 @@ export function VenueCombobox({
           )}
         </ul>
       )}
+      {!value.trim() && <p className="mt-1 text-xs text-faint">{t("create.venueHint")}</p>}
       {showMap ? (
         <div className="mt-2">
           <label className="label">{t("create.venueMapUrl")}</label>

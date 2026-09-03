@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
 import { Header } from "@/components/Header";
+import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
 import { CopyButton, LinkBox, QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { isValidShareCode } from "@/lib/codes";
@@ -35,7 +36,7 @@ export default async function SharePage({ params }: Props) {
   const spotsLeft = detail.roster.filter(isClaimable).length;
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
-  const text = t("shareText.event", { day, time, venue: ev.venueName, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
+  const text = t("shareText.event", { day, time, venue: ev.venueName ?? t("event.venueTbd"), spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
   const mUrl = manageUrl(baseUrl(), code, ev.manageCode);
 
   return (
@@ -55,6 +56,8 @@ export default async function SharePage({ params }: Props) {
         <Link href={`/${code}`} className="btn-secondary w-full text-lg">
           {t("share.openEvent")} →
         </Link>
+
+        <HomeScreenPrompt />
 
         {emailEnabled() && (
           <section className="card">

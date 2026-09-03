@@ -21,6 +21,8 @@ async function createPostgresDb(url: string): Promise<Db> {
   const client = postgres(url, {
     // Supabase transaction pooler (port 6543) does not support prepared statements.
     prepare: false,
+    // No array columns → skip the type-introspection roundtrip on every new connection.
+    fetch_types: false,
     max: process.env.NODE_ENV === "production" ? 5 : 3,
     idle_timeout: 20,
     connect_timeout: 10,

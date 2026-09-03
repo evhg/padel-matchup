@@ -12,11 +12,11 @@ export async function translatorFor(localeLike: string | null | undefined) {
   return { t: createTranslator({ locale, messages }), locale };
 }
 
-export function eventVars(ev: Pick<Event, "startsAt" | "tz" | "venueName">, locale: string) {
+export function eventVars(ev: Pick<Event, "startsAt" | "tz" | "venueName">, locale: string, venueFallback = "TBD") {
   return {
     day: formatEventDay(ev.startsAt, ev.tz, locale),
     time: formatEventTime(ev.startsAt, ev.tz, locale),
-    venue: ev.venueName,
+    venue: ev.venueName ?? venueFallback,
   };
 }
 

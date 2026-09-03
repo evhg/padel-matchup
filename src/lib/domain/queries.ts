@@ -22,22 +22,24 @@ export async function getEventByCode(db: Db, code: string): Promise<EventDetail 
 }
 
 export async function getEventDetail(db: Db, ev: Event): Promise<EventDetail> {
-  const [creator] = await db.select().from(players).where(eq(players.id, ev.creatorPlayerId));
-  const slotRows = await db
-    .select({ slot: slots, player: players })
-    .from(slots)
-    .leftJoin(players, eq(players.id, slots.playerId))
-    .where(eq(slots.eventId, ev.id))
-    .orderBy(asc(slots.position));
+  const [[creator], slotRows, scoreRows, actRows] = await Promise.all([
+    db.select().from(players).where(eq(players.id, ev.creatorPlayerId)),
+    db
+      .select({ slot: slots, player: players })
+      .from(slots)
+      .leftJoin(players, eq(players.id, slots.playerId))
+      .where(eq(slots.eventId, ev.id))
+      .orderBy(asc(slots.position)),
+    db.select().from(scores).where(eq(scores.eventId, ev.id)).orderBy(asc(scores.setNumber)),
+    db
+      .select({ activity, actor: players })
+      .from(activity)
+      .leftJoin(players, eq(players.id, activity.actorPlayerId))
+      .where(eq(activity.eventId, ev.id))
+      .orderBy(desc(activity.createdAt))
+      .limit(50),
+  ]);
   const all: SlotWithPlayer[] = slotRows.map((r) => ({ ...r.slot, player: r.player }));
-  const scoreRows = await db.select().from(scores).where(eq(scores.eventId, ev.id)).orderBy(asc(scores.setNumber));
-  const actRows = await db
-    .select({ activity, actor: players })
-    .from(activity)
-    .leftJoin(players, eq(players.id, activity.actorPlayerId))
-    .where(eq(activity.eventId, ev.id))
-    .orderBy(desc(activity.createdAt))
-    .limit(50);
   return {
     event: ev,
     creator,
@@ -66,6 +68,8 @@ export type MyEvent = {
   slot: Slot;
   scores: Score[];
   outcome: Outcome | null;
+  /** Tournament: 1-based finishing position once finalized. */
+  placement: number | null;
   playerCount: number;
   isCreator: boolean;
 };
@@ -94,11 +98,13 @@ export async function getPlayerEvents(db: Db, playerId: string, now = new Date()
     seen.add(r.event.id);
     const evScores = scoreRows.filter((s) => s.eventId === r.event.id);
     const slot = r.slot ?? ({ team: null, status: "empty", position: 0 } as unknown as Slot);
+    const placementIdx = r.event.type === "tournament" && r.event.standings ? r.event.standings.indexOf(playerId) : -1;
     list.push({
       event: r.event,
       slot,
       scores: evScores,
       outcome: outcomeForTeam(evScores, r.slot?.team ?? null),
+      placement: placementIdx >= 0 ? placementIdx + 1 : null,
       playerCount: countMap.get(r.event.id) ?? 0,
       isCreator: r.event.creatorPlayerId === playerId,
     });

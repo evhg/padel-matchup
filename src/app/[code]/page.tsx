@@ -4,14 +4,15 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { AmericanoPanel } from "@/components/AmericanoPanel";
 import { CreatorPanel } from "@/components/CreatorPanel";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
+import { PlayAgainButton } from "@/components/PlayAgainButton";
 import { ScorePanel } from "@/components/ScorePanel";
 import { QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { SlotActions } from "@/components/SlotActions";
-import { StandingsPanel } from "@/components/StandingsPanel";
 import { getDb } from "@/db";
 import { calendarTitle, googleCalendarUrl } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
@@ -20,6 +21,7 @@ import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLa
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
 import { scorePermission } from "@/lib/domain/scores";
+import { getTournamentState } from "@/lib/domain/tournament";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 
 type Props = { params: Promise<{ code: string }> };
@@ -35,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ev = detail.event;
   const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
   const occupied = detail.roster.filter(isOccupied).length;
-  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${ev.venueName} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
+  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${ev.venueName ?? t("event.venueTbd")} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
   return {
     title,
     description,
@@ -81,19 +83,22 @@ export default async function EventPage({ params }: Props) {
   const title = calendarTitle(ev, typeLabel);
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
+  const venue = ev.venueName ?? t("event.venueTbd");
   const shareText =
     spotsLeft === 0 && ev.whenFull === "waitlist"
-      ? t("shareText.eventFull", { day, time, venue: ev.venueName, url })
-      : t("shareText.event", { day, time, venue: ev.venueName, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  const calendarHref = googleCalendarUrl(ev, { title, url, tz: ev.tz });
+      ? t("shareText.eventFull", { day, time, venue, url })
+      : t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
+  const calendarHref = googleCalendarUrl(ev, { title, url, tz: ev.tz, venueLabel: venue });
 
   const participants = roster.filter(isOccupied);
   const participantIds = participants.map((s) => s.playerId).filter((x): x is string => Boolean(x));
   const perm = scorePermission({ event: ev, now, viewerPlayerId: me?.id ?? null, isCreator: viewer.isCreator, participantIds });
   const enteredBy = detail.scores[0]?.enteredByPlayerId ? (participants.find((s) => s.playerId === detail.scores[0].enteredByPlayerId)?.player?.displayName ?? null) : null;
   const showScore = started && !cancelled && ev.type === "match";
-  const showStandings = started && !cancelled && ev.type === "tournament";
-  const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (ev.type === "tournament" && !(ev.standings?.length)));
+  const isTournament = ev.type === "tournament";
+  const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
+  const nameOf = new Map<string, string>(participants.map((s) => [s.playerId!, s.player?.displayName ?? s.invitedName ?? "?"]));
+  const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
   const statusChip = cancelled
     ? { cls: "chip-danger", label: t("event.statusCancelled") }
@@ -107,8 +112,13 @@ export default async function EventPage({ params }: Props) {
 
   const [venues, rolodex] = viewer.isCreator ? await Promise.all([getVenues(db, ev.creatorPlayerId), getRolodex(db, ev.creatorPlayerId)]) : [[], []];
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
-  const inviteTextTemplate = t("shareText.invite", { name: "__NAME__", day, time, venue: ev.venueName, url: "__URL__" });
-  const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue: ev.venueName, url: "__URL__" });
+  const inviteTextTemplate = t("shareText.invite", { name: "__NAME__", day, time, venue, url: "__URL__" });
+  const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue, url: "__URL__" });
+  const pendingInvites = roster.filter((s) => s.status === "invited" && s.inviteCode);
+  const groupInviteText =
+    pendingInvites.length > 0
+      ? t("shareText.inviteGroup", { day, time, venue, lines: pendingInvites.map((s) => `${s.invitedName}: ${inviteUrl(base, code, s.inviteCode!)}`).join("\n") })
+      : null;
 
   const slotRow = (s: SlotWithPlayer, index: number, isWaitlist = false) => {
     const name = s.player?.displayName ?? s.invitedName ?? "";
@@ -185,7 +195,7 @@ export default async function EventPage({ params }: Props) {
           </div>
           <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-bg px-4 py-3">
             <div className="min-w-0">
-              <div className="truncate text-base font-bold">{ev.venueName}</div>
+              <div className={`truncate text-base font-bold ${ev.venueName ? "" : "text-muted"}`}>{venue}</div>
               <div className="text-xs text-muted">{t("event.organizedBy", { name: creator.displayName })}</div>
             </div>
             {ev.venueMapUrl && (
@@ -212,6 +222,11 @@ export default async function EventPage({ params }: Props) {
               📅 {t("event.addToCalendar")}
             </a>
           )}
+          {viewer.isCreator && (started || cancelled) && (
+            <div className="mt-4">
+              <PlayAgainButton code={code} />
+            </div>
+          )}
         </section>
 
         {creatorBanner && (
@@ -232,12 +247,25 @@ export default async function EventPage({ params }: Props) {
             enteredBy={enteredBy}
           />
         )}
-        {showStandings && (
-          <StandingsPanel
+        {isTournament && tstate && (
+          <AmericanoPanel
             code={code}
-            players={participants.map((s) => ({ id: s.playerId!, name: s.player?.displayName ?? s.invitedName ?? "" }))}
-            standings={ev.standings ?? []}
-            canEdit={viewer.isCreator}
+            isCreator={viewer.isCreator}
+            canScore={viewer.isCreator || Boolean(me && participantIds.includes(me.id))}
+            locked={ev.scoreLockedByCreator}
+            started={started}
+            cancelled={cancelled}
+            courts={ev.courts}
+            maxCourts={tstate.maxCourts}
+            pointsPerMatch={ev.pointsPerMatch}
+            participantCount={participantIds.length}
+            rounds={tstate.rounds.map((r) => ({
+              id: r.id,
+              roundNumber: r.roundNumber,
+              resting: r.resting.map((p) => nameOf.get(p) ?? "?"),
+              matches: r.matches.map((m) => ({ id: m.id, court: m.court, a: [nameOf.get(m.a1) ?? "?", nameOf.get(m.a2) ?? "?"], b: [nameOf.get(m.b1) ?? "?", nameOf.get(m.b2) ?? "?"], sideA: m.sideA, sideB: m.sideB })),
+            }))}
+            standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff }))}
           />
         )}
 
@@ -288,11 +316,13 @@ export default async function EventPage({ params }: Props) {
               date: parts.date,
               time: parts.time,
               tz: ev.tz,
-              venueName: ev.venueName,
+              venueName: ev.venueName ?? "",
               venueMapUrl: ev.venueMapUrl ?? "",
               note: ev.note ?? "",
               capacity: ev.capacity,
               whenFull: ev.whenFull,
+              courts: ev.courts,
+              pointsPerMatch: ev.pointsPerMatch,
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
             rolodex={rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone }))}
@@ -302,6 +332,7 @@ export default async function EventPage({ params }: Props) {
             manageUrl={manageUrl(base, code, ev.manageCode)}
             inviteTextTemplate={inviteTextTemplate}
             isCancelled={cancelled}
+            groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
           />
         )}
 

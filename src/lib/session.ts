@@ -7,6 +7,8 @@ import { sessionSecret } from "@/lib/env";
 import type { Player } from "@/db/schema";
 
 export const PLAYER_COOKIE = "km_player";
+/** Non-httpOnly companion so client code can tell "no identity" from "stale render". */
+export const HAS_ID_COOKIE = "km_has_id";
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
 const secret = sessionSecret;
@@ -56,11 +58,13 @@ export async function setSessionPlayer(playerId: string): Promise<void> {
     path: "/",
     maxAge: ONE_YEAR,
   });
+  store.set(HAS_ID_COOKIE, "1", { httpOnly: false, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: ONE_YEAR });
 }
 
 export async function clearSessionPlayer(): Promise<void> {
   const store = await cookies();
   store.delete(PLAYER_COOKIE);
+  store.delete(HAS_ID_COOKIE);
 }
 
 /** Per-event organizer access granted by visiting /{code}/manage/{manageCode}. */
