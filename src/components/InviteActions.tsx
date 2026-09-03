@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { confirmInviteAction, declineInviteAction } from "@/actions/slots";
 
@@ -23,7 +22,6 @@ export function InviteActions({
   reconfirm: boolean;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const [name, setName] = useState(invitedName);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,14 +33,12 @@ export function InviteActions({
     start(async () => {
       const r = await confirmInviteAction(code, inviteCode, { name: hasIdentity ? undefined : name, email: email || undefined });
       if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-      router.refresh();
     });
   };
   const decline = () =>
     start(async () => {
       const r = await declineInviteAction(code, inviteCode);
       if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-      router.refresh();
     });
 
   return (

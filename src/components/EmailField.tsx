@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { updateMyEmail } from "@/actions/identity";
 import { setCreatorEmailAction } from "@/actions/events";
@@ -26,7 +25,6 @@ export function EmailField({
   emailEnabled: boolean;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const [email, setEmail] = useState(initial ?? "");
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
@@ -36,10 +34,7 @@ export function EmailField({
     e.preventDefault();
     start(async () => {
       const r = mode === "creator" ? await setCreatorEmailAction(code, email) : await updateMyEmail(email, code);
-      if (r.ok) {
-        setSaved(true);
-        router.refresh();
-      }
+      if (r.ok) setSaved(true);
     });
   };
 

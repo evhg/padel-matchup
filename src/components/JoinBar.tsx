@@ -1,8 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { startTransition, useState, useTransition } from "react";
 import { joinAction, leaveAction } from "@/actions/slots";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past";
@@ -23,30 +22,30 @@ export function JoinBar({
   isTournament: boolean;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const [sheet, setSheet] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  // State updates after an awaited server action are wrapped in startTransition
+  // so they join the router's transition instead of interrupting it (React 19).
   const join = (withName?: string) =>
     start(async () => {
       setError(null);
       const r = await joinAction(code, withName);
-      if (!r.ok) {
-        setError(r.error === "name_required" ? t("identity.nameRequired") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-        return;
-      }
-      setSheet(false);
-      router.refresh();
+      startTransition(() => {
+        if (!r.ok) setError(r.error === "name_required" ? t("identity.nameRequired") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+        else setSheet(false);
+      });
     });
 
   const leave = () => {
     if (!confirm(t("event.leaveConfirm"))) return;
     start(async () => {
       const r = await leaveAction(code);
-      if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-      router.refresh();
+      startTransition(() => {
+        if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+      });
     });
   };
 

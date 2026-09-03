@@ -40,7 +40,9 @@
     "demo": "See an example match",
     "step1": "Pick a time and court",
     "step2": "Share one short link",
-    "step3": "Players tap to join. Done."
+    "step3": "Players tap to join. Done.",
+    "formTitle": "Set up a match in 10 seconds",
+    "formSub": "Pick a time, get a link, share it. Players tap to join. No app, no signup."
   },
   "create": {
     "title": "New match",
@@ -53,7 +55,7 @@
     "time": "Time",
     "timezone": "Time zone",
     "venue": "Venue",
-    "venuePlaceholder": "Club or court name",
+    "venuePlaceholder": "Court TBD · or type a club",
     "venueNew": "Add \"{name}\"",
     "venueMapUrl": "Map link",
     "venueMapUrlPlaceholder": "https://maps.app.goo.gl/…",
@@ -72,7 +74,17 @@
     "creating": "Creating…",
     "errVenue": "Please enter a venue.",
     "errDate": "Please pick a valid date and time.",
-    "errPast": "That time is already in the past."
+    "errPast": "That time is already in the past.",
+    "venueHint": "Leave empty if the court isn't booked yet.",
+    "chipTonight": "Tonight {time}",
+    "chipTomorrow": "Tomorrow {time}",
+    "chipDay": "{day} {time}",
+    "chipsLabel": "Quick pick",
+    "courts": "Courts",
+    "courtsAuto": "Auto",
+    "pointsPerMatch": "Points per match",
+    "pointsFree": "Free",
+    "tournamentHelp": "Americano: partners rotate every round, most points wins. Rounds are generated on the day."
   },
   "share": {
     "title": "Your match is live",
@@ -143,7 +155,10 @@
     "capacityLabel": "Capacity {capacity}",
     "waitlistOn": "Waitlist on",
     "waitlistOff": "Closes when full",
-    "startsIn": "Starts {when}"
+    "startsIn": "Starts {when}",
+    "venueTbd": "Court TBD",
+    "playAgain": "Play again next week",
+    "playAgainHelp": "Same settings, one week later, fresh link."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -170,7 +185,9 @@
     "notifications": "Email me when players join, leave or respond",
     "scoreReminderBanner": "How did it go? Enter the final score.",
     "manageLinkTitle": "Organizer link",
-    "rolodexHint": "Start typing to pick from players you've played with."
+    "rolodexHint": "Start typing to pick from players you've played with.",
+    "inviteAll": "Send all invites in one message",
+    "inviteAllHelp": "One message listing each person's personal link. Good for a group chat."
   },
   "score": {
     "title": "Score",
@@ -211,7 +228,8 @@
     "cancelled": "Cancelled",
     "you": "You",
     "identityHelp": "Your identity lives in this browser. Same name, no password.",
-    "noIdentity": "Enter your name to see your matches."
+    "noIdentity": "Enter your name to see your matches.",
+    "placement": "#{place} of {total}"
   },
   "notFound": {
     "title": "Link not found",
@@ -239,7 +257,8 @@
     "eventFull": "🎾 Padel {day} at {time} — {venue}. Full, but the waitlist is open: {url}",
     "invite": "🎾 Hey {name}! I saved you a spot for padel {day} at {time} at {venue}. Confirm here: {url}",
     "nudge": "🎾 {name}, still on for padel {day} at {time} at {venue}? Please confirm or decline here: {url}",
-    "spotsLeft": "{count, plural, =0 {No spots left} one {# spot left} other {# spots left}}"
+    "spotsLeft": "{count, plural, =0 {No spots left} one {# spot left} other {# spots left}}",
+    "inviteGroup": "🎾 Padel {day} at {time} — {venue}. I reserved spots for you. Confirm with your personal link:\n{lines}"
   },
   "og": {
     "players": "{count}/{capacity} players",
@@ -249,7 +268,8 @@
     "cancelled": "Cancelled",
     "finished": "Finished",
     "match": "Padel match",
-    "tournament": "Padel tournament"
+    "tournament": "Padel tournament",
+    "venueTbd": "Court TBD"
   },
   "activity": {
     "created": "{name} created the match",
@@ -332,5 +352,46 @@
     "not_started": "Score entry opens when the match starts.",
     "not_participant": "Only players in this match can enter the score.",
     "generic": "Something went wrong. Please try again."
+  },
+  "homescreen": {
+    "title": "Add Kicksmash to your home screen",
+    "body": "Next time it's one tap to your matches, like an app.",
+    "add": "Add to Home Screen",
+    "iosHint": "Tap the Share button below, then \"Add to Home Screen\".",
+    "later": "Not now",
+    "done": "Added to home screen"
+  },
+  "americano": {
+    "title": "Americano",
+    "howItWorks": "Partners rotate every round, everyone plays everyone, most points wins. Sit-outs are shared evenly. Players who join later are included from the next round.",
+    "standings": "Standings",
+    "finalStandings": "Final standings",
+    "live": "Live",
+    "locked": "Finalized by organizer",
+    "round": "Round {n}",
+    "court": "Court {n}",
+    "resting": "Sitting out: {names}",
+    "generateRound": "Generate round {n}",
+    "generateFirst": "Generate round 1",
+    "needPlayers": "Needs at least 4 players in the roster ({count} so far).",
+    "deleteLastRound": "Delete round {n}",
+    "deleteLastRoundConfirm": "Delete round {n}? Only possible while it has no scores.",
+    "finalize": "Finalize standings",
+    "finalizeConfirm": "Lock all scores and publish the final standings? You can unlock later.",
+    "unlock": "Unlock scores",
+    "courts": "Courts",
+    "auto": "Auto ({n})",
+    "pointsPerMatch": "Points per match",
+    "free": "Free",
+    "enterHelp": "Enter each court's points. Anyone in the tournament can fill in or correct scores until the organizer finalizes.",
+    "notStarted": "Score entry opens when the tournament starts. Rounds can be prepared now.",
+    "save": "Save",
+    "saved": "Saved",
+    "pts": "pts",
+    "colPlayed": "P",
+    "colWins": "W",
+    "colDiff": "+/-",
+    "noRounds": "No rounds yet.",
+    "vs": "vs"
   }
 }

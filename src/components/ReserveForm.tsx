@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { reserveAction } from "@/actions/slots";
 import { ShareButtons } from "./ShareSheet";
@@ -23,7 +22,6 @@ export function ReserveForm({
   emailEnabled: boolean;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -62,7 +60,6 @@ export function ReserveForm({
       setPhone("");
       setEmail("");
       setMore(false);
-      router.refresh();
     });
   };
 

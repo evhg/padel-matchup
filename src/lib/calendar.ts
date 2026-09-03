@@ -9,10 +9,11 @@ export function calendarTitle(ev: Pick<Event, "title" | "type">, fallback: strin
 }
 
 /** Google Calendar "render" URL — works with zero email. */
-export function googleCalendarUrl(ev: CalendarEvent, opts: { title: string; url: string; tz: string }): string {
+export function googleCalendarUrl(ev: CalendarEvent, opts: { title: string; url: string; tz: string; venueLabel?: string }): string {
   const end = new Date(ev.startsAt.getTime() + EVENT_DURATION_MS);
   const details = [ev.note, opts.url].filter(Boolean).join("\n\n");
-  const location = ev.venueMapUrl ? `${ev.venueName} (${ev.venueMapUrl})` : ev.venueName;
+  const venue = ev.venueName ?? opts.venueLabel ?? "";
+  const location = ev.venueMapUrl ? `${venue} (${ev.venueMapUrl})` : venue;
   const p = new URLSearchParams({
     action: "TEMPLATE",
     text: opts.title,
@@ -74,13 +75,13 @@ export function buildIcs(input: IcsInput): string {
     `DTSTART:${icsStamp(event.startsAt)}`,
     `DTEND:${icsStamp(end)}`,
     `SUMMARY:${icsEscape(title)}`,
-    `LOCATION:${icsEscape(event.venueName)}`,
+    ...(event.venueName ? [`LOCATION:${icsEscape(event.venueName)}`] : []),
     `DESCRIPTION:${icsEscape([event.note, url].filter(Boolean).join("\n\n"))}`,
     `URL:${url}`,
     `STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
     `ORGANIZER;CN=${icsEscape(organizer.name)}:mailto:${organizer.email}`,
   ];
-  if (event.venueMapUrl) lines.push(`X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-TITLE=${icsEscape(event.venueName)}:${event.venueMapUrl}`);
+  if (event.venueMapUrl) lines.push(`X-APPLE-STRUCTURED-LOCATION;VALUE=URI;X-TITLE=${icsEscape(event.venueName ?? "")}:${event.venueMapUrl}`);
   if (attendee) {
     lines.push(`ATTENDEE;CN=${icsEscape(attendee.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${attendee.email}`);
   }

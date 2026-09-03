@@ -179,7 +179,8 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ## Product rules baked in
 
-- **Match = exactly 4 players.** Tournament = creator-set capacity (2–64). Round/americano scoring is roadmap (`ROADMAP.md`).
+- **Match = exactly 4 players.** Tournament = creator-set capacity (4–64) running as an **americano**: the organizer generates rounds on the day (rotating partners, fair sit-outs, 1–N courts), any participant enters per-court points, standings update live, the organizer finalizes to lock.
+- **Fast create:** quick-pick time chips, venue optional ("Court TBD"), the landing page *is* the form, "Play again next week" clones any match in one tap, and an Add-to-Home-Screen prompt gives organizers an app-like shortcut.
 - **When full:** per event, waitlist with auto-promotion on dropout (leave / removal / declined invite) or hard close.
 - **Join** is first-come-first-serve and atomic: the event row is locked per mutation and one `UPDATE … WHERE id = (SELECT … LIMIT 1)` claims exactly one slot, so two taps on the last spot resolve cleanly (tested with 12 parallel joins).
 - **Reserved slots** get a personal invite link. The app never messages anyone; organizers get one-tap WhatsApp / Telegram forward buttons with pre-filled localized text. Declined slots become open spots.

@@ -120,32 +120,3 @@ export async function saveMatchScore(
     return { event: updated, scores: inserted };
   });
 }
-
-/** Tournament v1: creator-only ordered standings (player ids). Rounds are roadmap. */
-export async function saveTournamentStandings(
-  db: Db,
-  input: { eventId: string; playerId: string | null; isCreator: boolean; standings: string[]; now?: Date },
-): Promise<Event> {
-  const now = input.now ?? new Date();
-  if (!input.isCreator) throw new DomainError("forbidden");
-  return db.transaction(async (tx) => {
-    const ev = await lockEvent(tx, input.eventId);
-    if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
-    if (ev.status === "cancelled") throw new DomainError("cancelled");
-    if (now.getTime() < ev.startsAt.getTime()) throw new DomainError("not_started");
-    const roster = await tx
-      .select({ playerId: slots.playerId })
-      .from(slots)
-      .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["joined", "confirmed"])));
-    const valid = new Set(roster.map((r) => r.playerId).filter(Boolean) as string[]);
-    const standings = input.standings.filter((id, i, arr) => valid.has(id) && arr.indexOf(id) === i);
-    if (standings.length === 0) throw new DomainError("invalid", "standings");
-    const [updated] = await tx
-      .update(events)
-      .set({ standings, scoreLockedByCreator: true, scoreReminderSent: true })
-      .where(eq(events.id, ev.id))
-      .returning();
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "score_entered", meta: { byCreator: 1 } });
-    return updated;
-  });
-}

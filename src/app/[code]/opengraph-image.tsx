@@ -77,7 +77,7 @@ export default async function OgImage({ params }: { params: Promise<{ code: stri
               <div style={{ fontSize: 132, fontWeight: 800, letterSpacing: -6, lineHeight: 1 }}>{time}</div>
               <div style={{ display: "flex", flexDirection: "column", paddingBottom: 14 }}>
                 <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1 }}>{day}</div>
-                <div style={{ fontSize: 34, color: "#5B6470", maxWidth: 640, overflow: "hidden", whiteSpace: "nowrap" }}>{ev.venueName}</div>
+                <div style={{ fontSize: 34, color: "#5B6470", maxWidth: 640, overflow: "hidden", whiteSpace: "nowrap" }}>{ev.venueName ?? t("og.venueTbd")}</div>
               </div>
             </div>
           </div>
@@ -107,6 +107,6 @@ export default async function OgImage({ params }: { params: Promise<{ code: stri
         </div>
       </div>
     ),
-    { ...size, fonts: await fonts() },
+    { ...size, fonts: await fonts(), headers: { "Cache-Control": "public, max-age=0, s-maxage=120, stale-while-revalidate=600" } },
   );
 }

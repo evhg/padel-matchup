@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { tally } from "@/lib/domain/scores";
@@ -27,7 +26,6 @@ export function ScorePanel({
   enteredBy: string | null;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [sets, setSets] = useState<S[]>(scores.length ? scores : [{ setNumber: 1, sideA: 6, sideB: 4 }]);
   const [teamA, setTeamA] = useState<string[]>(players.filter((p) => p.team === "a").map((p) => p.id));
@@ -52,7 +50,6 @@ export function ScorePanel({
         return;
       }
       setEditing(false);
-      router.refresh();
     });
 
   const numInput = (value: number, onChange: (n: number) => void, label: string) => (

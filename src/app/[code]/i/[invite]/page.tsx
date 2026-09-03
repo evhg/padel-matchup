@@ -55,7 +55,8 @@ export default async function InvitePage({ params, searchParams }: Props) {
   const mine = Boolean(me && slot.playerId === me.id);
   const state: "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled" =
     ev.status === "cancelled" ? "cancelled" : slot.status === "invited" ? "invited" : slot.status === "declined" ? "declined" : (slot.status === "confirmed" || slot.status === "joined") && mine ? "confirmed_mine" : "gone";
-  const calendarHref = googleCalendarUrl(ev, { title, url: eventUrl(baseUrl(), code), tz: ev.tz });
+  const venue = ev.venueName ?? t("event.venueTbd");
+  const calendarHref = googleCalendarUrl(ev, { title, url: eventUrl(baseUrl(), code), tz: ev.tz, venueLabel: venue });
 
   return (
     <>
@@ -72,8 +73,8 @@ export default async function InvitePage({ params, searchParams }: Props) {
               <div className="text-xs font-semibold text-faint">{tzLabel(ev.startsAt, ev.tz, locale)}</div>
             </div>
           </div>
-          <div className="mt-3 rounded-2xl bg-bg px-4 py-3 font-bold">
-            {ev.venueName}
+          <div className={`mt-3 rounded-2xl bg-bg px-4 py-3 font-bold ${ev.venueName ? "" : "text-muted"}`}>
+            {venue}
             {ev.venueMapUrl && (
               <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm link">
                 📍 {t("event.openMap")}

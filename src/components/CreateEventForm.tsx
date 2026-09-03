@@ -31,6 +31,8 @@ export function CreateEventForm({
     note: "",
     capacity: 8,
     whenFull: "waitlist",
+    courts: null,
+    pointsPerMatch: null,
   });
   const touched = useRef(false);
   const [name, setName] = useState("");
@@ -59,7 +61,6 @@ export function CreateEventForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!values.venueName.trim()) return setError(t("create.errVenue"));
     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
     start(async () => {
       const r = await createEventAction({
@@ -69,11 +70,13 @@ export function CreateEventForm({
         date: values.date,
         time: values.time,
         tz: values.tz,
-        venueName: values.venueName,
+        venueName: values.venueName || undefined,
         venueMapUrl: values.venueMapUrl || undefined,
         note: values.note || undefined,
         capacity: values.type === "tournament" ? values.capacity : undefined,
         whenFull: values.whenFull,
+        courts: values.type === "tournament" ? values.courts : null,
+        pointsPerMatch: values.type === "tournament" ? values.pointsPerMatch : null,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));

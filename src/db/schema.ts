@@ -62,7 +62,8 @@ export const events = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     /** IANA timezone the event was created in (display only; starts_at is UTC). */
     tz: text("tz").notNull(),
-    venueName: text("venue_name").notNull(),
+    /** Optional: null means "court TBD". */
+    venueName: text("venue_name"),
     venueMapUrl: text("venue_map_url"),
     capacity: integer("capacity").notNull(),
     whenFull: whenFullEnum("when_full").notNull().default("waitlist"),
@@ -77,7 +78,11 @@ export const events = pgTable(
     scoreReminderSent: boolean("score_reminder_sent").notNull().default(false),
     /** iCalendar SEQUENCE — bumped on every time/venue change or cancellation. */
     icsSequence: integer("ics_sequence").notNull().default(0),
-    /** Tournament v1: ordered array of player ids (1st, 2nd, ...). Rounds are roadmap. */
+    /** Americano: number of courts in play (null → floor(players / 4)). */
+    courts: integer("courts"),
+    /** Americano: points per match (e.g. 16, 21, 24, 32); null → free scoring. */
+    pointsPerMatch: integer("points_per_match"),
+    /** Tournament: final standings snapshot (ordered player ids) written on finalize. */
     standings: jsonb("standings").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -182,24 +187,50 @@ export const activity = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// ROADMAP (migration stubs only — do not build in v1):
-//
-// export const tournamentRounds = pgTable("tournament_rounds", {
-//   id: uuid("id").primaryKey().defaultRandom(),
-//   eventId: uuid("event_id").notNull().references(() => events.id, { onDelete: "cascade" }),
-//   roundNumber: integer("round_number").notNull(),
-//   // pairings: jsonb — [{ court, teamA: [playerId, playerId], teamB: [...] }]
-// });
-//
-// export const tournamentScores = pgTable("tournament_scores", {
-//   id: uuid("id").primaryKey().defaultRandom(),
-//   roundId: uuid("round_id").notNull().references(() => tournamentRounds.id, { onDelete: "cascade" }),
-//   court: integer("court").notNull(),
-//   sideA: integer("side_a").notNull(),
-//   sideB: integer("side_b").notNull(),
-//   enteredByPlayerId: uuid("entered_by_player_id").references(() => players.id),
-// });
+// Americano engine — rounds of rotating-partner doubles, per-match points.
 // ---------------------------------------------------------------------------
+export const tournamentRounds = pgTable(
+  "tournament_rounds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    roundNumber: integer("round_number").notNull(),
+    /** Players sitting this round out (ordered player ids). */
+    resting: jsonb("resting").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("tournament_rounds_event_round_idx").on(t.eventId, t.roundNumber)],
+);
+
+export const tournamentMatches = pgTable(
+  "tournament_matches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => tournamentRounds.id, { onDelete: "cascade" }),
+    court: integer("court").notNull(),
+    a1: uuid("a1")
+      .notNull()
+      .references(() => players.id),
+    a2: uuid("a2")
+      .notNull()
+      .references(() => players.id),
+    b1: uuid("b1")
+      .notNull()
+      .references(() => players.id),
+    b2: uuid("b2")
+      .notNull()
+      .references(() => players.id),
+    sideA: integer("side_a"),
+    sideB: integer("side_b"),
+    enteredByPlayerId: uuid("entered_by_player_id").references(() => players.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("tournament_matches_round_court_idx").on(t.roundId, t.court), index("tournament_matches_round_idx").on(t.roundId)],
+);
 
 // ---------------------------------------------------------------------------
 // Relations (for db.query.*)
@@ -235,6 +266,15 @@ export const venuesRelations = relations(venues, ({ one }) => ({
   creator: one(players, { fields: [venues.creatorPlayerId], references: [players.id] }),
 }));
 
+export const tournamentRoundsRelations = relations(tournamentRounds, ({ one, many }) => ({
+  event: one(events, { fields: [tournamentRounds.eventId], references: [events.id] }),
+  matches: many(tournamentMatches),
+}));
+
+export const tournamentMatchesRelations = relations(tournamentMatches, ({ one }) => ({
+  round: one(tournamentRounds, { fields: [tournamentMatches.roundId], references: [tournamentRounds.id] }),
+}));
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -245,6 +285,8 @@ export type Slot = typeof slots.$inferSelect;
 export type Score = typeof scores.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
 export type Activity = typeof activity.$inferSelect;
+export type TournamentRound = typeof tournamentRounds.$inferSelect;
+export type TournamentMatch = typeof tournamentMatches.$inferSelect;
 export type EventType = Event["type"];
 export type EventStatus = Event["status"];
 export type SlotStatus = Slot["status"];
