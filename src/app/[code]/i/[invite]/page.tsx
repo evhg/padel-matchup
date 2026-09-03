@@ -1,0 +1,130 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getLocale, getTranslations } from "next-intl/server";
+import { Header } from "@/components/Header";
+import { InviteActions } from "@/components/InviteActions";
+import { getDb } from "@/db";
+import { calendarTitle, googleCalendarUrl } from "@/lib/calendar";
+import { isValidInviteCode, isValidShareCode } from "@/lib/codes";
+import { baseUrl, emailEnabled } from "@/lib/config";
+import { formatEventDayLong, formatEventTime, tzLabel } from "@/lib/dates";
+import { getSlotByInviteCode } from "@/lib/domain/queries";
+import { eventUrl } from "@/lib/share";
+import { getSessionPlayer } from "@/lib/session";
+
+type Props = { params: Promise<{ code: string; invite: string }>; searchParams: Promise<{ decline?: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { invite } = await params;
+  const t = await getTranslations();
+  const db = await getDb();
+  const found = isValidInviteCode(invite) ? await getSlotByInviteCode(db, invite) : null;
+  return { title: found?.slot.invitedName ? t("invitePage.title", { name: found.slot.invitedName }) : t("event.match"), robots: { index: false } };
+}
+
+export default async function InvitePage({ params, searchParams }: Props) {
+  const { code, invite } = await params;
+  const { decline } = await searchParams;
+  if (!isValidShareCode(code) || !isValidInviteCode(invite)) notFound();
+  const db = await getDb();
+  const found = await getSlotByInviteCode(db, invite);
+  const [t, locale, me] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db)]);
+
+  const eventHref = `/${code}`;
+  if (!found || found.event.code !== code) {
+    return (
+      <>
+        <Header minimal />
+        <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-6">
+          <section className="card text-center">
+            <h1 className="text-2xl font-extrabold">{t("invitePage.gone")}</h1>
+            <p className="mt-2 text-muted">{t("invitePage.goneHelp")}</p>
+            <Link href={eventHref} className="btn-primary mt-5 w-full">
+              {t("invitePage.goToEvent")}
+            </Link>
+          </section>
+        </main>
+      </>
+    );
+  }
+
+  const { slot, event: ev, creator } = found;
+  const name = slot.invitedName ?? "";
+  const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
+  const mine = Boolean(me && slot.playerId === me.id);
+  const state: "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled" =
+    ev.status === "cancelled" ? "cancelled" : slot.status === "invited" ? "invited" : slot.status === "declined" ? "declined" : (slot.status === "confirmed" || slot.status === "joined") && mine ? "confirmed_mine" : "gone";
+  const calendarHref = googleCalendarUrl(ev, { title, url: eventUrl(baseUrl(), code), tz: ev.tz });
+
+  return (
+    <>
+      <Header minimal />
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-4 pb-12">
+        <section className="card">
+          <div className="text-xs font-extrabold uppercase tracking-wider text-faint">{t(ev.type === "match" ? "event.match" : "event.tournament")}</div>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{state === "invited" || state === "declined" ? t("invitePage.title", { name }) : title}</h1>
+          <p className="mt-1 text-muted">{t("invitePage.subtitle", { organizer: creator.displayName })}</p>
+          <div className="mt-4 flex items-end gap-3">
+            <div className="text-5xl font-extrabold tracking-tighter tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
+            <div className="pb-1">
+              <div className="text-lg font-bold leading-tight">{formatEventDayLong(ev.startsAt, ev.tz, locale)}</div>
+              <div className="text-xs font-semibold text-faint">{tzLabel(ev.startsAt, ev.tz, locale)}</div>
+            </div>
+          </div>
+          <div className="mt-3 rounded-2xl bg-bg px-4 py-3 font-bold">
+            {ev.venueName}
+            {ev.venueMapUrl && (
+              <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm link">
+                📍 {t("event.openMap")}
+              </a>
+            )}
+          </div>
+          {ev.title && <div className="mt-2 text-sm text-muted">{ev.title}</div>}
+          {ev.note && <p className="mt-2 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
+        </section>
+
+        <section className="card">
+          {state === "invited" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} autoDecline={decline === "1"} reconfirm={false} />}
+          {state === "declined" && (
+            <>
+              <h2 className="text-xl font-extrabold">{t("invitePage.declined")}</h2>
+              <p className="mt-1 mb-4 text-sm text-muted">{t("invitePage.declinedHelp")}</p>
+              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} autoDecline={false} reconfirm />
+            </>
+          )}
+          {state === "confirmed_mine" && (
+            <>
+              <h2 className="text-xl font-extrabold text-ok">✓ {t("invitePage.confirmed")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("invitePage.confirmedHelp")}</p>
+              <a href={calendarHref} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-4 w-full">
+                📅 {t("event.addToCalendar")}
+              </a>
+              <Link href={eventHref} className="btn-primary mt-2 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </>
+          )}
+          {state === "gone" && (
+            <>
+              <h2 className="text-xl font-extrabold">{t("invitePage.gone")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("invitePage.goneHelp")}</p>
+              <Link href={eventHref} className="btn-primary mt-4 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </>
+          )}
+          {state === "cancelled" && (
+            <>
+              <h2 className="text-xl font-extrabold text-danger">{t("event.cancelled")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("event.cancelledHelp")}</p>
+              <Link href={eventHref} className="btn-ghost mt-4 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </>
+          )}
+        </section>
+      </main>
+    </>
+  );
+}
