@@ -137,7 +137,7 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
   });
 }
 
-/** Removes the latest round, only while none of its matches has a score. */
+/** Removes the latest round (scores in it are lost; the organizer confirms in the UI). */
 export async function deleteLastRound(db: Db, input: { eventId: string }): Promise<number | null> {
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
@@ -145,7 +145,6 @@ export async function deleteLastRound(db: Db, input: { eventId: string }): Promi
     const rounds = await loadRounds(tx, ev.id);
     const last = rounds.at(-1);
     if (!last) return null;
-    if (last.matches.some((m) => m.sideA != null || m.sideB != null)) throw new DomainError("invalid", "round_scored");
     await tx.delete(tournamentRounds).where(eq(tournamentRounds.id, last.id));
     return last.roundNumber;
   });

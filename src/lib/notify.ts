@@ -2,7 +2,7 @@ import "server-only";
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, type Event, type Player, type Slot } from "@/db/schema";
-import { buildIcs, googleCalendarUrl } from "@/lib/calendar";
+import { buildIcs } from "@/lib/calendar";
 import { eventTitleLine, venueWithCourt } from "@/lib/labels";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
@@ -88,12 +88,6 @@ export async function icsForDownload(db: Db, detail: EventDetail, viewer: Recipi
   return icsFor(detail.event, c, undefined, "PUBLISH");
 }
 
-/** Google Calendar link for the current viewer (private link inside when signed in). */
-export async function googleCalendarLinkFor(db: Db, detail: EventDetail, viewer: Recipient | null): Promise<string> {
-  const c = await ctx(db, detail.event, viewer?.locale ?? detail.creator.locale, viewer, detail);
-  return googleCalendarUrl(detail.event, { title: c.title, url: [c.url, c.playersLine].filter(Boolean).join("\n\n"), tz: detail.event.tz, location: c.venue });
-}
-
 /** Player joined/confirmed/was promoted: calendar invite (.ics REQUEST). */
 export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind: "joined" | "promoted" = "joined"): Promise<void> {
   if (!emailEnabled() || !player.email) return;
@@ -103,7 +97,7 @@ export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind
     heading: c.t(`${ns}.heading` as "email.calendarInvite.heading"),
     body: c.t(`${ns}.body` as "email.calendarInvite.body", c.vars),
     meta: c.meta,
-    cta: { label: c.t("event.addToCalendar"), url: googleCalendarUrl(ev, { title: c.title, url: c.url, tz: ev.tz, location: c.venue }) },
+    cta: { label: c.openLabel, url: c.url },
     footer: c.footer,
     eventUrl: c.url,
     openLabel: c.openLabel,

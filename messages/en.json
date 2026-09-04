@@ -491,7 +491,8 @@
     "noRounds": "No rounds yet.",
     "vs": "vs",
     "needMultiple": "Round 1 needs names in fours ({count} so far): add {up} or remove {down}.",
-    "autoShrink": "Generating round 1 with {count} players closes the remaining spots."
+    "autoShrink": "Generating round 1 with {count} players closes the remaining spots.",
+    "deleteScoredRoundConfirm": "Delete round {n}? Its scores will be lost."
   },
   "calendar": {
     "title": "Add to calendar",
@@ -499,7 +500,11 @@
     "apple": "Apple / Outlook",
     "completeSuffix": "COMPLETE",
     "players": "Players: {names}",
-    "playersLabel": "Players"
+    "playersLabel": "Players",
+    "emailTitle": "Add to your calendar",
+    "emailHelp": "Enter your email and we'll send a real calendar invite. It updates itself if the time changes or the match is cancelled, and you'll get match updates.",
+    "send": "Send invite",
+    "sentTo": "Calendar invite sent to {email}. It updates automatically if anything changes."
   },
   "push": {
     "enable": "Remind me 1 hour before",

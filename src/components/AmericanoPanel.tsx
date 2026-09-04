@@ -47,7 +47,7 @@ export function AmericanoPanel({
   const [error, setError] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
   const last = rounds.at(-1);
-  const lastUnscored = last ? last.matches.every((m) => m.sideA == null && m.sideB == null) : false;
+  const lastScored = last ? last.matches.some((m) => m.sideA != null || m.sideB != null) : false;
   const nextRound = (last?.roundNumber ?? 0) + 1;
   const firstRound = rounds.length === 0;
   const inFours = participantCount % 4 === 0;
@@ -75,9 +75,8 @@ export function AmericanoPanel({
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="block">
             <span className="label">{t("americano.courts")}</span>
-            <select className="input" value={courts ?? ""} disabled={pending} onChange={(e) => run(() => setTournamentSettingsAction(code, { courts: e.target.value ? Number(e.target.value) : null }))}>
-              <option value="">{t("americano.auto", { n: Math.max(1, maxCourts) })}</option>
-              {Array.from({ length: Math.max(1, maxCourts) }, (_, i) => i + 1).map((n) => (
+            <select className="input" value={courts ?? Math.max(1, maxCourts)} disabled={pending} onChange={(e) => run(() => setTournamentSettingsAction(code, { courts: Number(e.target.value) }))}>
+              {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
@@ -136,13 +135,13 @@ export function AmericanoPanel({
           <div key={r.id} className="rounded-2xl border border-line p-3">
             <div className="flex items-center justify-between">
               <div className="font-extrabold">{t("americano.round", { n: r.roundNumber })}</div>
-              {isCreator && !locked && r.id === last?.id && lastUnscored && (
+              {isCreator && !locked && r.id === last?.id && (
                 <button
                   type="button"
                   className="btn-danger btn-xs"
                   disabled={pending}
                   onClick={() => {
-                    if (confirm(t("americano.deleteLastRoundConfirm", { n: r.roundNumber }))) run(() => deleteLastRoundAction(code));
+                    if (confirm(t(lastScored ? "americano.deleteScoredRoundConfirm" : "americano.deleteLastRoundConfirm", { n: r.roundNumber }))) run(() => deleteLastRoundAction(code));
                   }}
                 >
                   {t("americano.deleteLastRound", { n: r.roundNumber })}
