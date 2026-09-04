@@ -150,3 +150,22 @@ export function icsStamp(date: Date): string {
 export function addMs(date: Date, ms: number): Date {
   return new Date(date.getTime() + ms);
 }
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Weekday (0 = Sunday) and "HH:mm" of an instant, in `tz`. */
+export function timePatternOf(date: Date, tz: string): { dow: number; time: string } {
+  const w = wallClock(date, tz);
+  return { dow: new Date(Date.UTC(w.year, w.month - 1, w.day)).getUTCDay(), time: `${pad2(w.hour)}:${pad2(w.minute)}` };
+}
+
+/** Next date in `tz` that falls on weekday `dow` at `time`, at least 30 minutes ahead of `now`. */
+export function nextOccurrence(dow: number, time: string, tz: string, now = new Date()): { date: string; time: string } {
+  const w = wallClock(now, tz);
+  const todayDow = new Date(Date.UTC(w.year, w.month - 1, w.day)).getUTCDay();
+  let off = (dow - todayDow + 7) % 7;
+  const [hh, mm] = time.split(":").map(Number);
+  if (off === 0 && hh * 60 + mm <= w.hour * 60 + w.minute + 30) off = 7;
+  const d = new Date(Date.UTC(w.year, w.month - 1, w.day + off));
+  return { date: `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`, time };
+}

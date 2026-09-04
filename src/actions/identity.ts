@@ -9,7 +9,7 @@ import { baseUrl, emailEnabled } from "@/lib/config";
 import { consumeEmailCode, findPlayerByPersonalToken, issueEmailCode, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
 import { getPlayer, normalizeEmail, updatePlayer } from "@/lib/domain/players";
 import { getEventByCode } from "@/lib/domain/queries";
-import { sendCalendarInvite, sendEmailCode } from "@/lib/notify";
+import { sendEmailCode, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
 import { getSessionPlayer, getSessionPlayerId, setSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
@@ -54,14 +54,12 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
     const normalized = normalizeEmail(email);
     const others = normalized ? (await playersWithEmail(db, normalized)).filter((o) => o.id !== me.id) : [];
     const p = (await updatePlayer(db, me.id, { email: normalized })) ?? me;
-    if (normalized && eventCode) {
-      const detail = await getEventByCode(db, eventCode);
-      const inEvent = detail?.roster.some((s) => s.playerId === me.id && (s.status === "joined" || s.status === "confirmed"));
-      if (detail && inEvent && detail.event.status !== "cancelled") {
-        after(() => sendCalendarInvite(db, detail.event, p));
-      }
-      revalidatePath(`/${eventCode}`);
+    if (normalized && normalized !== me.email) {
+      // New address: calendar invite when in this match (carries the personal link), else the personal-link email.
+      const detail = eventCode ? await getEventByCode(db, eventCode) : null;
+      after(() => welcomeEmail(db, p, detail?.event ?? null));
     }
+    if (eventCode) revalidatePath(`/${eventCode}`);
     revalidatePath("/me");
     return { ...pub(p), knownElsewhere: others.length > 0 };
   });

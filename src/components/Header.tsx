@@ -25,19 +25,11 @@ export async function Header({ minimal = false }: { minimal?: boolean }) {
   );
 }
 
-export async function Footer({ code }: { code?: string }) {
-  const t = await getTranslations();
+/** Brand line only. `spacious` leaves room below so a phone can scroll the CTA to mid-screen. */
+export function Footer({ spacious = false }: { spacious?: boolean }) {
   return (
-    <footer className="mx-auto mt-10 flex w-full max-w-xl flex-wrap items-center justify-between gap-3 px-4 pb-10 text-sm text-muted">
-      <div className="flex gap-4">
-        <Link href="/me" prefetch={false} className="link">
-          {t("common.myMatches")}
-        </Link>
-        <Link href="/new" prefetch={false} className="link">
-          {code ? t("event.createYourOwn") : t("common.newMatch")}
-        </Link>
-      </div>
-      <span className="text-faint">{APP_NAME}</span>
+    <footer className={`mx-auto mt-10 flex w-full max-w-xl items-center justify-end px-4 text-sm text-faint ${spacious ? "pb-[45vh]" : "pb-16"}`}>
+      <span>{APP_NAME}</span>
     </footer>
   );
 }

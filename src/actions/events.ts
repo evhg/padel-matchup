@@ -8,7 +8,7 @@ import { getDb } from "@/db";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
 import { normalizeEmail, updatePlayer } from "@/lib/domain/players";
-import { notifyEventCancelled, notifyEventUpdated, notifyPromotion } from "@/lib/notify";
+import { notifyEventCancelled, notifyEventUpdated, notifyPromotion, welcomeEmail } from "@/lib/notify";
 import { ActionFailure, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 
 const createSchema = z.object({
@@ -22,7 +22,7 @@ const createSchema = z.object({
   venueMapUrl: z.string().max(500).optional(),
   court: z.string().max(40).optional(),
   note: z.string().max(500).optional(),
-  capacity: z.coerce.number().int().min(2).max(64).optional(),
+  capacity: z.coerce.number().int().min(4).max(64).optional(),
   whenFull: z.enum(["waitlist", "closed"]),
   courts: z.coerce.number().int().min(1).max(16).nullable().optional(),
   pointsPerMatch: z.coerce.number().int().min(4).max(99).nullable().optional(),
@@ -74,7 +74,7 @@ const updateSchema = z.object({
   venueMapUrl: z.string().max(500).optional(),
   court: z.string().max(40).optional(),
   note: z.string().max(500).optional(),
-  capacity: z.coerce.number().int().min(2).max(64).optional(),
+  capacity: z.coerce.number().int().min(4).max(64).optional(),
   whenFull: z.enum(["waitlist", "closed"]).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
@@ -139,7 +139,9 @@ export async function setCreatorEmailAction(code: string, email: string): Promis
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     const target = viewer.player?.id === detail.event.creatorPlayerId ? viewer.player.id : detail.event.creatorPlayerId;
-    await updatePlayer(db, target, { email: normalizeEmail(email) });
+    const normalized = normalizeEmail(email);
+    const updated = await updatePlayer(db, target, { email: normalized });
+    if (updated && normalized && normalized !== detail.creator.email) after(() => welcomeEmail(db, updated, detail.event));
     revalidatePath(`/${code}`);
     return null;
   });

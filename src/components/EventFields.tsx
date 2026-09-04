@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { POINTS_PRESETS } from "@/lib/domain/americano";
-import { wallClock } from "@/lib/dates";
+import { nextOccurrence } from "@/lib/dates";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
 
 export type EventFormValues = {
@@ -22,28 +22,16 @@ export type EventFormValues = {
   pointsPerMatch: number | null;
 };
 
+export type TimePatternInput = { dow: number; time: string };
 type Chip = { key: string; date: string; time: string; label: string };
 
-/** Quick picks: tonight 19:00 (if still ahead), tomorrow 18:00, next Sat/Sun 10:00. */
-function quickChips(tz: string, locale: string, t: (k: "create.chipTonight" | "create.chipTomorrow" | "create.chipDay", v: Record<string, string>) => string, now = new Date()): Chip[] {
-  const w = wallClock(now, tz);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const dayAt = (offset: number) => {
-    const d = new Date(Date.UTC(w.year, w.month - 1, w.day + offset));
-    return { date: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`, dow: d.getUTCDay(), d };
-  };
-  const fmtDay = (d: Date) => new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(d);
-  const chips: Chip[] = [];
-  if (w.hour < 18) chips.push({ key: "tonight", ...dayAt(0), time: "19:00", label: t("create.chipTonight", { time: "19:00" }) });
-  chips.push({ key: "tomorrow", ...dayAt(1), time: "18:00", label: t("create.chipTomorrow", { time: "18:00" }) });
-  for (const dow of [6, 0]) {
-    let off = (dow - w.day + 7) % 7;
-    if (off === 0) off = 7;
-    if (off === 1) continue; // already covered by "tomorrow"
-    const x = dayAt(off);
-    chips.push({ key: `dow${dow}`, date: x.date, time: "10:00", label: t("create.chipDay", { day: fmtDay(x.d), time: "10:00" }) });
-  }
-  return chips;
+/** Quick picks: the organizer's own recurring slots, projected to their next occurrence. Never guessed. */
+function historyChips(patterns: TimePatternInput[], tz: string, locale: string, label: (day: string, time: string) => string, now = new Date()): Chip[] {
+  const fmt = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
+  return patterns.map((p) => {
+    const next = nextOccurrence(p.dow, p.time, tz, now);
+    return { key: `${p.dow}-${p.time}`, ...next, label: label(fmt.format(new Date(`${next.date}T00:00:00Z`)), p.time) };
+  });
 }
 
 function timeZones(current: string): string[] {
@@ -60,17 +48,19 @@ export function EventFields({
   onChange,
   venues,
   showType = true,
+  patterns = [],
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
   venues: VenueOption[];
   showType?: boolean;
+  patterns?: TimePatternInput[];
 }) {
   const t = useTranslations();
   const locale = useLocale();
   const [tzOpen, setTzOpen] = useState(false);
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
-  const chips = useMemo(() => quickChips(values.tz, locale, t as never), [values.tz, locale, t]);
+  const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
   const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note));
 
   return (
@@ -91,9 +81,10 @@ export function EventFields({
         </div>
       )}
 
-      <div>
-        <div className="label">{t("create.chipsLabel")}</div>
-        <div className="flex flex-wrap gap-2">
+      {chips.length > 0 && (
+        <div>
+          <div className="label">{t("create.chipsLabel")}</div>
+          <div className="flex flex-wrap gap-2">
           {chips.map((c) => {
             const active = values.date === c.date && values.time === c.time;
             return (
@@ -102,8 +93,9 @@ export function EventFields({
               </button>
             );
           })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>

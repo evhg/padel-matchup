@@ -9,7 +9,7 @@ import {
 } from "@/lib/domain/reminders";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getEventDetail } from "@/lib/domain/queries";
-import { notifyPromotion, sendInviteReminder, sendScoreReminder } from "@/lib/notify";
+import { notifyLineupChange, notifyPromotion, sendInviteReminder, sendScoreReminder } from "@/lib/notify";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 
@@ -46,7 +46,10 @@ export async function GET(req: Request) {
     summary.promotions = promotions.length;
     for (const p of promotions) {
       const [ev] = await db.select().from(events).where(eq(events.id, p.slot.eventId));
-      if (ev) await notifyPromotion(db, ev, p);
+      if (!ev) continue;
+      // A hygiene promotion fills a hole, so the line-up was not complete before it.
+      const fresh = await notifyLineupChange(db, ev, false, p.playerId);
+      await notifyPromotion(db, fresh ?? ev, p);
     }
   } catch (e) {
     summary.errors.push(`waitlist: ${String(e)}`);
@@ -55,7 +58,7 @@ export async function GET(req: Request) {
   try {
     const due = await findInviteRemindersDue(db, now);
     for (const { slot, event, creator } of due) {
-      const sent = await sendInviteReminder(event, slot, creator);
+      const sent = await sendInviteReminder(db, event, slot, creator);
       if (sent) {
         await markInviteReminded(db, slot.id, now);
         summary.inviteReminders++;
@@ -70,7 +73,7 @@ export async function GET(req: Request) {
     for (const { event, creator } of due) {
       // Exactly one reminder per event, whether or not an email could go out
       // (the in-app banner covers organizers without an email).
-      await sendScoreReminder(event, creator);
+      await sendScoreReminder(db, event, creator);
       await markScoreReminderSent(db, event.id);
       summary.scoreReminders++;
       void getEventDetail;

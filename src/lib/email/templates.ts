@@ -55,7 +55,7 @@ export function layout(i: LayoutInput): { html: string; text: string } {
 <tr><td style="padding-top:12px;font-size:16px;line-height:1.5;color:#2A2F36">${esc(i.body)}</td></tr>
 ${meta ? `<tr><td style="padding-top:16px"><table role="presentation" cellpadding="0" cellspacing="0">${meta}</table></td></tr>` : ""}
 <tr><td style="padding-top:22px">${i.cta ? btn(i.cta.label, i.cta.url, true) : ""}${i.secondary ? btn(i.secondary.label, i.secondary.url, false) : ""}</td></tr>
-<tr><td style="padding-top:8px"><a href="${esc(i.eventUrl)}" style="color:#1B4FD8;font-size:14px">${esc(i.openLabel)} →</a></td></tr>
+${i.cta && i.cta.url === i.eventUrl ? "" : `<tr><td style="padding-top:10px"><a href="${esc(i.eventUrl)}" style="color:#9AA0A6;font-size:13px;text-decoration:underline">${esc(i.openLabel)}</a></td></tr>`}
 ${i.personal ? `<tr><td style="padding-top:18px"><div style="background:#F4F3EE;border-radius:14px;padding:12px 14px;font-size:13px;color:#2A2F36"><strong>${esc(i.personal.label)}</strong><br><a href="${esc(i.personal.url)}" style="color:#1B4FD8;word-break:break-all">${esc(i.personal.url)}</a></div></td></tr>` : ""}
 <tr><td style="padding-top:26px;border-top:1px solid #E4E2DA;margin-top:20px;font-size:12px;color:#8A919C;line-height:1.5">${esc(i.footer)}<br><a href="${esc(i.eventUrl)}" style="color:#8A919C">${esc(i.eventUrl)}</a></td></tr>
 </table></td></tr></table></body></html>`;
@@ -68,7 +68,7 @@ ${i.personal ? `<tr><td style="padding-top:18px"><div style="background:#F4F3EE;
     "",
     i.cta ? `${i.cta.label}: ${i.cta.url}` : "",
     i.secondary ? `${i.secondary.label}: ${i.secondary.url}` : "",
-    `${i.openLabel}: ${i.eventUrl}`,
+    i.cta && i.cta.url === i.eventUrl ? undefined : `${i.openLabel}: ${i.eventUrl}`,
     i.personal ? `${i.personal.label}: ${i.personal.url}` : "",
     "",
     i.footer,

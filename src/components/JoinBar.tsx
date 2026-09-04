@@ -1,9 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { startTransition, useEffect, useRef, useState, useTransition } from "react";
+import { startTransition, useState, useTransition } from "react";
 import { joinAction, leaveAction } from "@/actions/slots";
-import { JOIN_EVENT } from "./ReserveSheet";
+import { requestJoin } from "./joinBus";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past";
 
@@ -23,7 +23,7 @@ export function JoinBar({
   isTournament: boolean;
 }) {
   const t = useTranslations();
-  const [sheet, setSheet] = useState(false);
+  const [inline, setInline] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -36,7 +36,7 @@ export function JoinBar({
       const r = await joinAction(code, withName);
       startTransition(() => {
         if (!r.ok) setError(r.error === "name_required" ? t("identity.nameRequired") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-        else setSheet(false);
+        else setInline(false);
       });
     });
 
@@ -50,22 +50,16 @@ export function JoinBar({
     });
   };
 
-  // Tapping an open spot in the roster triggers the same flow as the button.
-  const onTap = useRef<() => void>(() => {});
-  onTap.current = () => {
-    if (state !== "join" && state !== "join_waitlist") return;
-    if (hasIdentity) join();
-    else setSheet(true);
-  };
-  useEffect(() => {
-    const h = () => onTap.current();
-    window.addEventListener(JOIN_EVENT, h);
-    return () => window.removeEventListener(JOIN_EVENT, h);
-  }, []);
-
   if (state === "cancelled" || state === "past") return null;
 
   const joinLabel = state === "join_waitlist" ? t("event.joinWaitlist") : isTournament ? t("event.joinTournament") : t("event.join");
+
+  // No identity yet: expand an in-flow spot instead of opening a sheet (fixed
+  // overlays drift off screen on iOS once the keyboard shows).
+  const onJoin = () => {
+    if (hasIdentity) return join();
+    if (!requestJoin()) setInline(true);
+  };
 
   return (
     <>
@@ -74,9 +68,25 @@ export function JoinBar({
         <div className="mx-auto flex w-full max-w-xl items-center gap-3 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
           {(state === "join" || state === "join_waitlist") && (
             <div className="flex w-full flex-col gap-1">
-              <button type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={() => (hasIdentity ? join() : setSheet(true))}>
-                {pending ? t("common.working") : joinLabel}
-              </button>
+              {inline ? (
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!name.trim()) return setError(t("identity.nameRequired"));
+                    join(name);
+                  }}
+                >
+                  <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} enterKeyHint="go" />
+                  <button type="submit" className="btn-primary shrink-0" disabled={pending}>
+                    {pending ? t("common.working") : t("event.joinShort")}
+                  </button>
+                </form>
+              ) : (
+                <button type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>
+                  {pending ? t("common.working") : joinLabel}
+                </button>
+              )}
               <div className="flex justify-between text-xs font-semibold text-muted">
                 <span>{state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
                 {error && <span className="text-danger">{error}</span>}
@@ -109,31 +119,6 @@ export function JoinBar({
           {state === "full" && <div className="flex-1 text-base font-extrabold text-warn">{t("event.full")}</div>}
         </div>
       </div>
-
-      {sheet && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 p-3 sm:items-center" onClick={() => setSheet(false)}>
-          <form
-            className="card w-full max-w-md animate-pop"
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!name.trim()) return setError(t("identity.nameRequired"));
-              join(name);
-            }}
-          >
-            <h2 className="text-xl font-extrabold tracking-tight">{t("identity.whatsYourName")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("identity.nameHelp")}</p>
-            <input className="input mt-4" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} enterKeyHint="go" />
-            {error && <p className="mt-2 text-sm font-semibold text-danger">{error}</p>}
-            <button type="submit" className="btn-primary mt-3 w-full text-lg" disabled={pending}>
-              {pending ? t("common.working") : name.trim() ? t("event.joinAs", { name: name.trim() }) : joinLabel}
-            </button>
-            <button type="button" className="btn-ghost mt-2 w-full" onClick={() => setSheet(false)}>
-              {t("common.cancel")}
-            </button>
-          </form>
-        </div>
-      )}
     </>
   );
 }

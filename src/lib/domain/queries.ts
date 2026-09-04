@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, scores, slots, venues, type Activity, type Event, type Player, type Score, type Slot } from "@/db/schema";
+import { timePatternOf } from "@/lib/dates";
 import { outcomeForTeam, type Outcome } from "./scores";
 
 export type SlotWithPlayer = Slot & { player: Player | null };
@@ -164,4 +165,33 @@ export function participantsWithEmail(roster: SlotWithPlayer[]): { playerId: str
     out.push({ playerId: s.playerId, name: s.player?.displayName ?? s.invitedName ?? "", email, locale: s.player?.locale ?? "en" });
   }
   return out;
+}
+
+export type TimePattern = { dow: number; time: string; count: number; last: Date };
+
+/**
+ * The weekday + time slots this player actually plays (created or joined,
+ * not cancelled), most frequent first, then most recent. Feeds the quick
+ * picks on the create form: never guessed, always from history.
+ */
+export async function getPlayerTimePatterns(db: Db, playerId: string, limit = 4): Promise<TimePattern[]> {
+  const rows = await db
+    .select({ startsAt: events.startsAt, tz: events.tz })
+    .from(events)
+    .leftJoin(slots, and(eq(slots.eventId, events.id), eq(slots.playerId, playerId), inArray(slots.status, ["joined", "confirmed"])))
+    .where(and(ne(events.status, "cancelled"), or(eq(events.creatorPlayerId, playerId), sql`${slots.id} is not null`)))
+    .orderBy(desc(events.startsAt))
+    .limit(200);
+  const buckets = new Map<string, TimePattern>();
+  for (const r of rows) {
+    const startsAt = r.startsAt instanceof Date ? r.startsAt : new Date(r.startsAt);
+    const { dow, time } = timePatternOf(startsAt, r.tz);
+    const key = `${dow}-${time}`;
+    const b = buckets.get(key);
+    if (b) {
+      b.count++;
+      if (startsAt > b.last) b.last = startsAt;
+    } else buckets.set(key, { dow, time, count: 1, last: startsAt });
+  }
+  return [...buckets.values()].sort((a, b) => b.count - a.count || b.last.getTime() - a.last.getTime()).slice(0, limit);
 }
