@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
+import { players } from "@/db/schema";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
 import { normalizeEmail, updatePlayer } from "@/lib/domain/players";
@@ -135,6 +137,15 @@ export async function cancelEventAction(code: string): Promise<ActionResult<null
 }
 
 /** Share screen: "your email for notifications" (creator). */
+export async function setCreatorEmailNotificationsAction(code: string, on: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail } = await requireCreator(code);
+    await db.update(players).set({ emailNotifications: Boolean(on) }).where(eq(players.id, detail.event.creatorPlayerId));
+    revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
 export async function setCreatorEmailAction(code: string, email: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);

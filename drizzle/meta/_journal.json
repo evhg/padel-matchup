@@ -29,6 +29,13 @@
       "when": 1788494236729,
       "tag": "0003_push",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788496701312,
+      "tag": "0004_email_prefs",
+      "breakpoints": true
     }
   ]
 }

@@ -315,7 +315,7 @@ export default async function EventPage({ params }: Props) {
           {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t("event.fullHelp")}</p>}
           {me && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
             <div className="mt-5 border-t border-line pt-4">
-              <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} />
+              <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} notifyOn={me.emailNotifications} />
             </div>
           )}
           {me && isMember && !cancelled && !started && pushEnabled() && (
@@ -362,6 +362,7 @@ export default async function EventPage({ params }: Props) {
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
             creatorEmail={creator.email}
+            creatorNotify={creator.emailNotifications}
             emailEnabled={emailEnabled()}
             manageUrl={manageUrl(base, code, ev.manageCode)}
             isCancelled={cancelled}
@@ -369,7 +370,7 @@ export default async function EventPage({ params }: Props) {
           />
         )}
 
-        <ActivityFeed items={detail.activity} />
+        <ActivityFeed items={detail.activity} viewerId={me?.id ?? null} />
 
         {(cancelled || over) && (
           <Link href="/" className="btn-primary w-full">

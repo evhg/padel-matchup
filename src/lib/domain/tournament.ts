@@ -164,7 +164,7 @@ export async function saveTournamentMatchScore(
     const ev = await lockEvent(tx, input.eventId);
     if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
     if (ev.status === "cancelled") throw new DomainError("cancelled");
-    if (now.getTime() < ev.startsAt.getTime()) throw new DomainError("not_started");
+    // Scores can go in as soon as a round exists (warm-up games, early starts, testing).
     if (!input.isCreator) {
       if (!input.playerId) throw new DomainError("not_participant");
       const ids = await rosterIds(tx, ev);
