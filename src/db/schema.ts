@@ -54,6 +54,8 @@ export const players = pgTable(
     previousToken: text("previous_token"),
     /** First visit from a home-screen shortcut: the prompt is no longer needed. */
     homescreenAt: timestamp("homescreen_at", { withTimezone: true }),
+    /** Activity emails (players join/leave/respond, line-up changes, score reminder). Calendar/cancellation emails always go out. */
+    emailNotifications: boolean("email_notifications").notNull().default(true),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

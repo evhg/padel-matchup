@@ -2,14 +2,31 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { ActivityWithActor } from "@/lib/domain/queries";
 import { relativeTime } from "@/lib/dates";
 
-export async function ActivityFeed({ items }: { items: ActivityWithActor[] }) {
+type YouVerb = "created" | "joined" | "joinedWaitlist" | "left" | "confirmed" | "promoted" | "score_entered" | "cancelled" | "updated";
+
+/** Who did what, phrased from the viewer's side ("You added Zed" / "Zed was added by Erik"). */
+export async function ActivityFeed({ items, viewerId }: { items: ActivityWithActor[]; viewerId: string | null }) {
   const t = await getTranslations();
   const locale = await getLocale();
   if (items.length === 0) return null;
   const line = (a: ActivityWithActor) => {
-    const name = a.actor?.displayName ?? (a.meta?.name as string | undefined) ?? t("activity.someone");
-    if (a.verb === "joined" && a.meta?.waitlist) return t("activity.joinedWaitlist", { name });
-    return t(`activity.${a.verb}`, { name });
+    const actor = a.actor?.displayName ?? t("activity.someone");
+    const you = Boolean(viewerId && a.actorPlayerId === viewerId);
+    const target = (a.meta?.name as string | undefined) ?? "";
+    switch (a.verb) {
+      case "invited":
+        return you ? t("activity.addedByYou", { name: target }) : t("activity.addedBy", { name: target, actor });
+      case "removed":
+        return you ? t("activity.removedByYou", { name: target }) : t("activity.removedBy", { name: target, actor });
+      case "declined":
+        return t("activity.declined", { name: target || actor });
+      case "joined": {
+        const key: YouVerb = a.meta?.waitlist ? "joinedWaitlist" : "joined";
+        return you ? t(`activity.you.${key}`) : t(`activity.${key}`, { name: actor });
+      }
+      default:
+        return you ? t(`activity.you.${a.verb as YouVerb}`) : t(`activity.${a.verb}`, { name: actor });
+    }
   };
   return (
     <details className="card group">

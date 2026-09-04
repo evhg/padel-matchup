@@ -129,8 +129,7 @@ export function AmericanoPanel({
       )}
 
       {rounds.length === 0 && !isCreator && <p className="mt-4 text-sm text-muted">{t("americano.noRounds")}</p>}
-      {rounds.length > 0 && !started && <p className="mt-3 text-sm text-muted">{t("americano.notStarted")}</p>}
-      {rounds.length > 0 && started && canScore && !locked && <p className="mt-3 text-xs text-faint">{t("americano.enterHelp")}</p>}
+      {rounds.length > 0 && canScore && !locked && <p className="mt-3 text-xs text-faint">{t("americano.enterHelp")}</p>}
 
       <div className="mt-4 flex flex-col gap-4">
         {[...rounds].reverse().map((r) => (
@@ -152,7 +151,7 @@ export function AmericanoPanel({
             </div>
             <div className="mt-2 flex flex-col gap-2">
               {r.matches.map((m) => (
-                <MatchRow key={m.id} code={code} match={m} editable={canScore && started && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} />
+                <MatchRow key={m.id} code={code} match={m} editable={canScore && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} />
               ))}
             </div>
             {r.resting.length > 0 && <p className="mt-2 text-xs text-muted">{t("americano.resting", { names: r.resting.join(", ") })}</p>}

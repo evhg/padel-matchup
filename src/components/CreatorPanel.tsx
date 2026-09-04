@@ -13,6 +13,7 @@ export function CreatorPanel({
   initial,
   venues,
   creatorEmail,
+  creatorNotify,
   emailEnabled,
   manageUrl,
   isCancelled,
@@ -22,6 +23,7 @@ export function CreatorPanel({
   initial: EventFormValues;
   venues: VenueOption[];
   creatorEmail: string | null;
+  creatorNotify: boolean;
   emailEnabled: boolean;
   manageUrl: string;
   isCancelled: boolean;
@@ -79,7 +81,7 @@ export function CreatorPanel({
 
       {emailEnabled && (
         <div className="mt-4 border-t border-line pt-4">
-          <EmailField initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help={t("share.emailHelp")} emailEnabled={emailEnabled} />
+          <EmailField initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help={t("share.emailHelp")} emailEnabled={emailEnabled} notifyOn={creatorNotify} />
         </div>
       )}
 

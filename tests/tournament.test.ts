@@ -77,7 +77,10 @@ describe("americano engine (db)", () => {
     const r = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
     expect(r.resting).toHaveLength(0);
     const stranger = await makePlayer(db, "S");
-    await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 1, sideB: 2, playerId: stranger.id, isCreator: false })).rejects.toMatchObject({ code: "not_started" });
+    // Scores may go in before the start (warm-ups, early starts) — by participants only.
+    await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 1, sideB: 2, playerId: stranger.id, isCreator: false })).rejects.toMatchObject({ code: "not_participant" });
+    const early = await saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 10, sideB: 6, playerId: creator.id, isCreator: true });
+    expect(early.sideA).toBe(10);
     const later = new Date(Date.now() + 2 * HOUR);
     await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 1, sideB: 2, playerId: stranger.id, isCreator: false, now: later })).rejects.toMatchObject({ code: "not_participant" });
     await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 5, sideB: null, playerId: creator.id, isCreator: true, now: later })).rejects.toMatchObject({ code: "invalid" });

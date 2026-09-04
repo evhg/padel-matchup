@@ -195,7 +195,8 @@
     "joinHere": "Join here",
     "joinShort": "Join",
     "inviteNotAccepted": "Invite not yet accepted",
-    "inviteSent": "Invite sent"
+    "inviteSent": "Invite sent",
+    "notifyMe": "Email me when the line-up changes"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -325,11 +326,26 @@
     "declined": "{name} declined",
     "promoted": "{name} moved up from the waitlist",
     "removed": "{name} was removed",
-    "invited": "{name} was invited",
+    "invited": "{name} was added",
     "score_entered": "{name} entered the score",
     "cancelled": "{name} cancelled the match",
     "updated": "{name} updated the details",
-    "someone": "Someone"
+    "someone": "Someone",
+    "addedBy": "{name} was added by {actor}",
+    "addedByYou": "You added {name}",
+    "removedBy": "{name} was removed by {actor}",
+    "removedByYou": "You removed {name}",
+    "you": {
+      "created": "You created the match",
+      "joined": "You joined",
+      "joinedWaitlist": "You joined the waitlist",
+      "left": "You left",
+      "confirmed": "You confirmed your spot",
+      "promoted": "You moved up from the waitlist",
+      "score_entered": "You entered the score",
+      "cancelled": "You cancelled the match",
+      "updated": "You updated the details"
+    }
   },
   "email": {
     "openMatch": "Open the match",
@@ -465,8 +481,7 @@
     "auto": "Auto ({n})",
     "pointsPerMatch": "Points per match",
     "free": "Free",
-    "enterHelp": "Enter each court's points. Anyone in the tournament can fill in or correct scores until the organizer finalizes.",
-    "notStarted": "Score entry opens when the tournament starts. Rounds can be prepared now.",
+    "enterHelp": "Tap a score box to enter each court's points. Anyone in the tournament can fill in or correct scores until the organizer finalizes.",
     "save": "Save",
     "saved": "Saved",
     "pts": "pts",

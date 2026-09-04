@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { after } from "next/server";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
+import { players } from "@/db/schema";
 import { LOCALE_COOKIE, toLocale } from "@/i18n/config";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { consumeEmailCode, findPlayerByPersonalToken, issueEmailCode, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
@@ -92,6 +94,18 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
     await setSessionPlayer(player.id);
     revalidatePath("/", "layout");
     return pub(player);
+  });
+}
+
+/** Activity emails on/off (calendar invites, changes and cancellations always go out). */
+export async function setEmailNotificationsAction(on: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    await db.update(players).set({ emailNotifications: Boolean(on) }).where(eq(players.id, me.id));
+    revalidatePath("/", "layout");
+    return null;
   });
 }
 

@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
-import { updateMyEmail } from "@/actions/identity";
-import { setCreatorEmailAction } from "@/actions/events";
+import { setEmailNotificationsAction, updateMyEmail } from "@/actions/identity";
+import { setCreatorEmailAction, setCreatorEmailNotificationsAction } from "@/actions/events";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 
 /**
@@ -17,6 +17,7 @@ export function EmailField({
   title,
   help,
   emailEnabled,
+  notifyOn = true,
 }: {
   initial: string | null;
   mode: "me" | "creator";
@@ -24,6 +25,8 @@ export function EmailField({
   title?: string;
   help?: string;
   emailEnabled: boolean;
+  /** Activity emails switch (on by default once an email exists). */
+  notifyOn?: boolean;
 }) {
   const t = useTranslations();
   const [email, setEmail] = useState(initial ?? "");
@@ -31,7 +34,16 @@ export function EmailField({
   const [knownElsewhere, setKnownElsewhere] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [editing, setEditing] = useState(!initial);
+  const [notify, setNotify] = useState(notifyOn);
   const [pending, start] = useTransition();
+  const toggleNotify = () => {
+    const next = !notify;
+    setNotify(next);
+    start(async () => {
+      const r = mode === "creator" ? await setCreatorEmailNotificationsAction(code, next) : await setEmailNotificationsAction(next);
+      if (!r.ok) setNotify(!next);
+    });
+  };
   if (!emailEnabled) return null;
 
   const submit = (e: React.FormEvent) => {
@@ -81,6 +93,19 @@ export function EmailField({
           </div>
           <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => setEditing(true)}>
             {t("common.edit")}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-muted">{mode === "creator" ? t("creator.notifications") : t("event.notifyMe")}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notify}
+            aria-label={mode === "creator" ? t("creator.notifications") : t("event.notifyMe")}
+            onClick={toggleNotify}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${notify ? "bg-ink" : "bg-line-strong"}`}
+          >
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${notify ? "translate-x-6" : "translate-x-1"}`} />
           </button>
         </div>
         {restoreBlock}

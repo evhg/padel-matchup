@@ -158,7 +158,7 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
   if (!emailEnabled()) return;
   if (actorPlayerId && actorPlayerId === ev.creatorPlayerId) return;
   const creator = await getPlayer(db, ev.creatorPlayerId);
-  if (!creator?.email) return;
+  if (!creator?.email || !creator.emailNotifications) return;
   const c = await ctx(db, ev, creator.locale, creator);
   const vars = { ...c.vars, name: actorName };
   const subjectKey = (kind === "waitlisted" ? "joined" : kind) as Exclude<CreatorKind, "waitlisted">;
@@ -212,7 +212,9 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
     participantsWithEmail(detail.roster)
       .filter((r) => !excludePlayerId || r.playerId !== excludePlayerId)
       .map(async (r) => {
-        const c = await ctx(db, fresh, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, freshDetail);
+        const player = r.playerId ? await getPlayer(db, r.playerId) : null;
+        if (player && !player.emailNotifications) return;
+        const c = await ctx(db, fresh, r.locale, player, freshDetail);
         const { html, text } = layout({
           heading: c.t(`${ns}.heading` as "email.lineupComplete.heading", c.vars),
           body: c.t(`${ns}.body` as "email.lineupComplete.body", c.vars),
@@ -288,7 +290,7 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
 
 /** The single post-match score reminder to the creator (decision 13). */
 export async function sendScoreReminder(db: Db, ev: Event, creator: Player): Promise<boolean> {
-  if (!emailEnabled() || !creator.email) return false;
+  if (!emailEnabled() || !creator.email || !creator.emailNotifications) return false;
   const c = await ctx(db, ev, creator.locale, creator);
   const { html, text } = layout({ heading: c.t("email.scoreReminder.heading"), body: c.t("email.scoreReminder.body", c.vars), meta: c.meta, cta: { label: c.t("email.scoreReminder.cta"), url: `${c.url}#score` }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
   return sendEmail({ to: creator.email, subject: c.t("email.scoreReminder.subject"), html, text });

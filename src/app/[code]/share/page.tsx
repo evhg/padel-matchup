@@ -84,7 +84,7 @@ export default async function SharePage({ params }: Props) {
 
         {emailEnabled() && (
           <section className="card">
-            <EmailField initial={detail.creator.email} mode="creator" code={code} title={t("share.emailTitle")} help={t("share.emailHelp")} emailEnabled />
+            <EmailField initial={detail.creator.email} mode="creator" code={code} title={t("share.emailTitle")} help={t("share.emailHelp")} emailEnabled notifyOn={detail.creator.emailNotifications} />
           </section>
         )}
 
