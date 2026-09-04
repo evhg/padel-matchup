@@ -17,13 +17,13 @@ export function AmericanoPanel({
   locked,
   started,
   cancelled,
-  courts,
-  maxCourts,
   pointsPerMatch,
   participantCount,
   capacity,
   rounds,
   standings,
+  courtNames,
+  rotationLength,
   canPlayAgain = false,
 }: {
   code: string;
@@ -32,26 +32,33 @@ export function AmericanoPanel({
   locked: boolean;
   started: boolean;
   cancelled: boolean;
-  courts: number | null;
-  maxCourts: number;
   pointsPerMatch: number | null;
   /** Named roster spots: joined, confirmed and reserved-not-yet-accepted. */
   participantCount: number;
   capacity: number;
   rounds: PanelRound[];
   standings: PanelStanding[];
+  /** Organizer-given court names by index (court 1 = [0]). */
+  courtNames: string[] | null;
+  /** Rounds until everyone has partnered everyone once (field in fours), else null. */
+  rotationLength: number | null;
   canPlayAgain?: boolean;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [namesOpen, setNamesOpen] = useState(false);
   const last = rounds.at(-1);
   const lastScored = last ? last.matches.some((m) => m.sideA != null || m.sideB != null) : false;
   const nextRound = (last?.roundNumber ?? 0) + 1;
   const firstRound = rounds.length === 0;
   const inFours = participantCount % 4 === 0;
   const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && (!firstRound || inFours);
+  const courtCount = Math.max(1, Math.floor(participantCount / 4), ...rounds.flatMap((r) => r.matches.map((m) => m.court)));
+  const courtLabel = (n: number) => courtNames?.[n - 1]?.trim() || t("americano.court", { n });
+  const [names, setNames] = useState<string[]>(() => Array.from({ length: courtCount }, (_, i) => courtNames?.[i] ?? ""));
+  const repeatsRound = rotationLength && nextRound > rotationLength ? ((nextRound - 1) % rotationLength) + 1 : null;
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     start(async () => {
@@ -74,16 +81,6 @@ export function AmericanoPanel({
       {isCreator && !locked && !cancelled && (
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="label">{t("americano.courts")}</span>
-            <select className="input" value={courts ?? Math.max(1, maxCourts)} disabled={pending} onChange={(e) => run(() => setTournamentSettingsAction(code, { courts: Number(e.target.value) }))}>
-              {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
             <span className="label">{t("americano.pointsPerMatch")}</span>
             <select className="input" value={pointsPerMatch ?? ""} disabled={pending} onChange={(e) => run(() => setTournamentSettingsAction(code, { pointsPerMatch: e.target.value ? Number(e.target.value) : null }))}>
               <option value="">{t("americano.free")}</option>
@@ -94,7 +91,39 @@ export function AmericanoPanel({
               ))}
             </select>
           </label>
+          <div className="block">
+            <span className="label">{t("americano.courtNames")}</span>
+            <button type="button" className="btn-ghost w-full justify-between" onClick={() => setNamesOpen((o) => !o)} aria-expanded={namesOpen}>
+              <span className="truncate">{Array.from({ length: courtCount }, (_, i) => courtLabel(i + 1)).join(" · ")}</span>
+              <span className="text-faint">✎</span>
+            </button>
+          </div>
         </div>
+      )}
+      {isCreator && !locked && !cancelled && namesOpen && (
+        <form
+          className="mt-3 rounded-2xl bg-bg p-3 animate-pop"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => setTournamentSettingsAction(code, { courtNames: names }));
+            setNamesOpen(false);
+          }}
+        >
+          <p className="text-xs text-muted">{t("americano.courtNamesHelp")}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {names.map((v, i) => (
+              <input key={i} className="input min-h-11 text-sm" aria-label={t("americano.court", { n: i + 1 })} placeholder={t("americano.court", { n: i + 1 })} maxLength={20} value={v} onChange={(e) => setNames((cur) => cur.map((x, j) => (j === i ? e.target.value : x)))} />
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button type="submit" className="btn-secondary btn-sm" disabled={pending}>
+              {t("americano.saveNames")}
+            </button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setNamesOpen(false)}>
+              {t("common.cancel")}
+            </button>
+          </div>
+        </form>
       )}
 
       {(rounds.length > 0 || locked) && (
@@ -150,7 +179,7 @@ export function AmericanoPanel({
             </div>
             <div className="mt-2 flex flex-col gap-2">
               {r.matches.map((m) => (
-                <MatchRow key={m.id} code={code} match={m} editable={canScore && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} />
+                <MatchRow key={m.id} code={code} match={m} courtLabel={courtLabel(m.court)} editable={canScore && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} />
               ))}
             </div>
             {r.resting.length > 0 && <p className="mt-2 text-xs text-muted">{t("americano.resting", { names: r.resting.join(", ") })}</p>}
@@ -165,7 +194,7 @@ export function AmericanoPanel({
           {!locked && (
             <>
               <button type="button" className={`${rounds.length === 0 || started ? "btn-primary" : "btn-secondary"} w-full`} disabled={pending || !canGenerate} onClick={() => run(() => generateRoundAction(code))}>
-                {pending ? t("common.working") : rounds.length === 0 ? t("americano.generateFirst") : t("americano.generateRound", { n: nextRound })}
+                {pending ? t("common.working") : rounds.length === 0 ? t("americano.generateFirst") : repeatsRound ? t("americano.generateRepeat", { n: nextRound, again: repeatsRound }) : t("americano.generateRound", { n: nextRound })}
               </button>
               {participantCount < 4 ? (
                 <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: participantCount })}</p>
@@ -173,6 +202,10 @@ export function AmericanoPanel({
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: participantCount, up: 4 - (participantCount % 4), down: participantCount % 4 })}</p>
               ) : firstRound && participantCount < capacity ? (
                 <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: participantCount })}</p>
+              ) : rotationLength && rounds.length >= rotationLength ? (
+                <p className="text-center text-xs text-muted">{t("americano.rotationDone", { n: rotationLength })}</p>
+              ) : rotationLength ? (
+                <p className="text-center text-xs text-faint">{t("americano.rotationInfo", { n: rotationLength, left: rotationLength - rounds.length })}</p>
               ) : null}
               {rounds.length > 0 && (
                 <button
@@ -204,11 +237,11 @@ export function AmericanoPanel({
   );
 }
 
-function MatchRow({ code, match, editable, pointsPerMatch }: { code: string; match: PanelMatch; editable: boolean; pointsPerMatch: number | null }) {
+function MatchRow({ code, match, courtLabel, editable, pointsPerMatch }: { code: string; match: PanelMatch; courtLabel: string; editable: boolean; pointsPerMatch: number | null }) {
   const t = useTranslations();
   const [a, setA] = useState<string>(match.sideA == null ? "" : String(match.sideA));
   const [b, setB] = useState<string>(match.sideB == null ? "" : String(match.sideB));
-  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "incomplete" | "error">("idle");
   const dirty = a !== (match.sideA == null ? "" : String(match.sideA)) || b !== (match.sideB == null ? "" : String(match.sideB));
   const [, start] = useTransition();
   const aWon = match.sideA != null && match.sideB != null && match.sideA > match.sideB;
@@ -216,6 +249,11 @@ function MatchRow({ code, match, editable, pointsPerMatch }: { code: string; mat
 
   const save = () => {
     if (!dirty) return;
+    // Half a score is not an error: wait for the other box.
+    if ((a === "") !== (b === "")) {
+      setState("incomplete");
+      return;
+    }
     setState("saving");
     start(async () => {
       const r = await saveTournamentMatchAction(code, match.id, a === "" ? null : Number(a), b === "" ? null : Number(b));
@@ -223,20 +261,20 @@ function MatchRow({ code, match, editable, pointsPerMatch }: { code: string; mat
       if (r.ok) setTimeout(() => setState("idle"), 1500);
     });
   };
-  const onOther = (mine: string, setMine: (v: string) => void, v: string) => {
+  const onOther = (setMine: (v: string) => void, v: string) => {
     setMine(v);
+    setState("idle");
     // Fixed-points format: typing one side fills the other.
     if (pointsPerMatch && v !== "" && Number(v) <= pointsPerMatch) {
       const other = String(pointsPerMatch - Number(v));
       if (setMine === setA) setB(other);
       else setA(other);
     }
-    void mine;
   };
 
   return (
     <div className="rounded-xl bg-bg p-3">
-      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-faint">{t("americano.court", { n: match.court })}</div>
+      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
       <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] items-center gap-2">
         <div className={`text-sm font-bold leading-tight ${aWon ? "" : match.sideA != null ? "text-muted" : ""}`}>
           {match.a[0]}
@@ -244,13 +282,13 @@ function MatchRow({ code, match, editable, pointsPerMatch }: { code: string; mat
           {match.a[1]}
         </div>
         {editable ? (
-          <input aria-label="A" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={a} onChange={(e) => onOther(a, setA, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
+          <input aria-label="A" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={a} onChange={(e) => onOther(setA, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
         ) : (
           <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${aWon ? "bg-accent" : "bg-white"}`}>{match.sideA ?? "–"}</span>
         )}
         <span className="text-xs font-bold text-faint">{t("americano.vs")}</span>
         {editable ? (
-          <input aria-label="B" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={b} onChange={(e) => onOther(b, setB, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
+          <input aria-label="B" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={b} onChange={(e) => onOther(setB, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
         ) : (
           <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${bWon ? "bg-accent" : "bg-white"}`}>{match.sideB ?? "–"}</span>
         )}
@@ -264,6 +302,7 @@ function MatchRow({ code, match, editable, pointsPerMatch }: { code: string; mat
         <div className="mt-1 h-4 text-right text-xs font-semibold">
           {state === "saving" && <span className="text-muted">…</span>}
           {state === "saved" && <span className="text-ok">✓ {t("americano.saved")}</span>}
+          {state === "incomplete" && <span className="text-muted">{t("americano.completeScore")}</span>}
           {state === "error" && <span className="text-danger">{t("errors.generic")}</span>}
           {state === "idle" && dirty && (
             <button type="button" className="link" onMouseDown={(e) => e.preventDefault()} onClick={save}>

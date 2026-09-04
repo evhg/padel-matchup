@@ -37,7 +37,7 @@ export function CreateEventForm({
     note: "",
     capacity: 8,
     whenFull: "waitlist",
-    courts: 2,
+    courts: null,
     pointsPerMatch: null,
   });
   const touched = useRef(false);

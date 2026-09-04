@@ -1,17 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import {
-  boolean,
-  index,
-  integer,
-  jsonb,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
-} from "drizzle-orm/pg-core";
+import { bigint, boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -124,6 +112,8 @@ export const events = pgTable(
     pointsPerMatch: integer("points_per_match"),
     /** Tournament: final standings snapshot (ordered player ids) written on finalize. */
     standings: jsonb("standings").$type<string[]>(),
+    /** Tournament: organizer-given court names by index (court 1 = [0]); null/empty entry = "Court n". */
+    courtNames: jsonb("court_names").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -279,6 +269,14 @@ export const playersRelations = relations(players, ({ many }) => ({
   slots: many(slots),
   events: many(events),
 }));
+
+/** Self-measured usage counters and daily snapshots for the read-only /admin dashboard. */
+export const metricsDaily = pgTable("metrics_daily", {
+  day: date("day").notNull(),
+  key: text("key").notNull(),
+  value: bigint("value", { mode: "number" }).notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.day, t.key] })]);
+export type MetricRow = typeof metricsDaily.$inferSelect;
 
 /** Web Push subscriptions (one per browser/home-screen app, many per player). */
 export const pushSubscriptions = pgTable(

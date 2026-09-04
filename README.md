@@ -181,7 +181,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ## Product rules baked in
 
-- **Match = exactly 4 players.** Tournament = creator-set capacity (4–64, in fours) running as an **americano**: round 1 needs names in fours (reserved-but-unaccepted names count; they get a placeholder player that merges into the real one on accept) and closes any spots still open, so the tournament becomes exactly the players present; the organizer generates rounds on the day (rotating partners, fair sit-outs, 1–N courts), courts are a plain 1–16 choice (one per four players by default), the latest round can be deleted even if scored (confirmed), any participant enters per-court points as soon as a round exists (no need to wait for the start time), standings update live, the organizer finalizes to lock.
+- **Match = exactly 4 players.** Tournament = creator-set capacity (4–64, in fours) running as an **americano**: round 1 needs names in fours (reserved-but-unaccepted names count; they get a placeholder player that merges into the real one on accept) and closes any spots still open, so the tournament becomes exactly the players present; the organizer generates rounds on the day (rotating partners, fair sit-outs, 1–N courts), courts follow the players (one per four) and can be given real names, the schedule is exact when the field is in fours (every pair partners once in players−1 rounds; the next round replays round 1), the latest round can be deleted even if scored (confirmed), any participant enters per-court points as soon as a round exists (no need to wait for the start time), standings update live, the organizer finalizes to lock.
 - **Fast create:** quick-pick chips only from the organizer's own history (their usual weekday/time slots, projected to the next occurrence; the default date is their most usual slot), venue optional ("Court TBD") with an optional court field (court appears in the page, share text, email and calendar titles), the landing page *is* the form, "Play again next week" appears once a result is in and clones the match in one tap, and an Add-to-Home-Screen prompt gives organizers an app-like shortcut to their personal link.
 - **When full:** per event, waitlist with auto-promotion on dropout (leave / removal / declined invite) or hard close.
 - **Join** is first-come-first-serve and atomic: the event row is locked per mutation and one `UPDATE … WHERE id = (SELECT … LIMIT 1)` claims exactly one slot, so two taps on the last spot resolve cleanly (tested with 12 parallel joins).
@@ -194,6 +194,10 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Timezone:** default from Vercel's `x-vercel-ip-timezone` (browser zone as fallback), editable, stored UTC.
 - **Score:** any participant after start; players can correct each other; once the organizer enters/edits it locks ("Confirmed by organizer"). 1–3 sets, optional team assignment → win/loss in **My matches**.
 - **Organizer access** = creator cookie **or** the 10-char manage link (sets a per-event httpOnly cookie).
+
+## Admin dashboard
+
+`/admin` is a public, read-only usage page: hero figure, stat tiles with sparklines, meters against the free-tier ceilings (Supabase 500 MB, Resend 3,000/month and 100/day), and 7/30/90-day trend charts (growth, joins, outbound messages, database size, totals). Counters live in `metrics_daily` (bumped by the app, snapshotted by the hourly cron); no personal data is shown. Vercel bandwidth has no public API on Hobby, so it links to the dashboard.
 
 ## Project map
 

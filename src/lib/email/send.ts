@@ -48,6 +48,13 @@ export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
       console.error("[email] send failed", error);
       return false;
     }
+    // Usage counter for /admin (best effort).
+    try {
+      const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
+      await bumpMetric(await getDb(), "emails_sent");
+    } catch {
+      /* metrics are optional */
+    }
     return true;
   } catch (e) {
     console.error("[email] send threw", e);
