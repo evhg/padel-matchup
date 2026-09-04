@@ -30,6 +30,7 @@ export function EmailField({
   const [saved, setSaved] = useState(false);
   const [knownElsewhere, setKnownElsewhere] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [editing, setEditing] = useState(!initial);
   const [pending, start] = useTransition();
   if (!emailEnabled) return null;
 
@@ -38,16 +39,54 @@ export function EmailField({
     start(async () => {
       if (mode === "creator") {
         const r = await setCreatorEmailAction(code, email);
-        if (r.ok) setSaved(true);
+        if (r.ok) {
+          setSaved(true);
+          setEditing(!email);
+        }
         return;
       }
       const r = await updateMyEmail(email, code);
       if (r.ok) {
         setSaved(true);
+        setEditing(!email);
         setKnownElsewhere(r.data.knownElsewhere);
       }
     });
   };
+
+  const restoreBlock = saved && knownElsewhere && (
+    <div className="rounded-2xl bg-bg p-3">
+      <p className="text-sm text-muted">{t("identity.knownElsewhere")}</p>
+      {restoring ? (
+        <div className="mt-2">
+          <RestoreWithEmail initialEmail={email} compact />
+        </div>
+      ) : (
+        <button type="button" className="mt-1 text-sm link" onClick={() => setRestoring(true)}>
+          {t("identity.restoreIt")} →
+        </button>
+      )}
+    </div>
+  );
+
+  // Known email: show it, never ask again. Edit on demand.
+  if (!editing) {
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("event.yourEmail")}</div>
+            <div className="truncate font-semibold">✉️ {email}</div>
+            {saved && <p className="text-sm font-semibold text-ok">{mode === "creator" ? t("share.emailSaved") : t("event.emailSaved")}</p>}
+          </div>
+          <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => setEditing(true)}>
+            {t("common.edit")}
+          </button>
+        </div>
+        {restoreBlock}
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
@@ -78,22 +117,21 @@ export function EmailField({
         <button type="submit" className="btn-secondary shrink-0" disabled={pending || (!email && !initial)}>
           {pending ? "…" : t("common.save")}
         </button>
+        {initial && (
+          <button
+            type="button"
+            className="btn-ghost shrink-0"
+            onClick={() => {
+              setEmail(initial);
+              setEditing(false);
+            }}
+          >
+            {t("common.cancel")}
+          </button>
+        )}
       </div>
       {saved && <p className="text-sm font-semibold text-ok">{mode === "creator" ? t("share.emailSaved") : email ? t("event.emailSaved") : t("event.emailSavedNoMail")}</p>}
-      {saved && knownElsewhere && (
-        <div className="rounded-2xl bg-bg p-3">
-          <p className="text-sm text-muted">{t("identity.knownElsewhere")}</p>
-          {restoring ? (
-            <div className="mt-2">
-              <RestoreWithEmail initialEmail={email} compact />
-            </div>
-          ) : (
-            <button type="button" className="mt-1 text-sm link" onClick={() => setRestoring(true)}>
-              {t("identity.restoreIt")} →
-            </button>
-          )}
-        </div>
-      )}
+      {restoreBlock}
     </form>
   );
 }

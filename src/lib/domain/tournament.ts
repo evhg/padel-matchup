@@ -1,8 +1,9 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, slots, tournamentMatches, tournamentRounds, type Event, type TournamentMatch, type TournamentRound } from "@/db/schema";
+import { activity, events, players, slots, tournamentMatches, tournamentRounds, type Event, type Slot, type TournamentMatch, type TournamentRound } from "@/db/schema";
 import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, seedFrom, type StandingRow } from "./americano";
 import { DomainError } from "./errors";
+import { recomputeStatus } from "./events";
 import { lockEvent } from "./slots";
 
 export type RoundWithMatches = TournamentRound & { matches: TournamentMatch[] };
@@ -14,13 +15,38 @@ export type TournamentState = {
   scoredMatches: number;
 };
 
-async function rosterIds(tx: Db, ev: Event): Promise<string[]> {
-  const rows = await tx
-    .select({ playerId: slots.playerId })
+/** A roster spot with a name on it: joined, confirmed, or reserved and not yet accepted. */
+export const isNamedSlot = (s: Pick<Slot, "status">) => s.status === "joined" || s.status === "confirmed" || s.status === "invited";
+
+async function namedRoster(tx: Db, ev: Event): Promise<Slot[]> {
+  return tx
+    .select()
     .from(slots)
-    .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["joined", "confirmed"])))
+    .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["joined", "confirmed", "invited"])))
     .orderBy(asc(slots.position));
-  return rows.map((r) => r.playerId).filter((x): x is string => Boolean(x));
+}
+
+async function rosterIds(tx: Db, ev: Event): Promise<string[]> {
+  return (await namedRoster(tx, ev)).map((r) => r.playerId).filter((x): x is string => Boolean(x));
+}
+
+/**
+ * Round 1 with fewer names than capacity: the tournament becomes exactly those
+ * players. Named spots move to positions 1..n, open spots go, capacity = n.
+ */
+async function shrinkToNamed(tx: Db, ev: Event, named: Slot[], actorPlayerId: string | null): Promise<Event> {
+  const all = await tx.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(asc(slots.position));
+  const keep = new Set(named.map((s) => s.id));
+  const drop = all.filter((s) => s.position <= ev.capacity && !keep.has(s.id)).map((s) => s.id);
+  if (drop.length) await tx.delete(slots).where(inArray(slots.id, drop));
+  const order = [...named, ...all.filter((s) => s.position > ev.capacity)];
+  // Two passes keep the (event, position) unique index happy.
+  for (let i = 0; i < order.length; i++) await tx.update(slots).set({ position: -(i + 1) }).where(eq(slots.id, order[i].id));
+  for (let i = 0; i < order.length; i++) await tx.update(slots).set({ position: i + 1 }).where(eq(slots.id, order[i].id));
+  const [updated] = await tx.update(events).set({ capacity: named.length }).where(eq(events.id, ev.id)).returning();
+  const status = await recomputeStatus(tx, updated);
+  await tx.insert(activity).values({ eventId: ev.id, actorPlayerId, verb: "updated", meta: { capacity: named.length } });
+  return { ...updated, status };
 }
 
 export async function loadRounds(db: Db, eventId: string): Promise<RoundWithMatches[]> {
@@ -82,9 +108,23 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
     if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
     if (ev.status === "cancelled") throw new DomainError("cancelled");
     if (ev.scoreLockedByCreator) throw new DomainError("locked");
-    const ids = await rosterIds(tx, ev);
-    if (ids.length < 4) throw new DomainError("invalid", "need_4_players");
     const existing = await loadRounds(tx, ev.id);
+    const named = await namedRoster(tx, ev);
+    if (existing.length === 0) {
+      // Round 1 sets the field: names in fours (reserved-but-unaccepted count), open spots close.
+      if (named.length < 4 || named.length % 4 !== 0) throw new DomainError("invalid", "multiple_of_4");
+      const [creator] = await tx.select({ locale: players.locale }).from(players).where(eq(players.id, ev.creatorPlayerId));
+      for (const s of named) {
+        if (s.playerId) continue;
+        // Reserved player without an account yet: a placeholder that merges into them when they accept.
+        const [ph] = await tx.insert(players).values({ displayName: s.invitedName ?? "?", locale: creator?.locale ?? "en" }).returning();
+        await tx.update(slots).set({ playerId: ph.id }).where(eq(slots.id, s.id));
+        s.playerId = ph.id;
+      }
+      if (named.length < ev.capacity) await shrinkToNamed(tx, ev, named, input.actorPlayerId);
+    }
+    const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
+    if (ids.length < 4) throw new DomainError("invalid", "need_4_players");
     const history = buildHistory(existing.map((r) => ({ matches: r.matches, resting: r.resting })));
     const roundNumber = (existing.at(-1)?.roundNumber ?? 0) + 1;
     const plan = planRound(ids, ev.courts, history, mulberry32(seedFrom(`${ev.id}:${roundNumber}`)));

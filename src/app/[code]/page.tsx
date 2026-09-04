@@ -101,13 +101,15 @@ export default async function EventPage({ params }: Props) {
   const icsHref = `/${code}/calendar.ics`;
 
   const participants = roster.filter(isOccupied);
-  const participantIds = participants.map((s) => s.playerId).filter((x): x is string => Boolean(x));
+  const isTournament = ev.type === "tournament";
+  // Tournaments: reserved-but-unaccepted names count towards round 1 (placeholders get a player id when it is generated).
+  const namedSlots = isTournament ? roster.filter((s) => isOccupied(s) || s.status === "invited") : participants;
+  const participantIds = namedSlots.map((s) => s.playerId).filter((x): x is string => Boolean(x));
   const perm = scorePermission({ event: ev, now, viewerPlayerId: me?.id ?? null, isCreator: viewer.isCreator, participantIds });
   const enteredBy = detail.scores[0]?.enteredByPlayerId ? (participants.find((s) => s.playerId === detail.scores[0].enteredByPlayerId)?.player?.displayName ?? null) : null;
   const showScore = started && !cancelled && ev.type === "match";
-  const isTournament = ev.type === "tournament";
   const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
-  const nameOf = new Map<string, string>(participants.map((s) => [s.playerId!, s.player?.displayName ?? s.invitedName ?? "?"]));
+  const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.displayName ?? s.invitedName ?? "?"]));
   const canPlayAgain = viewer.isCreator || isMember;
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
@@ -165,8 +167,13 @@ export default async function EventPage({ params }: Props) {
               <div>
                 <div className="font-bold">{t("event.reservedFor", { name })}</div>
                 <div className="text-xs font-semibold text-warn">
-                  {t("event.invited")}
-                  {viewer.isCreator && s.invitedAt && <> · {s.lastRemindedAt ? t("creator.remindedAgo", { ago: relativeTime(s.lastRemindedAt, locale, now) }) : t("creator.invitedAgo", { ago: relativeTime(s.invitedAt, locale, now) })}</>}
+                  {s.invitedEmail && emailEnabled()
+                    ? viewer.isCreator && s.invitedAt
+                      ? s.lastRemindedAt
+                        ? t("creator.remindedAgo", { ago: relativeTime(s.lastRemindedAt, locale, now) })
+                        : t("creator.inviteEmailedAgo", { ago: relativeTime(s.invitedAt, locale, now) })
+                      : t("event.inviteSent")
+                    : t("event.inviteNotAccepted")}
                 </div>
               </div>
             ) : (
@@ -278,7 +285,8 @@ export default async function EventPage({ params }: Props) {
             courts={ev.courts}
             maxCourts={tstate.maxCourts}
             pointsPerMatch={ev.pointsPerMatch}
-            participantCount={participantIds.length}
+            participantCount={namedSlots.length}
+            capacity={ev.capacity}
             rounds={tstate.rounds.map((r) => ({
               id: r.id,
               roundNumber: r.roundNumber,

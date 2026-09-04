@@ -21,6 +21,7 @@ export function AmericanoPanel({
   maxCourts,
   pointsPerMatch,
   participantCount,
+  capacity,
   rounds,
   standings,
   canPlayAgain = false,
@@ -34,7 +35,9 @@ export function AmericanoPanel({
   courts: number | null;
   maxCourts: number;
   pointsPerMatch: number | null;
+  /** Named roster spots: joined, confirmed and reserved-not-yet-accepted. */
   participantCount: number;
+  capacity: number;
   rounds: PanelRound[];
   standings: PanelStanding[];
   canPlayAgain?: boolean;
@@ -46,7 +49,9 @@ export function AmericanoPanel({
   const last = rounds.at(-1);
   const lastUnscored = last ? last.matches.every((m) => m.sideA == null && m.sideB == null) : false;
   const nextRound = (last?.roundNumber ?? 0) + 1;
-  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4;
+  const firstRound = rounds.length === 0;
+  const inFours = participantCount % 4 === 0;
+  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && (!firstRound || inFours);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     start(async () => {
@@ -164,7 +169,13 @@ export function AmericanoPanel({
               <button type="button" className={`${rounds.length === 0 || started ? "btn-primary" : "btn-secondary"} w-full`} disabled={pending || !canGenerate} onClick={() => run(() => generateRoundAction(code))}>
                 {pending ? t("common.working") : rounds.length === 0 ? t("americano.generateFirst") : t("americano.generateRound", { n: nextRound })}
               </button>
-              {participantCount < 4 && <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: participantCount })}</p>}
+              {participantCount < 4 ? (
+                <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: participantCount })}</p>
+              ) : firstRound && !inFours ? (
+                <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: participantCount, up: 4 - (participantCount % 4), down: participantCount % 4 })}</p>
+              ) : firstRound && participantCount < capacity ? (
+                <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: participantCount })}</p>
+              ) : null}
               {rounds.length > 0 && (
                 <button
                   type="button"

@@ -71,7 +71,7 @@
     "typeMatch": "Match",
     "typeMatchHelp": "Exactly 4 players",
     "typeTournament": "Tournament",
-    "typeTournamentHelp": "4 to 64 players",
+    "typeTournamentHelp": "4 to 64 players, in fours",
     "roundScoringSoon": "Round scoring coming soon",
     "date": "Date",
     "time": "Time",
@@ -108,7 +108,8 @@
     "pointsFree": "Free",
     "tournamentHelp": "Americano: partners rotate every round, most points wins. Rounds are generated on the day.",
     "court": "Court",
-    "courtPlaceholder": "e.g. 3 or Centre court"
+    "courtPlaceholder": "e.g. 3 or Centre court",
+    "capacityHelp": "Spots still open when round 1 starts are dropped: the tournament becomes the players present."
   },
   "share": {
     "title": "Your match is live",
@@ -164,7 +165,7 @@
     "waitlist": "Waitlist",
     "openSpot": "Open spot",
     "reservedFor": "Reserved for {name}",
-    "invited": "Invited",
+    "invited": "Invite not yet accepted",
     "confirmed": "Confirmed",
     "declinedOpen": "{name} declined · open",
     "joined": "Joined",
@@ -192,7 +193,9 @@
     "tapToReserve": "Tap to reserve for someone",
     "tapToJoin": "Tap to join",
     "joinHere": "Join here",
-    "joinShort": "Join"
+    "joinShort": "Join",
+    "inviteNotAccepted": "Invite not yet accepted",
+    "inviteSent": "Invite sent"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -203,15 +206,15 @@
     "email": "Email",
     "reserveSubmit": "Reserve spot",
     "noSpots": "No open spots to reserve.",
-    "forward": "Forward invite",
+    "forward": "Invite now",
     "copyInvite": "Copy invite link",
     "nudge": "Nudge again",
-    "invitedAgo": "Invited {ago}",
+    "invitedAgo": "Reserved {ago}",
     "remindedAgo": "Reminded by email {ago}",
     "remove": "Remove",
     "removeConfirm": "Remove {name} from this match?",
-    "cancelInvite": "Cancel invitation",
-    "cancelInviteConfirm": "Cancel the invitation for {name}?",
+    "cancelInvite": "Remove player",
+    "cancelInviteConfirm": "Remove {name}? Their invite link stops working.",
     "edit": "Edit match",
     "cancelEvent": "Cancel match",
     "cancelEventConfirm": "Cancel this match for everyone? Players with an email get a cancellation.",
@@ -227,7 +230,8 @@
     "reserveInline": "Reserve this spot for…",
     "inviteEmailed": "Invite emailed to {email}",
     "sendTheirLink": "Send them their personal link",
-    "reserveDone": "Done"
+    "reserveDone": "Done",
+    "inviteEmailedAgo": "Invite emailed {ago}"
   },
   "score": {
     "title": "Score",
@@ -451,7 +455,7 @@
     "resting": "Sitting out: {names}",
     "generateRound": "Generate round {n}",
     "generateFirst": "Generate round 1",
-    "needPlayers": "Needs at least 4 players in the roster ({count} so far).",
+    "needPlayers": "Round 1 needs at least 4 names ({count} so far). Reserved players count too.",
     "deleteLastRound": "Delete round {n}",
     "deleteLastRoundConfirm": "Delete round {n}? Only possible while it has no scores.",
     "finalize": "Finalize standings",
@@ -470,7 +474,9 @@
     "colWins": "W",
     "colDiff": "+/-",
     "noRounds": "No rounds yet.",
-    "vs": "vs"
+    "vs": "vs",
+    "needMultiple": "Round 1 needs names in fours ({count} so far): add {up} or remove {down}.",
+    "autoShrink": "Generating round 1 with {count} players closes the remaining spots."
   },
   "calendar": {
     "title": "Add to calendar",

@@ -138,7 +138,13 @@ export function EventFields({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="label">{t("create.capacity")}</label>
-              <input className="input px-3" type="number" inputMode="numeric" min={4} max={64} value={values.capacity} onChange={(e) => onChange({ capacity: Number(e.target.value) })} />
+              <select className="input px-3" aria-label={t("create.capacity")} value={values.capacity} onChange={(e) => onChange({ capacity: Number(e.target.value) })}>
+                {Array.from({ length: 16 }, (_, i) => (i + 1) * 4).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label">{t("create.courts")}</label>
@@ -163,7 +169,7 @@ export function EventFields({
               </select>
             </div>
           </div>
-          <p className="mt-1.5 text-sm text-muted">{t("create.tournamentHelp")}</p>
+          <p className="mt-1.5 text-sm text-muted">{t("create.tournamentHelp")} {t("create.capacityHelp")}</p>
         </div>
       )}
 

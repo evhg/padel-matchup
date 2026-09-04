@@ -89,12 +89,12 @@ export default async function InvitePage({ params, searchParams }: Props) {
         </section>
 
         <section className="card">
-          {state === "invited" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} autoDecline={decline === "1"} reconfirm={false} />}
+          {state === "invited" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} />}
           {state === "declined" && (
             <>
               <h2 className="text-xl font-extrabold">{t("invitePage.declined")}</h2>
               <p className="mt-1 mb-4 text-sm text-muted">{t("invitePage.declinedHelp")}</p>
-              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} autoDecline={false} reconfirm />
+              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={false} reconfirm />
             </>
           )}
           {state === "confirmed_mine" && (
