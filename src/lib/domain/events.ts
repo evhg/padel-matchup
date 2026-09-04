@@ -42,8 +42,9 @@ function cleanUrl(v: string | null | undefined): string | null {
 
 export function resolveCapacity(type: "match" | "tournament", capacity?: number): number {
   if (type === "match") return MATCH_CAPACITY;
+  // Americano runs in fours (one court per 4). 4..64; round 1 later shrinks it to the players present.
   const c = Math.round(Number(capacity ?? 8));
-  if (!Number.isFinite(c) || c < 2 || c > MAX_TOURNAMENT_CAPACITY) throw new DomainError("invalid", "capacity");
+  if (!Number.isFinite(c) || c < 4 || c > MAX_TOURNAMENT_CAPACITY || c % 4 !== 0) throw new DomainError("invalid", "capacity");
   return c;
 }
 

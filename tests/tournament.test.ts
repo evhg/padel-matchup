@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events } from "@/db/schema";
-import { createEvent, duplicateEvent, nextWeekAfter } from "@/lib/domain/events";
-import { joinEvent } from "@/lib/domain/slots";
+import { and, isNull } from "drizzle-orm";
+import { players, slots, tournamentMatches } from "@/db/schema";
+import { createEvent, duplicateEvent, nextWeekAfter, resolveCapacity } from "@/lib/domain/events";
+import { confirmInvite, joinEvent, reserveSlot } from "@/lib/domain/slots";
 import { deleteLastRound, generateRound, getTournamentState, saveTournamentMatchScore, setTournamentLock, setTournamentSettings } from "@/lib/domain/tournament";
 import { createTestDb, makePlayer, HOUR, DAY } from "./helpers/db";
 
@@ -71,9 +73,9 @@ describe("americano engine (db)", () => {
   });
 
   it("rejects strangers, pre-start entry and lopsided input", async () => {
-    const { creator, ev } = await tournamentWith(5, new Date(Date.now() + HOUR));
+    const { creator, ev } = await tournamentWith(8, new Date(Date.now() + HOUR));
     const r = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
-    expect(r.resting).toHaveLength(1);
+    expect(r.resting).toHaveLength(0);
     const stranger = await makePlayer(db, "S");
     await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 1, sideB: 2, playerId: stranger.id, isCreator: false })).rejects.toMatchObject({ code: "not_started" });
     const later = new Date(Date.now() + 2 * HOUR);
@@ -84,6 +86,59 @@ describe("americano engine (db)", () => {
   it("needs four players", async () => {
     const { creator, ev } = await tournamentWith(3);
     await expect(generateRound(db, { eventId: ev.id, actorPlayerId: creator.id })).rejects.toMatchObject({ code: "invalid" });
+  });
+
+  it("round 1 needs names in fours; later rounds tolerate sit-outs", async () => {
+    const { creator, ev } = await tournamentWith(5);
+    await expect(generateRound(db, { eventId: ev.id, actorPlayerId: creator.id })).rejects.toMatchObject({ code: "invalid", message: "multiple_of_4" });
+    const { creator: c2, ev: ev2 } = await tournamentWith(4);
+    const r1 = await generateRound(db, { eventId: ev2.id, actorPlayerId: c2.id });
+    expect(r1.matches).toHaveLength(1);
+    const [shrunk] = await db.select().from(events).where(eq(events.id, ev2.id));
+    expect(shrunk.capacity).toBe(4);
+    expect(shrunk.status).toBe("full");
+  });
+
+  it("counts reserved names for round 1, shrinks capacity, and merges the placeholder when they accept", async () => {
+    const { creator, ev, players: joined } = await tournamentWith(6);
+    await reserveSlot(db, { eventId: ev.id, actorPlayerId: creator.id, name: "Zed" });
+    await reserveSlot(db, { eventId: ev.id, actorPlayerId: creator.id, name: "Yara" });
+    // 8 names on a 12-capacity roster
+    const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    expect(r1.matches).toHaveLength(2);
+    const [after] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(after.capacity).toBe(8);
+    expect(after.status).toBe("full");
+    const roster = await db.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(slots.position);
+    expect(roster.map((s) => s.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    const zedSlot = roster.find((s) => s.invitedName === "Zed")!;
+    expect(zedSlot.status).toBe("invited");
+    expect(zedSlot.playerId).toBeTruthy();
+    const placeholder = zedSlot.playerId!;
+    const inMatch = r1.matches.some((m) => [m.a1, m.a2, m.b1, m.b2].includes(placeholder));
+    expect(inMatch).toBe(true);
+
+    // Zed opens the invite link with a fresh identity → the placeholder folds into it.
+    const zed = await makePlayer(db, "Zed Real");
+    const res = await confirmInvite(db, { inviteCode: zedSlot.inviteCode!, playerId: zed.id });
+    expect(res.outcome).toBe("confirmed");
+    const matches = await db.select().from(tournamentMatches);
+    expect(matches.some((m) => [m.a1, m.a2, m.b1, m.b2].includes(zed.id))).toBe(true);
+    expect(matches.some((m) => [m.a1, m.a2, m.b1, m.b2].includes(placeholder))).toBe(false);
+    expect(await db.select().from(players).where(eq(players.id, placeholder))).toHaveLength(0);
+    const [confirmedSlot] = await db.select().from(slots).where(eq(slots.id, zedSlot.id));
+    expect(confirmedSlot.playerId).toBe(zed.id);
+    expect(confirmedSlot.status).toBe("confirmed");
+    void joined;
+    void and;
+    void isNull;
+  });
+
+  it("tournament capacity is a multiple of 4 between 4 and 64", () => {
+    expect(resolveCapacity("tournament", 8)).toBe(8);
+    expect(() => resolveCapacity("tournament", 6)).toThrow();
+    expect(() => resolveCapacity("tournament", 68)).toThrow();
+    expect(resolveCapacity("match", 99)).toBe(4);
   });
 });
 

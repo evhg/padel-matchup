@@ -5,6 +5,7 @@ import { newInviteCode } from "@/lib/codes";
 import { EVENT_DURATION_MS } from "@/lib/config";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
+import { mergePlayers } from "./merge";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
 
 export type JoinOutcome =
@@ -253,9 +254,11 @@ export async function confirmInvite(
       .from(slots)
       .where(and(eq(slots.eventId, ev.id), eq(slots.playerId, input.playerId)))
       .limit(1);
+    const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
     if (elsewhere) {
       // Player already got in through the public link: release the reservation.
       await tx.update(slots).set(VACANT).where(eq(slots.id, slot.id));
+      if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
       await recomputeStatus(tx, ev);
       return { outcome: "already_in", slot: elsewhere, event: ev };
     }
@@ -274,6 +277,8 @@ export async function confirmInvite(
     if (email) {
       await tx.update(players).set({ email }).where(and(eq(players.id, input.playerId), sql`${players.email} is null`));
     }
+    // Round 1 was generated with a placeholder for this name: hand its matches to the real player.
+    if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
     await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "confirmed" });
     const status = await recomputeStatus(tx, ev);
     return { outcome: "confirmed", slot: confirmed, event: { ...ev, status } };

@@ -22,7 +22,7 @@ const createSchema = z.object({
   venueMapUrl: z.string().max(500).optional(),
   court: z.string().max(40).optional(),
   note: z.string().max(500).optional(),
-  capacity: z.coerce.number().int().min(4).max(64).optional(),
+  capacity: z.coerce.number().int().min(4).max(64).multipleOf(4).optional(),
   whenFull: z.enum(["waitlist", "closed"]),
   courts: z.coerce.number().int().min(1).max(16).nullable().optional(),
   pointsPerMatch: z.coerce.number().int().min(4).max(99).nullable().optional(),
@@ -74,7 +74,7 @@ const updateSchema = z.object({
   venueMapUrl: z.string().max(500).optional(),
   court: z.string().max(40).optional(),
   note: z.string().max(500).optional(),
-  capacity: z.coerce.number().int().min(4).max(64).optional(),
+  capacity: z.coerce.number().int().min(4).max(64).multipleOf(4).optional(),
   whenFull: z.enum(["waitlist", "closed"]).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;

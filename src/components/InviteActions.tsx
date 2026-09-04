@@ -12,6 +12,7 @@ export function InviteActions({
   emailEnabled,
   autoDecline,
   reconfirm,
+  knownEmail = null,
 }: {
   code: string;
   inviteCode: string;
@@ -20,6 +21,8 @@ export function InviteActions({
   emailEnabled: boolean;
   autoDecline: boolean;
   reconfirm: boolean;
+  /** The viewer's saved email: shown instead of asking again. */
+  knownEmail?: string | null;
 }) {
   const t = useTranslations();
   const [name, setName] = useState(invitedName);
@@ -49,7 +52,8 @@ export function InviteActions({
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="given-name" />
         </div>
       )}
-      {emailEnabled && (
+      {emailEnabled && knownEmail && <p className="text-sm text-muted">✉️ {knownEmail}</p>}
+      {emailEnabled && !knownEmail && (
         <div>
           <div className="flex items-start gap-2">
             <span aria-hidden className="mt-0.5 inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-court-soft text-court text-[10px] font-black">
