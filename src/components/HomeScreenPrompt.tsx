@@ -5,19 +5,19 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
-const SESSION_KEY = "km_a2hs_later";
+const DONE_KEY = "km_a2hs_done";
 const ARRIVE_FLAG = "a2hs";
 
 type Mode = "hidden" | "prompt" | "ios-steps" | "android-steps" | "done";
 
 /**
- * Home-screen shortcut that opens the player's personal link.
- *  - Android/Chrome: the real install prompt (manifest start_url is personal).
- *  - iOS: Safari has no API, so the button takes you to the personal page and
- *    shows the two taps. The shortcut then points at /p/{token}.
- *  - "Not now" only hides it for this tab session; it comes back next visit.
+ * Home-screen shortcut that opens the player's personal link. Shown until a
+ * shortcut exists: hidden when running from one (standalone), when the server
+ * saw a shortcut visit for this player (`installed`), when Android reports the
+ * PWA installed, or once the user walked through the steps on this browser.
+ * No "Not now": either add it or ignore it.
  */
-export function HomeScreenPrompt({ personalPath }: { personalPath?: string | null }) {
+export function HomeScreenPrompt({ personalPath, installed = false }: { personalPath?: string | null; installed?: boolean }) {
   const t = useTranslations();
   const pathname = usePathname();
   const [mode, setMode] = useState<Mode>("hidden");
@@ -26,12 +26,13 @@ export function HomeScreenPrompt({ personalPath }: { personalPath?: string | nul
   const [safari, setSafari] = useState(true);
 
   useEffect(() => {
+    if (installed) return;
     let standalone = false;
-    let later = false;
+    let doneHere = false;
     let arrived = false;
     try {
       standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
-      later = sessionStorage.getItem(SESSION_KEY) === "1";
+      doneHere = localStorage.getItem(DONE_KEY) === "1";
       const sp = new URLSearchParams(window.location.search);
       arrived = sp.get(ARRIVE_FLAG) === "1";
       if (arrived) {
@@ -42,7 +43,7 @@ export function HomeScreenPrompt({ personalPath }: { personalPath?: string | nul
     } catch {
       /* storage unavailable */
     }
-    if (standalone) return;
+    if (standalone || doneHere) return;
     const ua = navigator.userAgent;
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/i.test(ua);
@@ -50,29 +51,45 @@ export function HomeScreenPrompt({ personalPath }: { personalPath?: string | nul
     setPlatform(p);
     setSafari(isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua));
 
+    let cancelled = false;
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
-      setMode((m) => (m === "hidden" && !later ? "prompt" : m));
+      setMode((m) => (m === "hidden" && !cancelled ? "prompt" : m));
     };
     const onInstalled = () => setMode("done");
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
 
-    if (arrived) setMode(p === "ios" ? "ios-steps" : "android-steps");
-    else if (!later && (p === "ios" || p === "android")) setMode("prompt");
+    const show = () => {
+      if (arrived) setMode(p === "ios" ? "ios-steps" : "android-steps");
+      else if (p === "ios" || p === "android") setMode("prompt");
+    };
+    // Android Chrome can tell us the PWA is already installed.
+    const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<unknown[]> };
+    if (nav.getInstalledRelatedApps) {
+      nav
+        .getInstalledRelatedApps()
+        .then((apps) => {
+          if (cancelled) return;
+          if (apps.length > 0) cancelled = true;
+          else show();
+        })
+        .catch(show);
+    } else show();
 
     return () => {
+      cancelled = true;
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, []);
+  }, [installed]);
 
   if (mode === "hidden") return null;
 
-  const snooze = () => {
+  const finish = () => {
     try {
-      sessionStorage.setItem(SESSION_KEY, "1");
+      localStorage.setItem(DONE_KEY, "1");
     } catch {
       /* ignore */
     }
@@ -87,8 +104,7 @@ export function HomeScreenPrompt({ personalPath }: { personalPath?: string | nul
       else setDeferred(null);
       return;
     }
-    // No install API: make sure the shortcut will point at the personal link,
-    // then show the two taps.
+    // No install API: make sure the shortcut will point at the personal link, then show the two taps.
     if (personalPath && pathname !== personalPath) {
       window.location.assign(`${personalPath}?${ARRIVE_FLAG}=1`);
       return;
@@ -107,14 +123,9 @@ export function HomeScreenPrompt({ personalPath }: { personalPath?: string | nul
           <>
             <div className="font-bold">{t("homescreen.title")}</div>
             <p className="mt-0.5 text-sm text-muted">{t("homescreen.body")}</p>
-            <div className="mt-2 flex gap-2">
-              <button type="button" className="btn-secondary btn-sm" onClick={add}>
-                {t("homescreen.add")}
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={snooze}>
-                {t("homescreen.later")}
-              </button>
-            </div>
+            <button type="button" className="btn-secondary btn-sm mt-2" onClick={add}>
+              {t("homescreen.add")}
+            </button>
           </>
         )}
         {(mode === "ios-steps" || mode === "android-steps") && (
@@ -127,7 +138,7 @@ export function HomeScreenPrompt({ personalPath }: { personalPath?: string | nul
                   {t("homescreen.add")}
                 </button>
               )}
-              <button type="button" className="btn-ghost btn-sm" onClick={snooze}>
+              <button type="button" className="btn-ghost btn-sm" onClick={finish}>
                 {t("homescreen.gotIt")}
               </button>
             </div>

@@ -429,10 +429,9 @@
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
-    "body": "One tap to your matches next time, like an app. The shortcut opens your personal link, so your history comes along.",
+    "body": "One tap to your matches, like an app, and match reminders on iPhone. The shortcut opens your personal link.",
     "add": "Add to Home Screen",
     "iosHint": "Tap the Share button below, then \"Add to Home Screen\".",
-    "later": "Not now",
     "done": "Added to home screen",
     "iosSteps": "Tap Share (the square with the arrow), then \"Add to Home Screen\".",
     "iosTitle": "Two taps in Safari",
@@ -480,5 +479,15 @@
     "completeSuffix": "COMPLETE",
     "players": "Players: {names}",
     "playersLabel": "Players"
+  },
+  "push": {
+    "enable": "Remind me 1 hour before",
+    "enableHelp": "One notification an hour before each of your matches. Late is a no-no, remember.",
+    "on": "Reminders on · 1 hour before each match",
+    "off": "Turn off",
+    "iosHint": "iPhone: add Kicksmash to your home screen first, then turn on reminders here.",
+    "denied": "Notifications are blocked for this site in your browser settings.",
+    "reminderTitle": "🎾 Padel in 1 hour · {time}",
+    "reminderBody": "{venue}. Don't be late!"
   }
 }

@@ -48,8 +48,12 @@ export const players = pgTable(
     email: text("email"),
     /** Set once the player proved ownership of `email` with a one-time code. */
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
-    /** Long random token behind the personal link /p/{token}; signs in on any device. */
+    /** Random token behind the personal link /p/{token}; signs in on any device. */
     personalToken: text("personal_token"),
+    /** The token before the last lazy shortening; still accepted so old calendar entries and shortcuts keep working. */
+    previousToken: text("previous_token"),
+    /** First visit from a home-screen shortcut: the prompt is no longer needed. */
+    homescreenAt: timestamp("homescreen_at", { withTimezone: true }),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -110,6 +114,8 @@ export const events = pgTable(
     scoreReminderSent: boolean("score_reminder_sent").notNull().default(false),
     /** iCalendar SEQUENCE — bumped on every time/venue change or cancellation. */
     icsSequence: integer("ics_sequence").notNull().default(0),
+    /** Web-push "one hour before" reminder went out (once per event). */
+    pushReminderSentAt: timestamp("push_reminder_sent_at", { withTimezone: true }),
     /** Americano: number of courts in play (null → floor(players / 4)). */
     courts: integer("courts"),
     /** Americano: points per match (e.g. 16, 21, 24, 32); null → free scoring. */
@@ -271,6 +277,25 @@ export const playersRelations = relations(players, ({ many }) => ({
   slots: many(slots),
   events: many(events),
 }));
+
+/** Web Push subscriptions (one per browser/home-screen app, many per player). */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint_idx").on(t.endpoint), index("push_subscriptions_player_idx").on(t.playerId)],
+);
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 
 export const eventsRelations = relations(events, ({ one, many }) => ({
   creator: one(players, { fields: [events.creatorPlayerId], references: [players.id] }),

@@ -12,6 +12,7 @@ import { Footer, Header } from "@/components/Header";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
 import { OpenSpot } from "@/components/OpenSpot";
+import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { SlotActions } from "@/components/SlotActions";
@@ -21,7 +22,9 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
+import { playerHasPush } from "@/lib/domain/push";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
+import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
 import { venueWithCourt } from "@/lib/labels";
@@ -118,7 +121,12 @@ export default async function EventPage({ params }: Props) {
           ? { cls: "chip-full", label: t("event.statusFull") }
           : { cls: "chip-open", label: t("event.statusOpen") };
 
-  const [venues, rolodex] = viewer.isCreator ? await Promise.all([getVenues(db, ev.creatorPlayerId), getRolodex(db, ev.creatorPlayerId)]) : [[], []];
+  const [venues, rolodexAll] = viewer.isCreator ? await Promise.all([getVenues(db, ev.creatorPlayerId), getRolodex(db, ev.creatorPlayerId)]) : [[], []];
+  // Suggestions never include people already in this match (joined, confirmed or invited).
+  const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
+  const inEventNames = new Set([...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => (s.player?.displayName ?? s.invitedName ?? "").trim().toLowerCase()).filter(Boolean));
+  const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
+  const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
   const inviteTextTemplate = t("shareText.invite", { name: "__NAME__", day, time, venue, url: "__URL__" });
   const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue, url: "__URL__" });
@@ -300,6 +308,11 @@ export default async function EventPage({ params }: Props) {
           {me && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
             <div className="mt-5 border-t border-line pt-4">
               <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} />
+            </div>
+          )}
+          {me && isMember && !cancelled && !started && pushEnabled() && (
+            <div className="mt-4 border-t border-line pt-4">
+              <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
             </div>
           )}
         </section>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
-import { APP_NAME, APP_TAGLINE } from "@/lib/config";
+import { APP_NAME, APP_TAGLINE, baseUrl } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalPath } from "@/lib/personal";
 import { getSessionPlayerId } from "@/lib/session";
@@ -34,6 +34,8 @@ export async function GET() {
     orientation: "portrait",
     background_color: "#f4f3ee",
     theme_color: "#f4f3ee",
+    // Lets Android Chrome answer navigator.getInstalledRelatedApps() for this very PWA.
+    related_applications: [{ platform: "webapp", url: `${baseUrl()}/manifest.webmanifest` }],
     icons: [
       { src: "/api/icon?size=192", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/api/icon?size=512", sizes: "512x512", type: "image/png", purpose: "any" },

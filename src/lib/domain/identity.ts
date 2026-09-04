@@ -14,26 +14,40 @@ import { normalizeEmail } from "./players";
  *    identity carrying that email into one
  */
 
-const newToken = customAlphabet(CODE_ALPHABET, 32);
+/** 12 chars of a 57-symbol alphabet ≈ 2^70: unguessable, yet short enough for a calendar line. */
+export const TOKEN_LENGTH = 12;
+const newToken = customAlphabet(CODE_ALPHABET, TOKEN_LENGTH);
 export const CODE_TTL_MS = 10 * 60 * 1000;
 export const CODE_MAX_ATTEMPTS = 5;
 export const CODES_PER_HOUR = 5;
 
-export const isValidPersonalToken = (s: string) => s.length === 32 && new RegExp(`^[${CODE_ALPHABET}]+$`).test(s);
+export const isValidPersonalToken = (s: string) => s.length >= TOKEN_LENGTH && s.length <= 32 && new RegExp(`^[${CODE_ALPHABET}]+$`).test(s);
 
+/**
+ * The player's current token. Tokens issued at the old 32-char length are
+ * shortened on first use; the long one stays valid as `previousToken`.
+ */
 export async function getOrCreatePersonalToken(db: Db, playerId: string): Promise<string> {
   const [p] = await db.select({ token: players.personalToken }).from(players).where(eq(players.id, playerId));
   if (!p) throw new DomainError("not_found");
-  if (p.token) return p.token;
-  return rotatePersonalToken(db, playerId);
+  if (p.token && p.token.length === TOKEN_LENGTH) return p.token;
+  return rotatePersonalToken(db, playerId, { keepPrevious: Boolean(p.token) });
 }
 
-export async function rotatePersonalToken(db: Db, playerId: string): Promise<string> {
+/** New token. `keepPrevious` (lazy shortening) keeps the old one working; a user-requested reset does not. */
+export async function rotatePersonalToken(db: Db, playerId: string, o: { keepPrevious?: boolean } = {}): Promise<string> {
   for (let i = 0; i < 5; i++) {
     const token = newToken();
-    const [clash] = await db.select({ id: players.id }).from(players).where(eq(players.personalToken, token)).limit(1);
+    const [clash] = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(sql`${players.personalToken} = ${token} or ${players.previousToken} = ${token}`)
+      .limit(1);
     if (clash) continue;
-    await db.update(players).set({ personalToken: token }).where(eq(players.id, playerId));
+    await db
+      .update(players)
+      .set({ personalToken: token, previousToken: o.keepPrevious ? sql`${players.personalToken}` : null })
+      .where(eq(players.id, playerId));
     return token;
   }
   throw new Error("Could not allocate a personal token");
@@ -41,7 +55,11 @@ export async function rotatePersonalToken(db: Db, playerId: string): Promise<str
 
 export async function findPlayerByPersonalToken(db: Db, token: string): Promise<Player | null> {
   if (!isValidPersonalToken(token)) return null;
-  const [p] = await db.select().from(players).where(eq(players.personalToken, token)).limit(1);
+  const [p] = await db
+    .select()
+    .from(players)
+    .where(sql`${players.personalToken} = ${token} or ${players.previousToken} = ${token}`)
+    .limit(1);
   return p ?? null;
 }
 

@@ -78,7 +78,7 @@ function icsFor(ev: Event, c: Ctx, attendee: { name: string; email: string } | u
     method,
     domain: shortHost(),
     location: c.venue,
-    extraDescription: [c.playersLine, c.personal ? `${c.personal.label}: ${c.personal.url}` : null].filter((x): x is string => Boolean(x)),
+    extraDescription: c.playersLine ? [c.playersLine] : undefined,
   });
 }
 
@@ -91,8 +91,7 @@ export async function icsForDownload(db: Db, detail: EventDetail, viewer: Recipi
 /** Google Calendar link for the current viewer (private link inside when signed in). */
 export async function googleCalendarLinkFor(db: Db, detail: EventDetail, viewer: Recipient | null): Promise<string> {
   const c = await ctx(db, detail.event, viewer?.locale ?? detail.creator.locale, viewer, detail);
-  const lines = [c.playersLine, c.personal ? `${c.personal.label}: ${c.personal.url}` : null].filter((x): x is string => Boolean(x));
-  return googleCalendarUrl(detail.event, { title: c.title, url: [c.url, ...lines].join("\n\n"), tz: detail.event.tz, location: c.venue });
+  return googleCalendarUrl(detail.event, { title: c.title, url: [c.url, c.playersLine].filter(Boolean).join("\n\n"), tz: detail.event.tz, location: c.venue });
 }
 
 /** Player joined/confirmed/was promoted: calendar invite (.ics REQUEST). */
@@ -165,7 +164,7 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
   const subjectKey = (kind === "waitlisted" ? "joined" : kind) as Exclude<CreatorKind, "waitlisted">;
   const subject = c.t(`email.creator.${subjectKey}Subject`, vars);
   const body = c.t(`email.creator.${kind}Body`, vars);
-  const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, personal: c.personal });
+  const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
   await sendEmail({ to: creator.email, subject, html, text });
 }
 
@@ -184,7 +183,7 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
   await Promise.all(
     participantsWithEmail(detail.roster).map(async (r) => {
       const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
-      const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, personal: c.personal });
+      const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
       await sendEmail({ to: r.email, subject: c.t("email.updated.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(ev, c, { name: r.name, email: r.email }, "REQUEST") } });
     }),
   );
@@ -222,7 +221,6 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
           footer: c.footer,
           eventUrl: c.url,
           openLabel: c.openLabel,
-          personal: c.personal,
         });
         await sendEmail({ to: r.email, subject: c.t(`${ns}.subject` as "email.lineupComplete.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(fresh, c, { name: r.name, email: r.email }, "REQUEST") } });
       }),
@@ -292,7 +290,7 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
 export async function sendScoreReminder(db: Db, ev: Event, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !creator.email) return false;
   const c = await ctx(db, ev, creator.locale, creator);
-  const { html, text } = layout({ heading: c.t("email.scoreReminder.heading"), body: c.t("email.scoreReminder.body", c.vars), meta: c.meta, cta: { label: c.t("email.scoreReminder.cta"), url: `${c.url}#score` }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, personal: c.personal });
+  const { html, text } = layout({ heading: c.t("email.scoreReminder.heading"), body: c.t("email.scoreReminder.body", c.vars), meta: c.meta, cta: { label: c.t("email.scoreReminder.cta"), url: `${c.url}#score` }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
   return sendEmail({ to: creator.email, subject: c.t("email.scoreReminder.subject"), html, text });
 }
 

@@ -6,6 +6,7 @@ import { Footer, Header } from "@/components/Header";
 import { MyMatches } from "@/components/MyMatches";
 import { getDb } from "@/db";
 import { findPlayerByPersonalToken } from "@/lib/domain/identity";
+import { markHomescreen } from "@/lib/domain/push";
 import { getSessionPlayerId } from "@/lib/session";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,11 +18,15 @@ export async function generateMetadata(): Promise<Metadata> {
  * Personal link: renders My matches for the token's player directly (so a
  * home-screen shortcut works in any cookie jar) and hands the device the cookie.
  */
-export default async function PersonalPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
+export default async function PersonalPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ source?: string }> }) {
+  const [{ token }, sp] = await Promise.all([params, searchParams]);
   const db = await getDb();
   const player = await findPlayerByPersonalToken(db, token);
   if (!player) notFound();
+  if (sp.source === "homescreen" && !player.homescreenAt) {
+    await markHomescreen(db, player.id);
+    player.homescreenAt = new Date();
+  }
   const sessionId = await getSessionPlayerId();
   return (
     <>

@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 import { IdentitySync } from "@/components/IdentitySync";
+import { PwaSetup } from "@/components/PwaSetup";
 import { getDb } from "@/db";
 import { APP_NAME, APP_TAGLINE, baseUrl } from "@/lib/config";
 import { getSessionPlayer } from "@/lib/session";
@@ -42,6 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NextIntlClientProvider messages={messages}>
           {children}
           <IdentitySync player={me} />
+          <PwaSetup signedIn={Boolean(me)} />
         </NextIntlClientProvider>
       </body>
     </html>

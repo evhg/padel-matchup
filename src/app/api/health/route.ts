@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { baseUrl, emailEnabled, emailFrom } from "@/lib/config";
+import { pushEnabled } from "@/lib/push";
 import { databaseSource, onVercel, sessionSecretSource } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ export async function GET() {
   if (placeholderLeft) hints.push("DATABASE_URL still contains [YOUR-PASSWORD]. Either replace it, or add a DATABASE_PASSWORD variable and redeploy.");
   if (database === "error") hints.push("The database URL is set but the connection failed. Check the password and that the host ends with pooler.supabase.com:6543.");
   if (database === "embedded" && onVercel()) hints.push("Embedded database cannot run on Vercel. Set DATABASE_URL.");
+  if (!pushEnabled()) hints.push("Push reminders are off (no VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY). Generate a pair with `npx web-push generate-vapid-keys`.");
   if (!emailEnabled()) hints.push("Email is off (no RESEND_API_KEY). Everything else works; add it later for calendar invites and notifications.");
   if (!process.env.CRON_SECRET) hints.push("CRON_SECRET is not set; the cron endpoint is unauthenticated but harmless. Set it when convenient.");
 
@@ -44,6 +46,7 @@ export async function GET() {
       sessionSecret: sessionSecretSource(),
       cronSecret: process.env.CRON_SECRET ? "set" : "missing",
       email: emailEnabled() ? "enabled" : "disabled",
+      push: pushEnabled() ? "enabled" : "disabled",
       emailFrom: emailEnabled() ? emailFrom() : null,
       baseUrl: baseUrl(),
       hints,
