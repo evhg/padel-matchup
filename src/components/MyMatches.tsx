@@ -5,18 +5,22 @@ import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { playerHasPush } from "@/lib/domain/push";
 import { getPlayerEvents, type MyEvent } from "@/lib/domain/queries";
+import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath, personalUrl } from "@/lib/personal";
 import { HomeScreenPrompt } from "./HomeScreenPrompt";
 import { NameEditor } from "./NameEditor";
 import { PersonalLinkCard } from "./PersonalLinkCard";
+import { PushToggle } from "./PushToggle";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 
 /** "My matches": rendered on /me (cookie identity) and /p/{token} (personal link). */
 export async function MyMatches({ player, personalToken }: { player: Player; personalToken: string }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
-  const { upcoming, past } = await getPlayerEvents(db, player.id);
+  const [{ upcoming, past }, hasPush] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id)]);
+  const hasHistory = upcoming.length > 0 || past.length > 0;
   const labelOpts = { venueTbd: t("event.venueTbd"), courtNumber: (n: string) => t("event.courtNumber", { n }) };
 
   const row = (m: MyEvent) => {
@@ -73,14 +77,8 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
   return (
     <>
       <h1 className="text-3xl font-extrabold tracking-tight">{t("me.title")}</h1>
-      <section className="card">
-        <NameEditor name={player.displayName} />
-        <p className="mt-2 text-xs text-faint">{t("me.identityHelp")}</p>
-      </section>
-      <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} />
-      <HomeScreenPrompt personalPath={personalPath(personalToken)} />
 
-      {upcoming.length === 0 && past.length === 0 ? (
+      {!hasHistory ? (
         <section className="card text-center">
           <p className="text-muted">{t("me.empty")}</p>
           <Link href="/" prefetch={false} className="btn-primary mt-4 w-full">
@@ -103,15 +101,20 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
         </>
       )}
 
-      {emailEnabled() && (
-        <details className="card group">
-          <summary className="cursor-pointer list-none font-bold">
-            {t("me.restoreCta")} <span className="text-faint transition group-open:rotate-90">›</span>
-          </summary>
-          <div className="mt-3">
-            <RestoreWithEmail initialEmail={player.email ?? ""} />
-          </div>
-        </details>
+      <section className="card">
+        <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
+      </section>
+      <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} />
+      <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
+      <section className="card">
+        <NameEditor name={player.displayName} />
+        <p className="mt-2 text-xs text-faint">{t("me.identityHelp")}</p>
+      </section>
+
+      {!hasHistory && emailEnabled() && (
+        <section className="card">
+          <RestoreWithEmail initialEmail={player.email ?? ""} />
+        </section>
       )}
     </>
   );

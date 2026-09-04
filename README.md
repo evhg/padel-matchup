@@ -3,7 +3,8 @@
 Mobile-first web app for organizing padel matches with **zero app installs, zero accounts, zero passwords**. Create a match, share `kicksma.sh/{code}` on WhatsApp or Telegram, friends tap → enter a name once → they're in.
 
 - **Stack:** Next.js 15 (App Router, TypeScript) · Supabase Postgres + Drizzle · Resend · next-intl (EN/RU) · Tailwind v4 · Vercel (Cron + OG images).
-- **Identity:** one-time name entry → player UUID in a signed httpOnly cookie (1 year) + localStorage mirror. Cross-device: every player has a private **personal link** (`/p/{token}`, shown on My matches, in every email and in the calendar invite) that signs any device in; an email that was used before can **restore** history with a 6-digit code, merging all identities that share it. The home-screen shortcut opens the personal link, and calendar entries and emails carry the **private event link** (`/p/{token}/{code}`: signs the device in, opens the match). A newly added email receives the personal link (inside the calendar invite when in a match, otherwise on its own).
+- **Identity:** one-time name entry → player UUID in a signed httpOnly cookie (1 year) + localStorage mirror. Cross-device: every player has a private **personal link** (`/p/{token}`, shown on My matches, in every email and in the calendar invite) that signs any device in; an email that was used before can **restore** history with a 6-digit code, merging all identities that share it. The home-screen shortcut opens the personal link, and calendar entries and emails carry the **private event link** (`/p/{token}/{code}`: signs the device in, opens the match). A newly added email receives the personal link (inside the calendar invite when in a match, otherwise on its own). Tokens are 12 characters; older 32-char tokens keep working as `previous_token` after the lazy shortening.
+- **Push reminders:** Web Push (VAPID) one hour before each match, for every device the player enabled it on (iPhone: from the home-screen app). `/api/cron/push` is called every 5 minutes by Supabase `pg_cron` + `pg_net` (Vercel Hobby cron is daily). Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 - **Links:** `/{code}` (4 chars, public) · `/{code}/i/{6}` (personal invite) · `/{code}/manage/{10}` (organizer secret).
 - **Email is optional everywhere.** Without `RESEND_API_KEY` the app runs fully with email features hidden.
 
@@ -54,6 +55,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `CRON_SECRET` | recommended | Protects `/api/cron/hourly`. Vercel sends it automatically when set. |
 | `DIRECT_DATABASE_URL` | no | Direct (5432) URL for `pnpm db:migrate`. Not needed: the app migrates itself on first connection (`AUTO_MIGRATE=false` disables). |
 | `RESEND_API_KEY` | no | Enables all email (calendar invites, notifications, reminders). |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | no | Enables push reminders (`npx web-push generate-vapid-keys`). |
 | `EMAIL_FROM` | no | Defaults to `Kicksmash <matches@<your domain>>`; the domain must be verified in Resend. |
 
 Generate secrets: `openssl rand -base64 32`. Check a deployment any time at `/api/health` (no secrets returned).
@@ -184,6 +186,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **When full:** per event, waitlist with auto-promotion on dropout (leave / removal / declined invite) or hard close.
 - **Join** is first-come-first-serve and atomic: the event row is locked per mutation and one `UPDATE … WHERE id = (SELECT … LIMIT 1)` claims exactly one slot, so two taps on the last spot resolve cleanly (tested with 12 parallel joins).
 - **Reserved slots** get a personal invite link. The organizer reserves by tapping an open spot in the roster, which expands in place (name, optional phone/email, Done); with an email the invite is sent immediately. Anyone else tapping an open spot joins in place. No popups anywhere: overlays drift off screen on iOS once the keyboard opens.
+- **Calendar entries** carry exactly one link: the short private event link (`kicksma.sh/p/{12 chars}/{code}`), plus the player list once complete.
 - **Line-up complete:** when every spot is joined/confirmed the calendar entry is re-sent with `- COMPLETE` in the title and the player names in the description (and reverted if someone drops out). The app never messages anyone; organizers get one-tap WhatsApp / Telegram forward buttons with pre-filled localized text. Declined slots become open spots.
 - **Rolodex:** everyone who ever joined or was invited to your events, with their email/phone reused automatically.
 - **Venue memory:** last-used venue pre-filled, all previous venues in the combobox, free text adds a new one.

@@ -15,10 +15,10 @@ beforeAll(async () => {
 afterAll(async () => close());
 
 describe("personal link", () => {
-  it("issues a stable 32-char token, resolves it, and can rotate it", async () => {
+  it("issues a stable short token, resolves it, and can rotate it", async () => {
     const p = await makePlayer(db, "Tok");
     const t1 = await getOrCreatePersonalToken(db, p.id);
-    expect(t1).toHaveLength(32);
+    expect(t1).toHaveLength(12);
     expect(await getOrCreatePersonalToken(db, p.id)).toBe(t1);
     expect((await findPlayerByPersonalToken(db, t1))?.id).toBe(p.id);
     const t2 = await rotatePersonalToken(db, p.id);

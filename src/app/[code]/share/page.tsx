@@ -6,6 +6,7 @@ import { getViewer } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
+import { PushToggle } from "@/components/PushToggle";
 import { ScrollTop } from "@/components/ScrollTop";
 import { CopyButton, LinkBox, QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
@@ -14,6 +15,8 @@ import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
+import { playerHasPush } from "@/lib/domain/push";
+import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";
@@ -51,6 +54,7 @@ export default async function SharePage({ params }: Props) {
   const text = t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
   const mUrl = manageUrl(baseUrl(), code, ev.manageCode);
   const token = viewer.player ? await getOrCreatePersonalToken(db, viewer.player.id) : null;
+  const hasPush = viewer.player && pushEnabled() ? await playerHasPush(db, viewer.player.id) : false;
 
   return (
     <>
@@ -71,7 +75,12 @@ export default async function SharePage({ params }: Props) {
           {t(isTournament ? "share.openTournament" : "share.openMatch")} →
         </Link>
 
-        <HomeScreenPrompt personalPath={token ? personalPath(token) : null} />
+        {viewer.player && pushEnabled() && (
+          <section className="card">
+            <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
+          </section>
+        )}
+        <HomeScreenPrompt personalPath={token ? personalPath(token) : null} installed={Boolean(viewer.player?.homescreenAt)} />
 
         {emailEnabled() && (
           <section className="card">
