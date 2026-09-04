@@ -106,7 +106,7 @@ export default async function EventPage({ params }: Props) {
   const enteredBy = detail.scores[0]?.enteredByPlayerId ? (participants.find((s) => s.playerId === detail.scores[0].enteredByPlayerId)?.player?.displayName ?? null) : null;
   const showScore = started && !cancelled && ev.type === "match";
   const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
-  const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.displayName ?? s.invitedName ?? "?"]));
+  const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
@@ -175,6 +175,7 @@ export default async function EventPage({ params }: Props) {
               </div>
             ) : (
               <OpenSpot
+                key={`${s.id}-${s.status}`}
                 code={code}
                 mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" ? "join" : "none"}
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
@@ -279,9 +280,9 @@ export default async function EventPage({ params }: Props) {
             locked={ev.scoreLockedByCreator}
             started={started}
             cancelled={cancelled}
-            courts={ev.courts}
-            maxCourts={tstate.maxCourts}
             pointsPerMatch={ev.pointsPerMatch}
+            courtNames={ev.courtNames ?? null}
+            rotationLength={tstate.rotationLength}
             participantCount={namedSlots.length}
             capacity={ev.capacity}
             rounds={tstate.rounds.map((r) => ({

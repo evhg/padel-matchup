@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, slots, tournamentMatches, tournamentRounds, type Event, type Slot, type TournamentMatch, type TournamentRound } from "@/db/schema";
-import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, seedFrom, type StandingRow } from "./americano";
+import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, seedFrom, type StandingRow } from "./americano";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
 import { lockEvent } from "./slots";
@@ -13,6 +13,8 @@ export type TournamentState = {
   participantIds: string[];
   maxCourts: number;
   scoredMatches: number;
+  /** Rounds until everyone has partnered everyone once (field in fours), else null. */
+  rotationLength: number | null;
 };
 
 /** A roster spot with a name on it: joined, confirmed, or reserved and not yet accepted. */
@@ -76,12 +78,13 @@ export async function getTournamentState(db: Db, ev: Event, participantIds: stri
     participantIds,
     maxCourts: maxCourtsFor(participantIds.length),
     scoredMatches: all.filter((m) => m.sideA != null && m.sideB != null).length,
+    rotationLength: rotationLength(participantIds.length),
   };
 }
 
 export async function setTournamentSettings(
   db: Db,
-  input: { eventId: string; actorPlayerId: string | null; courts?: number | null; pointsPerMatch?: number | null },
+  input: { eventId: string; actorPlayerId: string | null; courts?: number | null; pointsPerMatch?: number | null; courtNames?: string[] | null },
 ): Promise<Event> {
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
@@ -94,6 +97,14 @@ export async function setTournamentSettings(
     if (input.pointsPerMatch !== undefined) {
       if (input.pointsPerMatch !== null && (!Number.isInteger(input.pointsPerMatch) || input.pointsPerMatch < 4 || input.pointsPerMatch > 99)) throw new DomainError("invalid", "points");
       set.pointsPerMatch = input.pointsPerMatch;
+    }
+    if (input.courtNames !== undefined) {
+      if (input.courtNames === null) set.courtNames = null;
+      else {
+        if (!Array.isArray(input.courtNames) || input.courtNames.length > 16) throw new DomainError("invalid", "court_names");
+        const names = input.courtNames.map((n) => String(n ?? "").trim().slice(0, 20));
+        set.courtNames = names.some(Boolean) ? names : null;
+      }
     }
     if (Object.keys(set).length === 0) return ev;
     const [updated] = await tx.update(events).set(set).where(eq(events.id, ev.id)).returning();
@@ -127,7 +138,20 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
     if (ids.length < 4) throw new DomainError("invalid", "need_4_players");
     const history = buildHistory(existing.map((r) => ({ matches: r.matches, resting: r.resting })));
     const roundNumber = (existing.at(-1)?.roundNumber ?? 0) + 1;
-    const plan = planRound(ids, ev.courts, history, mulberry32(seedFrom(`${ev.id}:${roundNumber}`)));
+    const rng = mulberry32(seedFrom(`${ev.id}:${roundNumber}`));
+    const cycle = rotationLength(ids.length);
+    let plan;
+    const replay = cycle && roundNumber > cycle ? existing.find((r) => r.roundNumber === roundNumber - cycle) : undefined;
+    if (replay && replay.matches.every((m) => [m.a1, m.a2, m.b1, m.b2].every((id) => ids.includes(id)))) {
+      // Rotation complete: round n repeats round 1, exactly.
+      plan = { matches: replay.matches.map((m) => ({ court: m.court, a: [m.a1, m.a2] as [string, string], b: [m.b1, m.b2] as [string, string] })), resting: [] as string[] };
+    } else if (cycle) {
+      // Field in fours: exact schedule (every pair partners once in n-1 rounds). Order is seeded per event, stable across rounds.
+      const ordered = seededShuffle(ids, mulberry32(seedFrom(`${ev.id}:order`)));
+      plan = scheduleRound(ordered, roundNumber - 1, history, rng);
+    } else {
+      plan = planRound(ids, ev.courts, history, rng);
+    }
     const [round] = await tx.insert(tournamentRounds).values({ eventId: ev.id, roundNumber, resting: plan.resting }).returning();
     const matches = await tx
       .insert(tournamentMatches)

@@ -4,6 +4,7 @@ import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
 import { isOccupied } from "@/lib/domain/events";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
+import { bumpMetric, setMetric } from "@/lib/domain/metrics";
 import { findPushRemindersDue, markPushReminded, removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
 import { getEventDetail } from "@/lib/domain/queries";
 import { translatorFor } from "@/lib/email/templates";
@@ -57,6 +58,12 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(String(e));
+  }
+  try {
+    await setMetric(db, "cron_push_at", Math.floor(now.getTime() / 1000));
+    if (summary.sent) await bumpMetric(db, "push_sent", summary.sent);
+  } catch (e) {
+    summary.errors.push(`metrics: ${String(e)}`);
   }
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary });
 }

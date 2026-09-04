@@ -43,6 +43,12 @@ export function OpenSpot({
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  const reset = () => {
+    setName("");
+    setPhone("");
+    setEmail("");
+    setError(null);
+  };
   const expand = useCallback(() => {
     setOpen(true);
     requestAnimationFrame(() => {
@@ -73,6 +79,10 @@ export function OpenSpot({
       const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId });
       startTransition(() => {
         if (!r.ok) setError(errText(r.error));
+        else {
+          reset();
+          setOpen(false);
+        }
       });
     });
   };
@@ -173,7 +183,14 @@ export function OpenSpot({
         )}
         <div className="flex items-center justify-between gap-2">
           {error ? <span className="text-sm font-semibold text-danger">{error}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : t("identity.nameHelp")}</span>}
-          <button type="button" className="shrink-0 text-sm link" onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="shrink-0 text-sm link"
+            onClick={() => {
+              reset();
+              setOpen(false);
+            }}
+          >
             {t("common.cancel")}
           </button>
         </div>

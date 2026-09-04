@@ -7,6 +7,7 @@ import {
   markScoreReminderSent,
   transitionPastEvents,
 } from "@/lib/domain/reminders";
+import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getEventDetail } from "@/lib/domain/queries";
 import { notifyLineupChange, notifyPromotion, sendInviteReminder, sendScoreReminder } from "@/lib/notify";
@@ -80,6 +81,13 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(`scores: ${String(e)}`);
+  }
+
+  try {
+    await snapshotMetrics(db);
+    await setMetric(db, "cron_hourly_at", Math.floor(now.getTime() / 1000));
+  } catch (e) {
+    summary.errors.push(`metrics: ${String(e)}`);
   }
 
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), ...summary });

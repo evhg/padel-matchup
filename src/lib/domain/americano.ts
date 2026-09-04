@@ -70,6 +70,64 @@ function shuffle<T>(arr: readonly T[], rnd: () => number): T[] {
 
 export const maxCourtsFor = (players: number) => Math.floor(players / 4);
 
+/** Rounds until every player has partnered every other player once (n a multiple of 4), else null. */
+export const rotationLength = (players: number): number | null => (players >= 4 && players % 4 === 0 ? players - 1 : null);
+
+export function seededShuffle<T>(arr: readonly T[], rnd: () => number): T[] {
+  return shuffle(arr, rnd);
+}
+
+/**
+ * Exact americano schedule for n = 4k players: the classic circle method gives
+ * n-1 rounds in which every pair partners exactly once. Courts then group the
+ * pairs to spread opponents; court numbers rotate so nobody camps on court 1.
+ * `roundIndex` is 0-based and wraps, so round n repeats round 1.
+ */
+export function scheduleRound(orderedIds: readonly string[], roundIndex: number, history: History, rnd: () => number = Math.random): RoundPlan {
+  const n = orderedIds.length;
+  if (n < 4 || n % 4 !== 0) throw new Error("scheduleRound needs a multiple of 4 players");
+  const r = ((roundIndex % (n - 1)) + (n - 1)) % (n - 1);
+  const rest = orderedIds.slice(1);
+  const rot = [orderedIds[0], ...rest.map((_, i) => rest[(i + r) % (n - 1)])];
+  const pairs: [string, string][] = [];
+  for (let i = 0; i < n / 2; i++) pairs.push([rot[i], rot[n - 1 - i]]);
+  const opp = (p: string, q: string) => history.opponent.get(pairKey(p, q)) ?? 0;
+  const cost = (x: [string, string], y: [string, string]) => opp(x[0], y[0]) + opp(x[0], y[1]) + opp(x[1], y[0]) + opp(x[1], y[1]);
+  const courts: [[string, string], [string, string]][] = [];
+  if (pairs.length <= 8) {
+    // Exhaustive over perfect matchings (≤ 105 for 8 pairs): the cheapest grouping.
+    let best: [[string, string], [string, string]][] | null = null;
+    let bestCost = Infinity;
+    const walk = (left: [string, string][], acc: [[string, string], [string, string]][], c: number) => {
+      if (c >= bestCost) return;
+      if (left.length === 0) {
+        best = acc.map((x) => [x[0], x[1]]);
+        bestCost = c;
+        return;
+      }
+      const [first, ...others] = left;
+      for (let i = 0; i < others.length; i++) {
+        const partner = others[i];
+        walk(others.filter((_, j) => j !== i), [...acc, [first, partner]], c + cost(first, partner));
+      }
+    };
+    walk(shuffle(pairs, rnd), [], 0);
+    courts.push(...(best ?? []));
+  } else {
+    const pool = shuffle(pairs, rnd);
+    while (pool.length) {
+      const first = pool.shift()!;
+      let bi = 0;
+      for (let i = 1; i < pool.length; i++) if (cost(first, pool[i]) < cost(first, pool[bi])) bi = i;
+      courts.push([first, pool.splice(bi, 1)[0]]);
+    }
+  }
+  const k = courts.length;
+  const matches: Pairing[] = courts.map(([a, b], i) => ({ court: ((i + r) % k) + 1, a, b }));
+  matches.sort((x, y) => x.court - y.court);
+  return { matches, resting: [] };
+}
+
 export function planRound(playerIds: readonly string[], courts: number | null | undefined, history: History, rnd: () => number = Math.random, attempts = 400): RoundPlan {
   const players = [...new Set(playerIds)];
   const n = players.length;
