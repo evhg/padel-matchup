@@ -138,7 +138,17 @@ export function EventFields({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="label">{t("create.capacity")}</label>
-              <select className="input px-3" aria-label={t("create.capacity")} value={values.capacity} onChange={(e) => onChange({ capacity: Number(e.target.value) })}>
+              <select
+                className="input px-3"
+                aria-label={t("create.capacity")}
+                value={values.capacity}
+                onChange={(e) => {
+                  const capacity = Number(e.target.value);
+                  // Courts follow capacity (one per four) until the organizer picks a number.
+                  const followed = values.courts === null || values.courts === Math.max(1, Math.floor(values.capacity / 4));
+                  onChange(followed ? { capacity, courts: Math.max(1, capacity / 4) } : { capacity });
+                }}
+              >
                 {Array.from({ length: 16 }, (_, i) => (i + 1) * 4).map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -148,9 +158,8 @@ export function EventFields({
             </div>
             <div>
               <label className="label">{t("create.courts")}</label>
-              <select className="input px-3" value={values.courts ?? ""} onChange={(e) => onChange({ courts: e.target.value ? Number(e.target.value) : null })}>
-                <option value="">{t("create.courtsAuto")}</option>
-                {Array.from({ length: Math.max(1, Math.floor((values.capacity || 4) / 4)) }, (_, i) => i + 1).map((n) => (
+              <select className="input px-3" aria-label={t("create.courts")} value={values.courts ?? Math.max(1, Math.floor((values.capacity || 4) / 4))} onChange={(e) => onChange({ courts: Number(e.target.value) })}>
+                {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>

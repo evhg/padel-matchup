@@ -41,8 +41,6 @@ describe("americano engine (db)", () => {
     const m = r1.matches[0];
     await saveTournamentMatchScore(db, { eventId: ev.id, matchId: m.id, sideA: 16, sideB: 8, playerId: players[0].id, isCreator: false });
     await saveTournamentMatchScore(db, { eventId: ev.id, matchId: m.id, sideA: 15, sideB: 9, playerId: players[1].id, isCreator: false });
-    // Round with a score can't be deleted.
-    await expect(deleteLastRound(db, { eventId: ev.id })).rejects.toMatchObject({ code: "invalid" });
 
     const r2 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
     expect(r2.roundNumber).toBe(2);
@@ -135,6 +133,17 @@ describe("americano engine (db)", () => {
     void joined;
     void and;
     void isNull;
+  });
+
+  it("deletes the latest round even when it has scores (organizer confirms in the UI)", async () => {
+    const { creator, ev, players } = await tournamentWith(4);
+    const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    const r2 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    await saveTournamentMatchScore(db, { eventId: ev.id, matchId: r2.matches[0].id, sideA: 12, sideB: 4, playerId: players[0].id, isCreator: false });
+    expect(await deleteLastRound(db, { eventId: ev.id })).toBe(2);
+    expect(await deleteLastRound(db, { eventId: ev.id })).toBe(1);
+    expect(await deleteLastRound(db, { eventId: ev.id })).toBeNull();
+    void r1;
   });
 
   it("tournament capacity is a multiple of 4 between 4 and 64", () => {

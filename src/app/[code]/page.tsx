@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
-import { CalendarButtons } from "@/components/CalendarButtons";
+import { CalendarEmail } from "@/components/CalendarEmail";
 import { CreatorPanel } from "@/components/CreatorPanel";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
@@ -28,7 +28,6 @@ import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
 import { venueWithCourt } from "@/lib/labels";
-import { googleCalendarLinkFor } from "@/lib/notify";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 
 type Props = { params: Promise<{ code: string }> };
@@ -97,8 +96,6 @@ export default async function EventPage({ params }: Props) {
     spotsLeft === 0 && ev.whenFull === "waitlist"
       ? t("shareText.eventFull", { day, time, venue, url })
       : t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  const calendarHref = !cancelled && !over ? await googleCalendarLinkFor(db, detail, me) : "";
-  const icsHref = `/${code}/calendar.ics`;
 
   const participants = roster.filter(isOccupied);
   const isTournament = ev.type === "tournament";
@@ -252,7 +249,7 @@ export default async function EventPage({ params }: Props) {
               <div className="text-sm text-muted">{t("event.pastNoScore")}</div>
             </div>
           )}
-          {!cancelled && !over && <CalendarButtons googleHref={calendarHref} icsHref={icsHref} className="mt-4" />}
+          {me && (isMember || isWaitlisted) && !cancelled && !over && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} className="mt-4" />}
         </section>
 
         {creatorBanner && (
@@ -313,7 +310,7 @@ export default async function EventPage({ params }: Props) {
             </>
           )}
           {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t("event.fullHelp")}</p>}
-          {me && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
+          {me && me.email && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
             <div className="mt-5 border-t border-line pt-4">
               <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} notifyOn={me.emailNotifications} />
             </div>

@@ -60,7 +60,7 @@ export default async function SharePage({ params }: Props) {
     <>
       <ScrollTop />
       <Header minimal />
-      <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12 [overflow-anchor:none]">
         <section className="text-center">
           <div className="mx-auto inline-grid h-14 w-14 place-items-center rounded-full bg-accent text-2xl">{isTournament ? "🏆" : "🎾"}</div>
           <h1 className="mt-3 text-3xl font-extrabold tracking-tight">{t(isTournament ? "share.titleTournament" : "share.titleMatch")}</h1>
