@@ -36,7 +36,8 @@ export function TrendChart({ title, days, series, unit = "int", subtitle }: { ti
   const max = useMemo(() => niceMax(Math.max(1, ...series.flatMap((s) => s.values))), [series]);
   const x = (i: number) => PAD.left + (n <= 1 ? 0 : (i * (W - PAD.left - PAD.right)) / (n - 1));
   const y = (v: number) => PAD.top + (H - PAD.top - PAD.bottom) * (1 - v / max);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
+  // Integer-friendly ticks: 0..max when small, else five even steps of a "nice" max.
+  const ticks = max <= 5 && unit === "int" ? Array.from({ length: max + 1 }, (_, i) => i) : [0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => f * max);
   const labelEvery = n > 45 ? 15 : n > 14 ? 7 : 1;
   const fmtDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
   const path = (vals: number[]) => vals.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
@@ -116,7 +117,7 @@ export function TrendChart({ title, days, series, unit = "int", subtitle }: { ti
               </g>
             ))}
             {days.map((d, i) =>
-              i % labelEvery === 0 || i === n - 1 ? (
+              (i % labelEvery === 0 && n - 1 - i >= Math.max(2, labelEvery / 2)) || i === n - 1 ? (
                 <text key={d} x={x(i)} y={H - 8} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="10" fill="#8a919c">
                   {fmtDay(d)}
                 </text>
