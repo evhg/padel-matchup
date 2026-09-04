@@ -80,12 +80,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const range = (RANGES as readonly number[]).includes(Number(sp.range)) ? Number(sp.range) : 30;
   const db = await getDb();
   const now = new Date();
-  const [tot, metrics, act, month] = await Promise.all([
-    totals(db, now),
-    metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at"], range, now),
-    activitySeries(db, range, now),
-    metricSeries(db, ["emails_sent"], now.getUTCDate(), now),
-  ]);
+  // Sequential on purpose: see metrics.ts (pooler + pipelining).
+  const tot = await totals(db, now);
+  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at"], range, now);
+  const act = await activitySeries(db, range, now);
+  const month = await metricSeries(db, ["emails_sent"], now.getUTCDate(), now);
   const emailsToday = metrics.values.emails_sent.at(-1) ?? 0;
   const emailsMonth = sum(month.values.emails_sent);
   const lastCron = (k: string) => {
