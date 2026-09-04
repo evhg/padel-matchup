@@ -20,7 +20,7 @@ Rotating-partner rounds, fair sit-outs, per-match points by any participant, liv
 - Requires template approval and a verified business; not worth blocking v1 on.
 
 ## 4. Quality of life
-- Recurring matches ("every Thursday 18:00") with auto-created events and rolling invites. ("Play again next week" one-tap clone is shipped.)
+- Recurring matches (quick picks already learn the organizer's usual slots) ("every Thursday 18:00") with auto-created events and rolling invites. ("Play again next week" one-tap clone is shipped.)
 - Player reliability / no-show stats, surfaced in the rolodex.
 - Court booking integrations (Playtomic et al.).
 - Push notifications via web push (identity is now stable across devices via the personal link + email restore).

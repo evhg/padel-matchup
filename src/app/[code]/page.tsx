@@ -10,12 +10,13 @@ import { CreatorPanel } from "@/components/CreatorPanel";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
-import { OpenSpot, ReserveHost } from "@/components/ReserveSheet";
+import { JoinInline } from "@/components/JoinInline";
+import { OpenSpot } from "@/components/OpenSpot";
 import { ScorePanel } from "@/components/ScorePanel";
 import { QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { SlotActions } from "@/components/SlotActions";
 import { getDb } from "@/db";
-import { calendarTitle, googleCalendarUrl } from "@/lib/calendar";
+import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
@@ -23,7 +24,8 @@ import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
-import { eventTitleLine, venueWithCourt } from "@/lib/labels";
+import { venueWithCourt } from "@/lib/labels";
+import { googleCalendarLinkFor } from "@/lib/notify";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 
 type Props = { params: Promise<{ code: string }> };
@@ -92,7 +94,7 @@ export default async function EventPage({ params }: Props) {
     spotsLeft === 0 && ev.whenFull === "waitlist"
       ? t("shareText.eventFull", { day, time, venue, url })
       : t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  const calendarHref = googleCalendarUrl(ev, { title: eventTitleLine(ev, { fallback: typeLabel, courtNumber }), url, tz: ev.tz, location: venue });
+  const calendarHref = !cancelled && !over ? await googleCalendarLinkFor(db, detail, me) : "";
   const icsHref = `/${code}/calendar.ics`;
 
   const participants = roster.filter(isOccupied);
@@ -133,6 +135,7 @@ export default async function EventPage({ params }: Props) {
     const occupiedSlot = isOccupied(s);
     const inviteHref = s.inviteCode ? inviteUrl(base, code, s.inviteCode) : undefined;
     const stale = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000;
+    const justInvited = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() < 90 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
     return (
       <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-white" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
@@ -160,10 +163,13 @@ export default async function EventPage({ params }: Props) {
               </div>
             ) : (
               <OpenSpot
-                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && (joinState === "join" || (!me && !isMember)) ? "join" : "none"}
+                code={code}
+                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" ? "join" : "none"}
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
                 slotId={s.id}
-                position={s.position}
+                hasIdentity={Boolean(me)}
+                rolodex={viewer.isCreator ? rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone })) : []}
+                emailEnabled={emailEnabled()}
               />
             )}
           </div>
@@ -179,6 +185,8 @@ export default async function EventPage({ params }: Props) {
             forwardText={inviteHref ? inviteTextTemplate.replace("__NAME__", name).replace("__URL__", inviteHref) : undefined}
             nudgeText={inviteHref ? nudgeTextTemplate.replace("__NAME__", name).replace("__URL__", inviteHref) : undefined}
             stale={stale}
+            defaultOpen={justInvited}
+            emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
           />
         )}
       </li>
@@ -281,7 +289,7 @@ export default async function EventPage({ params }: Props) {
             {!cancelled && !over && <span className="text-sm font-semibold text-muted">{t("event.spotsLeft", { count: spotsLeft })}</span>}
           </div>
           <ul className="mt-3 flex flex-col gap-2">{roster.map((s, i) => slotRow(s, i))}</ul>
-          {viewer.isCreator && !cancelled && !over && <ReserveHost code={code} rolodex={rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone }))} inviteTextTemplate={inviteTextTemplate} emailEnabled={emailEnabled()} />}
+          {!me && joinState === "join_waitlist" && <JoinInline code={code} label={t("event.joinWaitlist")} />}
           {waitlist.length > 0 && (
             <>
               <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wider text-muted">{t("event.waitlist")}</h3>
@@ -343,12 +351,12 @@ export default async function EventPage({ params }: Props) {
         <ActivityFeed items={detail.activity} />
 
         {(cancelled || over) && (
-          <Link href="/new" className="btn-primary w-full">
+          <Link href="/" className="btn-primary w-full">
             {t("event.createYourOwn")}
           </Link>
         )}
       </main>
-      <Footer code={code} />
+      <Footer />
       <JoinBar code={code} state={joinState} hasIdentity={Boolean(me)} spotsLeft={spotsLeft} waitlistPosition={waitlistPosition} isTournament={ev.type === "tournament"} />
     </>
   );

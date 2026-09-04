@@ -12,7 +12,7 @@ export default async function NotFound() {
           <div className="text-6xl">🤷</div>
           <h1 className="mt-3 text-2xl font-extrabold">{t("notFound.title")}</h1>
           <p className="mt-2 text-muted">{t("notFound.body")}</p>
-          <Link href="/new" className="btn-primary mt-5 w-full">
+          <Link href="/" className="btn-primary mt-5 w-full">
             {t("notFound.cta")}
           </Link>
         </section>

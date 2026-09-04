@@ -18,7 +18,7 @@ export default async function Home() {
           ))}
         </section>
       </main>
-      <Footer />
+      <Footer spacious />
     </>
   );
 }

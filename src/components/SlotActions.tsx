@@ -15,6 +15,8 @@ export function SlotActions({
   forwardText,
   nudgeText,
   stale,
+  defaultOpen = false,
+  emailedTo = null,
 }: {
   code: string;
   slotId: string;
@@ -25,9 +27,13 @@ export function SlotActions({
   forwardText?: string;
   nudgeText?: string;
   stale?: boolean;
+  /** Just reserved: show the forward buttons right away, no extra tap. */
+  defaultOpen?: boolean;
+  /** The invite went out by email to this address. */
+  emailedTo?: string | null;
 }) {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [pending, start] = useTransition();
 
   const remove = () => {
@@ -40,6 +46,7 @@ export function SlotActions({
 
   return (
     <div className="mt-2 flex flex-col gap-2">
+      {emailedTo && <div className="text-sm font-semibold text-ok">✓ {t("creator.inviteEmailed", { email: emailedTo })}</div>}
       <div className="flex flex-wrap gap-2">
         {kind === "invited" && inviteUrl && (
           <button type="button" className={`btn-xs ${stale ? "btn-primary" : "btn-secondary"}`} onClick={() => setOpen((o) => !o)}>
@@ -52,6 +59,7 @@ export function SlotActions({
       </div>
       {open && inviteUrl && (
         <div className="rounded-2xl bg-bg p-3 animate-pop">
+          <div className="mb-2 text-sm font-bold">{t("creator.sendTheirLink")}</div>
           <ShareButtons url={inviteUrl} text={(stale ? nudgeText : forwardText) ?? inviteUrl} phone={phone} size="sm" />
         </div>
       )}

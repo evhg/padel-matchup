@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createEventAction } from "@/actions/events";
-import { tomorrowAt } from "@/lib/dates";
-import { EventFields, type EventFormValues } from "./EventFields";
+import { nextOccurrence, tomorrowAt } from "@/lib/dates";
+import { EventFields, type EventFormValues, type TimePatternInput } from "./EventFields";
 import type { VenueOption } from "./VenueCombobox";
 
 export function CreateEventForm({
@@ -12,14 +12,19 @@ export function CreateEventForm({
   tzFromHeader,
   venues,
   hasIdentity,
+  patterns = [],
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
   venues: VenueOption[];
   hasIdentity: boolean;
+  /** The organizer's usual weekday/time slots (quick picks + default). */
+  patterns?: TimePatternInput[];
 }) {
   const t = useTranslations();
-  const initial = tomorrowAt(defaultTz);
+  // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
+  const defaultFor = (tz: string) => (patterns[0] ? nextOccurrence(patterns[0].dow, patterns[0].time, tz) : tomorrowAt(tz));
+  const initial = defaultFor(defaultTz);
   const [values, setValues] = useState<EventFormValues>({
     type: "match",
     title: "",
@@ -46,12 +51,13 @@ export function CreateEventForm({
     try {
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (browserTz && browserTz !== defaultTz) {
-        const d = tomorrowAt(browserTz);
+        const d = defaultFor(browserTz);
         setValues((v) => ({ ...v, tz: browserTz, date: d.date, time: d.time }));
       }
     } catch {
       /* ignore */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tzFromHeader, defaultTz]);
 
   const onChange = (patch: Partial<EventFormValues>) => {
@@ -95,7 +101,7 @@ export function CreateEventForm({
         </div>
       )}
       <div className="card">
-        <EventFields values={values} onChange={onChange} venues={venues} />
+        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} />
       </div>
       {error && <p className="text-sm font-semibold text-danger">{error}</p>}
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>

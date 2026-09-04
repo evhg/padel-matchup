@@ -101,7 +101,7 @@
     "chipTonight": "Tonight {time}",
     "chipTomorrow": "Tomorrow {time}",
     "chipDay": "{day} {time}",
-    "chipsLabel": "Quick pick",
+    "chipsLabel": "Your usual times",
     "courts": "Courts",
     "courtsAuto": "Auto",
     "pointsPerMatch": "Points per match",
@@ -190,7 +190,9 @@
     "playAgainHelp": "Same players' settings, one week later, fresh link.",
     "courtNumber": "Court {n}",
     "tapToReserve": "Tap to reserve for someone",
-    "tapToJoin": "Tap to join"
+    "tapToJoin": "Tap to join",
+    "joinHere": "Join here",
+    "joinShort": "Join"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -221,7 +223,11 @@
     "inviteAll": "Send all invites in one message",
     "inviteAllHelp": "One message listing each person's personal link. Good for a group chat.",
     "reserveSpot": "Reserve spot {n}",
-    "reserveSheetHelp": "Hold this spot for someone. You'll get a personal link to forward to them."
+    "reserveSheetHelp": "Hold this spot for someone. You'll get a personal link to forward to them.",
+    "reserveInline": "Reserve this spot for…",
+    "inviteEmailed": "Invite emailed to {email}",
+    "sendTheirLink": "Send them their personal link",
+    "reserveDone": "Done"
   },
   "score": {
     "title": "Score",
@@ -379,6 +385,28 @@
       "body": "Enter this code to bring your matches to the new device. It expires in 10 minutes.",
       "codeLabel": "Code",
       "footer": "If you didn't request this, ignore it. Nothing happens without the code."
+    },
+    "invite": {
+      "subject": "🎾 {organizer} saved you a spot · padel {day} {time}",
+      "heading": "{organizer} saved you a spot",
+      "body": "Hi {name}! Padel {day} at {time} at {venue}. Tap to confirm or decline so the organizer can plan."
+    },
+    "lineupComplete": {
+      "subject": "Line-up complete: padel {day} {time} · {venue}",
+      "heading": "You're all set: {names}",
+      "body": "All {capacity} players are confirmed for padel {day} at {time} at {venue}. Your calendar entry now shows the full line-up; accept the attached update if your calendar asks."
+    },
+    "lineupOpen": {
+      "subject": "A spot opened up: padel {day} {time} · {venue}",
+      "heading": "The line-up changed",
+      "body": "Padel {day} at {time} at {venue} is at {count}/{capacity} players again. Your calendar entry will update when you accept the attached invite."
+    },
+    "personal": {
+      "subject": "Your Kicksmash link",
+      "heading": "Your personal link",
+      "body": "Keep this email. The link below opens your matches on any phone or laptop, no password. It's also inside every calendar invite we send you.",
+      "cta": "Open my matches",
+      "footer": "Keep the link private: anyone who has it is you."
     }
   },
   "errors": {
@@ -448,6 +476,9 @@
   "calendar": {
     "title": "Add to calendar",
     "google": "Google Calendar",
-    "apple": "Apple / Outlook"
+    "apple": "Apple / Outlook",
+    "completeSuffix": "COMPLETE",
+    "players": "Players: {names}",
+    "playersLabel": "Players"
   }
 }

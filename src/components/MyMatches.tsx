@@ -83,7 +83,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
       {upcoming.length === 0 && past.length === 0 ? (
         <section className="card text-center">
           <p className="text-muted">{t("me.empty")}</p>
-          <Link href="/new" prefetch={false} className="btn-primary mt-4 w-full">
+          <Link href="/" prefetch={false} className="btn-primary mt-4 w-full">
             {t("me.emptyCta")}
           </Link>
         </section>
@@ -97,7 +97,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.past")}</h2>
             {past.length ? <ul className="flex flex-col gap-2">{past.map(row)}</ul> : <p className="text-sm text-faint">—</p>}
           </section>
-          <Link href="/new" prefetch={false} className="btn-primary w-full">
+          <Link href="/" prefetch={false} className="btn-primary w-full">
             {t("common.newMatch")}
           </Link>
         </>
