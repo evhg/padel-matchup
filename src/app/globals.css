@@ -127,3 +127,20 @@
 .animate-pop {
   animation: pop 0.18s ease-out both;
 }
+
+/* Printing an americano schedule: paper gets the schedule, not the chrome. */
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+    break-inside: avoid;
+  }
+}

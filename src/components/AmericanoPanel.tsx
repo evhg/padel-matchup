@@ -25,6 +25,7 @@ export function AmericanoPanel({
   courtNames,
   rotationLength,
   canPlayAgain = false,
+  cardHref,
 }: {
   code: string;
   isCreator: boolean;
@@ -43,6 +44,8 @@ export function AmericanoPanel({
   /** Rounds until everyone has partnered everyone once (field in fours), else null. */
   rotationLength: number | null;
   canPlayAgain?: boolean;
+  /** Link to the shareable standings card (once a score exists). */
+  cardHref?: string;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
@@ -128,7 +131,14 @@ export function AmericanoPanel({
 
       {(rounds.length > 0 || locked) && (
         <div className="mt-4">
-          <h3 className="text-sm font-extrabold uppercase tracking-wider text-muted">{locked ? t("americano.finalStandings") : t("americano.standings")}</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-extrabold uppercase tracking-wider text-muted">{locked ? t("americano.finalStandings") : t("americano.standings")}</h3>
+            {cardHref && rounds.some((r) => r.matches.some((m) => m.sideA != null)) && (
+              <a href={cardHref} className="btn-ghost btn-xs">
+                📸 {t("card.share")}
+              </a>
+            )}
+          </div>
           <table className="mt-2 w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-bold uppercase tracking-wider text-faint">

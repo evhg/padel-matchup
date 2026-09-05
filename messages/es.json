@@ -67,7 +67,10 @@
     "step2": "Comparte un enlace corto",
     "step3": "Los jugadores se apuntan con un toque. Listo.",
     "formTitle": "Monta un partido en 10 segundos",
-    "formSub": "Elige una hora, consigue un enlace, compártelo. Los jugadores se apuntan con un toque. Sin app, sin registro."
+    "formSub": "Elige una hora, consigue un enlace, compártelo. Los jugadores se apuntan con un toque. Sin app, sin registro.",
+    "americanoLink": "¿Organizas un americano? Generador de cuadros gratis →",
+    "metaTitle": "Pádel en un enlace",
+    "metaDescription": "Crea un partido de pádel o un torneo americano, comparte un enlace corto por WhatsApp o Telegram y tus amigos se apuntan con un toque. Sin app ni cuentas. Invitaciones de calendario, recordatorios, resultados, niveles."
   },
   "create": {
     "title": "Nuevo partido",
@@ -312,7 +315,8 @@
     "invite": "🎾 ¡Hola {name}! Te he guardado una plaza para pádel {day} a las {time} en {venue}. Confirma aquí: {url}",
     "nudge": "🎾 {name}, ¿sigue en pie el pádel {day} a las {time} en {venue}? Confirma o rechaza aquí: {url}",
     "spotsLeft": "{count, plural, =0 {No quedan plazas} one {Queda # plaza} other {Quedan # plazas}}",
-    "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}"
+    "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}",
+    "result": "🎾 {line} · {day}\n{url}"
   },
   "og": {
     "players": "{count}/{capacity} jugadores",
@@ -521,7 +525,24 @@
     "rotationInfo": "{n} rondas completan la rotación (cada uno juega con todos una vez). Faltan {left}.",
     "rotationDone": "Rotación completa tras {n} rondas: cada pareja ha jugado junta una vez. Las rondas extra repiten desde la 1.",
     "generateRepeat": "Generar ronda {n} (igual que la ronda {again})",
-    "completeScore": "Completa el resultado"
+    "completeScore": "Completa el resultado",
+    "gen": {
+      "title": "Generador de cuadros americano",
+      "sub": "Parejas rotativas, descansos repartidos, cualquier número de jugadores. Gratis, sin registro. Imprímelo o llévalo en vivo con resultados y clasificación.",
+      "players": "Jugadores",
+      "courts": "Pistas",
+      "names": "Nombres (opcional, uno por línea)",
+      "namesPlaceholder": "Ana\nBea\nCarlos\n…",
+      "rounds": "Rondas",
+      "generate": "Generar cuadro",
+      "shuffle": "Barajar de nuevo",
+      "print": "Imprimir",
+      "live": "Llevarlo en vivo en Kicksmash",
+      "liveHelp": "Resultados desde cualquier móvil, clasificación en vivo, invitaciones de calendario, recordatorios.",
+      "perfect": "{n} rondas y cada pareja ha jugado junta exactamente una vez.",
+      "partial": "{players} jugadores en {courts} pistas: {resting} descansan cada ronda, repartidos con justicia.",
+      "metaDescription": "Generador gratuito de cuadros americano de pádel: parejas rotativas, descansos justos, de 4 a 64 jugadores, imprimible. O llévalo en vivo con resultados y clasificación."
+    }
   },
   "calendar": {
     "title": "Añadir al calendario",
@@ -635,5 +656,22 @@
       "podiums": "Podios"
     },
     "levelNeeded": "Elige tu nivel para unirte"
+  },
+  "card": {
+    "title": "Tarjeta de resultado",
+    "share": "Compartir resultado",
+    "saveHint": "Mantén pulsada la imagen para guardarla. O comparte el enlace: se despliega con la imagen.",
+    "organize": "Organiza tu propio partido",
+    "back": "Volver al partido",
+    "won": "{a} ganaron a {b}",
+    "draw": "{a} y {b} empataron",
+    "result": "Resultado",
+    "winner": "Ganador: {name}",
+    "standingsFinal": "Clasificación final",
+    "standingsLive": "Clasificación por ahora",
+    "poweredBy": "Pádel en un enlace",
+    "pts": "{points} pts",
+    "teamA": "Equipo A",
+    "teamB": "Equipo B"
   }
 }

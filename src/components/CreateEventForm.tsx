@@ -14,6 +14,8 @@ export function CreateEventForm({
   hasIdentity,
   patterns = [],
   hasLevel = false,
+  initialType = "match",
+  initialCapacity,
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
@@ -23,13 +25,17 @@ export function CreateEventForm({
   patterns?: TimePatternInput[];
   /** The organizer already has a level (a range then doesn't ask for theirs). */
   hasLevel?: boolean;
+  /** Prefill from the URL (the americano generator links here). */
+  initialType?: "match" | "tournament";
+  initialCapacity?: number;
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
   const defaultFor = (tz: string) => (patterns[0] ? nextOccurrence(patterns[0].dow, patterns[0].time, tz) : tomorrowAt(tz));
   const initial = defaultFor(defaultTz);
+  const cap = initialCapacity && Number.isInteger(initialCapacity) && initialCapacity >= 4 && initialCapacity <= 64 && initialCapacity % 4 === 0 ? initialCapacity : 8;
   const [values, setValues] = useState<EventFormValues>({
-    type: "match",
+    type: initialType,
     title: "",
     date: initial.date,
     time: initial.time,
@@ -38,7 +44,7 @@ export function CreateEventForm({
     venueMapUrl: venues[0]?.mapUrl ?? "",
     court: "",
     note: "",
-    capacity: 8,
+    capacity: cap,
     whenFull: "waitlist",
     courts: null,
     pointsPerMatch: null,

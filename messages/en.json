@@ -67,7 +67,10 @@
     "step2": "Share one short link",
     "step3": "Players tap to join. Done.",
     "formTitle": "Set up a match in 10 seconds",
-    "formSub": "Pick a time, get a link, share it. Players tap to join. No app, no signup."
+    "formSub": "Pick a time, get a link, share it. Players tap to join. No app, no signup.",
+    "americanoLink": "Running an americano? Free schedule generator →",
+    "metaTitle": "Padel in one link",
+    "metaDescription": "Create a padel match or americano tournament, share one short link on WhatsApp or Telegram, friends tap to join. No app, no accounts. Calendar invites, reminders, scores, levels."
   },
   "create": {
     "title": "New match",
@@ -312,7 +315,8 @@
     "invite": "🎾 Hey {name}! I saved you a spot for padel {day} at {time} at {venue}. Confirm here: {url}",
     "nudge": "🎾 {name}, still on for padel {day} at {time} at {venue}? Please confirm or decline here: {url}",
     "spotsLeft": "{count, plural, =0 {No spots left} one {# spot left} other {# spots left}}",
-    "inviteGroup": "🎾 Padel {day} at {time} — {venue}. I reserved spots for you. Confirm with your personal link:\n{lines}"
+    "inviteGroup": "🎾 Padel {day} at {time} — {venue}. I reserved spots for you. Confirm with your personal link:\n{lines}",
+    "result": "🎾 {line} · {day}\n{url}"
   },
   "og": {
     "players": "{count}/{capacity} players",
@@ -521,7 +525,24 @@
     "rotationInfo": "{n} rounds complete the rotation (everyone partners everyone once). {left} to go.",
     "rotationDone": "Rotation complete after {n} rounds: every pair has partnered once. Extra rounds repeat from round 1.",
     "generateRepeat": "Generate round {n} (same as round {again})",
-    "completeScore": "Please complete the score"
+    "completeScore": "Please complete the score",
+    "gen": {
+      "title": "Americano schedule generator",
+      "sub": "Rotating partners, fair sit-outs, any number of players. Free, no signup. Print it, or run it live with scores and standings.",
+      "players": "Players",
+      "courts": "Courts",
+      "names": "Names (optional, one per line)",
+      "namesPlaceholder": "Ana\nBo\nCy\n…",
+      "rounds": "Rounds",
+      "generate": "Generate schedule",
+      "shuffle": "Shuffle again",
+      "print": "Print",
+      "live": "Run it live on Kicksmash",
+      "liveHelp": "Scores from any phone, live standings, calendar invites, reminders.",
+      "perfect": "{n} rounds and every pair has partnered exactly once.",
+      "partial": "{players} players on {courts} courts: {resting} sit out each round, spread fairly.",
+      "metaDescription": "Free americano padel schedule generator: rotating partners, fair sit-outs, 4 to 64 players, printable. Or run it live with scores and standings."
+    }
   },
   "calendar": {
     "title": "Add to calendar",
@@ -635,5 +656,22 @@
       "podiums": "Podiums"
     },
     "levelNeeded": "Pick your level to join"
+  },
+  "card": {
+    "title": "Result card",
+    "share": "Share result",
+    "saveHint": "Long-press the image to save it. Or share the link: it unfurls with the picture.",
+    "organize": "Organize your own match",
+    "back": "Back to the match",
+    "won": "{a} beat {b}",
+    "draw": "{a} and {b} drew",
+    "result": "Result",
+    "winner": "Winner: {name}",
+    "standingsFinal": "Final standings",
+    "standingsLive": "Standings so far",
+    "poweredBy": "Padel in one link",
+    "pts": "{points} pts",
+    "teamA": "Team A",
+    "teamB": "Team B"
   }
 }

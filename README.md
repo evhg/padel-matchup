@@ -206,6 +206,8 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Levels (0–7):** players declare their level once in quarter steps (a plain select grouped by band, with a short guide); it shows next to their name in rosters, standings and the score panel. Results nudge it: when the organizer confirms a 2v2 match score or finalizes a tournament, an Elo-style delta (one level of difference ≈ 10:1 odds, at most ±0.10 per match, ±0.12 per tournament) is applied once per event to every rated player, the source becomes "adjusted by results" and the last change is shown on My matches with a capped log. Unrated players never move and never count.
 - **Level ranges:** a match or tournament can be Bronze (1.0–2.5), Silver (2.5–3.5), Gold (3.0–4.5), Platinum (4.5+) or a custom min–max; the range shows as a chip in the hero. Inside the range people join as usual (the join form asks for a level once); outside it the button turns into **Ask to join**, the organizer sees the requests with the level and approves (seats or waitlists) or declines, the requester sees the answer in the join bar and gets a calendar invite or a short note by email. Organizer-reserved invites and promotions bypass the range. **Balanced teams:** when all four have levels, the score panel suggests the 2v2 split with the smallest gap.
 - **Stats strip** on My matches: played, won, win rate, podiums (from confirmed team results and finalized standings).
+- **Result cards:** once a match has a score or a tournament has a scored round, "Share result" opens `/{code}/card`: a page whose link unfurls with a generated picture (score boxes with the winning side highlighted, or the top five of the table) in WhatsApp and Telegram, the picture itself to long-press and save, share buttons, and "Organize your own match" as the way in.
+- **Americano generator:** `/americano` is a public, indexable page running the same rotation engine in the browser: players (or pasted names), courts, rounds; exact rotation when the field is in fours, fair sit-outs otherwise; print stylesheet; "Run it live on Kicksmash" prefills the create form (`/?type=tournament&capacity=N`). `robots.txt` and `sitemap.xml` cover `/`, `/americano` and `/about`; personal, manage, invite, share and card pages stay out of the index.
 
 ## Admin dashboard
 
@@ -214,7 +216,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/i/[invite] · /[code]/manage/[manage] · /me · /p/[token] · /about · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /me · /p/[token] · /about · /americano · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)
