@@ -8,8 +8,9 @@ import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { LOCALE_COOKIE, toLocale } from "@/i18n/config";
 import { baseUrl, emailEnabled } from "@/lib/config";
-import { consumeEmailCode, findPlayerByPersonalToken, issueEmailCode, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
+import { changePlayerEmail, consumeEmailCode, findPlayerByPersonalToken, issueEmailCode, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
 import { getPlayer, normalizeEmail, updatePlayer } from "@/lib/domain/players";
+import { sendPersonalLinkEmail } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
 import { sendEmailCode, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
@@ -48,22 +49,34 @@ export async function updateMyName(name: string): Promise<ActionResult<PublicPla
  * Self-entered email (decision 9). If `eventCode` is given and the player is
  * in that event, a calendar invite goes out right away.
  */
-export async function updateMyEmail(email: string, eventCode?: string): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean }>> {
+export async function updateMyEmail(email: string, eventCode?: string): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean; kept: boolean }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new Error("no identity");
     const normalized = normalizeEmail(email);
     const others = normalized ? (await playersWithEmail(db, normalized)).filter((o) => o.id !== me.id) : [];
-    const p = (await updatePlayer(db, me.id, { email: normalized })) ?? me;
-    if (normalized && normalized !== me.email) {
+    const { player: p, changed, kept } = await changePlayerEmail(db, me.id, normalized);
+    if (changed) {
       // New address: calendar invite when in this match (carries the personal link), else the personal-link email.
       const detail = eventCode ? await getEventByCode(db, eventCode) : null;
       after(() => welcomeEmail(db, p, detail?.event ?? null));
     }
     if (eventCode) revalidatePath(`/${eventCode}`);
     revalidatePath("/me");
-    return { ...pub(p), knownElsewhere: others.length > 0 };
+    return { ...pub(p), knownElsewhere: others.length > 0, kept };
+  });
+}
+
+/** "Email me my link": the personal-link email to the address on file. */
+export async function emailPersonalLinkAction(): Promise<ActionResult<{ email: string | null; sent: boolean }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    if (!me.email) return { email: null, sent: false };
+    const sent = await sendPersonalLinkEmail(db, me);
+    return { email: me.email, sent };
   });
 }
 

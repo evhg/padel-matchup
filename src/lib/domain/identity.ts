@@ -66,8 +66,35 @@ export async function findPlayerByPersonalToken(db: Db, token: string): Promise<
 
 const hashCode = (email: string, code: string) => createHash("sha256").update(`${email}:${code}`).digest("hex");
 
+/** Identities reachable through this address: current email or the previous (recovery) one. */
 export async function playersWithEmail(db: Db, email: string): Promise<Player[]> {
-  return db.select().from(players).where(eq(players.email, email)).orderBy(asc(players.createdAt));
+  return db
+    .select()
+    .from(players)
+    .where(sql`${players.email} = ${email} or ${players.recoveryEmail} = ${email}`)
+    .orderBy(asc(players.createdAt));
+}
+
+/**
+ * Change a player's email. The old address is kept as `recoveryEmail`, and an
+ * existing address is never blanked (it is how the player gets back in):
+ * a clear request is ignored and reported as `kept`.
+ */
+export async function changePlayerEmail(db: Db, playerId: string, rawEmail: string | null | undefined): Promise<{ player: Player; changed: boolean; kept: boolean }> {
+  const [current] = await db.select().from(players).where(eq(players.id, playerId));
+  if (!current) throw new DomainError("not_found");
+  const next = normalizeEmail(rawEmail);
+  if (!next) {
+    if (current.email) return { player: current, changed: false, kept: true };
+    return { player: current, changed: false, kept: false };
+  }
+  if (next === current.email) return { player: current, changed: false, kept: false };
+  const [updated] = await db
+    .update(players)
+    .set({ email: next, recoveryEmail: current.email && current.email !== next ? current.email : current.recoveryEmail, emailVerifiedAt: null })
+    .where(eq(players.id, playerId))
+    .returning();
+  return { player: updated, changed: true, kept: false };
 }
 
 /**
@@ -135,7 +162,7 @@ export async function restoreByEmail(db: Db, email: string, currentPlayerId: str
   const pool = [...owners];
   if (current && !pool.some((p) => p.id === current.id)) pool.push(current);
   if (pool.length === 0) throw new DomainError("not_found");
-  const canonical = pool.find((p) => p.emailVerifiedAt && p.email === email) ?? pool.find((p) => p.email === email) ?? pool[0];
+  const canonical = pool.find((p) => p.emailVerifiedAt && p.email === email) ?? pool.find((p) => p.email === email) ?? pool.find((p) => p.recoveryEmail === email) ?? pool[0];
   await mergePlayers(
     db,
     canonical.id,
