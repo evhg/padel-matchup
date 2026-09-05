@@ -720,5 +720,22 @@
     "venue": "Usual place",
     "tz": "Time zone",
     "type": "Format"
+  },
+  "venue": {
+    "board": "Venue board",
+    "boardTitle": "Padel at {venue}",
+    "boardSub": "Open matches and tournaments anyone can join. Tap one, enter a name, you're in.",
+    "empty": "Nothing listed at {venue} right now.",
+    "emptyCta": "Organize one here",
+    "listed": "On the {venue} board",
+    "listToggle": "Show on the venue board",
+    "listHelp": "A public list of open matches at this venue; people who scan the venue's poster can join. Off by default.",
+    "poster": "Printable poster",
+    "posterScan": "Scan for open padel matches at {venue}. Tap one, enter your name, you're in.",
+    "posterHint": "Print it, tape it by the courts.",
+    "print": "Print",
+    "organizedBy": "by {name}",
+    "full": "Full · waitlist",
+    "listedHelp": "Anyone at the venue can find and join this match."
   }
 }

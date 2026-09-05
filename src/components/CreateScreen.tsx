@@ -11,7 +11,7 @@ import { getSessionPlayer } from "@/lib/session";
 import type { EventFormValues } from "./EventFields";
 
 /** The create form with its data. Rendered on / and /new. */
-export async function CreateScreen({ heading, sub, prefill }: { heading: string; sub?: string; prefill?: { type?: string; capacity?: string; group?: string } }) {
+export async function CreateScreen({ heading, sub, prefill }: { heading: string; sub?: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -42,6 +42,9 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
     };
     void utcToZonedParts;
   }
+  // From a venue board: the venue is prefilled and the listing switched on.
+  const venuePrefill = prefill?.venue?.trim().slice(0, 80);
+  if (venuePrefill && !groupValues) groupValues = { venueName: venuePrefill, venueMapUrl: venues.find((v) => v.name === venuePrefill)?.mapUrl ?? "", publicListing: true };
   return (
     <>
       <div>

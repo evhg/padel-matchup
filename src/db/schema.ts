@@ -138,6 +138,10 @@ export const events = pgTable(
     levelsAppliedAt: timestamp("levels_applied_at", { withTimezone: true }),
     /** The group this match belongs to (created from a group, or the group was formed from it). */
     groupId: uuid("group_id").references((): AnyPgColumn => groups.id, { onDelete: "set null" }),
+    /** Organizer opted in to the public venue board (/v/{venue_slug}). Off by default. */
+    publicListing: boolean("public_listing").notNull().default(false),
+    /** URL-safe key of venue_name, kept in sync on create/update. */
+    venueSlug: text("venue_slug"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -145,6 +149,7 @@ export const events = pgTable(
     index("events_creator_idx").on(t.creatorPlayerId),
     index("events_starts_at_idx").on(t.startsAt),
     index("events_group_idx").on(t.groupId),
+    index("events_venue_slug_idx").on(t.venueSlug, t.startsAt),
   ],
 );
 
