@@ -11,7 +11,7 @@ import { getSessionPlayer } from "@/lib/session";
 import type { EventFormValues } from "./EventFields";
 
 /** The create form with its data. Rendered on / and /new. */
-export async function CreateScreen({ heading, sub, prefill }: { heading: string; sub?: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string } }) {
+export async function CreateScreen({ heading, sub, prefill }: { heading: string; sub?: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; tg?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -58,7 +58,7 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
           <span className="text-muted">{t("group.memberOnly")} →</span>
         </Link>
       )}
-      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))} hasIdentity={Boolean(me)} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} />
+      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))} hasIdentity={Boolean(me)} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} />
     </>
   );
 }

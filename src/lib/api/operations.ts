@@ -1,19 +1,21 @@
 import { z } from "zod";
 import type { Db } from "@/db";
+import type { Player } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { buildHistory, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, type RoundRef } from "@/lib/domain/americano";
 import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
-import { getGroupById } from "@/lib/domain/groups";
+import { getGroupById, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { hasRange, levelFit } from "@/lib/domain/levels";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
-import { getEventByCode } from "@/lib/domain/queries";
+import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest } from "@/lib/domain/requests";
-import { joinEvent } from "@/lib/domain/slots";
-import { notifyCreator, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { joinEvent, leaveEvent } from "@/lib/domain/slots";
+import { lineupComplete } from "@/lib/lineup";
+import { notifyCreator, notifyLineupChange, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
 import { manageUrl } from "@/lib/share";
 import { ApiError } from "./http";
@@ -166,9 +168,15 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
   const detail = await getEventByCode(db, input.code);
   if (!detail) throw new ApiError(404, "not_found", `No match with code ${input.code}.`, "Codes are 4 characters and case-sensitive.");
   const player = await resolvePlayer(db, input, locale);
+  return joinAsPlayer(db, detail, player, ctx);
+}
+
+/** The join itself, for a player already resolved (API token, Telegram account, session). Same side effects as the web button. */
+export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext): Promise<JoinMatchResult> {
   const ev = detail.event;
   const range = { min: ev.levelMin, max: ev.levelMax };
   const base = baseUrl();
+  const before = lineupComplete(detail.roster, ev.capacity);
   const token = await getOrCreatePersonalToken(db, player.id);
   const me = { name: player.displayName, personalToken: token, personalUrl: personalUrl(base, token) };
   if (hasRange(range) && player.id !== ev.creatorPlayerId) {
@@ -179,21 +187,23 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
       if (!already) {
         await createJoinRequest(db, { eventId: ev.id, playerId: player.id, level: player.level });
         ctx.afterwards(async () => notifyCreator(db, ev, "requested", `${player.displayName} (${player.level})`, player.id));
-        const fresh = (await getEventByCode(db, input.code))!;
+        const fresh = (await getEventByCode(db, ev.code))!;
         return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, next: "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page." };
       }
     }
   }
   const res = await joinEvent(db, { eventId: ev.id, playerId: player.id });
   if (res.outcome === "joined" || res.outcome === "waitlisted") {
+    if (ev.groupId) await joinGroup(db, ev.groupId, player.id).catch(() => undefined);
     ctx.afterwards(async () => {
       await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", player.displayName, player.id);
-      if (res.outcome === "joined") await sendCalendarInvite(db, res.event, player);
+      const fresh = await notifyLineupChange(db, res.event, before, player.id);
+      if (res.outcome === "joined") await sendCalendarInvite(db, fresh ?? res.event, player);
     });
     ctx.emit("match.joined", ev.code, { player: { name: player.displayName, level: player.level }, outcome: res.outcome });
     if (res.event.status === "full") ctx.emit("match.full", ev.code);
   }
-  const fresh = (await getEventByCode(db, input.code))!;
+  const fresh = (await getEventByCode(db, ev.code))!;
   const group = fresh.event.groupId ? await getGroupById(db, fresh.event.groupId) : null;
   const nextText: Record<JoinMatchResult["outcome"], string> = {
     joined: "In. The player can open personalUrl to see the match, add it to a calendar or leave.",
@@ -203,6 +213,40 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
     requested: "Waiting for the organizer's approval.",
   };
   return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, next: nextText[res.outcome] };
+}
+
+export const leaveMatchSchema = z.object({
+  code: z.string().length(4).describe("The 4-character match code."),
+  token: z.string().min(8).max(64).describe("The player's personal token from an earlier create or join response."),
+});
+
+export type LeaveMatchResult = { outcome: "left" | "not_in"; match: PublicMatch; next: string };
+
+export async function leaveMatch(db: Db, raw: unknown, ctx: OpContext): Promise<LeaveMatchResult> {
+  const input = leaveMatchSchema.parse(raw);
+  const detail = await getEventByCode(db, input.code);
+  if (!detail) throw new ApiError(404, "not_found", `No match with code ${input.code}.`, "Codes are 4 characters and case-sensitive.");
+  const player = await findPlayerByPersonalToken(db, input.token);
+  if (!player) throw new ApiError(404, "unknown_token", "No player has this personal token.", "Use the token from the create or join response.");
+  return leaveAsPlayer(db, detail, player, ctx);
+}
+
+/** Leaving, with the same follow-ups as the web button: organizer note, line-up email, waitlist promotion, webhook. */
+export async function leaveAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext): Promise<LeaveMatchResult> {
+  const ev = detail.event;
+  const base = baseUrl();
+  const inMatch = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === player.id);
+  if (!inMatch) return { outcome: "not_in", match: matchToPublic(detail, base, null), next: "This player is not in the match, nothing changed." };
+  const before = lineupComplete(detail.roster, ev.capacity);
+  const res = await leaveEvent(db, { eventId: ev.id, playerId: player.id });
+  ctx.afterwards(async () => {
+    if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", player.displayName, player.id);
+    const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+    await notifyPromotion(db, fresh ?? res.event, res.promotion);
+  });
+  ctx.emit("match.left", ev.code, { player: { name: player.displayName } });
+  const fresh = (await getEventByCode(db, ev.code))!;
+  return { outcome: "left", match: matchToPublic(fresh, base, null), next: "Left. If someone was on the waitlist they have been moved in and told." };
 }
 
 export type ScheduleResult = {

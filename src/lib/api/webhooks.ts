@@ -126,6 +126,14 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
   } catch (e) {
     console.warn("[webhooks] emit failed", event, code, e);
   }
+  // Every change also reaches the Telegram cards (edited in place; the result is posted once). Loaded lazily: the bot imports the operations.
+  try {
+    const bot = await import("@/lib/telegram/bot");
+    if (event === "match.result") await bot.postTelegramResult(db, code);
+    await bot.syncTelegram(db, code);
+  } catch (e) {
+    console.warn("[telegram] sync failed", event, code, e);
+  }
 }
 
 /** Hourly: retry what failed, oldest first, bounded so the cron stays well inside its time budget. */

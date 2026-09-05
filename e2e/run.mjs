@@ -20,6 +20,10 @@ const env = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || "re_dummy_local_only",
   SESSION_SECRET: process.env.SESSION_SECRET || "e2e-session-secret-not-for-production",
   CRON_SECRET: process.env.CRON_SECRET || "e2e-cron-secret",
+  // A fake bot: the Bot API answers 401 (or is unreachable) and the code must stay quiet about it.
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "1:e2e-fake-token",
+  TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret",
+  TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME || "kicksmash_bot",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {

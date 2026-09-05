@@ -13,6 +13,7 @@ import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { normalizeEmail } from "@/lib/domain/players";
 import { emitMatchEvent } from "@/lib/api/webhooks";
+import { postCardForTicket } from "@/lib/telegram/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, welcomeEmail } from "@/lib/notify";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
@@ -41,6 +42,8 @@ const createSchema = z.object({
   groupCode: z.string().length(6).optional(),
   publicListing: z.boolean().optional(),
   bookingUrl: z.string().max(500).optional(),
+  /** Signed chat ticket from the Telegram bot's /new. */
+  telegramTicket: z.string().max(80).optional(),
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
 
@@ -78,6 +81,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       bookingUrl: input.bookingUrl,
     });
     after(async () => {
+      if (input.telegramTicket) await postCardForTicket(db, ev.code, input.telegramTicket);
       await emitMatchEvent(db, "match.created", ev.code);
     });
     if (group) {

@@ -92,6 +92,13 @@
       "when": 1788618640719,
       "tag": "0012_r2_formats_rankings",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788620354817,
+      "tag": "0013_telegram",
+      "breakpoints": true
     }
   ]
 }

@@ -798,5 +798,14 @@
     "how3": "Americano, mexicano and King of the Court with live scores from any phone.",
     "how4": "Everything is open: the API, the data and the code. Bring your own bot or assistant.",
     "metaDescription": "Padel in {city}: open matches, club rankings, americano, mexicano and King of the Court. Create a match in ten seconds, share one link, no app."
+  },
+  "telegram": {
+    "title": "Telegram",
+    "linked": "Linked: @{username}",
+    "linkedNoName": "Telegram linked ✓",
+    "help": "Sign in with Telegram on any device, and join matches from the bot's cards in your group chats.",
+    "signIn": "Sign in with Telegram",
+    "invalid": "Telegram sign-in could not be verified. Try again.",
+    "justLinked": "Telegram linked. Your matches from the bot are here now."
   }
 }

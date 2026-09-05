@@ -37,3 +37,8 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 ## Agent-native surfaces (keep them in sync when the API changes)
 
 `src/lib/api/openapi.ts`, `src/lib/api/docs.ts` (llms.txt, llms-full.txt, charter), `src/lib/api/mcp.ts` (tools), `src/app/developers/page.tsx`, `skills/kicksmash/SKILL.md`.
+
+## Telegram bot
+
+`src/lib/telegram/` is the whole bot: `api.ts` (Bot API calls, Login Widget and Mini App signature checks), `card.ts` (the one card per match, en/ru copy), `bot.ts` (updates, card sync, reminders, result). It is quiet by design: joins and leaves edit the card; new messages only for the card, a complete line-up, the reminder and the result. Every change funnels through `emitMatchEvent` in `src/lib/api/webhooks.ts`, which also refreshes the cards, so new write paths need no Telegram code of their own. Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; tests stub `fetch`.
+
