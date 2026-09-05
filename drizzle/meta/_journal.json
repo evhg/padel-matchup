@@ -50,6 +50,13 @@
       "when": 1788581102611,
       "tag": "0006_recovery_email",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788583395620,
+      "tag": "0007_optouts",
+      "breakpoints": true
     }
   ]
 }

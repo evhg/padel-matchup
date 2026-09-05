@@ -279,7 +279,9 @@
     "identityHelp": "Your identity lives in this browser, no password. Save your personal link below to use it anywhere.",
     "noIdentity": "Enter your name to see your matches.",
     "placement": "#{place} of {total}",
-    "restoreCta": "Played before on another phone? Restore"
+    "restoreCta": "Played before on another phone? Restore",
+    "deleteAccount": "Delete my account",
+    "deleteConfirm": "Delete your account? Your name, email and phone are wiped, upcoming spots are released and matches you organize are cancelled. Old scores stay as 'Deleted player'. No undo."
   },
   "notFound": {
     "title": "Link not found",
@@ -433,7 +435,9 @@
       "body": "Keep this email. The link below opens your matches on any phone or laptop, no password. It's also inside every calendar invite we send you.",
       "cta": "Open my matches",
       "footer": "Keep the link private: anyone who has it is you."
-    }
+    },
+    "footerInvite": "Sent by {app} because {organizer} reserved a spot for you. Confirm or decline on the match page.",
+    "optOut": "Not you, or not interested? Never hear from Kicksmash again"
   },
   "errors": {
     "not_found": "We couldn't find that.",
@@ -526,5 +530,29 @@
     "denied": "Notifications are blocked for this site in your browser settings.",
     "reminderTitle": "🎾 Padel in 1 hour · {time}",
     "reminderBody": "{venue}. Don't be late!"
+  },
+  "about": {
+    "footerLink": "Privacy & terms (short, promise)",
+    "title": "The fine print, kept short",
+    "sub": "No lawyers were harmed. Here's what Kicksmash does with your stuff.",
+    "storeTitle": "What we store",
+    "storeBody": "Your name, the matches you organize or join, scores, and, only if you give them, your email and phone. That's it. Your identity lives in a cookie on your device plus a private link, no password.",
+    "neverTitle": "What we never do",
+    "neverBody": "Sell your data. Show ads. Email you for fun. Emails only go out for things you asked for: calendar invites, updates to matches you're in, reminders you switched on, and invitations an organizer sent you (with a one-tap 'never again' link).",
+    "cookiesTitle": "Cookies",
+    "cookiesBody": "One functional cookie that remembers who you are, one for your language. No tracking, no third-party cookies, no banner needed.",
+    "rightsTitle": "Your rights",
+    "rightsBody": "Change your name or email anytime. Turn notifications off. Delete your account from My matches: your personal data disappears, your old scores stay as 'Deleted player' so your friends' history still adds up. Want a copy of your data? Email us.",
+    "termsTitle": "Terms",
+    "termsBody": "It's free. Be nice, show up, enter the score. The app comes as-is with no warranty; if a link breaks or a court double-books, that's between you and your padel buddies. We can remove abusive content or accounts.",
+    "openTitle": "Open source",
+    "openBody": "Kicksmash is open source under the Apache 2.0 license. Read it, run it, build on it. The name and logo stay ours.",
+    "contact": "Questions, data requests, love letters:"
+  },
+  "optout": {
+    "doneTitle": "Done. No more emails.",
+    "doneBody": "Organizers can no longer email {email} through Kicksmash. If you ever add this address yourself on a match page, that counts as a yes and turns emails back on.",
+    "badLinkTitle": "That link doesn't check out",
+    "badLinkBody": "It may be incomplete or expired. Use the link from the email you received."
   }
 }

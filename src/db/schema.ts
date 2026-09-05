@@ -281,6 +281,12 @@ export const metricsDaily = pgTable("metrics_daily", {
 }, (t) => [primaryKey({ columns: [t.day, t.key] })]);
 export type MetricRow = typeof metricsDaily.$inferSelect;
 
+/** Addresses that asked never to be emailed by organizers again (invites, reminders). */
+export const emailOptOuts = pgTable("email_opt_outs", {
+  email: text("email").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Web Push subscriptions (one per browser/home-screen app, many per player). */
 export const pushSubscriptions = pgTable(
   "push_subscriptions",

@@ -15,6 +15,7 @@ import { NameEditor } from "./NameEditor";
 import { PersonalLinkCard } from "./PersonalLinkCard";
 import { PushToggle } from "./PushToggle";
 import { RestoreWithEmail } from "./RestoreWithEmail";
+import { DeleteAccount } from "./DeleteAccount";
 
 /** "My matches": rendered on /me (cookie identity) and /p/{token} (personal link). */
 export async function MyMatches({ player, personalToken }: { player: Player; personalToken: string }) {
@@ -116,6 +117,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
           <RestoreWithEmail initialEmail={player.email ?? ""} />
         </section>
       )}
+      <DeleteAccount />
     </>
   );
 }

@@ -14,8 +14,10 @@ import { sendPersonalLinkEmail } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
 import { sendEmailCode, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
-import { getSessionPlayer, getSessionPlayerId, setSessionPlayer } from "@/lib/session";
-import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
+import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, setSessionPlayer } from "@/lib/session";
+import { ActionFailure, assertRate, clientIp, requirePlayer, runA, type ActionResult } from "./shared";
+import { LIMITS } from "@/lib/domain/ratelimit";
+import { removeOptOut } from "@/lib/domain/optouts";
 
 export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
 
@@ -56,8 +58,11 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
     if (!me) throw new Error("no identity");
     const normalized = normalizeEmail(email);
     const others = normalized ? (await playersWithEmail(db, normalized)).filter((o) => o.id !== me.id) : [];
+    if (normalized && normalized !== me.email) await assertRate(db, "email", me.id, LIMITS.emailChangesPerPlayerPerDay);
     const { player: p, changed, kept } = await changePlayerEmail(db, me.id, normalized);
     if (changed) {
+      // Adding your own address is explicit consent: lift any earlier "never email me".
+      await removeOptOut(db, p.email);
       // New address: calendar invite when in this match (carries the personal link), else the personal-link email.
       const detail = eventCode ? await getEventByCode(db, eventCode) : null;
       after(() => welcomeEmail(db, p, detail?.event ?? null));
@@ -75,6 +80,7 @@ export async function emailPersonalLinkAction(): Promise<ActionResult<{ email: s
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     if (!me.email) return { email: null, sent: false };
+    await assertRate(db, "linkmail", me.id, LIMITS.personalLinkMailsPerPlayerPerDay);
     const sent = await sendPersonalLinkEmail(db, me);
     return { email: me.email, sent };
   });
@@ -87,6 +93,7 @@ export async function requestRestoreCode(email: string): Promise<ActionResult<{ 
     const db = await getDb();
     const normalized = normalizeEmail(email);
     if (!normalized) throw new ActionFailure("invalid");
+    await assertRate(db, "restore", await clientIp(), LIMITS.restoreCodesPerIpPerDay);
     const owners = await playersWithEmail(db, normalized);
     if (owners.length === 0) return { known: false, sent: false };
     const issued = await issueEmailCode(db, normalized);
@@ -130,6 +137,31 @@ export async function rotatePersonalLinkAction(): Promise<ActionResult<{ url: st
     const token = await rotatePersonalToken(db, me.id);
     revalidatePath("/me");
     return { url: personalUrl(baseUrl(), token) };
+  });
+}
+
+/**
+ * "Delete my account": personal data goes, history stays anonymous. Upcoming
+ * spots are released; upcoming matches this player organizes are cancelled.
+ */
+export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const { anonymizePlayer } = await import("@/lib/domain/anonymize");
+    const { cancelledEvents, leftEvents } = await anonymizePlayer(db, me.id);
+    after(async () => {
+      const { notifyEventCancelled, notifyCreator, notifyPromotion } = await import("@/lib/notify");
+      for (const ev of cancelledEvents) await notifyEventCancelled(db, ev);
+      for (const { event, promotion } of leftEvents) {
+        await notifyCreator(db, event, "left", me.displayName, me.id);
+        await notifyPromotion(db, event, promotion);
+      }
+    });
+    await clearSessionPlayer();
+    revalidatePath("/", "layout");
+    return null;
   });
 }
 

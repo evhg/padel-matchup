@@ -26,3 +26,6 @@ coverage
 *.pem
 *.tsbuildinfo
 npm-debug.log*
+
+# e2e screenshots (pnpm e2e with SHOTS=e2e-shots)
+e2e-shots

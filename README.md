@@ -1,12 +1,17 @@
 # Kicksmash — padel match-up in one link
 
+[![CI](https://github.com/evhg/padel-matchup/actions/workflows/ci.yml/badge.svg)](https://github.com/evhg/padel-matchup/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Mobile-first web app for organizing padel matches with **zero app installs, zero accounts, zero passwords**. Create a match, share `kicksma.sh/{code}` on WhatsApp or Telegram, friends tap → enter a name once → they're in.
 
-- **Stack:** Next.js 15 (App Router, TypeScript) · Supabase Postgres + Drizzle · Resend · next-intl (EN/RU) · Tailwind v4 · Vercel (Cron + OG images).
+- **Stack:** Next.js 15 (App Router, TypeScript) · Supabase Postgres + Drizzle · Resend · next-intl (EN/RU/ES) · Tailwind v4 · Vercel (Cron + OG images).
+- **Open source** under the [Apache License 2.0](LICENSE). Run your own copy, build on it, send a PR: see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 - **Identity:** one-time name entry → player UUID in a signed httpOnly cookie (1 year) + localStorage mirror. Cross-device: every player has a private **personal link** (`/p/{token}`, shown on My matches, in every email and in the calendar invite) that signs any device in; an email that was used before can **restore** history with a 6-digit code, merging all identities that share it. The home-screen shortcut opens the personal link, and calendar entries and emails carry the **private event link** (`/p/{token}/{code}`: signs the device in, opens the match). A newly added email receives the personal link (inside the calendar invite when in a match, otherwise on its own). Tokens are 12 characters; older 32-char tokens keep working as `previous_token` after the lazy shortening. An email can be changed but never blanked once set; the previous address is kept as `recovery_email`, so a restore code sent to either address gets the player back in. "Email me this link" on My matches mails the personal link (native share, copy and QR are the other options).
 - **Push reminders:** Web Push (VAPID) one hour before each match, for every device the player enabled it on (iPhone: from the home-screen app). `/api/cron/push` is called every 5 minutes by Supabase `pg_cron` + `pg_net` (Vercel Hobby cron is daily). Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 - **Links:** `/{code}` (4 chars, public) · `/{code}/i/{6}` (personal invite) · `/{code}/manage/{10}` (organizer secret).
 - **Email is optional everywhere.** Without `RESEND_API_KEY` the app runs fully with email features hidden.
+- **Privacy, short and cheeky:** `/about` (one faint footer link) says what is stored, what is never done, and how to leave. Every organizer-initiated email (invites, invite reminders) carries a signed one-tap `/unsubscribe` link; a player adding their own address again lifts the opt-out. "Delete my account" at the bottom of My matches wipes personal data, releases upcoming spots and cancels the player's own upcoming matches; old scores stay as "Deleted player".
+- **Abuse limits** (per UTC day unless noted, generous for humans, tight for scripts): 40 new identities per IP, 20 matches per player, 40 invitations per organizer, 30 joins per player per hour, 10 email changes, 5 personal-link mails, 20 restore codes per IP, 60 browser crash reports per IP. Counters live in `metrics_daily`, no extra infrastructure. Hitting one returns "too many" and nothing else happens.
 
 ---
 
@@ -28,11 +33,14 @@ That's it. With no `DATABASE_URL` the app boots an **embedded PGlite database** 
 Copy `.env.example` to `.env` to change anything. All flows (join, waitlist, invites, scores, "My matches", OG previews) work end-to-end without any keys.
 
 ```bash
-pnpm test        # vitest: slot-claim concurrency, invite transitions, score-lock rules, reminder eligibility
+pnpm test        # vitest: slot-claim concurrency, invite transitions, score-lock rules, reminders, identity, americano rotation, rate limits, opt-outs, account deletion
 pnpm typecheck
 pnpm lint
 pnpm build
+pnpm e2e         # Playwright journeys (core + americano) against a fresh production build; first time: pnpm exec playwright install chromium
 ```
+
+`pnpm e2e` boots `next start` on port 3001 with a throwaway PGlite database, a dummy Resend key (email UIs on, sends fail harmlessly) and generated VAPID keys, then runs every `e2e/*.mjs` suite. `SHOTS=./shots` keeps full-page screenshots; `PW_CHROMIUM=/path/to/chromium` uses a preinstalled browser. GitHub Actions runs typecheck, lint, vitest on PGlite **and** on a real Postgres service, the build, and the e2e suites on every push and pull request (`.github/workflows/ci.yml`).
 
 Tests run on in-memory PGlite by default. To run them against a real Postgres (true concurrency), point `TEST_DATABASE_URL` at a **disposable** database — its `public` schema is dropped before each test file:
 
@@ -52,7 +60,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `DATABASE_PASSWORD` | if the URL still says `[YOUR-PASSWORD]` | The app substitutes and percent-encodes it for you. |
 | `APP_BASE_URL` | no | Defaults to the Vercel production domain. Set it locally or on other hosts. |
 | `SESSION_SECRET` | recommended | Signs the identity cookie. Without it a stable secret is derived from the database URL. |
-| `CRON_SECRET` | recommended | Protects `/api/cron/hourly`. Vercel sends it automatically when set. |
+| `CRON_SECRET` | recommended | Protects `/api/cron/hourly` and `/api/cron/push`. Vercel sends it automatically when set. |
 | `DIRECT_DATABASE_URL` | no | Direct (5432) URL for `pnpm db:migrate`. Not needed: the app migrates itself on first connection (`AUTO_MIGRATE=false` disables). |
 | `RESEND_API_KEY` | no | Enables all email (calendar invites, notifications, reminders). |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | no | Enables push reminders (`npx web-push generate-vapid-keys`). |
@@ -115,7 +123,7 @@ Skip this entirely if you don't want email yet; deploy never blocks on it.
 4. Back in Resend click **Verify**. Usually green within minutes (up to an hour).
 5. Set `EMAIL_FROM="Kicksmash <matches@kicksma.sh>"`.
 
-Emails sent: calendar invite (.ics, `METHOD:REQUEST`, stable UID) on join/confirm/promotion · updated/cancelled .ics · organizer notices (joined / left / confirmed / declined / promoted) · 24h invitee reminders · one post-match score reminder. All EN + RU by recipient language.
+Emails sent: calendar invite (.ics, `METHOD:REQUEST`, stable UID) on join/confirm/promotion · updated/cancelled .ics · organizer notices (joined / left / confirmed / declined / promoted) · 24h invitee reminders · one post-match score reminder · welcome mail with the personal link · restore codes. All EN + RU + ES by recipient language. Invites and invite reminders skip addresses on the opt-out list and carry the unsubscribe link; the activity notices respect the player's "email me" switch.
 
 #### 3. Deploy to Vercel via CLI (≈ 10 min)
 
@@ -197,22 +205,26 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ## Admin dashboard
 
-`/admin` is a public, read-only usage page: hero figure, stat tiles with sparklines, meters against the free-tier ceilings (Supabase 500 MB, Resend 3,000/month and 100/day), and 7/30/90-day trend charts (growth, joins, outbound messages, database size, totals). Counters live in `metrics_daily` (bumped by the app, snapshotted by the hourly cron); no personal data is shown. Vercel bandwidth has no public API on Hobby, so it links to the dashboard.
+`/admin` is a public, read-only usage page: hero figure with a health row (database, email, push, both crons, **errors today**), stat tiles with sparklines, meters against the free-tier ceilings (Supabase 500 MB, Resend 3,000/month and 100/day), and 7/30/90-day trend charts (growth, joins, outbound messages, errors, database size, totals). Counters live in `metrics_daily` (bumped by the app, snapshotted by the hourly cron); no personal data is shown. Errors are counted, never described: server actions that throw, cron steps that fail and browser crash screens (`/api/client-error`, rate-limited) each bump a counter, so the health row is the only alerting there is. Vercel bandwidth has no public API on Hobby, so it links to the dashboard.
 
 ## Project map
 
 ```
-src/app/                 routes: / · /new · /[code] · /[code]/share · /[code]/i/[invite] · /[code]/manage/[manage] · /me · /api/cron/hourly
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/i/[invite] · /[code]/manage/[manage] · /me · /p/[token] · /about · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)
 src/lib/notify.ts        every outbound email; safe no-op without RESEND_API_KEY
 src/lib/calendar.ts      Google Calendar URL + RFC 5545 .ics builder (also served at /{code}/calendar.ics)
 src/lib/domain/identity.ts personal tokens, email one-time codes, identity merge
+src/lib/domain/{ratelimit,optouts,anonymize}.ts   abuse ceilings, unsubscribe list, account deletion
+src/lib/alerts.ts        error counters for the admin health row
 src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed
 drizzle/                 generated SQL migrations
-messages/{en,ru}.json    all UI, share and email copy
+messages/{en,ru,es}.json all UI, share and email copy (identical key sets, typed in global.d.ts)
 tests/                   vitest against PGlite (or TEST_DATABASE_URL)
+e2e/                     Playwright journeys + runner (pnpm e2e)
+.github/workflows/ci.yml typecheck · lint · vitest (PGlite + Postgres) · build · e2e
 ```
 
 Schema changes: edit `src/db/schema.ts` → `pnpm db:generate` → commit `drizzle/` → `pnpm db:migrate`.

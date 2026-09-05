@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportError } from "@/lib/alerts";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
@@ -65,5 +66,6 @@ export async function GET(req: Request) {
   } catch (e) {
     summary.errors.push(`metrics: ${String(e)}`);
   }
+  if (summary.errors.length) await reportError("cron", summary.errors.join(" | "));
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary });
 }

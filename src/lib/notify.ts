@@ -15,6 +15,7 @@ import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
 import { layout, translatorFor } from "@/lib/email/templates";
 import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
+import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
 
 /**
@@ -249,6 +250,7 @@ export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string |
 /** Immediate invite to a reserved spot when the organizer entered an email. */
 export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !slot.invitedEmail || !slot.inviteCode) return false;
+  if (await isOptedOut(db, slot.invitedEmail)) return false;
   const c = await ctx(db, ev, creator.locale);
   const link = inviteUrl(baseUrl(), ev.code, slot.inviteCode);
   const { html, text } = layout({
@@ -257,7 +259,8 @@ export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Pl
     meta: c.meta,
     cta: { label: c.t("email.inviteReminder.confirm"), url: link },
     secondary: { label: c.t("email.inviteReminder.decline"), url: `${link}?decline=1` },
-    footer: c.footer,
+    footer: c.t("email.footerInvite", { app: APP_NAME, organizer: creator.displayName }),
+    footerLink: { label: c.t("email.optOut"), url: `${baseUrl()}${optOutPath(slot.invitedEmail)}` },
     eventUrl: c.publicUrl,
     openLabel: c.openLabel,
   });
@@ -267,6 +270,8 @@ export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Pl
 /** 24h reminder to an unconfirmed invitee with an email (decision 12). */
 export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !slot.invitedEmail || !slot.inviteCode) return false;
+  // Opted out counts as handled: no retry every hour.
+  if (await isOptedOut(db, slot.invitedEmail)) return true;
   const c = await ctx(db, ev, creator.locale);
   const link = inviteUrl(baseUrl(), ev.code, slot.inviteCode);
   const { html, text } = layout({
@@ -275,7 +280,8 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
     meta: c.meta,
     cta: { label: c.t("email.inviteReminder.confirm"), url: link },
     secondary: { label: c.t("email.inviteReminder.decline"), url: `${link}?decline=1` },
-    footer: c.footer,
+    footer: c.t("email.footerInvite", { app: APP_NAME, organizer: creator.displayName }),
+    footerLink: { label: c.t("email.optOut"), url: `${baseUrl()}${optOutPath(slot.invitedEmail)}` },
     eventUrl: c.publicUrl,
     openLabel: c.openLabel,
   });
