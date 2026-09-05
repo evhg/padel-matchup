@@ -185,12 +185,22 @@ try {
     else await p.context().close();
   }
   const unfold = (t) => t.replace(/\r\n[ \t]/g, "");
-  const ics3 = unfold(await a.evaluate(async (c) => (await fetch(`/${c}/calendar.ics`)).text(), code3));
+  // The calendar update runs in the action's after() hook, so poll until the sequence moves.
+  const icsWhen = async (c, seq) => {
+    let body = "";
+    for (let i = 0; i < 40; i++) {
+      body = unfold(await a.evaluate(async (cc) => (await fetch(`/${cc}/calendar.ics`, { cache: "no-store" })).text(), c));
+      if (body.includes(`SEQUENCE:${seq}`)) break;
+      await a.waitForTimeout(250);
+    }
+    return body;
+  };
+  const ics3 = await icsWhen(code3, 1);
   check("complete line-up: title gets - COMPLETE, players listed, SEQUENCE bumped", ics3.includes("- COMPLETE") && ics3.includes("Players: ") && ics3.includes("Di") && ics3.includes("SEQUENCE:1"), `${ics3.match(/SUMMARY:.*/)?.[0]} | ${ics3.match(/SEQUENCE:.*/)?.[0]} | ${ics3.match(/Players: [^\\]*/)?.[0]}`);
   await lastJoiner.getByRole("button", { name: "Leave" }).click();
   await lastJoiner.getByRole("button", { name: "Join this match" }).waitFor({ timeout: 20000 });
   await lastJoiner.context().close();
-  const ics4 = unfold(await a.evaluate(async (c) => (await fetch(`/${c}/calendar.ics`)).text(), code3));
+  const ics4 = await icsWhen(code3, 2);
   check("someone left: suffix removed, SEQUENCE bumped again", !ics4.includes("COMPLETE") && ics4.includes("SEQUENCE:2"), ics4.match(/SUMMARY:.*/)?.[0]);
 
   // ---- RU toggle ----
