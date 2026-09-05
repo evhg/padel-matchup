@@ -1,5 +1,6 @@
 // Boots a production build on a throwaway PGlite database and runs every e2e/*.mjs suite.
-// Usage: pnpm build && pnpm e2e            (SHOTS=./shots keeps screenshots, PW_CHROMIUM=/path uses a preinstalled browser)
+// Usage: pnpm build && pnpm e2e            (SHOTS=./shots keeps screenshots, PW_CHROMIUM=/path uses a preinstalled browser,
+//                                            E2E_ONLY=levels runs a single suite)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -58,6 +59,7 @@ if (!up) {
 
 const suites = readdirSync(path.dirname(new URL(import.meta.url).pathname))
   .filter((f) => f.endsWith(".mjs") && !["run.mjs", "lib.mjs"].includes(f))
+  .filter((f) => !process.env.E2E_ONLY || f === `${process.env.E2E_ONLY}.mjs`)
   .sort();
 let failed = 0;
 for (const f of suites) {

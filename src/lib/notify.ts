@@ -146,7 +146,7 @@ export async function welcomeEmail(db: Db, player: Player, ev: Event | null): Pr
   await sendPersonalLinkEmail(db, player);
 }
 
-type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" | "promoted";
+type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" | "promoted" | "requested";
 
 /** Creator notifications (decision 11). Skipped when the actor is the creator. */
 export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorName: string, actorPlayerId?: string | null): Promise<void> {
@@ -161,6 +161,17 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
   const body = c.t(`email.creator.${kind}Body`, vars);
   const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
   await sendEmail({ to: creator.email, subject, html, text });
+}
+
+/** Join request decided: approved players get their calendar invite, declined ones a short, kind note. */
+export async function notifyRequestDecided(db: Db, ev: Event, player: Player, approved: boolean): Promise<void> {
+  if (!emailEnabled()) return;
+  if (approved) return sendCalendarInvite(db, ev, player);
+  if (!player.email) return;
+  const c = await ctx(db, ev, player.locale, player);
+  const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
+  const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel });
+  await sendEmail({ to: player.email, subject: c.t("email.requestDeclined.subject", vars), html, text });
 }
 
 /** Handles the fallout of a promotion: promoted player invite + creator notice. */

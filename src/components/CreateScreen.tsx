@@ -23,7 +23,7 @@ export async function CreateScreen({ heading, sub }: { heading: string; sub?: st
         <h1 className="text-3xl font-extrabold tracking-tight">{heading}</h1>
         {sub && <p className="mt-1 text-muted">{sub}</p>}
       </div>
-      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))} hasIdentity={Boolean(me)} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} />
+      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))} hasIdentity={Boolean(me)} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} />
     </>
   );
 }

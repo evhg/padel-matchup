@@ -352,8 +352,14 @@
       "promoted": "You moved up from the waitlist",
       "score_entered": "You entered the score",
       "cancelled": "You cancelled the match",
-      "updated": "You updated the details"
-    }
+      "updated": "You updated the details",
+      "requested": "You asked to join"
+    },
+    "requested": "{name} asked to join",
+    "approvedBy": "{name} was approved by {actor}",
+    "approvedByYou": "You approved {name}",
+    "rejectedBy": "{name}'s request was declined by {actor}",
+    "rejectedByYou": "You declined {name}'s request"
   },
   "email": {
     "openMatch": "Open the match",
@@ -386,7 +392,9 @@
       "declinedSubject": "{name} declined",
       "declinedBody": "{name} can't make it on {day} at {time}. Their spot is open again — reserve it for someone else or let people join via the link.",
       "promotedSubject": "{name} moved up from the waitlist",
-      "promotedBody": "A spot freed up and {name} moved in from the waitlist for {day} at {time}. You're at {count}/{capacity}."
+      "promotedBody": "A spot freed up and {name} moved in from the waitlist for {day} at {time}. You're at {count}/{capacity}.",
+      "requestedSubject": "{name} asks to join",
+      "requestedBody": "{name} is outside the level range and asked to join your padel match on {day} at {time}. Approve or decline on the match page."
     },
     "promotedPlayer": {
       "subject": "You're in! Padel {day} {time} · {venue}",
@@ -437,7 +445,12 @@
       "footer": "Keep the link private: anyone who has it is you."
     },
     "footerInvite": "Sent by {app} because {organizer} reserved a spot for you. Confirm or decline on the match page.",
-    "optOut": "Not you, or not interested? Never hear from Kicksmash again"
+    "optOut": "Not you, or not interested? Never hear from Kicksmash again",
+    "requestDeclined": {
+      "subject": "Not this time: {title}",
+      "heading": "Not this time",
+      "body": "{organizer} didn't approve your request to join on {day} at {time}. No hard feelings; there's always another match."
+    }
   },
   "errors": {
     "not_found": "We couldn't find that.",
@@ -455,7 +468,8 @@
     "generic": "Something went wrong. Please try again.",
     "email_disabled": "Email isn't set up on this server.",
     "too_many": "Too many attempts. Try again later.",
-    "slot_taken": "That spot was just taken."
+    "slot_taken": "That spot was just taken.",
+    "level_required": "Pick your level first."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -554,5 +568,72 @@
     "doneBody": "Organizers can no longer email {email} through Kicksmash. If you ever add this address yourself on a match page, that counts as a yes and turns emails back on.",
     "badLinkTitle": "That link doesn't check out",
     "badLinkBody": "It may be incomplete or expired. Use the link from the email you received."
+  },
+  "level": {
+    "label": "Level",
+    "any": "Any level",
+    "anyHelp": "Everyone can join. Set a range for an even game.",
+    "rangeHelp": "{range}. Players outside can ask to join; you approve.",
+    "bronze": "Bronze",
+    "silver": "Silver",
+    "gold": "Gold",
+    "platinum": "Platinum",
+    "custom": "Custom",
+    "from": "From",
+    "to": "To",
+    "between": "{min}–{max}",
+    "plus": "{min}+",
+    "upTo": "up to {max}",
+    "chip": "{preset} · {range}",
+    "chipCustom": "Level {range}",
+    "yourLevel": "Your level",
+    "pickTitle": "What's your level?",
+    "pickHelp": "0 to 7, the scale padel apps use. Self-declared to start; results nudge it over time.",
+    "guide": "Not sure? Quick guide",
+    "bands": {
+      "starting": "Just starting",
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced",
+      "expert": "Expert",
+      "pro": "Pro"
+    },
+    "bandHelp": {
+      "starting": "0–1.5 · Learning the rules; the walls still surprise you.",
+      "beginner": "1.5–2.5 · Rallies happen, basic positioning, plays now and then.",
+      "intermediate": "2.5–3.5 · Consistent, uses the glass, plays most weeks.",
+      "advanced": "3.5–4.5 · Tactics, lobs and bandejas on purpose, wins local tournaments.",
+      "expert": "4.5–5.5 · Competes seriously, very few unforced errors.",
+      "pro": "5.5–7 · Circuit level."
+    },
+    "selfDeclared": "Self-declared",
+    "adjusted": "Adjusted by results",
+    "notSet": "Not set yet",
+    "notSetHelp": "Add it once: organizers use it for even matches and it shows next to your name.",
+    "set": "Set my level",
+    "lastChange": "{from} → {to} after a {type}",
+    "outOfRange": "Your level ({level}) is outside {range}.",
+    "askToJoin": "Ask to join",
+    "askHelp": "{name} decides. You'll see the answer here.",
+    "requestSent": "Request sent",
+    "requestSentHelp": "Waiting for {name}.",
+    "withdraw": "Withdraw",
+    "requestDeclined": "{name} didn't approve your request this time.",
+    "requestsTitle": "Requests to join",
+    "requestsHelp": "Outside the level range. Approving seats them, or waitlists them when full.",
+    "approve": "Approve",
+    "decline": "Decline",
+    "asked": "asked {ago}",
+    "balancedTitle": "Balanced teams",
+    "balancedTeams": "{a1} & {a2} vs {b1} & {b2}",
+    "balancedDiff": "level gap {diff}",
+    "useTeams": "Use these teams",
+    "stats": {
+      "played": "Played",
+      "won": "Won",
+      "winRate": "Win rate",
+      "podiums": "Podiums"
+    },
+    "levelNeeded": "Pick your level to join"
   }
 }

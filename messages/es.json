@@ -352,8 +352,14 @@
       "promoted": "Subiste desde la lista de espera",
       "score_entered": "Introdujiste el resultado",
       "cancelled": "Cancelaste el partido",
-      "updated": "Actualizaste los detalles"
-    }
+      "updated": "Actualizaste los detalles",
+      "requested": "Pediste unirte"
+    },
+    "requested": "{name} pidió unirse",
+    "approvedBy": "{actor} aprobó a {name}",
+    "approvedByYou": "Aprobaste a {name}",
+    "rejectedBy": "{actor} rechazó la solicitud de {name}",
+    "rejectedByYou": "Rechazaste la solicitud de {name}"
   },
   "email": {
     "openMatch": "Abrir el partido",
@@ -386,7 +392,9 @@
       "declinedSubject": "{name} no puede",
       "declinedBody": "{name} no puede el {day} a las {time}. Su plaza vuelve a estar libre: resérvala para otra persona o deja que se apunten por el enlace.",
       "promotedSubject": "{name} subió desde la lista de espera",
-      "promotedBody": "Se liberó una plaza y {name} entró desde la lista de espera para el {day} a las {time}. Vais {count}/{capacity}."
+      "promotedBody": "Se liberó una plaza y {name} entró desde la lista de espera para el {day} a las {time}. Vais {count}/{capacity}.",
+      "requestedSubject": "{name} pide unirse",
+      "requestedBody": "{name} está fuera del rango de nivel y pidió unirse a tu partido de pádel el {day} a las {time}. Aprueba o rechaza en la página del partido."
     },
     "promotedPlayer": {
       "subject": "¡Estás dentro! Pádel {day} {time} · {venue}",
@@ -437,7 +445,12 @@
       "footer": "Guarda el enlace en privado: quien lo tenga eres tú."
     },
     "footerInvite": "Enviado por {app} porque {organizer} te reservó una plaza. Confirma o rechaza en la página del partido.",
-    "optOut": "¿No eres tú o no te interesa? No volver a recibir emails de Kicksmash"
+    "optOut": "¿No eres tú o no te interesa? No volver a recibir emails de Kicksmash",
+    "requestDeclined": {
+      "subject": "Esta vez no: {title}",
+      "heading": "Esta vez no",
+      "body": "{organizer} no aprobó tu solicitud para el {day} a las {time}. Sin rencores; siempre hay otro partido."
+    }
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",
@@ -455,7 +468,8 @@
     "generic": "Algo ha fallado. Inténtalo de nuevo.",
     "email_disabled": "El email no está configurado en este servidor.",
     "too_many": "Demasiados intentos. Prueba más tarde.",
-    "slot_taken": "Esa plaza se acaba de ocupar."
+    "slot_taken": "Esa plaza se acaba de ocupar.",
+    "level_required": "Primero elige tu nivel."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -554,5 +568,72 @@
     "doneBody": "Los organizadores ya no pueden escribir a {email} a través de Kicksmash. Si algún día añades tú esta dirección en la página de un partido, cuenta como un sí y los emails vuelven.",
     "badLinkTitle": "Ese enlace no cuadra",
     "badLinkBody": "Puede estar incompleto o caducado. Usa el enlace del email que recibiste."
+  },
+  "level": {
+    "label": "Nivel",
+    "any": "Cualquier nivel",
+    "anyHelp": "Puede apuntarse cualquiera. Fija un rango para un partido igualado.",
+    "rangeHelp": "{range}. Quien esté fuera puede pedir unirse; tú apruebas.",
+    "bronze": "Bronce",
+    "silver": "Plata",
+    "gold": "Oro",
+    "platinum": "Platino",
+    "custom": "Personalizado",
+    "from": "Desde",
+    "to": "Hasta",
+    "between": "{min}–{max}",
+    "plus": "{min}+",
+    "upTo": "hasta {max}",
+    "chip": "{preset} · {range}",
+    "chipCustom": "Nivel {range}",
+    "yourLevel": "Tu nivel",
+    "pickTitle": "¿Cuál es tu nivel?",
+    "pickHelp": "De 0 a 7, la escala de las apps de pádel. Lo declaras tú; los resultados lo ajustan con el tiempo.",
+    "guide": "¿Dudas? Guía rápida",
+    "bands": {
+      "starting": "Empezando",
+      "beginner": "Principiante",
+      "intermediate": "Intermedio",
+      "advanced": "Avanzado",
+      "expert": "Experto",
+      "pro": "Pro"
+    },
+    "bandHelp": {
+      "starting": "0–1.5 · Aprendiendo las reglas; las paredes aún sorprenden.",
+      "beginner": "1.5–2.5 · Hay peloteo, posición básica, juega de vez en cuando.",
+      "intermediate": "2.5–3.5 · Regular, usa el cristal, juega casi todas las semanas.",
+      "advanced": "3.5–4.5 · Táctica, globos y bandejas a propósito, gana torneos locales.",
+      "expert": "4.5–5.5 · Compite en serio, muy pocos errores no forzados.",
+      "pro": "5.5–7 · Nivel de circuito."
+    },
+    "selfDeclared": "Declarado por ti",
+    "adjusted": "Ajustado por resultados",
+    "notSet": "Sin definir",
+    "notSetHelp": "Ponlo una vez: los organizadores lo usan para partidos igualados y aparece junto a tu nombre.",
+    "set": "Definir mi nivel",
+    "lastChange": "{from} → {to} tras un {type}",
+    "outOfRange": "Tu nivel ({level}) está fuera de {range}.",
+    "askToJoin": "Pedir unirme",
+    "askHelp": "Decide {name}. Verás la respuesta aquí.",
+    "requestSent": "Solicitud enviada",
+    "requestSentHelp": "Esperando a {name}.",
+    "withdraw": "Retirar",
+    "requestDeclined": "{name} no aprobó tu solicitud esta vez.",
+    "requestsTitle": "Solicitudes para unirse",
+    "requestsHelp": "Fuera del rango de nivel. Al aprobar entran, o van a la lista de espera si está lleno.",
+    "approve": "Aprobar",
+    "decline": "Rechazar",
+    "asked": "pidió {ago}",
+    "balancedTitle": "Equipos igualados",
+    "balancedTeams": "{a1} y {a2} contra {b1} y {b2}",
+    "balancedDiff": "diferencia de nivel {diff}",
+    "useTeams": "Usar estos equipos",
+    "stats": {
+      "played": "Jugados",
+      "won": "Ganados",
+      "winRate": "% victorias",
+      "podiums": "Podios"
+    },
+    "levelNeeded": "Elige tu nivel para unirte"
   }
 }

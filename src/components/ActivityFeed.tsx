@@ -2,7 +2,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { ActivityWithActor } from "@/lib/domain/queries";
 import { relativeTime } from "@/lib/dates";
 
-type YouVerb = "created" | "joined" | "joinedWaitlist" | "left" | "confirmed" | "promoted" | "score_entered" | "cancelled" | "updated";
+type YouVerb = "created" | "joined" | "joinedWaitlist" | "left" | "confirmed" | "promoted" | "score_entered" | "cancelled" | "updated" | "requested";
 
 /** Who did what, phrased from the viewer's side ("You added Zed" / "Zed was added by Erik"). */
 export async function ActivityFeed({ items, viewerId }: { items: ActivityWithActor[]; viewerId: string | null }) {
@@ -20,6 +20,10 @@ export async function ActivityFeed({ items, viewerId }: { items: ActivityWithAct
         return you ? t("activity.removedByYou", { name: target }) : t("activity.removedBy", { name: target, actor });
       case "declined":
         return t("activity.declined", { name: target || actor });
+      case "approved":
+        return you ? t("activity.approvedByYou", { name: target }) : t("activity.approvedBy", { name: target, actor });
+      case "rejected":
+        return you ? t("activity.rejectedByYou", { name: target }) : t("activity.rejectedBy", { name: target, actor });
       case "joined": {
         const key: YouVerb = a.meta?.waitlist ? "joinedWaitlist" : "joined";
         return you ? t(`activity.you.${key}`) : t(`activity.${key}`, { name: actor });

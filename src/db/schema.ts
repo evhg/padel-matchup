@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { bigint, boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -22,7 +22,14 @@ export const activityVerbEnum = pgEnum("activity_verb", [
   "cancelled",
   "updated",
   "invited",
+  "requested",
+  "approved",
+  "rejected",
 ]);
+export const joinRequestStatusEnum = pgEnum("join_request_status", ["pending", "approved", "declined", "withdrawn"]);
+
+/** One line per result-based level change, newest last (capped in code). */
+export type LevelLogEntry = { at: string; from: number; to: number; code: string; type: "match" | "tournament" };
 
 // ---------------------------------------------------------------------------
 // players — identity is a UUID in a signed cookie; no auth, no passwords.
@@ -46,6 +53,12 @@ export const players = pgTable(
     homescreenAt: timestamp("homescreen_at", { withTimezone: true }),
     /** Activity emails (players join/leave/respond, line-up changes, score reminder). Calendar/cancellation emails always go out. */
     emailNotifications: boolean("email_notifications").notNull().default(true),
+    /** Padel level 0–7 (quarter steps when self-declared, two decimals once results nudge it). Null = not set. */
+    level: real("level"),
+    /** "self" (declared by the player) or "adjusted" (results moved it). */
+    levelSource: text("level_source"),
+    levelUpdatedAt: timestamp("level_updated_at", { withTimezone: true }),
+    levelLog: jsonb("level_log").$type<LevelLogEntry[]>(),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -117,6 +130,11 @@ export const events = pgTable(
     standings: jsonb("standings").$type<string[]>(),
     /** Tournament: organizer-given court names by index (court 1 = [0]); null/empty entry = "Court n". */
     courtNames: jsonb("court_names").$type<string[]>(),
+    /** Level range (0–7). Both null = open to everyone; outside the range players ask to join. */
+    levelMin: real("level_min"),
+    levelMax: real("level_max"),
+    /** Result-based level adjustment ran for this event (once, on the organizer's finalize/confirm). */
+    levelsAppliedAt: timestamp("levels_applied_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -286,6 +304,28 @@ export const emailOptOuts = pgTable("email_opt_outs", {
   email: text("email").primaryKey(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Players outside an event's level range ask to join; the organizer decides. */
+export const joinRequests = pgTable(
+  "join_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** The player's level when they asked. */
+    level: real("level"),
+    status: joinRequestStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedByPlayerId: uuid("decided_by_player_id").references(() => players.id, { onDelete: "set null" }),
+  },
+  (t) => [uniqueIndex("join_requests_event_player_idx").on(t.eventId, t.playerId), index("join_requests_event_idx").on(t.eventId)],
+);
+export type JoinRequest = typeof joinRequests.$inferSelect;
 
 /** Web Push subscriptions (one per browser/home-screen app, many per player). */
 export const pushSubscriptions = pgTable(

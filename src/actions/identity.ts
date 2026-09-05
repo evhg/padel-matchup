@@ -118,6 +118,19 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
 }
 
 /** Activity emails on/off (calendar invites, changes and cancellations always go out). */
+export async function setMyLevelAction(level: number): Promise<ActionResult<{ level: number | null }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const { setPlayerLevel } = await import("@/lib/domain/rating");
+    const saved = await setPlayerLevel(db, me.id, level);
+    if (saved == null) throw new ActionFailure("invalid");
+    revalidatePath("/", "layout");
+    return { level: saved };
+  });
+}
+
 export async function setEmailNotificationsAction(on: boolean): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();

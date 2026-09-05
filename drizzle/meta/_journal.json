@@ -57,6 +57,13 @@
       "when": 1788583395620,
       "tag": "0007_optouts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788587872608,
+      "tag": "0008_levels",
+      "breakpoints": true
     }
   ]
 }

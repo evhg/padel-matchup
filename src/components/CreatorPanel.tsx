@@ -49,6 +49,8 @@ export function CreatorPanel({
         note: values.note,
         whenFull: values.whenFull,
         capacity: values.type === "tournament" ? values.capacity : undefined,
+        levelMin: values.levelMin,
+        levelMax: values.levelMax,
       });
       if (!r.ok) {
         setError(t("errors.invalid"));

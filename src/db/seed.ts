@@ -16,10 +16,10 @@ export async function seedIfEmpty(db: Db): Promise<boolean> {
   const [alex, maria, jordi, sofia] = await db
     .insert(players)
     .values([
-      { displayName: "Alex", locale: "en", email: null },
-      { displayName: "Maria", locale: "en" },
-      { displayName: "Jordi", locale: "en" },
-      { displayName: "Sofia", locale: "ru" },
+      { displayName: "Alex", locale: "en", email: null, level: 3.5, levelSource: "self" },
+      { displayName: "Maria", locale: "en", level: 3, levelSource: "self" },
+      { displayName: "Jordi", locale: "en", level: 2.75, levelSource: "self" },
+      { displayName: "Sofia", locale: "ru", level: 4, levelSource: "self" },
     ])
     .returning();
 

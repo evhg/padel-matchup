@@ -11,6 +11,7 @@ Mobile-first web app for organizing padel matches with **zero app installs, zero
 - **Links:** `/{code}` (4 chars, public) · `/{code}/i/{6}` (personal invite) · `/{code}/manage/{10}` (organizer secret).
 - **Email is optional everywhere.** Without `RESEND_API_KEY` the app runs fully with email features hidden.
 - **Privacy, short and cheeky:** `/about` (one faint footer link) says what is stored, what is never done, and how to leave. Every organizer-initiated email (invites, invite reminders) carries a signed one-tap `/unsubscribe` link; a player adding their own address again lifts the opt-out. "Delete my account" at the bottom of My matches wipes personal data, releases upcoming spots and cancels the player's own upcoming matches; old scores stay as "Deleted player".
+- **Levels:** every player can declare a padel level (0–7 in quarter steps, the scale the padel apps use) once, from My matches or the first time a ranged match asks for it. It shows as a small chip next to the name everywhere (roster, standings, team picker). Results nudge it: when the organizer confirms a 2v2 score or finalizes a tournament, a small Elo-style delta (at most ±0.10 per match, ±0.12 per tournament) is applied once per event and logged ("3.25 → 3.30 after a match"). Players without a level neither move nor count. Organizers can set a **level range** per match or tournament: presets Bronze 1.0–2.5, Silver 2.5–3.5, Gold 3.0–4.5, Platinum 4.5+, or a custom min–max. Players inside join as usual; players outside **ask to join** and the organizer approves (seats them, or waitlists them when full) or declines, with the answer shown in the join bar and the activity feed. Reserved/invited players and the organizer bypass the range. The score panel suggests **balanced teams** (smallest level gap) when all four have levels. My matches gets a stats strip: played, won, win rate, podiums.
 - **Abuse limits** (per UTC day unless noted, generous for humans, tight for scripts): 40 new identities per IP, 20 matches per player, 40 invitations per organizer, 30 joins per player per hour, 10 email changes, 5 personal-link mails, 20 restore codes per IP, 60 browser crash reports per IP. Counters live in `metrics_daily`, no extra infrastructure. Hitting one returns "too many" and nothing else happens.
 
 ---
@@ -37,7 +38,7 @@ pnpm test        # vitest: slot-claim concurrency, invite transitions, score-loc
 pnpm typecheck
 pnpm lint
 pnpm build
-pnpm e2e         # Playwright journeys (core + americano) against a fresh production build; first time: pnpm exec playwright install chromium
+pnpm e2e         # Playwright journeys (core, americano, levels) against a fresh production build; first time: pnpm exec playwright install chromium
 ```
 
 `pnpm e2e` boots `next start` on port 3001 with a throwaway PGlite database, a dummy Resend key (email UIs on, sends fail harmlessly) and generated VAPID keys, then runs every `e2e/*.mjs` suite. `SHOTS=./shots` keeps full-page screenshots; `PW_CHROMIUM=/path/to/chromium` uses a preinstalled browser. GitHub Actions runs typecheck, lint, vitest on PGlite **and** on a real Postgres service, the build, and the e2e suites on every push and pull request (`.github/workflows/ci.yml`).
@@ -202,6 +203,9 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Timezone:** default from Vercel's `x-vercel-ip-timezone` (browser zone as fallback), editable, stored UTC.
 - **Score:** any participant after start; players can correct each other; once the organizer enters/edits it locks ("Confirmed by organizer"). 1–3 sets, optional team assignment → win/loss in **My matches**.
 - **Organizer access** = creator cookie **or** the 10-char manage link (sets a per-event httpOnly cookie).
+- **Levels (0–7):** players declare their level once in quarter steps (a plain select grouped by band, with a short guide); it shows next to their name in rosters, standings and the score panel. Results nudge it: when the organizer confirms a 2v2 match score or finalizes a tournament, an Elo-style delta (one level of difference ≈ 10:1 odds, at most ±0.10 per match, ±0.12 per tournament) is applied once per event to every rated player, the source becomes "adjusted by results" and the last change is shown on My matches with a capped log. Unrated players never move and never count.
+- **Level ranges:** a match or tournament can be Bronze (1.0–2.5), Silver (2.5–3.5), Gold (3.0–4.5), Platinum (4.5+) or a custom min–max; the range shows as a chip in the hero. Inside the range people join as usual (the join form asks for a level once); outside it the button turns into **Ask to join**, the organizer sees the requests with the level and approves (seats or waitlists) or declines, the requester sees the answer in the join bar and gets a calendar invite or a short note by email. Organizer-reserved invites and promotions bypass the range. **Balanced teams:** when all four have levels, the score panel suggests the 2v2 split with the smallest gap.
+- **Stats strip** on My matches: played, won, win rate, podiums (from confirmed team results and finalized standings).
 
 ## Admin dashboard
 
@@ -218,6 +222,8 @@ src/lib/notify.ts        every outbound email; safe no-op without RESEND_API_KEY
 src/lib/calendar.ts      Google Calendar URL + RFC 5545 .ics builder (also served at /{code}/calendar.ics)
 src/lib/domain/identity.ts personal tokens, email one-time codes, identity merge
 src/lib/domain/{ratelimit,optouts,anonymize}.ts   abuse ceilings, unsubscribe list, account deletion
+src/lib/domain/{levels,requests,rating}.ts   level maths (ranges, presets, balanced teams, deltas), join requests, result-based adjustment
+src/lib/domain/{levels,rating,requests}.ts       level scale, presets, fit, balanced teams, Elo-style deltas; join requests
 src/lib/alerts.ts        error counters for the admin health row
 src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed
 drizzle/                 generated SQL migrations

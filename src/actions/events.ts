@@ -31,6 +31,9 @@ const createSchema = z.object({
   courts: z.coerce.number().int().min(1).max(16).nullable().optional(),
   pointsPerMatch: z.coerce.number().int().min(4).max(99).nullable().optional(),
   joinSelf: z.boolean().optional(),
+  levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
+  levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
+  myLevel: z.coerce.number().min(0).max(7).nullable().optional(),
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
 
@@ -57,7 +60,13 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       note: input.note,
       courts: input.courts ?? null,
       pointsPerMatch: input.pointsPerMatch ?? null,
+      levelMin: input.levelMin ?? null,
+      levelMax: input.levelMax ?? null,
     });
+    if (input.myLevel != null && me.level == null) {
+      const { setPlayerLevel } = await import("@/lib/domain/rating");
+      await setPlayerLevel(db, me.id, input.myLevel);
+    }
     if (input.joinSelf !== false) {
       // Organizers play too. Skip silently if the match was logged after the fact.
       const { joinEvent } = await import("@/lib/domain/slots");
@@ -81,6 +90,8 @@ const updateSchema = z.object({
   note: z.string().max(500).optional(),
   capacity: z.coerce.number().int().min(4).max(64).multipleOf(4).optional(),
   whenFull: z.enum(["waitlist", "closed"]).optional(),
+  levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
+  levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
@@ -119,6 +130,8 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       note: input.note,
       whenFull: input.whenFull,
       capacity: input.capacity,
+      levelMin: input.levelMin,
+      levelMax: input.levelMax,
     });
     if (result.calendarChanged) after(() => notifyEventUpdated(db, result.event));
     for (const pid of result.promotedPlayerIds) {

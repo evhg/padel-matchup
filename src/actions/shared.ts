@@ -10,7 +10,7 @@ import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { createPlayer, normalizeName } from "@/lib/domain/players";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer } from "@/lib/session";
 
-export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many";
+export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required";
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError };
 
 export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
