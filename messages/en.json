@@ -115,7 +115,12 @@
     "tournamentHelp": "Americano: partners rotate every round, most points wins. Rounds are generated on the day.",
     "court": "Court",
     "courtPlaceholder": "e.g. 3 or Centre court",
-    "capacityHelp": "Spots still open when round 1 starts are dropped: the tournament becomes the players present."
+    "capacityHelp": "Spots still open when round 1 starts are dropped: the tournament becomes the players present.",
+    "more": "More options",
+    "bookingUrl": "Court booking link",
+    "bookingUrlHelp": "Paste the club's booking page or confirmation. Players get one tap to it.",
+    "bookingSet": "Booking link added",
+    "titleSet": "Title or note added"
   },
   "share": {
     "title": "Your match is live",
@@ -202,7 +207,8 @@
     "joinShort": "Join",
     "inviteNotAccepted": "Invite not yet accepted",
     "inviteSent": "Invite sent",
-    "notifyMe": "Email me when the line-up changes"
+    "notifyMe": "Email me when the line-up changes",
+    "openBooking": "Booking"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -736,6 +742,8 @@
     "print": "Print",
     "organizedBy": "by {name}",
     "full": "Full · waitlist",
-    "listedHelp": "Anyone at the venue can find and join this match."
+    "listedHelp": "Anyone at the venue can find and join this match.",
+    "listedShort": "On the venue board",
+    "notListedShort": "Not on the venue board"
   }
 }

@@ -30,6 +30,8 @@ export type CreateEventInput = {
   groupId?: string | null;
   /** Opt-in to the public venue board. */
   publicListing?: boolean;
+  /** Link to the club's booking page or confirmation. */
+  bookingUrl?: string | null;
 };
 
 function cleanText(v: string | null | undefined, max: number): string | null {
@@ -107,6 +109,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           groupId: input.groupId ?? null,
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
           venueSlug: venueSlug(venueName),
+          bookingUrl: cleanUrl(input.bookingUrl),
         })
         .returning();
     }
@@ -173,6 +176,7 @@ export type UpdateEventInput = {
   levelMin?: number | null;
   levelMax?: number | null;
   publicListing?: boolean;
+  bookingUrl?: string | null;
 };
 
 export type UpdateEventResult = {
@@ -221,6 +225,10 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         if (!v) set.publicListing = false;
         calendarChanged = true;
       }
+    }
+    if (patch.bookingUrl !== undefined) {
+      const u = cleanUrl(patch.bookingUrl);
+      if (u !== ev.bookingUrl) set.bookingUrl = u;
     }
     if (patch.publicListing !== undefined) {
       const venueAfter = set.venueName !== undefined ? set.venueName : ev.venueName;

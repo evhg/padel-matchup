@@ -30,6 +30,8 @@ export type EventFormValues = {
   myLevel: number | null;
   /** Opt-in to the public venue board (needs a venue). */
   publicListing: boolean;
+  /** The club's booking page or confirmation, shown to players. */
+  bookingUrl: string;
 };
 
 export type TimePatternInput = { dow: number; time: string };
@@ -74,7 +76,8 @@ export function EventFields({
   const [tzOpen, setTzOpen] = useState(false);
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
-  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note));
+  // "More" opens by itself only when something non-default is already set (editing a match).
+  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note || values.bookingUrl || values.publicListing || values.whenFull === "closed" || hasRange({ min: values.levelMin, max: values.levelMax })));
   const range = { min: values.levelMin, max: values.levelMax };
   const preset = presetFor(range);
   const [customOpen, setCustomOpen] = useState(preset === "custom");
@@ -92,6 +95,16 @@ export function EventFields({
       onChange({ levelMin: r.min, levelMax: r.max });
     }
   };
+
+  const summary = [
+    hasRange(range) ? rangeText(t, range) : t("level.any"),
+    values.whenFull === "closed" ? t("create.whenFullClosed") : t("create.whenFullWaitlist"),
+    values.venueName.trim() ? (values.publicListing ? t("venue.listedShort") : t("venue.notListedShort")) : null,
+    values.bookingUrl ? t("create.bookingSet") : null,
+    values.title || values.note ? t("create.titleSet") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="flex flex-col gap-5">
@@ -163,15 +176,6 @@ export function EventFields({
         <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
       </div>
 
-      {values.venueName.trim() && (
-        <label className="-mt-1 flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
-          <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.publicListing} onChange={(e) => onChange({ publicListing: e.target.checked })} />
-          <span className="min-w-0">
-            <span className="block font-bold">📍 {t("venue.listToggle")}</span>
-            <span className="block text-xs text-muted">{t("venue.listHelp")}</span>
-          </span>
-        </label>
-      )}
 
       {values.type === "tournament" && (
         <div>
@@ -207,19 +211,19 @@ export function EventFields({
         </div>
       )}
 
-      <div>
-        <label className="label">{t("create.whenFull")}</label>
-        <div className="segment">
-          <button type="button" aria-pressed={values.whenFull === "waitlist"} onClick={() => onChange({ whenFull: "waitlist" })}>
-            {t("create.whenFullWaitlist")}
-          </button>
-          <button type="button" aria-pressed={values.whenFull === "closed"} onClick={() => onChange({ whenFull: "closed" })}>
-            {t("create.whenFullClosed")}
-          </button>
-        </div>
-        <p className="mt-1.5 text-sm text-muted">{values.whenFull === "waitlist" ? t("create.whenFullWaitlistHelp") : t("create.whenFullClosedHelp")}</p>
-      </div>
 
+      <div className="border-t border-line pt-4">
+        <button type="button" className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold">{t("create.more")}</span>
+            <span className="block truncate text-xs text-muted">{summary}</span>
+          </span>
+          <span className={`shrink-0 text-faint transition ${moreOpen ? "rotate-180" : ""}`} aria-hidden>
+            ⌄
+          </span>
+        </button>
+        {moreOpen && (
+          <div className="mt-5 flex flex-col gap-5 animate-pop">
       <div>
         <label className="label">{t("level.label")}</label>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t("level.label")}>
@@ -262,27 +266,49 @@ export function EventFields({
           </div>
         )}
       </div>
-
-      {moreOpen ? (
-        <>
-          <div>
-            <label className="label">
-              {t("create.titleLabel")} <span className="font-normal">({t("common.optional")})</span>
-            </label>
-            <input className="input" value={values.title} maxLength={80} placeholder={t("create.titlePlaceholder")} onChange={(e) => onChange({ title: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">
-              {t("create.note")} <span className="font-normal">({t("common.optional")})</span>
-            </label>
-            <textarea className="textarea" value={values.note} maxLength={500} placeholder={t("create.notePlaceholder")} onChange={(e) => onChange({ note: e.target.value })} />
-          </div>
-        </>
-      ) : (
-        <button type="button" className="self-start text-sm link" onClick={() => setMoreOpen(true)}>
-          + {t("create.titleLabel")} / {t("create.note")}
-        </button>
+      <div>
+        <label className="label">{t("create.whenFull")}</label>
+        <div className="segment">
+          <button type="button" aria-pressed={values.whenFull === "waitlist"} onClick={() => onChange({ whenFull: "waitlist" })}>
+            {t("create.whenFullWaitlist")}
+          </button>
+          <button type="button" aria-pressed={values.whenFull === "closed"} onClick={() => onChange({ whenFull: "closed" })}>
+            {t("create.whenFullClosed")}
+          </button>
+        </div>
+        <p className="mt-1.5 text-sm text-muted">{values.whenFull === "waitlist" ? t("create.whenFullWaitlistHelp") : t("create.whenFullClosedHelp")}</p>
+      </div>
+      {values.venueName.trim() && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
+          <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.publicListing} onChange={(e) => onChange({ publicListing: e.target.checked })} />
+          <span className="min-w-0">
+            <span className="block font-bold">📍 {t("venue.listToggle")}</span>
+            <span className="block text-xs text-muted">{t("venue.listHelp")}</span>
+          </span>
+        </label>
       )}
+            <div>
+              <label className="label">
+                {t("create.bookingUrl")} <span className="font-normal">({t("common.optional")})</span>
+              </label>
+              <input className="input" type="url" inputMode="url" autoComplete="off" placeholder="https://" value={values.bookingUrl} maxLength={500} onChange={(e) => onChange({ bookingUrl: e.target.value })} />
+              <p className="mt-1.5 text-sm text-muted">{t("create.bookingUrlHelp")}</p>
+            </div>
+            <div>
+              <label className="label">
+                {t("create.titleLabel")} <span className="font-normal">({t("common.optional")})</span>
+              </label>
+              <input className="input" value={values.title} maxLength={80} placeholder={t("create.titlePlaceholder")} onChange={(e) => onChange({ title: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">
+                {t("create.note")} <span className="font-normal">({t("common.optional")})</span>
+              </label>
+              <textarea className="textarea" value={values.note} maxLength={500} placeholder={t("create.notePlaceholder")} onChange={(e) => onChange({ note: e.target.value })} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { emitMatchEvent } from "@/lib/api/webhooks";
 import { applyEventLevels } from "@/lib/domain/rating";
 import { deleteLastRound, generateRound, saveTournamentMatchScore, setTournamentLock, setTournamentSettings } from "@/lib/domain/tournament";
 import { getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
@@ -47,6 +49,11 @@ export async function setTournamentLockAction(code: string, locked: boolean): Pr
     const { db, detail, viewer } = await requireCreator(code);
     await setTournamentLock(db, { eventId: detail.event.id, locked, actorPlayerId: viewer.player?.id ?? null });
     if (locked) await applyEventLevels(db, detail.event.id).catch(() => undefined);
+    if (locked) {
+      after(async () => {
+        await emitMatchEvent(db, "match.result", code, { confirmed: true });
+      });
+    }
     revalidatePath(`/${code}`);
     revalidatePath("/me");
     return null;

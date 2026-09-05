@@ -9,6 +9,7 @@ Mobile-first web app for organizing padel matches with **zero app installs, zero
 - **Identity:** one-time name entry → player UUID in a signed httpOnly cookie (1 year) + localStorage mirror. Cross-device: every player has a private **personal link** (`/p/{token}`, shown on My matches, in every email and in the calendar invite) that signs any device in; an email that was used before can **restore** history with a 6-digit code, merging all identities that share it. The home-screen shortcut opens the personal link, and calendar entries and emails carry the **private event link** (`/p/{token}/{code}`: signs the device in, opens the match). A newly added email receives the personal link (inside the calendar invite when in a match, otherwise on its own). Tokens are 12 characters; older 32-char tokens keep working as `previous_token` after the lazy shortening. An email can be changed but never blanked once set; the previous address is kept as `recovery_email`, so a restore code sent to either address gets the player back in. "Email me this link" on My matches mails the personal link (native share, copy and QR are the other options).
 - **Push reminders:** Web Push (VAPID) one hour before each match, for every device the player enabled it on (iPhone: from the home-screen app). `/api/cron/push` is called every 5 minutes by Supabase `pg_cron` + `pg_net` (Vercel Hobby cron is daily). Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 - **Links:** `/{code}` (4 chars, public) · `/{code}/i/{6}` (personal invite) · `/{code}/manage/{10}` (organizer secret).
+- **Agent-native and open.** A public REST API (OpenAPI 3.1 at `/api/openapi.json`), an MCP server at `/mcp` that any assistant adds by URL, instant self-serve keys, signed webhooks, `llms.txt`, `/.well-known/mcp.json`, a robots.txt that welcomes AI crawlers, `AGENTS.md`, an installable skill (`npx skills add evhg/padel-matchup`), calendar feeds per group and venue. Public data is CC BY 4.0. See `/developers` and `/agents`.
 - **Email is optional everywhere.** Without `RESEND_API_KEY` the app runs fully with email features hidden.
 - **Privacy, short and cheeky:** `/about` (one faint footer link) says what is stored, what is never done, and how to leave. Every organizer-initiated email (invites, invite reminders) carries a signed one-tap `/unsubscribe` link; a player adding their own address again lifts the opt-out. "Delete my account" at the bottom of My matches wipes personal data, releases upcoming spots and cancels the player's own upcoming matches; old scores stay as "Deleted player".
 - **Levels:** every player can declare a padel level (0–7 in quarter steps, the scale the padel apps use) once, from My matches or the first time a ranged match asks for it. It shows as a small chip next to the name everywhere (roster, standings, team picker). Results nudge it: when the organizer confirms a 2v2 score or finalizes a tournament, a small Elo-style delta (at most ±0.10 per match, ±0.12 per tournament) is applied once per event and logged ("3.25 → 3.30 after a match"). Players without a level neither move nor count. Organizers can set a **level range** per match or tournament: presets Bronze 1.0–2.5, Silver 2.5–3.5, Gold 3.0–4.5, Platinum 4.5+, or a custom min–max. Players inside join as usual; players outside **ask to join** and the organizer approves (seats them, or waitlists them when full) or declines, with the answer shown in the join bar and the activity feed. Reserved/invited players and the organizer bypass the range. The score panel suggests **balanced teams** (smallest level gap) when all four have levels. My matches gets a stats strip: played, won, win rate, podiums.
@@ -211,6 +212,22 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Venue boards (opt-in, off by default):** an organizer can tick "Show on the venue board" when creating or editing a match with a venue. Listed, upcoming, not-cancelled matches appear on `/v/{venue-slug}` (a public page named after the venue, with spots left and level range), and the match shows an "On the … board" chip. `/v/{slug}/poster` is a one-page printable poster with a QR code to the board ("Scan for open padel matches at …"). The board's empty state and footer lead to the create form with the venue prefilled and the listing switched on. Slugs are ASCII-only and kept in sync when a venue is renamed; removing the venue unlists the match.
 - **Americano generator:** `/americano` is a public, indexable page running the same rotation engine in the browser: players (or pasted names), courts, rounds; exact rotation when the field is in fours, fair sit-outs otherwise; print stylesheet; "Run it live on Kicksmash" prefills the create form (`/?type=tournament&capacity=N`). `robots.txt` and `sitemap.xml` cover `/`, `/americano` and `/about`; personal, manage, invite, share and card pages stay out of the index.
 
+## API, MCP server and webhooks
+
+Everything public on the site is available to programs and assistants, and everything the create form does is one call away.
+
+| Surface | Where |
+| --- | --- |
+| REST reads (no key) | `GET /api/v1/matches/{code}`, `/api/v1/boards/{slug}`, `/api/v1/groups/{code}`, `/api/v1/schedule?players=8&courts=2` |
+| REST writes (key optional, rate-limited per address without one) | `POST /api/v1/matches`, `POST /api/v1/matches/{code}/join` |
+| Keys | `POST /api/v1/keys` → instant, shown once; `Authorization: Bearer ks_live_…` |
+| Webhooks (key required) | `POST /api/v1/webhooks` with `url`, `events`, optional `filter`; signed `X-Kicksmash-Signature: t=…,v1=…`; retried with backoff by the hourly cron |
+| MCP | `POST /mcp` (streamable HTTP, stateless JSON): `about_kicksmash`, `get_match`, `find_matches`, `get_group`, `generate_schedule`, `create_match`, `join_match`, `create_api_key`; resources with the model reference and the OpenAPI document |
+| Discovery | `/llms.txt`, `/llms-full.txt`, `/.well-known/mcp.json`, `/api/openapi.json`, `/developers`, `/agents`, `robots.txt` explicitly allows AI crawlers |
+| Feeds | `/g/{code}/calendar.ics`, `/v/{slug}/calendar.ics` |
+
+Public shapes (`src/lib/api/serialize.ts`) carry first names and levels only; emails, phones, personal tokens and manage links never appear. Errors are `{ error: { code, message, hint, status } }`; every hint says what to do next. Limits live in `src/lib/domain/ratelimit.ts`.
+
 ## Admin dashboard
 
 `/admin` is a public, read-only usage page: hero figure with a health row (database, email, push, both crons, **errors today**), stat tiles with sparklines, meters against the free-tier ceilings (Supabase 500 MB, Resend 3,000/month and 100/day), and 7/30/90-day trend charts (growth, joins, outbound messages, errors, database size, totals). Counters live in `metrics_daily` (bumped by the app, snapshotted by the hourly cron); no personal data is shown. Errors are counted, never described: server actions that throw, cron steps that fail and browser crash screens (`/api/client-error`, rate-limited) each bump a counter, so the health row is the only alerting there is. Vercel bandwidth has no public API on Hobby, so it links to the dashboard.
@@ -218,7 +235,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] · /v/[slug] (+ /poster) · /me · /p/[token] · /about · /americano · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, calendar.ics) · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)
@@ -229,6 +246,8 @@ src/lib/domain/{ratelimit,optouts,anonymize}.ts   abuse ceilings, unsubscribe li
 src/lib/domain/{levels,requests,rating}.ts   level maths (ranges, presets, balanced teams, deltas), join requests, result-based adjustment
 src/lib/domain/groups.ts   groups, membership, weekly slots (recurrenceDue / autoCreateGroupMatches)
 src/lib/domain/venueBoard.ts   venue slugs, the public board query, listing toggle
+src/lib/api/               public REST (operations, serialize, keys, webhooks, openapi), MCP server (mcp.ts), model-facing docs (docs.ts)
+skills/kicksmash/SKILL.md  installable skill for coding agents; AGENTS.md at the root for agents working on this repo
 src/lib/domain/{levels,rating,requests}.ts       level scale, presets, fit, balanced teams, Elo-style deltas; join requests
 src/lib/alerts.ts        error counters for the admin health row
 src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed

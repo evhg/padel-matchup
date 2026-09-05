@@ -265,11 +265,18 @@ export default async function EventPage({ params }: Props) {
               <div className={`truncate text-base font-bold ${ev.venueName ? "" : "text-muted"}`}>{venue}</div>
               <div className="text-xs text-muted">{t("event.organizedBy", { name: creator.displayName })}</div>
             </div>
-            {ev.venueMapUrl && (
-              <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm shrink-0">
-                📍 {t("event.openMap")}
-              </a>
-            )}
+            <div className="flex shrink-0 gap-1.5">
+              {ev.bookingUrl && (
+                <a href={ev.bookingUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
+                  🎟 {t("event.openBooking")}
+                </a>
+              )}
+              {ev.venueMapUrl && (
+                <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
+                  📍 {t("event.openMap")}
+                </a>
+              )}
+            </div>
           </div>
           {ev.note && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
           {cancelled && (
@@ -401,6 +408,7 @@ export default async function EventPage({ params }: Props) {
               levelMax: ev.levelMax,
               myLevel: creator.level,
               publicListing: ev.publicListing,
+              bookingUrl: ev.bookingUrl ?? "",
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
             creatorEmail={creator.email}
