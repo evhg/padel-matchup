@@ -8,10 +8,11 @@ import {
   markScoreReminderSent,
   transitionPastEvents,
 } from "@/lib/domain/reminders";
+import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getEventDetail } from "@/lib/domain/queries";
-import { notifyLineupChange, notifyPromotion, sendInviteReminder, sendScoreReminder } from "@/lib/notify";
+import { notifyGroupMatch, notifyLineupChange, notifyPromotion, sendInviteReminder, sendScoreReminder } from "@/lib/notify";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 
@@ -24,6 +25,7 @@ export const maxDuration = 60;
  *  2. waitlist hygiene (fill any empty roster slot from the waitlist)
  *  3. 24h reminders to unconfirmed invitees with an email
  *  4. the single post-match score reminder to organizers
+ *  5. automatic group matches (weekly slots) + member notifications
  */
 export async function GET(req: Request) {
   // Vercel sends "Authorization: Bearer $CRON_SECRET" when the variable is set.
@@ -35,7 +37,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -82,6 +84,15 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(`scores: ${String(e)}`);
+  }
+
+  try {
+    // Weekly group slots: create the next match a few days ahead and ping the members.
+    const created = await autoCreateGroupMatches(db, now);
+    summary.groupMatches = created.length;
+    for (const c of created) await notifyGroupMatch(db, c.group, c.event, null);
+  } catch (e) {
+    summary.errors.push(`groups: ${String(e)}`);
   }
 
   try {

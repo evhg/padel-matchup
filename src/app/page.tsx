@@ -10,13 +10,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** The landing page is the create form. `?type=tournament&capacity=8` prefills it (used by the /americano generator). */
-export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string }> }) {
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
   return (
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
-        <CreateScreen heading={t("landing.formTitle")} sub={t("landing.formSub")} prefill={{ type: sp.type, capacity: sp.capacity }} />
+        <CreateScreen heading={t("landing.formTitle")} sub={t("landing.formSub")} prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group }} />
         <section className="mt-6 grid gap-2">
           {[t("landing.step1"), t("landing.step2"), t("landing.step3")].map((s, i) => (
             <div key={i} className="flex items-center gap-3 px-1 text-sm text-muted">

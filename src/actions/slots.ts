@@ -17,6 +17,7 @@ import {
   type DeclineOutcome,
   type JoinOutcome,
 } from "@/lib/domain/slots";
+import { joinGroup } from "@/lib/domain/groups";
 import { formatLevel, hasRange, levelFit } from "@/lib/domain/levels";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
@@ -57,6 +58,8 @@ export async function joinAction(code: string, name?: string, level?: number | n
     }
     const res = await joinEvent(db, { eventId: detail.event.id, playerId: me.id });
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
+      // Joining a group's match makes you part of the group (so the next match pings you too).
+      if (ev.groupId) await joinGroup(db, ev.groupId, me.id).catch(() => undefined);
       after(async () => {
         await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", me.displayName, me.id);
         const fresh = await notifyLineupChange(db, res.event, before, me.id);
@@ -86,6 +89,7 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
     const before = wasComplete(detail);
     const res = await decideJoinRequest(db, { eventId: detail.event.id, requestId, approve, actorPlayerId: viewer.player?.id ?? null });
     const player = res.player;
+    if (approve && player && detail.event.groupId) await joinGroup(db, detail.event.groupId, player.id).catch(() => undefined);
     after(async () => {
       if (!player) return;
       if (approve) {
@@ -170,6 +174,7 @@ export async function confirmInviteAction(
     const before = found ? wasComplete(await getEventDetail(db, found.event)) : false;
     const me = await requirePlayer(db, input.name);
     const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email });
+    if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id).catch(() => undefined);
     if (res.outcome === "confirmed") {
       after(async () => {
         const fresh = (await getPlayer(db, me.id)) ?? me;

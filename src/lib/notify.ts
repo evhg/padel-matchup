@@ -1,4 +1,7 @@
 import "server-only";
+import { pushEnabled, sendPush } from "@/lib/push";
+import { removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
+import { groupMembers as groupMembersTable, players as playersTable, type Group } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, type Event, type Player, type Slot } from "@/db/schema";
@@ -172,6 +175,33 @@ export async function notifyRequestDecided(db: Db, ev: Event, player: Player, ap
   const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
   const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel });
   await sendEmail({ to: player.email, subject: c.t("email.requestDeclined.subject", vars), html, text });
+}
+
+/** A group got a new match (by a member or the weekly slot): email + push to every other member. */
+export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludePlayerId?: string | null): Promise<{ emails: number; pushes: number }> {
+  const rows = await db.select({ player: playersTable }).from(groupMembersTable).innerJoin(playersTable, eq(playersTable.id, groupMembersTable.playerId)).where(eq(groupMembersTable.groupId, group.id));
+  const organizer = await getPlayer(db, ev.creatorPlayerId);
+  const detail = await getEventDetail(db, ev);
+  let emails = 0;
+  let pushes = 0;
+  for (const { player: p } of rows) {
+    if (excludePlayerId && p.id === excludePlayerId) continue;
+    const c = await ctx(db, ev, p.locale, p, detail);
+    const vars = { ...c.vars, group: group.name, organizer: organizer?.displayName ?? "" };
+    if (emailEnabled() && p.email && p.emailNotifications) {
+      const { html, text } = layout({ heading: c.t("email.groupMatch.heading", vars), body: c.t("email.groupMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      await sendEmail({ to: p.email, subject: c.t("email.groupMatch.subject", vars), html, text });
+      emails++;
+    }
+    if (pushEnabled()) {
+      for (const sub of await subscriptionsFor(db, [p.id])) {
+        const r = await sendPush(sub, { title: c.t("push.groupMatchTitle", vars), body: c.t("push.groupMatchBody", vars), url: c.url, tag: `group-${ev.code}` });
+        if (r === "sent") pushes++;
+        if (r === "gone") await removePushSubscription(db, sub.endpoint);
+      }
+    }
+  }
+  return { emails, pushes };
 }
 
 /** Handles the fallout of a promotion: promoted player invite + creator notice. */

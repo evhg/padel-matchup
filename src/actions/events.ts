@@ -9,9 +9,10 @@ import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
+import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { normalizeEmail } from "@/lib/domain/players";
-import { notifyEventCancelled, notifyEventUpdated, notifyPromotion, welcomeEmail } from "@/lib/notify";
+import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, welcomeEmail } from "@/lib/notify";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -34,6 +35,8 @@ const createSchema = z.object({
   levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
   myLevel: z.coerce.number().min(0).max(7).nullable().optional(),
+  /** Created from a group page: the match belongs to the group and every member is notified. */
+  groupCode: z.string().length(6).optional(),
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
 
@@ -46,6 +49,9 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
     await assertRate(db, "create", me.id, LIMITS.eventsPerPlayerPerDay);
     const startsAt = zonedTimeToUtc(input.date, input.time, input.tz);
     if (Number.isNaN(startsAt.getTime())) throw new ActionFailure("invalid");
+    const group = input.groupCode ? await getGroupByCode(db, input.groupCode) : null;
+    if (input.groupCode && !group) throw new ActionFailure("not_found");
+    if (group && !(await getGroupMember(db, group.id, me.id))) throw new ActionFailure("forbidden");
     const ev = await createEvent(db, {
       creatorPlayerId: me.id,
       type: input.type,
@@ -62,7 +68,13 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       pointsPerMatch: input.pointsPerMatch ?? null,
       levelMin: input.levelMin ?? null,
       levelMax: input.levelMax ?? null,
+      groupId: group?.id ?? null,
     });
+    if (group) {
+      after(async () => {
+        await notifyGroupMatch(db, group, ev, me.id);
+      });
+    }
     if (input.myLevel != null && me.level == null) {
       const { setPlayerLevel } = await import("@/lib/domain/rating");
       await setPlayerLevel(db, me.id, input.myLevel);

@@ -6,6 +6,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { playerHasPush } from "@/lib/domain/push";
+import { getPlayerGroups } from "@/lib/domain/groups";
 import { getPlayerEvents, type MyEvent } from "@/lib/domain/queries";
 import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
@@ -21,7 +22,7 @@ import { DeleteAccount } from "./DeleteAccount";
 /** "My matches": rendered on /me (cookie identity) and /p/{token} (personal link). */
 export async function MyMatches({ player, personalToken }: { player: Player; personalToken: string }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
-  const [{ upcoming, past }, hasPush] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id)]);
+  const [{ upcoming, past }, hasPush, groups] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id), getPlayerGroups(db, player.id)]);
   const hasHistory = upcoming.length > 0 || past.length > 0;
   // Stats strip: only matches the player was actually in (not organized-from-the-sidelines).
   const playedList = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
@@ -124,6 +125,28 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
         </>
       )}
 
+      {groups.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("group.yourGroups")}</h2>
+          <ul className="flex flex-col gap-2">
+            {groups.map((g) => (
+              <li key={g.group.id}>
+                <Link href={`/g/${g.group.code}`} prefetch={false} className="card flex items-center gap-4 py-4 hover:border-ink/30">
+                  <span className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink text-lg">👥</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-bold">{g.group.name}</div>
+                    <div className="truncate text-sm text-muted">
+                      {t("group.memberCount", { count: g.memberCount })}
+                      {g.nextEvent ? ` · ${formatEventDay(g.nextEvent.startsAt, g.nextEvent.tz, locale)} ${formatEventTime(g.nextEvent.startsAt, g.nextEvent.tz, locale)}` : ` · ${t("group.noUpcoming")}`}
+                    </div>
+                  </div>
+                  <span className="text-faint">›</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="card">
         <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
       </section>
