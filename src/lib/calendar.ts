@@ -93,3 +93,42 @@ export function buildIcs(input: IcsInput): string {
   lines.push("END:VEVENT", "END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";
 }
+
+
+export type FeedEntry = { event: CalendarEvent; title: string; url: string; location?: string };
+
+/** A subscribable calendar (METHOD:PUBLISH) with one VEVENT per match: group and venue feeds. */
+export function buildFeed(input: { name: string; domain: string; entries: FeedEntry[]; description?: string }): string {
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Kicksmash//Padel Match-Up//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${icsEscape(input.name)}`,
+    ...(input.description ? [`X-WR-CALDESC:${icsEscape(input.description)}`] : []),
+    "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+    "X-PUBLISHED-TTL:PT1H",
+  ];
+  const stamp = icsStamp(new Date());
+  for (const { event, title, url, location } of input.entries) {
+    const end = new Date(event.startsAt.getTime() + EVENT_DURATION_MS);
+    const loc = location ?? event.venueName ?? "";
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${icsUid(event.id, input.domain)}`,
+      `SEQUENCE:${event.icsSequence}`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${icsStamp(event.startsAt)}`,
+      `DTEND:${icsStamp(end)}`,
+      `SUMMARY:${icsEscape(title)}`,
+      ...(loc ? [`LOCATION:${icsEscape(loc)}`] : []),
+      `DESCRIPTION:${icsEscape([event.note, url].filter(Boolean).join("\n\n"))}`,
+      `URL:${url}`,
+      `STATUS:${event.status === "cancelled" ? "CANCELLED" : "CONFIRMED"}`,
+      "END:VEVENT",
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return lines.map(fold).join("\r\n") + "\r\n";
+}

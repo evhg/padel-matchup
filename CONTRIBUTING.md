@@ -43,6 +43,8 @@ CI runs exactly these. A green local run means a green PR.
 - **No new accounts.** Identity stays cookie + personal link. Do not add passwords or OAuth.
 - **Migrations are additive.** Production applies them automatically; a migration that drops or rewrites data needs a discussion first.
 - **Keep the free tiers in mind.** Sequential database queries in server components, small payloads, no polling.
+- **Simplicity budget.** One job per screen, one primary action, at most seven visible controls above the fold on a phone. Anything optional goes behind the single "More options" section with a one-line summary of what is set. Features appear when they can be useful (groups after matches, rankings after results), not before.
+- **Keep the agent surfaces in sync.** A change to the API or the product means updating `src/lib/api/openapi.ts`, `src/lib/api/docs.ts`, the MCP tools in `src/lib/api/mcp.ts`, `/developers` and `skills/kicksmash/SKILL.md` in the same pull request.
 - **Never interpolate a `Date` into a raw `sql` template.** Use `gt(events.startsAt, now)` and friends. PGlite accepts a raw Date, postgres-js (production, and the CI Postgres job) rejects it. Run the suite against a real Postgres before pushing anything that touches queries: `TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/kicksmash_test pnpm test`.
 
 ## Reporting bugs and ideas

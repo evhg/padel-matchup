@@ -115,7 +115,12 @@
     "tournamentHelp": "Americano: las parejas rotan cada ronda, gana quien sume más puntos. Las rondas se generan el mismo día.",
     "court": "Pista",
     "courtPlaceholder": "p. ej. 3 o Pista central",
-    "capacityHelp": "Las plazas libres al empezar la ronda 1 se eliminan: el torneo lo juegan los presentes."
+    "capacityHelp": "Las plazas libres al empezar la ronda 1 se eliminan: el torneo lo juegan los presentes.",
+    "more": "Más opciones",
+    "bookingUrl": "Enlace de reserva de pista",
+    "bookingUrlHelp": "Pega la página de reservas del club o la confirmación. Los jugadores la abren con un toque.",
+    "bookingSet": "Enlace de reserva añadido",
+    "titleSet": "Título o nota añadidos"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -202,7 +207,8 @@
     "joinShort": "Entrar",
     "inviteNotAccepted": "Invitación aún sin aceptar",
     "inviteSent": "Invitación enviada",
-    "notifyMe": "Avisarme por email cuando cambie la alineación"
+    "notifyMe": "Avisarme por email cuando cambie la alineación",
+    "openBooking": "Reserva"
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -736,6 +742,8 @@
     "print": "Imprimir",
     "organizedBy": "organiza {name}",
     "full": "Completo · lista de espera",
-    "listedHelp": "Cualquiera en el club puede encontrar este partido y apuntarse."
+    "listedHelp": "Cualquiera en el club puede encontrar este partido y apuntarse.",
+    "listedShort": "En el tablón del club",
+    "notListedShort": "No está en el tablón"
   }
 }

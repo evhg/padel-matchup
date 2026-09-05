@@ -22,6 +22,7 @@ import { formatLevel, hasRange, levelFit } from "@/lib/domain/levels";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { lineupComplete } from "@/lib/lineup";
+import { emitMatchEvent } from "@/lib/api/webhooks";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRemoved, notifyRequestDecided, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer } from "@/lib/session";
@@ -64,6 +65,8 @@ export async function joinAction(code: string, name?: string, level?: number | n
         await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", me.displayName, me.id);
         const fresh = await notifyLineupChange(db, res.event, before, me.id);
         if (res.outcome === "joined") await sendCalendarInvite(db, fresh ?? res.event, me);
+        await emitMatchEvent(db, "match.joined", code, { player: { name: me.displayName, level: myLevel }, outcome: res.outcome });
+        if (res.event.status === "full") await emitMatchEvent(db, "match.full", code);
       });
     }
     revalidatePath(`/${code}`);
@@ -95,6 +98,8 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
       if (approve) {
         const fresh = await notifyLineupChange(db, res.event, before, player.id);
         if (res.join?.outcome === "joined") await notifyRequestDecided(db, fresh ?? res.event, player, true);
+        await emitMatchEvent(db, "match.joined", code, { player: { name: player.displayName, level: player.level }, outcome: res.join?.outcome ?? "joined", approved: true });
+        if (res.event.status === "full") await emitMatchEvent(db, "match.full", code);
       } else {
         await notifyRequestDecided(db, res.event, player, false);
       }
@@ -115,6 +120,7 @@ export async function leaveAction(code: string): Promise<ActionResult<null>> {
       if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", me.displayName, me.id);
       const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
       await notifyPromotion(db, fresh ?? res.event, res.promotion);
+      await emitMatchEvent(db, "match.left", code, { player: { name: me.displayName } });
     });
     revalidatePath(`/${code}`);
     return null;

@@ -18,6 +18,8 @@ try {
   const org = await newPage();
   await org.goto(BASE + "/");
   await org.getByPlaceholder("e.g. Alex").fill("Olga");
+  check("level presets stay behind More options until asked", (await org.getByRole("button", { name: "Gold", exact: true }).count()) === 0);
+  await org.getByRole("button", { name: /More options/ }).click();
   await org.getByRole("button", { name: "Gold", exact: true }).click();
   check("gold preset explains the range and asks the organizer's level", (await org.getByText("3.0–4.5. Players outside can ask to join").count()) > 0 && (await org.getByLabel("Your level").count()) === 1);
   await org.getByLabel("Your level").selectOption({ label: "3.5" });

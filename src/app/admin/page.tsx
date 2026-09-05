@@ -82,7 +82,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const now = new Date();
   // Sequential on purpose: see metrics.ts (pooler + pipelining).
   const tot = await totals(db, now);
-  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at", "errors_server", "errors_client", "errors_cron"], range, now);
+  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at", "errors_server", "errors_client", "errors_cron", "api_calls", "mcp_calls"], range, now);
   const act = await activitySeries(db, range, now);
   const month = await metricSeries(db, ["emails_sent"], now.getUTCDate(), now);
   const emailsToday = metrics.values.emails_sent.at(-1) ?? 0;
@@ -144,11 +144,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </ul>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <Tile label="Players" value={fmtCompact(tot.players)} sub={`+${fmtInt(sum(act.values.newPlayers))} in ${range}d`} spark={act.values.newPlayers} />
           <Tile label="Joins" value={fmtCompact(sum(act.values.joins))} sub={`last ${range} days`} spark={act.values.joins} color={SERIES.aqua} />
           <Tile label="Emails sent" value={fmtCompact(sum(metrics.values.emails_sent))} sub={`${fmtInt(emailsToday)} today · ${fmtInt(emailsMonth)} this month`} spark={metrics.values.emails_sent} color={SERIES.orange} />
           <Tile label="Push reminders" value={fmtCompact(sum(metrics.values.push_sent))} sub={`${fmtInt(tot.pushSubs)} subscribed devices`} spark={metrics.values.push_sent} />
+          <Tile label="API & agents" value={fmtCompact(sum(metrics.values.api_calls) + sum(metrics.values.mcp_calls))} sub={`${fmtInt(sum(metrics.values.mcp_calls))} MCP calls in ${range}d`} spark={metrics.values.api_calls.map((v, i) => v + (metrics.values.mcp_calls[i] ?? 0))} color={SERIES.aqua} />
         </section>
 
         <section className="card flex flex-col gap-5">

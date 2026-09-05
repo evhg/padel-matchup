@@ -8,6 +8,7 @@ import {
   markScoreReminderSent,
   transitionPastEvents,
 } from "@/lib/domain/reminders";
+import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -90,9 +91,18 @@ export async function GET(req: Request) {
     // Weekly group slots: create the next match a few days ahead and ping the members.
     const created = await autoCreateGroupMatches(db, now);
     summary.groupMatches = created.length;
-    for (const c of created) await notifyGroupMatch(db, c.group, c.event, null);
+    for (const c of created) {
+      await notifyGroupMatch(db, c.group, c.event, null);
+      await emitMatchEvent(db, "match.created", c.event.code, { automatic: true });
+    }
   } catch (e) {
     summary.errors.push(`groups: ${String(e)}`);
+  }
+
+  try {
+    summary.webhookRetries = (await processWebhookRetries(db, now)).attempted;
+  } catch (e) {
+    summary.errors.push(`webhooks: ${String(e)}`);
   }
 
   try {

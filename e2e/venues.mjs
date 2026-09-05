@@ -19,6 +19,8 @@ try {
   check("no venue → no listing switch", (await org.getByText("Show on the venue board").count()) === 0);
   await org.getByPlaceholder("e.g. Alex").fill("Vera");
   await org.getByPlaceholder("Court TBD · or type a club").fill("Riverside Padel");
+  check("More options summary says the match is not on the board yet", (await org.getByText(/Not on the venue board/).count()) === 1);
+  await org.getByRole("button", { name: /More options/ }).click();
   await org.getByText("Show on the venue board").waitFor({ timeout: 5000 });
   const box = org.getByRole("checkbox");
   check("listing switch appears once a venue is typed, unchecked by default", (await box.count()) === 1 && !(await box.isChecked()));

@@ -12,6 +12,7 @@ import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/dom
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { normalizeEmail } from "@/lib/domain/players";
+import { emitMatchEvent } from "@/lib/api/webhooks";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, welcomeEmail } from "@/lib/notify";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
@@ -38,6 +39,7 @@ const createSchema = z.object({
   /** Created from a group page: the match belongs to the group and every member is notified. */
   groupCode: z.string().length(6).optional(),
   publicListing: z.boolean().optional(),
+  bookingUrl: z.string().max(500).optional(),
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
 
@@ -71,6 +73,10 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       levelMax: input.levelMax ?? null,
       groupId: group?.id ?? null,
       publicListing: input.publicListing ?? false,
+      bookingUrl: input.bookingUrl,
+    });
+    after(async () => {
+      await emitMatchEvent(db, "match.created", ev.code);
     });
     if (group) {
       after(async () => {
@@ -107,6 +113,7 @@ const updateSchema = z.object({
   levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
   publicListing: z.boolean().optional(),
+  bookingUrl: z.string().max(500).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
@@ -122,6 +129,9 @@ export async function duplicateEventAction(code: string): Promise<ActionResult<{
     const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
     const { joinEvent } = await import("@/lib/domain/slots");
     await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => undefined);
+    after(async () => {
+      await emitMatchEvent(db, "match.created", ev.code, { playAgainOf: code });
+    });
     newCode = ev.code;
     return { code: ev.code };
   });
@@ -148,8 +158,12 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       levelMin: input.levelMin,
       levelMax: input.levelMax,
       publicListing: input.publicListing,
+      bookingUrl: input.bookingUrl,
     });
     if (result.calendarChanged) after(() => notifyEventUpdated(db, result.event));
+    after(async () => {
+      await emitMatchEvent(db, "match.updated", code);
+    });
     for (const pid of result.promotedPlayerIds) {
       after(() => notifyPromotion(db, result.event, { playerId: pid, slot: null as never }));
     }
@@ -163,6 +177,9 @@ export async function cancelEventAction(code: string): Promise<ActionResult<null
     const { db, detail, viewer } = await requireCreator(code);
     const ev = await cancelEvent(db, detail.event.id, viewer.player?.id ?? null);
     after(() => notifyEventCancelled(db, ev));
+    after(async () => {
+      await emitMatchEvent(db, "match.cancelled", code);
+    });
     revalidatePath(`/${code}`);
     return null;
   });

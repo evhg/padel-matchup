@@ -27,4 +27,11 @@ export const LIMITS = {
   personalLinkMailsPerPlayerPerDay: 5,
   restoreCodesPerIpPerDay: 20,
   clientErrorReportsPerIpPerDay: 60,
+  // Public API and MCP: open without a key, roomier with one.
+  apiKeysPerIpPerDay: 10,
+  apiWritesPerIpPerDay: 12,
+  apiWritesPerKeyPerDay: 300,
+  apiReadsPerIpPerHour: 600,
+  mcpCallsPerIpPerHour: 300,
+  webhooksPerKey: 10,
 } as const;
