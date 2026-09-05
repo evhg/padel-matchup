@@ -720,5 +720,22 @@
     "venue": "Sitio habitual",
     "tz": "Zona horaria",
     "type": "Formato"
+  },
+  "venue": {
+    "board": "Tablón del club",
+    "boardTitle": "Pádel en {venue}",
+    "boardSub": "Partidos y torneos abiertos a los que cualquiera puede apuntarse. Toca uno, pon tu nombre y dentro.",
+    "empty": "Ahora mismo no hay nada en {venue}.",
+    "emptyCta": "Organiza uno aquí",
+    "listed": "En el tablón de {venue}",
+    "listToggle": "Mostrar en el tablón del club",
+    "listHelp": "Una lista pública de partidos abiertos en este club; quien escanee el cartel del club puede apuntarse. Desactivado por defecto.",
+    "poster": "Cartel para imprimir",
+    "posterScan": "Escanea para ver partidos de pádel abiertos en {venue}. Toca uno, pon tu nombre y dentro.",
+    "posterHint": "Imprímelo y pégalo junto a las pistas.",
+    "print": "Imprimir",
+    "organizedBy": "organiza {name}",
+    "full": "Completo · lista de espera",
+    "listedHelp": "Cualquiera en el club puede encontrar este partido y apuntarse."
   }
 }

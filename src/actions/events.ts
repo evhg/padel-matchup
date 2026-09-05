@@ -37,6 +37,7 @@ const createSchema = z.object({
   myLevel: z.coerce.number().min(0).max(7).nullable().optional(),
   /** Created from a group page: the match belongs to the group and every member is notified. */
   groupCode: z.string().length(6).optional(),
+  publicListing: z.boolean().optional(),
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
 
@@ -69,6 +70,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       levelMin: input.levelMin ?? null,
       levelMax: input.levelMax ?? null,
       groupId: group?.id ?? null,
+      publicListing: input.publicListing ?? false,
     });
     if (group) {
       after(async () => {
@@ -104,6 +106,7 @@ const updateSchema = z.object({
   whenFull: z.enum(["waitlist", "closed"]).optional(),
   levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
+  publicListing: z.boolean().optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
@@ -144,6 +147,7 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       capacity: input.capacity,
       levelMin: input.levelMin,
       levelMax: input.levelMax,
+      publicListing: input.publicListing,
     });
     if (result.calendarChanged) after(() => notifyEventUpdated(db, result.event));
     for (const pid of result.promotedPlayerIds) {

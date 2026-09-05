@@ -51,6 +51,7 @@ export function CreatorPanel({
         capacity: values.type === "tournament" ? values.capacity : undefined,
         levelMin: values.levelMin,
         levelMax: values.levelMax,
+        publicListing: values.publicListing,
       });
       if (!r.ok) {
         setError(t("errors.invalid"));

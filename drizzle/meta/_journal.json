@@ -71,6 +71,13 @@
       "when": 1788590273393,
       "tag": "0009_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788591631810,
+      "tag": "0010_venue_boards",
+      "breakpoints": true
     }
   ]
 }

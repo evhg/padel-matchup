@@ -208,6 +208,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Stats strip** on My matches: played, won, win rate, podiums (from confirmed team results and finalized standings).
 - **Result cards:** once a match has a score or a tournament has a scored round, "Share result" opens `/{code}/card`: a page whose link unfurls with a generated picture (score boxes with the winning side highlighted, or the top five of the table) in WhatsApp and Telegram, the picture itself to long-press and save, share buttons, and "Organize your own match" as the way in.
 - **Groups:** "Turn this crew into a group" on any match with two or more players makes a group (`/g/{6 chars}`) with the match's settings as defaults (venue, format, capacity, level range, time zone) and its players as members; the person who taps is the admin. Anyone with the link joins (name only); joining a group's match or accepting its invite makes you a member too. **Any member creates the next match** from the group page: the create form comes prefilled (including the next weekly slot), the match is linked back, and every other member gets an email and a push with their private link. Admins can set a **weekly slot**: the hourly cron creates the next match a few days ahead (lead time 1–14 days, default 5), seats the group's creator, notifies everyone, and never creates the same occurrence twice. My matches lists your groups with the next match of each.
+- **Venue boards (opt-in, off by default):** an organizer can tick "Show on the venue board" when creating or editing a match with a venue. Listed, upcoming, not-cancelled matches appear on `/v/{venue-slug}` (a public page named after the venue, with spots left and level range), and the match shows an "On the … board" chip. `/v/{slug}/poster` is a one-page printable poster with a QR code to the board ("Scan for open padel matches at …"). The board's empty state and footer lead to the create form with the venue prefilled and the listing switched on. Slugs are ASCII-only and kept in sync when a venue is renamed; removing the venue unlists the match.
 - **Americano generator:** `/americano` is a public, indexable page running the same rotation engine in the browser: players (or pasted names), courts, rounds; exact rotation when the field is in fours, fair sit-outs otherwise; print stylesheet; "Run it live on Kicksmash" prefills the create form (`/?type=tournament&capacity=N`). `robots.txt` and `sitemap.xml` cover `/`, `/americano` and `/about`; personal, manage, invite, share and card pages stay out of the index.
 
 ## Admin dashboard
@@ -217,7 +218,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] · /me · /p/[token] · /about · /americano · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] · /v/[slug] (+ /poster) · /me · /p/[token] · /about · /americano · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)
@@ -227,6 +228,7 @@ src/lib/domain/identity.ts personal tokens, email one-time codes, identity merge
 src/lib/domain/{ratelimit,optouts,anonymize}.ts   abuse ceilings, unsubscribe list, account deletion
 src/lib/domain/{levels,requests,rating}.ts   level maths (ranges, presets, balanced teams, deltas), join requests, result-based adjustment
 src/lib/domain/groups.ts   groups, membership, weekly slots (recurrenceDue / autoCreateGroupMatches)
+src/lib/domain/venueBoard.ts   venue slugs, the public board query, listing toggle
 src/lib/domain/{levels,rating,requests}.ts       level scale, presets, fit, balanced teams, Elo-style deltas; join requests
 src/lib/alerts.ts        error counters for the admin health row
 src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed

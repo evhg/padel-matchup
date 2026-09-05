@@ -244,6 +244,11 @@ export default async function EventPage({ params }: Props) {
                 👥 {t("group.partOf", { name: group.name })}
               </Link>
             )}
+            {ev.publicListing && ev.venueSlug && ev.venueName && (
+              <Link href={`/v/${ev.venueSlug}`} prefetch={false} className="chip-muted hover:bg-line">
+                📍 {t("venue.listed", { venue: ev.venueName })}
+              </Link>
+            )}
           </div>
           <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{title}</h1>
           <div className="mt-4 flex items-end gap-3">
@@ -395,6 +400,7 @@ export default async function EventPage({ params }: Props) {
               levelMin: ev.levelMin,
               levelMax: ev.levelMax,
               myLevel: creator.level,
+              publicListing: ev.publicListing,
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
             creatorEmail={creator.email}

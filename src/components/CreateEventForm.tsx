@@ -57,6 +57,7 @@ export function CreateEventForm({
     levelMin: null,
     levelMax: null,
     myLevel: null,
+    publicListing: false,
     ...initialValues,
   });
   const touched = useRef(Boolean(initialValues?.date));
@@ -108,6 +109,7 @@ export function CreateEventForm({
         levelMax: values.levelMax,
         myLevel: values.myLevel,
         groupCode,
+        publicListing: values.publicListing,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));

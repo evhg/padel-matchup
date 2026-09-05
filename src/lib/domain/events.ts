@@ -6,6 +6,7 @@ import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { normalizeRange } from "./levels";
+import { venueSlug } from "./venueBoard";
 
 export type CreateEventInput = {
   creatorPlayerId: string;
@@ -27,6 +28,8 @@ export type CreateEventInput = {
   levelMax?: number | null;
   /** The group this match belongs to. */
   groupId?: string | null;
+  /** Opt-in to the public venue board. */
+  publicListing?: boolean;
 };
 
 function cleanText(v: string | null | undefined, max: number): string | null {
@@ -102,6 +105,8 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           levelMin: range.min,
           levelMax: range.max,
           groupId: input.groupId ?? null,
+          publicListing: Boolean(input.publicListing) && Boolean(venueName),
+          venueSlug: venueSlug(venueName),
         })
         .returning();
     }
@@ -151,6 +156,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     levelMin: src.levelMin,
     levelMax: src.levelMax,
     groupId: src.groupId,
+    publicListing: src.publicListing,
   });
 }
 
@@ -166,6 +172,7 @@ export type UpdateEventInput = {
   capacity?: number;
   levelMin?: number | null;
   levelMax?: number | null;
+  publicListing?: boolean;
 };
 
 export type UpdateEventResult = {
@@ -210,8 +217,14 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
       const v = cleanText(patch.venueName, 80);
       if (v !== ev.venueName) {
         set.venueName = v;
+        set.venueSlug = venueSlug(v);
+        if (!v) set.publicListing = false;
         calendarChanged = true;
       }
+    }
+    if (patch.publicListing !== undefined) {
+      const venueAfter = set.venueName !== undefined ? set.venueName : ev.venueName;
+      set.publicListing = Boolean(patch.publicListing) && Boolean(venueAfter);
     }
     if (patch.court !== undefined) {
       const c = cleanText(patch.court, 40);

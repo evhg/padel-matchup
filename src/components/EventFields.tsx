@@ -28,6 +28,8 @@ export type EventFormValues = {
   levelMax: number | null;
   /** Organizer's own level, asked once when they set a range without having one. */
   myLevel: number | null;
+  /** Opt-in to the public venue board (needs a venue). */
+  publicListing: boolean;
 };
 
 export type TimePatternInput = { dow: number; time: string };
@@ -160,6 +162,16 @@ export function EventFields({
         </label>
         <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
       </div>
+
+      {values.venueName.trim() && (
+        <label className="-mt-1 flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
+          <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.publicListing} onChange={(e) => onChange({ publicListing: e.target.checked })} />
+          <span className="min-w-0">
+            <span className="block font-bold">📍 {t("venue.listToggle")}</span>
+            <span className="block text-xs text-muted">{t("venue.listHelp")}</span>
+          </span>
+        </label>
+      )}
 
       {values.type === "tournament" && (
         <div>
