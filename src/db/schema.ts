@@ -67,6 +67,9 @@ export const players = pgTable(
     levelVerifiedLevel: real("level_verified_level"),
     /** Opted in to the public club and city rankings. Off by default. */
     rankingOptIn: boolean("ranking_opt_in").notNull().default(false),
+    /** Telegram account linked by the bot or the login widget. */
+    telegramId: bigint("telegram_id", { mode: "number" }),
+    telegramUsername: text("telegram_username"),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -76,6 +79,9 @@ export const players = pgTable(
       .where(sql`${t.personalToken} is not null`),
     index("players_email_idx").on(t.email),
     index("players_recovery_email_idx").on(t.recoveryEmail),
+    uniqueIndex("players_telegram_id_idx")
+      .on(t.telegramId)
+      .where(sql`${t.telegramId} is not null`),
   ],
 );
 
@@ -153,6 +159,8 @@ export const events = pgTable(
     venueSlug: text("venue_slug"),
     /** Optional link to the club's booking page or confirmation. */
     bookingUrl: text("booking_url"),
+    /** Telegram "one hour before" reminder went out to the chats that carry this match (once per event). */
+    telegramReminderSentAt: timestamp("telegram_reminder_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -540,3 +548,51 @@ export type EventStatus = Event["status"];
 export type SlotStatus = Slot["status"];
 export type WhenFull = Event["whenFull"];
 export type ActivityVerb = Activity["verb"];
+
+// ---------------------------------------------------------------------------
+// telegram — group chats the bot sits in, and the one card per match it keeps
+// edited there. Quiet by design: joins and leaves edit the card, new messages
+// only for the card itself, a complete line-up, the reminder and the result.
+// ---------------------------------------------------------------------------
+export const telegramChats = pgTable("telegram_chats", {
+  /** Telegram chat id (negative for groups). */
+  chatId: bigint("chat_id", { mode: "number" }).primaryKey(),
+  type: text("type").notNull(),
+  title: text("title"),
+  /** Locale the bot speaks in this chat: en or ru. */
+  locale: text("locale").notNull().default("en"),
+  /** Defaults for matches created from the chat. */
+  tz: text("tz"),
+  venueName: text("venue_name"),
+  /** The group behind this chat, once one exists. */
+  groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
+  /** Bot removed from the chat: keep the row, stop posting. */
+  leftAt: timestamp("left_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const telegramCards = pgTable(
+  "telegram_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    chatId: bigint("chat_id", { mode: "number" })
+      .notNull()
+      .references(() => telegramChats.chatId, { onDelete: "cascade" }),
+    messageId: bigint("message_id", { mode: "number" }).notNull(),
+    /** card = the live match card; result = the result picture posted once. */
+    kind: text("kind").notNull().default("card"),
+    /** Hash of the last rendered text, to skip no-op edits. */
+    rendered: text("rendered"),
+    /** The "line-up complete" note has been posted for this card. */
+    completeNotedAt: timestamp("complete_noted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("telegram_cards_event_chat_kind_idx").on(t.eventId, t.chatId, t.kind), index("telegram_cards_event_idx").on(t.eventId)],
+);
+
+export type TelegramChat = typeof telegramChats.$inferSelect;
+export type TelegramCard = typeof telegramCards.$inferSelect;

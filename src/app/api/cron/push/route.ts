@@ -12,6 +12,7 @@ import { translatorFor } from "@/lib/email/templates";
 import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
+import { sendTelegramReminders } from "@/lib/telegram/bot";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -26,10 +27,15 @@ export async function GET(req: Request) {
   const auth = req.headers.get("authorization");
   if (secret && auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const now = new Date();
-  if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0 });
-
   const db = await getDb();
-  const summary = { events: 0, players: 0, sent: 0, gone: 0, failed: 0, errors: [] as string[] };
+  // Telegram "about an hour before" reminders share this 5-minute tick.
+  const telegram = await sendTelegramReminders(db, now).catch((e) => {
+    void reportError("cron", e);
+    return 0;
+  });
+  if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram });
+
+  const summary = { events: 0, players: 0, sent: 0, gone: 0, failed: 0, telegram, errors: [] as string[] };
   try {
     const due = await findPushRemindersDue(db, now);
     for (const ev of due) {

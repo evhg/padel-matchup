@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { MyMatches } from "@/components/MyMatches";
 import { NameGate } from "@/components/NameGate";
 import { RestoreWithEmail } from "@/components/RestoreWithEmail";
+import { TelegramLogin } from "@/components/TelegramLogin";
 import { getDb } from "@/db";
-import { emailEnabled } from "@/lib/config";
+import { baseUrl, emailEnabled } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
+import { telegramBotUsername, telegramEnabled } from "@/lib/telegram/api";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
@@ -26,6 +28,11 @@ export default async function MePage() {
         <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
           <h1 className="text-3xl font-extrabold tracking-tight">{t("me.title")}</h1>
           <NameGate title={t("me.noIdentity")} />
+          {telegramEnabled() && telegramBotUsername() && (
+            <section className="card">
+              <TelegramLogin botUsername={telegramBotUsername()!} linked={false} linkedUsername={null} lang={await getLocale()} authUrl={`${baseUrl()}/api/telegram/login`} />
+            </section>
+          )}
           {emailEnabled() && (
             <section className="card">
               <RestoreWithEmail />

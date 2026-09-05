@@ -798,5 +798,14 @@
     "how3": "Americano, mexicano y Rey de la pista con resultados en directo desde cualquier móvil.",
     "how4": "Todo es abierto: la API, los datos y el código. Trae tu propio bot o asistente.",
     "metaDescription": "Pádel en {city}: partidos abiertos, rankings de club, americano, mexicano y Rey de la pista. Crea un partido en diez segundos, comparte un enlace, sin app."
+  },
+  "telegram": {
+    "title": "Telegram",
+    "linked": "Vinculado: @{username}",
+    "linkedNoName": "Telegram vinculado ✓",
+    "help": "Entra con Telegram desde cualquier dispositivo y apúntate a partidos desde las tarjetas del bot en tus chats de grupo.",
+    "signIn": "Entrar con Telegram",
+    "invalid": "No se pudo verificar el acceso con Telegram. Inténtalo de nuevo.",
+    "justLinked": "Telegram vinculado. Tus partidos del bot ya están aquí."
   }
 }
