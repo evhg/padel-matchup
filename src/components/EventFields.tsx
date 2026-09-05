@@ -3,7 +3,10 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { POINTS_PRESETS } from "@/lib/domain/americano";
+import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, presetFor, rangeFor, type PresetKey } from "@/lib/domain/levels";
 import { nextOccurrence } from "@/lib/dates";
+import { rangeText } from "@/lib/levelText";
+import { LevelGuide, LevelSelect } from "./LevelSelect";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
 
 export type EventFormValues = {
@@ -20,6 +23,11 @@ export type EventFormValues = {
   whenFull: "waitlist" | "closed";
   courts: number | null;
   pointsPerMatch: number | null;
+  /** Level range; both null = open to everyone. */
+  levelMin: number | null;
+  levelMax: number | null;
+  /** Organizer's own level, asked once when they set a range without having one. */
+  myLevel: number | null;
 };
 
 export type TimePatternInput = { dow: number; time: string };
@@ -49,12 +57,15 @@ export function EventFields({
   venues,
   showType = true,
   patterns = [],
+  hasLevel = true,
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
   venues: VenueOption[];
   showType?: boolean;
   patterns?: TimePatternInput[];
+  /** False when the organizer has no level yet: a range then also asks for theirs. */
+  hasLevel?: boolean;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -62,6 +73,23 @@ export function EventFields({
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
   const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note));
+  const range = { min: values.levelMin, max: values.levelMax };
+  const preset = presetFor(range);
+  const [customOpen, setCustomOpen] = useState(preset === "custom");
+  const levelChoice: PresetKey | "custom" | "any" = customOpen ? "custom" : (preset ?? "any");
+  const pickPreset = (k: PresetKey | "custom" | "any") => {
+    if (k === "any") {
+      setCustomOpen(false);
+      onChange({ levelMin: null, levelMax: null });
+    } else if (k === "custom") {
+      setCustomOpen(true);
+      if (!hasRange(range)) onChange({ levelMin: 2.5, levelMax: 4 });
+    } else {
+      setCustomOpen(false);
+      const r = rangeFor(k);
+      onChange({ levelMin: r.min, levelMax: r.max });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -178,6 +206,49 @@ export function EventFields({
           </button>
         </div>
         <p className="mt-1.5 text-sm text-muted">{values.whenFull === "waitlist" ? t("create.whenFullWaitlistHelp") : t("create.whenFullClosedHelp")}</p>
+      </div>
+
+      <div>
+        <label className="label">{t("level.label")}</label>
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t("level.label")}>
+          {(["any", ...LEVEL_PRESETS.map((p) => p.key), "custom"] as const).map((k) => (
+            <button key={k} type="button" aria-pressed={levelChoice === k} onClick={() => pickPreset(k)} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${levelChoice === k ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+              {t(`level.${k}`)}
+            </button>
+          ))}
+        </div>
+        {levelChoice === "custom" && (
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">{t("level.from")}</label>
+              <select className="input px-3" value={values.levelMin ?? 0} onChange={(e) => { const r = normalizeRange(Number(e.target.value), values.levelMax ?? 7); onChange({ levelMin: r.min, levelMax: r.max }); }}>
+                {LEVEL_STEPS.map((v) => (
+                  <option key={v} value={v}>
+                    {formatLevel(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">{t("level.to")}</label>
+              <select className="input px-3" value={values.levelMax ?? 7} onChange={(e) => { const r = normalizeRange(values.levelMin ?? 0, Number(e.target.value)); onChange({ levelMin: r.min, levelMax: r.max }); }}>
+                {LEVEL_STEPS.map((v) => (
+                  <option key={v} value={v}>
+                    {formatLevel(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+        <p className="mt-1.5 text-sm text-muted">{hasRange(range) ? t("level.rangeHelp", { range: rangeText(t, range) }) : t("level.anyHelp")}</p>
+        {hasRange(range) && !hasLevel && (
+          <div className="mt-3 rounded-2xl bg-bg p-3">
+            <label className="label">{t("level.yourLevel")}</label>
+            <LevelSelect value={values.myLevel} onChange={(v) => onChange({ myLevel: v })} />
+            <LevelGuide className="mt-2" />
+          </div>
+        )}
       </div>
 
       {moreOpen ? (

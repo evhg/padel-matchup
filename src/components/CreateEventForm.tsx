@@ -13,6 +13,7 @@ export function CreateEventForm({
   venues,
   hasIdentity,
   patterns = [],
+  hasLevel = false,
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
@@ -20,6 +21,8 @@ export function CreateEventForm({
   hasIdentity: boolean;
   /** The organizer's usual weekday/time slots (quick picks + default). */
   patterns?: TimePatternInput[];
+  /** The organizer already has a level (a range then doesn't ask for theirs). */
+  hasLevel?: boolean;
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
@@ -39,6 +42,9 @@ export function CreateEventForm({
     whenFull: "waitlist",
     courts: null,
     pointsPerMatch: null,
+    levelMin: null,
+    levelMax: null,
+    myLevel: null,
   });
   const touched = useRef(false);
   const [name, setName] = useState("");
@@ -85,6 +91,9 @@ export function CreateEventForm({
         whenFull: values.whenFull,
         courts: values.type === "tournament" ? values.courts : null,
         pointsPerMatch: values.type === "tournament" ? values.pointsPerMatch : null,
+        levelMin: values.levelMin,
+        levelMax: values.levelMax,
+        myLevel: values.myLevel,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
@@ -101,7 +110,7 @@ export function CreateEventForm({
         </div>
       )}
       <div className="card">
-        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} />
+        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} />
       </div>
       {error && <p className="text-sm font-semibold text-danger">{error}</p>}
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>

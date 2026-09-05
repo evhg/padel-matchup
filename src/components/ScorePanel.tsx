@@ -3,10 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
+import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { tally } from "@/lib/domain/scores";
 import { PlayAgainButton } from "./PlayAgainButton";
 
-type P = { id: string; name: string; team: "a" | "b" | null };
+type P = { id: string; name: string; team: "a" | "b" | null; level?: number | null };
 type S = { setNumber: number; sideA: number; sideB: number };
 
 export function ScorePanel({
@@ -40,6 +41,9 @@ export function ScorePanel({
   const teamBPlayers = players.filter((p) => p.team === "b");
   const hasTeams = teamAPlayers.length > 0;
   const tl = tally(scores);
+  const balanced = balancedTeams(players.map((p) => ({ id: p.id, level: p.level ?? null })));
+  const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? "?";
+  const balancedChosen = Boolean(balanced && teamA.length === 2 && balanced.a.every((id) => teamA.includes(id)));
 
   const toggleTeam = (id: string) => {
     setTeamA((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 2 ? [cur[1], id] : [...cur, id]));
@@ -133,10 +137,22 @@ export function ScorePanel({
                     >
                       {inA ? "A · " : inB ? "B · " : ""}
                       {p.name}
+                      {p.level != null && <span className="ml-1 text-xs font-semibold opacity-70 tabular-nums">{formatLevel(p.level)}</span>}
                     </button>
                   );
                 })}
               </div>
+              {balanced && !balancedChosen && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-bg px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-bold">⚖️ {t("level.balancedTitle")}:</span> {t("level.balancedTeams", { a1: nameOf(balanced.a[0]), a2: nameOf(balanced.a[1]), b1: nameOf(balanced.b[0]), b2: nameOf(balanced.b[1]) })}{" "}
+                    <span className="text-faint">({t("level.balancedDiff", { diff: formatLevel(balanced.diff) })})</span>
+                  </span>
+                  <button type="button" className="btn-ghost btn-xs" onClick={() => setTeamA([...balanced.a])}>
+                    {t("level.useTeams")}
+                  </button>
+                </div>
+              )}
               <p className="mt-1 text-xs text-faint">{t("score.teamsOptional")}</p>
             </div>
           )}

@@ -3,7 +3,9 @@
 import { useTranslations } from "next-intl";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { joinAction, reserveAction } from "@/actions/slots";
+import type { LevelRange } from "@/lib/domain/levels";
 import { registerJoinHandler } from "./joinBus";
+import { LevelSelect } from "./LevelSelect";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
 type Mode = "reserve" | "join" | "none";
@@ -22,6 +24,8 @@ export function OpenSpot({
   hasIdentity,
   rolodex,
   emailEnabled,
+  levelRange = null,
+  myLevel = null,
 }: {
   code: string;
   slotId: string;
@@ -30,14 +34,18 @@ export function OpenSpot({
   hasIdentity: boolean;
   rolodex: RolodexItem[];
   emailEnabled: boolean;
+  /** Ranged event: joining asks for a level when the player has none yet. */
+  levelRange?: LevelRange | null;
+  myLevel?: number | null;
 }) {
   const t = useTranslations();
   const errText = (error: string) =>
-    error === "name_required" ? t("identity.nameRequired") : error === "invalid" ? t("errors.slot_taken") : error === "full" ? t("creator.noSpots") : t(`errors.${error === "no_identity" ? "generic" : error}` as "errors.generic");
+    error === "name_required" ? t("identity.nameRequired") : error === "level_required" ? t("errors.level_required") : error === "invalid" ? t("errors.slot_taken") : error === "full" ? t("creator.noSpots") : t(`errors.${error === "no_identity" ? "generic" : error}` as "errors.generic");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [level, setLevel] = useState<number | null>(myLevel);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLDivElement>(null);
@@ -57,16 +65,18 @@ export function OpenSpot({
     });
   }, []);
 
-  // The fixed Join button hands its no-identity case to the first open row.
+  const needsLevel = Boolean(levelRange) && myLevel == null;
+
+  // The fixed Join button hands its no-identity (or no-level) case to the first open row.
   useEffect(() => {
-    if (mode !== "join" || hasIdentity) return;
+    if (mode !== "join" || (hasIdentity && !needsLevel)) return;
     return registerJoinHandler(expand);
-  }, [mode, hasIdentity, expand]);
+  }, [mode, hasIdentity, needsLevel, expand]);
 
   const join = (withName?: string) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName);
+      const r = await joinAction(code, withName, level ?? undefined);
       startTransition(() => {
         if (!r.ok) setError(errText(r.error));
       });
@@ -103,7 +113,7 @@ export function OpenSpot({
 
   const tap = () => {
     if (mode === "reserve") expand();
-    else if (mode === "join" && hasIdentity) join();
+    else if (mode === "join" && hasIdentity && !needsLevel) join();
     else if (mode === "join") expand();
   };
 
@@ -136,28 +146,32 @@ export function OpenSpot({
     <div ref={box} className="animate-pop">
       <div className="mb-2 flex items-center gap-3">
         {avatar}
-        <span className="text-sm font-bold text-court">{mode === "reserve" ? t("creator.reserveInline") : t("identity.whatsYourName")}</span>
+        <span className="text-sm font-bold text-court">{mode === "reserve" ? t("creator.reserveInline") : hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</span>
       </div>
       <form
         className="flex flex-col gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (mode === "reserve") reserve();
-          else if (!hasNames) setError(t("identity.nameRequired"));
-          else join(name);
+          else if (!hasIdentity && !hasNames) setError(t("identity.nameRequired"));
+          else if (levelRange && level == null) setError(t("errors.level_required"));
+          else join(hasIdentity ? undefined : name);
         }}
       >
         <div className="flex gap-2">
-          <input
-            ref={input}
-            className="input"
-            placeholder={mode === "reserve" ? t("creator.name") : t("identity.namePlaceholder")}
-            value={name}
-            autoComplete={mode === "reserve" ? "off" : "given-name"}
-            maxLength={40}
-            enterKeyHint={mode === "reserve" ? "done" : "go"}
-            onChange={(e) => setName(e.target.value)}
-          />
+          {(mode === "reserve" || !hasIdentity) && (
+            <input
+              ref={input}
+              className="input"
+              placeholder={mode === "reserve" ? t("creator.name") : t("identity.namePlaceholder")}
+              value={name}
+              autoComplete={mode === "reserve" ? "off" : "given-name"}
+              maxLength={40}
+              enterKeyHint={mode === "reserve" ? "done" : "go"}
+              onChange={(e) => setName(e.target.value)}
+            />
+          )}
+          {mode === "join" && levelRange && <LevelSelect value={level} onChange={setLevel} />}
           <button type="submit" className="btn-primary shrink-0" disabled={pending}>
             {pending ? t("common.working") : mode === "reserve" ? t("creator.reserveDone") : t("event.joinShort")}
           </button>
@@ -195,7 +209,7 @@ export function OpenSpot({
           </button>
         )}
         <div className="flex items-center justify-between gap-2">
-          {error ? <span className="text-sm font-semibold text-danger">{error}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : t("identity.nameHelp")}</span>}
+          {error ? <span className="text-sm font-semibold text-danger">{error}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</span>}
           <button
             type="button"
             className="shrink-0 text-sm link"

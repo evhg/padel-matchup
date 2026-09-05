@@ -11,6 +11,8 @@ import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
+import { JoinRequests } from "@/components/JoinRequests";
+import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
@@ -22,12 +24,15 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
+import { hasRange } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
+import { getJoinRequests } from "@/lib/domain/requests";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
 import { venueWithCourt } from "@/lib/labels";
+import { rangeChip, rangeText } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 
 type Props = { params: Promise<{ code: string }> };
@@ -77,11 +82,20 @@ export default async function EventPage({ params }: Props) {
   const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
 
+  // Level range: players outside it ask to join; the organizer decides.
+  const levelRange = { min: ev.levelMin, max: ev.levelMax };
+  const ranged = hasRange(levelRange);
+  const requests = ranged ? await getJoinRequests(db, ev.id) : [];
+  const myRequest = me ? requests.find((r) => r.playerId === me.id) : undefined;
+  const pendingRequests = viewer.isCreator ? requests.filter((r) => r.status === "pending") : [];
+
   let joinState: JoinState = "join";
   if (cancelled) joinState = "cancelled";
   else if (over) joinState = "past";
   else if (isMember) joinState = started ? "member_live" : "leave";
   else if (isWaitlisted) joinState = "leave_waitlist";
+  else if (myRequest?.status === "pending") joinState = "requested";
+  else if (myRequest?.status === "declined") joinState = "request_declined";
   else if (spotsLeft > 0) joinState = "join";
   else if (ev.whenFull === "waitlist") joinState = "join_waitlist";
   else joinState = "full";
@@ -106,10 +120,13 @@ export default async function EventPage({ params }: Props) {
   const enteredBy = detail.scores[0]?.enteredByPlayerId ? (participants.find((s) => s.playerId === detail.scores[0].enteredByPlayerId)?.player?.displayName ?? null) : null;
   const showScore = started && !cancelled && ev.type === "match";
   const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
+  const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
+  const levelChip = rangeChip(t, levelRange);
+  const levelRangeText = ranged ? rangeText(t, levelRange) : "";
   const statusChip = cancelled
     ? { cls: "chip-danger", label: t("event.statusCancelled") }
     : over
@@ -156,6 +173,7 @@ export default async function EventPage({ params }: Props) {
             {occupiedSlot ? (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="truncate font-bold">{name}</span>
+                <LevelChip level={s.player?.level} />
                 {isMe && <span className="chip-open">{t("common.you")}</span>}
                 {isOrganizer && <span className="chip-muted">{t("common.organizer")}</span>}
                 {s.status === "confirmed" && <span className="chip-live">{t("event.confirmed")}</span>}
@@ -183,6 +201,8 @@ export default async function EventPage({ params }: Props) {
                 hasIdentity={Boolean(me)}
                 rolodex={viewer.isCreator ? rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone })) : []}
                 emailEnabled={emailEnabled()}
+                levelRange={ranged ? levelRange : null}
+                myLevel={me?.level ?? null}
               />
             )}
           </div>
@@ -215,6 +235,7 @@ export default async function EventPage({ params }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <span className={statusChip.cls}>{statusChip.label}</span>
             <span className="text-xs font-bold uppercase tracking-wider text-faint">{typeLabel}</span>
+            {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
           </div>
           <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{title}</h1>
           <div className="mt-4 flex items-end gap-3">
@@ -264,7 +285,7 @@ export default async function EventPage({ params }: Props) {
           <ScorePanel
             code={code}
             scores={detail.scores.map((s) => ({ setNumber: s.setNumber, sideA: s.sideA, sideB: s.sideB }))}
-            players={participants.map((s) => ({ id: s.playerId!, name: s.player?.displayName ?? s.invitedName ?? "", team: s.team }))}
+            players={participants.map((s) => ({ id: s.playerId!, name: s.player?.displayName ?? s.invitedName ?? "", team: s.team, level: s.player?.level ?? null }))}
             canEdit={perm.allowed}
             reason={perm.allowed ? null : perm.reason}
             locked={ev.scoreLockedByCreator}
@@ -291,7 +312,7 @@ export default async function EventPage({ params }: Props) {
               resting: r.resting.map((p) => nameOf.get(p) ?? "?"),
               matches: r.matches.map((m) => ({ id: m.id, court: m.court, a: [nameOf.get(m.a1) ?? "?", nameOf.get(m.a2) ?? "?"], b: [nameOf.get(m.b1) ?? "?", nameOf.get(m.b2) ?? "?"], sideA: m.sideA, sideB: m.sideB })),
             }))}
-            standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff }))}
+            standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null }))}
             canPlayAgain={canPlayAgain}
           />
         )}
@@ -303,7 +324,10 @@ export default async function EventPage({ params }: Props) {
             {!cancelled && !over && <span className="text-sm font-semibold text-muted">{t("event.spotsLeft", { count: spotsLeft })}</span>}
           </div>
           <ul className="mt-3 flex flex-col gap-2">{roster.map((s, i) => slotRow(s, i))}</ul>
-          {!me && joinState === "join_waitlist" && <JoinInline code={code} label={t("event.joinWaitlist")} />}
+          {pendingRequests.length > 0 && (
+            <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now) }))} />
+          )}
+          {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} />}
           {waitlist.length > 0 && (
             <>
               <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wider text-muted">{t("event.waitlist")}</h3>
@@ -357,6 +381,9 @@ export default async function EventPage({ params }: Props) {
               whenFull: ev.whenFull,
               courts: ev.courts,
               pointsPerMatch: ev.pointsPerMatch,
+              levelMin: ev.levelMin,
+              levelMax: ev.levelMax,
+              myLevel: creator.level,
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
             creatorEmail={creator.email}
@@ -377,7 +404,18 @@ export default async function EventPage({ params }: Props) {
         )}
       </main>
       <Footer />
-      <JoinBar code={code} state={joinState} hasIdentity={Boolean(me)} spotsLeft={spotsLeft} waitlistPosition={waitlistPosition} isTournament={ev.type === "tournament"} />
+      <JoinBar
+        code={code}
+        state={joinState}
+        hasIdentity={Boolean(me)}
+        spotsLeft={spotsLeft}
+        waitlistPosition={waitlistPosition}
+        isTournament={ev.type === "tournament"}
+        levelRange={ranged ? levelRange : null}
+        rangeText={levelRangeText}
+        myLevel={me?.level ?? null}
+        organizerName={creator.displayName}
+      />
     </>
   );
 }

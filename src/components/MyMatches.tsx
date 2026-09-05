@@ -11,6 +11,7 @@ import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath, personalUrl } from "@/lib/personal";
 import { HomeScreenPrompt } from "./HomeScreenPrompt";
+import { LevelEditor } from "./LevelEditor";
 import { NameEditor } from "./NameEditor";
 import { PersonalLinkCard } from "./PersonalLinkCard";
 import { PushToggle } from "./PushToggle";
@@ -22,6 +23,17 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
   const [{ upcoming, past }, hasPush] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id)]);
   const hasHistory = upcoming.length > 0 || past.length > 0;
+  // Stats strip: only matches the player was actually in (not organized-from-the-sidelines).
+  const playedList = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
+  const won = playedList.filter((m) => m.outcome === "won").length;
+  const decided = won + playedList.filter((m) => m.outcome === "lost").length;
+  const podiums = playedList.filter((m) => m.placement != null && m.placement <= 3).length;
+  const stats = [
+    { label: t("level.stats.played"), value: String(playedList.length) },
+    { label: t("level.stats.won"), value: String(won) },
+    { label: t("level.stats.winRate"), value: decided ? `${Math.round((won / decided) * 100)}%` : "—" },
+    { label: t("level.stats.podiums"), value: String(podiums) },
+  ];
   const labelOpts = { venueTbd: t("event.venueTbd"), courtNumber: (n: string) => t("event.courtNumber", { n }) };
 
   const row = (m: MyEvent) => {
@@ -88,6 +100,16 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
         </section>
       ) : (
         <>
+          {playedList.length > 0 && (
+            <section className="grid grid-cols-4 gap-2">
+              {stats.map((s) => (
+                <div key={s.label} className="card px-2 py-3 text-center">
+                  <div className="text-xl font-extrabold tabular-nums">{s.value}</div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-faint">{s.label}</div>
+                </div>
+              ))}
+            </section>
+          )}
           <section>
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.upcoming")}</h2>
             {upcoming.length ? <ul className="flex flex-col gap-2">{upcoming.map(row)}</ul> : <p className="text-sm text-faint">—</p>}
@@ -109,7 +131,10 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
       <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
       <section className="card">
         <NameEditor name={player.displayName} />
-        <p className="mt-2 text-xs text-faint">{t("me.identityHelp")}</p>
+        <div className="mt-4 border-t border-line pt-4">
+          <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} />
+        </div>
+        <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
       </section>
 
       {!hasHistory && emailEnabled() && (

@@ -5,6 +5,7 @@ import { newManageCode, newShareCode } from "@/lib/codes";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { normalizeRange } from "./levels";
 
 export type CreateEventInput = {
   creatorPlayerId: string;
@@ -21,6 +22,9 @@ export type CreateEventInput = {
   note?: string | null;
   courts?: number | null;
   pointsPerMatch?: number | null;
+  /** Level range; omitted or 0–7 = open to everyone. */
+  levelMin?: number | null;
+  levelMax?: number | null;
 };
 
 function cleanText(v: string | null | undefined, max: number): string | null {
@@ -65,6 +69,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
   if (!(input.startsAt instanceof Date) || Number.isNaN(input.startsAt.getTime())) throw new DomainError("invalid", "startsAt");
   const capacity = resolveCapacity(input.type, input.capacity);
   const venueMapUrl = cleanUrl(input.venueMapUrl);
+  const range = normalizeRange(input.levelMin, input.levelMax);
 
   return db.transaction(async (tx) => {
     let event: Event | undefined;
@@ -92,6 +97,8 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           status: "open",
           courts: input.type === "tournament" && input.courts ? Math.max(1, Math.min(16, Math.round(input.courts))) : null,
           pointsPerMatch: input.type === "tournament" && input.pointsPerMatch ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
+          levelMin: range.min,
+          levelMax: range.max,
         })
         .returning();
     }
@@ -138,6 +145,8 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     note: src.note,
     courts: src.courts,
     pointsPerMatch: src.pointsPerMatch,
+    levelMin: src.levelMin,
+    levelMax: src.levelMax,
   });
 }
 
@@ -151,6 +160,8 @@ export type UpdateEventInput = {
   note?: string | null;
   whenFull?: "waitlist" | "closed";
   capacity?: number;
+  levelMin?: number | null;
+  levelMax?: number | null;
 };
 
 export type UpdateEventResult = {
@@ -173,6 +184,11 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     if (patch.title !== undefined) set.title = cleanText(patch.title, 80);
     if (patch.note !== undefined) set.note = cleanText(patch.note, 500);
     if (patch.whenFull !== undefined) set.whenFull = patch.whenFull === "closed" ? "closed" : "waitlist";
+    if (patch.levelMin !== undefined || patch.levelMax !== undefined) {
+      const r = normalizeRange(patch.levelMin !== undefined ? patch.levelMin : ev.levelMin, patch.levelMax !== undefined ? patch.levelMax : ev.levelMax);
+      if (r.min !== ev.levelMin) set.levelMin = r.min;
+      if (r.max !== ev.levelMax) set.levelMax = r.max;
+    }
     if (patch.tz !== undefined) {
       if (!isValidTimeZone(patch.tz)) throw new DomainError("invalid", "tz");
       set.tz = patch.tz;

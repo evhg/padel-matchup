@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { applyEventLevels } from "@/lib/domain/rating";
 import { saveMatchScore, type SetScore } from "@/lib/domain/scores";
 import { getViewer, loadEvent, runA, type ActionResult } from "./shared";
 
@@ -15,6 +16,8 @@ export async function saveScoreAction(code: string, sets: SetScore[], teamA?: st
       sets,
       teamA: teamA && teamA.length === 2 ? teamA : undefined,
     });
+    // The organizer's confirmation is the moment results nudge levels (once per match).
+    if (viewer.isCreator) await applyEventLevels(db, detail.event.id).catch(() => undefined);
     revalidatePath(`/${code}`);
     revalidatePath("/me");
     return null;

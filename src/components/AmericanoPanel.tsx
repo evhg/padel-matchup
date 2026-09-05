@@ -8,7 +8,7 @@ import { PlayAgainButton } from "./PlayAgainButton";
 
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
-export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number };
+export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null };
 
 export function AmericanoPanel({
   code,
@@ -144,7 +144,10 @@ export function AmericanoPanel({
               {standings.map((s) => (
                 <tr key={s.playerId} className={`border-t border-line ${locked && s.rank === 1 ? "bg-accent-soft" : ""}`}>
                   <td className="py-2 font-extrabold tabular-nums">{s.rank}</td>
-                  <td className="py-2 font-semibold">{s.name}</td>
+                  <td className="py-2 font-semibold">
+                    {s.name}
+                    {s.level != null && <span className="ml-1.5 text-xs font-semibold text-faint tabular-nums">{s.level.toFixed(s.level * 4 === Math.round(s.level * 4) ? (s.level * 2 === Math.round(s.level * 2) ? 1 : 2) : 2)}</span>}
+                  </td>
                   <td className="py-2 text-right text-base font-extrabold tabular-nums">{s.points}</td>
                   <td className="py-2 text-right tabular-nums text-muted">{s.played}</td>
                   <td className="py-2 text-right tabular-nums text-muted">{s.wins}</td>

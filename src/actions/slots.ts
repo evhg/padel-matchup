@@ -17,8 +17,11 @@ import {
   type DeclineOutcome,
   type JoinOutcome,
 } from "@/lib/domain/slots";
+import { formatLevel, hasRange, levelFit } from "@/lib/domain/levels";
+import { setPlayerLevel } from "@/lib/domain/rating";
+import { createJoinRequest, decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { lineupComplete } from "@/lib/lineup";
-import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRemoved, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
+import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRemoved, notifyRequestDecided, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
@@ -28,12 +31,30 @@ import { LIMITS } from "@/lib/domain/ratelimit";
 const wasComplete = (detail: { roster: { status: string; position: number }[]; event: { capacity: number } }) =>
   lineupComplete(detail.roster as Parameters<typeof lineupComplete>[0], detail.event.capacity);
 
-export async function joinAction(code: string, name?: string): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] }>> {
+export async function joinAction(code: string, name?: string, level?: number | null): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested" }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
     const me = await requirePlayer(db, name);
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
+    // A level given while joining is the player's declaration (ranged events ask for it once).
+    const myLevel = level != null ? await setPlayerLevel(db, me.id, level) : me.level;
+    const ev = detail.event;
+    const range = { min: ev.levelMin, max: ev.levelMax };
+    if (hasRange(range) && me.id !== ev.creatorPlayerId) {
+      const fit = levelFit(range, myLevel);
+      if (fit === "unknown") throw new ActionFailure("level_required");
+      if (fit !== "ok") {
+        const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
+        if (already) return { outcome: "already_in" as const };
+        await createJoinRequest(db, { eventId: ev.id, playerId: me.id, level: myLevel });
+        after(async () => {
+          await notifyCreator(db, ev, "requested", myLevel != null ? `${me.displayName} (${formatLevel(myLevel)})` : me.displayName, me.id);
+        });
+        revalidatePath(`/${code}`);
+        return { outcome: "requested" as const };
+      }
+    }
     const res = await joinEvent(db, { eventId: detail.event.id, playerId: me.id });
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
       after(async () => {
@@ -44,6 +65,38 @@ export async function joinAction(code: string, name?: string): Promise<ActionRes
     }
     revalidatePath(`/${code}`);
     return { outcome: res.outcome };
+  });
+}
+
+export async function withdrawJoinRequestAction(code: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail } = await loadEvent(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    await withdrawJoinRequest(db, { eventId: detail.event.id, playerId: me.id });
+    revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
+/** Organizer approves (seats or waitlists the player) or declines a level-range request. */
+export async function decideJoinRequestAction(code: string, requestId: string, approve: boolean): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "declined" }>> {
+  return runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    const before = wasComplete(detail);
+    const res = await decideJoinRequest(db, { eventId: detail.event.id, requestId, approve, actorPlayerId: viewer.player?.id ?? null });
+    const player = res.player;
+    after(async () => {
+      if (!player) return;
+      if (approve) {
+        const fresh = await notifyLineupChange(db, res.event, before, player.id);
+        if (res.join?.outcome === "joined") await notifyRequestDecided(db, fresh ?? res.event, player, true);
+      } else {
+        await notifyRequestDecided(db, res.event, player, false);
+      }
+    });
+    revalidatePath(`/${code}`);
+    return { outcome: approve ? (res.join?.outcome ?? "joined") : "declined" };
   });
 }
 
