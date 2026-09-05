@@ -284,7 +284,8 @@
     "placement": "#{place} de {total}",
     "restoreCta": "¿Jugaste antes desde otro móvil? Recuperar",
     "deleteAccount": "Eliminar mi cuenta",
-    "deleteConfirm": "¿Eliminar tu cuenta? Se borran tu nombre, email y teléfono, se liberan tus plazas próximas y se cancelan los partidos que organizas. Los resultados antiguos quedan como «Jugador eliminado». No hay vuelta atrás."
+    "deleteConfirm": "¿Eliminar tu cuenta? Se borran tu nombre, email y teléfono, se liberan tus plazas próximas y se cancelan los partidos que organizas. Los resultados antiguos quedan como «Jugador eliminado». No hay vuelta atrás.",
+    "noGroups": "Los grupos aparecen aquí cuando conviertes a los jugadores de un partido en uno."
   },
   "notFound": {
     "title": "Enlace no encontrado",
@@ -316,7 +317,8 @@
     "nudge": "🎾 {name}, ¿sigue en pie el pádel {day} a las {time} en {venue}? Confirma o rechaza aquí: {url}",
     "spotsLeft": "{count, plural, =0 {No quedan plazas} one {Queda # plaza} other {Quedan # plazas}}",
     "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}",
-    "result": "🎾 {line} · {day}\n{url}"
+    "result": "🎾 {line} · {day}\n{url}",
+    "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}"
   },
   "og": {
     "players": "{count}/{capacity} jugadores",
@@ -454,6 +456,11 @@
       "subject": "Esta vez no: {title}",
       "heading": "Esta vez no",
       "body": "{organizer} no aprobó tu solicitud para el {day} a las {time}. Sin rencores; siempre hay otro partido."
+    },
+    "groupMatch": {
+      "subject": "Nuevo partido en {group}: {day} a las {time}",
+      "heading": "{group}: nuevo partido",
+      "body": "{organizer} ha montado pádel el {day} a las {time} en {venue}. Toca para coger tu plaza."
     }
   },
   "errors": {
@@ -564,7 +571,9 @@
     "iosHint": "iPhone: añade primero Kicksmash a tu pantalla de inicio y luego activa aquí los recordatorios.",
     "denied": "Las notificaciones están bloqueadas para este sitio en los ajustes del navegador.",
     "reminderTitle": "🎾 Pádel en 1 hora · {time}",
-    "reminderBody": "{venue}. ¡No llegues tarde!"
+    "reminderBody": "{venue}. ¡No llegues tarde!",
+    "groupMatchTitle": "{group}: nuevo partido",
+    "groupMatchBody": "{day} a las {time} · {venue}. Toca para unirte."
   },
   "about": {
     "footerLink": "Privacidad y condiciones (breve, prometido)",
@@ -673,5 +682,43 @@
     "pts": "{points} pts",
     "teamA": "Equipo A",
     "teamB": "Equipo B"
+  },
+  "group": {
+    "title": "Grupo",
+    "groups": "Grupos",
+    "yourGroups": "Tus grupos",
+    "create": "Convertir esta pandilla en un grupo",
+    "createHelp": "Mismos jugadores, mismo sitio. Cualquier miembro crea el siguiente partido con un toque; fija un hueco semanal y se crea solo.",
+    "creating": "Creando…",
+    "name": "Nombre del grupo",
+    "namePlaceholder": "Pandilla de los jueves",
+    "fallbackName": "Pandilla de pádel",
+    "members": "Miembros",
+    "memberCount": "{count, plural, one {# miembro} other {# miembros}}",
+    "join": "Unirme al grupo",
+    "joined": "Estás en este grupo",
+    "leave": "Salir del grupo",
+    "leaveConfirm": "¿Salir de {name}? Puedes volver con el enlace cuando quieras.",
+    "remove": "Quitar",
+    "admin": "Admin",
+    "nextMatch": "Crear el siguiente partido",
+    "nextMatchHelp": "Rellenado con los ajustes habituales del grupo. Todos los miembros reciben un aviso.",
+    "upcoming": "Próximos",
+    "past": "Pasados",
+    "noUpcoming": "Nada programado todavía.",
+    "repeats": "Hueco semanal",
+    "none": "Sin partidos automáticos",
+    "every": "Cada {day} a las {time}",
+    "autoHelp": "El siguiente partido se crea {n} días antes y se avisa a todos. Cualquier miembro puede seguir creando uno a mano.",
+    "leadDays": "Crearlo {n} días antes",
+    "settings": "Ajustes del grupo",
+    "save": "Guardar",
+    "partOf": "Parte de {name}",
+    "forGroup": "Para {name}",
+    "shareHelp": "Comparte este enlace: quien se una podrá crear el siguiente partido.",
+    "memberOnly": "Únete al grupo primero: después podrás crear su siguiente partido.",
+    "venue": "Sitio habitual",
+    "tz": "Zona horaria",
+    "type": "Formato"
   }
 }

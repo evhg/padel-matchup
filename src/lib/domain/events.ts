@@ -25,6 +25,8 @@ export type CreateEventInput = {
   /** Level range; omitted or 0–7 = open to everyone. */
   levelMin?: number | null;
   levelMax?: number | null;
+  /** The group this match belongs to. */
+  groupId?: string | null;
 };
 
 function cleanText(v: string | null | undefined, max: number): string | null {
@@ -99,6 +101,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           pointsPerMatch: input.type === "tournament" && input.pointsPerMatch ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
           levelMin: range.min,
           levelMax: range.max,
+          groupId: input.groupId ?? null,
         })
         .returning();
     }
@@ -147,6 +150,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     pointsPerMatch: src.pointsPerMatch,
     levelMin: src.levelMin,
     levelMax: src.levelMax,
+    groupId: src.groupId,
   });
 }
 

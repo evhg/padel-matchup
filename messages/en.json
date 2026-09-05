@@ -284,7 +284,8 @@
     "placement": "#{place} of {total}",
     "restoreCta": "Played before on another phone? Restore",
     "deleteAccount": "Delete my account",
-    "deleteConfirm": "Delete your account? Your name, email and phone are wiped, upcoming spots are released and matches you organize are cancelled. Old scores stay as 'Deleted player'. No undo."
+    "deleteConfirm": "Delete your account? Your name, email and phone are wiped, upcoming spots are released and matches you organize are cancelled. Old scores stay as 'Deleted player'. No undo.",
+    "noGroups": "Groups appear here once you turn a match's players into one."
   },
   "notFound": {
     "title": "Link not found",
@@ -316,7 +317,8 @@
     "nudge": "🎾 {name}, still on for padel {day} at {time} at {venue}? Please confirm or decline here: {url}",
     "spotsLeft": "{count, plural, =0 {No spots left} one {# spot left} other {# spots left}}",
     "inviteGroup": "🎾 Padel {day} at {time} — {venue}. I reserved spots for you. Confirm with your personal link:\n{lines}",
-    "result": "🎾 {line} · {day}\n{url}"
+    "result": "🎾 {line} · {day}\n{url}",
+    "group": "🎾 Join our padel group {name}: {url}"
   },
   "og": {
     "players": "{count}/{capacity} players",
@@ -454,6 +456,11 @@
       "subject": "Not this time: {title}",
       "heading": "Not this time",
       "body": "{organizer} didn't approve your request to join on {day} at {time}. No hard feelings; there's always another match."
+    },
+    "groupMatch": {
+      "subject": "New match in {group}: {day} at {time}",
+      "heading": "{group}: new match",
+      "body": "{organizer} set up padel on {day} at {time} at {venue}. Tap to grab your spot."
     }
   },
   "errors": {
@@ -564,7 +571,9 @@
     "iosHint": "iPhone: add Kicksmash to your home screen first, then turn on reminders here.",
     "denied": "Notifications are blocked for this site in your browser settings.",
     "reminderTitle": "🎾 Padel in 1 hour · {time}",
-    "reminderBody": "{venue}. Don't be late!"
+    "reminderBody": "{venue}. Don't be late!",
+    "groupMatchTitle": "{group}: new match",
+    "groupMatchBody": "{day} at {time} · {venue}. Tap to join."
   },
   "about": {
     "footerLink": "Privacy & terms (short, promise)",
@@ -673,5 +682,43 @@
     "pts": "{points} pts",
     "teamA": "Team A",
     "teamB": "Team B"
+  },
+  "group": {
+    "title": "Group",
+    "groups": "Groups",
+    "yourGroups": "Your groups",
+    "create": "Turn this crew into a group",
+    "createHelp": "Same players, same place. Any member creates the next match in one tap; set a weekly slot and it creates itself.",
+    "creating": "Creating…",
+    "name": "Group name",
+    "namePlaceholder": "Thursday crew",
+    "fallbackName": "Padel crew",
+    "members": "Members",
+    "memberCount": "{count, plural, one {# member} other {# members}}",
+    "join": "Join this group",
+    "joined": "You're in this group",
+    "leave": "Leave group",
+    "leaveConfirm": "Leave {name}? You can rejoin with the link anytime.",
+    "remove": "Remove",
+    "admin": "Admin",
+    "nextMatch": "Create the next match",
+    "nextMatchHelp": "Prefilled with the group's usual settings. Every member gets a ping.",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "noUpcoming": "Nothing scheduled yet.",
+    "repeats": "Weekly slot",
+    "none": "No automatic matches",
+    "every": "Every {day} at {time}",
+    "autoHelp": "The next match is created {n} days ahead and everyone is notified. Any member can still create one by hand.",
+    "leadDays": "Create it {n} days ahead",
+    "settings": "Group settings",
+    "save": "Save",
+    "partOf": "Part of {name}",
+    "forGroup": "For {name}",
+    "shareHelp": "Share this link: whoever joins can create the next match.",
+    "memberOnly": "Join the group first: then you can create its next match.",
+    "venue": "Usual place",
+    "tz": "Time zone",
+    "type": "Format"
   }
 }

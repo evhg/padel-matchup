@@ -11,6 +11,7 @@ import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
+import { CreateGroupButton } from "@/components/GroupPanel";
 import { JoinRequests } from "@/components/JoinRequests";
 import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
@@ -24,6 +25,7 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
+import { getGroupById } from "@/lib/domain/groups";
 import { hasRange } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
@@ -125,6 +127,7 @@ export default async function EventPage({ params }: Props) {
   const canPlayAgain = viewer.isCreator || isMember;
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
+  const group = ev.groupId ? await getGroupById(db, ev.groupId) : null;
   const levelChip = rangeChip(t, levelRange);
   const levelRangeText = ranged ? rangeText(t, levelRange) : "";
   const statusChip = cancelled
@@ -236,6 +239,11 @@ export default async function EventPage({ params }: Props) {
             <span className={statusChip.cls}>{statusChip.label}</span>
             <span className="text-xs font-bold uppercase tracking-wider text-faint">{typeLabel}</span>
             {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
+            {group && (
+              <Link href={`/g/${group.code}`} prefetch={false} className="chip-muted hover:bg-line">
+                👥 {t("group.partOf", { name: group.name })}
+              </Link>
+            )}
           </div>
           <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{title}</h1>
           <div className="mt-4 flex items-end gap-3">
@@ -347,6 +355,7 @@ export default async function EventPage({ params }: Props) {
               <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
             </div>
           )}
+          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} />}
         </section>
 
         {/* Share */}

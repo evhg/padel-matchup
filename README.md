@@ -175,7 +175,7 @@ Also add the Resend records from §2 in the same DNS editor if you skipped them.
 
 `vercel.json` schedules `GET /api/cron/hourly` daily at 07:00 UTC (Hobby-plan safe; on Pro set `0 * * * *` for hourly). Vercel automatically sends `Authorization: Bearer $CRON_SECRET` when that variable is set; without it the endpoint is open but every step is idempotent.
 
-The job does: `open/full → past` transitions · waitlist hygiene · 24h invite reminders (email only, stops on response or start) · the single organizer score reminder (2h after start).
+The job does: `open/full → past` transitions · waitlist hygiene · 24h invite reminders (email only, stops on response or start) · the single organizer score reminder (2h after start) · automatic group matches for weekly slots (with member notifications) · daily metric snapshots.
 
 Verify: **Project → Settings → Cron Jobs** shows the job, or trigger by hand:
 
@@ -207,6 +207,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Level ranges:** a match or tournament can be Bronze (1.0–2.5), Silver (2.5–3.5), Gold (3.0–4.5), Platinum (4.5+) or a custom min–max; the range shows as a chip in the hero. Inside the range people join as usual (the join form asks for a level once); outside it the button turns into **Ask to join**, the organizer sees the requests with the level and approves (seats or waitlists) or declines, the requester sees the answer in the join bar and gets a calendar invite or a short note by email. Organizer-reserved invites and promotions bypass the range. **Balanced teams:** when all four have levels, the score panel suggests the 2v2 split with the smallest gap.
 - **Stats strip** on My matches: played, won, win rate, podiums (from confirmed team results and finalized standings).
 - **Result cards:** once a match has a score or a tournament has a scored round, "Share result" opens `/{code}/card`: a page whose link unfurls with a generated picture (score boxes with the winning side highlighted, or the top five of the table) in WhatsApp and Telegram, the picture itself to long-press and save, share buttons, and "Organize your own match" as the way in.
+- **Groups:** "Turn this crew into a group" on any match with two or more players makes a group (`/g/{6 chars}`) with the match's settings as defaults (venue, format, capacity, level range, time zone) and its players as members; the person who taps is the admin. Anyone with the link joins (name only); joining a group's match or accepting its invite makes you a member too. **Any member creates the next match** from the group page: the create form comes prefilled (including the next weekly slot), the match is linked back, and every other member gets an email and a push with their private link. Admins can set a **weekly slot**: the hourly cron creates the next match a few days ahead (lead time 1–14 days, default 5), seats the group's creator, notifies everyone, and never creates the same occurrence twice. My matches lists your groups with the next match of each.
 - **Americano generator:** `/americano` is a public, indexable page running the same rotation engine in the browser: players (or pasted names), courts, rounds; exact rotation when the field is in fours, fair sit-outs otherwise; print stylesheet; "Run it live on Kicksmash" prefills the create form (`/?type=tournament&capacity=N`). `robots.txt` and `sitemap.xml` cover `/`, `/americano` and `/about`; personal, manage, invite, share and card pages stay out of the index.
 
 ## Admin dashboard
@@ -216,7 +217,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /me · /p/[token] · /about · /americano · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] · /me · /p/[token] · /about · /americano · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)
@@ -225,6 +226,7 @@ src/lib/calendar.ts      Google Calendar URL + RFC 5545 .ics builder (also serve
 src/lib/domain/identity.ts personal tokens, email one-time codes, identity merge
 src/lib/domain/{ratelimit,optouts,anonymize}.ts   abuse ceilings, unsubscribe list, account deletion
 src/lib/domain/{levels,requests,rating}.ts   level maths (ranges, presets, balanced teams, deltas), join requests, result-based adjustment
+src/lib/domain/groups.ts   groups, membership, weekly slots (recurrenceDue / autoCreateGroupMatches)
 src/lib/domain/{levels,rating,requests}.ts       level scale, presets, fit, balanced teams, Elo-style deltas; join requests
 src/lib/alerts.ts        error counters for the admin health row
 src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed

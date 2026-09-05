@@ -16,6 +16,8 @@ export function CreateEventForm({
   hasLevel = false,
   initialType = "match",
   initialCapacity,
+  groupCode,
+  initialValues,
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
@@ -28,6 +30,10 @@ export function CreateEventForm({
   /** Prefill from the URL (the americano generator links here). */
   initialType?: "match" | "tournament";
   initialCapacity?: number;
+  /** Creating the next match of a group: its members get notified. */
+  groupCode?: string;
+  /** Field overrides (a group's usual settings). */
+  initialValues?: Partial<EventFormValues>;
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
@@ -51,8 +57,9 @@ export function CreateEventForm({
     levelMin: null,
     levelMax: null,
     myLevel: null,
+    ...initialValues,
   });
-  const touched = useRef(false);
+  const touched = useRef(Boolean(initialValues?.date));
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -100,6 +107,7 @@ export function CreateEventForm({
         levelMin: values.levelMin,
         levelMax: values.levelMax,
         myLevel: values.myLevel,
+        groupCode,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
