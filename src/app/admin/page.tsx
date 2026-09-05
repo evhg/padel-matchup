@@ -82,7 +82,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const now = new Date();
   // Sequential on purpose: see metrics.ts (pooler + pipelining).
   const tot = await totals(db, now);
-  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at"], range, now);
+  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at", "errors_server", "errors_client", "errors_cron"], range, now);
   const act = await activitySeries(db, range, now);
   const month = await metricSeries(db, ["emails_sent"], now.getUTCDate(), now);
   const emailsToday = metrics.values.emails_sent.at(-1) ?? 0;
@@ -93,8 +93,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   };
   const ago = (d: Date | null) => (d ? `${Math.max(0, Math.round((now.getTime() - d.getTime()) / 60000))} min ago` : "never");
   const dbSeries = metrics.values.db_bytes.map((b, i, arr) => (b ? b : i > 0 ? arr[i - 1] : 0));
+  const errorsToday = (metrics.values.errors_server.at(-1) ?? 0) + (metrics.values.errors_cron.at(-1) ?? 0);
+  const clientErrorsToday = metrics.values.errors_client.at(-1) ?? 0;
   const health = [
     { label: "Database", ok: true, text: "connected" },
+    { label: "Errors today", ok: errorsToday === 0, text: `${fmtInt(errorsToday)} server${clientErrorsToday ? ` · ${fmtInt(clientErrorsToday)} browser` : ""}` },
     { label: "Email (Resend)", ok: emailEnabled(), text: emailEnabled() ? "enabled" : "off" },
     { label: "Push (VAPID)", ok: pushEnabled(), text: pushEnabled() ? "enabled" : "off" },
     { label: "Hourly cron", ok: Boolean(lastCron("cron_hourly_at")) && now.getTime() - (lastCron("cron_hourly_at")?.getTime() ?? 0) < 2 * 3600e3, text: ago(lastCron("cron_hourly_at")) },
@@ -177,6 +180,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <TrendChart title="Growth" subtitle="per day" days={act.days} series={[{ name: "New players", color: SERIES.blue, values: act.values.newPlayers }, { name: "Events created", color: SERIES.orange, values: act.values.eventsCreated }]} />
         <TrendChart title="Joins and confirmations" subtitle="per day" days={act.days} series={[{ name: "Joins", color: SERIES.aqua, values: act.values.joins }]} />
         <TrendChart title="Outbound messages" subtitle="per day" days={metrics.days} series={[{ name: "Emails", color: SERIES.orange, values: metrics.values.emails_sent }, { name: "Push", color: SERIES.blue, values: metrics.values.push_sent }]} />
+        <TrendChart title="Errors" subtitle="per day · server actions, cron jobs and browser crash screens" days={metrics.days} series={[{ name: "Server", color: STATUS.critical, values: metrics.values.errors_server }, { name: "Cron", color: SERIES.orange, values: metrics.values.errors_cron }, { name: "Browser", color: SERIES.blue, values: metrics.values.errors_client }]} />
         <TrendChart title="Database size" subtitle="daily snapshot (hourly cron)" days={metrics.days} series={[{ name: "MB", color: SERIES.blue, values: dbSeries.map((b) => Math.round((b / 1024 / 1024) * 10) / 10) }]} unit="mb" />
         <TrendChart title="Totals" subtitle="daily snapshot" days={metrics.days} series={[{ name: "Players", color: SERIES.blue, values: metrics.values.players_total }, { name: "Events", color: SERIES.orange, values: metrics.values.events_total }, { name: "Push devices", color: SERIES.aqua, values: metrics.values.push_subs }]} />
         <p className="text-center text-xs text-faint">Read-only. No personal data is shown here.</p>

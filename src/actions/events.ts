@@ -12,7 +12,8 @@ import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/dom
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { normalizeEmail } from "@/lib/domain/players";
 import { notifyEventCancelled, notifyEventUpdated, notifyPromotion, welcomeEmail } from "@/lib/notify";
-import { ActionFailure, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { LIMITS } from "@/lib/domain/ratelimit";
 
 const createSchema = z.object({
   name: z.string().optional(),
@@ -39,6 +40,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
     const input = createSchema.parse(raw);
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
+    await assertRate(db, "create", me.id, LIMITS.eventsPerPlayerPerDay);
     const startsAt = zonedTimeToUtc(input.date, input.time, input.tz);
     if (Number.isNaN(startsAt.getTime())) throw new ActionFailure("invalid");
     const ev = await createEvent(db, {

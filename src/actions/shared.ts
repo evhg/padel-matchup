@@ -1,5 +1,8 @@
 import "server-only";
 import { getLocale } from "next-intl/server";
+import { headers } from "next/headers";
+import { reportError } from "@/lib/alerts";
+import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { getDb, type Db } from "@/db";
 import type { Player } from "@/db/schema";
 import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
@@ -15,9 +18,20 @@ export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
     return { ok: true, data: await fn() };
   } catch (e) {
     if (isDomainError(e)) return { ok: false, error: e.code };
-    console.error("[action]", e);
+    void reportError("server", e);
     return { ok: false, error: "generic" };
   }
+}
+
+/** Caller IP (Vercel sets x-forwarded-for); "unknown" locally. */
+export async function clientIp(): Promise<string> {
+  const h = await headers();
+  return (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "unknown").split(",")[0].trim().slice(0, 64);
+}
+
+/** Fixed-window rate limit; throws `too_many` past the ceiling. */
+export async function assertRate(db: Db, scope: string, id: string, limit: number, window: "day" | "hour" = "day"): Promise<void> {
+  if (!(await takeRate(db, scope, id, limit, window))) throw new ActionFailure("too_many");
 }
 
 export class ActionFailure extends Error {
@@ -32,7 +46,7 @@ export async function runA<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   } catch (e) {
     if (e instanceof ActionFailure) return { ok: false, error: e.code };
     if (isDomainError(e)) return { ok: false, error: e.code };
-    console.error("[action]", e);
+    void reportError("server", e);
     return { ok: false, error: "generic" };
   }
 }
@@ -43,6 +57,7 @@ export async function requirePlayer(db: Db, name?: string | null): Promise<Playe
   if (existing) return existing;
   const clean = normalizeName(name ?? "");
   if (!clean) throw new ActionFailure("name_required");
+  await assertRate(db, "newid", await clientIp(), LIMITS.newIdentitiesPerIpPerDay);
   const locale = await getLocale();
   const player = await createPlayer(db, { displayName: clean, locale });
   await setSessionPlayer(player.id);

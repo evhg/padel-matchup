@@ -5,6 +5,6 @@ type Messages = typeof en;
 declare module "next-intl" {
   interface AppConfig {
     Messages: Messages;
-    Locale: "en" | "ru";
+    Locale: "en" | "ru" | "es";
   }
 }

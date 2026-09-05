@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reportError } from "@/lib/alerts";
 import { getDb } from "@/db";
 import {
   findInviteRemindersDue,
@@ -90,5 +91,6 @@ export async function GET(req: Request) {
     summary.errors.push(`metrics: ${String(e)}`);
   }
 
+  if (summary.errors.length) await reportError("cron", summary.errors.join(" | "));
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), ...summary });
 }

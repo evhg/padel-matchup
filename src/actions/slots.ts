@@ -21,7 +21,8 @@ import { lineupComplete } from "@/lib/lineup";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRemoved, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer } from "@/lib/session";
-import { ActionFailure, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { LIMITS } from "@/lib/domain/ratelimit";
 
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
 const wasComplete = (detail: { roster: { status: string; position: number }[]; event: { capacity: number } }) =>
@@ -32,6 +33,7 @@ export async function joinAction(code: string, name?: string): Promise<ActionRes
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
     const me = await requirePlayer(db, name);
+    await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     const res = await joinEvent(db, { eventId: detail.event.id, playerId: me.id });
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
       after(async () => {
@@ -83,6 +85,7 @@ export async function reserveAction(
 ): Promise<ActionResult<{ inviteUrl: string; inviteCode: string; name: string; emailed: boolean }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
+    await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
     const before = wasComplete(detail);
     const { slot, event } = await reserveSlot(db, {
       eventId: detail.event.id,

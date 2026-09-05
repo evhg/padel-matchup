@@ -25,10 +25,14 @@ export async function Header({ minimal = false }: { minimal?: boolean }) {
   );
 }
 
-/** Brand line only. `spacious` leaves room below so a phone can scroll the CTA to mid-screen. */
-export function Footer({ spacious = false }: { spacious?: boolean }) {
+/** Brand + the fine print, quietly. `spacious` leaves room below so a phone can scroll the CTA to mid-screen. */
+export async function Footer({ spacious = false }: { spacious?: boolean }) {
+  const t = await getTranslations();
   return (
-    <footer className={`mx-auto mt-10 flex w-full max-w-xl items-center justify-end px-4 text-sm text-faint ${spacious ? "pb-[45vh]" : "pb-16"}`}>
+    <footer className={`mx-auto mt-10 flex w-full max-w-xl items-center justify-between px-4 text-xs text-faint ${spacious ? "pb-[45vh]" : "pb-16"}`}>
+      <Link href="/about" prefetch={false} className="hover:text-muted">
+        {t("about.footerLink")}
+      </Link>
       <span>{APP_NAME}</span>
     </footer>
   );
