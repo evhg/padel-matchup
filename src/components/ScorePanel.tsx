@@ -19,6 +19,7 @@ export function ScorePanel({
   locked,
   enteredBy,
   canPlayAgain = false,
+  cardHref,
 }: {
   code: string;
   scores: S[];
@@ -29,6 +30,8 @@ export function ScorePanel({
   enteredBy: string | null;
   /** Creator or participant: offer "Play again next week" once a result exists. */
   canPlayAgain?: boolean;
+  /** Link to the shareable result card (once a result exists). */
+  cardHref?: string;
 }) {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
@@ -102,6 +105,11 @@ export function ScorePanel({
             </div>
           </div>
           {enteredBy && !locked && <p className="mt-3 text-xs text-faint">{t("score.enteredBy", { name: enteredBy })}</p>}
+          {cardHref && (
+            <a href={cardHref} className="btn-ghost btn-sm mt-3">
+              📸 {t("card.share")}
+            </a>
+          )}
           {canPlayAgain && (
             <div className="mt-4 border-t border-line pt-4">
               <PlayAgainButton code={code} />

@@ -291,6 +291,7 @@ export default async function EventPage({ params }: Props) {
             locked={ev.scoreLockedByCreator}
             enteredBy={enteredBy}
             canPlayAgain={canPlayAgain}
+            cardHref={detail.scores.length > 0 ? `/${code}/card` : undefined}
           />
         )}
         {isTournament && tstate && (
@@ -314,6 +315,7 @@ export default async function EventPage({ params }: Props) {
             }))}
             standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null }))}
             canPlayAgain={canPlayAgain}
+            cardHref={`/${code}/card`}
           />
         )}
 
