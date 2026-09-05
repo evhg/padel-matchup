@@ -43,6 +43,7 @@ CI runs exactly these. A green local run means a green PR.
 - **No new accounts.** Identity stays cookie + personal link. Do not add passwords or OAuth.
 - **Migrations are additive.** Production applies them automatically; a migration that drops or rewrites data needs a discussion first.
 - **Keep the free tiers in mind.** Sequential database queries in server components, small payloads, no polling.
+- **Never interpolate a `Date` into a raw `sql` template.** Use `gt(events.startsAt, now)` and friends. PGlite accepts a raw Date, postgres-js (production, and the CI Postgres job) rejects it. Run the suite against a real Postgres before pushing anything that touches queries: `TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/kicksmash_test pnpm test`.
 
 ## Reporting bugs and ideas
 

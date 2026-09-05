@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, groupMembers, groups, players, slots, type Event, type Group, type GroupMember, type Player } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
@@ -271,7 +271,7 @@ export async function getPlayerGroups(db: Db, playerId: string, now = new Date()
   const upcoming = await db
     .select()
     .from(events)
-    .where(and(inArray(events.groupId, ids), sql`${events.startsAt} > ${now}`, sql`${events.status} <> 'cancelled'`))
+    .where(and(inArray(events.groupId, ids), gt(events.startsAt, now), ne(events.status, "cancelled")))
     .orderBy(asc(events.startsAt));
   const countMap = new Map(counts.map((c) => [c.groupId, Number(c.n)]));
   return rows.map((r) => ({ group: r.group, role: r.role, memberCount: countMap.get(r.group.id) ?? 0, nextEvent: upcoming.find((e) => e.groupId === r.group.id) ?? null }));
