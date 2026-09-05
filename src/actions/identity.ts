@@ -131,6 +131,18 @@ export async function setMyLevelAction(level: number): Promise<ActionResult<{ le
   });
 }
 
+export async function setRankingOptInAction(on: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const { setRankingOptIn } = await import("@/lib/domain/ranking");
+    await setRankingOptIn(db, me.id, Boolean(on));
+    revalidatePath("/", "layout");
+    return null;
+  });
+}
+
 export async function setEmailNotificationsAction(on: boolean): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();

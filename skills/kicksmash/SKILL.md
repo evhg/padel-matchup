@@ -1,6 +1,6 @@
 ---
 name: kicksmash
-description: Organise padel matches and americano tournaments through Kicksmash (kicksma.sh), the open, agent-native padel match-up. Use when a user wants to set up a padel match, find open matches at a venue, generate an americano schedule, join a match, or build a padel tool that should not rebuild scheduling, levels and invites from scratch.
+description: Organise padel matches and tournaments (americano, mexicano, King of the Court) through Kicksmash (kicksma.sh), the open, agent-native padel match-up. Use when a user wants to set up a padel match, find open matches at a venue, generate an americano schedule, join a match, or build a padel tool that should not rebuild scheduling, levels and invites from scratch.
 ---
 
 # Kicksmash
@@ -15,7 +15,7 @@ Add `https://kicksma.sh/mcp` (streamable HTTP, no auth). Tools:
 - `get_match {code}` — a match by its 4-character code.
 - `find_matches {venue}` — open matches at a venue (its public board).
 - `get_group {code}` — a crew: members, weekly slot, upcoming.
-- `generate_schedule {players | names, courts?, rounds?}` — exact americano rotation, nothing stored.
+- `generate_schedule {players | names, courts?, rounds?}` — exact americano rotation, nothing stored. Mexicano and King of the Court rounds depend on scores, so they are generated live on the match page (pass `format` to `create_match`).
 - `create_match {startsAt, tz, venue?, organizer:{name, token?, email?, level?}, levelMin?, levelMax?, …}` — returns `shareUrl` for the players and the organizer's `personalUrl` and `manageUrl` (private).
 - `join_match {code, name | token, level?, email?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range).
 - `create_api_key {name, agent?}` — optional, for roomier limits and webhooks.

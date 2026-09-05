@@ -3,7 +3,12 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { POINTS_PRESETS } from "@/lib/domain/americano";
+import type { TournamentFormat } from "@/db/schema";
+import { DEFAULT_POINTS, FORMATS } from "@/lib/domain/formats";
 import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, presetFor, rangeFor, type PresetKey } from "@/lib/domain/levels";
+
+export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
+export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
 import { nextOccurrence } from "@/lib/dates";
 import { rangeText } from "@/lib/levelText";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
@@ -23,6 +28,8 @@ export type EventFormValues = {
   whenFull: "waitlist" | "closed";
   courts: number | null;
   pointsPerMatch: number | null;
+  /** Tournament format. */
+  format: TournamentFormat;
   /** Level range; both null = open to everyone. */
   levelMin: number | null;
   levelMax: number | null;
@@ -179,6 +186,25 @@ export function EventFields({
 
       {values.type === "tournament" && (
         <div>
+          {showType && (
+            <div className="mb-3">
+              <label className="label">{t("create.format")}</label>
+              <div className="flex flex-wrap gap-2" role="group" aria-label={t("create.format")}>
+                {FORMATS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={values.format === f}
+                    onClick={() => onChange({ format: f, pointsPerMatch: values.pointsPerMatch == null || values.pointsPerMatch === DEFAULT_POINTS[values.format] ? DEFAULT_POINTS[f] : values.pointsPerMatch })}
+                    className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${values.format === f ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}
+                  >
+                    {t(FORMAT_KEYS[f])}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-sm text-muted">{t(FORMAT_HELP_KEYS[values.format])}</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">{t("create.capacity")}</label>
@@ -207,7 +233,7 @@ export function EventFields({
               </select>
             </div>
           </div>
-          <p className="mt-1.5 text-sm text-muted">{t("create.tournamentHelp")} {t("create.capacityHelp")}</p>
+          <p className="mt-1.5 text-sm text-muted">{showType ? `${t("create.roundsHelp")} ${t("create.capacityHelp")}` : `${t("create.tournamentHelp")} ${t("create.capacityHelp")}`}</p>
         </div>
       )}
 

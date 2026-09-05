@@ -1,10 +1,11 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, slots, venues, type Event, type Slot } from "@/db/schema";
+import { activity, events, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
 import { newManageCode, newShareCode } from "@/lib/codes";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { formatOf } from "./formats";
 import { normalizeRange } from "./levels";
 import { venueSlug } from "./venueBoard";
 
@@ -23,6 +24,8 @@ export type CreateEventInput = {
   note?: string | null;
   courts?: number | null;
   pointsPerMatch?: number | null;
+  /** Tournament format; omitted = americano. */
+  format?: TournamentFormat | null;
   /** Level range; omitted or 0–7 = open to everyone. */
   levelMin?: number | null;
   levelMax?: number | null;
@@ -102,6 +105,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           creatorPlayerId: input.creatorPlayerId,
           manageCode: newManageCode(),
           status: "open",
+          format: input.type === "tournament" ? formatOf(input.format) : null,
           courts: input.type === "tournament" && input.courts ? Math.max(1, Math.min(16, Math.round(input.courts))) : null,
           pointsPerMatch: input.type === "tournament" && input.pointsPerMatch ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
           levelMin: range.min,
@@ -156,6 +160,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     note: src.note,
     courts: src.courts,
     pointsPerMatch: src.pointsPerMatch,
+    format: src.format,
     levelMin: src.levelMin,
     levelMax: src.levelMax,
     groupId: src.groupId,

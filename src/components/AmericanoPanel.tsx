@@ -3,15 +3,19 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
+import type { TournamentFormat } from "@/db/schema";
 import { POINTS_PRESETS } from "@/lib/domain/americano";
+import { FORMATS } from "@/lib/domain/formats";
+import { FORMAT_KEYS } from "./EventFields";
 import { PlayAgainButton } from "./PlayAgainButton";
 
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
-export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null };
+export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null; court?: number | null };
 
 export function AmericanoPanel({
   code,
+  format,
   isCreator,
   canScore,
   locked,
@@ -28,6 +32,7 @@ export function AmericanoPanel({
   cardHref,
 }: {
   code: string;
+  format: TournamentFormat;
   isCreator: boolean;
   canScore: boolean;
   locked: boolean;
@@ -57,29 +62,49 @@ export function AmericanoPanel({
   const nextRound = (last?.roundNumber ?? 0) + 1;
   const firstRound = rounds.length === 0;
   const inFours = participantCount % 4 === 0;
-  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && (!firstRound || inFours);
+  const lastFullyScored = last ? last.matches.every((m) => m.sideA != null && m.sideB != null) : true;
+  /** Mexicano and King build the next round from the scores, so they wait for them. */
+  const needScores = format !== "americano" && rounds.length > 0 && !lastFullyScored;
+  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && (!firstRound || inFours) && !needScores;
   const courtCount = Math.max(1, Math.floor(participantCount / 4), ...rounds.flatMap((r) => r.matches.map((m) => m.court)));
   const courtLabel = (n: number) => courtNames?.[n - 1]?.trim() || t("americano.court", { n });
   const [names, setNames] = useState<string[]>(() => Array.from({ length: courtCount }, (_, i) => courtNames?.[i] ?? ""));
   const repeatsRound = rotationLength && nextRound > rotationLength ? ((nextRound - 1) % rotationLength) + 1 : null;
 
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
+  const run = (fn: () => Promise<{ ok: boolean; error?: string; detail?: string }>) =>
     start(async () => {
       setError(null);
       const r = await fn();
-      if (!r.ok) setError(t(`errors.${(r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string)}` as "errors.generic"));
+      if (!r.ok) {
+        const key = r.detail === "scores_missing" || r.detail === "format_locked" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
+        setError(t(`errors.${key}` as "errors.generic"));
+      }
     });
+  const howItWorks = format === "mexicano" ? t("americano.howItWorksMexicano") : format === "king" ? t("americano.howItWorksKing") : t("americano.howItWorks");
 
   return (
     <section id="score" className="card">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-extrabold">{t("americano.title")}</h2>
+        <h2 className="text-lg font-extrabold">{t(FORMAT_KEYS[format])}</h2>
         {locked ? <span className="chip-open">✓ {t("americano.locked")}</span> : rounds.length > 0 && started ? <span className="chip-live">● {t("americano.live")}</span> : null}
       </div>
       <button type="button" className="mt-1 text-left text-sm link" onClick={() => setHelp((h) => !h)}>
         {help ? "−" : "?"} {t("create.typeTournament")}
       </button>
-      {help && <p className="mt-1 text-sm text-muted">{t("americano.howItWorks")}</p>}
+      {help && <p className="mt-1 text-sm text-muted">{howItWorks}</p>}
+
+      {isCreator && !locked && !cancelled && rounds.length === 0 && (
+        <div className="mt-4">
+          <span className="label">{t("create.format")}</span>
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t("create.format")}>
+            {FORMATS.map((f) => (
+              <button key={f} type="button" aria-pressed={format === f} disabled={pending} onClick={() => f !== format && run(() => setTournamentSettingsAction(code, { format: f }))} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${format === f ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+                {t(FORMAT_KEYS[f])}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isCreator && !locked && !cancelled && (
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -157,6 +182,7 @@ export function AmericanoPanel({
                   <td className="py-2 font-semibold">
                     {s.name}
                     {s.level != null && <span className="ml-1.5 text-xs font-semibold text-faint tabular-nums">{s.level.toFixed(s.level * 4 === Math.round(s.level * 4) ? (s.level * 2 === Math.round(s.level * 2) ? 1 : 2) : 2)}</span>}
+                    {format === "king" && s.court != null && <span className="ml-1.5 text-xs text-faint">· {courtLabel(s.court)}</span>}
                   </td>
                   <td className="py-2 text-right text-base font-extrabold tabular-nums">{s.points}</td>
                   <td className="py-2 text-right tabular-nums text-muted">{s.played}</td>
@@ -209,7 +235,9 @@ export function AmericanoPanel({
               <button type="button" className={`${rounds.length === 0 || started ? "btn-primary" : "btn-secondary"} w-full`} disabled={pending || !canGenerate} onClick={() => run(() => generateRoundAction(code))}>
                 {pending ? t("common.working") : rounds.length === 0 ? t("americano.generateFirst") : repeatsRound ? t("americano.generateRepeat", { n: nextRound, again: repeatsRound }) : t("americano.generateRound", { n: nextRound })}
               </button>
-              {participantCount < 4 ? (
+              {needScores && last ? (
+                <p className="text-center text-xs font-semibold text-warn">{t("americano.scoresMissing", { n: last.roundNumber })}</p>
+              ) : participantCount < 4 ? (
                 <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: participantCount })}</p>
               ) : firstRound && !inFours ? (
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: participantCount, up: 4 - (participantCount % 4), down: participantCount % 4 })}</p>

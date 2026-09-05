@@ -31,6 +31,7 @@ export const groupRoleEnum = pgEnum("group_role", ["admin", "member"]);
 
 /** One line per result-based level change, newest last (capped in code). */
 export type LevelLogEntry = { at: string; from: number; to: number; code: string; type: "match" | "tournament" };
+export type TournamentFormat = "americano" | "mexicano" | "king";
 
 // ---------------------------------------------------------------------------
 // players — identity is a UUID in a signed cookie; no auth, no passwords.
@@ -60,6 +61,12 @@ export const players = pgTable(
     levelSource: text("level_source"),
     levelUpdatedAt: timestamp("level_updated_at", { withTimezone: true }),
     levelLog: jsonb("level_log").$type<LevelLogEntry[]>(),
+    /** An organizer who played with them confirmed the level; valid while `level` stays within half a step of `level_verified_level`. */
+    levelVerifiedAt: timestamp("level_verified_at", { withTimezone: true }),
+    levelVerifiedBy: uuid("level_verified_by"),
+    levelVerifiedLevel: real("level_verified_level"),
+    /** Opted in to the public club and city rankings. Off by default. */
+    rankingOptIn: boolean("ranking_opt_in").notNull().default(false),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -123,6 +130,8 @@ export const events = pgTable(
     icsSequence: integer("ics_sequence").notNull().default(0),
     /** Web-push "one hour before" reminder went out (once per event). */
     pushReminderSentAt: timestamp("push_reminder_sent_at", { withTimezone: true }),
+    /** Tournament format: americano (rotating partners), mexicano (courts by standings) or king (winners move up). Null = americano. */
+    format: text("format").$type<TournamentFormat>(),
     /** Americano: number of courts in play (null → floor(players / 4)). */
     courts: integer("courts"),
     /** Americano: points per match (e.g. 16, 21, 24, 32); null → free scoring. */

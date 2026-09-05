@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { baseUrl } from "@/lib/config";
+import { CITIES } from "@/lib/domain/cities";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = baseUrl();
@@ -9,6 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/americano`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/agents`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    ...CITIES.map((c) => ({ url: `${base}/${c.slug}`, lastModified: now, changeFrequency: "daily" as const, priority: 0.8 })),
     { url: `${base}/about`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
 }

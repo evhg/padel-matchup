@@ -11,13 +11,13 @@ import { createPlayer, normalizeName } from "@/lib/domain/players";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer } from "@/lib/session";
 
 export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required";
-export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError };
+export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError; detail?: string };
 
 export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await fn() };
   } catch (e) {
-    if (isDomainError(e)) return { ok: false, error: e.code };
+    if (isDomainError(e)) return { ok: false, error: e.code, detail: e.message !== e.code ? e.message : undefined };
     void reportError("server", e);
     return { ok: false, error: "generic" };
   }
@@ -45,7 +45,7 @@ export async function runA<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
     return { ok: true, data: await fn() };
   } catch (e) {
     if (e instanceof ActionFailure) return { ok: false, error: e.code };
-    if (isDomainError(e)) return { ok: false, error: e.code };
+    if (isDomainError(e)) return { ok: false, error: e.code, detail: e.message !== e.code ? e.message : undefined };
     void reportError("server", e);
     return { ok: false, error: "generic" };
   }

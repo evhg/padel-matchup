@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import type { TournamentFormat } from "@/db/schema";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { applyEventLevels } from "@/lib/domain/rating";
 import { deleteLastRound, generateRound, saveTournamentMatchScore, setTournamentLock, setTournamentSettings } from "@/lib/domain/tournament";
 import { getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
 
-export async function setTournamentSettingsAction(code: string, input: { courts?: number | null; pointsPerMatch?: number | null; courtNames?: string[] | null }): Promise<ActionResult<null>> {
+export async function setTournamentSettingsAction(code: string, input: { courts?: number | null; pointsPerMatch?: number | null; courtNames?: string[] | null; format?: TournamentFormat }): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     await setTournamentSettings(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, ...input });

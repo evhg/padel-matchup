@@ -41,7 +41,17 @@ export function LevelGuide({ className = "" }: { className?: string }) {
   );
 }
 
-export function LevelChip({ level, className = "" }: { level: number | null | undefined; className?: string }) {
+export function LevelChip({ level, verified = false, className = "" }: { level: number | null | undefined; verified?: boolean; className?: string }) {
+  const t = useTranslations();
   if (level == null) return null;
-  return <span className={`chip-muted tabular-nums ${className}`}>{formatLevel(level)}</span>;
+  return (
+    <span className={`chip-muted tabular-nums ${className}`} title={verified ? t("level.verified") : undefined}>
+      {formatLevel(level)}
+      {verified && (
+        <span className="ml-0.5 text-accent-strong" aria-label={t("level.verified")}>
+          ✓
+        </span>
+      )}
+    </span>
+  );
 }

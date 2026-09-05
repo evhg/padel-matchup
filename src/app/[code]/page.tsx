@@ -13,6 +13,7 @@ import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
 import { CreateGroupButton } from "@/components/GroupPanel";
 import { JoinRequests } from "@/components/JoinRequests";
+import { ConfirmLevels } from "@/components/ConfirmLevels";
 import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
@@ -26,7 +27,7 @@ import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/confi
 import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getGroupById } from "@/lib/domain/groups";
-import { hasRange } from "@/lib/domain/levels";
+import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
@@ -125,6 +126,10 @@ export default async function EventPage({ params }: Props) {
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
+  // After the result is in, the organizer can confirm the levels of the people they played with.
+  const levelCandidates = participants
+    .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)
+    .map((s) => ({ id: s.player!.id, name: s.player!.displayName, level: s.player!.level!, verified: isLevelVerified(s.player!) }));
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
   const group = ev.groupId ? await getGroupById(db, ev.groupId) : null;
@@ -176,7 +181,7 @@ export default async function EventPage({ params }: Props) {
             {occupiedSlot ? (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="truncate font-bold">{name}</span>
-                <LevelChip level={s.player?.level} />
+                <LevelChip level={s.player?.level} verified={s.player ? isLevelVerified(s.player) : false} />
                 {isMe && <span className="chip-open">{t("common.you")}</span>}
                 {isOrganizer && <span className="chip-muted">{t("common.organizer")}</span>}
                 {s.status === "confirmed" && <span className="chip-live">{t("event.confirmed")}</span>}
@@ -317,6 +322,7 @@ export default async function EventPage({ params }: Props) {
         {isTournament && tstate && (
           <AmericanoPanel
             code={code}
+            format={tstate.format}
             isCreator={viewer.isCreator}
             canScore={viewer.isCreator || Boolean(me && participantIds.includes(me.id))}
             locked={ev.scoreLockedByCreator}
@@ -333,11 +339,12 @@ export default async function EventPage({ params }: Props) {
               resting: r.resting.map((p) => nameOf.get(p) ?? "?"),
               matches: r.matches.map((m) => ({ id: m.id, court: m.court, a: [nameOf.get(m.a1) ?? "?", nameOf.get(m.a2) ?? "?"], b: [nameOf.get(m.b1) ?? "?", nameOf.get(m.b2) ?? "?"], sideA: m.sideA, sideB: m.sideB })),
             }))}
-            standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null }))}
+            standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))}
             canPlayAgain={canPlayAgain}
             cardHref={`/${code}/card`}
           />
         )}
+        {viewer.isCreator && ev.scoreLockedByCreator && !cancelled && levelCandidates.length > 0 && <ConfirmLevels code={code} players={levelCandidates} />}
 
         {/* Players */}
         <section className="card">
@@ -408,6 +415,7 @@ export default async function EventPage({ params }: Props) {
               levelMax: ev.levelMax,
               myLevel: creator.level,
               publicListing: ev.publicListing,
+              format: ev.format ?? "americano",
               bookingUrl: ev.bookingUrl ?? "",
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
