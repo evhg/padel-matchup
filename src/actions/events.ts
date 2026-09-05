@@ -9,7 +9,8 @@ import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
-import { normalizeEmail, updatePlayer } from "@/lib/domain/players";
+import { changePlayerEmail } from "@/lib/domain/identity";
+import { normalizeEmail } from "@/lib/domain/players";
 import { notifyEventCancelled, notifyEventUpdated, notifyPromotion, welcomeEmail } from "@/lib/notify";
 import { ActionFailure, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -150,9 +151,8 @@ export async function setCreatorEmailAction(code: string, email: string): Promis
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     const target = viewer.player?.id === detail.event.creatorPlayerId ? viewer.player.id : detail.event.creatorPlayerId;
-    const normalized = normalizeEmail(email);
-    const updated = await updatePlayer(db, target, { email: normalized });
-    if (updated && normalized && normalized !== detail.creator.email) after(() => welcomeEmail(db, updated, detail.event));
+    const { player: updated, changed } = await changePlayerEmail(db, target, normalizeEmail(email));
+    if (changed) after(() => welcomeEmail(db, updated, detail.event));
     revalidatePath(`/${code}`);
     return null;
   });

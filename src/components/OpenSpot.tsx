@@ -93,6 +93,14 @@ export function OpenSpot({
     return (q ? rolodex.filter((r) => r.name.toLowerCase().includes(q) && r.name.toLowerCase() !== q) : rolodex).slice(0, 5);
   }, [rolodex, name, mode]);
 
+  // Same email or phone as someone the organizer has played with: offer that name.
+  const digits = (v: string) => v.replace(/\D/g, "");
+  const contactMatch =
+    mode === "reserve"
+      ? rolodex.find((r) => (email.trim() && r.email && r.email.toLowerCase() === email.trim().toLowerCase()) || (digits(phone).length >= 6 && r.phone && digits(r.phone) === digits(phone)))
+      : undefined;
+  const contactHint = contactMatch && contactMatch.name.toLowerCase() !== name.trim().toLowerCase() ? contactMatch : undefined;
+
   const tap = () => {
     if (mode === "reserve") expand();
     else if (mode === "join" && hasIdentity) join();
@@ -180,6 +188,11 @@ export function OpenSpot({
             <input className="input min-h-11 text-sm" type="tel" inputMode="tel" autoComplete="off" placeholder={`${t("creator.phone")} (${t("common.optional")})`} value={phone} onChange={(e) => setPhone(e.target.value)} />
             {emailEnabled && <input className="input min-h-11 text-sm" type="email" inputMode="email" autoComplete="off" placeholder={`${t("creator.email")} (${t("common.optional")})`} value={email} onChange={(e) => setEmail(e.target.value)} />}
           </div>
+        )}
+        {contactHint && (
+          <button type="button" className="self-start rounded-xl bg-accent-soft px-3 py-2 text-left text-sm font-semibold" onClick={() => setName(contactHint.name)}>
+            {t("creator.sameContact", { kind: contactHint.email && contactHint.email.toLowerCase() === email.trim().toLowerCase() ? t("creator.email").toLowerCase() : t("creator.phone").toLowerCase(), name: contactHint.name })}
+          </button>
         )}
         <div className="flex items-center justify-between gap-2">
           {error ? <span className="text-sm font-semibold text-danger">{error}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : t("identity.nameHelp")}</span>}

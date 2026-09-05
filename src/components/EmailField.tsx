@@ -139,7 +139,7 @@ export function EmailField({
             setRestoring(false);
           }}
         />
-        <button type="submit" className="btn-secondary shrink-0" disabled={pending || (!email && !initial)}>
+        <button type="submit" className="btn-secondary shrink-0" disabled={pending || !email.trim()}>
           {pending ? "…" : t("common.save")}
         </button>
         {initial && (
@@ -155,6 +155,7 @@ export function EmailField({
           </button>
         )}
       </div>
+      {initial && <p className="text-xs text-faint">{t("identity.emailKeepNote")}</p>}
       {saved && <p className="text-sm font-semibold text-ok">{mode === "creator" ? t("share.emailSaved") : email ? t("event.emailSaved") : t("event.emailSavedNoMail")}</p>}
       {restoreBlock}
     </form>

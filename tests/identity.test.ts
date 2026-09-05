@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, slots, venues } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { consumeEmailCode, findPlayerByPersonalToken, getOrCreatePersonalToken, issueEmailCode, mergePlayers, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
+import { consumeEmailCode, findPlayerByPersonalToken, getOrCreatePersonalToken, issueEmailCode, mergePlayers, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
 import { joinEvent } from "@/lib/domain/slots";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -95,5 +95,24 @@ describe("merge", () => {
     const mine = await db.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, a.id)));
     expect(mine).toHaveLength(1);
     expect((await db.select().from(players).where(eq(players.id, fresh.id))).length).toBe(0);
+  });
+});
+
+describe("email change safety", () => {
+  it("keeps the previous address for restores and refuses to blank an existing one", async () => {
+    const { changePlayerEmail } = await import("@/lib/domain/identity");
+    const p = await makePlayer(db, "Change", { email: "old@example.com" });
+    const kept = await changePlayerEmail(db, p.id, "");
+    expect(kept.kept).toBe(true);
+    expect(kept.player.email).toBe("old@example.com");
+    const changed = await changePlayerEmail(db, p.id, "New@Example.com");
+    expect(changed.changed).toBe(true);
+    expect(changed.player.email).toBe("new@example.com");
+    expect(changed.player.recoveryEmail).toBe("old@example.com");
+    // Both addresses find the identity; a code to the old one restores it.
+    expect((await playersWithEmail(db, "old@example.com")).map((x) => x.id)).toContain(p.id);
+    expect((await playersWithEmail(db, "new@example.com")).map((x) => x.id)).toContain(p.id);
+    const restored = await restoreByEmail(db, "old@example.com", null);
+    expect(restored.id).toBe(p.id);
   });
 });

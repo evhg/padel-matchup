@@ -36,6 +36,8 @@ export const players = pgTable(
     email: text("email"),
     /** Set once the player proved ownership of `email` with a one-time code. */
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    /** The address before the last change: a restore code sent there still gets the player back in. */
+    recoveryEmail: text("recovery_email"),
     /** Random token behind the personal link /p/{token}; signs in on any device. */
     personalToken: text("personal_token"),
     /** The token before the last lazy shortening; still accepted so old calendar entries and shortcuts keep working. */
@@ -52,6 +54,7 @@ export const players = pgTable(
       .on(t.personalToken)
       .where(sql`${t.personalToken} is not null`),
     index("players_email_idx").on(t.email),
+    index("players_recovery_email_idx").on(t.recoveryEmail),
   ],
 );
 

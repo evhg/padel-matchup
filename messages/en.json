@@ -49,11 +49,14 @@
     "personalLinkTitle": "Your personal link",
     "personalLinkHelp": "Opens your matches on any phone or laptop, no password. Keep it private: anyone with the link is you.",
     "copyLink": "Copy",
-    "sendToMe": "Send to myself",
-    "sendToMeText": "🎾 My Kicksmash link (opens my matches on any device): {url}",
     "resetLink": "Reset link",
     "resetConfirm": "Reset your personal link? The old one stops working, including home-screen shortcuts.",
-    "emailDisabled": "Email isn't set up on this server."
+    "emailDisabled": "Email isn't set up on this server.",
+    "emailMeLink": "Email me this link",
+    "linkEmailed": "Sent to {email}. Keep that email: it's your way back in.",
+    "sendToEmail": "Send",
+    "noEmailYet": "No email on file yet. Add one and we'll send you the link, so you can always get back in.",
+    "emailKeepNote": "You can change your email but not remove it: it's how you get back in. The previous address keeps working for restores."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -232,7 +235,8 @@
     "inviteEmailed": "Invite emailed to {email}",
     "sendTheirLink": "Send them their personal link",
     "reserveDone": "Done",
-    "inviteEmailedAgo": "Invite emailed {ago}"
+    "inviteEmailedAgo": "Invite emailed {ago}",
+    "sameContact": "Same {kind} as {name}. Use that name?"
   },
   "score": {
     "title": "Score",
@@ -296,7 +300,9 @@
     "goneHelp": "The spot was released or taken. You can still try the open match link.",
     "goToEvent": "Open the match",
     "nameLabel": "Your name",
-    "alreadyIn": "You're already in this match."
+    "alreadyIn": "You're already in this match.",
+    "playedBefore": "Played before with {email}?",
+    "playedBeforeHelp": "We know that email from an earlier match. Restore your history with a code first, then confirm this spot as you."
   },
   "shareText": {
     "event": "🎾 Padel {day} at {time} — {venue}. {spots}. Tap to join: {url}",

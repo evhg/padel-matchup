@@ -104,7 +104,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
       <section className="card">
         <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
       </section>
-      <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} />
+      <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />
       <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
       <section className="card">
         <NameEditor name={player.displayName} />
