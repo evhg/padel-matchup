@@ -120,7 +120,15 @@
     "bookingUrl": "Enlace de reserva de pista",
     "bookingUrlHelp": "Pega la página de reservas del club o la confirmación. Los jugadores la abren con un toque.",
     "bookingSet": "Enlace de reserva añadido",
-    "titleSet": "Título o nota añadidos"
+    "titleSet": "Título o nota añadidos",
+    "format": "Formato",
+    "formatAmericano": "Americano",
+    "formatMexicano": "Mexicano",
+    "formatKing": "Rey de la pista",
+    "formatAmericanoHelp": "Las parejas rotan, todos juegan con todos, gana quien suma más puntos.",
+    "formatMexicanoHelp": "La ronda 1 es al azar; desde entonces las pistas siguen la clasificación, así siempre juegas con gente de tu nivel.",
+    "formatKingHelp": "Los ganadores suben de pista, los perdedores bajan. Las parejas se separan cada ronda.",
+    "roundsHelp": "Las rondas se generan el mismo día."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -486,7 +494,10 @@
     "email_disabled": "El email no está configurado en este servidor.",
     "too_many": "Demasiados intentos. Prueba más tarde.",
     "slot_taken": "Esa plaza se acaba de ocupar.",
-    "level_required": "Primero elige tu nivel."
+    "level_required": "Primero elige tu nivel.",
+    "scores_missing": "Introduce primero todos los resultados de la última ronda.",
+    "format_locked": "El formato no se puede cambiar una vez existe la ronda 1.",
+    "no_result": "Cierra primero el resultado."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -555,7 +566,10 @@
       "perfect": "{n} rondas y cada pareja ha jugado junta exactamente una vez.",
       "partial": "{players} jugadores en {courts} pistas: {resting} descansan cada ronda, repartidos con justicia.",
       "metaDescription": "Generador gratuito de cuadros americano de pádel: parejas rotativas, descansos justos, de 4 a 64 jugadores, imprimible. O llévalo en vivo con resultados y clasificación."
-    }
+    },
+    "howItWorksMexicano": "La ronda 1 es al azar. Desde la ronda 2 las pistas siguen la clasificación: los cuatro primeros juegan en la pista 1, los cuatro siguientes en la 2, y en cada pista 1.º y 4.º juegan contra 2.º y 3.º. Introduce todos los resultados antes de la siguiente ronda.",
+    "howItWorksKing": "Los ganadores suben de pista y los perdedores bajan; los ganadores de la pista superior y los perdedores de la inferior se quedan. Las parejas se separan cada ronda. La clasificación sigue la pista en la que terminas, ganadores primero. Introduce todos los resultados antes de la siguiente ronda.",
+    "scoresMissing": "Introduce primero todos los resultados de la ronda {n}."
   },
   "calendar": {
     "title": "Añadir al calendario",
@@ -670,7 +684,15 @@
       "winRate": "% victorias",
       "podiums": "Podios"
     },
-    "levelNeeded": "Elige tu nivel para unirte"
+    "levelNeeded": "Elige tu nivel para unirte",
+    "verified": "Confirmado por un organizador",
+    "confirmTitle": "Confirmar niveles",
+    "confirmHelp": "Has jugado con ellos. Si un nivel te parece correcto, confírmalo: el jugador recibe una marca junto a su nivel y los rankings pueden fiarse.",
+    "confirmHelpShort": "{count, plural, one {# jugador por confirmar} other {# jugadores por confirmar}}",
+    "confirmAll": "Confirmar todos ({count})",
+    "confirmOne": "Es correcto",
+    "confirmed": "Confirmado",
+    "confirmedCount": "{count, plural, one {# nivel confirmado} other {# niveles confirmados}}"
   },
   "card": {
     "title": "Tarjeta de resultado",
@@ -745,5 +767,36 @@
     "listedHelp": "Cualquiera en el club puede encontrar este partido y apuntarse.",
     "listedShort": "En el tablón del club",
     "notListedShort": "No está en el tablón"
+  },
+  "ranking": {
+    "title": "Ranking",
+    "clubTitle": "Ranking de {venue}",
+    "sub": "Últimos 90 días, solo resultados cerrados. 3 puntos por victoria, 1 por empate; los torneos dan 3, 2 y 1 al podio.",
+    "optInOnly": "Solo aparecen los jugadores que lo han activado. Nadie sale sin su permiso.",
+    "empty": "Aún no hay resultados cerrados aquí. Juega, apunta el resultado y que el organizador lo confirme.",
+    "emptyOptIn": "Hay resultados, pero nadie ha activado aún su aparición en el ranking.",
+    "optInCta": "Mostrarme en los rankings",
+    "optedIn": "Apareces en los rankings",
+    "optInHelp": "Los rankings de club y ciudad muestran tu nombre, nivel y resultados de los últimos 90 días. Desactivado por defecto; puedes quitarlo cuando quieras.",
+    "colPts": "Pts",
+    "colPlayed": "J",
+    "colWins": "G",
+    "verifiedLegend": "✓ nivel confirmado por un organizador",
+    "metaDescription": "Ranking de pádel en {name}: jugadores que lo han activado, resultados cerrados de los últimos 90 días."
+  },
+  "city": {
+    "title": "Pádel en {city}",
+    "sub": "Partidos abiertos en los clubes de {city}, el ranking de la ciudad y un enlace que junta a cuatro en pista en diez segundos.",
+    "openMatches": "Partidos abiertos",
+    "noMatches": "Ahora mismo no hay partidos publicados. Crea uno y activa el tablón del club para que te encuentren.",
+    "clubs": "Clubes vistos aquí",
+    "create": "Crear un partido en {city}",
+    "ranking": "Ranking de {city}",
+    "how": "Cómo funciona aquí",
+    "how1": "Crea un partido y comparte un enlace en tu chat. La gente toca y se apunta; sin app ni registro.",
+    "how2": "Niveles 0–7, la escala de siempre. Los organizadores pueden confirmarlos tras un partido.",
+    "how3": "Americano, mexicano y Rey de la pista con resultados en directo desde cualquier móvil.",
+    "how4": "Todo es abierto: la API, los datos y el código. Trae tu propio bot o asistente.",
+    "metaDescription": "Pádel en {city}: partidos abiertos, rankings de club, americano, mexicano y Rey de la pista. Crea un partido en diez segundos, comparte un enlace, sin app."
   }
 }

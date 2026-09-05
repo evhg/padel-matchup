@@ -81,6 +81,9 @@ export default async function VenueBoardPage({ params }: Props) {
           </ul>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <Link href={`/v/${slug}/ranking`} prefetch={false} className="link">
+            🏆 {t("ranking.title")}
+          </Link>
           <Link href={`/v/${slug}/poster`} prefetch={false} className="link">
             🖨 {t("venue.poster")}
           </Link>

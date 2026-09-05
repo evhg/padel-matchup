@@ -1,15 +1,17 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, players, slots, tournamentMatches, tournamentRounds, type Event, type Slot, type TournamentMatch, type TournamentRound } from "@/db/schema";
+import { activity, events, players, slots, tournamentMatches, tournamentRounds, type Event, type Slot, type TournamentFormat, type TournamentMatch, type TournamentRound } from "@/db/schema";
 import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, seedFrom, type StandingRow } from "./americano";
 import { DomainError } from "./errors";
+import { computeKingStandings, FORMATS, formatOf, planKingRound, planMexicanoRound, type KingStandingRow } from "./formats";
 import { recomputeStatus } from "./events";
 import { lockEvent } from "./slots";
 
 export type RoundWithMatches = TournamentRound & { matches: TournamentMatch[] };
 export type TournamentState = {
+  format: TournamentFormat;
   rounds: RoundWithMatches[];
-  standings: StandingRow[];
+  standings: (StandingRow | KingStandingRow)[];
   participantIds: string[];
   maxCourts: number;
   scoredMatches: number;
@@ -72,24 +74,32 @@ export async function getTournamentState(db: Db, ev: Event, participantIds: stri
   const all = rounds.flatMap((r) => r.matches);
   const ids = new Set(participantIds);
   for (const m of all) for (const p of [m.a1, m.a2, m.b1, m.b2]) ids.add(p);
+  const format = formatOf(ev.format);
   return {
+    format,
     rounds,
-    standings: computeStandings([...ids], all),
+    standings: format === "king" ? computeKingStandings([...ids], rounds) : computeStandings([...ids], all),
     participantIds,
     maxCourts: maxCourtsFor(participantIds.length),
     scoredMatches: all.filter((m) => m.sideA != null && m.sideB != null).length,
-    rotationLength: rotationLength(participantIds.length),
+    rotationLength: format === "americano" ? rotationLength(participantIds.length) : null,
   };
 }
 
 export async function setTournamentSettings(
   db: Db,
-  input: { eventId: string; actorPlayerId: string | null; courts?: number | null; pointsPerMatch?: number | null; courtNames?: string[] | null },
+  input: { eventId: string; actorPlayerId: string | null; courts?: number | null; pointsPerMatch?: number | null; courtNames?: string[] | null; format?: TournamentFormat },
 ): Promise<Event> {
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
     if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
     const set: Partial<typeof events.$inferInsert> = {};
+    if (input.format !== undefined) {
+      if (!FORMATS.includes(input.format)) throw new DomainError("invalid", "format");
+      // The format decides how rounds are built, so it is fixed once round 1 exists.
+      if (input.format !== formatOf(ev.format) && (await loadRounds(tx, ev.id)).length > 0) throw new DomainError("invalid", "format_locked");
+      set.format = input.format;
+    }
     if (input.courts !== undefined) {
       if (input.courts !== null && (!Number.isInteger(input.courts) || input.courts < 1 || input.courts > 16)) throw new DomainError("invalid", "courts");
       set.courts = input.courts;
@@ -139,10 +149,15 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
     const history = buildHistory(existing.map((r) => ({ matches: r.matches, resting: r.resting })));
     const roundNumber = (existing.at(-1)?.roundNumber ?? 0) + 1;
     const rng = mulberry32(seedFrom(`${ev.id}:${roundNumber}`));
-    const cycle = rotationLength(ids.length);
+    const format = formatOf(ev.format);
+    const cycle = format === "americano" ? rotationLength(ids.length) : null;
     let plan;
     const replay = cycle && roundNumber > cycle ? existing.find((r) => r.roundNumber === roundNumber - cycle) : undefined;
-    if (replay && replay.matches.every((m) => [m.a1, m.a2, m.b1, m.b2].every((id) => ids.includes(id)))) {
+    if (format === "mexicano") {
+      plan = planMexicanoRound({ ids, courts: ev.courts, rounds: existing, rnd: rng });
+    } else if (format === "king") {
+      plan = planKingRound({ ids, courts: ev.courts, rounds: existing, rnd: rng });
+    } else if (replay && replay.matches.every((m) => [m.a1, m.a2, m.b1, m.b2].every((id) => ids.includes(id)))) {
       // Rotation complete: round n repeats round 1, exactly.
       plan = { matches: replay.matches.map((m) => ({ court: m.court, a: [m.a1, m.a2] as [string, string], b: [m.b1, m.b2] as [string, string] })), resting: [] as string[] };
     } else if (cycle) {

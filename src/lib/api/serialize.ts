@@ -2,6 +2,7 @@ import type { Event, Player } from "@/db/schema";
 import { EVENT_DURATION_MS } from "@/lib/config";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import type { GroupDetail } from "@/lib/domain/groups";
+import { formatOf } from "@/lib/domain/formats";
 import { hasRange, presetFor } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
@@ -17,6 +18,8 @@ export type PublicMatch = {
   code: string;
   url: string;
   type: "match" | "tournament";
+  /** Tournaments only: americano, mexicano or king (King of the Court). */
+  format: "americano" | "mexicano" | "king" | null;
   title: string | null;
   status: "open" | "full" | "cancelled" | "past";
   startsAt: string;
@@ -52,6 +55,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     code: ev.code,
     url: `${base}/${ev.code}`,
     type: ev.type,
+    format: ev.type === "tournament" ? formatOf(ev.format) : null,
     title: ev.title,
     status: ev.status,
     startsAt: ev.startsAt.toISOString(),

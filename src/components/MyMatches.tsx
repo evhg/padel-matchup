@@ -12,6 +12,7 @@ import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath, personalUrl } from "@/lib/personal";
 import { HomeScreenPrompt } from "./HomeScreenPrompt";
+import { isLevelVerified } from "@/lib/domain/levels";
 import { LevelEditor } from "./LevelEditor";
 import { NameEditor } from "./NameEditor";
 import { PersonalLinkCard } from "./PersonalLinkCard";
@@ -155,7 +156,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
       <section className="card">
         <NameEditor name={player.displayName} />
         <div className="mt-4 border-t border-line pt-4">
-          <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} />
+          <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasHistory} />
         </div>
         <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
       </section>

@@ -120,7 +120,15 @@
     "bookingUrl": "Court booking link",
     "bookingUrlHelp": "Paste the club's booking page or confirmation. Players get one tap to it.",
     "bookingSet": "Booking link added",
-    "titleSet": "Title or note added"
+    "titleSet": "Title or note added",
+    "format": "Format",
+    "formatAmericano": "Americano",
+    "formatMexicano": "Mexicano",
+    "formatKing": "King of the court",
+    "formatAmericanoHelp": "Partners rotate, everyone plays everyone, most points wins.",
+    "formatMexicanoHelp": "Round 1 is random; from then on the courts follow the standings, so you always play people at your level.",
+    "formatKingHelp": "Winners move up a court, losers move down. Partners split every round.",
+    "roundsHelp": "Rounds are generated on the day."
   },
   "share": {
     "title": "Your match is live",
@@ -486,7 +494,10 @@
     "email_disabled": "Email isn't set up on this server.",
     "too_many": "Too many attempts. Try again later.",
     "slot_taken": "That spot was just taken.",
-    "level_required": "Pick your level first."
+    "level_required": "Pick your level first.",
+    "scores_missing": "Enter all scores of the last round first.",
+    "format_locked": "The format can't change once round 1 exists.",
+    "no_result": "Finalize the result first."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -555,7 +566,10 @@
       "perfect": "{n} rounds and every pair has partnered exactly once.",
       "partial": "{players} players on {courts} courts: {resting} sit out each round, spread fairly.",
       "metaDescription": "Free americano padel schedule generator: rotating partners, fair sit-outs, 4 to 64 players, printable. Or run it live with scores and standings."
-    }
+    },
+    "howItWorksMexicano": "Round 1 is random. From round 2 the courts follow the standings: the top four play on court 1, the next four on court 2, and on each court 1st and 4th play 2nd and 3rd. Enter every score before the next round.",
+    "howItWorksKing": "Winners move up a court, losers move down; the top court's winners and the bottom court's losers stay. Partners split every round. Standings follow the court you finish on, winners first. Enter every score before the next round.",
+    "scoresMissing": "Enter all scores of round {n} first."
   },
   "calendar": {
     "title": "Add to calendar",
@@ -670,7 +684,15 @@
       "winRate": "Win rate",
       "podiums": "Podiums"
     },
-    "levelNeeded": "Pick your level to join"
+    "levelNeeded": "Pick your level to join",
+    "verified": "Confirmed by an organizer",
+    "confirmTitle": "Confirm levels",
+    "confirmHelp": "You played with them. If a level looks right, confirm it: the player gets a tick next to their level, and rankings can trust it.",
+    "confirmHelpShort": "{count, plural, one {# player to confirm} other {# players to confirm}}",
+    "confirmAll": "Confirm all {count}",
+    "confirmOne": "Looks right",
+    "confirmed": "Confirmed",
+    "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}"
   },
   "card": {
     "title": "Result card",
@@ -745,5 +767,36 @@
     "listedHelp": "Anyone at the venue can find and join this match.",
     "listedShort": "On the venue board",
     "notListedShort": "Not on the venue board"
+  },
+  "ranking": {
+    "title": "Ranking",
+    "clubTitle": "{venue} ranking",
+    "sub": "Last 90 days, finalized results only. 3 points per win, 1 per draw; tournaments give 3, 2, 1 to the podium.",
+    "optInOnly": "Only players who opted in appear. Nobody is listed without their say.",
+    "empty": "No finalized results here yet. Play, enter the score, and let the organizer confirm it.",
+    "emptyOptIn": "There are results, but nobody has opted in to the ranking yet.",
+    "optInCta": "Show me in rankings",
+    "optedIn": "You appear in rankings",
+    "optInHelp": "Club and city rankings list your first name, level and results from the last 90 days. Off by default; switch it off any time.",
+    "colPts": "Pts",
+    "colPlayed": "P",
+    "colWins": "W",
+    "verifiedLegend": "✓ level confirmed by an organizer",
+    "metaDescription": "Padel ranking at {name}: opted-in players, finalized results from the last 90 days."
+  },
+  "city": {
+    "title": "Padel in {city}",
+    "sub": "Open matches at clubs across {city}, the city ranking, and a link that gets four people on court in ten seconds.",
+    "openMatches": "Open matches",
+    "noMatches": "No listed matches right now. Create one and switch on the venue board so people here can find it.",
+    "clubs": "Clubs seen here",
+    "create": "Create a match in {city}",
+    "ranking": "{city} ranking",
+    "how": "How it works here",
+    "how1": "Create a match and share one link in your chat. Players tap to join; no app, no sign-up.",
+    "how2": "Levels 0–7, the scale you know. Organizers can confirm them after a match.",
+    "how3": "Americano, mexicano and King of the Court with live scores from any phone.",
+    "how4": "Everything is open: the API, the data and the code. Bring your own bot or assistant.",
+    "metaDescription": "Padel in {city}: open matches, club rankings, americano, mexicano and King of the Court. Create a match in ten seconds, share one link, no app."
   }
 }

@@ -39,7 +39,7 @@ pnpm test        # vitest: slot-claim concurrency, invite transitions, score-loc
 pnpm typecheck
 pnpm lint
 pnpm build
-pnpm e2e         # Playwright journeys (core, americano, levels) against a fresh production build; first time: pnpm exec playwright install chromium
+pnpm e2e         # Playwright journeys (core, americano, levels, viral, groups, venues, agents, formats) against a fresh production build; first time: pnpm exec playwright install chromium
 ```
 
 `pnpm e2e` boots `next start` on port 3001 with a throwaway PGlite database, a dummy Resend key (email UIs on, sends fail harmlessly) and generated VAPID keys, then runs every `e2e/*.mjs` suite. `SHOTS=./shots` keeps full-page screenshots; `PW_CHROMIUM=/path/to/chromium` uses a preinstalled browser. GitHub Actions runs typecheck, lint, vitest on PGlite **and** on a real Postgres service, the build, and the e2e suites on every push and pull request (`.github/workflows/ci.yml`).
@@ -204,6 +204,9 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Timezone:** default from Vercel's `x-vercel-ip-timezone` (browser zone as fallback), editable, stored UTC.
 - **Score:** any participant after start; players can correct each other; once the organizer enters/edits it locks ("Confirmed by organizer"). 1–3 sets, optional team assignment → win/loss in **My matches**.
 - **Organizer access** = creator cookie **or** the 10-char manage link (sets a per-event httpOnly cookie).
+- **Tournament formats:** besides the americano rotation a tournament can run as a **mexicano** (round 1 random, then the courts follow the standings, 1st+4th against 2nd+3rd on each court; the next round waits for all scores) or as **King of the Court** (winners move up a court, losers move down, the top court's winners and the bottom court's losers stay, partners split every round, standings follow the court you finish on). Chosen with one chip when creating a tournament, changeable until round 1. Engine: `src/lib/domain/formats.ts`.
+- **Organizer-verified levels:** after a finalized result the organizer sees a folded "Confirm levels" row and confirms, one tap each or all at once, the levels of the people they played with. A confirmed level shows a ✓ next to the chip and stays confirmed while it moves less than half a step.
+- **Rankings (opt-in, off by default):** `/v/{slug}/ranking` ranks a club's finalized results from the last 90 days (3 points per win, 1 per draw, 3/2/1 for tournament podiums); `/phuket` and `/singapore` do the same across a city's clubs and list the open matches there. Only players who switched on "Show me in rankings" (My matches, or one tap on a ranking page) appear. Cities: `src/lib/domain/cities.ts`.
 - **Levels (0–7):** players declare their level once in quarter steps (a plain select grouped by band, with a short guide); it shows next to their name in rosters, standings and the score panel. Results nudge it: when the organizer confirms a 2v2 match score or finalizes a tournament, an Elo-style delta (one level of difference ≈ 10:1 odds, at most ±0.10 per match, ±0.12 per tournament) is applied once per event to every rated player, the source becomes "adjusted by results" and the last change is shown on My matches with a capped log. Unrated players never move and never count.
 - **Level ranges:** a match or tournament can be Bronze (1.0–2.5), Silver (2.5–3.5), Gold (3.0–4.5), Platinum (4.5+) or a custom min–max; the range shows as a chip in the hero. Inside the range people join as usual (the join form asks for a level once); outside it the button turns into **Ask to join**, the organizer sees the requests with the level and approves (seats or waitlists) or declines, the requester sees the answer in the join bar and gets a calendar invite or a short note by email. Organizer-reserved invites and promotions bypass the range. **Balanced teams:** when all four have levels, the score panel suggests the 2v2 split with the smallest gap.
 - **Stats strip** on My matches: played, won, win rate, podiums (from confirmed team results and finalized standings).
@@ -235,7 +238,7 @@ Public shapes (`src/lib/api/serialize.ts`) carry first names and levels only; em
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, calendar.ics) · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, /ranking, calendar.ics) · /phuket · /singapore · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)

@@ -4,6 +4,7 @@ import { baseUrl } from "@/lib/config";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { buildHistory, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, type RoundRef } from "@/lib/domain/americano";
 import { createEvent } from "@/lib/domain/events";
+import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { hasRange, levelFit } from "@/lib/domain/levels";
@@ -36,6 +37,8 @@ export const createMatchSchema = z.object({
   venueMapUrl: z.url().max(500).optional(),
   court: z.string().max(40).optional().describe('Court within the venue, e.g. "3".'),
   capacity: z.number().int().min(4).max(64).optional().describe("Tournaments only, a multiple of 4. Matches are always 4."),
+  format: z.enum(["americano", "mexicano", "king"]).optional().describe("Tournaments only. americano: partners rotate, everyone plays everyone. mexicano: courts by standings after round 1. king: winners move up a court, losers down."),
+  pointsPerMatch: z.number().int().min(4).max(99).optional().describe("Tournaments only: fixed points per match (16, 21, 24, 32). Omit for free scoring; mexicano defaults to 24."),
   whenFull: z.enum(["waitlist", "closed"]).default("waitlist"),
   levelMin: levelField.describe("Level range 0 to 7 (Playtomic-style). Omit both for any level."),
   levelMax: levelField,
@@ -128,6 +131,8 @@ export async function createMatch(db: Db, raw: unknown, ctx: OpContext, locale =
     capacity: input.capacity,
     whenFull: input.whenFull,
     note: input.note,
+    format: input.format ?? null,
+    pointsPerMatch: input.pointsPerMatch ?? DEFAULT_POINTS[formatOf(input.format)],
     levelMin: input.levelMin ?? null,
     levelMax: input.levelMax ?? null,
     publicListing: input.listOnVenueBoard,

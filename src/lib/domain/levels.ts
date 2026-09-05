@@ -162,3 +162,11 @@ export function tournamentDeltas(rows: readonly { id: string; level: number | nu
   }
   return out;
 }
+
+/** Half a step of drift keeps an organizer's confirmation valid while results nudge the level. */
+export const VERIFIED_TOLERANCE = 0.5;
+
+/** An organizer who played with them confirmed the level, and it has not moved much since. */
+export function isLevelVerified(p: { level: number | null; levelVerifiedLevel: number | null }): boolean {
+  return p.level != null && p.levelVerifiedLevel != null && Math.abs(p.level - p.levelVerifiedLevel) <= VERIFIED_TOLERANCE;
+}
