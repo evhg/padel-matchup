@@ -8,8 +8,8 @@ import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { setTournamentLock } from "@/lib/domain/tournament";
 import { saveMatchScore } from "@/lib/domain/scores";
-import { telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
-import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
+import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
+import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
 import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets, postCardForTicket, postTelegramNotice, postTelegramResult, refreshStartedCards, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
 import { renderDiscordCard } from "@/lib/discord/card";
@@ -92,6 +92,20 @@ describe("telegram signatures and tickets", () => {
     expect(ok?.query_id).toBe("q1");
     expect(verifyInitData(params.toString().replace("Bo", "Bob"), now)).toBeNull();
   });
+  it("the Mini App: where a start parameter leads, and the direct link on cards once the app exists", async () => {
+    expect(miniAppNext(null)).toBe("/me");
+    expect(miniAppNext("AbCd")).toBe("/AbCd");
+    expect(miniAppNext("r_AbCd")).toBe("/AbCd");
+    expect(miniAppNext("../etc")).toBe("/me");
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+    expect(miniAppUrl("AbCd")).toBeNull();
+    process.env.TELEGRAM_BOT_USERNAME = "kicksmash_bot";
+    process.env.TELEGRAM_MINIAPP_SLUG = "app";
+    expect(miniAppUrl("AbCd")).toBe("https://t.me/kicksmash_bot/app?startapp=AbCd");
+    expect(miniAppUrl()).toBe("https://t.me/kicksmash_bot/app");
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+  });
+
   it("chat tickets are bound to the chat and expire after two days", () => {
     const now = new Date("2026-09-05T12:00:00Z");
     const ticket = chatTicket(-5, now);
@@ -261,6 +275,10 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(ev.cost).toBe("400 ฿");
     const detail = (await getEventByCode(db, ev.code))!;
     expect(renderCard(detail, "https://kicksma.sh", "en").text).toContain("💸 400 ฿ · PromptPay 081 234 5678");
+    process.env.TELEGRAM_MINIAPP_SLUG = "app";
+    expect(JSON.stringify(renderCard(detail, "https://kicksma.sh", "en").keyboard)).toContain(`https://t.me/kicksmash_bot/app?startapp=${ev.code}`);
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+    expect(JSON.stringify(renderCard(detail, "https://kicksma.sh", "en").keyboard)).toContain(`https://kicksma.sh/${ev.code}`);
     expect(renderDiscordCard(detail, "https://kicksma.sh", "ru").embeds[0].description).toContain("💸 400 ฿ · PromptPay 081 234 5678");
     const pub = matchToPublic(detail, "https://kicksma.sh");
     expect(pub.cost).toBe("400 ฿");

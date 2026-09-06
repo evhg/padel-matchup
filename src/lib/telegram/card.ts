@@ -4,7 +4,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { esc, type InlineKeyboard } from "./api";
+import { esc, miniAppUrl, type InlineKeyboard } from "./api";
 
 export type BotLocale = "en" | "ru";
 export const botLocale = (languageCode: string | null | undefined): BotLocale => (languageCode?.toLowerCase().startsWith("ru") ? "ru" : "en");
@@ -205,7 +205,8 @@ export function whenLine(detail: EventDetail, locale: BotLocale): string {
 export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
   const s = strings(locale);
-  const url = `${base}/${ev.code}`;
+  // Inside Telegram the match opens in the Mini App (signed in, no browser) once the owner has created it; the web page otherwise.
+  const url = miniAppUrl(ev.code) ?? `${base}/${ev.code}`;
   const seats = detail.roster.filter((x) => x.position <= ev.capacity).sort((a, b) => a.position - b.position);
   const occupied = seats.filter(isOccupied).length;
   const complete = lineupComplete(detail.roster, ev.capacity);

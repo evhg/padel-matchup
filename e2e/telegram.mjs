@@ -69,6 +69,22 @@ try {
   check("a tap under the inline card joins", olyaTap.json?.outcome === "join:joined", JSON.stringify(olyaTap.json));
   const pubAfter = await fetch(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
   check("the inline joiner is on the roster", pubAfter.players.some((p) => p.name === "Olya"), JSON.stringify(pubAfter.players));
+  // The Mini App sign-in: signed initData in, a session out, no browser login anywhere.
+  const initUser = { id: 515252, first_name: "Мини", username: "mini_e2e", language_code: "ru" };
+  const initFields = { auth_date: String(Math.floor(Date.now() / 1000)), query_id: "q1", user: JSON.stringify(initUser), start_param: code };
+  const initCheck = Object.keys(initFields).sort().map((k) => `${k}=${initFields[k]}`).join("\n");
+  const initHash = createHmac("sha256", createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest()).update(initCheck).digest("hex");
+  const initData = new URLSearchParams({ ...initFields, hash: initHash }).toString();
+  const mini = await fetch(`${BASE}/api/telegram/miniapp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData, startParam: code }) });
+  const miniJson = await mini.json().catch(() => null);
+  const cookie = (mini.headers.get("set-cookie") ?? "").split(";")[0];
+  check("the Mini App sign-in verifies initData, sets the session and points at the match", mini.status === 200 && miniJson?.ok === true && miniJson.next === `/${code}` && cookie.length > 10, `${mini.status} ${JSON.stringify(miniJson)}`);
+  const miniMe = await fetch(`${BASE}/api/me/export`, { headers: { cookie } }).then((r) => r.json());
+  check("the session belongs to the Telegram user from initData", miniMe.player?.displayName === "Мини", JSON.stringify(miniMe.player));
+  const forgedMini = await fetch(`${BASE}/api/telegram/miniapp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: initData.replace(/hash=\w/, "hash=0") }) });
+  check("forged initData is refused", forgedMini.status === 401);
+  const tgPage = await fetch(`${BASE}/tg`);
+  check("/tg renders (outside Telegram it says so)", tgPage.status === 200 && (await tgPage.text()).includes("telegram-web-app.js"));
   const games = await hook({ update_id: 33, message: { message_id: 4, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/games phuket" } });
   check("/games in the private chat lists the city's open matches", /^games:\d+\+[1-9]/.test(games.json?.outcome ?? ""), JSON.stringify(games.json));
   const login = await fetch(`${BASE}/api/telegram/login?id=1&first_name=Eve&auth_date=${Math.floor(Date.now() / 1000)}&hash=00`, { redirect: "manual" });

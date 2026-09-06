@@ -113,6 +113,19 @@ export function answerCallbackQuery(id: string, text?: string, o: { alert?: bool
   return tg<true>("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}), show_alert: o.alert ?? false, ...(o.url ? { url: o.url } : {}) });
 }
 
+/** The Mini App's direct link for a match, when the owner created the app in BotFather (TELEGRAM_MINIAPP_SLUG), else null. Opens inside Telegram with the player already signed in. */
+export function miniAppUrl(code?: string | null): string | null {
+  const slug = process.env.TELEGRAM_MINIAPP_SLUG;
+  const bot = telegramBotUsername();
+  if (!slug || !bot) return null;
+  return `https://t.me/${bot}/${slug}${code ? `?startapp=${encodeURIComponent(code)}` : ""}`;
+}
+
+/** The button next to the message box in the bot's private chat: opens the Mini App. */
+export function setMenuButton(url: string, text: string) {
+  return tg<true>("setChatMenuButton", { menu_button: { type: "web_app", text, web_app: { url } } });
+}
+
 export function setWebhook(url: string, secret: string) {
   return tg<true>("setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query", "my_chat_member", "inline_query", "chosen_inline_result"], drop_pending_updates: true });
 }
