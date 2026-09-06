@@ -10,7 +10,7 @@ import { setTournamentLock } from "@/lib/domain/tournament";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
 import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
-import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, postCardForTicket, postTelegramNotice, postTelegramResult, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
+import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets, postCardForTicket, postTelegramNotice, postTelegramResult, refreshStartedCards, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
 import { renderDiscordCard } from "@/lib/discord/card";
 import { matchToPublic } from "@/lib/api/serialize";
@@ -332,6 +332,101 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     await notifyCreator(db, ev, "joined", "Olga", org.id);
     expect(sent("sendMessage")).toHaveLength(0);
+  });
+
+  it("/new with words creates the match right there: the zone from the text, the chat learns it, the card is posted", async () => {
+    const chat = { id: -100333, type: "supergroup" as const, title: "Rawai crew" };
+    const lee = user(51, "Lee");
+    const send = (id: number, text: string) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat, from: lee, text } }, NO_SIDE_EFFECTS);
+    // No zone known and nothing in the text that names a place: ask once, offer the form.
+    expect(await send(70, "/new tomorrow 19:00")).toBe("new_need_tz");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("/tz");
+    expect(await send(71, "/tz nowhere/nope")).toBe("tz_unknown");
+    // A place in the text is enough.
+    const out = await send(72, "/new tomorrow 19:00 Rawai Padel Club 400฿ level 3-4");
+    expect(out).toMatch(/^new_created:[A-Za-z0-9]{4}$/);
+    const code = out.split(":")[1];
+    const detail = (await getEventByCode(db, code))!;
+    expect(detail.event.tz).toBe("Asia/Bangkok");
+    expect(detail.event.venueName).toBe("Rawai Padel Club");
+    expect(detail.event.cost).toBe("400฿");
+    expect([detail.event.levelMin, detail.event.levelMax]).toEqual([3, 4]);
+    expect(detail.creator.telegramId).toBe(51);
+    expect(detail.roster.filter((x) => x.playerId === detail.creator.id)).toHaveLength(1);
+    const card = sent("sendMessage").at(-1)!;
+    expect(String(card.body.text)).toContain("Rawai Padel Club");
+    expect(String(card.body.text)).toContain("💸 400฿");
+    expect(JSON.stringify(card.body.reply_markup)).toContain(`j:${code}`);
+    const [row] = await db.select().from(telegramChats).where(eq(telegramChats.chatId, chat.id));
+    expect(row.tz).toBe("Asia/Bangkok");
+    expect(row.venueName).toBe("Rawai Padel Club");
+    // From now on the chat knows its zone and its court.
+    const again = await send(73, "/new сб 10:00 американо 8");
+    expect(again).toMatch(/^new_created:/);
+    const t = (await getEventByCode(db, again.split(":")[1]))!.event;
+    expect([t.type, t.format, t.capacity, t.venueName]).toEqual(["tournament", "americano", 8, "Rawai Padel Club"]);
+    expect(await send(74, "/new next week sometime")).toBe("new_how");
+    expect(await send(75, "/new 01.01.2020 19:00")).toBe("new_past");
+    expect(await send(76, "/tz Москва")).toBe("tz");
+    expect((await db.select().from(telegramChats).where(eq(telegramChats.chatId, chat.id)))[0].tz).toBe("Europe/Moscow");
+    // Bare /new still hands out the form.
+    expect(await send(77, "/new")).toBe("new");
+  });
+
+  it("the result from the card: 🏁 asks who won, a player's tap records it, the organizer's tap confirms, /score adds the sets", async () => {
+    const chat = { id: -100444, type: "supergroup" as const, title: "Results" };
+    const org = user(61, "Olga", "ru");
+    const players = [user(62, "Petr"), user(63, "Dima"), user(64, "Kolya")];
+    const msg = (id: number, from: ReturnType<typeof user>, text: string, reply?: number) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat, from, text, ...(reply ? { reply_to_message: { message_id: reply, date: 0, chat } } : {}) } }, NO_SIDE_EFFECTS);
+    const tap = (id: number, from: ReturnType<typeof user>, messageId: number, data: string) => handleTelegramUpdate(db, { update_id: id, callback_query: { id: `cb${id}`, from, message: { message_id: messageId, date: 0, chat }, data } }, NO_SIDE_EFFECTS);
+    const out = await msg(80, org, "/new tomorrow 20:00 Kata Padel");
+    const code = out.split(":")[1];
+    const [card] = await db.select().from(telegramCards).where(eq(telegramCards.chatId, chat.id));
+    for (const [i, p] of players.entries()) expect(await tap(81 + i, p, card.messageId, `j:${code}`)).toBe("join:joined");
+    // Not started: the button is not on the card and a tap says so.
+    expect(JSON.stringify(sent("editMessageText").at(-1)!.body.reply_markup)).not.toContain(`r:${code}`);
+    expect(await tap(85, org, card.messageId, `r:${code}`)).toBe("result:not_yet");
+    // Time passes.
+    const ev = (await getEventByCode(db, code))!.event;
+    await db.update(events).set({ startsAt: new Date(Date.now() - 2 * HOUR) }).where(eq(events.id, ev.id));
+    calls = [];
+    expect(await refreshStartedCards(db)).toBe(1);
+    expect(JSON.stringify(sent("editMessageText").at(-1)!.body.reply_markup)).toContain(`r:${code}`);
+    expect(await refreshStartedCards(db)).toBe(0); // same render, no second edit
+    expect(await tap(86, org, card.messageId, `r:${code}`)).toBe("result:prompt");
+    const prompt = sent("sendMessage").at(-1)!;
+    const rows = (prompt.body.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard;
+    expect(rows).toHaveLength(3);
+    expect(rows.flat().map((b) => b.callback_data)).toEqual([`w:${code}:12`, `w:${code}:34`, `w:${code}:13`, `w:${code}:24`, `w:${code}:14`, `w:${code}:23`]);
+    expect(rows[0][0].text).toBe("🏆 Olga & Petr");
+    // A stranger cannot record; Petr can, and the organizer is asked to confirm.
+    expect(await tap(87, user(99, "Zed"), prompt.body.message_id as number, `w:${code}:13`)).toBe("result:error:not_participant");
+    expect(await tap(88, players[0], 500, `w:${code}:13`)).toBe("result:recorded");
+    let pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result).toMatchObject({ teamA: ["Olga", "Dima"], teamB: ["Petr", "Kolya"], winner: "a", sets: [], confirmed: false });
+    const edited = sent("editMessageText").at(-1)!;
+    expect(String(edited.body.text)).toContain("🏆 Olga &amp; Dima"); // HTML parse mode: the ampersand is escaped, Telegram shows "&"
+    expect(JSON.stringify(edited.body.reply_markup)).toContain(`k:${code}`);
+    expect(await tap(89, players[1], 500, `k:${code}`)).toBe("result:not_organizer");
+    expect(await tap(90, org, 500, `k:${code}`)).toBe("result:confirmed");
+    pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result?.confirmed).toBe(true);
+    expect(String(sent("editMessageText").at(-1)!.body.text)).toContain("подтверждено");
+    // The picture goes out once, naming the winners, with no made-up score.
+    calls = [];
+    expect(await postTelegramResult(db, code)).toBe(1);
+    expect(String(sent("sendPhoto")[0].body.caption)).toContain("🏆 Olga & Dima");
+    expect(String(sent("sendPhoto")[0].body.caption)).not.toContain("1-0");
+    // Sets afterwards, by replying to the card.
+    expect(parseSets("6-3, 6:4 and 10-8")).toEqual([{ setNumber: 1, sideA: 6, sideB: 3 }, { setNumber: 2, sideA: 6, sideB: 4 }, { setNumber: 3, sideA: 10, sideB: 8 }]);
+    expect(await msg(91, org, "/score 6-3 6-4", card.messageId)).toBe("score_saved");
+    pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 6, b: 4 }]);
+    expect(await msg(92, org, `/score ${code} 6-3`)).toBe("score_saved");
+    expect(await msg(93, org, "/score what")).toBe("score_how");
+    // A locked result stays locked for players.
+    expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_error:locked");
+    expect(await tap(95, org, card.messageId, `r:${code}`)).toBe("result:locked");
   });
 
   it("does nothing when the bot is not configured", async () => {

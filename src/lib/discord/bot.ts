@@ -230,7 +230,7 @@ export async function postDiscordResult(db: Db, code: string): Promise<number> {
           detail.roster.map((x) => ({ team: x.team, status: x.status, name: x.player?.displayName ?? x.invitedName ?? "?" })),
         );
         if (r) {
-          lines.push(`**${r.score}**`);
+          if (r.score) lines.push(`**${r.score}**`);
           if (r.hasTeams && r.winner !== "draw") lines.push(s.winner((r.winner === "a" ? r.a : r.b).join(" & ")));
         }
       } else if (ev.standings?.length) {

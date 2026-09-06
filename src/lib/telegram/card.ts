@@ -45,7 +45,7 @@ const STRINGS = {
     toastError: "Something went wrong. Open the match instead.",
     welcome: "Hi. I keep one card per match here and stay quiet otherwise: people join with one tap, the card updates itself. /new creates a match in ten seconds; paste a kicksma.sh link and I turn it into a card.",
     newMatch: "Create the match here (ten seconds). The card lands in this chat:",
-    help: "/new creates a match for this chat\n/match CODE posts the card of an existing match\n/lang en|ru switches my language\nEverything else: one tap on the card.",
+    help: "/new tomorrow 19:00 Rawai creates a match right here (or /new alone for the form)\n/match CODE posts the card of an existing match\n/score CODE 6-3 6-4 adds the sets after a match\n/tz phuket sets the chat's time zone once\n/lang en|ru switches my language\nEverything else: one tap on the card.",
     completeNote: (n: number, time: string) => `Line-up complete ✓ ${n} players. See you at ${time}.`,
     reminder: (title: string, where: string, n: number, cap: number) => `⏰ In about an hour: ${title} · ${where}. ${n}/${cap} players.`,
     result: "🏁 Result",
@@ -60,6 +60,27 @@ const STRINGS = {
     noAnswer: "I don't have a good answer to that one. Try asking in more detail, or open kicksma.sh/answers.",
     changedNote: (title: string, when: string, where: string) => `🔁 ${title}: now ${when} · ${where}.`,
     cancelledNote: (title: string, when: string) => `❌ ${title} on ${when} is cancelled.`,
+    newHowTo: "Tell me when and where, in one line:\n/new tomorrow 19:00 Rawai 400฿\n/new sat 10:00 americano 8 Bangtao\nOr use the form:",
+    needTz: "Which time zone is this chat in? Once: /tz phuket (a city or a zone name). Or use the form:",
+    tzSet: (tz: string) => `Time zone for this chat: ${tz}.`,
+    tzUnknown: "I don't know that zone. Try a city (/tz phuket) or a zone name (/tz Asia/Bangkok).",
+    newPast: "That was more than a day ago. For a match you already played, give today's or yesterday's date.",
+    tooMany: "That is a lot of matches for one day. Try again tomorrow.",
+    resultBtn: "🏁 Result",
+    whoWon: (title: string) => `${title}: who won?`,
+    notYet: "The match hasn't started yet.",
+    needFour: "The result needs four players in the line-up.",
+    onlyPlayers: "Only players in this match can enter the result.",
+    onlyOrganizer: "Only the organizer can confirm.",
+    resultLocked: "The organizer already confirmed the result.",
+    recorded: (winners: string, by: string) => `🏆 ${winners}\nRecorded by ${by}. Organizer: confirm below, or tap again to correct.`,
+    confirmBtn: "✔ Confirm",
+    confirmedNote: (winners: string) => `🏆 ${winners} · confirmed ✓`,
+    scoreHint: (code: string) => `Sets, if you like: /score ${code} 6-3 6-4`,
+    scoreHow: "Like this: /score CODE 6-3 6-4 (or reply to the card with /score 6-3 6-4).",
+    scoreNoTeams: "Tap 🏁 Result on the card first, so I know the teams.",
+    scoreSaved: (score: string) => `Saved: ${score}`,
+    toastSaved: "Saved ✅",
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} is in · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} joined the waitlist` : kind === "left" ? `↩️ ${name} left · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} asks to join (outside the level range)` : kind === "confirmed" ? `✅ ${name} confirmed · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declined` : `⬆️ ${name} moved in from the waitlist · ${n}/${cap}`,
   },
@@ -97,7 +118,7 @@ const STRINGS = {
     toastError: "Что-то пошло не так. Откройте матч.",
     welcome: "Привет. Я веду одну карточку на матч и больше не пишу: люди записываются одним нажатием, карточка обновляется сама. /new создаёт матч за десять секунд; вставьте ссылку kicksma.sh, и я превращу её в карточку.",
     newMatch: "Создайте матч здесь (десять секунд). Карточка появится в этом чате:",
-    help: "/new создаёт матч для этого чата\n/match КОД публикует карточку существующего матча\n/lang en|ru меняет язык\nВсё остальное: одно нажатие на карточке.",
+    help: "/new завтра 19:00 Равай создаёт матч прямо здесь (или просто /new для формы)\n/match КОД публикует карточку существующего матча\n/score КОД 6-3 6-4 добавляет счёт после матча\n/tz пхукет один раз задаёт часовой пояс чата\n/lang en|ru меняет язык\nВсё остальное: одно нажатие на карточке.",
     completeNote: (n: number, time: string) => `Состав собран ✓ ${n} игроков. До встречи в ${time}.`,
     reminder: (title: string, where: string, n: number, cap: number) => `⏰ Примерно через час: ${title} · ${where}. Игроков: ${n}/${cap}.`,
     result: "🏁 Результат",
@@ -112,6 +133,27 @@ const STRINGS = {
     noAnswer: "Хорошего ответа у меня нет. Спросите подробнее или загляните на kicksma.sh/answers.",
     changedNote: (title: string, when: string, where: string) => `🔁 ${title}: теперь ${when} · ${where}.`,
     cancelledNote: (title: string, when: string) => `❌ ${title} ${when} отменён.`,
+    newHowTo: "Напишите когда и где, одной строкой:\n/new завтра 19:00 Равай 400฿\n/new сб 10:00 американо 8 Бангтао\nИли через форму:",
+    needTz: "В каком часовом поясе этот чат? Один раз: /tz пхукет (город или название зоны). Или через форму:",
+    tzSet: (tz: string) => `Часовой пояс чата: ${tz}.`,
+    tzUnknown: "Не знаю такой зоны. Попробуйте город (/tz пхукет) или название зоны (/tz Asia/Bangkok).",
+    newPast: "Это больше суток назад. Для уже сыгранного матча укажите сегодняшнюю или вчерашнюю дату.",
+    tooMany: "Слишком много матчей за день. Попробуйте завтра.",
+    resultBtn: "🏁 Результат",
+    whoWon: (title: string) => `${title}: кто выиграл?`,
+    notYet: "Матч ещё не начался.",
+    needFour: "Для результата нужны четыре игрока в составе.",
+    onlyPlayers: "Результат могут вносить только участники матча.",
+    onlyOrganizer: "Подтвердить может только организатор.",
+    resultLocked: "Организатор уже подтвердил результат.",
+    recorded: (winners: string, by: string) => `🏆 ${winners}\nВнёс(ла): ${by}. Организатор: подтвердите ниже или нажмите ещё раз, чтобы исправить.`,
+    confirmBtn: "✔ Подтвердить",
+    confirmedNote: (winners: string) => `🏆 ${winners} · подтверждено ✓`,
+    scoreHint: (code: string) => `Счёт по сетам, если хотите: /score ${code} 6-3 6-4`,
+    scoreHow: "Вот так: /score КОД 6-3 6-4 (или ответом на карточку: /score 6-3 6-4).",
+    scoreNoTeams: "Сначала нажмите 🏁 Результат на карточке, чтобы я знал составы пар.",
+    scoreSaved: (score: string) => `Сохранено: ${score}`,
+    toastSaved: "Сохранено ✅",
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} играет · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} в листе ожидания` : kind === "left" ? `↩️ ${name} больше не играет · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} просится в матч (вне диапазона уровней)` : kind === "confirmed" ? `✅ ${name}: участие подтверждено · ${n}/${cap}` : kind === "declined" ? `❌ ${name}: отказ` : `⬆️ ${name} из листа ожидания в состав · ${n}/${cap}`,
   },
@@ -142,7 +184,7 @@ export function whenLine(detail: EventDetail, locale: BotLocale): string {
 }
 
 /** The one message per match the bot keeps edited. HTML parse mode. */
-export function renderCard(detail: EventDetail, base: string, locale: BotLocale): { text: string; keyboard: InlineKeyboard; complete: boolean } {
+export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
   const s = strings(locale);
   const url = `${base}/${ev.code}`;
@@ -150,7 +192,10 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale)
   const occupied = seats.filter(isOccupied).length;
   const complete = lineupComplete(detail.roster, ev.capacity);
   const cancelled = ev.status === "cancelled";
-  const past = ev.status === "past";
+  const started = now.getTime() >= ev.startsAt.getTime();
+  const past = ev.status === "past" || started;
+  // After the start a match takes its result from the card; once the organizer confirmed, the button goes.
+  const resultOpen = ev.type === "match" && !cancelled && started && !ev.scoreLockedByCreator;
   const lines: string[] = [];
   lines.push(`🎾 <b>${esc(cardTitle(detail, locale))}</b>`);
   lines.push(`📅 ${esc(formatEventDay(ev.startsAt, ev.tz, locale))} · ${esc(formatEventTime(ev.startsAt, ev.tz, locale))}`);
@@ -181,7 +226,7 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale)
   lines.push(status);
   const keyboard: InlineKeyboard =
     cancelled || past
-      ? { inline_keyboard: [[{ text: s.open, url }]] }
+      ? { inline_keyboard: resultOpen ? [[{ text: s.resultBtn, callback_data: `r:${ev.code}` }], [{ text: s.open, url }]] : [[{ text: s.open, url }]] }
       : {
           inline_keyboard: [
             [

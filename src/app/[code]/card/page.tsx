@@ -43,7 +43,7 @@ export default async function CardPage({ params }: Props) {
     if (!r) redirect(`/${code}`);
     const a = r.hasTeams ? r.a.join(" & ") : t("card.teamA");
     const b = r.hasTeams ? r.b.join(" & ") : t("card.teamB");
-    line = r.winner === "draw" ? `${t("card.draw", { a, b })} ${r.score}` : r.winner === "a" ? `${t("card.won", { a, b })} ${r.score}` : `${t("card.won", { a: b, b: a })} ${r.sets.map((s) => `${s.sideB}-${s.sideA}`).join(" ")}`;
+    line = (r.winner === "draw" ? `${t("card.draw", { a, b })} ${r.score}` : r.winner === "a" ? `${t("card.won", { a, b })} ${r.score}` : `${t("card.won", { a: b, b: a })} ${r.sets.map((s) => `${s.sideB}-${s.sideA}`).join(" ")}`).trim();
   } else {
     const named = detail.roster.filter((s) => isOccupied(s) || s.status === "invited");
     const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
