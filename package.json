@@ -26,7 +26,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "pnpm db:migrate && pnpm db:seed",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "packages:build": "node scripts/build-packages.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",

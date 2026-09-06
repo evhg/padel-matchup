@@ -194,6 +194,15 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ---
 
+## npm packages
+
+The pure engines ship as packages, generated from `src/lib/domain` so there is one source of truth:
+
+- [`@kicksmash/americano`](https://www.npmjs.com/package/@kicksmash/americano): `buildSchedule({ names | players, courts, rounds, seed })` for a whole americano, plus the round-by-round planners (`planRound`, `planMexicanoRound`, `planKingRound`), histories and standings.
+- [`@kicksmash/levels`](https://www.npmjs.com/package/@kicksmash/levels): bands, presets, ranges and `levelFit`, `balancedTeams`, `matchDeltas` and `tournamentDeltas`.
+
+`pnpm packages:build` regenerates `packages/*/src` and `packages/*/dist` (both gitignored); `tests/packages.test.ts` builds them on every CI run. To release: bump the version in `packages/<name>/package.json`, build, `npm publish` from that directory.
+
 ## Community
 
 Questions, ideas and "I built a thing on the API" go to [GitHub Discussions](https://github.com/evhg/padel-matchup/discussions). Bugs go to issues. There is a Discord server too (the link is on `/developers`), where the bot answers questions about once an hour. The Telegram bot and the Reddit account answer people where they are; the code and the roadmap live here.

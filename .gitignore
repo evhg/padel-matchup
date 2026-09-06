@@ -29,3 +29,8 @@ npm-debug.log*
 
 # e2e screenshots (pnpm e2e with SHOTS=e2e-shots)
 e2e-shots
+
+# npm packages: sources and builds are generated from src/lib/domain by scripts/build-packages.mjs
+packages/*/src
+packages/*/dist
+packages/*/LICENSE
