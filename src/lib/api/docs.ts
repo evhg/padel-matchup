@@ -10,7 +10,7 @@ export function llmsTxt(base: string): string {
 
 > ${VALUE_PROP}
 
-${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexicano, King of the Court). A match is a short link (${base}/CODE, 4 characters). People open the link, type a first name and are in. No accounts, no app, no passwords. Organisers get a private manage link. Levels 0–7 (Playtomic-style) are self-declared and nudged by results. Groups create their next match in one tap or on a weekly slot. A Telegram bot (@kicksmash_bot) keeps one live card per match in group chats: one tap joins. Venue boards list open matches at a club; club and city rankings (opt-in, last 90 days) live at /v/{slug}/ranking and /phuket, /singapore. Everything public here is readable by anyone, including AI assistants and crawlers; the data is CC BY 4.0 and the code is Apache-2.0.
+${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexicano, King of the Court). A match is a short link (${base}/CODE, 4 characters). People open the link, type a first name and are in. No accounts, no app, no passwords. Organisers get a private manage link. Levels 0–7 (Playtomic-style) are self-declared and nudged by results. Groups create their next match in one tap or on a weekly slot. A Telegram bot (@kicksmash_bot) keeps one live card per match in group chats: one tap joins. Venue boards list open matches at a club; club and city rankings (opt-in, last 90 days) live at /v/{slug}/ranking and /phuket, /singapore. Short answers to common organising questions live at /answers. Everything public here is readable by anyone, including AI assistants and crawlers; the data is CC BY 4.0 and the code is Apache-2.0.
 
 ## For assistants and agents
 

@@ -16,7 +16,8 @@ import { fetchAll, type FeedSpec } from "./sources";
  * Nothing is ever posted without that tap.
  */
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-export const LIMITS = { draftsPerRun: 8, asksPerDay: 6 } as const;
+/** Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. */
+export const LIMITS = { draftsPerRun: 3, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
 
 export const ownerTelegramId = () => (process.env.TELEGRAM_OWNER_ID ? Number(process.env.TELEGRAM_OWNER_ID) : null);
 
@@ -36,9 +37,11 @@ export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof f
   const out = { drafted: 0, relevant: 0, errors: 0 };
   if (!draftingEnabled()) return out;
   const pending = await db.select().from(listenItems).where(eq(listenItems.status, "new")).orderBy(desc(listenItems.postedAt)).limit(LIMITS.draftsPerRun);
+  const started = Date.now();
   for (const item of pending) {
+    if (Date.now() - started > LIMITS.draftBudgetMs) break;
     if (!(await withinBudget(db, now))) break;
-    const { draft, error } = await draftReply(db, { source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt }, fetchImpl);
+    const { draft, error } = await draftReply(db, { source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt }, fetchImpl, now);
     if (!draft) {
       out.errors++;
       await db.update(listenItems).set({ status: "failed", lastError: error, draftedAt: now }).where(eq(listenItems.id, item.id));
@@ -137,13 +140,27 @@ export async function approveItem(db: Db, id: string, now = new Date(), fetchImp
     const res = await postRedditComment(item.threadId, item.draft, fetchImpl);
     if (res.ok) {
       await db.update(listenItems).set({ status: "posted", decidedAt: now, postedReplyAt: now, replyUrl: res.url, lastError: null }).where(eq(listenItems.id, id));
+      await growAnswer(db, id, now, fetchImpl);
       return { status: "posted", url: res.url };
     }
     await db.update(listenItems).set({ status: "approved", decidedAt: now, lastError: res.error }).where(eq(listenItems.id, id));
     return { status: "failed", error: res.error };
   }
   await db.update(listenItems).set({ status: "approved", decidedAt: now }).where(eq(listenItems.id, id));
+  await growAnswer(db, id, now, fetchImpl);
   return { status: "approved_manual" };
+}
+
+/** An approved reply becomes an evergreen answer page. Lazy import: answers.ts imports this module. */
+async function growAnswer(db: Db, id: string, now: Date, fetchImpl: typeof fetch): Promise<void> {
+  try {
+    const item = await getItem(db, id);
+    if (!item) return;
+    const { generateAnswer } = await import("./answers");
+    await generateAnswer(db, item, now, fetchImpl);
+  } catch {
+    // The reply is what mattered; the page can be regenerated from the desk.
+  }
 }
 
 export async function markPostedManually(db: Db, id: string, replyUrl: string | null, now = new Date()): Promise<ListenItem | null> {
@@ -172,6 +189,12 @@ export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly
   const expired = await expireOld(db, now);
   const drafted = await draftPending(db, now, o.fetchImpl);
   const asked = await askOwner(db, now);
+  try {
+    const { sendWeeklyDigest } = await import("./answers");
+    await sendWeeklyDigest(db, now);
+  } catch {
+    // Digest is a nicety; never let it fail the tick.
+  }
   const failed = fetched.filter((f) => f.error);
   return { feeds: fetched.length, feedErrors: failed.length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked, ...(failed.length ? { feedErrorDetails: failed.map((f) => `${f.feed.id}: ${f.error}`) } : {}) };
 }

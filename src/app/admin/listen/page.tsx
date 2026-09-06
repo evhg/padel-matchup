@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { isOwner } from "@/actions/listen";
+import { AnswerRow } from "@/components/admin/AnswerRow";
 import { ListenItemCard } from "@/components/admin/ListenItemCard";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
+import { listAllAnswers } from "@/lib/listen/answers";
 import { draftingEnabled, spentToday } from "@/lib/listen/draft";
 import { redditEnabled } from "@/lib/listen/reddit";
 import { listItems, ownerTelegramId } from "@/lib/listen/tick";
@@ -37,7 +39,7 @@ export default async function ListenAdminPage({ searchParams }: { searchParams: 
   }
   const db = await getDb();
   const status = STATUSES.includes(sp.status as (typeof STATUSES)[number]) ? (sp.status as (typeof STATUSES)[number]) : null;
-  const [items, spent] = await Promise.all([listItems(db, status ? [status] : ["drafted", "approved", "failed", "posted"]), spentToday(db)]);
+  const [items, spent, pages] = await Promise.all([listItems(db, status ? [status] : ["drafted", "approved", "failed", "posted"]), spentToday(db), listAllAnswers(db, 30)]);
   const canPost = redditEnabled();
   return (
     <>
@@ -63,6 +65,17 @@ export default async function ListenAdminPage({ searchParams }: { searchParams: 
             ))}
           </div>
         </section>
+        {pages.length > 0 && (
+          <section className="card">
+            <h2 className="font-extrabold">Answer pages</h2>
+            <p className="mt-1 text-xs text-muted">Grown from approved replies, published at once. Unpublish anything you would not sign.</p>
+            <ul className="mt-2 flex flex-col divide-y divide-line">
+              {pages.map((a) => (
+                <AnswerRow key={a.id} id={a.id} slug={a.slug} title={a.title} language={a.language} published={Boolean(a.publishedAt) && !a.unpublishedAt} />
+              ))}
+            </ul>
+          </section>
+        )}
         {items.length === 0 && <p className="text-sm text-muted">Nothing here right now.</p>}
         {items.map((it) => (
           <ListenItemCard

@@ -44,5 +44,5 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 
 ## Listening desk
 
-`src/lib/listen/`: `parse.ts` (feeds → candidates, relevance gate, language guess; pure), `sources.ts` (the feeds, polite fetch), `draft.ts` (one Messages API call per candidate with a strict JSON contract and daily budgets counted in `metrics_daily`), `reddit.ts` (posting an approved comment), `tick.ts` (the hourly loop: remember, gate, draft, ask the owner on Telegram, approve, expire). The tone rules live in `SYSTEM_PROMPT` in `draft.ts` and nowhere else. Nothing is posted without the owner's tap; keep it that way.
+`src/lib/listen/`: `parse.ts` (feeds → candidates, relevance gate, language guess; pure), `sources.ts` (the feeds, polite fetch), `draft.ts` (one Messages API call per candidate with a strict JSON contract and daily budgets counted in `metrics_daily`), `reddit.ts` (posting an approved comment), `tick.ts` (the hourly loop: remember, gate, draft, ask the owner on Telegram, approve, expire), `answers.ts` (approved replies become /answers pages; the Sunday digest with Unpublish buttons). The tone rules live in `SYSTEM_PROMPT` in `draft.ts` and nowhere else. Nothing is posted without the owner's tap; keep it that way.
 
