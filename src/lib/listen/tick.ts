@@ -163,12 +163,15 @@ export async function listItems(db: Db, statuses: string[] = ["drafted", "approv
 }
 
 /** The hourly step. Safe to run often; every part is idempotent. */
-export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly FeedSpec[]; fetchImpl?: typeof fetch } = {}): Promise<Record<string, number>> {
+export type ListenSummary = { feeds: number; feedErrors: number; fetched: number; remembered: number; expired: number; drafted: number; relevant: number; draftErrors: number; asked: number; feedErrorDetails?: string[] };
+
+export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly FeedSpec[]; fetchImpl?: typeof fetch } = {}): Promise<ListenSummary> {
   const fetched = await fetchAll(o.feeds, o.fetchImpl);
   const items = fetched.flatMap((f) => f.items);
   const remembered = await rememberCandidates(db, items, now);
   const expired = await expireOld(db, now);
   const drafted = await draftPending(db, now, o.fetchImpl);
   const asked = await askOwner(db, now);
-  return { feeds: fetched.length, feedErrors: fetched.filter((f) => f.error).length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked };
+  const failed = fetched.filter((f) => f.error);
+  return { feeds: fetched.length, feedErrors: failed.length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked, ...(failed.length ? { feedErrorDetails: failed.map((f) => `${f.feed.id}: ${f.error}`) } : {}) };
 }
