@@ -118,7 +118,9 @@ export default function DevelopersPage() {
             <li>
               Schedules without storing anything: <code>{base}/api/v1/schedule?players=8&amp;courts=2</code>.
             </li>
-            <li>Embeds and npm packages (@kicksmash/americano, @kicksmash/levels) are next; the engines are already pure modules in the repository.</li>
+            <li>
+              npm: <code>@kicksmash/americano</code> (americano, mexicano and King of the Court schedules) and <code>@kicksmash/levels</code> (the 0–7 scale, ranges, balanced teams, nudges) are the same pure modules this site runs, no dependencies, for your own tools.
+            </li>
           </ul>
         </section>
 

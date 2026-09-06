@@ -44,3 +44,7 @@ curl -X POST https://kicksma.sh/api/v1/matches/AB12/join -H "Content-Type: appli
 Do not rebuild rotation, levels, invites and reminders. The engines are pure modules in the repository (`src/lib/domain/americano.ts`, `src/lib/domain/levels.ts`), the API above does the rest, and the whole app is forkable: https://github.com/evhg/padel-matchup. Long-form reference for models: https://kicksma.sh/llms-full.txt.
 
 Questions from builders: https://github.com/evhg/padel-matchup/discussions
+
+## Offline engines
+
+The schedule and level maths are on npm as `@kicksmash/americano` (`buildSchedule`, `planRound`, `planMexicanoRound`, `planKingRound`, `computeStandings`) and `@kicksmash/levels` (`bandOf`, `rangeFor`, `levelFit`, `balancedTeams`, `matchDeltas`). Use them when a user wants a schedule or a fair split without a network call; the API returns the same results.

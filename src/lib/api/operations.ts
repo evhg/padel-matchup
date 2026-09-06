@@ -3,7 +3,7 @@ import type { Db } from "@/db";
 import type { Player } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { buildHistory, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, type RoundRef } from "@/lib/domain/americano";
+import { buildSchedule, type ScheduleResult } from "@/lib/domain/schedule";
 import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById, joinGroup } from "@/lib/domain/groups";
@@ -249,49 +249,9 @@ export async function leaveAsPlayer(db: Db, detail: EventDetail, player: Player,
   return { outcome: "left", match: matchToPublic(fresh, base, null), next: "Left. If someone was on the waitlist they have been moved in and told." };
 }
 
-export type ScheduleResult = {
-  format: "americano";
-  players: number;
-  courts: number;
-  exact: boolean;
-  rounds: { round: number; matches: { court: number; a: [string, string]; b: [string, string] }[]; resting: string[] }[];
-  note: string;
-};
+export type { ScheduleResult } from "@/lib/domain/schedule";
 
 /** Pure: the same rotation engine the live tournaments use. */
 export function generateSchedule(raw: unknown): ScheduleResult {
-  const input = scheduleSchema.parse(raw);
-  const names = input.names?.map((n) => n.trim()).filter(Boolean);
-  const n = names && names.length >= 4 ? names.length : (input.players ?? 8);
-  const label = (i: number) => names?.[i] ?? `Player ${i + 1}`;
-  const maxCourts = maxCourtsFor(n);
-  const courts = Math.min(maxCourts, Math.max(1, input.courts ?? maxCourts));
-  const cycle = rotationLength(n);
-  const exact = Boolean(cycle) && courts === maxCourts;
-  const roundCount = Math.min(40, Math.max(1, input.rounds ?? (exact ? (cycle as number) : n)));
-  const seed = input.seed ?? 1;
-  const ids = Array.from({ length: n }, (_, i) => `p${i}`);
-  const rng = mulberry32(seed * 7919 + n);
-  const ordered = seededShuffle(ids, mulberry32(seed * 104729 + n));
-  const out: ScheduleResult["rounds"] = [];
-  const refs: RoundRef[] = [];
-  const plans: { matches: { court: number; a: [string, string]; b: [string, string] }[]; resting: string[] }[] = [];
-  for (let r = 0; r < roundCount; r++) {
-    let plan: (typeof plans)[number];
-    if (exact && cycle && r >= cycle) plan = plans[r - cycle];
-    else if (exact) plan = scheduleRound(ordered, r, buildHistory(refs), rng);
-    else plan = planRound(ids, courts, buildHistory(refs), rng);
-    plans.push(plan);
-    refs.push({ matches: plan.matches.map((m) => ({ a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1], sideA: null, sideB: null })), resting: plan.resting });
-    const idx = (id: string) => Number(id.slice(1));
-    out.push({ round: r + 1, matches: plan.matches.map((m) => ({ court: m.court, a: [label(idx(m.a[0])), label(idx(m.a[1]))], b: [label(idx(m.b[0])), label(idx(m.b[1]))] })), resting: plan.resting.map((id) => label(idx(id))) });
-  }
-  return {
-    format: "americano",
-    players: n,
-    courts,
-    exact,
-    rounds: out,
-    note: exact ? `${roundCount} rounds; every pair partners exactly once every ${cycle} rounds.` : `${n} players on ${courts} court${courts > 1 ? "s" : ""}: ${n - courts * 4} sit out each round, spread fairly.`,
-  };
+  return buildSchedule(scheduleSchema.parse(raw));
 }
