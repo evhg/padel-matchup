@@ -7,7 +7,7 @@ import { approveItem, askOwner, draftPending, expireOld, listenTick, rememberCan
 import type { FeedSpec } from "@/lib/listen/sources";
 import { createTestDb } from "./helpers/db";
 
-const NOW = new Date("2026-09-06T09:00:00Z");
+const NOW = new Date("2026-09-07T09:00:00Z");
 const iso = (hoursAgo: number) => new Date(NOW.getTime() - hoursAgo * 3600 * 1000).toISOString();
 
 const atom = (entries: { id: string; title: string; body: string; when: string }[]) =>
@@ -119,7 +119,7 @@ describe("listen: the hourly tick (db, stubbed network)", () => {
     expect(dms[0].body?.chat_id).toBe(777);
     expect(JSON.stringify(dms[0].body?.reply_markup)).toContain(`la:${byId.t3_aaa111.id}`);
     expect(calls.some((c) => c.url.includes("oauth.reddit.com"))).toBe(false);
-    const spent = await spentToday(db, "2026-09-06");
+    const spent = await spentToday(db, "2026-09-07");
     expect(spent).toEqual({ drafts: 2, input: 1800, output: 240 });
 
     // The second run is idempotent: nothing new, nothing re-asked.
@@ -166,7 +166,7 @@ describe("listen: the hourly tick (db, stubbed network)", () => {
     await rememberCandidates(db, many, NOW);
     let drafted = 0;
     for (let i = 0; i < 12; i++) drafted += (await draftPending(db, NOW)).drafted;
-    const spent = await spentToday(db, "2026-09-06");
+    const spent = await spentToday(db, "2026-09-07");
     expect(spent.drafts).toBeLessThanOrEqual(BUDGET.draftsPerDay);
     expect(drafted).toBeLessThanOrEqual(BUDGET.draftsPerDay);
     const asked = await askOwner(db, NOW);

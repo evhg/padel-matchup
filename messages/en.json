@@ -807,5 +807,13 @@
     "signIn": "Sign in with Telegram",
     "invalid": "Telegram sign-in could not be verified. Try again.",
     "justLinked": "Telegram linked. Your matches from the bot are here now."
+  },
+  "answers": {
+    "eyebrow": "Answers",
+    "title": "Padel organising, answered",
+    "sub": "Short, practical answers to the questions people ask about getting a game together: formats, levels, group chats, schedules. Grown from real conversations, kept generic.",
+    "empty": "The first answers are on their way. Until then, the americano generator answers the most common one.",
+    "footer": "Written for the community by the people who build Kicksmash. Reuse freely (CC BY 4.0).",
+    "metaDescription": "Short answers to common questions about organising padel: americano and mexicano formats, levels, group chats, schedules."
   }
 }

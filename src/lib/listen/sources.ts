@@ -13,8 +13,7 @@ const UA = "Kicksmash listening bot (+https://kicksma.sh/agents; reads public fe
 export const FEEDS: readonly FeedSpec[] = [
   { id: "hn-padel", kind: "hn", url: "https://hn.algolia.com/api/v1/search_by_date?query=padel&tags=(story,comment)&hitsPerPage=50", source: "hn" },
   { id: "reddit-padel-new", kind: "feed", url: "https://www.reddit.com/r/padel/new/.rss?limit=50", source: "reddit" },
-  { id: "reddit-search-padel-app", kind: "feed", url: "https://www.reddit.com/search.rss?q=padel+app&sort=new&limit=50", source: "reddit" },
-  { id: "reddit-search-padel-organise", kind: "feed", url: "https://www.reddit.com/search.rss?q=padel+organise+OR+organize+OR+americano+OR+mexicano&sort=new&limit=50", source: "reddit" },
+  { id: "reddit-search-padel-tools", kind: "feed", url: "https://www.reddit.com/search.rss?q=padel+%28app+OR+organise+OR+organize+OR+americano+OR+mexicano+OR+whatsapp%29&sort=new&t=week&limit=50", source: "reddit" },
 ];
 
 export type FetchResult = { feed: FeedSpec; items: Candidate[]; error: string | null; status: number | null };

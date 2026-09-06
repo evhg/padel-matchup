@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
+import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, markPostedManually, ownerTelegramId, saveDraft, skipItem, type ApproveOutcome } from "@/lib/listen/tick";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, runA, type ActionResult } from "./shared";
@@ -60,3 +61,14 @@ export async function markListenPostedAction(id: string, replyUrl: string): Prom
     return null;
   });
 }
+
+export async function setAnswerPublishedAction(id: string, on: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db } = await requireOwner();
+    await setAnswerPublished(db, id, on);
+    revalidatePath("/admin/listen");
+    revalidatePath("/answers");
+    return null;
+  });
+}
+

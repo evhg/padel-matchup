@@ -17,6 +17,7 @@ import { personalUrl } from "@/lib/personal";
 import { isValidShareCode } from "@/lib/codes";
 import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whereLine, type BotLocale } from "./card";
+import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 
 /**
@@ -341,10 +342,16 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   return codes.length ? "card" : "ignored";
 }
 
-async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "la" | "ls", id: string): Promise<string> {
+async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "la" | "ls" | "lu", id: string): Promise<string> {
   if (cb.from.id !== ownerTelegramId()) {
     await answerCallbackQuery(cb.id);
     return "listen:not_owner";
+  }
+  if (action === "lu") {
+    const row = await setAnswerPublished(db, id, false);
+    await answerCallbackQuery(cb.id, row ? "Unpublished." : "Not found.");
+    if (cb.message && row) await editMessageText(cb.message.chat.id, cb.message.message_id, `🗑 <b>Unpublished</b>\n${esc(row.title)}`, { inline_keyboard: [[{ text: "Desk", url: `${baseUrl()}/admin/listen` }]] });
+    return row ? "listen:unpublished" : "listen:noop";
   }
   if (action === "ls") {
     const row = await skipItem(db, id);
@@ -364,8 +371,8 @@ async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_q
 
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
-  const listen = data.match(/^(la|ls):([0-9a-f-]{36})$/);
-  if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls", listen[2]);
+  const listen = data.match(/^(la|ls|lu):([0-9a-f-]{36})$/);
+  if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
   const m = data.match(/^([jl]):([A-Za-z0-9]{4})$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);

@@ -807,5 +807,13 @@
     "signIn": "Entrar con Telegram",
     "invalid": "No se pudo verificar el acceso con Telegram. Inténtalo de nuevo.",
     "justLinked": "Telegram vinculado. Tus partidos del bot ya están aquí."
+  },
+  "answers": {
+    "eyebrow": "Respuestas",
+    "title": "Organizar pádel, respondido",
+    "sub": "Respuestas cortas y prácticas a lo que la gente pregunta para montar un partido: formatos, niveles, grupos de chat, cuadros. Nacen de conversaciones reales, sin datos personales.",
+    "empty": "Las primeras respuestas están en camino. Mientras tanto, el generador de americano responde la más frecuente.",
+    "footer": "Escrito para la comunidad por quienes hacen Kicksmash. Reutilízalo libremente (CC BY 4.0).",
+    "metaDescription": "Respuestas cortas a preguntas frecuentes sobre organizar pádel: americano y mexicano, niveles, grupos de chat, cuadros."
   }
 }

@@ -637,3 +637,28 @@ export const listenItems = pgTable(
 );
 export type ListenItem = typeof listenItems.$inferSelect;
 
+// ---------------------------------------------------------------------------
+// answers — evergreen Q&A pages grown from replies the owner approved. Public,
+// no personal data (the model rewrites the question generically), one-tap
+// unpublish from the weekly digest or the desk.
+// ---------------------------------------------------------------------------
+export const answers = pgTable(
+  "answers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull(),
+    language: text("language").notNull().default("en"),
+    title: text("title").notNull(),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    sourceItemId: uuid("source_item_id").references(() => listenItems.id, { onDelete: "set null" }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
+    /** The weekly digest mentioned this page (so it is offered for unpublish once). */
+    digestedAt: timestamp("digested_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("answers_slug_idx").on(t.slug), index("answers_published_idx").on(t.publishedAt)],
+);
+export type Answer = typeof answers.$inferSelect;
+
