@@ -73,6 +73,10 @@ export const players = pgTable(
     /** Discord account linked by the bot (snowflakes as text: they exceed 2^53). */
     discordId: text("discord_id"),
     discordUsername: text("discord_username"),
+    /** Opt-in public profile at /u/{public_slug}. Off by default; the slug is minted on the first opt-in and kept. */
+    publicProfile: boolean("public_profile").notNull().default(false),
+    publicSlug: text("public_slug"),
+    publicSince: timestamp("public_since", { withTimezone: true }),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -88,6 +92,9 @@ export const players = pgTable(
     uniqueIndex("players_discord_id_idx")
       .on(t.discordId)
       .where(sql`${t.discordId} is not null`),
+    uniqueIndex("players_public_slug_idx")
+      .on(t.publicSlug)
+      .where(sql`${t.publicSlug} is not null`),
   ],
 );
 

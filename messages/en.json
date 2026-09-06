@@ -923,5 +923,43 @@
     "metaDescription": "Padel clubs on Kicksmash: open matches, rankings, posters, booking buttons and free courts. Clubs claim their page for free; the first ten in each city are founding clubs.",
     "seeAll": "All clubs",
     "openPage": "Open the club page"
+  },
+  "passport": {
+    "title": "Passport",
+    "sub": "Your level, results and data: yours to show, yours to take with you.",
+    "publicProfile": "Public page",
+    "publicOn": "on",
+    "publicOff": "off",
+    "publicHelp": "Off by default. On: a page with your first name, level and results at kicksma.sh/u/…, for a club, a partner or another app.",
+    "yourPage": "Your page",
+    "signed": "Signed level",
+    "signedHelp": "A small document any app can verify; the key is public.",
+    "export": "Download my data",
+    "exportHelp": "Everything Kicksmash holds about you, in one file.",
+    "memberSince": "On Kicksmash since {date}",
+    "playsAt": "Plays at",
+    "noLevel": "No level yet",
+    "verifiedBy": "Confirmed by an organizer",
+    "selfDeclared": "Self-declared",
+    "adjusted": "Moved by results",
+    "verify": "Verify this level",
+    "profileTitle": "{name} · padel level {level}",
+    "profileTitleNoLevel": "{name} · padel",
+    "metaDescription": "{name}'s padel passport on Kicksmash: level, results and clubs.",
+    "importTitle": "Have a level in another app?",
+    "importHelp": "Pick the scale and your number; it lands on 0–7 in the open. Results move it from there.",
+    "importScale": "Scale",
+    "importValue": "Your number",
+    "importUse": "Use {level}",
+    "importInvalid": "That number is outside the scale.",
+    "scale": {
+      "playtomic": "Playtomic (0–7)",
+      "ten": "1 to 10 (club systems)",
+      "five": "Five categories (1 beginner, 5 top)"
+    },
+    "scalesTitle": "Other apps' scales",
+    "scalesHelp": "How other scales land on 0–7. If yours is missing, pick the nearest band and let results do the rest.",
+    "scalesYours": "Yours",
+    "scalesKicksmash": "Kicksmash"
   }
 }

@@ -20,9 +20,9 @@ const PACKAGES = {
     index: `export * from "./americano.js";\nexport * from "./formats.js";\nexport * from "./schedule.js";\nexport { DomainError, isDomainError, type DomainErrorCode } from "./errors.js";\nexport type { TournamentFormat } from "./types.js";\n`,
   },
   levels: {
-    files: ["levels.ts"],
+    files: ["levels.ts", "passport.ts"],
     extra: {},
-    index: `export * from "./levels.js";\n`,
+    index: `export * from "./levels.js";\nexport * from "./passport.js";\n`,
   },
 };
 

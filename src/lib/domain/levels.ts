@@ -170,3 +170,28 @@ export const VERIFIED_TOLERANCE = 0.5;
 export function isLevelVerified(p: { level: number | null; levelVerifiedLevel: number | null }): boolean {
   return p.level != null && p.levelVerifiedLevel != null && Math.abs(p.level - p.levelVerifiedLevel) <= VERIFIED_TOLERANCE;
 }
+
+// ---------------------------------------------------------------------------
+// Other apps' scales, mapped onto 0–7 in the open. Playtomic uses the same
+// 0–7 numbers; club systems often use 1–10 or five categories. A mapping is
+// a starting point, not a verdict: results move the level from there.
+// ---------------------------------------------------------------------------
+export type LevelScale = { id: "playtomic" | "ten" | "five"; min: number; max: number; step: number; toLevel: (v: number) => number };
+
+export const LEVEL_SCALES: readonly LevelScale[] = [
+  { id: "playtomic", min: 0, max: 7, step: 0.25, toLevel: (v) => v },
+  /** 1 → 0.5, 10 → 7, linear in between. */
+  { id: "ten", min: 1, max: 10, step: 0.5, toLevel: (v) => 0.5 + ((v - 1) * 6.5) / 9 },
+  /** Five categories from beginner (1) to top club level (5): the middle of each band. */
+  { id: "five", min: 1, max: 5, step: 1, toLevel: (v) => [1.25, 2.25, 3.25, 4.25, 5.5][Math.round(v) - 1] },
+];
+
+export const scaleById = (id: string | null | undefined): LevelScale | null => LEVEL_SCALES.find((s) => s.id === id) ?? null;
+
+/** A number on another scale becomes a Kicksmash level in quarter steps, or null when it makes no sense. */
+export function fromScale(scaleId: string, value: unknown): number | null {
+  const scale = scaleById(scaleId);
+  const v = typeof value === "number" ? value : Number(value);
+  if (!scale || !Number.isFinite(v) || v < scale.min || v > scale.max) return null;
+  return clampLevel(Math.round(scale.toLevel(v) / LEVEL_STEP) * LEVEL_STEP);
+}

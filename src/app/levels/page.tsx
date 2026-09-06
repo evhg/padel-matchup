@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
-import { LEVEL_BANDS, LEVEL_PRESETS, MATCH_K, TOURNAMENT_K, formatLevel, type BandKey } from "@/lib/domain/levels";
+import { LEVEL_BANDS, LEVEL_PRESETS, LEVEL_SCALES, MATCH_K, TOURNAMENT_K, formatLevel, fromScale, type BandKey } from "@/lib/domain/levels";
 
 export const dynamic = "force-static";
 export const revalidate = 86400;
@@ -71,6 +71,34 @@ export default async function LevelsPage() {
                 {t(`level.${p.key}`)} · {formatLevel(p.min)}–{formatLevel(p.max)}
               </span>
             ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <h2 className="text-lg font-extrabold">{t("passport.scalesTitle")}</h2>
+          <p className="mt-1 text-sm text-muted">{t("passport.scalesHelp")}</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-faint">
+                  <th className="py-1 pr-3 font-bold">{t("passport.importScale")}</th>
+                  <th className="py-1 pr-3 font-bold">{t("passport.scalesYours")}</th>
+                  <th className="py-1 font-bold">{t("passport.scalesKicksmash")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {LEVEL_SCALES.map((s) => {
+                  const samples = s.id === "playtomic" ? [1, 3.5, 6] : s.id === "ten" ? [1, 4, 7, 10] : [1, 2, 3, 4, 5];
+                  return (
+                    <tr key={s.id}>
+                      <td className="py-2 pr-3 font-bold">{t(`passport.scale.${s.id}`)}</td>
+                      <td className="py-2 pr-3 tabular-nums text-muted">{samples.join(" · ")}</td>
+                      <td className="py-2 tabular-nums">{samples.map((v) => formatLevel(fromScale(s.id, v)!)).join(" · ")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </section>
 

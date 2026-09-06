@@ -923,5 +923,43 @@
     "metaDescription": "Clubes de pádel en Kicksmash: partidos abiertos, rankings, pósteres, botones de reserva y pistas libres. Los clubes reclaman su página gratis; los diez primeros de cada ciudad son fundadores.",
     "seeAll": "Todos los clubes",
     "openPage": "Abrir la página del club"
+  },
+  "passport": {
+    "title": "Pasaporte",
+    "sub": "Tu nivel, tus resultados y tus datos: para enseñarlos a quien quieras y llevártelos contigo.",
+    "publicProfile": "Página pública",
+    "publicOn": "activada",
+    "publicOff": "desactivada",
+    "publicHelp": "Desactivada por defecto. Activada: una página con tu nombre, nivel y resultados en kicksma.sh/u/…, para un club, un compañero u otra app.",
+    "yourPage": "Tu página",
+    "signed": "Nivel firmado",
+    "signedHelp": "Un documento pequeño que cualquier app puede verificar; la clave es pública.",
+    "export": "Descargar mis datos",
+    "exportHelp": "Todo lo que Kicksmash guarda sobre ti, en un archivo.",
+    "memberSince": "En Kicksmash desde {date}",
+    "playsAt": "Juega en",
+    "noLevel": "Sin nivel todavía",
+    "verifiedBy": "Confirmado por un organizador",
+    "selfDeclared": "Declarado por ti",
+    "adjusted": "Movido por los resultados",
+    "verify": "Verificar este nivel",
+    "profileTitle": "{name} · nivel de pádel {level}",
+    "profileTitleNoLevel": "{name} · pádel",
+    "metaDescription": "El pasaporte de pádel de {name} en Kicksmash: nivel, resultados y clubes.",
+    "importTitle": "¿Tienes nivel en otra app?",
+    "importHelp": "Elige la escala y tu número; se traduce a 0–7 a la vista. Desde ahí lo mueven los resultados.",
+    "importScale": "Escala",
+    "importValue": "Tu número",
+    "importUse": "Usar {level}",
+    "importInvalid": "Ese número está fuera de la escala.",
+    "scale": {
+      "playtomic": "Playtomic (0–7)",
+      "ten": "De 1 a 10 (sistemas de club)",
+      "five": "Cinco categorías (1 principiante, 5 máximo)"
+    },
+    "scalesTitle": "Escalas de otras apps",
+    "scalesHelp": "Cómo caen otras escalas sobre 0–7. Si falta la tuya, elige la franja más cercana y deja que los resultados hagan el resto.",
+    "scalesYours": "La tuya",
+    "scalesKicksmash": "Kicksmash"
   }
 }
