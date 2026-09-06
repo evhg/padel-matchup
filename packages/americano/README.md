@@ -1,15 +1,15 @@
-# @kicksmash/americano
+# @erikv69/americano
 
 Americano, mexicano and King of the Court schedules for padel. This is the exact rotation engine behind [kicksma.sh](https://kicksma.sh): pure TypeScript, no dependencies, deterministic for a seed, works in Node and in the browser.
 
 ```sh
-npm install @kicksmash/americano
+npm install @erikv69/americano
 ```
 
 ## A whole schedule in one call
 
 ```ts
-import { buildSchedule } from "@kicksmash/americano";
+import { buildSchedule } from "@erikv69/americano";
 
 const s = buildSchedule({ names: ["Ana", "Bo", "Chen", "Dee", "Eli", "Fay", "Gus", "Hana"] });
 // s.exact === true: 8 players in fours, every pair partners exactly once in 7 rounds
@@ -26,7 +26,7 @@ Options: `players` (4–64, ignored when `names` are given), `courts` (default `
 For live tournaments the engine plans one round at a time from what has been played:
 
 ```ts
-import { buildHistory, planRound, computeStandings, type RoundRef } from "@kicksmash/americano";
+import { buildHistory, planRound, computeStandings, type RoundRef } from "@erikv69/americano";
 
 const ids = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
 const played: RoundRef[] = []; // fill sideA / sideB as scores come in

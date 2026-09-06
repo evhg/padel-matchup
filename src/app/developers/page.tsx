@@ -119,7 +119,7 @@ export default function DevelopersPage() {
               Schedules without storing anything: <code>{base}/api/v1/schedule?players=8&amp;courts=2</code>.
             </li>
             <li>
-              npm: <code>@kicksmash/americano</code> (americano, mexicano and King of the Court schedules) and <code>@kicksmash/levels</code> (the 0–7 scale, ranges, balanced teams, nudges) are the same pure modules this site runs, no dependencies, for your own tools.
+              npm: <code>@erikv69/americano</code> (americano, mexicano and King of the Court schedules) and <code>@erikv69/levels</code> (the 0–7 scale, ranges, balanced teams, nudges) are the same pure modules this site runs, no dependencies, for your own tools.
             </li>
           </ul>
         </section>
@@ -130,7 +130,7 @@ export default function DevelopersPage() {
             A player who switches their public page on gets a signed level document at <code>/u/&#123;slug&#125;/passport.json</code>: name, level, band, whether an organizer confirmed it, matches played and won, issued and expiry dates. Ed25519 over canonical JSON (keys sorted, no whitespace, every field except <code>alg</code> and <code>sig</code>). The public key is at <code>/.well-known/kicksmash-passport.json</code>. Profiles are opt-in and off by default; there is no list of them, and you should never guess a slug.
           </p>
           <pre className="overflow-x-auto rounded-2xl bg-ink p-4 text-xs text-bg">
-            <code>{`import { verifyPassport } from "@kicksmash/levels";
+            <code>{`import { verifyPassport } from "@erikv69/levels";
 
 const doc = await fetch("https://kicksma.sh/u/ana-x7k2m/passport.json").then((r) => r.json());
 const { keys } = await fetch("https://kicksma.sh/.well-known/kicksmash-passport.json").then((r) => r.json());

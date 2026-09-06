@@ -47,4 +47,4 @@ Questions from builders: https://github.com/evhg/padel-matchup/discussions
 
 ## Offline engines
 
-The schedule and level maths are on npm as `@kicksmash/americano` (`buildSchedule`, `planRound`, `planMexicanoRound`, `planKingRound`, `computeStandings`) and `@kicksmash/levels` (`bandOf`, `rangeFor`, `levelFit`, `balancedTeams`, `matchDeltas`). Use them when a user wants a schedule or a fair split without a network call; the API returns the same results.
+The schedule and level maths are on npm as `@erikv69/americano` (`buildSchedule`, `planRound`, `planMexicanoRound`, `planKingRound`, `computeStandings`) and `@erikv69/levels` (`bandOf`, `rangeFor`, `levelFit`, `balancedTeams`, `matchDeltas`). Use them when a user wants a schedule or a fair split without a network call; the API returns the same results.

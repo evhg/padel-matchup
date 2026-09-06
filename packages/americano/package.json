@@ -1,5 +1,5 @@
 {
-  "name": "@kicksmash/americano",
+  "name": "@erikv69/americano",
   "version": "0.1.0",
   "description": "Americano, mexicano and King of the Court schedules for padel: the exact rotation engine behind kicksma.sh. Pure TypeScript, no dependencies, works in Node and the browser.",
   "keywords": ["padel", "americano", "mexicano", "king of the court", "tournament", "schedule", "rotation", "round robin", "doubles"],
