@@ -42,3 +42,7 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 
 `src/lib/telegram/` is the whole bot: `api.ts` (Bot API calls, Login Widget and Mini App signature checks), `card.ts` (the one card per match, en/ru copy), `bot.ts` (updates, card sync, reminders, result). It is quiet by design: joins and leaves edit the card; new messages only for the card, a complete line-up, the reminder and the result. Every change funnels through `emitMatchEvent` in `src/lib/api/webhooks.ts`, which also refreshes the cards, so new write paths need no Telegram code of their own. Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; tests stub `fetch`.
 
+## Listening desk
+
+`src/lib/listen/`: `parse.ts` (feeds → candidates, relevance gate, language guess; pure), `sources.ts` (the feeds, polite fetch), `draft.ts` (one Messages API call per candidate with a strict JSON contract and daily budgets counted in `metrics_daily`), `reddit.ts` (posting an approved comment), `tick.ts` (the hourly loop: remember, gate, draft, ask the owner on Telegram, approve, expire). The tone rules live in `SYSTEM_PROMPT` in `draft.ts` and nowhere else. Nothing is posted without the owner's tap; keep it that way.
+

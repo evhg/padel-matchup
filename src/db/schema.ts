@@ -596,3 +596,44 @@ export const telegramCards = pgTable(
 
 export type TelegramChat = typeof telegramChats.$inferSelect;
 export type TelegramCard = typeof telegramCards.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// listen_items — public posts where people ask about organising padel, the
+// reply we drafted, and what the owner decided. Nothing is posted without a
+// human tap. Bodies are public text already; we keep no more than needed.
+// ---------------------------------------------------------------------------
+export const listenItems = pgTable(
+  "listen_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: text("source").notNull(),
+    externalId: text("external_id").notNull(),
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    author: text("author"),
+    /** Thing id or comment id the posting API needs (Reddit t3_/t1_, HN item id). */
+    threadId: text("thread_id"),
+    postedAt: timestamp("posted_at", { withTimezone: true }).notNull(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    /** new → drafted → approved → posted; or skipped / irrelevant / expired / failed. */
+    status: text("status").notNull().default("new"),
+    kind: text("kind"),
+    language: text("language"),
+    draft: text("draft"),
+    draftReason: text("draft_reason"),
+    draftModel: text("draft_model"),
+    draftedAt: timestamp("drafted_at", { withTimezone: true }),
+    /** The owner was asked on Telegram; message id of that DM. */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    notifyMessageId: bigint("notify_message_id", { mode: "number" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    postedReplyAt: timestamp("posted_reply_at", { withTimezone: true }),
+    replyUrl: text("reply_url"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("listen_items_source_external_idx").on(t.source, t.externalId), index("listen_items_status_idx").on(t.status, t.postedAt)],
+);
+export type ListenItem = typeof listenItems.$inferSelect;
+
