@@ -45,6 +45,19 @@ try {
   check("second tap: already in", again.json?.outcome === "join:already_in");
   const left = await hook({ update_id: 7, callback_query: { id: "cb3", from: ivan, message: { message_id: 999, date: 0, chat: group }, data: `l:${code}` } });
   check("leave tap works", left.json?.outcome === "leave:left");
+  // Creating from the chat with words: the place in the text gives the zone, the card is posted (the Bot API is unreachable here, the match still exists).
+  const bkk = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", hour12: false }).formatToParts(new Date(Date.now() - 90 * 60 * 1000));
+  const part = (t) => bkk.find((p) => p.type === t).value;
+  const made = await hook({ update_id: 30, message: { message_id: 30, date: 0, chat: group, from: ivan, text: `/new ${part("day")}.${part("month")} ${part("hour")}:${part("minute")} Rawai Padel Club 300฿` } });
+  const newCode = String(made.json?.outcome ?? "").split(":")[1];
+  check("/new with words creates the match from the chat", /^new_created:[A-Za-z0-9]{4}$/.test(made.json?.outcome ?? ""), JSON.stringify(made.json));
+  const newMatch = await fetch(`${BASE}/api/v1/matches/${newCode}`).then((r) => r.json());
+  check("the chat-made match has the venue, the money line, the zone and the organizer in it", newMatch.venue?.name === "Rawai Padel Club" && newMatch.cost === "300฿" && newMatch.tz === "Asia/Bangkok" && newMatch.players.some((p) => p.name === "Ivan" && p.organizer), JSON.stringify(newMatch).slice(0, 300));
+  const started = new Date(newMatch.startsAt).getTime() < Date.now();
+  const prompt = await hook({ update_id: 31, callback_query: { id: "cbr", from: ivan, message: { message_id: 31, date: 0, chat: group }, data: `r:${newCode}` } });
+  check("the result tap on a match that already started asks for the four players first", started && prompt.json?.outcome === "result:need_four", JSON.stringify(prompt.json));
+  const tzSet = await hook({ update_id: 32, message: { message_id: 32, date: 0, chat: group, from: ivan, text: "/tz singapore" } });
+  check("/tz sets the chat's zone", tzSet.json?.outcome === "tz");
   const priv = await hook({ update_id: 8, message: { message_id: 3, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/start" } });
   check("private /start is answered with the personal link", priv.json?.outcome === "private_start");
   const login = await fetch(`${BASE}/api/telegram/login?id=1&first_name=Eve&auth_date=${Math.floor(Date.now() / 1000)}&hash=00`, { redirect: "manual" });

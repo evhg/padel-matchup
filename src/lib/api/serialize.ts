@@ -40,7 +40,7 @@ export type PublicMatch = {
   /** What each player pays, free text. How to pay stays between the players. */
   cost: string | null;
   note: string | null;
-  result: { sets: { a: number; b: number }[]; teamA: string[]; teamB: string[]; confirmed: boolean } | null;
+  result: { sets: { a: number; b: number }[]; teamA: string[]; teamB: string[]; winner: "a" | "b" | "draw"; confirmed: boolean } | null;
   createdAt: string;
 };
 
@@ -77,7 +77,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     bookingUrl: ev.bookingUrl,
     cost: ev.cost,
     note: ev.note,
-    result: res ? { sets: res.sets.map((s) => ({ a: s.sideA, b: s.sideB })), teamA: res.a, teamB: res.b, confirmed: ev.scoreLockedByCreator } : null,
+    result: res ? { sets: res.sets.map((s) => ({ a: s.sideA, b: s.sideB })), teamA: res.a, teamB: res.b, winner: res.winner, confirmed: ev.scoreLockedByCreator } : null,
     createdAt: ev.createdAt.toISOString(),
   };
 }

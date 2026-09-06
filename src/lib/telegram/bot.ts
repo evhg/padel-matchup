@@ -1,22 +1,28 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, telegramCards, telegramChats, type Player, type TelegramChat } from "@/db/schema";
+import { events, players, telegramCards, telegramChats, type Event, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
-import { isOccupied } from "@/lib/domain/events";
+import { createEvent, isOccupied } from "@/lib/domain/events";
+import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
+import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
+import { applyEventLevels } from "@/lib/domain/rating";
+import { saveMatchScore, type SetScore } from "@/lib/domain/scores";
+import { joinEvent } from "@/lib/domain/slots";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { mergePlayers } from "@/lib/domain/merge";
 import { createPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
-import { matchResult } from "@/lib/domain/result";
+import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { isValidShareCode } from "@/lib/codes";
 import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
-import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale } from "./card";
+import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
+import { parseNewCommand, resolveZone, tzHintFor } from "./parse";
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 import { decideClub, getClubByToken } from "@/lib/domain/clubs";
@@ -139,7 +145,7 @@ export async function postCard(db: Db, detail: EventDetail, chat: TelegramChat, 
 }
 
 /** Called after anything changed on a match: edits every card silently, notes a complete line-up once. Never throws. */
-export async function syncTelegram(db: Db, code: string): Promise<number> {
+export async function syncTelegram(db: Db, code: string, now = new Date()): Promise<number> {
   if (!telegramEnabled()) return 0;
   try {
     const detail = await getEventByCode(db, code);
@@ -152,7 +158,7 @@ export async function syncTelegram(db: Db, code: string): Promise<number> {
     let edits = 0;
     for (const { card, chat } of cards) {
       const locale = chatLocale(chat);
-      const { text, keyboard, complete } = renderCard(detail, baseUrl(), locale);
+      const { text, keyboard, complete } = renderCard(detail, baseUrl(), locale, now);
       const hash = renderHash(text, keyboard);
       if (hash !== card.rendered) {
         const res = await editMessageText(chat.chatId, card.messageId, text, keyboard);
@@ -180,7 +186,22 @@ export async function postCardForTicket(db: Db, code: string, ticket: string | n
   if (!chatId || !telegramEnabled()) return false;
   const [chat, detail] = await Promise.all([getChat(db, chatId), getEventByCode(db, code)]);
   if (!chat || chat.leftAt || !detail) return false;
+  await rememberChatDefaults(db, chat, detail.event);
   return (await postCard(db, detail, chat)) !== "failed";
+}
+
+/** Every few minutes: cards of matches that started in the last day and have no confirmed result are re-rendered, so the Result button shows up. The hash keeps it to one edit per card. */
+export async function refreshStartedCards(db: Db, now = new Date()): Promise<number> {
+  if (!telegramEnabled()) return 0;
+  const rows = await db
+    .selectDistinct({ code: events.code })
+    .from(events)
+    .innerJoin(telegramCards, and(eq(telegramCards.eventId, events.id), eq(telegramCards.kind, "card")))
+    .where(and(eq(events.type, "match"), lte(events.startsAt, now), gt(events.startsAt, new Date(now.getTime() - DAY_MS)), eq(events.scoreLockedByCreator, false), inArray(events.status, ["open", "full", "past"])))
+    .limit(100);
+  let edits = 0;
+  for (const r of rows) edits += await syncTelegram(db, r.code, now);
+  return edits;
 }
 
 /** About an hour before: one reminder per match into each chat that carries its card. */
@@ -256,6 +277,252 @@ export async function postTelegramResult(db: Db, code: string): Promise<number> 
   } catch {
     return 0;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Creating from the chat, and the result from the card.
+// ---------------------------------------------------------------------------
+/** The zone a chat's matches live in: set with /tz, learned from the last match carried here, or read off the text (a city or an area). */
+async function chatZone(db: Db, chat: TelegramChat, hint: string | null): Promise<string | null> {
+  if (chat.tz) return chat.tz;
+  const [row] = await db.select({ tz: events.tz }).from(telegramCards).innerJoin(events, eq(events.id, telegramCards.eventId)).where(eq(telegramCards.chatId, chat.chatId)).orderBy(desc(telegramCards.createdAt)).limit(1);
+  return row?.tz ?? hint;
+}
+
+/** A chat learns its zone and its usual court from the first match made for it. */
+async function rememberChatDefaults(db: Db, chat: TelegramChat, ev: Event): Promise<void> {
+  const set: Partial<typeof telegramChats.$inferInsert> = {};
+  if (!chat.tz) set.tz = ev.tz;
+  if (!chat.venueName && ev.venueName) set.venueName = ev.venueName;
+  if (Object.keys(set).length) await db.update(telegramChats).set(set).where(eq(telegramChats.chatId, chat.chatId));
+}
+
+/** "6-3 6-4", "6:3, 6:4": up to three sets. */
+export function parseSets(text: string): SetScore[] {
+  const out: SetScore[] = [];
+  for (const m of text.matchAll(/(?<!\d)(\d{1,2})\s*[-:]\s*(\d{1,2})(?!\d)/g)) {
+    if (out.length === 3) break;
+    out.push({ setNumber: out.length + 1, sideA: Number(m[1]), sideB: Number(m[2]) });
+  }
+  return out;
+}
+
+type Seat = EventDetail["roster"][number];
+const seatName = (x: Seat) => x.player?.displayName ?? x.invitedName ?? "?";
+const playingSeats = (detail: EventDetail): Seat[] => detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x) && x.playerId).sort((a, b) => a.position - b.position);
+/** Both pairs, once they are known (set on the site, or by the first result tap). */
+function teamsOf(detail: EventDetail): { a: Seat[]; b: Seat[] } | null {
+  const seats = playingSeats(detail);
+  const a = seats.filter((x) => x.team === "a");
+  const b = seats.filter((x) => x.team === "b");
+  return a.length === 2 && b.length === 2 ? { a, b } : null;
+}
+const scoreErrorText = (s: BotStrings, e: unknown) => (isDomainError(e) ? (e.code === "not_started" ? s.notYet : e.code === "locked" ? s.resultLocked : e.code === "not_participant" ? s.onlyPlayers : s.toastError) : s.toastError);
+
+/** "/new tomorrow 19:00 Rawai 400฿": the match is created and its card posted, no site visit. */
+async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, ctx: OpContext): Promise<string> {
+  const s = strings(chatLocale(chat));
+  const now = new Date();
+  const params = new URLSearchParams({ tg: chatTicket(chat.chatId) });
+  if (chat.venueName) params.set("venue", chat.venueName);
+  const form = { inline_keyboard: [[{ text: "kicksma.sh →", url: `${baseUrl()}/?${params.toString()}` }]] };
+  const threadId = msg.message_thread_id ?? null;
+  const say = (text: string, keyboard?: typeof form) => sendMessage(chat.chatId, esc(text), { keyboard: keyboard ?? null, replyTo: msg.message_id, threadId, silent: true });
+  const tz = await chatZone(db, chat, tzHintFor(args));
+  if (!tz) {
+    await say(s.needTz, form);
+    return "new_need_tz";
+  }
+  const parsed = parseNewCommand(args, { tz, now });
+  if (!parsed.startsAt) {
+    await say(s.newHowTo, form);
+    return "new_how";
+  }
+  if (parsed.startsAt.getTime() < now.getTime() - DAY_MS) {
+    await say(s.newPast);
+    return "new_past";
+  }
+  const player = await findOrCreateTelegramPlayer(db, from);
+  if (!(await takeRate(db, "create", player.id, LIMITS.eventsPerPlayerPerDay))) {
+    await say(s.tooMany);
+    return "new_too_many";
+  }
+  let ev: Event;
+  try {
+    ev = await createEvent(db, {
+      creatorPlayerId: player.id,
+      type: parsed.type,
+      startsAt: parsed.startsAt,
+      tz,
+      venueName: parsed.venue ?? chat.venueName,
+      court: parsed.court,
+      capacity: parsed.capacity ?? undefined,
+      whenFull: "waitlist",
+      format: parsed.format,
+      pointsPerMatch: parsed.type === "tournament" ? DEFAULT_POINTS[formatOf(parsed.format)] : null,
+      levelMin: parsed.levelMin,
+      levelMax: parsed.levelMax,
+      cost: parsed.cost,
+    });
+  } catch {
+    await say(s.newHowTo, form);
+    return "new_invalid";
+  }
+  await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => undefined);
+  await rememberChatDefaults(db, chat, ev);
+  const detail = (await getEventByCode(db, ev.code))!;
+  await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });
+  ctx.emit("match.created", ev.code);
+  return `new_created:${ev.code}`;
+}
+
+/** "/score CODE 6-3 6-4", or "/score 6-3 6-4" as a reply to the card. Needs the pairs to be known. */
+async function scoreFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, ctx: OpContext): Promise<string> {
+  const s = strings(chatLocale(chat));
+  const say = (text: string) => sendMessage(chat.chatId, esc(text), { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null, silent: true });
+  const sets = parseSets(args);
+  const base = baseUrl();
+  let code: string | null = codesInText(args, base)[0] ?? args.replace(/\d{1,2}\s*[-:]\s*\d{1,2}/g, " ").match(CODE_RE)?.[1] ?? null;
+  if (!code && msg.reply_to_message) {
+    const [row] = await db.select({ code: events.code }).from(telegramCards).innerJoin(events, eq(events.id, telegramCards.eventId)).where(and(eq(telegramCards.chatId, chat.chatId), eq(telegramCards.messageId, msg.reply_to_message.message_id))).limit(1);
+    code = row?.code ?? null;
+  }
+  const detail = code && isValidShareCode(code) ? await getEventByCode(db, code) : null;
+  if (!detail || detail.event.type !== "match" || sets.length === 0) {
+    await say(s.scoreHow);
+    return "score_how";
+  }
+  if (!teamsOf(detail)) {
+    await say(s.scoreNoTeams);
+    return "score_no_teams";
+  }
+  const player = await findOrCreateTelegramPlayer(db, from);
+  const isCreator = player.id === detail.event.creatorPlayerId;
+  try {
+    await saveMatchScore(db, { eventId: detail.event.id, playerId: player.id, isCreator, sets });
+  } catch (e) {
+    await say(scoreErrorText(s, e));
+    return `score_error:${isDomainError(e) ? e.code : "unknown"}`;
+  }
+  if (isCreator) await applyEventLevels(db, detail.event.id).catch(() => undefined);
+  ctx.emit("match.result", detail.event.code, { confirmed: isCreator });
+  await say(s.scoreSaved(sets.map((x) => `${x.sideA}-${x.sideB}`).join(" ")));
+  return "score_saved";
+}
+
+/** 🏁 on the card: "who won?", one tap per possible pair (or per known pair). */
+async function handleResultPrompt(cb: NonNullable<TgUpdate["callback_query"]>, detail: EventDetail, locale: BotLocale): Promise<string> {
+  const s = strings(locale);
+  const ev = detail.event;
+  if (ev.type !== "match" || ev.status === "cancelled") {
+    await answerCallbackQuery(cb.id, s.toastError);
+    return "result:not_match";
+  }
+  if (Date.now() < ev.startsAt.getTime()) {
+    await answerCallbackQuery(cb.id, s.notYet);
+    return "result:not_yet";
+  }
+  if (ev.scoreLockedByCreator) {
+    await answerCallbackQuery(cb.id, s.resultLocked);
+    return "result:locked";
+  }
+  const seats = playingSeats(detail);
+  if (seats.length !== 4) {
+    await answerCallbackQuery(cb.id, s.needFour, { alert: true });
+    return "result:need_four";
+  }
+  const label = (w: Seat[]) => `🏆 ${w.map(seatName).join(" & ")}`.slice(0, 60);
+  const teams = teamsOf(detail);
+  const rows = teams
+    ? [[{ text: label(teams.a), callback_data: `w:${ev.code}:a` }], [{ text: label(teams.b), callback_data: `w:${ev.code}:b` }]]
+    : [
+        [0, 1, 2, 3],
+        [0, 2, 1, 3],
+        [0, 3, 1, 2],
+      ].map(([i, j, k, l]) => [
+        { text: label([seats[i], seats[j]]), callback_data: `w:${ev.code}:${seats[i].position}${seats[j].position}` },
+        { text: label([seats[k], seats[l]]), callback_data: `w:${ev.code}:${seats[k].position}${seats[l].position}` },
+      ]);
+  if (cb.message) await sendMessage(cb.message.chat.id, esc(s.whoWon(cardTitle(detail, locale))), { keyboard: { inline_keyboard: rows }, replyTo: cb.message.message_id, silent: true });
+  await answerCallbackQuery(cb.id);
+  return "result:prompt";
+}
+
+/** A winner tap: the pairs and who won are saved; the organizer's tap confirms at once, a player's waits for the organizer. */
+async function handleWinner(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, detail: EventDetail, sel: string, ctx: OpContext, locale: BotLocale): Promise<string> {
+  const s = strings(locale);
+  const ev = detail.event;
+  const player = await findOrCreateTelegramPlayer(db, cb.from);
+  const isCreator = player.id === ev.creatorPlayerId;
+  let winners: Seat[];
+  let teamA: string[] | undefined;
+  let sets: SetScore[];
+  if (sel === "a" || sel === "b") {
+    const teams = teamsOf(detail);
+    if (!teams) {
+      await answerCallbackQuery(cb.id, s.toastError);
+      return "result:no_teams";
+    }
+    winners = teams[sel];
+    sets = [...WINNER_ONLY_SETS[sel]];
+  } else {
+    const positions = sel.split("").map(Number);
+    winners = playingSeats(detail).filter((x) => positions.includes(x.position));
+    if (winners.length !== 2) {
+      await answerCallbackQuery(cb.id, s.toastError);
+      return "result:bad_pick";
+    }
+    teamA = winners.map((x) => x.playerId!);
+    sets = [...WINNER_ONLY_SETS.a];
+  }
+  try {
+    await saveMatchScore(db, { eventId: ev.id, playerId: player.id, isCreator, sets, teamA });
+  } catch (e) {
+    await answerCallbackQuery(cb.id, scoreErrorText(s, e), { alert: true });
+    return `result:error:${isDomainError(e) ? e.code : "unknown"}`;
+  }
+  if (isCreator) await applyEventLevels(db, ev.id).catch(() => undefined);
+  const names = winners.map(seatName).join(" & ");
+  if (cb.message) {
+    const text = `${esc(isCreator ? s.confirmedNote(names) : s.recorded(names, player.displayName))}\n${esc(s.scoreHint(ev.code))}`;
+    await editMessageText(cb.message.chat.id, cb.message.message_id, text, isCreator ? null : { inline_keyboard: [[{ text: s.confirmBtn, callback_data: `k:${ev.code}` }]] });
+  }
+  ctx.emit("match.result", ev.code, { confirmed: isCreator });
+  await answerCallbackQuery(cb.id, s.toastSaved);
+  return isCreator ? "result:confirmed" : "result:recorded";
+}
+
+/** The organizer confirms what a player recorded: the result locks, levels move, the picture is posted. */
+async function handleConfirm(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, detail: EventDetail, ctx: OpContext, locale: BotLocale): Promise<string> {
+  const s = strings(locale);
+  const ev = detail.event;
+  const player = await findOrCreateTelegramPlayer(db, cb.from);
+  if (player.id !== ev.creatorPlayerId) {
+    await answerCallbackQuery(cb.id, s.onlyOrganizer);
+    return "result:not_organizer";
+  }
+  const sets = [...detail.scores].sort((x, y) => x.setNumber - y.setNumber).map((x) => ({ setNumber: x.setNumber, sideA: x.sideA, sideB: x.sideB }));
+  const teams = teamsOf(detail);
+  if (sets.length === 0 || !teams) {
+    await answerCallbackQuery(cb.id, s.toastError);
+    return "result:nothing";
+  }
+  try {
+    await saveMatchScore(db, { eventId: ev.id, playerId: player.id, isCreator: true, sets });
+  } catch (e) {
+    await answerCallbackQuery(cb.id, scoreErrorText(s, e), { alert: true });
+    return `result:error:${isDomainError(e) ? e.code : "unknown"}`;
+  }
+  await applyEventLevels(db, ev.id).catch(() => undefined);
+  const r = matchResult(
+    detail.scores,
+    detail.roster.map((x) => ({ team: x.team, status: x.status, name: seatName(x) })),
+  );
+  const names = r && r.winner !== "draw" ? (r.winner === "a" ? r.a : r.b).join(" & ") : `${teams.a.map(seatName).join(" & ")} · ${teams.b.map(seatName).join(" & ")}`;
+  if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, `${esc(s.confirmedNote(names))}${r?.score ? `\n${esc(r.score)}` : ""}`, null);
+  ctx.emit("match.result", ev.code, { confirmed: true });
+  await answerCallbackQuery(cb.id, s.toastSaved);
+  return "result:confirmed";
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +649,18 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   const locale = chatLocale(chat);
   const s = strings(locale);
   if (cmd) {
+    if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);
+    if (cmd.command === "score") return scoreFromChat(db, msg, chat, from, cmd.args, ctx);
+    if (cmd.command === "tz") {
+      const zone = resolveZone(cmd.args);
+      if (!zone) {
+        await sendMessage(chat.chatId, s.tzUnknown, { replyTo: msg.message_id, silent: true });
+        return "tz_unknown";
+      }
+      await db.update(telegramChats).set({ tz: zone }).where(eq(telegramChats.chatId, chat.chatId));
+      await sendMessage(chat.chatId, esc(s.tzSet(zone)), { silent: true });
+      return "tz";
+    }
     if (cmd.command === "new") {
       const params = new URLSearchParams({ tg: chatTicket(chat.chatId) });
       if (chat.venueName) params.set("venue", chat.venueName);
@@ -417,7 +696,6 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     const detail = await getEventByCode(db, code);
     if (detail) await postCard(db, detail, chat, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
   }
-  void ctx;
   return codes.length ? "card" : "ignored";
 }
 
@@ -471,7 +749,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
   const club = data.match(/^(ca|cr):([A-Za-z0-9_-]{16,40})$/);
   if (club) return handleClubCallback(db, cb, club[1] as "ca" | "cr", club[2]);
-  const m = data.match(/^([jl]):([A-Za-z0-9]{4})$/);
+  const m = data.match(/^([jlrwk]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
   const s = strings(locale);
@@ -479,12 +757,15 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     await answerCallbackQuery(cb.id);
     return "callback_unknown";
   }
-  const [, action, code] = m;
+  const [, action, code, sel] = m;
   const detail = await getEventByCode(db, code);
   if (!detail) {
     await answerCallbackQuery(cb.id, s.noMatch);
     return "callback_no_match";
   }
+  if (action === "r") return handleResultPrompt(cb, detail, locale);
+  if (action === "w") return handleWinner(db, cb, detail, sel ?? "", ctx, locale);
+  if (action === "k") return handleConfirm(db, cb, detail, ctx, locale);
   const player = await findOrCreateTelegramPlayer(db, cb.from);
   let toast: string = s.toastError;
   let outcome = "error";
@@ -537,14 +818,18 @@ export async function handleTelegramUpdate(db: Db, update: TgUpdate, ctx: OpCont
 
 export const BOT_COMMANDS = {
   en: [
-    { command: "new", description: "Create a match for this chat" },
+    { command: "new", description: "Create a match: /new tomorrow 19:00 Rawai" },
     { command: "match", description: "Post the card of a match: /match CODE" },
+    { command: "score", description: "Sets after a match: /score CODE 6-3 6-4" },
+    { command: "tz", description: "This chat's time zone, once: /tz phuket" },
     { command: "lang", description: "Bot language: /lang en or /lang ru" },
     { command: "help", description: "What I do (very little, on purpose)" },
   ],
   ru: [
-    { command: "new", description: "Создать матч для этого чата" },
+    { command: "new", description: "Создать матч: /new завтра 19:00 Равай" },
     { command: "match", description: "Показать карточку матча: /match КОД" },
+    { command: "score", description: "Счёт после матча: /score КОД 6-3 6-4" },
+    { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
     { command: "lang", description: "Язык бота: /lang ru или /lang en" },
     { command: "help", description: "Что я умею (нарочно немного)" },
   ],

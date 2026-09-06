@@ -12,7 +12,7 @@ import { translatorFor } from "@/lib/email/templates";
 import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
-import { sendTelegramReminders } from "@/lib/telegram/bot";
+import { refreshStartedCards, sendTelegramReminders } from "@/lib/telegram/bot";
 import { sendDiscordReminders } from "@/lib/discord/bot";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,8 @@ export async function GET(req: Request) {
     void reportError("cron", e);
     return 0;
   });
+  // Cards of matches that just started grow their Result button.
+  await refreshStartedCards(db, now).catch((e) => reportError("cron", e));
   if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram, discord });
 
   const summary = { events: 0, players: 0, sent: 0, gone: 0, failed: 0, telegram, discord, errors: [] as string[] };
