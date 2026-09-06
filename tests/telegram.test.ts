@@ -6,11 +6,12 @@ import { events, players, telegramCards, telegramChats, telegramInlineCards } fr
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
+import { autoCreateGroupMatches, createGroup, updateGroup } from "@/lib/domain/groups";
 import { setTournamentLock } from "@/lib/domain/tournament";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
 import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
-import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets, postCardForTicket, postTelegramNotice, postTelegramResult, refreshStartedCards, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
+import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets, postCardForTicket, postCardsForGroup, postTelegramNotice, postTelegramResult, refreshStartedCards, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
 import { renderDiscordCard } from "@/lib/discord/card";
 import { matchToPublic } from "@/lib/api/serialize";
@@ -530,6 +531,37 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(String(sent("answerCallbackQuery").at(-1)!.body.url)).toContain(`start=r_${ev.code}`);
     // And that deep link, opened in the private chat, asks the question there.
     expect(await handleTelegramUpdate(db, { update_id: 808, message: { message_id: 1, date: 0, chat: { id: 93, type: "private" }, from: user(93, "Mai"), text: `/start r_${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("private_result_prompt");
+  });
+
+  it("a group's chat: the first group match carded there ties them, the weekly slot's match then lands by itself, and /new there makes group matches", async () => {
+    const chat = { id: -100444, type: "supergroup" as const, title: "Thursday crew" };
+    await handleTelegramUpdate(db, { update_id: 900, my_chat_member: { chat, from: user(51, "Kat"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } }, NO_SIDE_EFFECTS);
+    const kat = await makePlayer(db, "Kat");
+    const group = await createGroup(db, { creatorPlayerId: kat.id, name: "Thursday crew", tz: "Asia/Bangkok", venueName: "Rawai Padel Club" });
+    const ev = await createEvent(db, { creatorPlayerId: kat.id, type: "match", startsAt: new Date(Date.now() + 40 * 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel Club", whenFull: "waitlist", groupId: group.id });
+    // Nothing is tied yet: the group's match reaches no chat.
+    expect(await postCardsForGroup(db, ev.code)).toBe(0);
+    // Someone posts the group match in the chat: the card ties the chat to the group.
+    expect(await handleTelegramUpdate(db, { update_id: 901, message: { message_id: 1, date: 0, chat, from: user(51, "Kat"), text: `/match ${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("card");
+    const [row] = await db.select().from(telegramChats).where(eq(telegramChats.chatId, chat.id));
+    expect(row.groupId).toBe(group.id);
+    // The weekly slot creates the next match; its card lands in the tied chat with no one asking.
+    const dow = (new Date().getUTCDay() + 2) % 7;
+    await updateGroup(db, group.id, kat.id, { recurDow: dow, recurTime: "19:00", recurLeadDays: 7 });
+    const created = await autoCreateGroupMatches(db, new Date());
+    const mine = created.find((c) => c.group.id === group.id);
+    expect(mine).toBeTruthy();
+    calls = [];
+    expect(await postCardsForGroup(db, mine!.event.code)).toBe(1);
+    expect(sent("sendMessage")[0].body.chat_id).toBe(chat.id);
+    expect(String(sent("sendMessage")[0].body.text)).toContain("Rawai Padel Club");
+    // Twice is still one card.
+    expect(await postCardsForGroup(db, mine!.event.code)).toBe(0);
+    // /new in the tied chat makes a group match.
+    const out = await handleTelegramUpdate(db, { update_id: 902, message: { message_id: 2, date: 0, chat, from: user(51, "Kat"), text: "/new tomorrow 20:00 Rawai" } }, NO_SIDE_EFFECTS);
+    expect(out).toMatch(/^new_created:/);
+    const [fresh] = await db.select().from(events).where(eq(events.code, out.split(":")[1]));
+    expect(fresh.groupId).toBe(group.id);
   });
 
   it("does nothing when the bot is not configured", async () => {

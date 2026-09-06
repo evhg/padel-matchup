@@ -129,6 +129,7 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
   // Every change also reaches the Telegram cards (edited in place; the result is posted once). Loaded lazily: the bot imports the operations.
   try {
     const bot = await import("@/lib/telegram/bot");
+    if (event === "match.created") await bot.postCardsForGroup(db, code);
     if (event === "match.result") await bot.postTelegramResult(db, code);
     await bot.syncTelegram(db, code);
     if (event === "match.cancelled") await bot.postTelegramNotice(db, code, "cancelled");
@@ -138,6 +139,7 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
   }
   try {
     const bot = await import("@/lib/discord/bot");
+    if (event === "match.created") await bot.postCardsForGroup(db, code);
     if (event === "match.result") await bot.postDiscordResult(db, code);
     await bot.syncDiscord(db, code);
   } catch (e) {

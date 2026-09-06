@@ -126,7 +126,20 @@ export async function postCard(db: Db, detail: EventDetail, channel: DiscordChan
     return "failed";
   }
   await db.insert(discordCards).values({ eventId: ev.id, channelId: channel.channelId, messageId: sent.result.id, kind: "card", rendered: card.hash }).onConflictDoNothing();
+  // The first group match carded here ties the channel to the group: its later matches arrive by themselves.
+  if (ev.groupId && !channel.groupId) await db.update(discordChannels).set({ groupId: ev.groupId }).where(and(eq(discordChannels.channelId, channel.channelId), isNull(discordChannels.groupId)));
   return "posted";
+}
+
+/** A match of a group: its card goes into every channel tied to that group. */
+export async function postCardsForGroup(db: Db, code: string): Promise<number> {
+  if (!discordEnabled()) return 0;
+  const detail = await getEventByCode(db, code);
+  if (!detail?.event.groupId || detail.event.status === "cancelled") return 0;
+  const channels = await db.select().from(discordChannels).where(and(eq(discordChannels.groupId, detail.event.groupId), isNull(discordChannels.leftAt))).limit(50);
+  let posted = 0;
+  for (const channel of channels) if ((await postCard(db, detail, channel)) === "posted") posted++;
+  return posted;
 }
 
 /** Called after anything changed on a match: edits every card silently, notes a complete line-up once. Never throws. */
