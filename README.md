@@ -193,6 +193,21 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ---
 
+## Deploy your own
+
+Kicksmash is one Next.js project and one Postgres database, Apache-2.0. Run it for your club, your city or your country; the environment table above is the whole configuration.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fevhg%2Fpadel-matchup&project-name=kicksmash&repository-name=kicksmash&env=DATABASE_URL,DIRECT_DATABASE_URL,SESSION_SECRET,APP_BASE_URL&envDescription=Postgres%20connection%20strings%2C%20a%20random%20session%20secret%20and%20your%20public%20URL&envLink=https%3A%2F%2Fgithub.com%2Fevhg%2Fpadel-matchup%23environment-variables)
+
+Or with Docker (standalone Next.js build, about 200 MB):
+
+```bash
+docker build -t kicksmash .
+docker run -p 3000:3000 --env-file .env kicksmash   # then: pnpm db:migrate against the same DATABASE_URL
+```
+
+Everything optional stays optional: without a Resend key no emails go out, without a bot token there is no Telegram, without an Anthropic key the listening desk only collects. Keep the `/agents` charter and the CC BY 4.0 notice if you keep the public API.
+
 ## Product rules baked in
 
 - **Match = exactly 4 players.** Tournament = creator-set capacity (4–64, in fours) running as an **americano**: round 1 needs names in fours (reserved-but-unaccepted names count; they get a placeholder player that merges into the real one on accept) and closes any spots still open, so the tournament becomes exactly the players present; the organizer generates rounds on the day (rotating partners, fair sit-outs, 1–N courts), courts follow the players (one per four) and can be given real names, the schedule is exact when the field is in fours (every pair partners once in players−1 rounds; the next round replays round 1), the latest round can be deleted even if scored (confirmed), any participant enters per-court points as soon as a round exists (no need to wait for the start time), standings update live, the organizer finalizes to lock.
@@ -210,6 +225,8 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 - **Organizer access** = creator cookie **or** the 10-char manage link (sets a per-event httpOnly cookie).
 - **Telegram bot (@kicksmash_bot), quiet by design:** add it to a padel group chat and it keeps **one card per match** there: title, time, venue, level range, the roster with levels, spots left, and two buttons, "I'm in" and "Can't make it". Taps join or leave through the same code path as the web button (organizer note, calendar invite, waitlist promotion, webhooks); the card is **edited in place**, never re-posted. The bot posts a new message only four times: the card itself (`/new` hands out a create link bound to the chat; a pasted kicksma.sh link becomes a card when the bot is admin or privacy mode is off; `/match CODE` works always), one short "line-up complete" note, one reminder about an hour before (via the 5-minute push cron), and the result picture once the organizer confirms. English or Russian per chat (`/lang`). People who tap become players with just their first name; **Telegram sign-in** on My matches (Login Widget) links or merges that account with the browser identity. Module: `src/lib/telegram/`.
 - **Listening desk (helpful replies, never on their own):** every hour the app reads public feeds where people ask about organising padel (Hacker News via Algolia, r/padel and Reddit searches via RSS), keeps the last week of items, gates them cheaply (padel + an organising intent), and asks the model for a reply in the thread's language under strict tone rules: answer first, no hype, mention kicksma.sh at most once and only when it solves the question, disclose that we build it. Drafts go to the owner on Telegram with **Approve / Skip / Edit** buttons, at most six a day; Approve posts on Reddit as the project's account (or, without Reddit keys, marks it for a manual copy). `/admin/listen` is the desk (owner only, via Telegram sign-in). Daily ceilings on drafts and tokens keep a capped API key safe. Approved replies grow into evergreen **answer pages** at `/answers/{slug}` (question rewritten generically, QAPage JSON-LD, in the sitemap), published at once; a Sunday digest on Telegram lists the week and offers one-tap Unpublish for each new page. Module: `src/lib/listen/`.
+- **Embeds and oEmbed:** `/embed/board/{slug}` and `/embed/match/{code}` are iframe-safe views (no header, opens on kicksma.sh in a new tab, "Live from kicksma.sh" footer); the venue board shows the snippet under "Embed this board". `/api/oembed?url=…&format=json` is an oEmbed provider and match and board pages advertise it with `<link rel="alternate" type="application/json+oembed">`, so WordPress, Discourse, Ghost and Notion unfurl a pasted link into the live card. Helper: `src/lib/embed.ts`.
+- **Deploy your own:** the app is one Next.js project with a Postgres database. `Dockerfile` builds a standalone image; the README's environment table is the whole configuration. Everything is Apache-2.0; run it for your club, your city or your country.
 - **Tournament formats:** besides the americano rotation a tournament can run as a **mexicano** (round 1 random, then the courts follow the standings, 1st+4th against 2nd+3rd on each court; the next round waits for all scores) or as **King of the Court** (winners move up a court, losers move down, the top court's winners and the bottom court's losers stay, partners split every round, standings follow the court you finish on). Chosen with one chip when creating a tournament, changeable until round 1. Engine: `src/lib/domain/formats.ts`.
 - **Organizer-verified levels:** after a finalized result the organizer sees a folded "Confirm levels" row and confirms, one tap each or all at once, the levels of the people they played with. A confirmed level shows a ✓ next to the chip and stays confirmed while it moves less than half a step.
 - **Rankings (opt-in, off by default):** `/v/{slug}/ranking` ranks a club's finalized results from the last 90 days (3 points per win, 1 per draw, 3/2/1 for tournament podiums); `/phuket` and `/singapore` do the same across a city's clubs and list the open matches there. Only players who switched on "Show me in rankings" (My matches, or one tap on a ranking page) appear. Cities: `src/lib/domain/cities.ts`.
@@ -237,6 +254,10 @@ Everything public on the site is available to programs and assistants, and every
 
 Public shapes (`src/lib/api/serialize.ts`) carry first names and levels only; emails, phones, personal tokens and manage links never appear. Errors are `{ error: { code, message, hint, status } }`; every hint says what to do next. Limits live in `src/lib/domain/ratelimit.ts`.
 
+### Registries and marketplaces
+
+`server.json` at the repository root is the manifest for the official MCP registry (namespace `io.github.evhg`); publishing is one command for the repository owner: `mcp-publisher login github && mcp-publisher publish`. The skill in `skills/kicksmash/SKILL.md` is picked up by the skills index from the public repository. Smithery, Glama and mcp.so accept the remote URL `https://kicksma.sh/mcp` through their web forms.
+
 ## Admin dashboard
 
 `/admin` is a public, read-only usage page: hero figure with a health row (database, email, push, both crons, **errors today**), stat tiles with sparklines, meters against the free-tier ceilings (Supabase 500 MB, Resend 3,000/month and 100/day), and 7/30/90-day trend charts (growth, joins, outbound messages, errors, database size, totals). Counters live in `metrics_daily` (bumped by the app, snapshotted by the hourly cron); no personal data is shown. Errors are counted, never described: server actions that throw, cron steps that fail and browser crash screens (`/api/client-error`, rate-limited) each bump a counter, so the health row is the only alerting there is. Vercel bandwidth has no public API on Hobby, so it links to the dashboard.
@@ -244,7 +265,7 @@ Public shapes (`src/lib/api/serialize.ts`) carry first names and levels only; em
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, /ranking, calendar.ics) · /phuket · /singapore · /api/telegram/{webhook,setup,login} · /admin/listen · /answers (+ /[slug]) · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, /ranking, calendar.ics) · /phuket · /singapore · /api/telegram/{webhook,setup,login} · /admin/listen · /answers (+ /[slug]) · /embed/{board,match}/… · /api/oembed · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)

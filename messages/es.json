@@ -815,5 +815,13 @@
     "empty": "Las primeras respuestas están en camino. Mientras tanto, el generador de americano responde la más frecuente.",
     "footer": "Escrito para la comunidad por quienes hacen Kicksmash. Reutilízalo libremente (CC BY 4.0).",
     "metaDescription": "Respuestas cortas a preguntas frecuentes sobre organizar pádel: americano y mexicano, niveles, grupos de chat, cuadros."
+  },
+  "embed": {
+    "title": "Insertar este tablón",
+    "help": "Pega este código en la web del club o en un foro. Se mantiene al día, abre los partidos en kicksma.sh y no necesita cuenta.",
+    "copy": "Copiar código",
+    "copied": "Copiado ✓",
+    "openOn": "Abrir en kicksma.sh",
+    "poweredBy": "En directo desde"
   }
 }

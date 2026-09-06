@@ -8,6 +8,8 @@ import { calendarTitle } from "@/lib/calendar";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
+import { EmbedSnippet } from "@/components/EmbedSnippet";
+import { embedHtml } from "@/lib/embed";
 import { rangeChip } from "@/lib/levelText";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const board = isValidVenueSlug(slug) ? await getVenueBoard(db, slug) : null;
   if (!board) return { title: t("venue.board") };
   const title = t("venue.boardTitle", { venue: board.name });
-  return { title, description: t("venue.boardSub"), alternates: { canonical: `/v/${slug}` }, openGraph: { title, description: t("venue.boardSub"), type: "website", url: `${baseUrl()}/v/${slug}` } };
+  return { title, description: t("venue.boardSub"), alternates: { canonical: `/v/${slug}`, types: { "application/json+oembed": `${baseUrl()}/api/oembed?url=${encodeURIComponent(`${baseUrl()}/v/${slug}`)}&format=json` } }, openGraph: { title, description: t("venue.boardSub"), type: "website", url: `${baseUrl()}/v/${slug}` } };
 }
 
 /** Public board of organizer-listed open matches at one venue: what the poster's QR code points to. */
@@ -91,6 +93,7 @@ export default async function VenueBoardPage({ params }: Props) {
             + {t("common.newMatch")}
           </Link>
         </div>
+        <EmbedSnippet html={embedHtml(baseUrl(), { kind: "board", slug }, t("venue.boardTitle", { venue: board.name }))} />
       </main>
       <Footer />
     </>

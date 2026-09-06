@@ -815,5 +815,13 @@
     "empty": "The first answers are on their way. Until then, the americano generator answers the most common one.",
     "footer": "Written for the community by the people who build Kicksmash. Reuse freely (CC BY 4.0).",
     "metaDescription": "Short answers to common questions about organising padel: americano and mexicano formats, levels, group chats, schedules."
+  },
+  "embed": {
+    "title": "Embed this board",
+    "help": "Paste this on the club's website or in a forum post. It stays live, opens matches on kicksma.sh, and needs no account.",
+    "copy": "Copy code",
+    "copied": "Copied ✓",
+    "openOn": "Open on kicksma.sh",
+    "poweredBy": "Live from"
   }
 }
