@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.evhg/kicksmash",
+  "description": "Organise padel through the open, agent-native Kicksmash: create a match, share one link, join, generate americano schedules, read venue boards. No key needed for reads and a daily allowance of writes.",
+  "version": "1.0.0",
+  "status": "active",
+  "websiteUrl": "https://kicksma.sh/developers",
+  "repository": {
+    "url": "https://github.com/evhg/padel-matchup",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://kicksma.sh/mcp"
+    }
+  ]
+}

@@ -4,6 +4,8 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
+  // Standalone output feeds the Dockerfile; Vercel ignores it.
+  output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
   // Keep native/wasm drivers out of the webpack bundle; they are loaded from node_modules at runtime.

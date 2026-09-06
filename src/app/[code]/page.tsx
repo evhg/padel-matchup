@@ -58,6 +58,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description,
     openGraph: { title, description, url: eventUrl(baseUrl(), code), type: "website" },
     twitter: { card: "summary_large_image", title, description },
+    alternates: { types: { "application/json+oembed": `${baseUrl()}/api/oembed?url=${encodeURIComponent(eventUrl(baseUrl(), code))}&format=json` } },
   };
 }
 
