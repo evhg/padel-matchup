@@ -1,13 +1,13 @@
-# @kicksmash/levels
+# @erikv69/levels
 
 Padel levels 0–7 the way [kicksma.sh](https://kicksma.sh) uses them: the bands, the sign-up presets, level ranges for a match, balanced 2v2 teams from four rated players, and the small result-based nudges. Pure TypeScript, no dependencies.
 
 ```sh
-npm install @kicksmash/levels
+npm install @erikv69/levels
 ```
 
 ```ts
-import { bandOf, formatLevel, levelFit, rangeFor, balancedTeams, matchDeltas } from "@kicksmash/levels";
+import { bandOf, formatLevel, levelFit, rangeFor, balancedTeams, matchDeltas } from "@erikv69/levels";
 
 bandOf(3.5); // "intermediate"
 formatLevel(3.25); // "3.25"
@@ -29,7 +29,7 @@ matchDeltas([{ id: "a", level: 3 }, { id: "b", level: 3 }], [{ id: "c", level: 3
 ## Other apps' scales and the passport
 
 ```ts
-import { fromScale, LEVEL_SCALES, verifyPassport } from "@kicksmash/levels";
+import { fromScale, LEVEL_SCALES, verifyPassport } from "@erikv69/levels";
 
 fromScale("ten", 7); // 4.75: a 1–10 club scale mapped onto 0–7 in the open
 fromScale("five", 3); // 3.25

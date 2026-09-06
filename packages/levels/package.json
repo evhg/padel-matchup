@@ -1,5 +1,5 @@
 {
-  "name": "@kicksmash/levels",
+  "name": "@erikv69/levels",
   "version": "0.1.0",
   "description": "Padel levels 0-7 as kicksma.sh uses them: bands, presets, ranges, balanced teams and the result-based nudges. Pure TypeScript, no dependencies.",
   "keywords": ["padel", "level", "rating", "elo", "skill", "balanced teams", "doubles"],

@@ -16,7 +16,7 @@ describe("npm packages", () => {
     expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
     for (const name of ["americano", "levels"]) {
       const pkg = JSON.parse(readFileSync(path.join(root, "packages", name, "package.json"), "utf8")) as { name: string; version: string; exports: Record<string, unknown> };
-      expect(pkg.name).toBe(`@kicksmash/${name}`);
+      expect(pkg.name).toBe(`@erikv69/${name}`);
       expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
       expect(pkg.exports["."]).toBeTruthy();
     }

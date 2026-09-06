@@ -52,7 +52,7 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 
 ## Passport
 
-`src/lib/domain/passport.ts` is pure (WebCrypto Ed25519, canonical JSON, base64url) and ships inside `@kicksmash/levels`; `src/lib/domain/profile.ts` holds the opt-in public page (`publicProfile`, `publicSlug` minted once), stats from a player's finished matches, `issuePassport` and the data export. Public pages are off by default and never listed anywhere; the export never contains tokens or manage codes. Keys: `PASSPORT_PRIVATE_KEY` and `PASSPORT_PUBLIC_KEY` (raw hex); the public key is served at `/.well-known/kicksmash-passport.json`. Other apps' level scales live in `LEVEL_SCALES` in `levels.ts` with the mapping shown on `/levels`; add a scale there, never in a component.
+`src/lib/domain/passport.ts` is pure (WebCrypto Ed25519, canonical JSON, base64url) and ships inside `@erikv69/levels`; `src/lib/domain/profile.ts` holds the opt-in public page (`publicProfile`, `publicSlug` minted once), stats from a player's finished matches, `issuePassport` and the data export. Public pages are off by default and never listed anywhere; the export never contains tokens or manage codes. Keys: `PASSPORT_PRIVATE_KEY` and `PASSPORT_PUBLIC_KEY` (raw hex); the public key is served at `/.well-known/kicksmash-passport.json`. Other apps' level scales live in `LEVEL_SCALES` in `levels.ts` with the mapping shown on `/levels`; add a scale there, never in a component.
 
 ## Listening desk
 

@@ -25,7 +25,7 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 - GET ${base}/api/v1/matches/{code}: a match with players, levels, spots left, result.
 - GET ${base}/api/v1/boards/{venue-slug}: open matches at a venue.
 - GET ${base}/api/v1/clubs?city=phuket and ${base}/api/v1/clubs/{slug}: club pages clubs manage themselves (booking link and platform, courts, today's free courts when the club shares its calendar, founding status).
-- GET ${base}/u/{slug}/passport.json: a player's signed level (Ed25519 over canonical JSON, key at ${base}/.well-known/kicksmash-passport.json; verifyPassport in @kicksmash/levels checks it). Public profiles at /u/{slug} are opt-in and off by default; never guess a slug. Signed-in players export everything at /api/me/export.
+- GET ${base}/u/{slug}/passport.json: a player's signed level (Ed25519 over canonical JSON, key at ${base}/.well-known/kicksmash-passport.json; verifyPassport in @erikv69/levels checks it). Public profiles at /u/{slug} are opt-in and off by default; never guess a slug. Signed-in players export everything at /api/me/export.
 - GET ${base}/api/v1/groups/{code}: a group with members and upcoming matches.
 - GET ${base}/api/v1/schedule?players=8&courts=2: an exact americano rotation.
 - POST ${base}/api/v1/matches: create a match (rate-limited per address without a key).
