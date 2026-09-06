@@ -583,7 +583,7 @@ export const telegramChats = pgTable("telegram_chats", {
   /** Defaults for matches created from the chat. */
   tz: text("tz"),
   venueName: text("venue_name"),
-  /** The group behind this chat, once one exists. */
+  /** The group behind this chat, learned from the first group match carded here: its weekly matches land here by themselves, and /new here makes group matches. */
   groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
   /** Bot removed from the chat: keep the row, stop posting. */
   leftAt: timestamp("left_at", { withTimezone: true }),
@@ -656,6 +656,8 @@ export const discordChannels = pgTable("discord_channels", {
   lastMessageId: text("last_message_id"),
   /** The listener answers questions here (off for channels an admin turned it off in). */
   listen: boolean("listen").notNull().default(true),
+  /** The group behind this channel, learned from the first group match carded here: its weekly matches land here by themselves. */
+  groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
   /** Bot lost access: keep the row, stop posting. */
   leftAt: timestamp("left_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

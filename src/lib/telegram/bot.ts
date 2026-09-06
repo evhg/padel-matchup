@@ -143,7 +143,20 @@ export async function postCard(db: Db, detail: EventDetail, chat: TelegramChat, 
     .insert(telegramCards)
     .values({ eventId: ev.id, chatId: chat.chatId, messageId: sent.result.message_id, kind: "card", rendered: renderHash(text, keyboard) })
     .onConflictDoNothing();
+  // The first group match carded here ties the chat to the group: from now on the group's matches arrive by themselves.
+  if (ev.groupId && !chat.groupId && GROUP_TYPES.has(chat.type)) await db.update(telegramChats).set({ groupId: ev.groupId }).where(and(eq(telegramChats.chatId, chat.chatId), isNull(telegramChats.groupId)));
   return "posted";
+}
+
+/** A match of a group: its card goes into every chat tied to that group (the weekly slot, a match made on the site, one made from another chat). */
+export async function postCardsForGroup(db: Db, code: string): Promise<number> {
+  if (!telegramEnabled()) return 0;
+  const detail = await getEventByCode(db, code);
+  if (!detail?.event.groupId || detail.event.status === "cancelled") return 0;
+  const chats = await db.select().from(telegramChats).where(and(eq(telegramChats.groupId, detail.event.groupId), isNull(telegramChats.leftAt))).limit(50);
+  let posted = 0;
+  for (const chat of chats) if ((await postCard(db, detail, chat)) === "posted") posted++;
+  return posted;
 }
 
 /** Called after anything changed on a match: edits every card silently, notes a complete line-up once. Never throws. */
@@ -386,6 +399,7 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
       levelMax: parsed.levelMax,
       cost: parsed.cost,
       publicListing: parsed.publicListing,
+      groupId: chat.groupId,
     });
   } catch {
     await say(s.newHowTo, form);

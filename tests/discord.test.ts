@@ -8,8 +8,9 @@ import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { discordApplicationId, md, verifyInteraction, type DcInteraction } from "@/lib/discord/api";
-import { channelTicket, handleInteraction, postCardForDiscordTicket, postDiscordResult, sendDiscordReminders, syncDiscord, verifyChannelTicket } from "@/lib/discord/bot";
+import { channelTicket, handleInteraction, postCardForDiscordTicket, postCardsForGroup, postDiscordResult, sendDiscordReminders, syncDiscord, verifyChannelTicket } from "@/lib/discord/bot";
 import { discordListenTick, looksLikeQuestion } from "@/lib/discord/listen";
+import { createGroup } from "@/lib/domain/groups";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 // The first token segment is base64 of the application id (1545988138055237723 here); the rest is fake.
@@ -260,6 +261,22 @@ describe("discord bot (db, stubbed REST)", () => {
     const result = posts().at(-1)!;
     expect(JSON.stringify(result.body?.embeds)).toContain("opengraph-image");
     expect(await postDiscordResult(db, ev.code)).toBe(0);
+  });
+
+  it("a group's channel: the first group match carded there ties them, later group matches land by themselves", async () => {
+    const kat = await makePlayer(db, "Kat");
+    const group = await createGroup(db, { creatorPlayerId: kat.id, name: "Thursday crew", tz: "Asia/Bangkok", venueName: "Rawai Padel Club" });
+    const first = await createEvent(db, { creatorPlayerId: kat.id, type: "match", startsAt: new Date(Date.now() + 40 * 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel Club", whenFull: "waitlist", groupId: group.id });
+    expect(await postCardsForGroup(db, first.code)).toBe(0);
+    const posted = await handleInteraction(db, command("match", user(7, "Kat"), { code: first.code }), NO_SIDE_EFFECTS);
+    expect(posted.outcome).toBe("card");
+    const [ch] = await db.select().from(discordChannels).where(eq(discordChannels.channelId, CHANNEL));
+    expect(ch.groupId).toBe(group.id);
+    const second = await createEvent(db, { creatorPlayerId: kat.id, type: "match", startsAt: new Date(Date.now() + 47 * 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel Club", whenFull: "waitlist", groupId: group.id });
+    const before = posts().length;
+    expect(await postCardsForGroup(db, second.code)).toBe(1);
+    expect(posts().length).toBe(before + 1);
+    expect(await postCardsForGroup(db, second.code)).toBe(0);
   });
 
   it("/ask defers, answers through the model and records the reply; without a key it says so", async () => {
