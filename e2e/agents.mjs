@@ -83,7 +83,7 @@ try {
   const notif = await rpc({ jsonrpc: "2.0", method: "notifications/initialized" });
   check("notifications are accepted with 202", notif.status() === 202);
   const tools = await j(await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }));
-  check("MCP lists the eight tools with schemas", tools.result.tools.length === 8 && tools.result.tools.every((t) => t.inputSchema && t.inputSchema.type === "object") && tools.result.tools.some((t) => t.name === "create_match"));
+  check("MCP lists the nine tools with schemas", tools.result.tools.length === 9 && tools.result.tools.every((t) => t.inputSchema && t.inputSchema.type === "object") && tools.result.tools.some((t) => t.name === "create_match"));
   const sched = await j(await rpc({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "generate_schedule", arguments: { players: 8 } } }));
   check("MCP generate_schedule returns 7 exact rounds", sched.result.structuredContent.rounds.length === 7 && sched.result.structuredContent.exact === true);
   const got = await j(await rpc({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "get_match", arguments: { code } } }));

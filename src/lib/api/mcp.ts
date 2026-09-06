@@ -5,12 +5,13 @@ import { isDomainError } from "@/lib/domain/errors";
 import { getGroupByCode, getGroupDetail, getGroupById } from "@/lib/domain/groups";
 import { getEventByCode } from "@/lib/domain/queries";
 import { getVenueBoard, isValidVenueSlug, venueSlug } from "@/lib/domain/venueBoard";
+import { getLiveClub, listLiveClubs } from "@/lib/domain/clubs";
 import { llmsFullTxt, llmsTxt, VALUE_PROP } from "./docs";
 import { ApiError } from "./http";
 import { createApiKey } from "./keys";
 import { openapiDocument } from "./openapi";
 import { createMatch, createMatchSchema, generateSchedule, joinMatch, joinMatchSchema, scheduleSchema, type OpContext } from "./operations";
-import { boardToPublic, groupToPublic, matchToPublic } from "./serialize";
+import { boardToPublic, clubToPublic, groupToPublic, matchToPublic } from "./serialize";
 
 /**
  * A minimal, dependency-free MCP server over streamable HTTP (JSON responses,
@@ -32,6 +33,7 @@ const toSchema = (s: z.ZodType) => {
 
 const codeSchema = z.object({ code: z.string().min(4).max(6).describe("The code from the link.") });
 const venueSchema = z.object({ venue: z.string().min(2).max(80).describe("Venue name or its slug, e.g. 'Padel Indoor BCN' or 'padel-indoor-bcn'.") });
+const clubsSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore"), name: z.string().max(80).optional().describe("One club by name; the slug is derived") });
 const keySchema = z.object({ name: z.string().min(1).max(80).describe("Who or what will use the key."), agent: z.string().max(80).optional().describe("Your name as an assistant, e.g. 'claude'."), email: z.email().optional() });
 
 type Tool = {
@@ -102,6 +104,24 @@ const TOOLS: Tool[] = [
     run: async (_db, args) => generateSchedule(args),
   },
   {
+    name: "find_clubs",
+    title: "Find clubs",
+    description: "Club pages that clubs manage themselves: booking link and platform, courts, today's free courts when the club shares its calendar, founding status. Filter by city (phuket, singapore) or ask for one club by name.",
+    schema: clubsSchema,
+    readOnly: true,
+    run: async (db, args) => {
+      const { city, name } = clubsSchema.parse(args);
+      const base = baseUrl();
+      if (name) {
+        const slug = isValidVenueSlug(name) ? name : venueSlug(name);
+        const club = slug ? await getLiveClub(db, slug) : null;
+        return club ? { clubs: [clubToPublic(club, base)] } : { clubs: [], note: `No live club page called "${name}". Clubs claim their page at ${base}/clubs/claim; the venue board (find_matches) works for any venue with a match.` };
+      }
+      const clubs = await listLiveClubs(db, city ?? null);
+      return { clubs: clubs.map((c) => clubToPublic(c, base)), note: clubs.length ? undefined : `No club has claimed its page${city ? ` in ${city}` : ""} yet. The first ten per city become founding clubs: ${base}/clubs.` };
+    },
+  },
+  {
     name: "create_match",
     title: "Create a match",
     description: "Create a padel match (4 players) or an americano tournament for a person. Returns the share link for the players and the organizer's private links. Give the person all links; keep personalToken and manageUrl private. Ask before creating; one request, one match.",
@@ -132,7 +152,7 @@ const TOOLS: Tool[] = [
 ];
 
 const RESOURCES = [
-  { uri: "kicksmash://docs/reference", name: "Kicksmash reference for models", description: "Everything about matches, levels, groups, boards and the API, in plain text.", mimeType: "text/plain" },
+  { uri: "kicksmash://docs/reference", name: "Kicksmash reference for models", description: "Everything about matches, levels, groups, boards, clubs and the API, in plain text.", mimeType: "text/plain" },
   { uri: "kicksmash://docs/openapi", name: "Kicksmash OpenAPI 3.1", description: "The REST API document.", mimeType: "application/json" },
 ];
 

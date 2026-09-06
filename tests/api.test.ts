@@ -107,7 +107,7 @@ describe("MCP handler", () => {
     expect(notif).toEqual({ status: 202, body: null });
     const list = await handleMcpPost(db, { jsonrpc: "2.0", id: 2, method: "tools/list" }, NO_SIDE_EFFECTS);
     const tools = (list.body as { result: { tools: { name: string; inputSchema: { type: string }; annotations: { readOnlyHint: boolean } }[] } }).result.tools;
-    expect(tools.map((t) => t.name)).toEqual(["about_kicksmash", "get_match", "find_matches", "get_group", "generate_schedule", "create_match", "join_match", "create_api_key"]);
+    expect(tools.map((t) => t.name)).toEqual(["about_kicksmash", "get_match", "find_matches", "get_group", "generate_schedule", "find_clubs", "create_match", "join_match", "create_api_key"]);
     expect(tools.find((t) => t.name === "create_match")!.annotations.readOnlyHint).toBe(false);
     const sched = await handleMcpPost(db, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "generate_schedule", arguments: { players: 12, courts: 3 } } }, NO_SIDE_EFFECTS);
     expect((sched.body as { result: { structuredContent: { rounds: unknown[] } } }).result.structuredContent.rounds).toHaveLength(11);

@@ -19,6 +19,7 @@ import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, tele
 import { botLocale, cardTitle, renderCard, strings, whereLine, type BotLocale } from "./card";
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
+import { decideClub, getClubByToken } from "@/lib/domain/clubs";
 
 /**
  * The bot, quiet by design. It posts a new message only for: the match card,
@@ -369,10 +370,29 @@ async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_q
   return `listen:${res.status}`;
 }
 
+async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "ca" | "cr", token: string): Promise<string> {
+  if (cb.from.id !== ownerTelegramId()) {
+    await answerCallbackQuery(cb.id);
+    return "club:not_owner";
+  }
+  const club = await getClubByToken(db, token);
+  const row = club ? await decideClub(db, club.slug, action === "ca") : null;
+  if (!row) {
+    await answerCallbackQuery(cb.id, "Not found.");
+    return "club:noop";
+  }
+  const text = action === "ca" ? `✅ Live${row.founding ? " · founding club" : ""}: ${row.name}` : `❌ Not approved: ${row.name}`;
+  await answerCallbackQuery(cb.id, text.slice(0, 190));
+  if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(text), { inline_keyboard: [[{ text: "Open page", url: `${baseUrl()}/v/${row.slug}` }]] });
+  return action === "ca" ? "club:approved" : "club:rejected";
+}
+
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
   const listen = data.match(/^(la|ls|lu):([0-9a-f-]{36})$/);
   if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
+  const club = data.match(/^(ca|cr):([A-Za-z0-9_-]{16,40})$/);
+  if (club) return handleClubCallback(db, cb, club[1] as "ca" | "cr", club[2]);
   const m = data.match(/^([jl]):([A-Za-z0-9]{4})$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
