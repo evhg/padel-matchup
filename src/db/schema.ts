@@ -172,6 +172,10 @@ export const events = pgTable(
     venueSlug: text("venue_slug"),
     /** Optional link to the club's booking page or confirmation. */
     bookingUrl: text("booking_url"),
+    /** What each player pays, as the organizer wrote it ("400 ฿", "€8"). */
+    cost: text("cost"),
+    /** How to pay the organizer (PromptPay number, Revolut tag…). For the players: on the page and the cards, never in the public API. */
+    payNote: text("pay_note"),
     /** Telegram "one hour before" reminder went out to the chats that carry this match (once per event). */
     telegramReminderSentAt: timestamp("telegram_reminder_sent_at", { withTimezone: true }),
     /** Same for the Discord channels that carry this match. */

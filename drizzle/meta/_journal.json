@@ -134,6 +134,13 @@
       "when": 1788672286471,
       "tag": "0018_passport",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788696855653,
+      "tag": "0019_cost",
+      "breakpoints": true
     }
   ]
 }

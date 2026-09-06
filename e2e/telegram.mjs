@@ -30,10 +30,13 @@ try {
   check("bot added to a chat: 200 and a welcome (even if Telegram is unreachable here)", added.status === 200 && added.json?.outcome === "welcome", JSON.stringify(added.json));
   const chatter = await hook({ update_id: 3, message: { message_id: 1, date: 0, chat: group, from: ivan, text: "who is playing tonight?" } });
   check("ordinary chatter is ignored", chatter.json?.outcome === "ignored");
-  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Kai" } }) }).then((r) => r.json());
+  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Kai" }, cost: "400 THB" }) }).then((r) => r.json());
   const code = created.match.code;
+  check("the API accepts and returns the cost per player", created.match.cost === "400 THB", JSON.stringify(created.match).slice(0, 200));
   const posted = await hook({ update_id: 4, message: { message_id: 2, date: 0, chat: group, from: ivan, text: `/match ${code}` } });
   check("/match CODE is handled as a card", posted.json?.outcome === "card", JSON.stringify(posted.json));
+  const matchHtml = await fetch(`${BASE}/${code}`).then((r) => r.text());
+  check("the match page shows the money line", matchHtml.includes("400 THB per player"));
   const tap = await hook({ update_id: 5, callback_query: { id: "cb1", from: ivan, message: { message_id: 999, date: 0, chat: group }, data: `j:${code}` } });
   check("a tap on the card joins through the shared flow", tap.json?.outcome === "join:joined", JSON.stringify(tap.json));
   const pub = await fetch(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());

@@ -4,14 +4,17 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, telegramCards, telegramChats } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
-import { createEvent } from "@/lib/domain/events";
+import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { setTournamentLock } from "@/lib/domain/tournament";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
 import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
-import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, postCardForTicket, postTelegramResult, sendTelegramReminders, syncTelegram, verifyChatTicket } from "@/lib/telegram/bot";
+import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, postCardForTicket, postTelegramNotice, postTelegramResult, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
+import { renderDiscordCard } from "@/lib/discord/card";
+import { matchToPublic } from "@/lib/api/serialize";
+import { notifyCreator } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -20,14 +23,18 @@ type Call = { method: string; body: Record<string, unknown> };
 let calls: Call[] = [];
 let nextMessageId = 100;
 
+// Chat ids the fake Bot API refuses (a user who never pressed Start, or blocked the bot).
+let unreachable = new Set<number>();
 function stubTelegram() {
   calls = [];
+  unreachable = new Set();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL, init?: RequestInit) => {
       const method = String(url).split("/").pop()!;
       const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
       calls.push({ method, body });
+      if (unreachable.has(Number(body.chat_id))) return new Response(JSON.stringify({ ok: false, error_code: 403, description: "Forbidden: bot can't initiate conversation with a user" }), { status: 403, headers: { "content-type": "application/json" } });
       const result = method === "sendMessage" || method === "sendPhoto" ? { message_id: nextMessageId++, chat: { id: body.chat_id } } : true;
       return new Response(JSON.stringify({ ok: true, result }), { status: 200, headers: { "content-type": "application/json" } });
     }),
@@ -245,6 +252,86 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     const cancelled = renderCard({ ...tdetail, event: { ...tdetail.event, status: "cancelled" } }, "https://kicksma.sh", "ru");
     expect(cancelled.text).toContain("Отменён");
     expect(cancelled.keyboard.inline_keyboard).toHaveLength(1);
+  });
+
+  it("the money line: on both cards and the match page's API shape, the pay details never in the public API", async () => {
+    const org = await makePlayer(db, "Kai");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 30 * 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel Club", whenFull: "waitlist", cost: "  400 ฿ ", payNote: "PromptPay 081 234 5678" });
+    expect(ev.cost).toBe("400 ฿");
+    const detail = (await getEventByCode(db, ev.code))!;
+    expect(renderCard(detail, "https://kicksma.sh", "en").text).toContain("💸 400 ฿ · PromptPay 081 234 5678");
+    expect(renderDiscordCard(detail, "https://kicksma.sh", "ru").embeds[0].description).toContain("💸 400 ฿ · PromptPay 081 234 5678");
+    const pub = matchToPublic(detail, "https://kicksma.sh");
+    expect(pub.cost).toBe("400 ฿");
+    expect(JSON.stringify(pub)).not.toContain("PromptPay");
+    const { event: updated } = await updateEvent(db, ev.id, org.id, { cost: "", payNote: "Revolut @kai" });
+    expect(updated.cost).toBeNull();
+    expect(updated.payNote).toBe("Revolut @kai");
+    expect(renderCard((await getEventByCode(db, ev.code))!, "https://kicksma.sh", "en").text).not.toContain("💸");
+  });
+
+  it("a time change or a cancellation reaches the Telegram players: a reply under the card that mentions them, a private message to each who can receive one", async () => {
+    const chat = { id: -100555, type: "supergroup" as const, title: "Notices" };
+    await handleTelegramUpdate(db, { update_id: 60, my_chat_member: { chat, from: user(41, "Ivan", "ru"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } }, NO_SIDE_EFFECTS);
+    const { org, ev } = await match();
+    await handleTelegramUpdate(db, { update_id: 61, message: { message_id: 1, date: 0, chat, from: user(41, "Ivan", "ru"), text: `https://kicksma.sh/${ev.code}` } }, NO_SIDE_EFFECTS);
+    const [card] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, ev.id));
+    const tap = (id: number, u: ReturnType<typeof user>) => handleTelegramUpdate(db, { update_id: id, callback_query: { id: `cb${id}`, from: u, message: { message_id: card.messageId, date: 0, chat }, data: `j:${ev.code}` } }, NO_SIDE_EFFECTS);
+    await tap(62, user(41, "Ivan", "ru"));
+    await tap(63, { id: 42, first_name: "Оля", language_code: "ru" } as ReturnType<typeof user>);
+    // A web player without Telegram is in too: nothing goes to them from here.
+    const web = await makePlayer(db, "Web");
+    await joinEvent(db, { eventId: ev.id, playerId: web.id });
+    calls = [];
+    unreachable.add(42); // Olya never pressed Start.
+
+    const moved = await updateEvent(db, ev.id, org.id, { startsAt: new Date(ev.startsAt.getTime() + 2 * HOUR) });
+    expect(moved.calendarChanged).toBe(true);
+    const upd = await postTelegramNotice(db, ev.code, "updated");
+    expect(upd).toEqual({ notes: 1, dms: 1 });
+    const note = sent("sendMessage").find((c) => c.body.chat_id === chat.id)!;
+    expect(String(note.body.text)).toContain("🔁");
+    expect(String(note.body.text)).toContain("теперь"); // the chat's language: Ivan added the bot in Russian
+    expect(String(note.body.text)).toContain("@ivan_tg");
+    expect(String(note.body.text)).toContain('<a href="tg://user?id=42">Оля</a>');
+    expect(note.body.reply_parameters).toMatchObject({ message_id: card.messageId });
+    const dm = sent("sendMessage").find((c) => c.body.chat_id === 41)!;
+    expect(String(dm.body.text)).toContain("теперь");
+    expect(JSON.stringify(dm.body.reply_markup)).toMatch(/\/p\/[A-Za-z0-9]{12}\//);
+    expect(sent("sendMessage").filter((c) => c.body.chat_id === 42)).toHaveLength(1); // tried, refused, no retry
+    expect(sent("sendMessage").some((c) => c.body.chat_id === org.telegramId)).toBe(false);
+
+    calls = [];
+    await cancelEvent(db, ev.id, org.id);
+    expect(await postTelegramNotice(db, ev.code, "cancelled")).toEqual({ notes: 1, dms: 1 });
+    expect(String(sent("sendMessage")[0].body.text)).toContain("❌");
+    // Nothing more once it is cancelled, and nothing at all without the bot.
+    expect(await postTelegramNotice(db, ev.code, "updated")).toEqual({ notes: 0, dms: 0 });
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    expect(await postTelegramNotice(db, ev.code, "cancelled")).toEqual({ notes: 0, dms: 0 });
+  });
+
+  it("an organizer who linked Telegram hears who joined and left, in their language; nobody else does", async () => {
+    const { org, ev } = await match();
+    const petr = await makePlayer(db, "Petr");
+    await joinEvent(db, { eventId: ev.id, playerId: petr.id });
+    // Not linked: no message.
+    await notifyCreator(db, ev, "joined", "Petr", petr.id);
+    expect(sent("sendMessage")).toHaveLength(0);
+    const linked = await linkTelegram(db, org.id, { id: 31, first_name: "Olga", username: "olga_tg", language_code: "ru" });
+    await db.update(players).set({ locale: "ru" }).where(eq(players.id, org.id));
+    const detail = (await getEventByCode(db, ev.code))!;
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Petr")).toBe(true);
+    const dm = sent("sendMessage").at(-1)!;
+    expect(dm.body.chat_id).toBe(31);
+    expect(String(dm.body.text)).toContain("✅ Petr играет · 2/4");
+    expect(String(dm.body.text)).toContain("Rawai Padel Club");
+    await notifyCreator(db, ev, "left", "Petr", petr.id);
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("↩️ Petr");
+    // The organizer's own actions are not echoed back.
+    calls = [];
+    await notifyCreator(db, ev, "joined", "Olga", org.id);
+    expect(sent("sendMessage")).toHaveLength(0);
   });
 
   it("does nothing when the bot is not configured", async () => {

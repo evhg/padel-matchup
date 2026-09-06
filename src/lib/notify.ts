@@ -153,17 +153,27 @@ type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" |
 
 /** Creator notifications (decision 11). Skipped when the actor is the creator. */
 export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorName: string, actorPlayerId?: string | null): Promise<void> {
-  if (!emailEnabled()) return;
   if (actorPlayerId && actorPlayerId === ev.creatorPlayerId) return;
   const creator = await getPlayer(db, ev.creatorPlayerId);
-  if (!creator?.email || !creator.emailNotifications) return;
-  const c = await ctx(db, ev, creator.locale, creator);
-  const vars = { ...c.vars, name: actorName };
-  const subjectKey = (kind === "waitlisted" ? "joined" : kind) as Exclude<CreatorKind, "waitlisted">;
-  const subject = c.t(`email.creator.${subjectKey}Subject`, vars);
-  const body = c.t(`email.creator.${kind}Body`, vars);
-  const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
-  await sendEmail({ to: creator.email, subject, html, text });
+  if (!creator) return;
+  if (emailEnabled() && creator.email && creator.emailNotifications) {
+    const c = await ctx(db, ev, creator.locale, creator);
+    const vars = { ...c.vars, name: actorName };
+    const subjectKey = (kind === "waitlisted" ? "joined" : kind) as Exclude<CreatorKind, "waitlisted">;
+    const subject = c.t(`email.creator.${subjectKey}Subject`, vars);
+    const body = c.t(`email.creator.${kind}Body`, vars);
+    const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+    await sendEmail({ to: creator.email, subject, html, text });
+  }
+  // Organizers who linked Telegram get the same line there. Loaded lazily: the bot imports the operations, which import this file.
+  if (creator.telegramId) {
+    try {
+      const bot = await import("@/lib/telegram/bot");
+      await bot.telegramCreatorNote(db, await getEventDetail(db, ev), creator, kind, actorName);
+    } catch (e) {
+      console.warn("[telegram] organizer note failed", e);
+    }
+  }
 }
 
 /** Join request decided: approved players get their calendar invite, declined ones a short, kind note. */

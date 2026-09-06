@@ -43,6 +43,8 @@ const createSchema = z.object({
   groupCode: z.string().length(6).optional(),
   publicListing: z.boolean().optional(),
   bookingUrl: z.string().max(500).optional(),
+  cost: z.string().max(40).optional(),
+  payNote: z.string().max(120).optional(),
   /** Signed chat ticket from the Telegram bot's /new. */
   telegramTicket: z.string().max(80).optional(),
   /** Signed channel ticket from the Discord bot's /new. */
@@ -82,6 +84,8 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       groupId: group?.id ?? null,
       publicListing: input.publicListing ?? false,
       bookingUrl: input.bookingUrl,
+      cost: input.cost,
+      payNote: input.payNote,
     });
     after(async () => {
       if (input.telegramTicket) await postCardForTicket(db, ev.code, input.telegramTicket);
@@ -124,6 +128,8 @@ const updateSchema = z.object({
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
   publicListing: z.boolean().optional(),
   bookingUrl: z.string().max(500).optional(),
+  cost: z.string().max(40).optional(),
+  payNote: z.string().max(120).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
@@ -169,10 +175,12 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       levelMax: input.levelMax,
       publicListing: input.publicListing,
       bookingUrl: input.bookingUrl,
+      cost: input.cost,
+      payNote: input.payNote,
     });
     if (result.calendarChanged) after(() => notifyEventUpdated(db, result.event));
     after(async () => {
-      await emitMatchEvent(db, "match.updated", code);
+      await emitMatchEvent(db, "match.updated", code, { calendarChanged: result.calendarChanged });
     });
     for (const pid of result.promotedPlayerIds) {
       after(() => notifyPromotion(db, result.event, { playerId: pid, slot: null as never }));

@@ -35,6 +35,9 @@ export type CreateEventInput = {
   publicListing?: boolean;
   /** Link to the club's booking page or confirmation. */
   bookingUrl?: string | null;
+  /** What each player pays and how to pay the organizer; free text. */
+  cost?: string | null;
+  payNote?: string | null;
 };
 
 function cleanText(v: string | null | undefined, max: number): string | null {
@@ -114,6 +117,8 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
           venueSlug: venueSlug(venueName),
           bookingUrl: cleanUrl(input.bookingUrl),
+          cost: cleanText(input.cost, 40),
+          payNote: cleanText(input.payNote, 120),
         })
         .returning();
     }
@@ -165,6 +170,9 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     levelMax: src.levelMax,
     groupId: src.groupId,
     publicListing: src.publicListing,
+    bookingUrl: src.bookingUrl,
+    cost: src.cost,
+    payNote: src.payNote,
   });
 }
 
@@ -182,6 +190,8 @@ export type UpdateEventInput = {
   levelMax?: number | null;
   publicListing?: boolean;
   bookingUrl?: string | null;
+  cost?: string | null;
+  payNote?: string | null;
 };
 
 export type UpdateEventResult = {
@@ -234,6 +244,14 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     if (patch.bookingUrl !== undefined) {
       const u = cleanUrl(patch.bookingUrl);
       if (u !== ev.bookingUrl) set.bookingUrl = u;
+    }
+    if (patch.cost !== undefined) {
+      const c = cleanText(patch.cost, 40);
+      if (c !== ev.cost) set.cost = c;
+    }
+    if (patch.payNote !== undefined) {
+      const c = cleanText(patch.payNote, 120);
+      if (c !== ev.payNote) set.payNote = c;
     }
     if (patch.publicListing !== undefined) {
       const venueAfter = set.venueName !== undefined ? set.venueName : ev.venueName;

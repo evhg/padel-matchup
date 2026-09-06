@@ -47,6 +47,7 @@ export const createMatchSchema = z.object({
   title: z.string().max(80).optional(),
   note: z.string().max(500).optional(),
   bookingUrl: z.url().max(500).optional().describe("The club's booking page or confirmation link, shown to players."),
+  cost: z.string().max(40).optional().describe("What each player pays, as free text: 400 THB, €8, split 4 ways."),
   listOnVenueBoard: z.boolean().default(false).describe("Show the match on the public venue board (/v/{venue-slug}). Off by default."),
   organizer: z.object({
     name: z.string().min(1).max(40).describe("First name is enough."),
@@ -139,6 +140,7 @@ export async function createMatch(db: Db, raw: unknown, ctx: OpContext, locale =
     levelMax: input.levelMax ?? null,
     publicListing: input.listOnVenueBoard,
     bookingUrl: input.bookingUrl,
+    cost: input.cost,
   });
   if (input.organizerPlays) await joinEvent(db, { eventId: ev.id, playerId: organizer.id }).catch(() => undefined);
   const token = await getOrCreatePersonalToken(db, organizer.id);

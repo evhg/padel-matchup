@@ -285,6 +285,12 @@ export default async function EventPage({ params }: Props) {
               )}
             </div>
           </div>
+          {ev.cost && (
+            <p className="mt-3 text-sm">
+              <span className="font-bold">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>
+              {ev.payNote && <span className="text-muted"> · {ev.payNote}</span>}
+            </p>
+          )}
           {ev.note && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
           {cancelled && (
             <div className="mt-4 rounded-2xl bg-danger-soft p-4">
@@ -419,6 +425,8 @@ export default async function EventPage({ params }: Props) {
               publicListing: ev.publicListing,
               format: ev.format ?? "americano",
               bookingUrl: ev.bookingUrl ?? "",
+              cost: ev.cost ?? "",
+              payNote: ev.payNote ?? "",
             }}
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
             creatorEmail={creator.email}

@@ -40,6 +40,7 @@ const publicMatch = {
     group: { type: ["object", "null"], properties: { code: { type: "string" }, name: { type: "string" }, url: { type: "string" } } },
     listed: { type: "boolean" },
     bookingUrl: { type: ["string", "null"] },
+    cost: { type: ["string", "null"], description: "What each player pays, free text." },
     note: { type: ["string", "null"] },
     result: { type: ["object", "null"], properties: { sets: { type: "array", items: { type: "object", properties: { a: { type: "integer" }, b: { type: "integer" } } } }, teamA: { type: "array", items: { type: "string" } }, teamB: { type: "array", items: { type: "string" } }, confirmed: { type: "boolean" } } },
     createdAt: { type: "string", format: "date-time" },

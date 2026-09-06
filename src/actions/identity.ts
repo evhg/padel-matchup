@@ -193,7 +193,11 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
     const { cancelledEvents, leftEvents } = await anonymizePlayer(db, me.id);
     after(async () => {
       const { notifyEventCancelled, notifyCreator, notifyPromotion } = await import("@/lib/notify");
-      for (const ev of cancelledEvents) await notifyEventCancelled(db, ev);
+      const { emitMatchEvent } = await import("@/lib/api/webhooks");
+      for (const ev of cancelledEvents) {
+        await notifyEventCancelled(db, ev);
+        await emitMatchEvent(db, "match.cancelled", ev.code);
+      }
       for (const { event, promotion } of leftEvents) {
         await notifyCreator(db, event, "left", me.displayName, me.id);
         await notifyPromotion(db, event, promotion);
