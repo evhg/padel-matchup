@@ -70,6 +70,9 @@ export const players = pgTable(
     /** Telegram account linked by the bot or the login widget. */
     telegramId: bigint("telegram_id", { mode: "number" }),
     telegramUsername: text("telegram_username"),
+    /** Discord account linked by the bot (snowflakes as text: they exceed 2^53). */
+    discordId: text("discord_id"),
+    discordUsername: text("discord_username"),
     locale: text("locale").notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -82,6 +85,9 @@ export const players = pgTable(
     uniqueIndex("players_telegram_id_idx")
       .on(t.telegramId)
       .where(sql`${t.telegramId} is not null`),
+    uniqueIndex("players_discord_id_idx")
+      .on(t.discordId)
+      .where(sql`${t.discordId} is not null`),
   ],
 );
 
@@ -161,6 +167,8 @@ export const events = pgTable(
     bookingUrl: text("booking_url"),
     /** Telegram "one hour before" reminder went out to the chats that carry this match (once per event). */
     telegramReminderSentAt: timestamp("telegram_reminder_sent_at", { withTimezone: true }),
+    /** Same for the Discord channels that carry this match. */
+    discordReminderSentAt: timestamp("discord_reminder_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -596,6 +604,53 @@ export const telegramCards = pgTable(
 
 export type TelegramChat = typeof telegramChats.$inferSelect;
 export type TelegramCard = typeof telegramCards.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// discord_channels / discord_cards — the same quiet bot for Discord servers:
+// one card per match per channel, edited in place. Ids are Discord snowflakes
+// kept as text. `last_message_id` is the listening cursor for the hourly poll.
+// ---------------------------------------------------------------------------
+export const discordChannels = pgTable("discord_channels", {
+  channelId: text("channel_id").primaryKey(),
+  guildId: text("guild_id").notNull(),
+  name: text("name"),
+  guildName: text("guild_name"),
+  /** Locale the bot speaks in this channel: en or ru. */
+  locale: text("locale").notNull().default("en"),
+  tz: text("tz"),
+  venueName: text("venue_name"),
+  /** Newest message the listener has read in this channel. */
+  lastMessageId: text("last_message_id"),
+  /** The listener answers questions here (off for channels an admin turned it off in). */
+  listen: boolean("listen").notNull().default(true),
+  /** Bot lost access: keep the row, stop posting. */
+  leftAt: timestamp("left_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const discordCards = pgTable(
+  "discord_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => discordChannels.channelId, { onDelete: "cascade" }),
+    messageId: text("message_id").notNull(),
+    /** card = the live match card; result = the result posted once. */
+    kind: text("kind").notNull().default("card"),
+    rendered: text("rendered"),
+    completeNotedAt: timestamp("complete_noted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("discord_cards_event_channel_kind_idx").on(t.eventId, t.channelId, t.kind), index("discord_cards_event_idx").on(t.eventId)],
+);
+
+export type DiscordChannel = typeof discordChannels.$inferSelect;
+export type DiscordCard = typeof discordCards.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // listen_items — public posts where people ask about organising padel, the

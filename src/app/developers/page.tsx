@@ -129,7 +129,14 @@ export default function DevelopersPage() {
           </p>
           <p className="text-sm text-muted">
             Limits without a key: {LIMITS.apiReadsPerIpPerHour} reads an hour, {LIMITS.apiWritesPerIpPerDay} writes a day per address, {LIMITS.mcpCallsPerIpPerHour} MCP calls an hour. With a key: five times the reads, {LIMITS.apiWritesPerKeyPerDay} writes a day, {LIMITS.webhooksPerKey} webhooks. Need more, or building something? Say so in{" "}
-            <a href="https://github.com/evhg/padel-matchup/discussions">GitHub Discussions</a>.
+            <a href="https://github.com/evhg/padel-matchup/discussions">GitHub Discussions</a>
+            {process.env.DISCORD_INVITE_URL ? (
+              <>
+                {" "}
+                or on <a href={process.env.DISCORD_INVITE_URL}>Discord</a>
+              </>
+            ) : null}
+            .
           </p>
           <p className="text-sm text-muted">
             Building your own padel tool with an assistant? <code>npx skills add evhg/padel-matchup</code> installs a skill that teaches it this API. The repository also carries an <code>AGENTS.md</code>.

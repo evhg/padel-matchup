@@ -69,6 +69,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` / `TELEGRAM_BOT_USERNAME` | no | Enables the Telegram bot and Telegram sign-in. Register the webhook once with `GET /api/telegram/setup` (Bearer `CRON_SECRET`). |
 | `ANTHROPIC_API_KEY` | no | Drafts replies for the listening desk (use a key with a monthly spend cap). `LISTEN_MODEL` overrides the model. |
 | `TELEGRAM_OWNER_ID` | no | The owner's Telegram id: drafts are sent there for one-tap approval and `/admin/listen` opens for that account only. |
+| `DISCORD_BOT_TOKEN` / `DISCORD_PUBLIC_KEY` | no | Enables the Discord bot (slash commands, cards, the in-server helper). Register commands and the interactions URL once with `GET /api/discord/setup` (Bearer `CRON_SECRET`); it returns the install link. `DISCORD_INVITE_URL` shows the server on the community pages. |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USERNAME` / `REDDIT_PASSWORD` | no | Lets an approved reply be posted on Reddit as the project's account. Without them, Approve means copy and paste. |
 | `EMAIL_FROM` | no | Defaults to `Kicksmash <matches@<your domain>>`; the domain must be verified in Resend. |
 
@@ -195,7 +196,7 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ## Community
 
-Questions, ideas and "I built a thing on the API" go to [GitHub Discussions](https://github.com/evhg/padel-matchup/discussions). Bugs go to issues. The Telegram bot and the Reddit account answer people where they are; the code and the roadmap live here.
+Questions, ideas and "I built a thing on the API" go to [GitHub Discussions](https://github.com/evhg/padel-matchup/discussions). Bugs go to issues. There is a Discord server too (the link is on `/developers`), where the bot answers questions about once an hour. The Telegram bot and the Reddit account answer people where they are; the code and the roadmap live here.
 
 ## Deploy your own
 
@@ -210,7 +211,7 @@ docker build -t kicksmash .
 docker run -p 3000:3000 --env-file .env kicksmash   # then: pnpm db:migrate against the same DATABASE_URL
 ```
 
-Everything optional stays optional: without a Resend key no emails go out, without a bot token there is no Telegram, without an Anthropic key the listening desk only collects. Keep the `/agents` charter and the CC BY 4.0 notice if you keep the public API.
+Everything optional stays optional: without a Resend key no emails go out, without a bot token there is no Telegram or Discord, without an Anthropic key the listening desk only collects. Keep the `/agents` charter and the CC BY 4.0 notice if you keep the public API.
 
 ## Product rules baked in
 
@@ -228,6 +229,7 @@ Everything optional stays optional: without a Resend key no emails go out, witho
 - **Score:** any participant after start; players can correct each other; once the organizer enters/edits it locks ("Confirmed by organizer"). 1–3 sets, optional team assignment → win/loss in **My matches**.
 - **Organizer access** = creator cookie **or** the 10-char manage link (sets a per-event httpOnly cookie).
 - **Telegram bot (@kicksmash_bot), quiet by design:** add it to a padel group chat and it keeps **one card per match** there: title, time, venue, level range, the roster with levels, spots left, and two buttons, "I'm in" and "Can't make it". Taps join or leave through the same code path as the web button (organizer note, calendar invite, waitlist promotion, webhooks); the card is **edited in place**, never re-posted. The bot posts a new message only four times: the card itself (`/new` hands out a create link bound to the chat; a pasted kicksma.sh link becomes a card when the bot is admin or privacy mode is off; `/match CODE` works always), one short "line-up complete" note, one reminder about an hour before (via the 5-minute push cron), and the result picture once the organizer confirms. English or Russian per chat (`/lang`). People who tap become players with just their first name; **Telegram sign-in** on My matches (Login Widget) links or merges that account with the browser identity. Module: `src/lib/telegram/`.
+- **Discord bot, the same manners:** HTTP interactions only (no gateway process), so it runs on the same serverless functions. `/new` hands out a create link bound to the channel, `/match CODE` posts the card, the two buttons join and leave through the shared operations and the card **updates in place** for everyone; one "line-up complete" note, one reminder, the result once. `/ask` answers a padel or Kicksmash question on the spot, and the hourly tick reads new messages in the servers the bot is in, keeps the ones that read like questions and answers them in a reply (this is our own community, so no tap is needed; the shared daily budget still applies, and every reply grows an answer page). `/lang en|ru` per channel. Module: `src/lib/discord/`.
 - **Listening desk (helpful replies, never on their own):** every hour the app reads public feeds where people ask about organising padel (Hacker News via Algolia, r/padel and Reddit searches via RSS), keeps the last week of items, gates them cheaply (padel + an organising intent), and asks the model for a reply in the thread's language under strict tone rules: answer first, no hype, mention kicksma.sh at most once and only when it solves the question, disclose that we build it. Drafts go to the owner on Telegram with **Approve / Skip / Edit** buttons, at most six a day; Approve posts on Reddit as the project's account (or, without Reddit keys, marks it for a manual copy). `/admin/listen` is the desk (owner only, via Telegram sign-in). Daily ceilings on drafts and tokens keep a capped API key safe. Approved replies grow into evergreen **answer pages** at `/answers/{slug}` (question rewritten generically, QAPage JSON-LD, in the sitemap), published at once; a Sunday digest on Telegram lists the week and offers one-tap Unpublish for each new page. Module: `src/lib/listen/`.
 - **Embeds and oEmbed:** `/embed/board/{slug}` and `/embed/match/{code}` are iframe-safe views (no header, opens on kicksma.sh in a new tab, "Live from kicksma.sh" footer); the venue board shows the snippet under "Embed this board". `/api/oembed?url=…&format=json` is an oEmbed provider and match and board pages advertise it with `<link rel="alternate" type="application/json+oembed">`, so WordPress, Discourse, Ghost and Notion unfurl a pasted link into the live card. Helper: `src/lib/embed.ts`.
 - **Deploy your own:** the app is one Next.js project with a Postgres database. `Dockerfile` builds a standalone image; the README's environment table is the whole configuration. Everything is Apache-2.0; run it for your club, your city or your country.
@@ -269,7 +271,7 @@ Public shapes (`src/lib/api/serialize.ts`) carry first names and levels only; em
 ## Project map
 
 ```
-src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, /ranking, calendar.ics) · /phuket · /singapore · /api/telegram/{webhook,setup,login} · /admin/listen · /answers (+ /[slug]) · /embed/{board,match}/… · /api/oembed · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
+src/app/                 routes: / · /[code] · /[code]/share · /[code]/card (+ opengraph-image) · /[code]/i/[invite] · /[code]/manage/[manage] · /g/[code] (+ calendar.ics) · /v/[slug] (+ /poster, /ranking, calendar.ics) · /phuket · /singapore · /api/telegram/{webhook,setup,login} · /api/discord/{interactions,setup} · /admin/listen · /answers (+ /[slug]) · /embed/{board,match}/… · /api/oembed · /me · /p/[token] · /about · /americano · /developers · /agents · /mcp · /api/v1/* · /api/openapi.json · /llms.txt · /.well-known/mcp.json · /unsubscribe · /admin · /api/cron/{hourly,push} · /api/client-error · robots.txt · sitemap.xml
 src/app/[code]/opengraph-image.tsx   link preview (Inter w/ Cyrillic, organizer's language)
 src/actions/             server actions (identity incl. restore codes, events, slots, scores)
 src/lib/domain/          pure business logic, driver-agnostic (events, slots, scores, reminders, queries)

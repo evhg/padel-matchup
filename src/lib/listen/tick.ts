@@ -66,7 +66,7 @@ export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof f
 }
 
 function ownerMessage(item: ListenItem): string {
-  const where = item.source === "reddit" ? "Reddit" : item.source === "hn" ? "Hacker News" : "Web";
+  const where = item.source === "reddit" ? "Reddit" : item.source === "hn" ? "Hacker News" : item.source === "discord" ? "Discord" : "Web";
   const manual = item.source !== "reddit" || !redditEnabled();
   return [
     `<b>${where}</b> · ${esc(item.author ?? "")}`.trim(),
@@ -152,7 +152,7 @@ export async function approveItem(db: Db, id: string, now = new Date(), fetchImp
 }
 
 /** An approved reply becomes an evergreen answer page. Lazy import: answers.ts imports this module. */
-async function growAnswer(db: Db, id: string, now: Date, fetchImpl: typeof fetch): Promise<void> {
+export async function growAnswer(db: Db, id: string, now: Date, fetchImpl: typeof fetch): Promise<void> {
   try {
     const item = await getItem(db, id);
     if (!item) return;
@@ -180,9 +180,19 @@ export async function listItems(db: Db, statuses: string[] = ["drafted", "approv
 }
 
 /** The hourly step. Safe to run often; every part is idempotent. */
-export type ListenSummary = { feeds: number; feedErrors: number; fetched: number; remembered: number; expired: number; drafted: number; relevant: number; draftErrors: number; asked: number; feedErrorDetails?: string[] };
+export type ListenSummary = { feeds: number; feedErrors: number; fetched: number; remembered: number; expired: number; drafted: number; relevant: number; draftErrors: number; asked: number; feedErrorDetails?: string[]; discord?: { guilds: number; channels: number; read: number; candidates: number; replied: number; errors: string[] } };
 
-export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly FeedSpec[]; fetchImpl?: typeof fetch } = {}): Promise<ListenSummary> {
+export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly FeedSpec[]; fetchImpl?: typeof fetch; discord?: boolean } = {}): Promise<ListenSummary> {
+  // Our own Discord servers first: replies there need no tap and people are waiting.
+  let discord: ListenSummary["discord"];
+  if (o.discord !== false) {
+    try {
+      const { discordListenTick } = await import("@/lib/discord/listen");
+      discord = await discordListenTick(db, now, o.fetchImpl);
+    } catch (e) {
+      discord = { guilds: 0, channels: 0, read: 0, candidates: 0, replied: 0, errors: [e instanceof Error ? e.message : String(e)] };
+    }
+  }
   const fetched = await fetchAll(o.feeds, o.fetchImpl);
   const items = fetched.flatMap((f) => f.items);
   const remembered = await rememberCandidates(db, items, now);
@@ -196,5 +206,5 @@ export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly
     // Digest is a nicety; never let it fail the tick.
   }
   const failed = fetched.filter((f) => f.error);
-  return { feeds: fetched.length, feedErrors: failed.length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked, ...(failed.length ? { feedErrorDetails: failed.map((f) => `${f.feed.id}: ${f.error}`) } : {}) };
+  return { feeds: fetched.length, feedErrors: failed.length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked, ...(failed.length ? { feedErrorDetails: failed.map((f) => `${f.feed.id}: ${f.error}`) } : {}), ...(discord ? { discord } : {}) };
 }

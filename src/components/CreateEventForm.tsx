@@ -19,6 +19,7 @@ export function CreateEventForm({
   groupCode,
   initialValues,
   telegramTicket,
+  discordTicket,
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
@@ -37,6 +38,8 @@ export function CreateEventForm({
   initialValues?: Partial<EventFormValues>;
   /** From the Telegram bot's /new: the card is posted into that chat once the match exists. */
   telegramTicket?: string;
+  /** Same for the Discord bot's /new. */
+  discordTicket?: string;
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
@@ -116,6 +119,7 @@ export function CreateEventForm({
         myLevel: values.myLevel,
         groupCode,
         telegramTicket,
+        discordTicket,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl || undefined,
       });
