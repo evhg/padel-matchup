@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { answers, events, listenItems, telegramChats, type Answer, type ListenItem } from "@/db/schema";
+import { activity, answers, clubs, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { metricsDaily } from "@/db/schema";
@@ -128,9 +128,18 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts')`)).groupBy(metricsDaily.key),
   ]);
   const spent = Object.fromEntries(spend.map((r) => [r.key, Number(r.total)]));
+  // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
+  const [[newPlayers], [joins], [results], [newClubs], [channels]] = await Promise.all([
+    db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
+    db.select({ n: sql<number>`count(*)` }).from(activity).where(and(eq(activity.verb, "joined"), gte(activity.createdAt, since))),
+    db.select({ n: sql<number>`count(distinct ${activity.eventId})` }).from(activity).where(and(eq(activity.verb, "score_entered"), gte(activity.createdAt, since))),
+    db.select({ n: sql<number>`count(*)` }).from(clubs).where(gte(clubs.createdAt, since)),
+    db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
+  ]);
   const lines = [
     "<b>Kicksmash, this week</b>",
-    `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)}`,
+    `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,
+    `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
     newAnswers.length ? `\nNew answer pages (${newAnswers.length}), each with an Unpublish button below:` : "\nNo new answer pages this week.",
