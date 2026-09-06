@@ -131,6 +131,8 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
     const bot = await import("@/lib/telegram/bot");
     if (event === "match.result") await bot.postTelegramResult(db, code);
     await bot.syncTelegram(db, code);
+    if (event === "match.cancelled") await bot.postTelegramNotice(db, code, "cancelled");
+    else if (event === "match.updated" && extra.calendarChanged === true) await bot.postTelegramNotice(db, code, "updated");
   } catch (e) {
     console.warn("[telegram] sync failed", event, code, e);
   }

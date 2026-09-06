@@ -128,7 +128,13 @@
     "formatAmericanoHelp": "Partners rotate, everyone plays everyone, most points wins.",
     "formatMexicanoHelp": "Round 1 is random; from then on the courts follow the standings, so you always play people at your level.",
     "formatKingHelp": "Winners move up a court, losers move down. Partners split every round.",
-    "roundsHelp": "Rounds are generated on the day."
+    "roundsHelp": "Rounds are generated on the day.",
+    "cost": "Cost per player",
+    "costPlaceholder": "400 ฿",
+    "payNote": "How to pay",
+    "payNotePlaceholder": "PromptPay 081 234 5678",
+    "costHelp": "Shown on the match page and on the bot's cards, so nobody has to ask.",
+    "costSet": "{cost} per player"
   },
   "share": {
     "title": "Your match is live",
@@ -216,7 +222,8 @@
     "inviteNotAccepted": "Invite not yet accepted",
     "inviteSent": "Invite sent",
     "notifyMe": "Email me when the line-up changes",
-    "openBooking": "Booking"
+    "openBooking": "Booking",
+    "costPerPlayer": "{cost} per player"
   },
   "creator": {
     "tools": "Organizer tools",

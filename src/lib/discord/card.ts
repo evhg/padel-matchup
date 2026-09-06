@@ -31,6 +31,7 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
   head.push(`📍 ${md(whereLine(detail, locale))}`);
   const range = { min: ev.levelMin, max: ev.levelMax };
   if (hasRange(range)) head.push(`🎚 ${s.level} ${formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` })}`);
+  if (ev.cost) head.push(`💸 ${md(ev.cost)}${ev.payNote ? ` · ${md(ev.payNote)}` : ""}`);
   const lines: string[] = [];
   const shown = seats.slice(0, MAX_LINES);
   for (const seat of shown) {

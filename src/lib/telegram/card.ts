@@ -58,6 +58,10 @@ const STRINGS = {
     posted: "Card posted.",
     thinking: "Thinking…",
     noAnswer: "I don't have a good answer to that one. Try asking in more detail, or open kicksma.sh/answers.",
+    changedNote: (title: string, when: string, where: string) => `🔁 ${title}: now ${when} · ${where}.`,
+    cancelledNote: (title: string, when: string) => `❌ ${title} on ${when} is cancelled.`,
+    orgNote: (kind: string, name: string, n: number, cap: number) =>
+      kind === "joined" ? `✅ ${name} is in · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} joined the waitlist` : kind === "left" ? `↩️ ${name} left · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} asks to join (outside the level range)` : kind === "confirmed" ? `✅ ${name} confirmed · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declined` : `⬆️ ${name} moved in from the waitlist · ${n}/${cap}`,
   },
   ru: {
     match: "Падел-матч",
@@ -106,6 +110,10 @@ const STRINGS = {
     posted: "Карточка опубликована.",
     thinking: "Думаю…",
     noAnswer: "Хорошего ответа у меня нет. Спросите подробнее или загляните на kicksma.sh/answers.",
+    changedNote: (title: string, when: string, where: string) => `🔁 ${title}: теперь ${when} · ${where}.`,
+    cancelledNote: (title: string, when: string) => `❌ ${title} ${when} отменён.`,
+    orgNote: (kind: string, name: string, n: number, cap: number) =>
+      kind === "joined" ? `✅ ${name} играет · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} в листе ожидания` : kind === "left" ? `↩️ ${name} больше не играет · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} просится в матч (вне диапазона уровней)` : kind === "confirmed" ? `✅ ${name}: участие подтверждено · ${n}/${cap}` : kind === "declined" ? `❌ ${name}: отказ` : `⬆️ ${name} из листа ожидания в состав · ${n}/${cap}`,
   },
 } as const;
 
@@ -128,6 +136,11 @@ export function whereLine(detail: EventDetail, locale: BotLocale): string {
   return ev.court ? `${venue} · ${s.court(ev.court)}` : venue;
 }
 
+export function whenLine(detail: EventDetail, locale: BotLocale): string {
+  const ev = detail.event;
+  return `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)}`;
+}
+
 /** The one message per match the bot keeps edited. HTML parse mode. */
 export function renderCard(detail: EventDetail, base: string, locale: BotLocale): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
@@ -144,6 +157,7 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale)
   lines.push(`📍 ${esc(whereLine(detail, locale))}`);
   const range = { min: ev.levelMin, max: ev.levelMax };
   if (hasRange(range)) lines.push(`🎚 ${s.level} ${esc(formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` }))}`);
+  if (ev.cost) lines.push(`💸 ${esc(ev.cost)}${ev.payNote ? ` · ${esc(ev.payNote)}` : ""}`);
   lines.push("");
   lines.push(`<b>${s.players} ${occupied}/${ev.capacity}</b>`);
   const shown = seats.slice(0, MAX_LINES);

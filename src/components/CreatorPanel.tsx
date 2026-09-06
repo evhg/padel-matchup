@@ -53,6 +53,8 @@ export function CreatorPanel({
         levelMax: values.levelMax,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl,
+        cost: values.cost,
+        payNote: values.payNote,
       });
       if (!r.ok) {
         setError(t("errors.invalid"));

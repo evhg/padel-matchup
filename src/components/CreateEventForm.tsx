@@ -66,6 +66,8 @@ export function CreateEventForm({
     myLevel: null,
     publicListing: false,
     bookingUrl: "",
+    cost: "",
+    payNote: "",
     ...initialValues,
   });
   const touched = useRef(Boolean(initialValues?.date));
@@ -122,6 +124,8 @@ export function CreateEventForm({
         discordTicket,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl || undefined,
+        cost: values.cost || undefined,
+        payNote: values.payNote || undefined,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));

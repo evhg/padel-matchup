@@ -37,6 +37,8 @@ export type PublicMatch = {
   group: { code: string; name: string; url: string } | null;
   listed: boolean;
   bookingUrl: string | null;
+  /** What each player pays, free text. How to pay stays between the players. */
+  cost: string | null;
   note: string | null;
   result: { sets: { a: number; b: number }[]; teamA: string[]; teamB: string[]; confirmed: boolean } | null;
   createdAt: string;
@@ -73,6 +75,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     group: group ? { code: group.code, name: group.name, url: `${base}/g/${group.code}` } : null,
     listed: ev.publicListing,
     bookingUrl: ev.bookingUrl,
+    cost: ev.cost,
     note: ev.note,
     result: res ? { sets: res.sets.map((s) => ({ a: s.sideA, b: s.sideB })), teamA: res.a, teamB: res.b, confirmed: ev.scoreLockedByCreator } : null,
     createdAt: ev.createdAt.toISOString(),

@@ -39,6 +39,9 @@ export type EventFormValues = {
   publicListing: boolean;
   /** The club's booking page or confirmation, shown to players. */
   bookingUrl: string;
+  /** What each player pays and how to pay the organizer; free text, shown to players. */
+  cost: string;
+  payNote: string;
 };
 
 export type TimePatternInput = { dow: number; time: string };
@@ -84,7 +87,7 @@ export function EventFields({
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
   // "More" opens by itself only when something non-default is already set (editing a match).
-  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note || values.bookingUrl || values.publicListing || values.whenFull === "closed" || hasRange({ min: values.levelMin, max: values.levelMax })));
+  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed" || hasRange({ min: values.levelMin, max: values.levelMax })));
   const range = { min: values.levelMin, max: values.levelMax };
   const preset = presetFor(range);
   const [customOpen, setCustomOpen] = useState(preset === "custom");
@@ -108,6 +111,7 @@ export function EventFields({
     values.whenFull === "closed" ? t("create.whenFullClosed") : t("create.whenFullWaitlist"),
     values.venueName.trim() ? (values.publicListing ? t("venue.listedShort") : t("venue.notListedShort")) : null,
     values.bookingUrl ? t("create.bookingSet") : null,
+    values.cost ? t("create.costSet", { cost: values.cost }) : null,
     values.title || values.note ? t("create.titleSet") : null,
   ]
     .filter(Boolean)
@@ -319,6 +323,21 @@ export function EventFields({
               </label>
               <input className="input" type="url" inputMode="url" autoComplete="off" placeholder="https://" value={values.bookingUrl} maxLength={500} onChange={(e) => onChange({ bookingUrl: e.target.value })} />
               <p className="mt-1.5 text-sm text-muted">{t("create.bookingUrlHelp")}</p>
+            </div>
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">
+                    {t("create.cost")} <span className="font-normal">({t("common.optional")})</span>
+                  </label>
+                  <input className="input" value={values.cost} maxLength={40} autoComplete="off" placeholder={t("create.costPlaceholder")} onChange={(e) => onChange({ cost: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">{t("create.payNote")}</label>
+                  <input className="input" value={values.payNote} maxLength={120} autoComplete="off" placeholder={t("create.payNotePlaceholder")} onChange={(e) => onChange({ payNote: e.target.value })} />
+                </div>
+              </div>
+              <p className="mt-1.5 text-sm text-muted">{t("create.costHelp")}</p>
             </div>
             <div>
               <label className="label">

@@ -128,7 +128,13 @@
     "formatAmericanoHelp": "Las parejas rotan, todos juegan con todos, gana quien suma más puntos.",
     "formatMexicanoHelp": "La ronda 1 es al azar; desde entonces las pistas siguen la clasificación, así siempre juegas con gente de tu nivel.",
     "formatKingHelp": "Los ganadores suben de pista, los perdedores bajan. Las parejas se separan cada ronda.",
-    "roundsHelp": "Las rondas se generan el mismo día."
+    "roundsHelp": "Las rondas se generan el mismo día.",
+    "cost": "Por jugador",
+    "costPlaceholder": "8 €",
+    "payNote": "Cómo pagar",
+    "payNotePlaceholder": "Bizum 612 345 678",
+    "costHelp": "Se ve en la página del partido y en las tarjetas del bot, así nadie tiene que preguntar.",
+    "costSet": "{cost} por jugador"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -216,7 +222,8 @@
     "inviteNotAccepted": "Invitación aún sin aceptar",
     "inviteSent": "Invitación enviada",
     "notifyMe": "Avisarme por email cuando cambie la alineación",
-    "openBooking": "Reserva"
+    "openBooking": "Reserva",
+    "costPerPlayer": "{cost} por jugador"
   },
   "creator": {
     "tools": "Herramientas de organizador",
