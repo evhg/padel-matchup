@@ -820,7 +820,8 @@
     "help": "Entra con Telegram desde cualquier dispositivo y apúntate a partidos desde las tarjetas del bot en tus chats de grupo.",
     "signIn": "Entrar con Telegram",
     "invalid": "No se pudo verificar el acceso con Telegram. Inténtalo de nuevo.",
-    "justLinked": "Telegram vinculado. Tus partidos del bot ya están aquí."
+    "justLinked": "Telegram vinculado. Tus partidos del bot ya están aquí.",
+    "signingIn": "Entrando…"
   },
   "answers": {
     "eyebrow": "Respuestas",
@@ -960,6 +961,21 @@
     "scalesTitle": "Escalas de otras apps",
     "scalesHelp": "Cómo caen otras escalas sobre 0–7. Si falta la tuya, elige la franja más cercana y deja que los resultados hagan el resto.",
     "scalesYours": "La tuya",
-    "scalesKicksmash": "Kicksmash"
+    "scalesKicksmash": "Kicksmash",
+    "docIntro": "Un documento pequeño firmado por {issuer}. Un club, un compañero u otra app pueden comprobar que este nivel viene de Kicksmash y no se ha cambiado, sin preguntar a nadie.",
+    "docLevel": "Nivel",
+    "docStatus": "Estado",
+    "docRecord": "Resultados",
+    "docPlayedWon": "{played} jugados · {won} ganados",
+    "docIssued": "Emitido",
+    "docExpires": "Válido hasta",
+    "docSignatureOk": "La firma es correcta (clave {kid})",
+    "docUnsigned": "Esta copia de Kicksmash no tiene clave de firma, así que el documento no está firmado.",
+    "docForApps": "Para apps y clubes",
+    "docForAppsHelp": "El mismo documento en JSON, con la firma. La clave pública está en /.well-known/kicksmash-passport.json.",
+    "docCopyLink": "Copiar enlace JSON",
+    "docOpenJson": "Abrir JSON",
+    "docShow": "Ver el documento",
+    "docBack": "Volver a {name}"
   }
 }

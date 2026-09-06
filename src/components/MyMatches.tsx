@@ -18,7 +18,7 @@ import { NameEditor } from "./NameEditor";
 import { PersonalLinkCard } from "./PersonalLinkCard";
 import { PushToggle } from "./PushToggle";
 import { TelegramLogin } from "./TelegramLogin";
-import { telegramBotUsername, telegramEnabled } from "@/lib/telegram/api";
+import { telegramBotId } from "@/lib/telegram/api";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { DeleteAccount } from "./DeleteAccount";
 
@@ -160,9 +160,9 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
         <div className="mt-4 border-t border-line pt-4">
           <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasHistory} />
         </div>
-        {telegramEnabled() && telegramBotUsername() && (
+        {telegramBotId() && (
           <div className="mt-4 border-t border-line pt-4">
-            <TelegramLogin botUsername={telegramBotUsername()!} linked={player.telegramId != null} linkedUsername={player.telegramUsername} lang={locale} authUrl={`${baseUrl()}/api/telegram/login`} />
+            <TelegramLogin botId={telegramBotId()!} linked={player.telegramId != null} linkedUsername={player.telegramUsername} lang={locale} authUrl={`${baseUrl()}/api/telegram/login`} />
           </div>
         )}
         <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>

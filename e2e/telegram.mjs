@@ -1,11 +1,21 @@
 // Telegram: webhook secret, quiet update handling with an unreachable Bot API, /new ticket → card row,
-// login callback rejects forged data, My matches shows the Telegram sign-in.
+// login callback rejects forged data, My matches shows the Telegram sign-in, and the way back from
+// Telegram (signed fields in the hash) signs the player in, in the same tab.
+import { createHash, createHmac } from "node:crypto";
 import { BASE, finish, iphone, launch, makeCheck } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
 const check = makeCheck(results);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret";
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "1:e2e-fake-token";
+// What Telegram puts in the hash of return_to: the user's fields, signed with sha256(bot token).
+const authResultHash = (user) => {
+  const fields = { ...user, auth_date: Math.floor(Date.now() / 1000) };
+  const check = Object.keys(fields).sort().map((k) => `${k}=${fields[k]}`).join("\n");
+  fields.hash = createHmac("sha256", createHash("sha256").update(BOT_TOKEN).digest()).update(check).digest("hex");
+  return Buffer.from(JSON.stringify(fields), "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
 const hook = async (update, secret = SECRET) => {
   const res = await fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", ...(secret ? { "x-telegram-bot-api-secret-token": secret } : {}) }, body: JSON.stringify(update) });
   return { status: res.status, json: await res.json().catch(() => null) };
@@ -40,9 +50,29 @@ try {
   check("setup route needs the cron secret", setup.status === 401);
 
   const ctx = await browser.newContext(iphone);
-  const page = await ctx.newPage();
+  let page = await ctx.newPage();
   await page.goto(`${BASE}/me`);
-  check("signed-out My matches offers Telegram sign-in", (await page.getByText("Sign in with Telegram").count()) + (await page.getByText("Telegram", { exact: true }).count()) > 0);
+  check("signed-out My matches offers Telegram sign-in as a plain button, no widget iframe", (await page.getByRole("button", { name: "Sign in with Telegram" }).count()) === 1 && (await page.locator("iframe").count()) === 0);
+
+  // Back from Telegram in the same tab: the hash carries the signed fields, the page hands them to the login route.
+  const olya = { id: 515151, first_name: "Оля", username: "olya_e2e" };
+  await page.goto("about:blank");
+  await page.goto(`${BASE}/me#tgAuthResult=${authResultHash(olya)}`);
+  await page.waitForURL(/\/me\?telegram=linked$/, { timeout: 30000 });
+  check("the player is signed in and told so, on the same page", (await page.getByText("Telegram linked. Your matches from the bot are here now.").count()) === 1 && (await page.getByText("Linked: @olya_e2e").count()) === 1);
+  const exported = await page.request.get(`${BASE}/api/me/export`).then((r) => r.json());
+  check("the session belongs to the Telegram user", exported.player?.displayName === "Оля");
+  const forgedCtx = await browser.newContext(iphone);
+  const forged = await forgedCtx.newPage();
+  const bad = authResultHash(olya).replace(/^./, (c) => (c === "A" ? "B" : "A"));
+  await forged.goto(`${BASE}/me#tgAuthResult=${bad}`);
+  await forged.waitForTimeout(1500);
+  check("a tampered hash never signs anyone in", !/telegram=linked/.test(forged.url()) && (await forged.getByRole("button", { name: "Sign in with Telegram" }).count()) === 1, forged.url());
+  await forgedCtx.close();
+  await ctx.close();
+
+  const ctx2 = await browser.newContext(iphone);
+  page = await ctx2.newPage();
   await page.goto(`${BASE}/`);
   await page.getByPlaceholder("e.g. Alex").fill("Tia");
   await page.getByRole("button", { name: "Create & get the link" }).click();

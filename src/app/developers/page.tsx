@@ -127,7 +127,7 @@ export default function DevelopersPage() {
         <section id="passport" className="card flex flex-col gap-3">
           <h2 className="text-lg font-extrabold">Portable levels: the passport</h2>
           <p className="text-sm text-muted">
-            A player who switches their public page on gets a signed level document at <code>/u/&#123;slug&#125;/passport.json</code>: name, level, band, whether an organizer confirmed it, matches played and won, issued and expiry dates. Ed25519 over canonical JSON (keys sorted, no whitespace, every field except <code>alg</code> and <code>sig</code>). The public key is at <code>/.well-known/kicksmash-passport.json</code>. Profiles are opt-in and off by default; there is no list of them, and you should never guess a slug.
+            A player who switches their public page on gets a signed level document at <code>/u/&#123;slug&#125;/passport.json</code> (people get the readable version at <code>/u/&#123;slug&#125;/passport</code>): name, level, band, whether an organizer confirmed it, matches played and won, issued and expiry dates. Ed25519 over canonical JSON (keys sorted, no whitespace, every field except <code>alg</code> and <code>sig</code>). The public key is at <code>/.well-known/kicksmash-passport.json</code>. Profiles are opt-in and off by default; there is no list of them, and you should never guess a slug.
           </p>
           <pre className="overflow-x-auto rounded-2xl bg-ink p-4 text-xs text-bg">
             <code>{`import { verifyPassport } from "@erikv69/levels";

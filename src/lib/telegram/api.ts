@@ -9,6 +9,11 @@ export const telegramEnabled = () => Boolean(process.env.TELEGRAM_BOT_TOKEN);
 export const telegramBotUsername = () => process.env.TELEGRAM_BOT_USERNAME ?? null;
 export const telegramWebhookSecret = () => process.env.TELEGRAM_WEBHOOK_SECRET ?? null;
 const token = () => process.env.TELEGRAM_BOT_TOKEN ?? "";
+/** The numeric bot id (the part of the token before the colon): the sign-in URL needs it, the token never leaves the server. */
+export const telegramBotId = () => {
+  const id = token().split(":")[0] ?? "";
+  return /^\d+$/.test(id) ? id : null;
+};
 
 export type TgResult<T> = { ok: true; result: T } | { ok: false; error_code: number; description: string };
 export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: string; url?: string }[][] };

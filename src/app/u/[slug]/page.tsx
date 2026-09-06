@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title, description, alternates: { canonical: `/u/${slug}` }, openGraph: { title, description, type: "profile", url: `${baseUrl()}/u/${slug}` } };
 }
 
-/** The public page a player chose to have: first name, level, results, clubs, and the signed document. Nothing else. */
+/** The public page a player chose to have: first name, level, results, clubs, and a link to the signed level. Nothing else. */
 export default async function PublicProfilePage({ params }: Props) {
   const { slug } = await params;
   const db = await getDb();
@@ -78,9 +78,9 @@ export default async function PublicProfilePage({ params }: Props) {
         </section>
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <a href={`/u/${slug}/passport.json`} className="link">
+          <Link href={`/u/${slug}/passport`} prefetch={false} className="link">
             🔏 {t("passport.signed")}
-          </a>
+          </Link>
           <Link href="/developers#passport" prefetch={false} className="link">
             {t("passport.verify")} →
           </Link>

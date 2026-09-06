@@ -820,7 +820,8 @@
     "help": "Sign in with Telegram on any device, and join matches from the bot's cards in your group chats.",
     "signIn": "Sign in with Telegram",
     "invalid": "Telegram sign-in could not be verified. Try again.",
-    "justLinked": "Telegram linked. Your matches from the bot are here now."
+    "justLinked": "Telegram linked. Your matches from the bot are here now.",
+    "signingIn": "Signing in…"
   },
   "answers": {
     "eyebrow": "Answers",
@@ -960,6 +961,21 @@
     "scalesTitle": "Other apps' scales",
     "scalesHelp": "How other scales land on 0–7. If yours is missing, pick the nearest band and let results do the rest.",
     "scalesYours": "Yours",
-    "scalesKicksmash": "Kicksmash"
+    "scalesKicksmash": "Kicksmash",
+    "docIntro": "A small document signed by {issuer}. A club, a partner or another app can check that this level came from Kicksmash and was not changed, without asking anyone.",
+    "docLevel": "Level",
+    "docStatus": "Status",
+    "docRecord": "Record",
+    "docPlayedWon": "{played} played · {won} won",
+    "docIssued": "Issued",
+    "docExpires": "Valid until",
+    "docSignatureOk": "Signature checks out (key {kid})",
+    "docUnsigned": "This copy of Kicksmash has no signing key, so the document is not signed.",
+    "docForApps": "For apps and clubs",
+    "docForAppsHelp": "The same document as JSON, signature included. The public key is at /.well-known/kicksmash-passport.json.",
+    "docCopyLink": "Copy JSON link",
+    "docOpenJson": "Open JSON",
+    "docShow": "Show the document",
+    "docBack": "Back to {name}"
   }
 }
