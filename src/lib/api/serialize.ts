@@ -4,6 +4,8 @@ import { isClaimable, isOccupied } from "@/lib/domain/events";
 import type { GroupDetail } from "@/lib/domain/groups";
 import { formatOf } from "@/lib/domain/formats";
 import { hasRange, presetFor } from "@/lib/domain/levels";
+import type { Club } from "@/db/schema";
+import { platformById } from "@/lib/booking/platforms";
 import type { EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import type { VenueBoard } from "@/lib/domain/venueBoard";
@@ -124,5 +126,45 @@ export function groupToPublic(detail: GroupDetail, base: string): PublicGroup {
     weekly: g.recurDow != null && g.recurTime ? { weekday: g.recurDow, time: g.recurTime, leadDays: g.recurLeadDays } : null,
     members: detail.members.map((m) => ({ name: m.player.displayName, level: m.player.level, admin: m.role === "admin" })),
     upcoming: detail.upcoming.map((e: Event) => ({ code: e.code, url: `${base}/${e.code}`, startsAt: e.startsAt.toISOString(), title: e.title })),
+  };
+}
+
+export type PublicClub = {
+  slug: string;
+  name: string;
+  url: string;
+  city: string | null;
+  mapUrl: string | null;
+  website: string | null;
+  booking: { url: string; platform: string | null; platformName: string | null } | null;
+  courts: number | null;
+  about: string | null;
+  founding: boolean;
+  /** Today's free court-hours from the club's own feed, or null when the club shares none. */
+  freeCourts: { day: string; tz: string; fetchedAt: string; slots: { start: string; end: string; free: number }[] } | null;
+  boardUrl: string;
+  rankingUrl: string;
+  calendarUrl: string;
+};
+
+/** A live club: what the club chose to publish, nothing private (the manage token never leaves the server). */
+export function clubToPublic(c: Club, base: string): PublicClub {
+  const platform = platformById(c.bookingPlatform);
+  const a = c.availability && !c.availability.error ? c.availability : null;
+  return {
+    slug: c.slug,
+    name: c.name,
+    url: `${base}/v/${c.slug}`,
+    city: c.city,
+    mapUrl: c.mapUrl,
+    website: c.website,
+    booking: c.bookingUrl ? { url: c.bookingUrl, platform: platform?.id ?? null, platformName: platform?.name ?? null } : null,
+    courts: c.courts,
+    about: c.about,
+    founding: c.founding,
+    freeCourts: a ? { day: a.day, tz: a.tz, fetchedAt: a.fetchedAt, slots: a.slots } : null,
+    boardUrl: `${base}/v/${c.slug}`,
+    rankingUrl: `${base}/v/${c.slug}/ranking`,
+    calendarUrl: `${base}/v/${c.slug}/calendar.ics`,
   };
 }

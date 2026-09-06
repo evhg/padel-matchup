@@ -3,14 +3,20 @@ import { baseUrl } from "@/lib/config";
 import { getDb } from "@/db";
 import { CITIES } from "@/lib/domain/cities";
 import { listPublishedAnswers } from "@/lib/listen/answers";
+import { listLiveClubs } from "@/lib/domain/clubs";
+
+// Rendered on request: answer pages and club pages appear as soon as they exist (a build-time sitemap would freeze them).
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = baseUrl();
   const now = new Date();
   let answerPages: MetadataRoute.Sitemap = [];
+  let clubPages: MetadataRoute.Sitemap = [];
   try {
     const db = await getDb();
     answerPages = (await listPublishedAnswers(db, 500)).map((a) => ({ url: `${base}/answers/${a.slug}`, lastModified: a.publishedAt ?? now, changeFrequency: "monthly" as const, priority: 0.6 }));
+    clubPages = (await listLiveClubs(db)).map((c) => ({ url: `${base}/v/${c.slug}`, lastModified: c.updatedAt, changeFrequency: "daily" as const, priority: 0.7 }));
   } catch {
     answerPages = [];
   }
@@ -22,6 +28,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/agents`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     ...CITIES.map((c) => ({ url: `${base}/${c.slug}`, lastModified: now, changeFrequency: "daily" as const, priority: 0.8 })),
+    { url: `${base}/clubs`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    ...clubPages,
     { url: `${base}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     ...answerPages,
     { url: `${base}/about`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },

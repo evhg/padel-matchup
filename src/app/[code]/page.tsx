@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { detectPlatform } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -274,7 +275,7 @@ export default async function EventPage({ params }: Props) {
             <div className="flex shrink-0 gap-1.5">
               {ev.bookingUrl && (
                 <a href={ev.bookingUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
-                  🎟 {t("event.openBooking")}
+                  🎟 {detectPlatform(ev.bookingUrl) ? t("club.bookOn", { platform: detectPlatform(ev.bookingUrl)!.name }) : t("event.openBooking")}
                 </a>
               )}
               {ev.venueMapUrl && (

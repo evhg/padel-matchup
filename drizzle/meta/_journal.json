@@ -120,6 +120,13 @@
       "when": 1788663325660,
       "tag": "0016_discord",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788665254040,
+      "tag": "0017_clubs",
+      "breakpoints": true
     }
   ]
 }

@@ -9,13 +9,18 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import type { City } from "@/lib/domain/cities";
 import { getRanking } from "@/lib/domain/ranking";
 import { getCityBoard } from "@/lib/domain/venueBoard";
+import { ClubRow } from "@/components/ClubBits";
+import { CLUB_LIMITS, listLiveClubs } from "@/lib/domain/clubs";
 import { rangeChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
 
 /** /phuket, /singapore: open matches across the city's clubs, the city ranking, and the pitch in four lines. */
 export async function CityPage({ city }: { city: City }) {
   const db = await getDb();
-  const [t, locale, me, board, ranking] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city })]);
+  const [t, locale, me, board, ranking, clubs] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listLiveClubs(db, city.slug)]);
+  const liveSlugs = new Set(clubs.map((c) => c.slug));
+  const otherClubs = board.clubs.filter((c) => !liveSlugs.has(c.slug));
+  const foundingLeft = Math.max(0, CLUB_LIMITS.foundingPerCity - clubs.filter((c) => c.founding).length);
   return (
     <>
       <Header />
@@ -58,11 +63,27 @@ export async function CityPage({ city }: { city: City }) {
               })}
             </ul>
           )}
-          {board.clubs.length > 0 && (
-            <div className="mt-4 border-t border-line pt-3">
+        </section>
+
+        <section className="card">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-extrabold">{t("club.inCity", { city: city.name })}</h2>
+            <Link href="/clubs" prefetch={false} className="link text-sm">
+              {t("club.seeAll")} →
+            </Link>
+          </div>
+          {clubs.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {clubs.map((c) => (
+                <ClubRow key={c.slug} club={c} />
+              ))}
+            </ul>
+          )}
+          {otherClubs.length > 0 && (
+            <div className={clubs.length > 0 ? "mt-4 border-t border-line pt-3" : "mt-2"}>
               <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("city.clubs")}</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {board.clubs.map((c) => (
+                {otherClubs.map((c) => (
                   <Link key={c.slug} href={`/v/${c.slug}`} prefetch={false} className="chip-muted hover:bg-line">
                     {c.name}
                   </Link>
@@ -70,6 +91,17 @@ export async function CityPage({ city }: { city: City }) {
               </div>
             </div>
           )}
+          {clubs.length === 0 && otherClubs.length === 0 && <p className="mt-2 text-sm text-muted">{t("club.noClubs")}</p>}
+          <div className="mt-4 rounded-2xl bg-bg px-4 py-3">
+            <div className="text-sm font-bold">🌱 {t("club.founding")}</div>
+            <p className="mt-1 text-xs text-muted">{t("club.foundingBody")}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Link href="/clubs/claim" prefetch={false} className="btn-secondary btn-sm">
+                {t("club.claimCta")}
+              </Link>
+              <span className="text-xs text-faint">{t("club.foundingLeft", { count: foundingLeft, city: city.name })}</span>
+            </div>
+          </div>
         </section>
 
         <section className="card">

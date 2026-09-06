@@ -653,6 +653,54 @@ export type DiscordChannel = typeof discordChannels.$inferSelect;
 export type DiscordCard = typeof discordCards.$inferSelect;
 
 // ---------------------------------------------------------------------------
+// clubs — a venue page a club has claimed. Rows exist only for claimed clubs;
+// unclaimed venues still render from their matches. The owner approves each
+// claim once (one tap); until then the club's details stay private.
+// ---------------------------------------------------------------------------
+export type ClubFreeSlot = { start: string; end: string; free: number };
+export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string };
+
+export const clubs = pgTable(
+  "clubs",
+  {
+    /** Same as the venue slug of the club's matches. */
+    slug: text("slug").primaryKey(),
+    name: text("name").notNull(),
+    /** City slug (phuket, singapore) or null. */
+    city: text("city"),
+    tz: text("tz"),
+    mapUrl: text("map_url"),
+    website: text("website"),
+    bookingUrl: text("booking_url"),
+    /** Detected from booking_url: playtomic, matchi, playbypoint, … */
+    bookingPlatform: text("booking_platform"),
+    courts: integer("courts"),
+    about: text("about"),
+    opensAt: text("opens_at"),
+    closesAt: text("closes_at"),
+    /** Club opt-in: a calendar feed of bookings (.ics) or a JSON feed of free slots. */
+    availabilityUrl: text("availability_url"),
+    availabilityKind: text("availability_kind"),
+    availability: jsonb("availability").$type<ClubAvailability>(),
+    availabilityAt: timestamp("availability_at", { withTimezone: true }),
+    /** The club's private manage link. */
+    manageToken: text("manage_token").notNull(),
+    claimedBy: uuid("claimed_by").references(() => players.id, { onDelete: "set null" }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    /** One of the first clubs in its city: everything stays free for good. */
+    founding: boolean("founding").notNull().default(false),
+    /** The owner's Telegram message asking for approval. */
+    notifyMessageId: bigint("notify_message_id", { mode: "number" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("clubs_manage_token_idx").on(t.manageToken), index("clubs_city_idx").on(t.city), index("clubs_claimed_by_idx").on(t.claimedBy)],
+);
+export type Club = typeof clubs.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // listen_items — public posts where people ask about organising padel, the
 // reply we drafted, and what the owner decided. Nothing is posted without a
 // human tap. Bodies are public text already; we keep no more than needed.

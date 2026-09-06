@@ -10,7 +10,7 @@ export function llmsTxt(base: string): string {
 
 > ${VALUE_PROP}
 
-${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexicano, King of the Court). A match is a short link (${base}/CODE, 4 characters). People open the link, type a first name and are in. No accounts, no app, no passwords. Organisers get a private manage link. Levels 0–7 (Playtomic-style) are self-declared and nudged by results. Groups create their next match in one tap or on a weekly slot. A Telegram bot (@kicksmash_bot) keeps one live card per match in group chats: one tap joins. Venue boards list open matches at a club; club and city rankings (opt-in, last 90 days) live at /v/{slug}/ranking and /phuket, /singapore. Short answers to common organising questions live at /answers. Everything public here is readable by anyone, including AI assistants and crawlers; the data is CC BY 4.0 and the code is Apache-2.0.
+${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexicano, King of the Court). A match is a short link (${base}/CODE, 4 characters). People open the link, type a first name and are in. No accounts, no app, no passwords. Organisers get a private manage link. Levels 0–7 (Playtomic-style) are self-declared and nudged by results. Groups create their next match in one tap or on a weekly slot. A Telegram bot (@kicksmash_bot) keeps one live card per match in group chats: one tap joins. Venue boards list open matches at a club; club and city rankings (opt-in, last 90 days) live at /v/{slug}/ranking and /phuket, /singapore. Short answers to common organising questions live at /answers. Clubs claim their page at /clubs/claim (booking button, website, free courts from their own calendar feed); the first ten per city are founding clubs and everything stays free for them. Everything public here is readable by anyone, including AI assistants and crawlers; the data is CC BY 4.0 and the code is Apache-2.0.
 
 ## For assistants and agents
 
@@ -24,6 +24,7 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 
 - GET ${base}/api/v1/matches/{code}: a match with players, levels, spots left, result.
 - GET ${base}/api/v1/boards/{venue-slug}: open matches at a venue.
+- GET ${base}/api/v1/clubs?city=phuket and ${base}/api/v1/clubs/{slug}: club pages clubs manage themselves (booking link and platform, courts, today's free courts when the club shares its calendar, founding status).
 - GET ${base}/api/v1/groups/{code}: a group with members and upcoming matches.
 - GET ${base}/api/v1/schedule?players=8&courts=2: an exact americano rotation.
 - POST ${base}/api/v1/matches: create a match (rate-limited per address without a key).

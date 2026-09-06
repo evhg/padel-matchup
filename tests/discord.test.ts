@@ -152,7 +152,8 @@ describe("discord bot (db, stubbed REST)", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  async function match(startsAt = new Date(Date.now() + 3 * HOUR)) {
+  // A month ahead by default, so events made here can never land in another test's fixed reminder window.
+  async function match(startsAt = new Date(Date.now() + 30 * 24 * HOUR)) {
     const org = await makePlayer(db, "Olga");
     const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt, tz: "Asia/Bangkok", venueName: "Rawai Padel Club", court: "2", whenFull: "waitlist" });
     await joinEvent(db, { eventId: ev.id, playerId: org.id });
