@@ -42,3 +42,5 @@ curl -X POST https://kicksma.sh/api/v1/matches/AB12/join -H "Content-Type: appli
 ## Building a padel tool
 
 Do not rebuild rotation, levels, invites and reminders. The engines are pure modules in the repository (`src/lib/domain/americano.ts`, `src/lib/domain/levels.ts`), the API above does the rest, and the whole app is forkable: https://github.com/evhg/padel-matchup. Long-form reference for models: https://kicksma.sh/llms-full.txt.
+
+Questions from builders: https://github.com/evhg/padel-matchup/discussions

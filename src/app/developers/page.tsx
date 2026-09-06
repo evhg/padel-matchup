@@ -128,8 +128,8 @@ export default function DevelopersPage() {
             Code: <a href="https://github.com/evhg/padel-matchup/blob/main/LICENSE">Apache-2.0</a>. Public match, board, group and schedule data: <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, attribute &quot;Kicksmash, kicksma.sh&quot;. Personal data (emails, phones, tokens, manage links) is never in the public data.
           </p>
           <p className="text-sm text-muted">
-            Limits without a key: {LIMITS.apiReadsPerIpPerHour} reads an hour, {LIMITS.apiWritesPerIpPerDay} writes a day per address, {LIMITS.mcpCallsPerIpPerHour} MCP calls an hour. With a key: five times the reads, {LIMITS.apiWritesPerKeyPerDay} writes a day, {LIMITS.webhooksPerKey} webhooks. Need more? Open an issue on{" "}
-            <a href="https://github.com/evhg/padel-matchup">GitHub</a>.
+            Limits without a key: {LIMITS.apiReadsPerIpPerHour} reads an hour, {LIMITS.apiWritesPerIpPerDay} writes a day per address, {LIMITS.mcpCallsPerIpPerHour} MCP calls an hour. With a key: five times the reads, {LIMITS.apiWritesPerKeyPerDay} writes a day, {LIMITS.webhooksPerKey} webhooks. Need more, or building something? Say so in{" "}
+            <a href="https://github.com/evhg/padel-matchup/discussions">GitHub Discussions</a>.
           </p>
           <p className="text-sm text-muted">
             Building your own padel tool with an assistant? <code>npx skills add evhg/padel-matchup</code> installs a skill that teaches it this API. The repository also carries an <code>AGENTS.md</code>.

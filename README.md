@@ -193,6 +193,10 @@ Hobby plan crons run once a day at best-effort times; Pro runs them on the minut
 
 ---
 
+## Community
+
+Questions, ideas and "I built a thing on the API" go to [GitHub Discussions](https://github.com/evhg/padel-matchup/discussions). Bugs go to issues. The Telegram bot and the Reddit account answer people where they are; the code and the roadmap live here.
+
 ## Deploy your own
 
 Kicksmash is one Next.js project and one Postgres database, Apache-2.0. Run it for your club, your city or your country; the environment table above is the whole configuration.

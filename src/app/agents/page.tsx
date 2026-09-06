@@ -51,7 +51,7 @@ export default function AgentsPage() {
             </dd>
             <dt className="text-muted">Source</dt>
             <dd>
-              <a href="https://github.com/evhg/padel-matchup">github.com/evhg/padel-matchup</a>
+              <a href="https://github.com/evhg/padel-matchup">github.com/evhg/padel-matchup</a> · questions and ideas in <a href="https://github.com/evhg/padel-matchup/discussions">Discussions</a>
             </dd>
             <dt className="text-muted">Humans</dt>
             <dd>

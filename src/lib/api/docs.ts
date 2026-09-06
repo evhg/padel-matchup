@@ -82,7 +82,7 @@ Exact rotation when the field is in fours: every pair partners once in playersâˆ
 2. Treat personal tokens and manage links as secrets belonging to the person you act for.
 3. Do not create matches nobody asked for. One request, one match.
 4. Tell people plainly when a match was created or joined on their behalf, and give them the links.
-5. If something is wrong or missing, say so on GitHub: https://github.com/evhg/padel-matchup/issues
+5. If something is wrong or missing, say so in GitHub Discussions: https://github.com/evhg/padel-matchup/discussions (bugs: https://github.com/evhg/padel-matchup/issues)
 
 ## Licence
 

@@ -569,7 +569,21 @@
     },
     "howItWorksMexicano": "Round 1 is random. From round 2 the courts follow the standings: the top four play on court 1, the next four on court 2, and on each court 1st and 4th play 2nd and 3rd. Enter every score before the next round.",
     "howItWorksKing": "Winners move up a court, losers move down; the top court's winners and the bottom court's losers stay. Partners split every round. Standings follow the court you finish on, winners first. Enter every score before the next round.",
-    "scoresMissing": "Enter all scores of round {n} first."
+    "scoresMissing": "Enter all scores of round {n} first.",
+    "static": {
+      "title": "Americano schedule for {players} players",
+      "sub": "{players} players on {courts} courts: {rounds} rounds and every pair has partnered exactly once. Print it, or run it live with scores from any phone.",
+      "metaDescription": "Free printable americano padel schedule for {players} players on {courts} courts: {rounds} rounds, every pair partners once. Run it live with scores and standings.",
+      "player": "Player {n}",
+      "customise": "Other numbers or names",
+      "howTitle": "How to run it",
+      "how1": "Number your {players} players 1 to {players}; each round uses {courts} courts.",
+      "how2": "Play every match to a fixed number of points (16, 21, 24 or 32); each player takes their side's points.",
+      "how3": "After {rounds} rounds the rotation is complete. Most points wins; point difference breaks ties.",
+      "otherSizes": "Other field sizes",
+      "players": "{count} players",
+      "readyMade": "Ready-made schedules:"
+    }
   },
   "calendar": {
     "title": "Add to calendar",
@@ -823,5 +837,26 @@
     "copied": "Copied ✓",
     "openOn": "Open on kicksma.sh",
     "poweredBy": "Live from"
+  },
+  "levels": {
+    "eyebrow": "Padel levels",
+    "title": "What your padel level means",
+    "sub": "Kicksmash uses the 0 to 7 scale most padel apps use, in quarter steps. You declare it once; results move it a little; an organizer who played with you can confirm it.",
+    "scale": "The scale",
+    "scaleNote": "The same numbers Playtomic-style apps show, so a 3.0 here means what a 3.0 means at your club.",
+    "ranges": "Level ranges on a match",
+    "rangesHelp": "An organizer can set a range. Inside it people join; outside it they ask, and the organizer decides. Presets:",
+    "faqTitle": "Questions people ask",
+    "faq1q": "How do I know my level?",
+    "faq1a": "Read the scale above and pick the band that describes most of your matches, not your best day. Most people who play weekly and use the glass on purpose are 2.5 to 3.5. If unsure, pick the lower number: results correct it upwards.",
+    "faq2q": "How does the level change after matches?",
+    "faq2a": "Only when an organizer confirms a 2v2 score or finalizes a tournament. The change is small (at most ±{match} per match, ±{tournament} per tournament) and depends on the levels of everyone involved: beating stronger players moves you more. Unrated players never move anyone.",
+    "faq3q": "What is the tick next to a level?",
+    "faq3a": "An organizer who played with that person confirmed the level after the result. It stays while the level moves less than half a step. Rankings can rely on it.",
+    "faq4q": "Is my level public?",
+    "faq4a": "It shows as a small chip next to your first name on matches you are in. Club and city rankings list you only if you switch that on yourself.",
+    "ctaTitle": "Set yours in ten seconds",
+    "ctaHelp": "No account. Your name and level live behind a personal link.",
+    "metaDescription": "The padel level scale explained: what 0 to 7 means, how results move it, what a confirmed level is, and how level ranges work on a match."
   }
 }
