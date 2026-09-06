@@ -828,7 +828,8 @@
     "signIn": "Войти через Telegram",
     "invalid": "Не удалось проверить вход через Telegram. Попробуйте ещё раз.",
     "justLinked": "Telegram привязан. Ваши матчи из бота теперь здесь.",
-    "signingIn": "Входим…"
+    "signingIn": "Входим…",
+    "notInside": "Эта страница открывается внутри Telegram. В браузере откройте"
   },
   "answers": {
     "eyebrow": "Ответы",

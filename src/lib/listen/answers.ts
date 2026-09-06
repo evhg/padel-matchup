@@ -123,7 +123,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ n: sql<number>`count(*)` }).from(listenItems).where(and(eq(listenItems.status, "posted"), gte(listenItems.postedReplyAt, since))),
     db.select({ n: sql<number>`count(*)` }).from(listenItems).where(and(eq(listenItems.status, "approved"), gte(listenItems.decidedAt, since))),
     db.select({ n: sql<number>`count(*)` }).from(events).where(gte(events.createdAt, since)),
-    db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(isNull(telegramChats.leftAt)),
+    db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNull(telegramChats.leftAt), sql`${telegramChats.type} <> 'private'`)),
     db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt), isNull(answers.digestedAt))).orderBy(desc(answers.publishedAt)).limit(10),
     db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts')`)).groupBy(metricsDaily.key),
   ]);

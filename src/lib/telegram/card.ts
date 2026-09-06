@@ -4,7 +4,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { esc, type InlineKeyboard } from "./api";
+import { esc, miniAppUrl, type InlineKeyboard } from "./api";
 
 export type BotLocale = "en" | "ru";
 export const botLocale = (languageCode: string | null | undefined): BotLocale => (languageCode?.toLowerCase().startsWith("ru") ? "ru" : "en");
@@ -81,6 +81,15 @@ const STRINGS = {
     scoreNoTeams: "Tap 🏁 Result on the card first, so I know the teams.",
     scoreSaved: (score: string) => `Saved: ${score}`,
     toastSaved: "Saved ✅",
+    share: "📤 Share",
+    privateHelp: "Here you can also:\n/new tomorrow 19:00 Rawai creates a match; share its card into any chat with 📤\n/games shows open matches near you (add a city: /games phuket)\nPaste a kicksma.sh link or a code and I show the card.",
+    gamesTitle: (city: string) => `Open matches · ${city}`,
+    gamesMine: "Your upcoming matches",
+    gamesNone: (city: string) => `No open matches listed in ${city} right now. Create one: /new tomorrow 19:00 <club>.`,
+    gamesWhichCity: "Which city? /games phuket or /games singapore.",
+    inlineNothing: "No matches to share yet. Create one in a chat with me: /new tomorrow 19:00 <club>.",
+    inlineHint: "Create a match",
+    spotsShort: (n: number, cap: number) => `${n}/${cap}`,
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} is in · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} joined the waitlist` : kind === "left" ? `↩️ ${name} left · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} asks to join (outside the level range)` : kind === "confirmed" ? `✅ ${name} confirmed · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declined` : `⬆️ ${name} moved in from the waitlist · ${n}/${cap}`,
   },
@@ -154,6 +163,15 @@ const STRINGS = {
     scoreNoTeams: "Сначала нажмите 🏁 Результат на карточке, чтобы я знал составы пар.",
     scoreSaved: (score: string) => `Сохранено: ${score}`,
     toastSaved: "Сохранено ✅",
+    share: "📤 Поделиться",
+    privateHelp: "Здесь тоже можно:\n/new завтра 19:00 Равай создаёт матч; карточку можно отправить в любой чат через 📤\n/games показывает открытые матчи рядом (с городом: /games пхукет)\nВставьте ссылку kicksma.sh или код, и я покажу карточку.",
+    gamesTitle: (city: string) => `Открытые матчи · ${city}`,
+    gamesMine: "Ваши ближайшие матчи",
+    gamesNone: (city: string) => `Сейчас в ${city} нет открытых матчей. Создайте: /new завтра 19:00 <клуб>.`,
+    gamesWhichCity: "Какой город? /games пхукет или /games сингапур.",
+    inlineNothing: "Пока нечего отправлять. Создайте матч в чате со мной: /new завтра 19:00 <клуб>.",
+    inlineHint: "Создать матч",
+    spotsShort: (n: number, cap: number) => `${n}/${cap}`,
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} играет · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} в листе ожидания` : kind === "left" ? `↩️ ${name} больше не играет · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} просится в матч (вне диапазона уровней)` : kind === "confirmed" ? `✅ ${name}: участие подтверждено · ${n}/${cap}` : kind === "declined" ? `❌ ${name}: отказ` : `⬆️ ${name} из листа ожидания в состав · ${n}/${cap}`,
   },
@@ -187,7 +205,8 @@ export function whenLine(detail: EventDetail, locale: BotLocale): string {
 export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
   const s = strings(locale);
-  const url = `${base}/${ev.code}`;
+  // Inside Telegram the match opens in the Mini App (signed in, no browser) once the owner has created it; the web page otherwise.
+  const url = miniAppUrl(ev.code) ?? `${base}/${ev.code}`;
   const seats = detail.roster.filter((x) => x.position <= ev.capacity).sort((a, b) => a.position - b.position);
   const occupied = seats.filter(isOccupied).length;
   const complete = lineupComplete(detail.roster, ev.capacity);
@@ -233,7 +252,10 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
               { text: s.in, callback_data: `j:${ev.code}` },
               { text: s.out, callback_data: `l:${ev.code}` },
             ],
-            [{ text: s.open, url }],
+            [
+              { text: s.open, url },
+              { text: s.share, switch_inline_query: ev.code },
+            ],
           ],
         };
   return { text: lines.join("\n"), keyboard, complete };

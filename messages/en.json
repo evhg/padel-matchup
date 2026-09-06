@@ -828,7 +828,8 @@
     "signIn": "Sign in with Telegram",
     "invalid": "Telegram sign-in could not be verified. Try again.",
     "justLinked": "Telegram linked. Your matches from the bot are here now.",
-    "signingIn": "Signing in…"
+    "signingIn": "Signing in…",
+    "notInside": "This page opens inside Telegram. On the web, go to"
   },
   "answers": {
     "eyebrow": "Answers",

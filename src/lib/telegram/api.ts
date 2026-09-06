@@ -16,16 +16,24 @@ export const telegramBotId = () => {
 };
 
 export type TgResult<T> = { ok: true; result: T } | { ok: false; error_code: number; description: string };
-export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: string; url?: string }[][] };
+export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: string; url?: string; switch_inline_query?: string }[][] };
 export type TgUser = { id: number; is_bot?: boolean; first_name: string; last_name?: string; username?: string; language_code?: string };
 export type TgChat = { id: number; type: "private" | "group" | "supergroup" | "channel"; title?: string; username?: string };
 export type TgMessage = { message_id: number; date: number; chat: TgChat; from?: TgUser; text?: string; message_thread_id?: number; reply_to_message?: TgMessage; entities?: { type: string; offset: number; length: number; url?: string }[] };
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
-  callback_query?: { id: string; from: TgUser; message?: TgMessage; data?: string };
+  /** A tap on a button: under a message the bot sent, or (inline_message_id) under a card sent through inline mode. */
+  callback_query?: { id: string; from: TgUser; message?: TgMessage; inline_message_id?: string; data?: string };
   my_chat_member?: { chat: TgChat; from: TgUser; old_chat_member: { status: string }; new_chat_member: { status: string } };
+  /** "@bot query" typed in any chat. */
+  inline_query?: { id: string; from: TgUser; query: string; offset: string; chat_type?: string };
+  /** The user picked one of our inline results (sent when inline feedback is on in BotFather; carries the message id only when the result has buttons). */
+  chosen_inline_result?: { result_id: string; from: TgUser; query: string; inline_message_id?: string };
 };
+
+/** One article in the inline results: what the picker shows, and the message it sends when chosen. */
+export type InlineArticle = { id: string; title: string; description: string; text: string; keyboard: InlineKeyboard };
 
 export async function tg<T = unknown>(method: string, body: Record<string, unknown>): Promise<TgResult<T>> {
   if (!telegramEnabled()) return { ok: false, error_code: 0, description: "telegram disabled" };
@@ -73,6 +81,22 @@ export function editMessageText(chatId: number, messageId: number, text: string,
   });
 }
 
+/** Edits a card that was sent through inline mode (no chat id, only the inline message id). */
+export function editInlineMessageText(inlineMessageId: string, text: string, keyboard?: InlineKeyboard | null) {
+  return tg<true>("editMessageText", { inline_message_id: inlineMessageId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: keyboard ?? { inline_keyboard: [] } });
+}
+
+/** Answers an inline query with articles; short cache and personal results, since the list depends on who asks. */
+export function answerInlineQuery(id: string, articles: InlineArticle[], o: { cacheTime?: number; switchPmText?: string; switchPmParameter?: string } = {}) {
+  return tg<true>("answerInlineQuery", {
+    inline_query_id: id,
+    results: articles.map((a) => ({ type: "article", id: a.id, title: a.title, description: a.description, input_message_content: { message_text: a.text, parse_mode: "HTML", link_preview_options: { is_disabled: true } }, reply_markup: a.keyboard })),
+    cache_time: o.cacheTime ?? 5,
+    is_personal: true,
+    ...(o.switchPmText ? { button: { text: o.switchPmText, start_parameter: o.switchPmParameter ?? "hello" } } : {}),
+  });
+}
+
 export function sendPhoto(chatId: number, photo: string, caption: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendPhoto", {
     chat_id: chatId,
@@ -89,8 +113,21 @@ export function answerCallbackQuery(id: string, text?: string, o: { alert?: bool
   return tg<true>("answerCallbackQuery", { callback_query_id: id, ...(text ? { text } : {}), show_alert: o.alert ?? false, ...(o.url ? { url: o.url } : {}) });
 }
 
+/** The Mini App's direct link for a match, when the owner created the app in BotFather (TELEGRAM_MINIAPP_SLUG), else null. Opens inside Telegram with the player already signed in. */
+export function miniAppUrl(code?: string | null): string | null {
+  const slug = process.env.TELEGRAM_MINIAPP_SLUG;
+  const bot = telegramBotUsername();
+  if (!slug || !bot) return null;
+  return `https://t.me/${bot}/${slug}${code ? `?startapp=${encodeURIComponent(code)}` : ""}`;
+}
+
+/** The button next to the message box in the bot's private chat: opens the Mini App. */
+export function setMenuButton(url: string, text: string) {
+  return tg<true>("setChatMenuButton", { menu_button: { type: "web_app", text, web_app: { url } } });
+}
+
 export function setWebhook(url: string, secret: string) {
-  return tg<true>("setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query", "my_chat_member"], drop_pending_updates: true });
+  return tg<true>("setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query", "my_chat_member", "inline_query", "chosen_inline_result"], drop_pending_updates: true });
 }
 
 export const getWebhookInfo = () => tg<{ url: string; pending_update_count: number; last_error_message?: string }>("getWebhookInfo", {});

@@ -828,7 +828,8 @@
     "signIn": "Entrar con Telegram",
     "invalid": "No se pudo verificar el acceso con Telegram. Inténtalo de nuevo.",
     "justLinked": "Telegram vinculado. Tus partidos del bot ya están aquí.",
-    "signingIn": "Entrando…"
+    "signingIn": "Entrando…",
+    "notInside": "Esta página se abre dentro de Telegram. En la web, ve a"
   },
   "answers": {
     "eyebrow": "Respuestas",

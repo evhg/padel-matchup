@@ -2,14 +2,14 @@ import { createHash, createHmac } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, telegramCards, telegramChats } from "@/db/schema";
+import { events, players, telegramCards, telegramChats, telegramInlineCards } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { setTournamentLock } from "@/lib/domain/tournament";
 import { saveMatchScore } from "@/lib/domain/scores";
-import { telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
-import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
+import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
+import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
 import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets, postCardForTicket, postTelegramNotice, postTelegramResult, refreshStartedCards, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
 import { renderDiscordCard } from "@/lib/discord/card";
@@ -92,6 +92,20 @@ describe("telegram signatures and tickets", () => {
     expect(ok?.query_id).toBe("q1");
     expect(verifyInitData(params.toString().replace("Bo", "Bob"), now)).toBeNull();
   });
+  it("the Mini App: where a start parameter leads, and the direct link on cards once the app exists", async () => {
+    expect(miniAppNext(null)).toBe("/me");
+    expect(miniAppNext("AbCd")).toBe("/AbCd");
+    expect(miniAppNext("r_AbCd")).toBe("/AbCd");
+    expect(miniAppNext("../etc")).toBe("/me");
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+    expect(miniAppUrl("AbCd")).toBeNull();
+    process.env.TELEGRAM_BOT_USERNAME = "kicksmash_bot";
+    process.env.TELEGRAM_MINIAPP_SLUG = "app";
+    expect(miniAppUrl("AbCd")).toBe("https://t.me/kicksmash_bot/app?startapp=AbCd");
+    expect(miniAppUrl()).toBe("https://t.me/kicksmash_bot/app");
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+  });
+
   it("chat tickets are bound to the chat and expire after two days", () => {
     const now = new Date("2026-09-05T12:00:00Z");
     const ticket = chatTicket(-5, now);
@@ -204,7 +218,8 @@ describe("telegram bot (db, stubbed Bot API)", () => {
   it("reminds about an hour before, once, and posts the result once the organizer confirms", async () => {
     const chat = { id: -100888, type: "supergroup" as const, title: "Reminders" };
     await handleTelegramUpdate(db, { update_id: 50, my_chat_member: { chat, from: user(11, "Max"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } }, NO_SIDE_EFFECTS);
-    const now = new Date("2026-09-06T10:00:00Z");
+    // A whole hour a week ahead: the fixed windows below never collide with the real clock.
+    const now = new Date(Math.ceil(Date.now() / HOUR) * HOUR + 7 * 24 * HOUR);
     const { org, ev } = await match(new Date(now.getTime() + 70 * 60 * 1000));
     await handleTelegramUpdate(db, { update_id: 51, message: { message_id: 1, date: 0, chat, from: user(11, "Max"), text: `/match ${ev.code}` } }, NO_SIDE_EFFECTS);
     expect(await sendTelegramReminders(db, new Date(now.getTime() - 3 * HOUR))).toBe(0);
@@ -260,6 +275,10 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(ev.cost).toBe("400 ฿");
     const detail = (await getEventByCode(db, ev.code))!;
     expect(renderCard(detail, "https://kicksma.sh", "en").text).toContain("💸 400 ฿ · PromptPay 081 234 5678");
+    process.env.TELEGRAM_MINIAPP_SLUG = "app";
+    expect(JSON.stringify(renderCard(detail, "https://kicksma.sh", "en").keyboard)).toContain(`https://t.me/kicksmash_bot/app?startapp=${ev.code}`);
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+    expect(JSON.stringify(renderCard(detail, "https://kicksma.sh", "en").keyboard)).toContain(`https://kicksma.sh/${ev.code}`);
     expect(renderDiscordCard(detail, "https://kicksma.sh", "ru").embeds[0].description).toContain("💸 400 ฿ · PromptPay 081 234 5678");
     const pub = matchToPublic(detail, "https://kicksma.sh");
     expect(pub.cost).toBe("400 ฿");
@@ -427,6 +446,90 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     // A locked result stays locked for players.
     expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_error:locked");
     expect(await tap(95, org, card.messageId, `r:${code}`)).toBe("result:locked");
+  });
+
+  it("the private chat is a console: /start explains, /new makes a card here with a Share button, a bare code shows a card, /games lists mine and the city's open ones", async () => {
+    const me = user(91, "Dasha", "ru");
+    const dm = { id: 91, type: "private" as const };
+    const send = (id: number, text: string) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat: dm, from: me, text } }, NO_SIDE_EFFECTS);
+    expect(await send(700, "/start")).toBe("private_start");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("/games");
+    // No zone known for a fresh private chat: the bot asks once, then remembers.
+    expect(await send(701, "/new завтра 19:00 Sunny Club")).toBe("new_need_tz");
+    expect(await send(702, "/tz пхукет")).toBe("tz");
+    expect(await send(703, "/new завтра 19:00 Sunny Club 400฿")).toMatch(/^new_created:/);
+    const card = sent("sendMessage").at(-1)!;
+    expect(card.body.chat_id).toBe(91);
+    expect(String(card.body.text)).toContain("Sunny Club");
+    expect(String(card.body.text)).toContain("💸 400฿");
+    const kb = JSON.stringify(card.body.reply_markup);
+    expect(kb).toContain('"switch_inline_query"');
+    const [row] = await db.select({ code: events.code, tz: events.tz }).from(events).innerJoin(telegramCards, eq(telegramCards.eventId, events.id)).where(eq(telegramCards.chatId, 91));
+    expect(row.tz).toBe("Asia/Bangkok");
+    expect(kb).toContain(`"switch_inline_query":"${row.code}"`);
+    // A bare code pasted into the private chat: the card again (refreshed in place).
+    calls = [];
+    expect(await send(704, row.code)).toBe("card");
+    // /games: my match at the top; a public match in Phuket from someone else below, with a button that shows its card here.
+    const other = await makePlayer(db, "Pavel");
+    const pub = await createEvent(db, { creatorPlayerId: other.id, type: "match", startsAt: new Date(Date.now() + 2 * 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel Club", whenFull: "waitlist", publicListing: true, cost: "350 ฿" });
+    await joinEvent(db, { eventId: pub.id, playerId: other.id });
+    calls = [];
+    expect(await send(705, "/games")).toBe("games:1+1");
+    const list = sent("sendMessage").at(-1)!;
+    expect(String(list.body.text)).toContain("Ваши ближайшие матчи");
+    expect(String(list.body.text)).toContain("Открытые матчи · Phuket");
+    expect(String(list.body.text)).toContain("350 ฿");
+    expect(JSON.stringify(list.body.reply_markup)).toContain(`c:${pub.code}`);
+    expect(await handleTelegramUpdate(db, { update_id: 706, callback_query: { id: "cbc", from: me, message: { message_id: 5, date: 0, chat: dm }, data: `c:${pub.code}` } }, NO_SIDE_EFFECTS)).toBe("card");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("Rawai Padel Club");
+    // Unknown text in private: the help, not silence.
+    expect(await send(707, "hello?")).toBe("private_other");
+  });
+
+  it("inline mode: @bot lists the city's open matches, an exact code gives that card, a chosen result stays live, taps under it join and edit it in place", async () => {
+    const lee = user(92, "Lee");
+    const { ev } = await match();
+    const pub = await createEvent(db, { creatorPlayerId: (await makePlayer(db, "Nok")).id, type: "match", startsAt: new Date(Date.now() + 3 * 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel Club", whenFull: "waitlist", publicListing: true });
+    // Lee has no history and names no city: nothing to list, so the picker offers to create one.
+    calls = [];
+    expect(await handleTelegramUpdate(db, { update_id: 800, inline_query: { id: "iq1", from: lee, query: "", offset: "" } }, NO_SIDE_EFFECTS)).toBe("inline:0");
+    expect(sent("answerInlineQuery")[0].body.button).toBeTruthy();
+    // With a city: the public match shows.
+    expect(await handleTelegramUpdate(db, { update_id: 801, inline_query: { id: "iq2", from: lee, query: "phuket", offset: "" } }, NO_SIDE_EFFECTS)).toMatch(/^inline:[1-9]/);
+    const results = sent("answerInlineQuery").at(-1)!.body.results as { id: string; title: string; description: string; input_message_content: { message_text: string }; reply_markup: unknown }[];
+    const hit = results.find((r) => r.id === pub.code)!;
+    expect(hit).toBeTruthy();
+    expect(hit.description).toContain("Rawai Padel Club · 0/4");
+    expect(hit.input_message_content.message_text).toContain("Rawai Padel Club");
+    expect(JSON.stringify(hit.reply_markup)).toContain(`j:${pub.code}`);
+    // An exact code: that match, listed or not.
+    expect(await handleTelegramUpdate(db, { update_id: 802, inline_query: { id: "iq3", from: lee, query: ev.code, offset: "" } }, NO_SIDE_EFFECTS)).toBe("inline:1");
+    expect((sent("answerInlineQuery").at(-1)!.body.results as { id: string }[])[0].id).toBe(ev.code);
+    // Lee sends it into some chat: Telegram tells us the inline message id.
+    expect(await handleTelegramUpdate(db, { update_id: 803, chosen_inline_result: { result_id: ev.code, from: lee, query: ev.code, inline_message_id: "AAQinline1" } }, NO_SIDE_EFFECTS)).toBe("inline_chosen");
+    const [stored] = await db.select().from(telegramInlineCards).where(eq(telegramInlineCards.inlineMessageId, "AAQinline1"));
+    expect(stored.eventId).toBe(ev.id);
+    // A tap under that card (no chat, no message: only the inline id): the join goes through and the card is edited by its inline id.
+    calls = [];
+    expect(await handleTelegramUpdate(db, { update_id: 804, callback_query: { id: "cbi", from: user(93, "Mai"), inline_message_id: "AAQinline1", data: `j:${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("join:joined");
+    const edit = calls.find((c) => c.method === "editMessageText" && c.body.inline_message_id === "AAQinline1")!;
+    expect(edit).toBeTruthy();
+    expect(String(edit.body.text)).toContain("Players 2/4");
+    // A tap under a card we never heard about (inline feedback off in BotFather): learned on the spot.
+    expect(await handleTelegramUpdate(db, { update_id: 805, callback_query: { id: "cbj", from: user(94, "Ploy"), inline_message_id: "AAQinline2", data: `j:${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("join:joined");
+    expect((await db.select().from(telegramInlineCards).where(eq(telegramInlineCards.eventId, ev.id))).length).toBe(2);
+    // The result tap under an inline card has no chat to answer in: the question goes to the tapper privately, or through a deep link.
+    await db.update(events).set({ startsAt: new Date(Date.now() - HOUR) }).where(eq(events.id, ev.id));
+    await joinEvent(db, { eventId: ev.id, playerId: (await makePlayer(db, "Fourth")).id });
+    calls = [];
+    expect(await handleTelegramUpdate(db, { update_id: 806, callback_query: { id: "cbr", from: user(93, "Mai"), inline_message_id: "AAQinline1", data: `r:${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("result:prompt_dm");
+    expect(sent("sendMessage").at(-1)!.body.chat_id).toBe(93);
+    unreachable.add(93);
+    expect(await handleTelegramUpdate(db, { update_id: 807, callback_query: { id: "cbr2", from: user(93, "Mai"), inline_message_id: "AAQinline1", data: `r:${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("result:prompt_deeplink");
+    expect(String(sent("answerCallbackQuery").at(-1)!.body.url)).toContain(`start=r_${ev.code}`);
+    // And that deep link, opened in the private chat, asks the question there.
+    expect(await handleTelegramUpdate(db, { update_id: 808, message: { message_id: 1, date: 0, chat: { id: 93, type: "private" }, from: user(93, "Mai"), text: `/start r_${ev.code}` } }, NO_SIDE_EFFECTS)).toBe("private_result_prompt");
   });
 
   it("does nothing when the bot is not configured", async () => {

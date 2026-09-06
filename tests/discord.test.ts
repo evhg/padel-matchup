@@ -104,7 +104,8 @@ describe("discord signatures, tickets, helpers", () => {
     expect(verifyInteraction(null, ts, body, pub)).toBe(false);
   });
   it("channel tickets are bound to the channel and expire after two days", () => {
-    const now = new Date("2026-09-06T12:00:00Z");
+    // A whole hour a week ahead: the fixed windows below never collide with the real clock.
+    const now = new Date(Math.ceil(Date.now() / HOUR) * HOUR + 7 * 24 * HOUR);
     const t = channelTicket(CHANNEL, now);
     expect(verifyChannelTicket(t, now)).toBe(CHANNEL);
     expect(verifyChannelTicket(t, new Date(now.getTime() + 20 * HOUR))).toBe(CHANNEL);
@@ -240,7 +241,8 @@ describe("discord bot (db, stubbed REST)", () => {
 
   it("reminds about an hour before, once, and posts the result once the organizer confirms", async () => {
     const chan = "1545987795863085077";
-    const now = new Date("2026-09-06T10:00:00Z");
+    // A whole hour a week ahead: the fixed windows below never collide with the real clock.
+    const now = new Date(Math.ceil(Date.now() / HOUR) * HOUR + 7 * 24 * HOUR);
     const { org, ev } = await match(new Date(now.getTime() + 70 * 60 * 1000));
     await handleInteraction(db, command("match", user(11, "Max"), { code: ev.code }, { channel: chan }), NO_SIDE_EFFECTS);
     expect(await sendDiscordReminders(db, new Date(now.getTime() - 3 * HOUR))).toBe(0);
@@ -293,7 +295,8 @@ describe("discord bot (db, stubbed REST)", () => {
     messages[chan] = [{ id: "500", type: 0, content: "How do I set a level range?", author: user(31, "Old") }];
     process.env.ANTHROPIC_API_KEY = "sk-test";
     modelReply = { relevant: true, kind: "asks_how_to", language: "en", reply: "Open More options on the create form and pick a range.", reason: "how-to", mentionsKicksmash: true };
-    const now = new Date("2026-09-07T10:00:00Z");
+    // A whole hour a week ahead: the fixed windows below never collide with the real clock.
+    const now = new Date(Math.ceil(Date.now() / HOUR) * HOUR + 7 * 24 * HOUR);
     const first = await discordListenTick(db, now);
     expect(first.guilds).toBe(1);
     expect(first.channels).toBe(1);

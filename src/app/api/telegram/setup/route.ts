@@ -1,5 +1,5 @@
 import { baseUrl } from "@/lib/config";
-import { getWebhookInfo, setMyCommands, setWebhook, telegramEnabled, telegramWebhookSecret } from "@/lib/telegram/api";
+import { getWebhookInfo, setMenuButton, setMyCommands, setWebhook, telegramEnabled, telegramWebhookSecret } from "@/lib/telegram/api";
 import { BOT_COMMANDS } from "@/lib/telegram/bot";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,8 @@ export async function GET(req: Request) {
   const hook = await setWebhook(url, telegramWebhookSecret()!);
   const commands = await setMyCommands(BOT_COMMANDS.en);
   const commandsRu = await setMyCommands(BOT_COMMANDS.ru, "ru");
+  // The Mini App button in the private chat needs no BotFather step: the page signs the player in from initData.
+  const menu = await setMenuButton(`${baseUrl()}/tg`, "Kicksmash");
   const info = await getWebhookInfo();
-  return Response.json({ ok: hook.ok && commands.ok && commandsRu.ok, url, hook, commands: commands.ok && commandsRu.ok, info: info.ok ? info.result : info });
+  return Response.json({ ok: hook.ok && commands.ok && commandsRu.ok, url, hook, commands: commands.ok && commandsRu.ok, menuButton: menu.ok, info: info.ok ? info.result : info });
 }

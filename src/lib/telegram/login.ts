@@ -39,3 +39,12 @@ export function readAuthResult(hash: string): Record<string, string> | null {
 export function returnToFor(loc: { origin: string; pathname: string }): string {
   return `${loc.origin}${loc.pathname}`;
 }
+
+/** Where the Mini App goes after signing in: the match named in Telegram's start parameter (a code, or r_CODE from a result deep link), else My matches. */
+export function miniAppNext(startParam: string | null | undefined): string {
+  const p = (startParam ?? "").trim();
+  if (!p) return "/me";
+  const code = p.startsWith("r_") ? p.slice(2) : p;
+  return /^[A-Za-z0-9]{4}$/.test(code) ? `/${code}` : "/me";
+}
+
