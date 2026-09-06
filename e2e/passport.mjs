@@ -55,7 +55,7 @@ try {
 
   // Level import from a 1–10 scale.
   await page.goto(`${BASE}/me`);
-  await page.getByRole("button", { name: "Set your level" }).click();
+  await page.getByRole("button", { name: "Set my level" }).click();
   await page.getByRole("button", { name: "Have a level in another app?" }).click();
   await page.getByLabel("Scale").selectOption("ten");
   await page.getByLabel("Your number").fill("10");
