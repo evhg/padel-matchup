@@ -24,6 +24,9 @@ const env = {
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "1:e2e-fake-token",
   TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret",
   TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME || "kicksmash_bot",
+  // A fake Discord app: the token decodes to a plausible id, the key pair exists only for these tests (private half in e2e/discord.mjs).
+  DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN || "MTU0NTk4ODEzODA1NTIzNzcyMw.e2e.fake-token",
+  DISCORD_PUBLIC_KEY: process.env.DISCORD_PUBLIC_KEY || "7cb05c12c78f756c9e976f772d63dd58a6426129cc2d177f8314a2fce536bb96",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {

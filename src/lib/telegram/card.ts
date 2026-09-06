@@ -54,6 +54,10 @@ const STRINGS = {
     langSet: "Language: English",
     notHere: "I only work inside group chats and via the buttons. Add me to your padel chat.",
     noMatch: "No match with that code.",
+    discordHelp: "/new creates a match for this channel\n/match CODE posts the card of an existing match\n/ask a padel or Kicksmash question\n/lang switches my language\nEverything else: one tap on the card. I also answer questions people ask here, about once an hour.",
+    posted: "Card posted.",
+    thinking: "Thinking…",
+    noAnswer: "I don't have a good answer to that one. Try asking in more detail, or open kicksma.sh/answers.",
   },
   ru: {
     match: "Падел-матч",
@@ -98,6 +102,10 @@ const STRINGS = {
     langSet: "Язык: русский",
     notHere: "Я работаю в групповых чатах и через кнопки. Добавьте меня в чат вашей падел-компании.",
     noMatch: "Матча с таким кодом нет.",
+    discordHelp: "/new создаёт матч для этого канала\n/match КОД публикует карточку существующего матча\n/ask вопрос о паделе или Kicksmash\n/lang меняет язык\nВсё остальное: одно нажатие на карточке. Я также отвечаю на вопросы в канале, примерно раз в час.",
+    posted: "Карточка опубликована.",
+    thinking: "Думаю…",
+    noAnswer: "Хорошего ответа у меня нет. Спросите подробнее или загляните на kicksma.sh/answers.",
   },
 } as const;
 

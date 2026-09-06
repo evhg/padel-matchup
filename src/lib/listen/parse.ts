@@ -2,7 +2,7 @@
  * Listening: turn public feeds into candidate items. Pure functions, no
  * network, so they are cheap to test. Fetching lives in sources.ts.
  */
-export type ListenSource = "hn" | "reddit" | "rss";
+export type ListenSource = "hn" | "reddit" | "rss" | "discord";
 
 export type Candidate = {
   source: ListenSource;

@@ -134,6 +134,13 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
   } catch (e) {
     console.warn("[telegram] sync failed", event, code, e);
   }
+  try {
+    const bot = await import("@/lib/discord/bot");
+    if (event === "match.result") await bot.postDiscordResult(db, code);
+    await bot.syncDiscord(db, code);
+  } catch (e) {
+    console.warn("[discord] sync failed", event, code, e);
+  }
 }
 
 /** Hourly: retry what failed, oldest first, bounded so the cron stays well inside its time budget. */

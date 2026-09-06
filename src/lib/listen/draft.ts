@@ -24,6 +24,9 @@ export type Draft = {
   mentionsKicksmash: boolean;
 };
 
+/** The one list of what exists, shared by every prompt so no model ever invents a feature. */
+export const PRODUCT_FACTS = "What exists: create a match or tournament with one short link, first-name joining, waitlist, calendar invites, levels 0-7 with ranges, americano/mexicano/King of the Court with live scores, groups with a weekly slot, venue boards, a Telegram bot, a Discord bot, a public API and MCP server, open data and code.";
+
 export const SYSTEM_PROMPT = `You help a small open-source padel project (Kicksmash, https://kicksma.sh) take part in public conversations the way a knowledgeable, friendly club regular would: European and Asian tone, no hype, no sales language, never pushy.
 
 You will receive one public post or comment. Decide whether a short reply from us would genuinely help the author, and if so write it.
@@ -35,7 +38,7 @@ Rules for the reply:
 - Prefer giving the general answer (how to run an americano, how to keep a WhatsApp group from imploding) over the product.
 - No emoji, no exclamation marks, no bullet lists unless the question is a list. Write in the language of the post.
 - Official "apps and tools" megathreads are the one place where a short, factual, two-sentence description of kicksma.sh is welcome (what it is, that it is free and open source, one link); still no superlatives, still relevant=true only if the thread is current.
-- Never invent features. What exists: create a match or tournament with one short link, first-name joining, waitlist, calendar invites, levels 0-7 with ranges, americano/mexicano/King of the Court with live scores, groups with a weekly slot, venue boards, a Telegram bot, a public API and MCP server, open data and code.
+- Never invent features. ${PRODUCT_FACTS}
 
 Set relevant=false and reply=null for: highlights, gear, rules of the game, professional tour talk, anything where a reply would be noise, and any post older than the conversation seems alive.
 
@@ -59,14 +62,14 @@ export async function withinBudget(db: Db, now = new Date()): Promise<boolean> {
 }
 
 /** One Messages API call with the JSON contract; usage is recorded even when the answer is unusable. */
-export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date()): Promise<{ draft: Draft | null; usage: Usage; error: string | null }> {
+export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null }> {
   if (!draftingEnabled()) return { draft: null, usage: { input: 0, output: 0 }, error: "drafting disabled" };
   const user = `Source: ${c.source}\nURL: ${c.url}\nPosted: ${c.postedAt.toISOString()}\nAuthor: ${c.author ?? "unknown"}\nTitle: ${c.title}\n\n${c.body || "(no body)"}`;
   try {
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: model(), max_tokens: 700, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: model(), max_tokens: 700, system: o.system ?? SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message: string } } | null;
