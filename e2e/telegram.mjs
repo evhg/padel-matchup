@@ -30,7 +30,7 @@ try {
   check("bot added to a chat: 200 and a welcome (even if Telegram is unreachable here)", added.status === 200 && added.json?.outcome === "welcome", JSON.stringify(added.json));
   const chatter = await hook({ update_id: 3, message: { message_id: 1, date: 0, chat: group, from: ivan, text: "who is playing tonight?" } });
   check("ordinary chatter is ignored", chatter.json?.outcome === "ignored");
-  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Kai" }, cost: "400 THB" }) }).then((r) => r.json());
+  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Kai" }, cost: "400 THB", listOnVenueBoard: true }) }).then((r) => r.json());
   const code = created.match.code;
   check("the API accepts and returns the cost per player", created.match.cost === "400 THB", JSON.stringify(created.match).slice(0, 200));
   const posted = await hook({ update_id: 4, message: { message_id: 2, date: 0, chat: group, from: ivan, text: `/match ${code}` } });
@@ -60,6 +60,17 @@ try {
   check("/tz sets the chat's zone", tzSet.json?.outcome === "tz");
   const priv = await hook({ update_id: 8, message: { message_id: 3, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/start" } });
   check("private /start is answered with the personal link", priv.json?.outcome === "private_start");
+  // Inline mode: the exact code gives that card; a chosen result is remembered; a tap under it joins.
+  const iq = await hook({ update_id: 30, inline_query: { id: "iq1", from: ivan, query: code, offset: "" } });
+  check("@bot CODE answers the inline query with that one card", iq.json?.outcome === "inline:1", JSON.stringify(iq.json));
+  const chosen = await hook({ update_id: 31, chosen_inline_result: { result_id: code, from: ivan, query: code, inline_message_id: "e2e-inline-1" } });
+  check("a chosen inline result is remembered", chosen.json?.outcome === "inline_chosen", JSON.stringify(chosen.json));
+  const olyaTap = await hook({ update_id: 32, callback_query: { id: "cbi", from: { id: 434343, first_name: "Olya", username: "olya_inline" }, inline_message_id: "e2e-inline-1", data: `j:${code}` } });
+  check("a tap under the inline card joins", olyaTap.json?.outcome === "join:joined", JSON.stringify(olyaTap.json));
+  const pubAfter = await fetch(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
+  check("the inline joiner is on the roster", pubAfter.players.some((p) => p.name === "Olya"), JSON.stringify(pubAfter.players));
+  const games = await hook({ update_id: 33, message: { message_id: 4, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/games phuket" } });
+  check("/games in the private chat lists the city's open matches", /^games:\d+\+[1-9]/.test(games.json?.outcome ?? ""), JSON.stringify(games.json));
   const login = await fetch(`${BASE}/api/telegram/login?id=1&first_name=Eve&auth_date=${Math.floor(Date.now() / 1000)}&hash=00`, { redirect: "manual" });
   check("forged login redirects to /me?telegram=invalid", login.status >= 300 && login.status < 400 && /\/me\?telegram=invalid$/.test(login.headers.get("location") ?? ""), login.headers.get("location"));
   const setup = await fetch(`${BASE}/api/telegram/setup`);

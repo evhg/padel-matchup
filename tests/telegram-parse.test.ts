@@ -78,6 +78,14 @@ describe("/new text parsing", () => {
     expect(parseNewCommand("", { tz, now }).startsAt).toBeNull();
     expect(parseNewCommand("Rawai", { tz, now }).venue).toBe("Rawai");
   });
+  it("a public match is one word away", () => {
+    const r = parseNewCommand("tomorrow 19:00 Rawai public", { tz, now });
+    expect(r.publicListing).toBe(true);
+    expect(r.venue).toBe("Rawai");
+    expect(parseNewCommand("завтра 19:00 Равай открытый", { tz, now }).publicListing).toBe(true);
+    expect(parseNewCommand("tomorrow 19:00 Rawai", { tz, now }).publicListing).toBe(false);
+  });
+
   it("the time zone hint and the /tz shortcuts", () => {
     expect(tzHintFor("завтра Равай")).toBe("Asia/Bangkok");
     expect(tzHintFor("Bang Tao 19:00")).toBe("Asia/Bangkok");

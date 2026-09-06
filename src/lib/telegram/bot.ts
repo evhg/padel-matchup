@@ -1,11 +1,11 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, telegramCards, telegramChats, type Event, type Player, type TelegramChat } from "@/db/schema";
+import { events, players, telegramCards, telegramChats, telegramInlineCards, type Event, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
-import { formatEventTime } from "@/lib/dates";
+import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
 import { createEvent, isOccupied } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
@@ -16,11 +16,13 @@ import { joinEvent } from "@/lib/domain/slots";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { mergePlayers } from "@/lib/domain/merge";
 import { createPlayer } from "@/lib/domain/players";
-import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
+import { getEventByCode, getPlayerEvents, type EventDetail } from "@/lib/domain/queries";
+import { CITIES, cityInText, cityOf, type City } from "@/lib/domain/cities";
+import { getCityBoard, withCounts } from "@/lib/domain/venueBoard";
 import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { isValidShareCode } from "@/lib/codes";
-import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
+import { answerCallbackQuery, answerInlineQuery, editInlineMessageText, editMessageText, esc, sendMessage, sendPhoto, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
 import { parseNewCommand, resolveZone, tzHintFor } from "./parse";
 import { setAnswerPublished } from "@/lib/listen/answers";
@@ -174,6 +176,18 @@ export async function syncTelegram(db: Db, code: string, now = new Date()): Prom
         if (note.ok) await db.update(telegramCards).set({ completeNotedAt: new Date() }).where(eq(telegramCards.id, card.id));
       }
     }
+    // Cards shared through inline mode: same render, edited by their inline message id.
+    const inline = await db.select().from(telegramInlineCards).where(eq(telegramInlineCards.eventId, detail.event.id)).limit(200);
+    for (const c of inline) {
+      const { text, keyboard } = renderCard(detail, baseUrl(), c.locale === "ru" ? "ru" : "en", now);
+      const hash = renderHash(text, keyboard);
+      if (hash === c.rendered) continue;
+      const res = await editInlineMessageText(c.inlineMessageId, text, keyboard);
+      if (res.ok || /message is not modified/i.test(res.description)) {
+        await db.update(telegramInlineCards).set({ rendered: hash, updatedAt: new Date() }).where(eq(telegramInlineCards.inlineMessageId, c.inlineMessageId));
+        edits++;
+      }
+    }
     return edits;
   } catch {
     return 0;
@@ -196,8 +210,16 @@ export async function refreshStartedCards(db: Db, now = new Date()): Promise<num
   const rows = await db
     .selectDistinct({ code: events.code })
     .from(events)
-    .innerJoin(telegramCards, and(eq(telegramCards.eventId, events.id), eq(telegramCards.kind, "card")))
-    .where(and(eq(events.type, "match"), lte(events.startsAt, now), gt(events.startsAt, new Date(now.getTime() - DAY_MS)), eq(events.scoreLockedByCreator, false), inArray(events.status, ["open", "full", "past"])))
+    .where(
+      and(
+        eq(events.type, "match"),
+        lte(events.startsAt, now),
+        gt(events.startsAt, new Date(now.getTime() - DAY_MS)),
+        eq(events.scoreLockedByCreator, false),
+        inArray(events.status, ["open", "full", "past"]),
+        sql`(exists (select 1 from ${telegramCards} c where c.event_id = ${events.id} and c.kind = 'card') or exists (select 1 from ${telegramInlineCards} i where i.event_id = ${events.id}))`,
+      ),
+    )
     .limit(100);
   let edits = 0;
   for (const r of rows) edits += await syncTelegram(db, r.code, now);
@@ -363,6 +385,7 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
       levelMin: parsed.levelMin,
       levelMax: parsed.levelMax,
       cost: parsed.cost,
+      publicListing: parsed.publicListing,
     });
   } catch {
     await say(s.newHowTo, form);
@@ -431,6 +454,27 @@ async function handleResultPrompt(cb: NonNullable<TgUpdate["callback_query"]>, d
     await answerCallbackQuery(cb.id, s.needFour, { alert: true });
     return "result:need_four";
   }
+  const keyboard = resultPromptKeyboard(detail);
+  const text = esc(s.whoWon(cardTitle(detail, locale)));
+  if (cb.message) {
+    await sendMessage(cb.message.chat.id, text, { keyboard, replyTo: cb.message.message_id, silent: true });
+    await answerCallbackQuery(cb.id);
+    return "result:prompt";
+  }
+  // Under a card shared through inline mode there is no chat to reply into: the question goes to the tapper privately,
+  // or the tap opens our chat with the same question when they never started the bot.
+  const dm = await sendMessage(cb.from.id, text, { keyboard, silent: true });
+  if (dm.ok) {
+    await answerCallbackQuery(cb.id);
+    return "result:prompt_dm";
+  }
+  await answerCallbackQuery(cb.id, undefined, { url: botDeepLink(`r_${ev.code}`) ?? undefined });
+  return "result:prompt_deeplink";
+}
+
+function resultPromptKeyboard(detail: EventDetail): InlineKeyboard {
+  const ev = detail.event;
+  const seats = playingSeats(detail);
   const label = (w: Seat[]) => `🏆 ${w.map(seatName).join(" & ")}`.slice(0, 60);
   const teams = teamsOf(detail);
   const rows = teams
@@ -443,9 +487,97 @@ async function handleResultPrompt(cb: NonNullable<TgUpdate["callback_query"]>, d
         { text: label([seats[i], seats[j]]), callback_data: `w:${ev.code}:${seats[i].position}${seats[j].position}` },
         { text: label([seats[k], seats[l]]), callback_data: `w:${ev.code}:${seats[k].position}${seats[l].position}` },
       ]);
-  if (cb.message) await sendMessage(cb.message.chat.id, esc(s.whoWon(cardTitle(detail, locale))), { keyboard: { inline_keyboard: rows }, replyTo: cb.message.message_id, silent: true });
-  await answerCallbackQuery(cb.id);
-  return "result:prompt";
+  return { inline_keyboard: rows };
+}
+
+// ---------------------------------------------------------------------------
+// Finding matches: /games in the private chat, and inline mode (@bot in any chat).
+// ---------------------------------------------------------------------------
+/** The city a player plays in: the chat's zone, their last match, or the only city in that zone. */
+async function playerCity(db: Db, playerId: string, chat: TelegramChat | null): Promise<City | null> {
+  const { upcoming, past } = await getPlayerEvents(db, playerId);
+  for (const m of [...upcoming, ...past]) {
+    const c = cityOf(m.event.tz, m.event.venueSlug);
+    if (c) return c;
+  }
+  const tz = chat?.tz ?? upcoming[0]?.event.tz ?? past[0]?.event.tz ?? null;
+  return tz ? (CITIES.find((c) => c.tz === tz) ?? null) : null;
+}
+
+const shortLine = (ev: Event, locale: BotLocale, occupied: number) => `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${ev.venueName ?? strings(locale).courtTbd} · ${occupied}/${ev.capacity}`;
+
+/** /games [city]: the player's own upcoming matches, then the open ones listed in their city, each one tap from its card. */
+async function gamesFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string): Promise<string> {
+  const locale = chatLocale(chat);
+  const s = strings(locale);
+  const base = baseUrl();
+  const player = await findOrCreateTelegramPlayer(db, from);
+  const city = cityInText(args) ?? (await playerCity(db, player.id, chat));
+  const { upcoming } = await getPlayerEvents(db, player.id);
+  const mine = await withCounts(db, upcoming.map((m) => m.event).filter((e) => e.status !== "cancelled").slice(0, 5));
+  const board = city ? (await getCityBoard(db, city)).events.filter((b) => !mine.some((m) => m.event.id === b.event.id)).slice(0, 10) : [];
+  const lines: string[] = [];
+  if (mine.length) {
+    lines.push(`<b>${esc(s.gamesMine)}</b>`);
+    for (const m of mine) lines.push(`• <a href="${base}/${m.event.code}">${esc(shortLine(m.event, locale, m.occupied))}</a>`);
+    lines.push("");
+  }
+  if (!city) lines.push(esc(s.gamesWhichCity));
+  else if (board.length === 0) lines.push(esc(s.gamesNone(city.name)));
+  else {
+    lines.push(`<b>${esc(s.gamesTitle(city.name))}</b>`);
+    for (const b of board) lines.push(`• ${esc(shortLine(b.event, locale, b.occupied))}${b.event.cost ? ` · ${esc(b.event.cost)}` : ""}`);
+  }
+  const keyboard: InlineKeyboard = { inline_keyboard: board.map((b) => [{ text: shortLine(b.event, locale, b.occupied).slice(0, 60), callback_data: `c:${b.event.code}` }]) };
+  await sendMessage(chat.chatId, lines.join("\n"), { keyboard: board.length ? keyboard : null, replyTo: msg.message_id, silent: true, threadId: msg.message_thread_id ?? null });
+  return `games:${mine.length}+${board.length}`;
+}
+
+/** "@bot" in any chat: the player's matches, the open ones in their city, one exact code, or a search. Each result is the live card. */
+async function handleInlineQuery(db: Db, q: NonNullable<TgUpdate["inline_query"]>): Promise<string> {
+  const locale = botLocale(q.from.language_code);
+  const s = strings(locale);
+  const base = baseUrl();
+  const player = await findOrCreateTelegramPlayer(db, q.from);
+  const query = q.query.trim();
+  const code = codesInText(query, base)[0] ?? (isValidShareCode(query) ? query : null);
+  let candidates: Event[] = [];
+  if (code) {
+    const d = await getEventByCode(db, code);
+    if (d && d.event.status !== "cancelled") candidates = [d.event];
+  } else {
+    const { upcoming } = await getPlayerEvents(db, player.id);
+    candidates = upcoming.map((m) => m.event).filter((e) => e.status !== "cancelled");
+    const cityNamed = cityInText(query);
+    const city = cityNamed ?? (await playerCity(db, player.id, null));
+    if (city) for (const b of (await getCityBoard(db, city)).events) if (!candidates.some((c) => c.id === b.event.id)) candidates.push(b.event);
+    if (query && !cityNamed) {
+      const needle = query.toLowerCase();
+      candidates = candidates.filter((e) => `${e.venueName ?? ""} ${e.title ?? ""}`.toLowerCase().includes(needle));
+    }
+  }
+  const articles: InlineArticle[] = [];
+  for (const ev of candidates.slice(0, 10)) {
+    const detail = await getEventByCode(db, ev.code);
+    if (!detail) continue;
+    const { text, keyboard } = renderCard(detail, base, locale);
+    const occupied = detail.roster.filter((x) => x.position <= ev.capacity && isOccupied(x)).length;
+    articles.push({ id: ev.code, title: `${cardTitle(detail, locale)} · ${whenLine(detail, locale)}`, description: `${whereLine(detail, locale)} · ${s.spotsShort(occupied, ev.capacity)}${ev.cost ? ` · ${ev.cost}` : ""}`, text, keyboard });
+  }
+  await answerInlineQuery(q.id, articles, articles.length ? {} : { switchPmText: s.inlineHint, switchPmParameter: "new" });
+  return `inline:${articles.length}`;
+}
+
+/** The user sent one of our inline results somewhere: remember the message so the card stays live. */
+async function rememberInlineCard(db: Db, inlineMessageId: string, code: string, locale: BotLocale): Promise<boolean> {
+  const detail = await getEventByCode(db, code);
+  if (!detail) return false;
+  const { text, keyboard } = renderCard(detail, baseUrl(), locale);
+  await db
+    .insert(telegramInlineCards)
+    .values({ inlineMessageId, eventId: detail.event.id, locale, rendered: renderHash(text, keyboard) })
+    .onConflictDoNothing();
+  return true;
 }
 
 /** A winner tap: the pairs and who won are saved; the organizer's tap confirms at once, a player's waits for the organizer. */
@@ -631,26 +763,26 @@ export function codesInText(text: string | undefined, base = baseUrl()): string[
 async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<string> {
   const from = msg.from;
   if (!from || from.is_bot) return "ignored";
+  const isPrivate = msg.chat.type === "private";
+  if (!isPrivate && !GROUP_TYPES.has(msg.chat.type)) return "ignored";
   const cmd = parseCommand(msg.text);
   const base = baseUrl();
-  if (msg.chat.type === "private") {
-    const s = strings(botLocale(from.language_code));
-    if (cmd?.command === "start" || cmd?.command === "help") {
-      const player = await findOrCreateTelegramPlayer(db, from);
-      const token = await getOrCreatePersonalToken(db, player.id);
-      await sendMessage(msg.chat.id, s.privateStart(personalUrl(base, token)));
-      return "private_start";
-    }
-    await sendMessage(msg.chat.id, s.notHere);
-    return "private_other";
-  }
-  if (!GROUP_TYPES.has(msg.chat.type)) return "ignored";
+  // The private chat gets a row too: a card can live there and be shared onwards with 📤.
   const { chat } = await upsertChat(db, msg.chat, from);
   const locale = chatLocale(chat);
   const s = strings(locale);
+  const threadId = msg.message_thread_id ?? null;
   if (cmd) {
     if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);
+    if (cmd.command === "new") {
+      const params = new URLSearchParams({ tg: chatTicket(chat.chatId) });
+      if (chat.venueName) params.set("venue", chat.venueName);
+      const url = `${base}/?${params.toString()}`;
+      await sendMessage(chat.chatId, isPrivate ? esc(s.newHowTo) : s.newMatch, { keyboard: { inline_keyboard: [[{ text: "kicksma.sh →", url }]] }, threadId });
+      return "new";
+    }
     if (cmd.command === "score") return scoreFromChat(db, msg, chat, from, cmd.args, ctx);
+    if (cmd.command === "games") return gamesFromChat(db, msg, chat, from, cmd.args);
     if (cmd.command === "tz") {
       const zone = resolveZone(cmd.args);
       if (!zone) {
@@ -661,13 +793,6 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       await sendMessage(chat.chatId, esc(s.tzSet(zone)), { silent: true });
       return "tz";
     }
-    if (cmd.command === "new") {
-      const params = new URLSearchParams({ tg: chatTicket(chat.chatId) });
-      if (chat.venueName) params.set("venue", chat.venueName);
-      const url = `${base}/?${params.toString()}`;
-      await sendMessage(chat.chatId, s.newMatch, { keyboard: { inline_keyboard: [[{ text: "kicksma.sh →", url }]] }, threadId: msg.message_thread_id ?? null });
-      return "new";
-    }
     if (cmd.command === "match") {
       const code = codesInText(cmd.args, base)[0] ?? cmd.args.match(CODE_RE)?.[1];
       const detail = code && isValidShareCode(code) ? await getEventByCode(db, code) : null;
@@ -675,7 +800,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
         await sendMessage(chat.chatId, s.noMatch, { replyTo: msg.message_id, silent: true });
         return "match_unknown";
       }
-      await postCard(db, detail, chat, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
+      await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });
       return "card";
     }
     if (cmd.command === "lang") {
@@ -685,18 +810,47 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       return "lang";
     }
     if (cmd.command === "help" || cmd.command === "start") {
-      await sendMessage(chat.chatId, s.help, { silent: true });
-      return "help";
+      if (!isPrivate) {
+        await sendMessage(chat.chatId, s.help, { silent: true });
+        return "help";
+      }
+      // Deep links: t.me/bot?start=r_CODE asks for a result here; ?start=CODE shows a card; ?start=new explains /new.
+      const payload = cmd.args.trim();
+      const result = payload.match(/^r_([A-Za-z0-9]{4})$/);
+      if (result) {
+        const detail = await getEventByCode(db, result[1]);
+        if (detail && detail.event.type === "match" && playingSeats(detail).length === 4 && !detail.event.scoreLockedByCreator) {
+          await sendMessage(chat.chatId, esc(s.whoWon(cardTitle(detail, locale))), { keyboard: resultPromptKeyboard(detail) });
+          return "private_result_prompt";
+        }
+      }
+      if (isValidShareCode(payload)) {
+        const detail = await getEventByCode(db, payload);
+        if (detail) {
+          await postCard(db, detail, chat);
+          return "card";
+        }
+      }
+      const player = await findOrCreateTelegramPlayer(db, from);
+      const token = await getOrCreatePersonalToken(db, player.id);
+      await sendMessage(chat.chatId, `${esc(s.privateStart(personalUrl(base, token)))}\n\n${esc(s.privateHelp)}`, { keyboard: payload === "new" ? null : null });
+      return "private_start";
     }
     return "ignored";
   }
-  // A pasted kicksma.sh link becomes a live card (needs admin rights or privacy mode off to be seen).
+  // A pasted kicksma.sh link becomes a live card (in groups this needs admin rights or privacy mode off); in the private chat a bare code works too.
   const codes = codesInText(msg.text, base);
+  if (isPrivate && codes.length === 0 && msg.text && isValidShareCode(msg.text.trim())) codes.push(msg.text.trim());
   for (const code of codes.slice(0, 2)) {
     const detail = await getEventByCode(db, code);
-    if (detail) await postCard(db, detail, chat, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
+    if (detail) await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });
   }
-  return codes.length ? "card" : "ignored";
+  if (codes.length) return "card";
+  if (isPrivate) {
+    await sendMessage(chat.chatId, esc(s.privateHelp), { silent: true });
+    return "private_other";
+  }
+  return "ignored";
 }
 
 async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "la" | "ls" | "lu", id: string): Promise<string> {
@@ -749,7 +903,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
   const club = data.match(/^(ca|cr):([A-Za-z0-9_-]{16,40})$/);
   if (club) return handleClubCallback(db, cb, club[1] as "ca" | "cr", club[2]);
-  const m = data.match(/^([jlrwk]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
+  const m = data.match(/^([jlrwkc]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
   const s = strings(locale);
@@ -762,6 +916,13 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (!detail) {
     await answerCallbackQuery(cb.id, s.noMatch);
     return "callback_no_match";
+  }
+  // A tap under a card shared through inline mode: learn its id now (inline feedback may be off), so the card can be kept live.
+  if (!cb.message && cb.inline_message_id) await rememberInlineCard(db, cb.inline_message_id, code, locale);
+  if (action === "c") {
+    if (chat) await postCard(db, detail, chat);
+    await answerCallbackQuery(cb.id);
+    return "card";
   }
   if (action === "r") return handleResultPrompt(cb, detail, locale);
   if (action === "w") return handleWinner(db, cb, detail, sel ?? "", ctx, locale);
@@ -810,6 +971,12 @@ export async function handleTelegramUpdate(db: Db, update: TgUpdate, ctx: OpCont
     if (update.callback_query) return await handleCallback(db, update.callback_query, ctx);
     if (update.message) return await handleMessage(db, update.message, ctx);
     if (update.my_chat_member) return await handleMyChatMember(db, update.my_chat_member);
+    if (update.inline_query) return await handleInlineQuery(db, update.inline_query);
+    if (update.chosen_inline_result) {
+      const r = update.chosen_inline_result;
+      if (!r.inline_message_id || !isValidShareCode(r.result_id)) return "inline_chosen_untracked";
+      return (await rememberInlineCard(db, r.inline_message_id, r.result_id, botLocale(r.from.language_code))) ? "inline_chosen" : "inline_chosen_unknown";
+    }
     return "ignored";
   } catch (e) {
     return `error:${e instanceof Error ? e.message : String(e)}`;
@@ -820,6 +987,7 @@ export const BOT_COMMANDS = {
   en: [
     { command: "new", description: "Create a match: /new tomorrow 19:00 Rawai" },
     { command: "match", description: "Post the card of a match: /match CODE" },
+    { command: "games", description: "Open matches near you: /games phuket" },
     { command: "score", description: "Sets after a match: /score CODE 6-3 6-4" },
     { command: "tz", description: "This chat's time zone, once: /tz phuket" },
     { command: "lang", description: "Bot language: /lang en or /lang ru" },
@@ -828,6 +996,7 @@ export const BOT_COMMANDS = {
   ru: [
     { command: "new", description: "Создать матч: /new завтра 19:00 Равай" },
     { command: "match", description: "Показать карточку матча: /match КОД" },
+    { command: "games", description: "Открытые матчи рядом: /games пхукет" },
     { command: "score", description: "Счёт после матча: /score КОД 6-3 6-4" },
     { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
     { command: "lang", description: "Язык бота: /lang ru или /lang en" },

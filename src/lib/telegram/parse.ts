@@ -23,6 +23,8 @@ export type ParsedNew = {
   cost: string | null;
   /** A time zone the text itself points at (a city name or area), or null. */
   tzHint: string | null;
+  /** "public" / "открытый": list the match on the venue and city boards, where strangers find it. */
+  publicListing: boolean;
 };
 
 // Cyrillic has no \b in JS regexes; these lookarounds are the word boundary for both alphabets.
@@ -87,7 +89,7 @@ const toNum = (s: string) => Number(s.replace(",", "."));
 
 export function parseNewCommand(args: string, opts: { tz: string; now?: Date }): ParsedNew {
   const now = opts.now ?? new Date();
-  const out: ParsedNew = { startsAt: null, date: null, time: null, venue: null, court: null, type: "match", format: null, capacity: null, levelMin: null, levelMax: null, cost: null, tzHint: tzHintFor(args) };
+  const out: ParsedNew = { startsAt: null, date: null, time: null, venue: null, court: null, type: "match", format: null, capacity: null, levelMin: null, levelMax: null, cost: null, tzHint: tzHintFor(args), publicListing: false };
   let text = ` ${args.replace(/\s+/g, " ").trim()} `;
   const take = (re: RegExp, on: (m: RegExpMatchArray) => boolean | void) => {
     text = text.replace(re, (...m) => {
@@ -96,6 +98,9 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date }):
     });
   };
 
+  take(word("public|open game|открыт(?:ый|о|ая)|публичн(?:ый|о)"), () => {
+    out.publicListing = true;
+  });
   // Money first: "400฿", "400 thb", "€8", "8 евро".
   take(new RegExp(`(?<![\\p{L}\\d])(?:([฿€$£])\\s?(\\d{1,5}(?:[.,]\\d{1,2})?)|(\\d{1,5}(?:[.,]\\d{1,2})?)\\s?(${CURRENCY}))(?![\\p{L}\\d])`, "iu"), (m) => {
     if (out.cost) return false;

@@ -40,3 +40,16 @@ export function venueInCity(city: City, venueSlug: string | null | undefined, tz
   if (city.needles.length === 0) return true;
   return city.needles.some((n) => venueSlug.includes(n));
 }
+
+/** The city an event sits in, by its zone and venue, or null. */
+export const cityOf = (tz: string, venueSlug: string | null | undefined): City | null => CITIES.find((c) => c.tz === tz && (venueSlug ? venueInCity(c, venueSlug, tz) : c.needles.length === 0)) ?? null;
+
+/** A city named in free text, in either alphabet, or null. */
+export function cityInText(text: string): City | null {
+  const lower = text.toLowerCase();
+  const aliases: Record<string, string> = { пхукет: "phuket", сингапур: "singapore" };
+  for (const c of CITIES) if (lower.includes(c.name.toLowerCase()) || lower.includes(c.slug)) return c;
+  for (const [ru, slug] of Object.entries(aliases)) if (lower.includes(ru)) return cityBySlug(slug);
+  return null;
+}
+

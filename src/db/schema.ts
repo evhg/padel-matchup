@@ -613,6 +613,28 @@ export const telegramCards = pgTable(
   (t) => [uniqueIndex("telegram_cards_event_chat_kind_idx").on(t.eventId, t.chatId, t.kind), index("telegram_cards_event_idx").on(t.eventId)],
 );
 
+/**
+ * Cards sent through inline mode (@bot CODE in any chat, no membership needed).
+ * Telegram gives no chat id for these, only an inline message id, which is
+ * enough to keep editing the card.
+ */
+export const telegramInlineCards = pgTable(
+  "telegram_inline_cards",
+  {
+    inlineMessageId: text("inline_message_id").primaryKey(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    /** Locale the card was rendered in (the sender's). */
+    locale: text("locale").notNull().default("en"),
+    rendered: text("rendered"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("telegram_inline_cards_event_idx").on(t.eventId)],
+);
+export type TelegramInlineCard = typeof telegramInlineCards.$inferSelect;
+
 export type TelegramChat = typeof telegramChats.$inferSelect;
 export type TelegramCard = typeof telegramCards.$inferSelect;
 

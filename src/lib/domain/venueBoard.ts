@@ -33,7 +33,7 @@ export async function getVenueBoard(db: Db, slug: string, now = new Date()): Pro
 }
 
 /** Occupied seats and open spots per event, in one round trip each. */
-async function withCounts(db: Db, rows: Event[]): Promise<BoardEvent[]> {
+export async function withCounts(db: Db, rows: Event[]): Promise<BoardEvent[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((e) => e.id);
   const counts = await db
