@@ -6,6 +6,7 @@ import { setMyLevelAction, setRankingOptInAction } from "@/actions/identity";
 import type { LevelLogEntry } from "@/db/schema";
 import { formatLevel } from "@/lib/domain/levels";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
+import { LevelImport } from "./LevelImport";
 
 /** "Your level" on My matches: declare once, see how results moved it. */
 /** `offerRanking`: show the opt-in once there is something to rank (a level or a played match), so a fresh screen stays quiet. */
@@ -97,6 +98,7 @@ export function LevelEditor({ level, source, log, verified = false, rankingOptIn
         </button>
       </div>
       <LevelGuide />
+      <LevelImport onPick={(lvl) => setValue(lvl)} />
       <button type="button" className="self-start text-sm link" onClick={() => setEditing(false)}>
         {t("common.cancel")}
       </button>

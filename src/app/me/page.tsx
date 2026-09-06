@@ -10,6 +10,7 @@ import { baseUrl, emailEnabled } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
+import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
 import { telegramBotUsername, telegramEnabled } from "@/lib/telegram/api";
 
@@ -52,6 +53,7 @@ export default async function MePage() {
       <Header minimal />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
         <MyMatches player={me} personalToken={token} />
+        <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
         {myClubs.length > 0 && (
           <section className="card">
             <h2 className="text-lg font-extrabold">{t("club.yourClubs")}</h2>

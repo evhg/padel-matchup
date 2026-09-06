@@ -118,6 +118,21 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
 }
 
 /** Activity emails on/off (calendar invites, changes and cancellations always go out). */
+/** Passport: the public page switch. Off by default; the slug is minted once and kept. */
+export async function setPublicProfileAction(on: boolean): Promise<ActionResult<{ slug: string; on: boolean }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const { setPublicProfile } = await import("@/lib/domain/profile");
+    const row = await setPublicProfile(db, me.id, Boolean(on));
+    if (!row?.publicSlug) throw new ActionFailure("generic");
+    revalidatePath("/me");
+    revalidatePath(`/u/${row.publicSlug}`);
+    return { slug: row.publicSlug, on: row.publicProfile };
+  });
+}
+
 export async function setMyLevelAction(level: number): Promise<ActionResult<{ level: number | null }>> {
   return runA(async () => {
     const db = await getDb();

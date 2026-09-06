@@ -124,6 +124,24 @@ export default function DevelopersPage() {
           </ul>
         </section>
 
+        <section id="passport" className="card flex flex-col gap-3">
+          <h2 className="text-lg font-extrabold">Portable levels: the passport</h2>
+          <p className="text-sm text-muted">
+            A player who switches their public page on gets a signed level document at <code>/u/&#123;slug&#125;/passport.json</code>: name, level, band, whether an organizer confirmed it, matches played and won, issued and expiry dates. Ed25519 over canonical JSON (keys sorted, no whitespace, every field except <code>alg</code> and <code>sig</code>). The public key is at <code>/.well-known/kicksmash-passport.json</code>. Profiles are opt-in and off by default; there is no list of them, and you should never guess a slug.
+          </p>
+          <pre className="overflow-x-auto rounded-2xl bg-ink p-4 text-xs text-bg">
+            <code>{`import { verifyPassport } from "@kicksmash/levels";
+
+const doc = await fetch("https://kicksma.sh/u/ana-x7k2m/passport.json").then((r) => r.json());
+const { keys } = await fetch("https://kicksma.sh/.well-known/kicksmash-passport.json").then((r) => r.json());
+const key = keys.find((k) => k.kid === doc.kid);
+const ok = key && (await verifyPassport(doc, key.hex)) && new Date(doc.expiresAt) > new Date();`}</code>
+          </pre>
+          <p className="text-sm text-muted">
+            The same package maps other apps&apos; scales onto 0–7 (<code>fromScale</code>); the table is on <Link href="/levels" prefetch={false}>/levels</Link>. Players can also download everything Kicksmash holds about them as one JSON file from My matches.
+          </p>
+        </section>
+
         <section className="card flex flex-col gap-3">
           <h2 className="text-lg font-extrabold">Licence and limits</h2>
           <p className="text-sm text-muted">

@@ -26,6 +26,9 @@ const env = {
   TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME || "kicksmash_bot",
   // The owner's Telegram id: club claims and listening drafts are approved from this account.
   TELEGRAM_OWNER_ID: process.env.TELEGRAM_OWNER_ID || "777001",
+  // Passport signing pair for these tests only (never used anywhere else).
+  PASSPORT_PRIVATE_KEY: process.env.PASSPORT_PRIVATE_KEY || "8e634fbeffa64d5c4fcbdaa76e1aadaa388eeaa636cd8179f0d858311c321ab7",
+  PASSPORT_PUBLIC_KEY: process.env.PASSPORT_PUBLIC_KEY || "041adb0508a2d16a6e97203251a2a85ce6e30c2fa2ec6498fc1ddec242265447",
   // A fake Discord app: the token decodes to a plausible id, the key pair exists only for these tests (private half in e2e/discord.mjs).
   DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN || "MTU0NTk4ODEzODA1NTIzNzcyMw.e2e.fake-token",
   DISCORD_PUBLIC_KEY: process.env.DISCORD_PUBLIC_KEY || "7cb05c12c78f756c9e976f772d63dd58a6426129cc2d177f8314a2fce536bb96",
