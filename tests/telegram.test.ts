@@ -8,7 +8,8 @@ import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { setTournamentLock } from "@/lib/domain/tournament";
 import { saveMatchScore } from "@/lib/domain/scores";
-import { verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
+import { telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
+import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
 import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, postCardForTicket, postTelegramResult, sendTelegramReminders, syncTelegram, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
 import { getEventByCode } from "@/lib/domain/queries";
@@ -55,6 +56,21 @@ describe("telegram signatures and tickets", () => {
     expect(verifyLoginWidget({ ...fields, first_name: "Eve" }, now)).toBe(false);
     expect(verifyLoginWidget(fields, new Date(now.getTime() + 2 * 24 * 3600 * 1000))).toBe(false);
     expect(verifyLoginWidget({ ...fields, hash: "00" }, now)).toBe(false);
+  });
+  it("the same-tab sign-in: the URL Telegram gets, and the fields it puts in the hash on the way back", () => {
+    const url = new URL(telegramAuthUrl("123456", "https://kicksma.sh", "https://kicksma.sh/me", "ru"));
+    expect(url.origin + url.pathname).toBe("https://oauth.telegram.org/auth");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ bot_id: "123456", origin: "https://kicksma.sh", request_access: "write", lang: "ru", return_to: "https://kicksma.sh/me" });
+    expect(new URL(telegramAuthUrl("1", "https://kicksma.sh", "https://kicksma.sh/me", "de")).searchParams.get("lang")).toBe("en");
+    expect(returnToFor({ origin: "https://kicksma.sh", pathname: "/me" })).toBe("https://kicksma.sh/me");
+    expect(telegramBotId()).toBe("123456");
+    const b64u = (s: string) => Buffer.from(s, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const fields = { id: 7, first_name: "Оля", username: "olya", auth_date: 1757160000, hash: "ab".repeat(32) };
+    expect(readAuthResult(`#tgAuthResult=${b64u(JSON.stringify(fields))}`)).toEqual({ id: "7", first_name: "Оля", username: "olya", auth_date: "1757160000", hash: "ab".repeat(32) });
+    expect(readAuthResult(`#tgAuthResult=${b64u(JSON.stringify({ id: 7, first_name: "Bo" }))}`)).toBeNull();
+    expect(readAuthResult("#tgAuthResult=%%%")).toBeNull();
+    expect(readAuthResult("")).toBeNull();
+    expect(readAuthResult("#other=1")).toBeNull();
   });
   it("verifies Mini App initData", () => {
     const now = new Date("2026-09-05T12:00:00Z");

@@ -820,7 +820,8 @@
     "help": "Входите через Telegram с любого устройства и записывайтесь на матчи прямо из карточек бота в групповых чатах.",
     "signIn": "Войти через Telegram",
     "invalid": "Не удалось проверить вход через Telegram. Попробуйте ещё раз.",
-    "justLinked": "Telegram привязан. Ваши матчи из бота теперь здесь."
+    "justLinked": "Telegram привязан. Ваши матчи из бота теперь здесь.",
+    "signingIn": "Входим…"
   },
   "answers": {
     "eyebrow": "Ответы",
@@ -960,6 +961,21 @@
     "scalesTitle": "Шкалы других приложений",
     "scalesHelp": "Как другие шкалы ложатся на 0–7. Если вашей нет, выберите ближайший диапазон, остальное сделают результаты.",
     "scalesYours": "У вас",
-    "scalesKicksmash": "Kicksmash"
+    "scalesKicksmash": "Kicksmash",
+    "docIntro": "Небольшой документ, подписанный {issuer}. Клуб, партнёр или другое приложение могут проверить, что этот уровень выдан Kicksmash и не изменён, ни у кого не спрашивая.",
+    "docLevel": "Уровень",
+    "docStatus": "Статус",
+    "docRecord": "Результаты",
+    "docPlayedWon": "Сыграно {played} · побед {won}",
+    "docIssued": "Выдан",
+    "docExpires": "Действует до",
+    "docSignatureOk": "Подпись верна (ключ {kid})",
+    "docUnsigned": "У этой копии Kicksmash нет ключа подписи, поэтому документ не подписан.",
+    "docForApps": "Для приложений и клубов",
+    "docForAppsHelp": "Тот же документ в JSON, вместе с подписью. Открытый ключ: /.well-known/kicksmash-passport.json.",
+    "docCopyLink": "Скопировать ссылку на JSON",
+    "docOpenJson": "Открыть JSON",
+    "docShow": "Показать документ",
+    "docBack": "Назад к {name}"
   }
 }

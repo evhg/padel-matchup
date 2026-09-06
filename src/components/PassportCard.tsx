@@ -43,7 +43,7 @@ export function PassportCard({ publicOn, slug, base }: { publicOn: boolean; slug
             {url.replace(/^https?:\/\//, "")}
           </a>
           <CopyButton value={url} label={t("common.copy")} copiedLabel={t("common.copied")} className="btn-ghost btn-sm" />
-          <a href={`${url}/passport.json`} className="btn-ghost btn-sm" title={t("passport.signedHelp")}>
+          <a href={`${url}/passport`} className="btn-ghost btn-sm" title={t("passport.signedHelp")}>
             🔏 {t("passport.signed")}
           </a>
         </div>

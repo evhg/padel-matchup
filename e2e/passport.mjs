@@ -36,9 +36,18 @@ try {
   check("switching the page on mints a slug", /^[a-z0-9]+-[a-z0-9]{5}$/.test(slug ?? ""), link);
   await shot(page, "p1-passport-on");
 
+  const signedHref = await page.getByRole("link", { name: /Signed level/ }).getAttribute("href");
+  check("Signed level on My matches opens the readable page, not the JSON", signedHref === `${link}/passport`, signedHref);
   const profile = await fetch(`${BASE}/u/${slug}`);
   const html = await profile.text();
   check("the public page shows the first name and the stats strip", profile.status === 200 && html.includes("Tia") && html.includes("Played"));
+  check("the public page links people to the readable signed level", html.includes(`href="/u/${slug}/passport"`) && !html.includes(`href="/u/${slug}/passport.json"`));
+  await page.goto(`${BASE}/u/${slug}/passport`);
+  check("the readable passport says whose level it is and that the signature checks out", (await page.getByRole("heading", { name: "Tia" }).count()) === 1 && (await page.getByText(/Signature checks out \(key [0-9a-f]{8}\)/).count()) === 1 && (await page.getByText("No level yet").count()) === 1);
+  check("the JSON is one tap away and the document is folded", (await page.getByRole("link", { name: "Open JSON" }).getAttribute("href")) === `${link}/passport.json` && (await page.locator("details pre").isVisible()) === false);
+  await page.getByText("Show the document").click();
+  check("unfolded, the document is the signed JSON", (await page.locator("details pre").innerText()).includes('"alg": "Ed25519"'));
+  await shot(page, "p2-passport-doc");
   const doc = await fetch(`${BASE}/u/${slug}/passport.json`).then((r) => r.json());
   check("the passport is signed and names the player", doc.alg === "Ed25519" && doc.name === "Tia" && typeof doc.sig === "string" && doc.sub.endsWith(`/u/${slug}`), JSON.stringify(doc).slice(0, 200));
   const wk = await fetch(`${BASE}/.well-known/kicksmash-passport.json`).then((r) => r.json());
@@ -76,7 +85,8 @@ try {
   await page.getByText(/Public page · off/).waitFor({ timeout: 15000 });
   const gone = await fetch(`${BASE}/u/${slug}`);
   const goneDoc = await fetch(`${BASE}/u/${slug}/passport.json`);
-  check("switching the page off makes both the page and the passport 404", gone.status === 404 && goneDoc.status === 404);
+  const goneDocPage = await fetch(`${BASE}/u/${slug}/passport`);
+  check("switching the page off makes the page, the passport and its readable version 404", gone.status === 404 && goneDoc.status === 404 && goneDocPage.status === 404);
 } finally {
   await browser.close();
 }

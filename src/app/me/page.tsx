@@ -12,16 +12,20 @@ import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
-import { telegramBotUsername, telegramEnabled } from "@/lib/telegram/api";
+import { telegramBotId } from "@/lib/telegram/api";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
   return { title: t("me.title") };
 }
 
-export default async function MePage() {
+type Props = { searchParams: Promise<{ telegram?: string }> };
+
+export default async function MePage({ searchParams }: Props) {
   const db = await getDb();
-  const me = await getSessionPlayer(db);
+  const [me, { telegram }] = await Promise.all([getSessionPlayer(db), searchParams]);
+  // Back from Telegram: one line about how it went, nothing else changes.
+  const note = telegram === "linked" ? "linked" : telegram === "invalid" ? "invalid" : null;
 
   if (!me) {
     const t = await getTranslations();
@@ -30,10 +34,11 @@ export default async function MePage() {
         <Header minimal />
         <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
           <h1 className="text-3xl font-extrabold tracking-tight">{t("me.title")}</h1>
+          {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
           <NameGate title={t("me.noIdentity")} />
-          {telegramEnabled() && telegramBotUsername() && (
+          {telegramBotId() && (
             <section className="card">
-              <TelegramLogin botUsername={telegramBotUsername()!} linked={false} linkedUsername={null} lang={await getLocale()} authUrl={`${baseUrl()}/api/telegram/login`} />
+              <TelegramLogin botId={telegramBotId()!} linked={false} linkedUsername={null} lang={await getLocale()} authUrl={`${baseUrl()}/api/telegram/login`} />
             </section>
           )}
           {emailEnabled() && (
@@ -52,6 +57,8 @@ export default async function MePage() {
     <>
       <Header minimal />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
+        {note === "linked" && <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">✓ {t("telegram.justLinked")}</p>}
+        {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
         <MyMatches player={me} personalToken={token} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
         {myClubs.length > 0 && (
