@@ -15,8 +15,9 @@ import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import { personalUrl } from "@/lib/personal";
 import { isValidShareCode } from "@/lib/codes";
-import { answerCallbackQuery, editMessageText, sendMessage, sendPhoto, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
+import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whereLine, type BotLocale } from "./card";
+import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 
 /**
  * The bot, quiet by design. It posts a new message only for: the match card,
@@ -340,8 +341,31 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   return codes.length ? "card" : "ignored";
 }
 
+async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "la" | "ls", id: string): Promise<string> {
+  if (cb.from.id !== ownerTelegramId()) {
+    await answerCallbackQuery(cb.id);
+    return "listen:not_owner";
+  }
+  if (action === "ls") {
+    const row = await skipItem(db, id);
+    await answerCallbackQuery(cb.id, row ? "Skipped." : "Already decided.");
+    if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, `⏭ <b>Skipped</b>\n${esc(row?.title ?? "")}`, null);
+    return row ? "listen:skipped" : "listen:noop";
+  }
+  const res = await approveItem(db, id);
+  const text = res.status === "posted" ? `✅ Posted: ${res.url}` : res.status === "approved_manual" ? "✅ Approved. Copy it from the admin page." : res.status === "failed" ? `⚠️ Approved, posting failed: ${res.error}` : res.status === "already" ? "Already posted." : "Not found.";
+  await answerCallbackQuery(cb.id, text.slice(0, 190), { alert: res.status === "failed" });
+  if (cb.message) {
+    const url = `${baseUrl()}/admin/listen?item=${id}`;
+    await editMessageText(cb.message.chat.id, cb.message.message_id, `${esc(text)}`, { inline_keyboard: [[{ text: "Admin", url }]] });
+  }
+  return `listen:${res.status}`;
+}
+
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
+  const listen = data.match(/^(la|ls):([0-9a-f-]{36})$/);
+  if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls", listen[2]);
   const m = data.match(/^([jl]):([A-Za-z0-9]{4})$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);

@@ -9,6 +9,7 @@ import {
   transitionPastEvents,
 } from "@/lib/domain/reminders";
 import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
+import { listenTick } from "@/lib/listen/tick";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | Record<string, number>, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -101,6 +102,7 @@ export async function GET(req: Request) {
 
   try {
     summary.webhookRetries = (await processWebhookRetries(db, now)).attempted;
+    summary.listen = await listenTick(db, now);
   } catch (e) {
     summary.errors.push(`webhooks: ${String(e)}`);
   }
