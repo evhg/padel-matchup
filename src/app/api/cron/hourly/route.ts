@@ -12,6 +12,7 @@ import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
 import { listenTick, type ListenSummary } from "@/lib/listen/tick";
 import { refreshAllAvailability } from "@/lib/booking/availability";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
+import { runBackup, type BackupResult } from "@/lib/backup";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getEventDetail } from "@/lib/domain/queries";
@@ -40,7 +41,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -113,6 +114,14 @@ export async function GET(req: Request) {
     summary.clubs = await refreshAllAvailability(db, now);
   } catch (e) {
     summary.errors.push(`clubs: ${String(e)}`);
+  }
+
+  try {
+    // Once a day: every table into the owner's private backup repository (when configured).
+    summary.backup = await runBackup(db, now);
+    if (summary.backup.status === "failed") summary.errors.push(`backup: ${summary.backup.error}`);
+  } catch (e) {
+    summary.errors.push(`backup: ${String(e)}`);
   }
 
   try {
