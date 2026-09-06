@@ -65,7 +65,7 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: model(), max_tokens: 700, temperature: 0.4, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: model(), max_tokens: 700, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message: string } } | null;

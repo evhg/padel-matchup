@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   applicationName: APP_NAME,
   appleWebApp: { capable: true, title: APP_NAME, statusBarStyle: "default" },
   formatDetection: { telephone: false },
+  // Yandex Webmaster ownership (the Russian search index matters for Phuket).
+  verification: { yandex: "a205f02ae7fc481b" },
 };
 
 export const viewport: Viewport = {
