@@ -1,0 +1,129 @@
+name: Uptime
+
+# An outside eye on kicksma.sh every ten minutes; three tries before it counts.
+# State lives in a GitHub issue labelled `uptime`: opened when the site stops
+# answering, closed when it is back. With the two optional repository secrets
+# TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_ID the owner hears about both moments
+# from here, even while the site is down. Without them the app relays the issue
+# to the owner on its next hourly run (src/lib/uptime.ts).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SITE: https://kicksma.sh
+      TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TG_OWNER: ${{ secrets.TELEGRAM_OWNER_ID }}
+    steps:
+      - name: Probe the site
+        id: probe
+        shell: bash
+        run: |
+          fail=""
+          for attempt in 1 2 3; do
+            fail=""
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 20 "$SITE/api/health" || echo 000)
+            if [ "$code" != "200" ] || ! grep -q '"ok":true' /tmp/health.json 2>/dev/null; then
+              fail="health $code $(tr -d '\n' < /tmp/health.json 2>/dev/null | head -c 200)"
+            fi
+            home=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/" || echo 000)
+            if [ "$home" != "200" ]; then fail="${fail:+$fail; }home $home"; fi
+            if [ -z "$fail" ]; then break; fi
+            if [ "$attempt" -lt 3 ]; then sleep 40; fi
+          done
+          {
+            echo "fail<<END"
+            echo "$fail"
+            echo "END"
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$fail" ]; then echo "::warning::down: $fail"; else echo "up"; fi
+
+      - name: Open or close the uptime issue
+        id: state
+        uses: actions/github-script@v7
+        env:
+          FAIL: ${{ steps.probe.outputs.fail }}
+        with:
+          script: |
+            const fail = (process.env.FAIL || '').trim().replace(/`/g, "'");
+            const { owner, repo } = context.repo;
+            const ensureLabel = async (name, color, description) => {
+              try { await github.rest.issues.getLabel({ owner, repo, name }); }
+              catch { await github.rest.issues.createLabel({ owner, repo, name, color, description }).catch(() => {}); }
+            };
+            await ensureLabel('uptime', 'b60205', 'Opened by the uptime probe while kicksma.sh is down');
+            const open = (await github.rest.issues.listForRepo({ owner, repo, labels: 'uptime', state: 'open', per_page: 5 })).data.filter((i) => !i.pull_request);
+            const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+            let transition = 'up';
+            let number = open[0]?.number ?? 0;
+            if (fail) {
+              if (open.length) {
+                transition = 'still_down';
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: `Still down at ${stamp}: \`${fail}\`` });
+              } else {
+                transition = 'went_down';
+                const created = await github.rest.issues.create({
+                  owner, repo, labels: ['uptime'],
+                  title: `kicksma.sh down since ${stamp}`,
+                  body: `The uptime probe could not reach the site three times in a row.\n\n\`${fail}\`\n\nThis issue closes itself when the site answers again. Deployments: https://vercel.com · Health: https://kicksma.sh/api/health`,
+                });
+                number = created.data.number;
+              }
+            } else if (open.length) {
+              transition = 'recovered';
+              for (const i of open) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: i.number, body: `Back at ${stamp}.` });
+                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: 'closed', state_reason: 'completed' });
+              }
+            }
+            core.setOutput('transition', transition);
+            core.setOutput('number', String(number));
+            core.info(`${transition} (#${number})`);
+
+      - name: Tell the owner on Telegram
+        id: telegram
+        if: env.TG_TOKEN != '' && env.TG_OWNER != '' && (steps.state.outputs.transition == 'went_down' || steps.state.outputs.transition == 'recovered')
+        shell: bash
+        env:
+          TRANSITION: ${{ steps.state.outputs.transition }}
+          FAIL: ${{ steps.probe.outputs.fail }}
+          NUMBER: ${{ steps.state.outputs.number }}
+        run: |
+          if [ "$TRANSITION" = "went_down" ]; then
+            text="⚠️ kicksma.sh is not answering (${FAIL:0:200}). Outside probe, three tries. I will say when it is back."
+          else
+            text="✅ kicksma.sh is answering again."
+          fi
+          url="https://github.com/${GITHUB_REPOSITORY}/issues/${NUMBER}"
+          curl -sS --max-time 20 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_OWNER}" --data-urlencode "text=${text}" \
+            --data-urlencode "reply_markup={\"inline_keyboard\":[[{\"text\":\"Details\",\"url\":\"${url}\"}]]}" -o /tmp/tg.json || true
+          if grep -q '"ok":true' /tmp/tg.json 2>/dev/null; then echo "sent=1" >> "$GITHUB_OUTPUT"; else echo "sent=0" >> "$GITHUB_OUTPUT"; cat /tmp/tg.json || true; fi
+
+      - name: Mark the issue as relayed
+        if: steps.telegram.outputs.sent == '1' && steps.state.outputs.number != '0'
+        uses: actions/github-script@v7
+        env:
+          NUMBER: ${{ steps.state.outputs.number }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            await github.rest.issues.addLabels({ owner, repo, issue_number: Number(process.env.NUMBER), labels: ['notified'] });
+
+      - name: Red while the site is down
+        if: steps.probe.outputs.fail != ''
+        run: exit 1

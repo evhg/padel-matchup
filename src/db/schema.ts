@@ -800,3 +800,27 @@ export const answers = pgTable(
 );
 export type Answer = typeof answers.$inferSelect;
 
+
+/**
+ * Production exceptions, one row per fingerprint: what broke, where, how often.
+ * The daily fixer reads them at /api/admin/errors and marks what it shipped.
+ */
+export const errorEvents = pgTable(
+  "error_events",
+  {
+    fingerprint: text("fingerprint").primaryKey(),
+    /** server | client | cron */
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    stack: text("stack"),
+    path: text("path"),
+    count: integer("count").notNull().default(1),
+    firstAt: timestamp("first_at", { withTimezone: true }).notNull().defaultNow(),
+    lastAt: timestamp("last_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set when a fix shipped; a later lastAt means it came back. */
+    fixedAt: timestamp("fixed_at", { withTimezone: true }),
+    fixNote: text("fix_note"),
+  },
+  (t) => [index("error_events_last_idx").on(t.lastAt)],
+);
+export type ErrorEvent = typeof errorEvents.$inferSelect;
