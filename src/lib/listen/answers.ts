@@ -2,6 +2,7 @@ import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, answers, clubs, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
 import { listErrors } from "@/lib/alerts";
+import { outreachWeek } from "@/lib/outreach/desk";
 import { pingIndexNow } from "@/lib/indexnow";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
@@ -133,6 +134,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   ]);
   const spent = Object.fromEntries(spend.map((r) => [r.key, Number(r.total)]));
   const openErrors = await listErrors(db, { since, limit: 5 });
+  const mail = await outreachWeek(db, since);
   // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
   const [[newPlayers], [joins], [results], [newClubs], [channels]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
@@ -147,6 +149,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
+    `Press desk: sent ${mail.sent} · received ${mail.received} · waiting for your tap ${mail.waiting}`,
     `Errors: server ${spent.errors_server ?? 0} · client ${spent.errors_client ?? 0} · cron ${spent.errors_cron ?? 0} · open kinds ${openErrors.length}${openErrors[0] ? ` (latest: ${esc(openErrors[0].message.slice(0, 80))})` : ""}`,
     newAnswers.length ? `\nNew answer pages (${newAnswers.length}), each with an Unpublish button below:` : "\nNo new answer pages this week.",
   ];

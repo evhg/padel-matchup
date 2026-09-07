@@ -16,6 +16,7 @@ import { runBackup, type BackupResult } from "@/lib/backup";
 import { pruneErrors } from "@/lib/alerts";
 import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
 import { relayUptimeIssues } from "@/lib/uptime";
+import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getEventDetail } from "@/lib/domain/queries";
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, errorsPruned: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -139,6 +140,8 @@ export async function GET(req: Request) {
     // Outages the outside probe recorded reach the owner even when the probe itself could not tell them.
     summary.uptimeRelayed = (await relayUptimeIssues(db, now)).relayed;
     summary.errorsPruned = await pruneErrors(db, now);
+    // Press desk: drafts whose moment has come go to the owner, a few a day.
+    summary.outreachAsks = await askOwnerOutreach(db, now);
   } catch (e) {
     summary.errors.push(`uptime: ${String(e)}`);
   }

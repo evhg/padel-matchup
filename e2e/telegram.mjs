@@ -81,7 +81,7 @@ try {
   check("the Mini App sign-in verifies initData, sets the session and points at the match", mini.status === 200 && miniJson?.ok === true && miniJson.next === `/${code}` && cookie.length > 10, `${mini.status} ${JSON.stringify(miniJson)}`);
   const miniMe = await fetch(`${BASE}/api/me/export`, { headers: { cookie } }).then((r) => r.json());
   check("the session belongs to the Telegram user from initData", miniMe.player?.displayName === "Мини", JSON.stringify(miniMe.player));
-  const forgedMini = await fetch(`${BASE}/api/telegram/miniapp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: initData.replace(/hash=\w/, "hash=0") }) });
+  const forgedMini = await fetch(`${BASE}/api/telegram/miniapp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: initData.replace(/hash=[0-9a-f]+/, `hash=${"0".repeat(64)}`) }) });
   check("forged initData is refused", forgedMini.status === 401);
   const tgPage = await fetch(`${BASE}/tg`);
   check("/tg renders (outside Telegram it says so)", tgPage.status === 200 && (await tgPage.text()).includes("telegram-web-app.js"));
