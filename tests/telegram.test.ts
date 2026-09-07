@@ -17,6 +17,7 @@ import { renderDiscordCard } from "@/lib/discord/card";
 import { matchToPublic } from "@/lib/api/serialize";
 import { notifyCreator } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
+import { formatEventTime } from "@/lib/dates";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 const TOKEN = "123456:TESTTOKEN";
@@ -197,9 +198,13 @@ describe("telegram bot (db, stubbed Bot API)", () => {
 
   it("/new hands out a ticket that posts the card after creation; /lang and /help answer briefly; private /start gives the personal link", async () => {
     const chat = { id: -100777, type: "group" as const, title: "Padel SG" };
-    expect(await handleTelegramUpdate(db, { update_id: 40, message: { message_id: 1, date: 0, chat, from: user(9, "Lee"), text: "/new@kicksmash_bot" } }, NO_SIDE_EFFECTS)).toBe("new");
+    // A chat without a zone is asked for it first; once it has one, bare /new asks for the day and offers the full form (with the chat ticket) as the last row.
+    expect(await handleTelegramUpdate(db, { update_id: 39, message: { message_id: 0, date: 0, chat, from: user(9, "Lee"), text: "/new@kicksmash_bot" } }, NO_SIDE_EFFECTS)).toBe("new_zone");
+    expect(await handleTelegramUpdate(db, { update_id: 38, message: { message_id: 0, date: 0, chat, from: user(9, "Lee"), text: "/tz singapore" } }, NO_SIDE_EFFECTS)).toBe("tz");
+    expect(await handleTelegramUpdate(db, { update_id: 40, message: { message_id: 1, date: 0, chat, from: user(9, "Lee"), text: "/new@kicksmash_bot" } }, NO_SIDE_EFFECTS)).toBe("new_when");
     const reply = sent("sendMessage").at(-1)!;
-    const url = (reply.body.reply_markup as { inline_keyboard: { url: string }[][] }).inline_keyboard[0][0].url;
+    const rows = (reply.body.reply_markup as { inline_keyboard: { url?: string }[][] }).inline_keyboard;
+    const url = rows[rows.length - 1][0].url!;
     const ticket = new URL(url).searchParams.get("tg")!;
     expect(verifyChatTicket(ticket)).toBe(chat.id);
     const { ev } = await match();
@@ -359,7 +364,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     const lee = user(51, "Lee");
     const send = (id: number, text: string) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat, from: lee, text } }, NO_SIDE_EFFECTS);
     // No zone known and nothing in the text that names a place: ask once, offer the form.
-    expect(await send(70, "/new tomorrow 19:00")).toBe("new_need_tz");
+    expect(await send(70, "/new tomorrow 19:00")).toBe("new_zone");
     expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("/tz");
     expect(await send(71, "/tz nowhere/nope")).toBe("tz_unknown");
     // A place in the text is enough.
@@ -390,7 +395,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await send(76, "/tz Москва")).toBe("tz");
     expect((await db.select().from(telegramChats).where(eq(telegramChats.chatId, chat.id)))[0].tz).toBe("Europe/Moscow");
     // Bare /new still hands out the form.
-    expect(await send(77, "/new")).toBe("new");
+    expect(await send(77, "/new")).toBe("new_when");
   });
 
   it("the result from the card: 🏁 asks who won, a player's tap records it, the organizer's tap confirms, /score adds the sets", async () => {
@@ -456,7 +461,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await send(700, "/start")).toBe("private_start");
     expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("/games");
     // No zone known for a fresh private chat: the bot asks once, then remembers.
-    expect(await send(701, "/new завтра 19:00 Sunny Club")).toBe("new_need_tz");
+    expect(await send(701, "/new завтра 19:00 Sunny Club")).toBe("new_zone");
     expect(await send(702, "/tz пхукет")).toBe("tz");
     expect(await send(703, "/new завтра 19:00 Sunny Club 400฿")).toMatch(/^new_created:/);
     const card = sent("sendMessage").at(-1)!;
@@ -562,6 +567,76 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(out).toMatch(/^new_created:/);
     const [fresh] = await db.select().from(events).where(eq(events.code, out.split(":")[1]));
     expect(fresh.groupId).toBe(group.id);
+  });
+
+  it("bare /new is three taps: the city once, then a day, a time and a place; a reply to a prompt works too; the prompt disappears once the card exists", async () => {
+    const chat = { id: -100555111, type: "supergroup" as const, title: "Taps" };
+    const dima = user(51, "Dima");
+    const send = (id: number, text: string, replyTo?: { message_id: number; text: string }) =>
+      handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat, from: dima, text, ...(replyTo ? { reply_to_message: { message_id: replyTo.message_id, date: 0, chat, from: { id: 123456, is_bot: true, first_name: "Kicksmash" }, text: replyTo.text } } : {}) } }, NO_SIDE_EFFECTS);
+    const tap = (id: number, messageId: number, data: string) => handleTelegramUpdate(db, { update_id: id, callback_query: { id: `g${id}`, from: dima, message: { message_id: messageId, date: 0, chat }, data } }, NO_SIDE_EFFECTS);
+    // No zone yet: the first prompt asks for the city, with buttons.
+    expect(await send(900, "/new")).toBe("new_zone");
+    const zonePrompt = sent("sendMessage").at(-1)!;
+    expect(JSON.stringify(zonePrompt.body.reply_markup)).toContain("n:z:phuket");
+    const zoneMsgId = 500; // prompts are edited and deleted by the id the tap carries; any number will do here
+    expect(await tap(901, zoneMsgId, "n:z:phuket")).toBe("new_when");
+    const [row] = await db.select().from(telegramChats).where(eq(telegramChats.chatId, chat.id));
+    expect(row.tz).toBe("Asia/Bangkok");
+    const when = sent("editMessageText").at(-1)!;
+    expect(String(when.body.text)).toContain("New match. When?");
+    expect(String(when.body.text)).toContain("/new tomorrow 19:00 Rawai");
+    const dayButtons = JSON.stringify(when.body.reply_markup);
+    expect(dayButtons).toMatch(/n:d:\d{8}/);
+    expect(dayButtons).toContain("Today");
+    expect(dayButtons).toContain("Tomorrow");
+    expect(dayButtons).toContain("Full form");
+    const tomorrow = dayButtons.match(/n:d:(\d{8})/g)![1].slice(4);
+    // Day → time buttons, with the one-line trailer.
+    expect(await tap(902, zoneMsgId, `n:d:${tomorrow}`)).toBe("new_time");
+    const timePrompt = sent("editMessageText").at(-1)!;
+    expect(String(timePrompt.body.text)).toContain("What time?");
+    expect(String(timePrompt.body.text)).toMatch(/\/new \d{2}\.\d{2}<\/code>/);
+    expect(JSON.stringify(timePrompt.body.reply_markup)).toContain(`n:t:${tomorrow}:1900`);
+    // Time → place buttons (no known place yet: only Court TBD), trailer with the time.
+    expect(await tap(903, zoneMsgId, `n:t:${tomorrow}:1900`)).toBe("new_where");
+    const wherePrompt = sent("editMessageText").at(-1)!;
+    expect(String(wherePrompt.body.text)).toContain("Where?");
+    expect(String(wherePrompt.body.text)).toMatch(/\/new \d{2}\.\d{2} 19:00<\/code>/);
+    expect(JSON.stringify(wherePrompt.body.reply_markup)).toContain(`n:v:${tomorrow}:1900:x`);
+    // Place → the match, the card, and the prompt is deleted.
+    calls = [];
+    const created = await tap(904, zoneMsgId, `n:v:${tomorrow}:1900:x`);
+    expect(created).toMatch(/^new_created:/);
+    const code = created.split(":")[1];
+    expect(sent("deleteMessage")).toHaveLength(1);
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("Players 1/4");
+    const detail = (await getEventByCode(db, code))!;
+    expect(detail.event.tz).toBe("Asia/Bangkok");
+    expect(detail.event.cost).toBeNull();
+    expect(detail.event.venueName).toBeNull();
+    expect(detail.roster.some((x) => x.player?.telegramId === 51)).toBe(true);
+
+    // Second time: the zone is known, so /new goes straight to the day; a reply with a time, then a reply with a place.
+    calls = [];
+    expect(await send(905, "/new")).toBe("new_when");
+    const whenId = 501;
+    expect(await tap(906, whenId, `n:d:${tomorrow}`)).toBe("new_time");
+    const timeText = String(sent("editMessageText").at(-1)!.body.text).replace(/<[^>]+>/g, "");
+    expect(await send(907, "18:30", { message_id: whenId, text: timeText })).toBe("new_where");
+    const whereText = String(sent("editMessageText").at(-1)!.body.text).replace(/<[^>]+>/g, "");
+    expect(whereText).toContain("18:30");
+    calls = [];
+    const made = await send(908, "Rawai Padel Club", { message_id: whenId, text: whereText });
+    expect(made).toMatch(/^new_created:/);
+    const ev2 = (await getEventByCode(db, made.split(":")[1]))!.event;
+    expect(ev2.venueName).toBe("Rawai Padel Club");
+    expect(formatEventTime(ev2.startsAt, "Asia/Bangkok", "en")).toBe("18:30");
+    expect(sent("deleteMessage")).toHaveLength(1);
+    // The chat now knows its usual place: the next place prompt offers it as a button.
+    expect(await send(909, "/new")).toBe("new_when");
+    const [chatRow] = await db.select().from(telegramChats).where(eq(telegramChats.chatId, chat.id));
+    expect(chatRow.venueName).toBe("Rawai Padel Club");
   });
 
   it("does nothing when the bot is not configured", async () => {

@@ -85,6 +85,16 @@ try {
   check("forged initData is refused", forgedMini.status === 401);
   const tgPage = await fetch(`${BASE}/tg`);
   check("/tg renders (outside Telegram it says so)", tgPage.status === 200 && (await tgPage.text()).includes("telegram-web-app.js"));
+  // Bare /new in the group: the chat knows its zone from the carded match, so it asks for the day; three taps make the match.
+  const bare = await hook({ update_id: 40, message: { message_id: 40, date: 0, chat: group, from: ivan, text: "/new" } });
+  check("bare /new asks for the day", bare.json?.outcome === "new_when", JSON.stringify(bare.json));
+  const tapDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() + 2 * 86400000)).replace(/-/g, "");
+  const tapDay = await hook({ update_id: 41, callback_query: { id: "g1", from: ivan, message: { message_id: 900, date: 0, chat: group }, data: `n:d:${tapDate}` } });
+  const tapTime = await hook({ update_id: 42, callback_query: { id: "g2", from: ivan, message: { message_id: 900, date: 0, chat: group }, data: `n:t:${tapDate}:1900` } });
+  const tapPlace = await hook({ update_id: 43, callback_query: { id: "g3", from: ivan, message: { message_id: 900, date: 0, chat: group }, data: `n:v:${tapDate}:1900:0` } });
+  check("day, time and place taps create the match", tapDay.json?.outcome === "new_time" && tapTime.json?.outcome === "new_where" && /^new_created:/.test(tapPlace.json?.outcome ?? ""), JSON.stringify([tapDay.json, tapTime.json, tapPlace.json]));
+  const tapped = await fetch(`${BASE}/api/v1/matches/${(tapPlace.json?.outcome ?? "").split(":")[1]}`).then((r) => r.json());
+  check("the tapped match is at 19:00 in the chat's zone, at its usual court, with no cost", typeof tapped?.tz === "string" && new Intl.DateTimeFormat("en-GB", { timeZone: tapped.tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(tapped.startsAt)) === "19:00" && tapped.venue?.name === "Rawai Padel Club" && tapped.cost === null, JSON.stringify(tapped).slice(0, 240));
   const games = await hook({ update_id: 33, message: { message_id: 4, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/games phuket" } });
   check("/games in the private chat lists the city's open matches", /^games:\d+\+[1-9]/.test(games.json?.outcome ?? ""), JSON.stringify(games.json));
   const login = await fetch(`${BASE}/api/telegram/login?id=1&first_name=Eve&auth_date=${Math.floor(Date.now() / 1000)}&hash=00`, { redirect: "manual" });
