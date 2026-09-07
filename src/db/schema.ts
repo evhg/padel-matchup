@@ -824,3 +824,41 @@ export const errorEvents = pgTable(
   (t) => [index("error_events_last_idx").on(t.lastAt)],
 );
 export type ErrorEvent = typeof errorEvents.$inferSelect;
+
+/**
+ * The press desk: emails we propose to send from claude@<apex> (pitches and
+ * replies), each waiting for the owner's tap, and the mail that comes back.
+ */
+export const outreach = pgTable(
+  "outreach",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** pitch | reply | inbound */
+    kind: text("kind").notNull(),
+    /** press | clubs | builders | hn | other: which launch moment it belongs to */
+    moment: text("moment"),
+    /** The counterpart's address, lowercased: one thread per person. */
+    threadKey: text("thread_key").notNull(),
+    counterpartEmail: text("counterpart_email").notNull(),
+    counterpartName: text("counterpart_name"),
+    org: text("org"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    /** outbound: draft → approved → sent | skipped | failed; inbound: received */
+    status: text("status").notNull().default("draft"),
+    /** The owner is not asked before this moment (the launch calendar). */
+    notBefore: timestamp("not_before", { withTimezone: true }),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    notifyMessageId: bigint("notify_message_id", { mode: "number" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** Resend's id for the sent or received email. */
+    resendId: text("resend_id"),
+    messageId: text("message_id"),
+    inReplyTo: text("in_reply_to"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("outreach_status_idx").on(t.status, t.createdAt), index("outreach_thread_idx").on(t.threadKey, t.createdAt), uniqueIndex("outreach_resend_idx").on(t.resendId)],
+);
+export type Outreach = typeof outreach.$inferSelect;

@@ -27,6 +27,7 @@ import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type Bo
 import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse";
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
+import { approveOutreach, skipOutreach } from "@/lib/outreach/desk";
 import { decideClub, getClubByToken } from "@/lib/domain/clubs";
 
 /**
@@ -1089,10 +1090,31 @@ async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_que
   return action === "ca" ? "club:approved" : "club:rejected";
 }
 
+async function handleOutreachCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "oa" | "os", id: string): Promise<string> {
+  if (cb.from.id !== ownerTelegramId()) {
+    await answerCallbackQuery(cb.id);
+    return "outreach:not_owner";
+  }
+  const desk = { inline_keyboard: [[{ text: "Desk", url: `${baseUrl()}/admin/press?item=${id}` }]] };
+  if (action === "os") {
+    const row = await skipOutreach(db, id);
+    await answerCallbackQuery(cb.id, row ? "Skipped." : "Already decided.");
+    if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, `⏭ <b>Skipped</b>\n${esc(row?.subject ?? "")}`, desk);
+    return row ? "outreach:skipped" : "outreach:noop";
+  }
+  const res = await approveOutreach(db, id);
+  const text = res.status === "sent" ? "✅ Sent." : res.status === "already" ? "Already sent." : res.status === "disabled" ? "Email is off on this deployment." : res.status === "failed" ? `⚠️ Not sent: ${res.error}` : "Not found.";
+  await answerCallbackQuery(cb.id, text.slice(0, 190), { alert: res.status === "failed" });
+  if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(text), desk);
+  return `outreach:${res.status}`;
+}
+
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
   const listen = data.match(/^(la|ls|lu):([0-9a-f-]{36})$/);
   if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
+  const mail = data.match(/^(oa|os):([0-9a-f-]{36})$/);
+  if (mail) return handleOutreachCallback(db, cb, mail[1] as "oa" | "os", mail[2]);
   const club = data.match(/^(ca|cr):([A-Za-z0-9_-]{16,40})$/);
   if (club) return handleClubCallback(db, cb, club[1] as "ca" | "cr", club[2]);
   const guided = data.match(/^n:([zdtv]):(.+)$/);
