@@ -1,6 +1,8 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, answers, clubs, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
+import { listErrors } from "@/lib/alerts";
+import { pingIndexNow } from "@/lib/indexnow";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { metricsDaily } from "@/db/schema";
@@ -104,6 +106,8 @@ export async function getPublishedAnswer(db: Db, slug: string): Promise<Answer |
 
 export async function setAnswerPublished(db: Db, id: string, on: boolean, now = new Date()): Promise<Answer | null> {
   const [row] = await db.update(answers).set(on ? { publishedAt: now, unpublishedAt: null } : { unpublishedAt: now }).where(eq(answers.id, id)).returning();
+  // Search engines hear about the page either way: a new one to index, a gone one to drop.
+  if (row) await pingIndexNow([`/answers/${row.slug}`, "/answers"], { db });
   return row ?? null;
 }
 
@@ -125,9 +129,10 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ n: sql<number>`count(*)` }).from(events).where(gte(events.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNull(telegramChats.leftAt), sql`${telegramChats.type} <> 'private'`)),
     db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt), isNull(answers.digestedAt))).orderBy(desc(answers.publishedAt)).limit(10),
-    db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts')`)).groupBy(metricsDaily.key),
+    db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts','errors_server','errors_client','errors_cron')`)).groupBy(metricsDaily.key),
   ]);
   const spent = Object.fromEntries(spend.map((r) => [r.key, Number(r.total)]));
+  const openErrors = await listErrors(db, { since, limit: 5 });
   // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
   const [[newPlayers], [joins], [results], [newClubs], [channels]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
@@ -142,6 +147,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
+    `Errors: server ${spent.errors_server ?? 0} · client ${spent.errors_client ?? 0} · cron ${spent.errors_cron ?? 0} · open kinds ${openErrors.length}${openErrors[0] ? ` (latest: ${esc(openErrors[0].message.slice(0, 80))})` : ""}`,
     newAnswers.length ? `\nNew answer pages (${newAnswers.length}), each with an Unpublish button below:` : "\nNo new answer pages this week.",
   ];
   const head = await sendMessage(owner, lines.join("\n"), { keyboard: { inline_keyboard: [[{ text: "Listening desk", url: `${baseUrl()}/admin/listen` }]] } });

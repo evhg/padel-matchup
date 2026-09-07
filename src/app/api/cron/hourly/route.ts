@@ -13,6 +13,9 @@ import { listenTick, type ListenSummary } from "@/lib/listen/tick";
 import { refreshAllAvailability } from "@/lib/booking/availability";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { runBackup, type BackupResult } from "@/lib/backup";
+import { pruneErrors } from "@/lib/alerts";
+import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
+import { relayUptimeIssues } from "@/lib/uptime";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getEventDetail } from "@/lib/domain/queries";
@@ -41,7 +44,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, errorsPruned: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -122,6 +125,22 @@ export async function GET(req: Request) {
     if (summary.backup.status === "failed") summary.errors.push(`backup: ${summary.backup.error}`);
   } catch (e) {
     summary.errors.push(`backup: ${String(e)}`);
+  }
+
+  try {
+    // Search engines hear about the pages that changed (IndexNow, once a day).
+    summary.indexnow = await submitIndexNowDaily(db, now);
+    if (summary.indexnow.status === "failed") summary.errors.push(`indexnow: ${summary.indexnow.httpStatus ?? summary.indexnow.error}`);
+  } catch (e) {
+    summary.errors.push(`indexnow: ${String(e)}`);
+  }
+
+  try {
+    // Outages the outside probe recorded reach the owner even when the probe itself could not tell them.
+    summary.uptimeRelayed = (await relayUptimeIssues(db, now)).relayed;
+    summary.errorsPruned = await pruneErrors(db, now);
+  } catch (e) {
+    summary.errors.push(`uptime: ${String(e)}`);
   }
 
   try {

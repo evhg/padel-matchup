@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { locales } from "@/i18n/config";
+import { pingIndexNow } from "@/lib/indexnow";
+import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
 import { clubs, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
@@ -151,6 +154,8 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
     founding = Number(n) < CLUB_LIMITS.foundingPerCity;
   }
   const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
+  // A live club page is news for the search engines that speak IndexNow.
+  await pingIndexNow([`/v/${slug}`, ...locales.map((l) => localePath("/clubs", l))], { db });
   return row;
 }
 

@@ -6,7 +6,7 @@ import Link from "next/link";
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     // Count it on /admin; no personal data leaves the browser.
-    fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ digest: error.digest ?? "", message: error.message?.slice(0, 200) ?? "" }) }).catch(() => {});
+    fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ digest: error.digest ?? "", message: error.message?.slice(0, 200) ?? "", path: typeof location === "undefined" ? "" : location.pathname.slice(0, 200) }) }).catch(() => {});
   }, [error]);
   return (
     <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-10">
