@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
 import { LEVEL_BANDS, LEVEL_PRESETS, LEVEL_SCALES, MATCH_K, TOURNAMENT_K, formatLevel, fromScale, type BandKey } from "@/lib/domain/levels";
 
-export const dynamic = "force-static";
-export const revalidate = 86400;
+// Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
+  const locale = await getLocale();
   const title = t("levels.title");
   const description = t("levels.metaDescription");
-  return { title, description, alternates: { canonical: "/levels" }, openGraph: { title, description, type: "article", url: `${baseUrl()}/levels` } };
+  return { title, description, alternates: localeAlternates("/levels", locale), openGraph: { title, description, type: "article", url: `${baseUrl()}/levels` } };
 }
 
 /** What a padel level number means, how it moves, and how to set yours. One page, the best answer to "what is my padel level". */

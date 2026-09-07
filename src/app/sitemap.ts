@@ -4,6 +4,8 @@ import { getDb } from "@/db";
 import { CITIES } from "@/lib/domain/cities";
 import { listPublishedAnswers } from "@/lib/listen/answers";
 import { listLiveClubs } from "@/lib/domain/clubs";
+import { locales } from "@/i18n/config";
+import { localePath } from "@/lib/seo";
 
 // Rendered on request: answer pages and club pages appear as soon as they exist (a build-time sitemap would freeze them).
 export const dynamic = "force-dynamic";
@@ -20,18 +22,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   } catch {
     answerPages = [];
   }
+  // Pages that exist in every language: one entry per language, each naming the others (hreflang).
+  const inEveryLanguage = (path: string, changeFrequency: "daily" | "weekly" | "monthly" | "yearly", priority: number): MetadataRoute.Sitemap => {
+    const languages = Object.fromEntries([...locales.map((l) => [l, `${base}${localePath(path, l)}`]), ["x-default", `${base}${localePath(path, "en")}`]]);
+    return locales.map((l) => ({ url: `${base}${localePath(path, l)}`, lastModified: now, changeFrequency, priority: l === "en" ? priority : Math.max(0.1, priority - 0.1), alternates: { languages } }));
+  };
   return [
-    { url: `${base}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
-    { url: `${base}/americano`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
-    ...[8, 12, 16, 20, 24].map((n) => ({ url: `${base}/americano/${n}`, lastModified: now, changeFrequency: "yearly" as const, priority: 0.6 })),
-    { url: `${base}/levels`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    ...inEveryLanguage("/", "weekly", 1),
+    ...inEveryLanguage("/americano", "monthly", 0.8),
+    ...[8, 12, 16, 20, 24].flatMap((n) => inEveryLanguage(`/americano/${n}`, "yearly", 0.6)),
+    ...inEveryLanguage("/levels", "monthly", 0.7),
     { url: `${base}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/agents`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    ...CITIES.map((c) => ({ url: `${base}/${c.slug}`, lastModified: now, changeFrequency: "daily" as const, priority: 0.8 })),
-    { url: `${base}/clubs`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    ...CITIES.flatMap((c) => inEveryLanguage(`/${c.slug}`, "daily", 0.8)),
+    ...inEveryLanguage("/clubs", "weekly", 0.7),
     ...clubPages,
     { url: `${base}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     ...answerPages,
-    { url: `${base}/about`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    ...inEveryLanguage("/about", "yearly", 0.3),
   ];
 }

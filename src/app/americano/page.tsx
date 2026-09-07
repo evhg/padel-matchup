@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { AmericanoGenerator } from "@/components/AmericanoGenerator";
 import { Footer, Header } from "@/components/Header";
 
+// Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
+  const locale = await getLocale();
   return {
     title: t("americano.gen.title"),
     description: t("americano.gen.metaDescription"),
-    alternates: { canonical: "/americano" },
+    alternates: localeAlternates("/americano", locale),
     openGraph: { title: t("americano.gen.title"), description: t("americano.gen.metaDescription"), type: "website", url: "/americano" },
   };
 }
