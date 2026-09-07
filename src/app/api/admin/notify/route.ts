@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * Text is sent as-is (escaped); one optional button.
  */
 export async function POST(req: Request) {
-  if (!operatorAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return NextResponse.json({ error: "telegram_not_configured" }, { status: 503 });
   const body = (await req.json().catch(() => ({}))) as { text?: unknown; url?: unknown; label?: unknown; silent?: unknown };

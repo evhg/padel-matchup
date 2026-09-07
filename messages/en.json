@@ -985,5 +985,19 @@
     "docOpenJson": "Open JSON",
     "docShow": "Show the document",
     "docBack": "Back to {name}"
+  },
+  "feedback": {
+    "title": "Tell us what should change",
+    "sub": "One idea, one bug, one wish. I read every note myself and answer within a day. If it changes Kicksmash, you hear about it first, with what changed.",
+    "placeholder": "What should be different?",
+    "contactLabel": "Email, so I can answer (optional)",
+    "contactHelp": "Without it I still read it, but I cannot write back.",
+    "send": "Send",
+    "sent": "Got it, thank you.",
+    "sentSub": "I answer within a day. Whatever you inspire, you will hear about it first.",
+    "tooShort": "A few more words, please.",
+    "tooMany": "That is plenty for today. Thank you.",
+    "footerLink": "Feedback",
+    "viaTelegram": "You signed in with Telegram, so I will answer you there."
   }
 }

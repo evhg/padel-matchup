@@ -33,6 +33,9 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 - POST ${base}/api/v1/keys: get a key instantly for roomier limits and webhooks.
 - Webhooks: match.created, match.joined, match.full, match.cancelled, match.result, signed with HMAC.
 
+## Feedback
+Players and assistants can tell us what should change: /feedback in Telegram or Discord, ${base}/feedback, or email feedback@kicksma.sh. Every note is read and answered within a day; changes it causes are announced to the person who asked.
+
 ## Telegram, for people who live there
 
 - Add @kicksmash_bot to a group chat. /new asks for a day, a time and a place with buttons; or write it in one line: /new tomorrow 19:00 Rawai (cost such as 400฿ and a level range such as 3-4 are optional words). The card lands in the chat; people tap ✅ I'm in.
