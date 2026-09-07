@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ClubRow } from "@/components/ClubBits";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
@@ -12,8 +13,9 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
+  const locale = await getLocale();
   const title = t("club.title");
-  return { title, description: t("club.metaDescription"), alternates: { canonical: "/clubs" }, openGraph: { title, description: t("club.metaDescription"), type: "website", url: `${baseUrl()}/clubs` } };
+  return { title, description: t("club.metaDescription"), alternates: localeAlternates("/clubs", locale), openGraph: { title, description: t("club.metaDescription"), type: "website", url: `${baseUrl()}/clubs` } };
 }
 
 /** /clubs: what a club page is, the founding offer, the live clubs by city, the claim button. */

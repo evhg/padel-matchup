@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { CreateScreen } from "@/components/CreateScreen";
 import { Footer, Header } from "@/components/Header";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
-  return { title: t("landing.metaTitle"), description: t("landing.metaDescription"), openGraph: { title: t("landing.metaTitle"), description: t("landing.metaDescription"), type: "website", url: "/" } };
+  const locale = await getLocale();
+  return { title: t("landing.metaTitle"), description: t("landing.metaDescription"), alternates: localeAlternates("/", locale), openGraph: { title: t("landing.metaTitle"), description: t("landing.metaDescription"), type: "website", url: "/" } };
 }
 
 /** The landing page is the create form. `?type=tournament&capacity=8` prefills it (used by the /americano generator). */

@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { localeAlternates } from "@/lib/seo";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { emailFrom } from "@/lib/config";
 
+// Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
-  return { title: t("about.title") };
+  const locale = await getLocale();
+  return { title: t("about.title"), alternates: localeAlternates("/about", locale) };
 }
 
 /** The fine print: privacy, terms, open source. Short, honest, slightly cheeky. */

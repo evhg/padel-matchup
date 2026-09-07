@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
@@ -10,9 +11,10 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
+  const locale = await getLocale();
   const title = t("answers.title");
   const description = t("answers.metaDescription");
-  return { title, description, alternates: { canonical: "/answers" }, openGraph: { title, description, type: "website", url: `${baseUrl()}/answers` } };
+  return { title, description, alternates: localeAlternates("/answers", locale), openGraph: { title, description, type: "website", url: `${baseUrl()}/answers` } };
 }
 
 const LANG_LABEL: Record<string, string> = { en: "English", ru: "Русский", es: "Español" };

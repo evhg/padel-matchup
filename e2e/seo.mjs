@@ -9,6 +9,17 @@ try {
   // Raw HTML doubles every string in the RSC payload, so counts come from the rendered page.
   const ctx = await browser.newContext(iphone);
   const page = await ctx.newPage();
+  // Language paths: /ru and /es serve the same pages in Russian and Spanish, set the cookie, and carry hreflang.
+  const ru = await fetch(`${BASE}/ru/phuket`, { redirect: "manual" });
+  const ruHtml = await ru.text();
+  check("/ru/phuket renders in Russian with hreflang and sets the language cookie", ru.status === 200 && ruHtml.includes('<html lang="ru"') && /hreflang="es"/i.test(ruHtml) && ruHtml.includes('rel="canonical" href="' + BASE + '/ru/phuket"') && /NEXT_LOCALE=ru/.test(ru.headers.get("set-cookie") ?? ""), `${ru.status} ${ru.headers.get("set-cookie")}`);
+  const es = await fetch(`${BASE}/es/levels`);
+  const esHtml = await es.text();
+  check("/es/levels renders in Spanish", es.status === 200 && esHtml.includes('<html lang="es"') && esHtml.includes("nivel"));
+  const plain = await fetch(`${BASE}/levels`);
+  check("the plain path stays English with x-default pointing at itself", new RegExp('hreflang="x-default" href="' + BASE + '/levels"', "i").test(await plain.text()));
+  const sm = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());
+  check("the sitemap lists the language variants with alternates", sm.includes(`${BASE}/ru/phuket`) && sm.includes(`${BASE}/es/americano/8`) && /hreflang="ru"/i.test(sm));
   const levels = await fetch(`${BASE}/levels`);
   const levelsHtml = await levels.text();
   check("/levels renders with FAQ structured data", levels.status === 200 && levelsHtml.includes('"@type":"FAQPage"') && levelsHtml.includes("What your padel level means"));

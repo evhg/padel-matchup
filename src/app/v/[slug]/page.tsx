@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -27,7 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!name) return { title: t("venue.board") };
   const title = t("venue.boardTitle", { venue: name });
   const description = live?.about ?? t("venue.boardSub");
-  return { title, description, alternates: { canonical: `/v/${slug}`, types: { "application/json+oembed": `${baseUrl()}/api/oembed?url=${encodeURIComponent(`${baseUrl()}/v/${slug}`)}&format=json` } }, openGraph: { title, description, type: "website", url: `${baseUrl()}/v/${slug}` } };
+  return { title, description, alternates: { ...localeAlternates(`/v/${slug}`, await getLocale()), types: { "application/json+oembed": `${baseUrl()}/api/oembed?url=${encodeURIComponent(`${baseUrl()}/v/${slug}`)}&format=json` } }, openGraph: { title, description, type: "website", url: `${baseUrl()}/v/${slug}` } };
 }
 
 /** Public board of organizer-listed open matches at one venue: what the poster's QR code points to. */

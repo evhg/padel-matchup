@@ -5,7 +5,8 @@ import { LOCALE_COOKIE, loadMessages, negotiateLocale, toLocale } from "./config
 export default getRequestConfig(async () => {
   const cookieStore = await cookies();
   const hdrs = await headers();
-  const locale = toLocale(cookieStore.get(LOCALE_COOKIE)?.value) ?? negotiateLocale(hdrs.get("accept-language"));
+  // A language path (/ru, /es) wins over the cookie, which wins over the browser's list.
+  const locale = toLocale(hdrs.get("x-locale")) ?? toLocale(cookieStore.get(LOCALE_COOKIE)?.value) ?? negotiateLocale(hdrs.get("accept-language"));
   const tz = hdrs.get("x-vercel-ip-timezone") ?? "UTC";
   return {
     locale,

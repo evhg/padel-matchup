@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
+import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
 import { buildHistory, mulberry32, rotationLength, scheduleRound, type RoundRef } from "@/lib/domain/americano";
 
-export const dynamic = "force-static";
-export const revalidate = 86400;
+// Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
+export const dynamic = "force-dynamic";
 
 /** Fields in fours from 8 to 24: the exact rotation exists and the pages are worth indexing. */
 const FIELDS = [8, 12, 16, 20, 24] as const;
@@ -25,11 +26,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const n = parseField(players);
   if (!n) return { robots: { index: false } };
   const t = await getTranslations();
+  const locale = await getLocale();
   const courts = n / 4;
   const rounds = rotationLength(n) ?? 0;
   const title = t("americano.static.title", { players: n });
   const description = t("americano.static.metaDescription", { players: n, courts, rounds });
-  return { title, description, alternates: { canonical: `/americano/${n}` }, openGraph: { title, description, type: "article", url: `${baseUrl()}/americano/${n}` } };
+  return { title, description, alternates: localeAlternates(`/americano/${n}`, locale), openGraph: { title, description, type: "article", url: `${baseUrl()}/americano/${n}` } };
 }
 
 /** The full exact schedule for n players on n/4 courts: every pair partners once. Server-rendered, printable, indexable. */
