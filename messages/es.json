@@ -985,5 +985,19 @@
     "docOpenJson": "Abrir JSON",
     "docShow": "Ver el documento",
     "docBack": "Volver a {name}"
+  },
+  "feedback": {
+    "title": "Cuéntanos qué debería cambiar",
+    "sub": "Una idea, un error, un deseo. Leo cada nota yo mismo y respondo en un día. Si cambia Kicksmash, lo sabrás primero, con lo que cambió.",
+    "placeholder": "¿Qué debería ser distinto?",
+    "contactLabel": "Email, para poder responderte (opcional)",
+    "contactHelp": "Sin él lo leo igual, pero no puedo escribirte.",
+    "send": "Enviar",
+    "sent": "Recibido, gracias.",
+    "sentSub": "Respondo en un día. Si tu idea entra en el producto, serás quien lo sepa primero.",
+    "tooShort": "Unas palabras más, por favor.",
+    "tooMany": "Con eso basta por hoy. Gracias.",
+    "footerLink": "Opiniones",
+    "viaTelegram": "Entraste con Telegram, así que te responderé allí."
   }
 }

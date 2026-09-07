@@ -160,6 +160,26 @@ export function renderDeskEmail(body: string): { text: string; html: string } {
 
 export type SendOutcome = { status: "sent" | "failed" | "already" | "not_found" | "disabled"; error?: string; id?: string };
 
+/** One email from claude@<apex> through Resend: plain text with a light HTML twin, reply-to us, thread headers when answering. */
+export async function sendPlainEmail(m: { to: string; subject: string; text: string; inReplyTo?: string | null }, fetchImpl: typeof fetch = fetch): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!deskEnabled()) return { ok: false, error: "email_disabled" };
+  const { text, html } = renderDeskEmail(m.text);
+  const headers: Record<string, string> = m.inReplyTo ? { "In-Reply-To": m.inReplyTo, References: m.inReplyTo } : {};
+  try {
+    const res = await fetchImpl("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: deskFrom(), to: [m.to], reply_to: deskAddress(), subject: m.subject, text, html, ...(Object.keys(headers).length ? { headers } : {}) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const json = (await res.json().catch(() => null)) as { id?: string; message?: string } | null;
+    if (!res.ok || !json?.id) return { ok: false, error: json?.message ?? `HTTP ${res.status}` };
+    return { ok: true, id: json.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** The owner's tap: send it from claude@<apex>. Replies carry the thread headers. */
 export async function approveOutreach(db: Db, id: string, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<SendOutcome> {
   const r = await getOutreach(db, id);
@@ -168,33 +188,14 @@ export async function approveOutreach(db: Db, id: string, now = new Date(), fetc
   if (!["draft", "failed", "approved"].includes(r.status)) return { status: "not_found" };
   if (!deskEnabled()) return { status: "disabled" };
   await db.update(outreach).set({ status: "approved", decidedAt: now }).where(eq(outreach.id, id));
-  const { text, html } = renderDeskEmail(r.body);
-  const headers: Record<string, string> = {};
-  if (r.inReplyTo) {
-    headers["In-Reply-To"] = r.inReplyTo;
-    headers["References"] = r.inReplyTo;
+  const res = await sendPlainEmail({ to: r.counterpartEmail, subject: r.subject, text: r.body, inReplyTo: r.inReplyTo }, fetchImpl);
+  if (!res.ok) {
+    await db.update(outreach).set({ status: "failed", lastError: res.error.slice(0, 500) }).where(eq(outreach.id, id));
+    return { status: "failed", error: res.error };
   }
-  try {
-    const res = await fetchImpl("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: deskFrom(), to: [r.counterpartEmail], reply_to: deskAddress(), subject: r.subject, text, html, ...(Object.keys(headers).length ? { headers } : {}) }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const json = (await res.json().catch(() => null)) as { id?: string; message?: string; name?: string } | null;
-    if (!res.ok || !json?.id) {
-      const error = json?.message ?? `HTTP ${res.status}`;
-      await db.update(outreach).set({ status: "failed", lastError: error.slice(0, 500) }).where(eq(outreach.id, id));
-      return { status: "failed", error };
-    }
-    await db.update(outreach).set({ status: "sent", sentAt: now, resendId: json.id, lastError: null }).where(eq(outreach.id, id));
-    await bumpMetric(db, "outreach_sent").catch(() => undefined);
-    return { status: "sent", id: json.id };
-  } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
-    await db.update(outreach).set({ status: "failed", lastError: error.slice(0, 500) }).where(eq(outreach.id, id));
-    return { status: "failed", error };
-  }
+  await db.update(outreach).set({ status: "sent", sentAt: now, resendId: res.id, lastError: null }).where(eq(outreach.id, id));
+  await bumpMetric(db, "outreach_sent").catch(() => undefined);
+  return { status: "sent", id: res.id };
 }
 
 export type InboundMail = { emailId: string; from: string; to: string[]; subject: string | null; text: string | null; html: string | null; messageId: string | null; inReplyTo: string | null; receivedAt?: Date };

@@ -1,7 +1,10 @@
 import { after, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { reportError } from "@/lib/alerts";
-import { draftReplyTo, notifyInbound, recordInbound, type InboundMail } from "@/lib/outreach/desk";
+import { createFeedback, markAcknowledged } from "@/lib/feedback/store";
+import { feedbackStrings } from "@/lib/feedback/strings";
+import { guessLanguage } from "@/lib/listen/parse";
+import { draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
 import { verifySvix } from "@/lib/outreach/svix";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +35,7 @@ export async function POST(req: Request) {
   const mail = await fetchReceived(emailId, event);
   if (!mail) return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
   const db = await getDb();
+  if (mail.to.some((t) => /^feedback@/i.test(parseAddress(t).email))) return feedbackByEmail(db, mail);
   const { row, fresh } = await recordInbound(db, mail);
   if (fresh) {
     const followUp = async () => {
@@ -50,6 +54,32 @@ export async function POST(req: Request) {
     }
   }
   return NextResponse.json({ ok: true, id: row.id, fresh });
+}
+
+/** feedback@<apex>: a note for the loop, thanked at once, answered by the daily session in the same thread. */
+async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: InboundMail) {
+  const from = parseAddress(mail.from);
+  if (isAutomatedSender(from.email)) return NextResponse.json({ ok: true, ignored: "automated" });
+  const text = `${mail.subject ?? ""}\n\n${mail.text?.trim() || (mail.html ? mail.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "")}`.trim();
+  const locale = guessLanguage(text) ?? "en";
+  const row = await createFeedback(db, { source: "email", text, locale, name: from.name, email: from.email, emailMessageId: mail.messageId ?? mail.emailId, context: "email" }).catch(() => null);
+  if (!row) return NextResponse.json({ ok: true, ignored: "empty" });
+  const fs = feedbackStrings(locale);
+  const ack = fs.emailThanks(from.name ?? "");
+  const followUp = async () => {
+    try {
+      const res = await sendPlainEmail({ to: from.email, subject: `Re: ${mail.subject ?? fs.emailSubject}`, text: ack, inReplyTo: mail.messageId });
+      if (res.ok) await markAcknowledged(db, row.id, ack);
+    } catch (e) {
+      void reportError("server", e, { path: "/api/inbound/resend" });
+    }
+  };
+  try {
+    after(followUp);
+  } catch {
+    await followUp();
+  }
+  return NextResponse.json({ ok: true, id: row.id, feedback: true });
 }
 
 async function fetchReceived(emailId: string, event: ReceivedEvent): Promise<InboundMail | null> {

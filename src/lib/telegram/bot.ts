@@ -28,6 +28,8 @@ import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 import { approveOutreach, skipOutreach } from "@/lib/outreach/desk";
+import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged } from "@/lib/feedback/store";
+import { feedbackStrings } from "@/lib/feedback/strings";
 import { decideClub, getClubByToken } from "@/lib/domain/clubs";
 
 /**
@@ -956,6 +958,35 @@ export function codesInText(text: string | undefined, base = baseUrl()): string[
   return [...new Set(out)];
 }
 
+/** /feedback and your words: stored, thanked at once, answered within a day by the daily session, on this same chat. */
+async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, locale: BotLocale): Promise<string> {
+  const fs = feedbackStrings(locale);
+  const text = args.trim();
+  const isPrivate = msg.chat.type === "private";
+  if (text.length < 3) {
+    await sendMessage(chat.chatId, esc(fs.how), { silent: !isPrivate, replyTo: msg.message_id });
+    return "feedback:how";
+  }
+  if ((await feedbackCountToday(db, { telegramUserId: from.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return "feedback:too_many";
+  const player = await findTelegramPlayer(db, from.id);
+  const row = await createFeedback(db, {
+    source: "telegram",
+    text,
+    locale,
+    name: from.first_name,
+    playerId: player?.id ?? null,
+    context: isPrivate ? null : ((msg.chat as { title?: string }).title ?? null),
+    telegramChatId: chat.chatId,
+    telegramUserId: from.id,
+    telegramThreadId: msg.message_thread_id ?? null,
+    telegramMessageId: msg.message_id,
+  });
+  const ack = fs.thanks(from.first_name);
+  const res = await sendMessage(chat.chatId, esc(ack), { silent: !isPrivate, replyTo: msg.message_id });
+  if (res.ok) await markAcknowledged(db, row.id, ack);
+  return `feedback:${row.id}`;
+}
+
 async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<string> {
   const from = msg.from;
   if (!from || from.is_bot) return "ignored";
@@ -1002,6 +1033,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       await sendMessage(chat.chatId, strings(next).langSet, { silent: true });
       return "lang";
     }
+    if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale);
     if (cmd.command === "help" || cmd.command === "start") {
       if (!isPrivate) {
         await sendMessage(chat.chatId, s.help, { silent: true });
@@ -1207,6 +1239,7 @@ export const BOT_COMMANDS = {
     { command: "score", description: "Sets after a match: /score CODE 6-3 6-4" },
     { command: "tz", description: "This chat's time zone, once: /tz phuket" },
     { command: "lang", description: "Bot language: /lang en or /lang ru" },
+    { command: "feedback", description: "Tell me what should change; I answer within a day" },
     { command: "help", description: "What I do (very little, on purpose)" },
   ],
   ru: [
@@ -1216,6 +1249,7 @@ export const BOT_COMMANDS = {
     { command: "score", description: "Счёт после матча: /score КОД 6-3 6-4" },
     { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
     { command: "lang", description: "Язык бота: /lang ru или /lang en" },
+    { command: "feedback", description: "Что стоит изменить; отвечу в течение суток" },
     { command: "help", description: "Что я умею (нарочно немного)" },
   ],
 };

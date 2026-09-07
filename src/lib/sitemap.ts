@@ -42,5 +42,6 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
     { url: `${base}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     ...answerPages,
     ...inEveryLanguage("/about", "yearly", 0.3),
+    ...inEveryLanguage("/feedback", "yearly", 0.3),
   ];
 }

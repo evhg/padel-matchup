@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  *   POST /api/admin/errors { fingerprint, note }   → marks it fixed
  */
 export async function GET(req: Request) {
-  if (!operatorAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const url = new URL(req.url);
   const since = url.searchParams.get("since");
   const db = await getDb();
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!operatorAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { fingerprint?: unknown; note?: unknown };
   const fingerprint = typeof body.fingerprint === "string" ? body.fingerprint.trim() : "";
   if (!/^[0-9a-f]{16}$/.test(fingerprint)) return NextResponse.json({ error: "fingerprint required" }, { status: 400 });

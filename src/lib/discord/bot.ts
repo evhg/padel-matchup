@@ -5,6 +5,8 @@ import { discordCards, discordChannels, events, players, type DiscordChannel, ty
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
+import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged } from "@/lib/feedback/store";
+import { feedbackStrings } from "@/lib/feedback/strings";
 import { formatEventTime } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
 import { isOccupied } from "@/lib/domain/events";
@@ -305,6 +307,17 @@ async function handleCommand(db: Db, i: DcInteraction, user: DcUser, ctx: OpCont
     await db.update(discordChannels).set({ locale: next }).where(eq(discordChannels.channelId, channel.channelId));
     return { response: ephemeral(strings(next).langSet), outcome: "lang" };
   }
+  if (name === "feedback") {
+    const text = String(option(i, "text") ?? "").trim();
+    const fs = feedbackStrings(locale);
+    const who = displayNameOf(user);
+    if (text.length < 3) return { response: ephemeral(fs.how.replace("/feedback and the text", "/feedback text").replace("/feedback и текст", "/feedback text").replace("/feedback y el texto", "/feedback text")), outcome: "feedback_short" };
+    if ((await feedbackCountToday(db, { discordUserId: user.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return { response: ephemeral(fs.thanks(who)), outcome: "feedback_too_many" };
+    const row = await createFeedback(db, { source: "discord", text, locale, name: who, context: (channel as { name?: string | null }).name ?? null, discordChannelId: channel.channelId, discordUserId: user.id, discordGuildId: channel.guildId });
+    const ack = fs.thanks(who);
+    await markAcknowledged(db, row.id, ack);
+    return { response: ephemeral(ack), outcome: `feedback:${row.id}` };
+  }
   if (name === "ask") {
     const question = String(option(i, "question") ?? "").trim().slice(0, 1500);
     if (question.length < 8) return { response: ephemeral(s.noAnswer), outcome: "ask_short" };
@@ -385,5 +398,6 @@ export const COMMANDS: CommandSpec[] = [
   { name: "match", description: "Post the card of a match", description_localizations: { ru: "Показать карточку матча" }, options: [{ type: 3, name: "code", description: "The 4-character code or the kicksma.sh link", required: true }] },
   { name: "ask", description: "Ask about padel formats, levels or Kicksmash", description_localizations: { ru: "Спросить о форматах, уровнях или Kicksmash" }, options: [{ type: 3, name: "question", description: "Your question", required: true }] },
   { name: "lang", description: "Bot language for this channel", description_localizations: { ru: "Язык бота в этом канале" }, options: [{ type: 3, name: "language", description: "en or ru", required: true }] },
+  { name: "feedback", description: "Tell me what should change; I answer within a day", description_localizations: { ru: "Что стоит изменить; отвечу в течение суток" }, options: [{ type: 3, name: "text", description: "Your words", required: true }] },
   { name: "help", description: "What I do (very little, on purpose)", description_localizations: { ru: "Что я умею (нарочно немного)" } },
 ];

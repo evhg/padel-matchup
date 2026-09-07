@@ -12,14 +12,14 @@ export const dynamic = "force-dynamic";
  * Nothing here sends anything; only the owner's tap does.
  */
 export async function GET(req: Request) {
-  if (!operatorAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const status = new URL(req.url).searchParams.get("status");
   const rows = await listOutreach(await getDb(), status ? status.split(",").map((s) => s.trim()).filter(Boolean) : undefined, 200);
   return NextResponse.json({ ok: true, count: rows.length, rows });
 }
 
 export async function POST(req: Request) {
-  if (!operatorAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => null)) as { drafts?: unknown } | null;
   const drafts = Array.isArray(body?.drafts) ? (body!.drafts as Record<string, unknown>[]) : [];
   if (drafts.length === 0 || drafts.length > 50) return NextResponse.json({ error: "drafts: 1..50 required" }, { status: 400 });

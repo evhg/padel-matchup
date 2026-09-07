@@ -862,3 +862,46 @@ export const outreach = pgTable(
   (t) => [index("outreach_status_idx").on(t.status, t.createdAt), index("outreach_thread_idx").on(t.threadKey, t.createdAt), uniqueIndex("outreach_resend_idx").on(t.resendId)],
 );
 export type Outreach = typeof outreach.$inferSelect;
+
+/**
+ * What players tell us, where they told us, and what we did about it. The
+ * daily session reads it, decides against docs/DECIDING.md, ships, and thanks
+ * the person on the same channel. The owner is not in this loop.
+ */
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** telegram | discord | web | email */
+    source: text("source").notNull(),
+    playerId: uuid("player_id").references(() => players.id, { onDelete: "set null" }),
+    locale: text("locale").notNull().default("en"),
+    name: text("name"),
+    telegramChatId: bigint("telegram_chat_id", { mode: "number" }),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }),
+    telegramThreadId: integer("telegram_thread_id"),
+    telegramMessageId: integer("telegram_message_id"),
+    discordChannelId: text("discord_channel_id"),
+    discordUserId: text("discord_user_id"),
+    discordGuildId: text("discord_guild_id"),
+    email: text("email"),
+    emailMessageId: text("email_message_id"),
+    text: text("text").notNull(),
+    /** Page, match code or chat title, when known. */
+    context: text("context"),
+    /** new → acknowledged → asked | planned | shipped | declined */
+    status: text("status").notNull().default("new"),
+    /** adopt | decline | later | ask, set by the daily session */
+    verdict: text("verdict"),
+    /** Internal reasoning against the criteria; never shown to the person. */
+    assessment: text("assessment"),
+    replyText: text("reply_text"),
+    repliedAt: timestamp("replied_at", { withTimezone: true }),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    prUrl: text("pr_url"),
+    messagesSent: integer("messages_sent").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("feedback_status_idx").on(t.status, t.createdAt), index("feedback_tg_user_idx").on(t.telegramUserId, t.createdAt)],
+);
+export type Feedback = typeof feedback.$inferSelect;
