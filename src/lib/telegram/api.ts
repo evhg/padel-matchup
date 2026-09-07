@@ -70,6 +70,11 @@ export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
   });
 }
 
+/** Removes one of the bot's own messages (a finished prompt, for instance). */
+export function deleteMessage(chatId: number, messageId: number) {
+  return tg<true>("deleteMessage", { chat_id: chatId, message_id: messageId });
+}
+
 export function editMessageText(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard | null) {
   return tg<TgMessage | true>("editMessageText", {
     chat_id: chatId,
