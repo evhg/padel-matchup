@@ -40,7 +40,7 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 
 ## Telegram bot
 
-`src/lib/telegram/` is the whole bot: `api.ts` (Bot API calls, Login Widget and Mini App signature checks), `card.ts` (the one card per match, en/ru copy), `bot.ts` (updates, card sync, reminders, result). It is quiet by design: joins and leaves edit the card; new messages only for the card, a complete line-up, the reminder and the result. Every change funnels through `emitMatchEvent` in `src/lib/api/webhooks.ts`, which also refreshes the cards, so new write paths need no Telegram code of their own. Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; tests stub `fetch`.
+`src/lib/telegram/` is the whole bot: `api.ts` (Bot API calls, Login Widget and Mini App signature checks, inline mode), `card.ts` (the one card per match, en/ru copy), `parse.ts` (the one-line `/new` grammar in both languages, pure), `login.ts` (the same-tab web sign-in), `bot.ts` (updates, the tap-through `/new`, result taps, notices, the private-chat console, inline cards, card sync, reminders, result). It is quiet by design: joins and leaves edit the card; new messages only for the card, a complete line-up, the reminder, the result, and private notes for a time change or cancellation. Every change funnels through `emitMatchEvent` in `src/lib/api/webhooks.ts`, which also refreshes the cards (group and inline), posts group matches into tied chats and sends the notices, so new write paths need no Telegram code of their own. The Mini App shell is `/tg` + `/api/telegram/miniapp`. Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`, optional `TELEGRAM_MINIAPP_SLUG`; tests stub `fetch`.
 
 ## Discord bot
 

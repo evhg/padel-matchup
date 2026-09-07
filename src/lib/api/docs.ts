@@ -10,7 +10,7 @@ export function llmsTxt(base: string): string {
 
 > ${VALUE_PROP}
 
-${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexicano, King of the Court). A match is a short link (${base}/CODE, 4 characters). People open the link, type a first name and are in. No accounts, no app, no passwords. Organisers get a private manage link. Levels 0–7 (Playtomic-style) are self-declared and nudged by results. Groups create their next match in one tap or on a weekly slot. A Telegram bot (@kicksmash_bot) keeps one live card per match in group chats: one tap joins. Venue boards list open matches at a club; club and city rankings (opt-in, last 90 days) live at /v/{slug}/ranking and /phuket, /singapore. Short answers to common organising questions live at /answers. Clubs claim their page at /clubs/claim (booking button, website, free courts from their own calendar feed); the first ten per city are founding clubs and everything stays free for them. A player can switch on a public page at /u/{slug} with a signed, portable level (the passport), download all their data, and import a level from another app's scale (the mapping is shown on /levels). Everything public here is readable by anyone, including AI assistants and crawlers; the data is CC BY 4.0 and the code is Apache-2.0.
+${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexicano, King of the Court). A match is a short link (${base}/CODE, 4 characters). People open the link, type a first name and are in. No accounts, no app, no passwords. Organisers get a private manage link. Levels 0–7 (Playtomic-style) are self-declared and nudged by results. Groups create their next match in one tap or on a weekly slot. A Telegram bot (@kicksmash_bot) keeps one live card per match in group chats: one tap joins, /new makes a match in three taps or one line ("/new tomorrow 19:00 Rawai"), 🏁 on the card records who won, @kicksmash_bot typed in any chat drops a live card there, and the whole site opens inside Telegram as a Mini App. A Discord bot does the same for servers. Venue boards list open matches at a club; club and city rankings (opt-in, last 90 days) live at /v/{slug}/ranking and /phuket, /singapore. Short answers to common organising questions live at /answers. Clubs claim their page at /clubs/claim (booking button, website, free courts from their own calendar feed); the first ten per city are founding clubs and everything stays free for them. A player can switch on a public page at /u/{slug} with a signed, portable level (the passport), download all their data, and import a level from another app's scale (the mapping is shown on /levels). Everything public here is readable by anyone, including AI assistants and crawlers; the data is CC BY 4.0 and the code is Apache-2.0.
 
 ## For assistants and agents
 
@@ -33,9 +33,17 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 - POST ${base}/api/v1/keys: get a key instantly for roomier limits and webhooks.
 - Webhooks: match.created, match.joined, match.full, match.cancelled, match.result, signed with HMAC.
 
+## Telegram, for people who live there
+
+- Add @kicksmash_bot to a group chat. /new asks for a day, a time and a place with buttons; or write it in one line: /new tomorrow 19:00 Rawai (cost such as 400฿ and a level range such as 3-4 are optional words). The card lands in the chat; people tap ✅ I'm in.
+- After the match, 🏁 Result on the card: pick who won, the organizer confirms; /score CODE 6-3 6-4 adds sets. Results move levels.
+- Time changes and cancellations reach the players privately; organizers hear who joined.
+- Private chat with the bot: /games phuket lists open matches; /new works there too; a code shows its card. Typing @kicksmash_bot in any chat shares a live card without adding the bot. https://t.me/kicksmash_bot
+
 ## Pages
 
 - ${base}/: create a match (the landing page is the form)
+- ${base}/ru and ${base}/es: the same pages in Russian and Spanish
 - ${base}/americano: free schedule generator
 - ${base}/about: privacy and terms, short
 - ${base}/developers and ${base}/agents
@@ -65,6 +73,9 @@ No accounts. A player is a name in a signed cookie plus a personal link (${base}
 
 ### Venue boards
 Organisers can opt a match into the public board of its venue (${base}/v/venue-slug). Boards have a printable QR poster. Off by default.
+
+### Telegram
+The bot is quiet by design: one card per match, edited in place; new messages only for the card, a complete line-up, the reminder, the result, and (privately) a time change or cancellation. Commands: /new (three taps, or one line with a day, a time, a place, optional cost and level; "public" lists the match on the city board), /match CODE, /score CODE 6-3 6-4, /games [city], /tz, /lang. A chat becomes a group's chat once a group match is carded there; the weekly slot's card then arrives by itself. Inline mode (@kicksmash_bot CODE or a city) sends a live card into any chat. The Mini App (t.me/kicksmash_bot/KickSmash) opens the site signed in from Telegram's own data; the Login Widget signs people in on the web.
 
 ### Americano engine
 Exact rotation when the field is in fours: every pair partners once in players−1 rounds; the next round repeats round one. Otherwise a fair heuristic with sit-outs spread evenly. Standings are points scored, then point difference, then wins.

@@ -124,6 +124,13 @@ export default function DevelopersPage() {
           </ul>
         </section>
 
+        <section id="telegram" className="card flex flex-col gap-3">
+          <h2 className="text-lg font-extrabold">Telegram, where the players are</h2>
+          <p className="text-sm text-muted">
+            The bot (<a className="link" href="https://t.me/kicksmash_bot">@kicksmash_bot</a>) keeps one live card per match in a group chat and stays quiet otherwise. <code>/new</code> asks for a day, a time and a place with buttons, or takes one line: <code>/new tomorrow 19:00 Rawai</code> (a cost such as <code>400฿</code> and a level range such as <code>3-4</code> are optional words). People tap <em>I&apos;m in</em>; after the match, 🏁 on the card records who won and the organizer confirms. Typing <code>@kicksmash_bot</code> in any chat shares a live card without adding the bot; the Mini App at <code>t.me/kicksmash_bot/KickSmash</code> opens the site signed in. Every change made there goes through the same API and webhooks as the web, so your integration sees it all.
+          </p>
+        </section>
+
         <section id="passport" className="card flex flex-col gap-3">
           <h2 className="text-lg font-extrabold">Portable levels: the passport</h2>
           <p className="text-sm text-muted">
