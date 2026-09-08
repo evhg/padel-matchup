@@ -305,12 +305,16 @@
     "cancelled": "Cancelled",
     "you": "You",
     "identityHelp": "Your identity lives in this browser, no password. Save your personal link below to use it anywhere.",
-    "noIdentity": "Enter your name to see your matches.",
     "placement": "#{place} of {total}",
     "restoreCta": "Played before on another phone? Restore",
     "deleteAccount": "Delete my account",
     "deleteConfirm": "Delete your account? Your name, email and phone are wiped, upcoming spots are released and matches you organize are cancelled. Old scores stay as 'Deleted player'. No undo.",
-    "noGroups": "Groups appear here once you turn a match's players into one."
+    "noGroups": "Groups appear here once you turn a match's players into one.",
+    "returningTitle": "Been here before?",
+    "returningHelp": "Enter the email you used before. A 6-digit code brings your matches to this device.",
+    "returningTelegramOnly": "Sign in with Telegram and your matches come to this device.",
+    "returningTelegram": "Or, if you used the Telegram bot:",
+    "firstTimeTitle": "First time here? Just your name, that's it."
   },
   "notFound": {
     "title": "Link not found",
