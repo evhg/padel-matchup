@@ -35,6 +35,16 @@ export type TgUpdate = {
 /** One article in the inline results: what the picker shows, and the message it sends when chosen. */
 export type InlineArticle = { id: string; title: string; description: string; text: string; keyboard: InlineKeyboard };
 
+/** One counter per call, for the service board; never blocks a send and never throws. */
+async function count(key: "telegram_sent" | "telegram_429"): Promise<void> {
+  try {
+    const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
+    await bumpMetric(await getDb(), key);
+  } catch {
+    /* metrics are optional */
+  }
+}
+
 export async function tg<T = unknown>(method: string, body: Record<string, unknown>): Promise<TgResult<T>> {
   if (!telegramEnabled()) return { ok: false, error_code: 0, description: "telegram disabled" };
   try {
@@ -45,6 +55,7 @@ export async function tg<T = unknown>(method: string, body: Record<string, unkno
       signal: AbortSignal.timeout(10_000),
     });
     const json = (await res.json().catch(() => null)) as TgResult<T> | null;
+    void count(res.status === 429 || (json && !json.ok && json.error_code === 429) ? "telegram_429" : "telegram_sent");
     if (!json) return { ok: false, error_code: res.status, description: `telegram ${method}: bad response` };
     return json;
   } catch (e) {

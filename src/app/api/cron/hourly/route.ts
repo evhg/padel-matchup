@@ -17,6 +17,7 @@ import { runBackup, type BackupResult } from "@/lib/backup";
 import { pruneErrors } from "@/lib/alerts";
 import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
 import { relayUptimeIssues } from "@/lib/uptime";
+import { alertOnServices, refreshAnthropicCost } from "@/lib/ops/alerts";
 import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -151,6 +152,13 @@ export async function GET(req: Request) {
     summary.outreachAsks = await askOwnerOutreach(db, now);
   } catch (e) {
     summary.errors.push(`uptime: ${String(e)}`);
+  }
+
+  try {
+    await refreshAnthropicCost(db, now);
+    summary.serviceAlerts = await alertOnServices(db, now);
+  } catch (e) {
+    summary.errors.push(`services: ${String(e)}`);
   }
 
   try {
