@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
-import { listPublishedAnswers } from "@/lib/listen/answers";
+import { answerPath, listPublishedAnswers } from "@/lib/listen/answers";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +48,7 @@ export default async function AnswersIndex() {
             <ul className="mt-2 flex flex-col divide-y divide-line">
               {list.map((a) => (
                 <li key={a.id}>
-                  <Link href={`/answers/${a.slug}`} prefetch={false} className="block py-3 font-bold hover:text-court">
+                  <Link href={answerPath(a)} prefetch={false} className="block py-3 font-bold hover:text-court">
                     {a.title}
                   </Link>
                 </li>

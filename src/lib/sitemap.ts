@@ -3,7 +3,7 @@ import type { Db } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
 import { listLiveClubs } from "@/lib/domain/clubs";
-import { listPublishedAnswers } from "@/lib/listen/answers";
+import { answerPath, listPublishedAnswers } from "@/lib/listen/answers";
 import { locales } from "@/i18n/config";
 import { localePath } from "@/lib/seo";
 
@@ -17,7 +17,7 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
   let clubPages: MetadataRoute.Sitemap = [];
   if (db) {
     try {
-      answerPages = (await listPublishedAnswers(db, 500)).map((a) => ({ url: `${base}/answers/${a.slug}`, lastModified: a.publishedAt ?? now, changeFrequency: "monthly" as const, priority: 0.6 }));
+      answerPages = (await listPublishedAnswers(db, 500)).map((a) => ({ url: `${base}${answerPath(a)}`, lastModified: a.publishedAt ?? now, changeFrequency: "monthly" as const, priority: 0.6 }));
       clubPages = (await listLiveClubs(db)).map((c) => ({ url: `${base}/v/${c.slug}`, lastModified: c.updatedAt, changeFrequency: "daily" as const, priority: 0.7 }));
     } catch {
       answerPages = [];

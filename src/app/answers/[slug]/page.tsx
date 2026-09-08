@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
-import { getPublishedAnswer } from "@/lib/listen/answers";
+import { answerPath, getPublishedAnswer } from "@/lib/listen/answers";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const a = valid(slug) ? await getPublishedAnswer(db, slug) : null;
   if (!a) return { title: "Answers", robots: { index: false } };
   const description = a.answer.slice(0, 155).replace(/\s+\S*$/, "") + (a.answer.length > 155 ? "…" : "");
-  return { title: a.title, description, alternates: { canonical: `/answers/${a.slug}` }, openGraph: { title: a.title, description, type: "article", url: `${baseUrl()}/answers/${a.slug}`, locale: a.language } };
+  return { title: a.title, description, alternates: { canonical: answerPath(a) }, openGraph: { title: a.title, description, type: "article", url: `${baseUrl()}${answerPath(a)}`, locale: a.language } };
 }
 
 /** One evergreen answer, marked up as a Q&A page for search engines and assistants alike. */
