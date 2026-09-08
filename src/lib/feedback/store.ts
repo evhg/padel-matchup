@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { feedback, type Feedback } from "@/db/schema";
+import { feedback, players, type Feedback } from "@/db/schema";
+import { isCoachActor } from "@/lib/domain/coaching";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { dc } from "@/lib/discord/api";
 import { sendPlainEmail } from "@/lib/outreach/desk";
@@ -40,9 +41,21 @@ export function cleanFeedbackText(raw: string): string {
   return raw.replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim().slice(0, FEEDBACK_LIMITS.textMax);
 }
 
+/** "coach" when the author runs a lessons book (or manages one); their notes are read first. */
+async function authorRole(db: Db, input: FeedbackInput): Promise<"coach" | null> {
+  let playerId = input.playerId ?? null;
+  if (!playerId && input.telegramUserId) {
+    const [p] = await db.select({ id: players.id }).from(players).where(eq(players.telegramId, input.telegramUserId)).limit(1);
+    playerId = p?.id ?? null;
+  }
+  if (!playerId) return null;
+  return (await isCoachActor(db, playerId).catch(() => false)) ? "coach" : null;
+}
+
 export async function createFeedback(db: Db, input: FeedbackInput, now = new Date()): Promise<Feedback> {
   const text = cleanFeedbackText(input.text);
   if (text.length < 3) throw new FeedbackError("too_short");
+  const role = await authorRole(db, input);
   const [row] = await db
     .insert(feedback)
     .values({
@@ -62,6 +75,7 @@ export async function createFeedback(db: Db, input: FeedbackInput, now = new Dat
       email: input.email?.trim().toLowerCase().slice(0, 200) || null,
       emailMessageId: input.emailMessageId ?? null,
       status: "new",
+      role,
       createdAt: now,
     })
     .returning();

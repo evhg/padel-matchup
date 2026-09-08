@@ -1,0 +1,61 @@
+import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
+import { CoachHome } from "@/components/coach/CoachHome";
+import { CoachSetup } from "@/components/coach/CoachSetup";
+import { Footer, Header } from "@/components/Header";
+import { NameGate } from "@/components/NameGate";
+import { getDb } from "@/db";
+import { baseUrl } from "@/lib/config";
+import { zonedTimeToUtc } from "@/lib/dates";
+import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
+import { busyBetween, DAY_MS, getCoachForActor, listCoachLessons, listStudents, openSlots } from "@/lib/domain/coaching";
+import { getSessionPlayer } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("coach");
+  return { title: t("setup.title"), robots: { index: false, follow: false } };
+}
+
+type Props = { searchParams: Promise<{ welcome?: string }> };
+
+/** The coach's book, or the four taps that create it. One screen, one job. */
+export default async function CoachPage({ searchParams }: Props) {
+  const db = await getDb();
+  const [me, t, locale, sp] = await Promise.all([getSessionPlayer(db), getTranslations("coach"), getLocale(), searchParams]);
+  const shell = (children: React.ReactNode) => (
+    <>
+      <Header />
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">{children}</main>
+      <Footer />
+    </>
+  );
+  if (!me) return shell(<NameGate title={t("setup.nameTitle")} />);
+  const found = await getCoachForActor(db, me.id);
+  if (!found) return shell(<CoachSetup />);
+
+  const { coach } = found;
+  const now = new Date();
+  const today = todayIn(coach.tz, now);
+  const days = dayRange(today, 14);
+  const from = zonedTimeToUtc(today, "00:00", coach.tz);
+  const to = new Date(from.getTime() + 14 * DAY_MS);
+  const [rows, students, busy] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to)]);
+  const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
+  // The coach may book at short notice: no minimum notice on their own grid.
+  const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now });
+  return shell(
+    <CoachHome
+      handle={coach.handle}
+      url={`${baseUrl()}/c/${coach.handle}`}
+      today={today}
+      welcome={sp.welcome === "1"}
+      students={students.filter((s) => s.status !== "requested").map((s) => ({ id: s.player.id, name: s.player.displayName }))}
+      lessons={rows.map((l) => coachLessonDTO(l, coach, locale, labels, now))}
+      slots={slotDTOs(slots, coach.tz, locale)}
+      dayLabels={labels}
+      days={days}
+    />,
+  );
+}

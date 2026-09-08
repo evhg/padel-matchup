@@ -11,6 +11,7 @@ import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
+import { MyLessons } from "@/components/coach/MyLessons";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
 import { telegramBotId } from "@/lib/telegram/api";
@@ -94,6 +95,7 @@ export default async function MePage({ searchParams }: Props) {
             </ul>
           </section>
         )}
+        <MyLessons db={db} playerId={me.id} />
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />

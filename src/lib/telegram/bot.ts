@@ -1039,6 +1039,13 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       return "lang";
     }
     if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale);
+    if (cmd.command === "coach" && isPrivate) {
+      // The coach's book opens on the web with this device signed in; the courtside one-liners follow in the next round.
+      const player = await findOrCreateTelegramPlayer(db, from);
+      const token = await getOrCreatePersonalToken(db, player.id);
+      await sendMessage(chat.chatId, esc(s.coachLink), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
+      return "coach_link";
+    }
     if (cmd.command === "help" || cmd.command === "start") {
       if (!isPrivate) {
         await sendMessage(chat.chatId, s.help, { silent: true });
@@ -1245,6 +1252,7 @@ export const BOT_COMMANDS = {
     { command: "tz", description: "This chat's time zone, once: /tz phuket" },
     { command: "lang", description: "Bot language: /lang en or /lang ru" },
     { command: "feedback", description: "Tell me what should change; I answer within a day" },
+    { command: "coach", description: "Your lessons book, if you coach (write to me privately)" },
     { command: "help", description: "What I do (very little, on purpose)" },
   ],
   ru: [
@@ -1255,6 +1263,7 @@ export const BOT_COMMANDS = {
     { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
     { command: "lang", description: "Язык бота: /lang ru или /lang en" },
     { command: "feedback", description: "Что стоит изменить; отвечу в течение суток" },
+    { command: "coach", description: "Книга занятий, если вы тренер (напишите мне в личку)" },
     { command: "help", description: "Что я умею (нарочно немного)" },
   ],
 };

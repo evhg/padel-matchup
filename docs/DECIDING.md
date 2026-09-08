@@ -29,3 +29,12 @@ The first global padel match-up layer: one link that works in any chat, a card t
 ## Voice
 
 Warm, brief, European. First person singular is fine ("I read every note"). No hype, no sales language, no exclamation marks in a row. Names of other products never appear. Messages fit on a phone screen.
+
+## Coaches
+
+A coach's book is the first thing a coach uses that is not their own memory, so a coach's note weighs more than a cosmetic one. The rules above still apply; these add to them.
+
+11. **Coach notes first.** A note whose author runs a book (the row carries `role: coach`) is read before the others and answered the same day. A "how does this work" question is answered in the product's words, and if the answer was not obvious on the screen, the copy on that screen changes too. Nobody is ever told to talk to a person.
+12. **A preference becomes a setting when three coaches ask.** Until then it is a default. Coach screens keep the budget: today's lessons and one action; a student sees the next lesson, the package line and one action; everything else behind "More". A request that adds a visible control for one coach's habit is "later" with that sentence.
+13. **Their calendar, their sheet, their money.** We read and write the coach's own Google Calendar and package sheet where they share them; we never ask them to move. No payment passes through Kicksmash: the coach's PromptPay QR or payment link is shown, "paid" is a note the coach makes. A request for payments, commissions or a marketplace is declined with rule 6 and this one.
+14. **Students are answered while the coach teaches.** Booking, cancelling, "how many lessons do I have left" and questions about the rules are answered at once, inside the coach's settings, in the student's language. The coach receives decisions only: a new student to accept, a time outside the hours. A request that makes the coach the bottleneck again is declined.

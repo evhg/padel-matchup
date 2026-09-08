@@ -900,8 +900,225 @@ export const feedback = pgTable(
     shippedAt: timestamp("shipped_at", { withTimezone: true }),
     prUrl: text("pr_url"),
     messagesSent: integer("messages_sent").notNull().default(0),
+    /** "coach" when the author runs a lessons book; the daily session ranks those notes first. */
+    role: text("role"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("feedback_status_idx").on(t.status, t.createdAt), index("feedback_tg_user_idx").on(t.telegramUserId, t.createdAt)],
 );
 export type Feedback = typeof feedback.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Coaching: a coach's book. Lessons, students, packages with expiry, blocks,
+// waitlists and managers. Round nine. No money moves here: the coach's own
+// PromptPay QR or payment link is shown, and "paid" is a note the coach makes.
+// ---------------------------------------------------------------------------
+
+export const coaches = pgTable(
+  "coaches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** Public handle: /c/{handle}. Lowercase letters, digits and dashes. */
+    handle: varchar("handle", { length: 32 }).notNull(),
+    displayName: text("display_name").notNull(),
+    bio: text("bio"),
+    /** Club names, free text; an exclusive coach lists one. */
+    clubNames: jsonb("club_names").$type<string[]>().notNull().default([]),
+    languages: jsonb("languages").$type<string[]>().notNull().default(["en"]),
+    lessonMinutes: integer("lesson_minutes").notNull().default(60),
+    /** Weekly template in the coach's zone: { "1": [["07:00","12:00"],["15:00","20:00"]], … } (0 = Sunday). */
+    hours: jsonb("hours").$type<Record<string, [string, string][]>>().notNull().default({}),
+    tz: text("tz").notNull(),
+    /** Hours before a lesson until which a student may cancel freely. */
+    cutoffHours: integer("cutoff_hours").notNull().default(12),
+    /** Free late cancellations per package before a late one counts. */
+    latePasses: integer("late_passes").notNull().default(1),
+    /** Shortest notice for a self-booked lesson, in hours. */
+    minNoticeHours: integer("min_notice_hours").notNull().default(2),
+    /** PromptPay phone or national id; a QR with the amount is rendered from it. */
+    promptpayId: text("promptpay_id"),
+    /** A payment link for coaches outside Thailand (Swish, Revolut, …). */
+    payLink: text("pay_link"),
+    /** An uploaded QR picture, when the coach prefers their bank's own. */
+    qrAssetId: uuid("qr_asset_id"),
+    /** Digits only, for wa.me links; never shown as a number. */
+    whatsapp: text("whatsapp"),
+    /** Listed on the public page, city list and sitemap. */
+    isPublic: boolean("is_public").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("coaches_handle_idx").on(t.handle), uniqueIndex("coaches_player_idx").on(t.playerId)],
+);
+export type Coach = typeof coaches.$inferSelect;
+
+/** Small pictures a coach uploads (their bank's QR). One row per picture, base64, capped in code. */
+export const coachAssets = pgTable(
+  "coach_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("qr"),
+    mime: text("mime").notNull(),
+    dataBase64: text("data_base64").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("coach_assets_coach_idx").on(t.coachId)],
+);
+
+export const coachStudents = pgTable(
+  "coach_students",
+  {
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** requested → accepted; paused keeps the history but stops self-booking. */
+    status: text("status").notNull().default("requested"),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.coachId, t.playerId] }), index("coach_students_player_idx").on(t.playerId)],
+);
+export type CoachStudent = typeof coachStudents.$inferSelect;
+
+export const lessonPackages = pgTable(
+  "lesson_packages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    studentPlayerId: uuid("student_player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    size: integer("size").notNull(),
+    used: integer("used").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /** Whole currency units (THB has no minor unit in practice). */
+    amount: integer("amount"),
+    currency: text("currency").notNull().default("THB"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    latePassesUsed: integer("late_passes_used").notNull().default(0),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+  },
+  (t) => [index("lesson_packages_student_idx").on(t.coachId, t.studentPlayerId, t.createdAt)],
+);
+export type LessonPackage = typeof lessonPackages.$inferSelect;
+
+export const lessons = pgTable(
+  "lessons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    studentPlayerId: uuid("student_player_id").references(() => players.id, { onDelete: "set null" }),
+    packageId: uuid("package_id").references(() => lessonPackages.id, { onDelete: "set null" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    minutes: integer("minutes").notNull(),
+    /** booked → done | cancelled (by the coach) | cancelled_by_student | late_cancelled | no_show */
+    status: text("status").notNull().default("booked"),
+    kind: text("kind").notNull().default("private"),
+    /** web | telegram | calendar | import | api */
+    source: text("source").notNull().default("web"),
+    /** Whether the booking consumed a package lesson (refunded on a timely cancellation). */
+    consumed: boolean("consumed").notNull().default(false),
+    /** A late cancellation forgiven by a free pass. */
+    freePass: boolean("free_pass").notNull().default(false),
+    note: text("note"),
+    /** Event id in the coach's calendar, once attached. */
+    externalId: text("external_id"),
+    createdByPlayerId: uuid("created_by_player_id").references(() => players.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  },
+  (t) => [index("lessons_coach_time_idx").on(t.coachId, t.startsAt), index("lessons_student_idx").on(t.studentPlayerId, t.startsAt), index("lessons_external_idx").on(t.coachId, t.externalId)],
+);
+export type Lesson = typeof lessons.$inferSelect;
+
+export const coachBlocks = pgTable(
+  "coach_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    reason: text("reason"),
+    externalId: text("external_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("coach_blocks_coach_time_idx").on(t.coachId, t.startsAt)],
+);
+export type CoachBlock = typeof coachBlocks.$inferSelect;
+
+export const lessonWaitlist = pgTable(
+  "lesson_waitlist",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    studentPlayerId: uuid("student_player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** A specific slot, or null for "any slot in the week starting weekStart". */
+    slotStartsAt: timestamp("slot_starts_at", { withTimezone: true }),
+    weekStart: date("week_start"),
+    /** waiting → offered → booked | expired | withdrawn */
+    status: text("status").notNull().default("waiting"),
+    offeredAt: timestamp("offered_at", { withTimezone: true }),
+    offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }),
+    offeredLessonId: uuid("offered_lesson_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("lesson_waitlist_coach_idx").on(t.coachId, t.status, t.createdAt)],
+);
+export type LessonWaitlistEntry = typeof lessonWaitlist.$inferSelect;
+
+export const coachManagers = pgTable(
+  "coach_managers",
+  {
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.coachId, t.playerId] })],
+);
+
+export const coachesRelations = relations(coaches, ({ one, many }) => ({
+  player: one(players, { fields: [coaches.playerId], references: [players.id] }),
+  students: many(coachStudents),
+  lessons: many(lessons),
+}));
+export const coachStudentsRelations = relations(coachStudents, ({ one }) => ({
+  coach: one(coaches, { fields: [coachStudents.coachId], references: [coaches.id] }),
+  player: one(players, { fields: [coachStudents.playerId], references: [players.id] }),
+}));
+export const lessonsRelations = relations(lessons, ({ one }) => ({
+  coach: one(coaches, { fields: [lessons.coachId], references: [coaches.id] }),
+  student: one(players, { fields: [lessons.studentPlayerId], references: [players.id] }),
+  package: one(lessonPackages, { fields: [lessons.packageId], references: [lessonPackages.id] }),
+}));
+export const lessonPackagesRelations = relations(lessonPackages, ({ one }) => ({
+  coach: one(coaches, { fields: [lessonPackages.coachId], references: [coaches.id] }),
+  student: one(players, { fields: [lessonPackages.studentPlayerId], references: [players.id] }),
+}));
