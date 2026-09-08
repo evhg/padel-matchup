@@ -27,6 +27,8 @@ export function matchResult(scores: Pick<Score, "sideA" | "sideB" | "setNumber">
   const inPlay = roster.filter((s) => s.status === "joined" || s.status === "confirmed" || (s.status === "invited" && s.name.trim() !== "" && s.name !== "?"));
   const a = inPlay.filter((s) => s.team === "a").map((s) => s.name);
   const b = inPlay.filter((s) => s.team === "b").map((s) => s.name);
+  // A player nobody assigned to a side still played: the score was entered against the sides as they stood, so the short side is theirs.
+  for (const s of inPlay.filter((s) => s.team !== "a" && s.team !== "b")) (a.length <= b.length ? a : b).push(s.name);
   return {
     a,
     b,
