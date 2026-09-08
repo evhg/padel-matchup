@@ -14,6 +14,7 @@ import { Footer, Header } from "@/components/Header";
 import { SourceTag } from "@/components/SourceTag";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { CreateGroupButton } from "@/components/GroupPanel";
 import { JoinRequests } from "@/components/JoinRequests";
 import { ConfirmLevels } from "@/components/ConfirmLevels";
@@ -27,7 +28,8 @@ import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
+import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
@@ -386,7 +388,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
             </div>
           )}
-          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} suggestedName={t("group.defaultName", { day: weekdayName(ev.startsAt, ev.tz, locale), time: formatEventTime(ev.startsAt, ev.tz, locale) })} />}
+          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
         </section>
 
         {/* Share */}
@@ -449,12 +451,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             {t("event.createYourOwn")}
           </Link>
         )}
-        {/* The quiet door for what should change, where players actually are. A page, never a popup. */}
-        <p className="text-center text-xs text-faint">
-          <Link href="/feedback" prefetch={false} className="hover:text-muted">
-            💬 {t("feedback.title")} →
-          </Link>
-        </p>
+        {/* The quiet door for what should change, where players actually are: opens in place, never a popup. */}
+        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
       <JoinBar

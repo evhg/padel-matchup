@@ -270,6 +270,12 @@ try {
   check("forged unsubscribe link is rejected", (await a.getByText("That link doesn't check out").count()) > 0);
   await a.goto(`${BASE}/unsubscribe`);
   check("unsubscribe without params is rejected", (await a.getByText("That link doesn't check out").count()) > 0);
+  // The feedback door on a match page opens in place: no navigation, no popup.
+  await a.goto(BASE + "/PLAY");
+  const urlBefore = a.url();
+  await a.getByRole("button", { name: /Tell us what should change/ }).click();
+  await a.locator("#feedback-text").waitFor({ timeout: 10000 });
+  check("feedback opens in place on the match page", a.url() === urlBefore && (await a.locator("#feedback-text").count()) === 1);
   await a.goto(`${BASE}/me`);
   await a.getByRole("button", { name: "es", exact: true }).click();
   await a.getByText("Mis partidos").first().waitFor({ timeout: 20000 });
