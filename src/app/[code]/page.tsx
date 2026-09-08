@@ -449,6 +449,12 @@ export default async function EventPage({ params, searchParams }: Props) {
             {t("event.createYourOwn")}
           </Link>
         )}
+        {/* The quiet door for what should change, where players actually are. A page, never a popup. */}
+        <p className="text-center text-xs text-faint">
+          <Link href="/feedback" prefetch={false} className="hover:text-muted">
+            💬 {t("feedback.title")} →
+          </Link>
+        </p>
       </main>
       <Footer />
       <JoinBar
