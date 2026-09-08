@@ -128,6 +128,44 @@ export async function markNotFeedback(db: Db, id: string, replyText: string, now
     .where(and(eq(feedback.id, id), eq(feedback.status, "new")));
 }
 
+/** The note a reply belongs to: the most recent one this person left on this channel, within two weeks. */
+export async function findNoteForReply(db: Db, who: { telegramUserId?: number | null; telegramChatId?: number | null; discordUserId?: string | null; email?: string | null }, now = new Date()): Promise<Feedback | null> {
+  const since = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
+  const conds = [];
+  if (who.telegramUserId) conds.push(and(eq(feedback.telegramUserId, who.telegramUserId), ...(who.telegramChatId ? [eq(feedback.telegramChatId, who.telegramChatId)] : [])));
+  if (who.discordUserId) conds.push(eq(feedback.discordUserId, who.discordUserId));
+  if (who.email) conds.push(eq(feedback.email, who.email.toLowerCase()));
+  if (conds.length === 0) return null;
+  const [row] = await db
+    .select()
+    .from(feedback)
+    .where(and(gte(feedback.createdAt, since), sql`${feedback.verdict} is distinct from 'not_feedback'`, conds.length === 1 ? conds[0] : sql`(${sql.join(conds, sql` or `)})`))
+    .orderBy(desc(feedback.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * A reply to the thank-you joins the note it answers, dated, and puts the note back on the
+ * desk: an answered question, a shipped change with a follow-up, a declined idea with a new
+ * argument all get read again. The person is never asked to start over.
+ */
+export async function appendFeedbackReply(db: Db, id: string, replyText: string, now = new Date()): Promise<Feedback | null> {
+  const clean = cleanFeedbackText(replyText);
+  if (clean.length < 2) return null;
+  const [row] = await db.select().from(feedback).where(eq(feedback.id, id)).limit(1);
+  if (!row) return null;
+  const stamp = now.toISOString().slice(0, 16).replace("T", " ");
+  const text = `${row.text}\n\n[reply ${stamp}] ${clean}`.slice(0, FEEDBACK_LIMITS.textMax * 3);
+  const reopen = row.status === "asked" || row.status === "shipped" || row.status === "declined" || row.status === "planned";
+  const [updated] = await db
+    .update(feedback)
+    .set({ text, ...(reopen ? { status: "acknowledged", verdict: null } : {}) })
+    .where(eq(feedback.id, id))
+    .returning();
+  return updated ?? null;
+}
+
 export type Delivery = { status: "sent" | "failed" | "capped" | "no_channel" | "not_found"; error?: string };
 
 /** The one way out: the person hears from us on the channel they used. */

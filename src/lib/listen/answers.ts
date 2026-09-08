@@ -179,12 +179,15 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ n: sql<number>`count(*)` }).from(clubs).where(gte(clubs.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
   ]);
+  const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('pageviews','card_views')`)).groupBy(metricsDaily.key);
+  const funnel = Object.fromEntries(funnelRows.map((r) => [r.key, Number(r.total)]));
   const board = await serviceBoard(db, now);
   const hot = boardHighlights(board);
   const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(`${r.name} ${r.pct !== null ? `${r.pct.toFixed(0)}%` : r.usage}`)).join(" · ")}` : "Services: everything under 60% of its ceiling.";
   const lines = [
     "<b>Kicksmash, this week</b>",
     `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,
+    `Funnel: visitors ${funnel.pageviews ?? 0} → matches ${Number(matches.n)} → seats ${Number(joins.n)} → scores ${Number(results.n)} → card views ${funnel.card_views ?? 0}`,
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,

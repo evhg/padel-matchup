@@ -3,12 +3,16 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
+import { SameTimeButton } from "@/components/SameTimeButton";
 import { ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
-import { formatEventDay } from "@/lib/dates";
+import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { bumpMetric } from "@/lib/domain/metrics";
+import { praiseLine } from "@/lib/domain/praise";
+import { getSessionPlayer } from "@/lib/session";
 import { fnv1a } from "@/lib/hash";
 import { isOccupied } from "@/lib/domain/events";
 import { getEventByCode } from "@/lib/domain/queries";
@@ -41,16 +45,20 @@ export default async function CardPage({ params }: Props) {
   const db = await getDb();
   const detail = await getEventByCode(db, code);
   if (!detail) notFound();
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const [t, locale, me] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db)]);
   const ev = detail.event;
   const nameOf = (s: (typeof detail.roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
+  // One count per render: the funnel's last step.
+  void bumpMetric(db, "card_views").catch(() => undefined);
   let line: string;
+  let praise: string | null = null;
   if (ev.type === "match") {
     const r = matchResult(detail.scores, detail.roster.map((s) => ({ team: s.team, status: s.status, name: nameOf(s) })));
     if (!r) redirect(`/${code}`);
     const a = r.hasTeams ? r.a.join(" & ") : t("card.teamA");
     const b = r.hasTeams ? r.b.join(" & ") : t("card.teamB");
     line = (r.winner === "draw" ? `${t("card.draw", { a, b })} ${r.score}` : r.winner === "a" ? `${t("card.won", { a, b })} ${r.score}` : `${t("card.won", { a: b, b: a })} ${r.sets.map((s) => `${s.sideB}-${s.sideA}`).join(" ")}`).trim();
+    if (r.hasTeams && r.winner !== "draw") praise = praiseLine(locale, ev.code, (r.winner === "a" ? r.a : r.b).join(" & "));
   } else {
     const named = detail.roster.filter((s) => isOccupied(s) || s.status === "invited");
     const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
@@ -73,8 +81,10 @@ export default async function CardPage({ params }: Props) {
           <img src={`/${code}/card/opengraph-image?v=${resultVersion(detail)}`} alt={line} width={1200} height={630} className="block h-auto w-full" />
         </div>
         <p className="text-sm font-semibold">{line}</p>
+        {praise && <p className="text-sm text-muted" data-testid="praise">{praise}</p>}
         <p className="text-xs text-faint">{t("card.saveHint")}</p>
         <ShareButtons url={url} text={text} />
+        {ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || detail.roster.some((s) => isOccupied(s) && s.playerId === me.id)) && <SameTimeButton code={code} when={`${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}`} />}
         <Link href="/" prefetch={false} className="btn-primary w-full text-lg">
           {t("card.organize")}
         </Link>

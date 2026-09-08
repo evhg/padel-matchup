@@ -24,8 +24,8 @@ import { alertOnServices, refreshAnthropicCost } from "@/lib/ops/alerts";
 import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
-import { getEventDetail } from "@/lib/domain/queries";
-import { notifyGroupMatch, notifyLineupChange, notifyPromotion, sendInviteReminder, sendScoreReminder } from "@/lib/notify";
+import { notifyGroupMatch, notifyLineupChange, notifyPromotion, sendInviteReminder } from "@/lib/notify";
+import { nudgeForScore } from "@/lib/afterMatch";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 
@@ -104,13 +104,11 @@ export async function GET(req: Request) {
 
   try {
     const due = await findScoreRemindersDue(db, now);
-    for (const { event, creator } of due) {
-      // Exactly one reminder per event, whether or not an email could go out
-      // (the in-app banner covers organizers without an email).
-      await sendScoreReminder(db, event, creator);
+    for (const { event } of due) {
+      // Exactly one nudge per event, to every player on the channel they have; the in-app banner covers the rest.
       await markScoreReminderSent(db, event.id);
+      await nudgeForScore(db, event).catch((e) => summary.errors.push(`nudge ${event.code}: ${String(e)}`));
       summary.scoreReminders++;
-      void getEventDetail;
     }
   } catch (e) {
     summary.errors.push(`scores: ${String(e)}`);

@@ -56,6 +56,29 @@ try {
   const started = new Date(newMatch.startsAt).getTime() < Date.now();
   const prompt = await hook({ update_id: 31, callback_query: { id: "cbr", from: ivan, message: { message_id: 31, date: 0, chat: group }, data: `r:${newCode}` } });
   check("the result tap on a match that already started asks for the four players first", started && prompt.json?.outcome === "result:need_four", JSON.stringify(prompt.json));
+  // After the match: three more join the started match, Ivan picks the winners, then types the sets in private, then "same time next week?".
+  const kai = { id: 606060, first_name: "Kai", username: "kai_e2e" };
+  const nina = { id: 707070, first_name: "Nina", username: "nina_e2e" };
+  const olyaG = { id: 434343, first_name: "Olya", username: "olya_inline" };
+  for (const [i, u] of [olyaG, kai, nina].entries()) await hook({ update_id: 40 + i, callback_query: { id: `cbj${i}`, from: u, message: { message_id: 31, date: 0, chat: group }, data: `j:${newCode}` } });
+  const rosterNow = await fetch(`${BASE}/api/v1/matches/${newCode}`).then((r) => r.json());
+  check("four players are in the started match", rosterNow.players.length >= 4, JSON.stringify(rosterNow.players.map((p) => p.name)));
+  const won = await hook({ update_id: 44, callback_query: { id: "cbw", from: ivan, message: { message_id: 31, date: 0, chat: group }, data: `w:${newCode}:12` } });
+  check("the organizer picks the winning pair from the card and the result is confirmed", won.json?.outcome === "result:confirmed", JSON.stringify(won.json));
+  const setsPriv = await hook({ update_id: 45, message: { message_id: 45, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "6-3 6-4" } });
+  check("a bare score in the private chat lands on the player's freshest finished match", setsPriv.json?.outcome === "score_saved", JSON.stringify(setsPriv.json));
+  const scored = await fetch(`${BASE}/api/v1/matches/${newCode}`).then((r) => r.json());
+  check("the sets are on the match", scored.result?.sets?.length === 2 && scored.result.sets[0].a === 6 && scored.result.sets[0].b === 3, JSON.stringify(scored.result));
+  const sameTime = await hook({ update_id: 46, callback_query: { id: "cbg", from: ivan, message: { message_id: 31, date: 0, chat: group }, data: `g:${newCode}` } });
+  check("“same time next week?” turns the crew into a weekly group", sameTime.json?.outcome === "group:made", JSON.stringify(sameTime.json));
+  const sameAgain = await hook({ update_id: 47, callback_query: { id: "cbg2", from: ivan, message: { message_id: 31, date: 0, chat: group }, data: `g:${newCode}` } });
+  check("a second tap says the group already exists", sameAgain.json?.outcome === "group:exists", JSON.stringify(sameAgain.json));
+  // A reply to the thank-you joins the note.
+  const note = await hook({ update_id: 48, message: { message_id: 48, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/feedback the score nudge is a good idea" } });
+  check("a private /feedback is stored and thanked", /^feedback:[0-9a-f-]{36}$/.test(note.json?.outcome ?? ""), JSON.stringify(note.json));
+  const noteId = String(note.json?.outcome ?? "").split(":")[1];
+  const replyToAck = await hook({ update_id: 49, message: { message_id: 49, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "and make it two hours after the match", reply_to_message: { message_id: 50, date: 0, chat: { id: 424242, type: "private" }, from: { id: 1, is_bot: true, first_name: "Kicksmash" }, text: "Thanks, Ivan." } } });
+  check("a reply to the thank-you joins the same note", replyToAck.json?.outcome === `feedback:added:${noteId}`, JSON.stringify(replyToAck.json));
   const tzSet = await hook({ update_id: 32, message: { message_id: 32, date: 0, chat: group, from: ivan, text: "/tz singapore" } });
   check("/tz sets the chat's zone", tzSet.json?.outcome === "tz");
   const priv = await hook({ update_id: 8, message: { message_id: 3, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/start" } });

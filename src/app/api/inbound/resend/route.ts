@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { reportError } from "@/lib/alerts";
 import { composeAck } from "@/lib/feedback/ack";
-import { createFeedback, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
+import { appendFeedbackReply, createFeedback, findNoteForReply, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { guessLanguage } from "@/lib/listen/parse";
 import { draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
@@ -61,8 +61,21 @@ export async function POST(req: Request) {
 async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: InboundMail) {
   const from = parseAddress(mail.from);
   if (isAutomatedSender(from.email)) return NextResponse.json({ ok: true, ignored: "automated" });
-  const text = `${mail.subject ?? ""}\n\n${mail.text?.trim() || (mail.html ? mail.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "")}`.trim();
+  const bodyText = mail.text?.trim() || (mail.html ? mail.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "");
+  const text = `${mail.subject ?? ""}\n\n${bodyText}`.trim();
   const locale = guessLanguage(text) ?? "en";
+  // A reply to our thank-you (In-Reply-To set, or "Re:") joins the note it answers instead of opening a new one.
+  const isReply = Boolean(mail.inReplyTo) || /^\s*(re|ответ|отв|aw|sv):/i.test(mail.subject ?? "");
+  const earlier = isReply ? await findNoteForReply(db, { email: from.email }) : null;
+  if (earlier) {
+    const quoted = bodyText.split(/\n\s*(?:On .*wrote:|>\s|--\s*$|Claude, for Kicksmash|Claude, для Kicksmash|Claude, para Kicksmash)/)[0].trim();
+    const updated = await appendFeedbackReply(db, earlier.id, quoted || bodyText);
+    if (updated) {
+      const fs = feedbackStrings(updated.locale);
+      if (updated.messagesSent < 3) await sendPlainEmail({ to: from.email, subject: `Re: ${mail.subject ?? fs.emailSubject}`, text: `${fs.added}\n\nClaude, for Kicksmash\nhttps://kicksma.sh`, inReplyTo: mail.messageId }).catch(() => undefined);
+      return NextResponse.json({ ok: true, id: updated.id, feedback: true, appended: true });
+    }
+  }
   const row = await createFeedback(db, { source: "email", text, locale, name: from.name, email: from.email, emailMessageId: mail.messageId ?? mail.emailId, context: "email" }).catch(() => null);
   if (!row) return NextResponse.json({ ok: true, ignored: "empty" });
   const fs = feedbackStrings(locale);
