@@ -29,23 +29,33 @@ export default async function MePage({ searchParams }: Props) {
 
   if (!me) {
     const t = await getTranslations();
+    // Most people arriving here signed out have played before (another phone, another browser):
+    // the way back comes first, the first-time path second.
+    const returning = emailEnabled() || Boolean(telegramBotId());
     return (
       <>
         <Header minimal />
         <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
           <h1 className="text-3xl font-extrabold tracking-tight">{t("me.title")}</h1>
           {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
-          <NameGate title={t("me.noIdentity")} />
-          {telegramBotId() && (
+          {returning && (
             <section className="card">
-              <TelegramLogin botId={telegramBotId()!} linked={false} linkedUsername={null} lang={await getLocale()} authUrl={`${baseUrl()}/api/telegram/login`} />
+              <h2 className="text-xl font-extrabold tracking-tight">{t("me.returningTitle")}</h2>
+              <p className="mt-1 text-sm text-muted">{emailEnabled() ? t("me.returningHelp") : t("me.returningTelegramOnly")}</p>
+              {emailEnabled() && (
+                <div className="mt-3">
+                  <RestoreWithEmail compact />
+                </div>
+              )}
+              {telegramBotId() && (
+                <div className={emailEnabled() ? "mt-4 border-t border-line pt-3" : "mt-3"}>
+                  {emailEnabled() && <p className="mb-2 text-sm text-muted">{t("me.returningTelegram")}</p>}
+                  <TelegramLogin botId={telegramBotId()!} linked={false} linkedUsername={null} lang={await getLocale()} authUrl={`${baseUrl()}/api/telegram/login`} />
+                </div>
+              )}
             </section>
           )}
-          {emailEnabled() && (
-            <section className="card">
-              <RestoreWithEmail />
-            </section>
-          )}
+          <NameGate title={t("me.firstTimeTitle")} autoFocus={!returning} />
         </main>
         <Footer />
       </>

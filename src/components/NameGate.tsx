@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ensureIdentity } from "@/actions/identity";
 
-export function NameGate({ title, onDone, cta }: { title?: string; onDone?: (name: string) => void; cta?: string }) {
+export function NameGate({ title, onDone, cta, autoFocus = true }: { title?: string; onDone?: (name: string) => void; cta?: string; autoFocus?: boolean }) {
   const t = useTranslations();
   const router = useRouter();
   const [name, setName] = useState("");
@@ -39,7 +39,7 @@ export function NameGate({ title, onDone, cta }: { title?: string; onDone?: (nam
         onChange={(e) => setName(e.target.value)}
         placeholder={t("identity.namePlaceholder")}
         autoComplete="given-name"
-        autoFocus
+        autoFocus={autoFocus}
         maxLength={40}
         enterKeyHint="done"
       />

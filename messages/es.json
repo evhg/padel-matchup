@@ -305,12 +305,16 @@
     "cancelled": "Cancelado",
     "you": "Tú",
     "identityHelp": "Tu identidad vive en este navegador, sin contraseña. Guarda abajo tu enlace personal para usarla en cualquier sitio.",
-    "noIdentity": "Escribe tu nombre para ver tus partidos.",
     "placement": "#{place} de {total}",
     "restoreCta": "¿Jugaste antes desde otro móvil? Recuperar",
     "deleteAccount": "Eliminar mi cuenta",
     "deleteConfirm": "¿Eliminar tu cuenta? Se borran tu nombre, email y teléfono, se liberan tus plazas próximas y se cancelan los partidos que organizas. Los resultados antiguos quedan como «Jugador eliminado». No hay vuelta atrás.",
-    "noGroups": "Los grupos aparecen aquí cuando conviertes a los jugadores de un partido en uno."
+    "noGroups": "Los grupos aparecen aquí cuando conviertes a los jugadores de un partido en uno.",
+    "returningTitle": "¿Ya has estado aquí?",
+    "returningHelp": "Escribe el email que usaste antes. Un código de 6 cifras trae tus partidos a este dispositivo.",
+    "returningTelegramOnly": "Entra con Telegram y tus partidos llegan a este dispositivo.",
+    "returningTelegram": "O, si usaste el bot de Telegram:",
+    "firstTimeTitle": "¿Primera vez? Solo tu nombre, nada más."
   },
   "notFound": {
     "title": "Enlace no encontrado",

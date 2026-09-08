@@ -163,6 +163,14 @@ try {
   await nd.context().close();
   await shot(a, "11b-me-outcome");
 
+  // ---- Signed out, /me leads with the way back (email or Telegram) and puts the first-time path second ----
+  const so = await newPage();
+  await so.goto(BASE + "/me");
+  const soHtml = await so.content();
+  check("/me signed out: returning players first, newcomers second", soHtml.indexOf("Been here before?") > 0 && soHtml.indexOf("First time here?") > soHtml.indexOf("Been here before?"), `${soHtml.indexOf("Been here before?")} ${soHtml.indexOf("First time here?")}`);
+  check("/me signed out: no 'enter your name to see your matches'", !soHtml.includes("Enter your name to see your matches"));
+  await so.context().close();
+
   // ---- Private event link: signs a fresh device in and opens the match ----
   const pd = await newPage();
   await pd.goto(`${personalHref}/PLAY`);
