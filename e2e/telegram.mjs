@@ -156,8 +156,8 @@ try {
   await page.getByRole("button", { name: /New package/ }).first().waitFor({ timeout: 20000 });
   const studentBooked = await ivanSays(2, "завтра 16");
   check("an accepted student books by writing a day and a time", studentBooked.json?.outcome === "student:booked", JSON.stringify(studentBooked.json));
-  const left = await ivanSays(3, "осталось");
-  check("'left' answers with the package line", left.json?.outcome === "student:left", JSON.stringify(left.json));
+  const leftLine = await ivanSays(3, "осталось");
+  check("'left' answers with the package line", leftLine.json?.outcome === "student:left", JSON.stringify(leftLine.json));
   const lessonsCmd = await ivanSays(4, "/lessons");
   check("/lessons lists the student's lessons", lessonsCmd.json?.outcome === "student:lessons", JSON.stringify(lessonsCmd.json));
   const slots = await ivanSays(5, "завтра");
