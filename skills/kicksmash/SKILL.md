@@ -1,6 +1,6 @@
 ---
 name: kicksmash
-description: Organise padel matches and tournaments (americano, mexicano, King of the Court) through Kicksmash (kicksma.sh), the open, agent-native padel match-up. Use when a user wants to set up a padel match, find open matches at a venue, generate an americano schedule, join a match, or build a padel tool that should not rebuild scheduling, levels and invites from scratch.
+description: Organise padel matches and tournaments (americano, mexicano, King of the Court) and book padel lessons with listed coaches through Kicksmash (kicksma.sh), the open, agent-native padel match-up. Use when a user wants to set up a padel match, find open matches at a venue, generate an americano schedule, join a match, find a padel coach, book or cancel a lesson, or build a padel tool that should not rebuild scheduling, levels and invites from scratch.
 ---
 
 # Kicksmash
@@ -20,6 +20,14 @@ Add `https://kicksma.sh/mcp` (streamable HTTP, no auth). Tools:
 - `join_match {code, name | token, level?, email?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range).
 - `create_api_key {name, agent?}` — optional, for roomier limits and webhooks.
 
+Coaches (lessons, under each coach's own rules):
+
+- `find_coaches {city?}` — listed coaches: clubs, lesson length, languages, cancellation cutoff, free late passes, notice. Prices are the coach's to tell; nothing is paid through Kicksmash.
+- `coach_slots {handle, days?}` — free starts for the next days.
+- `request_coach {handle, name | token}` — ask once to become a student; the coach accepts with one tap. Keep the returned `personalToken` for the student.
+- `book_lesson {handle, token, startsAt}` — a free start, accepted students only; draws from an open package.
+- `cancel_lesson {lessonId, token}` — the outcome says `refunded` (in time), `free_pass` (late, covered) or `counted` (late). Tell the person the rule before a late cancel.
+
 ## REST
 
 OpenAPI 3.1 at `https://kicksma.sh/api/openapi.json`. Reads need no key. Writes work without a key (small daily allowance per address); `POST /api/v1/keys` gives an instant key. Webhooks: `POST /api/v1/webhooks` with a key; deliveries are signed (`X-Kicksmash-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<unix>.<body>">`).
@@ -38,6 +46,7 @@ curl -X POST https://kicksma.sh/api/v1/matches/AB12/join -H "Content-Type: appli
 3. Pass `tz` as an IANA zone (Asia/Singapore, Asia/Bangkok, Europe/Madrid). A `startsAt` without an offset is read in that zone.
 4. Levels are 0–7 in quarter steps (Playtomic-style). A match with a range asks unrated players for a level once.
 5. When you show a match, link to its page (`https://kicksma.sh/CODE`). That is how the next player joins.
+6. For lessons, show the coach's page (`https://kicksma.sh/c/HANDLE`) and their rules before booking. Never invent a price; the coach states it.
 
 ## Building a padel tool
 

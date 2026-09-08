@@ -612,3 +612,27 @@ export async function getPlayerById(db: Db, playerId: string): Promise<Player | 
   const [row] = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
   return row ?? null;
 }
+
+// ---------------------------------------------------------------- findable
+
+/** Coaches who chose to be listed, newest last; a city narrows by the coach's zone. */
+export async function listPublicCoaches(db: Db, cityTz?: string | null, limit = 200): Promise<Coach[]> {
+  return db
+    .select()
+    .from(coaches)
+    .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), ...(cityTz ? [eq(coaches.tz, cityTz)] : [])))
+    .orderBy(asc(coaches.createdAt))
+    .limit(limit);
+}
+
+/** Listed coaches who named this club among theirs (case aside): the club page's "coaches here". */
+export async function coachesAtClub(db: Db, clubName: string): Promise<Coach[]> {
+  const name = clubName.trim().toLowerCase();
+  if (!name) return [];
+  return db
+    .select()
+    .from(coaches)
+    .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), sql`${name} in (select lower(x) from jsonb_array_elements_text(${coaches.clubNames}) as x)`))
+    .orderBy(asc(coaches.createdAt))
+    .limit(50);
+}

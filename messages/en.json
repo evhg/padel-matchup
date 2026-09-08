@@ -814,7 +814,9 @@
     "full": "Full · waitlist",
     "listedHelp": "Anyone at the venue can find and join this match.",
     "listedShort": "On the venue board",
-    "notListedShort": "Not on the venue board"
+    "notListedShort": "Not on the venue board",
+    "coaches": "Coaches here",
+    "coachesHelp": "Coaches who named this club and chose to be listed."
   },
   "ranking": {
     "title": "Ranking",
@@ -1316,5 +1318,15 @@
       "joinGone": "That link is not valid any more. Ask the coach for a new one.",
       "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section."
     }
+  },
+  "coaches": {
+    "title": "Padel coaches in {city}",
+    "metaDescription": "Padel coaches in {city} who list their lessons book on Kicksmash: clubs, lesson length, languages, and free times you can book yourself.",
+    "lead": "Listed by the coaches themselves. Prices and levels are theirs to tell you; booking and cancelling follow each coach's own rules, shown on their page.",
+    "empty": "No coach has listed their page in {city} yet.",
+    "open": "Open {name}'s book",
+    "coachQuestion": "Do you coach in {city}?",
+    "coachHelp": "Set up your book in four taps: students book free times themselves, packages count themselves, your calendar stays yours. Listing is optional.",
+    "coachCta": "Set up your book"
   }
 }

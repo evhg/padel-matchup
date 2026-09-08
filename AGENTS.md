@@ -36,7 +36,11 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 
 ## Agent-native surfaces (keep them in sync when the API changes)
 
-`src/lib/api/openapi.ts`, `src/lib/api/docs.ts` (llms.txt, llms-full.txt, charter), `src/lib/api/mcp.ts` (tools), `src/app/developers/page.tsx`, `skills/kicksmash/SKILL.md`.
+`src/lib/api/openapi.ts`, `src/lib/api/docs.ts` (llms.txt, llms-full.txt, charter), `src/lib/api/mcp.ts` (tools), `src/app/developers/page.tsx`, `skills/kicksmash/SKILL.md`. Coach endpoints and tools share `src/lib/api/coachOps.ts` (find, slots, request, book, cancel), which calls the same domain functions as the coach pages and the Telegram assistant.
+
+## Coaches
+
+`src/lib/domain/coaching.ts` (coaches, students, packages, lessons, blocks, slots, the cancellation policy), `src/lib/coach/` (`assistant.ts`: the one-line parser for coaches and students in three languages, pure; `strings.ts`: what the assistant says, en/ru/es; `notify.ts`: DMs, offers, reminders, ICS emails; `chains.ts`: waitlists with thirty-minute offers, the reschedule chain after any cancellation, requests outside the hours, reminders, the manager link, month counts; `gcal.ts`/`ical.ts`/`sync.ts`: the coach's own calendar by sharing with the service account or an iCal link; `import.ts`: the package sheet in one paste), `src/lib/telegram/coach.ts` (the courtside assistant), `src/actions/coach.ts`, pages under `src/app/coach`, `src/app/c/[handle]` and `src/app/coaches/[city]`. Rules: DECIDING 11–17. Every cancellation path ends in `afterLessonFreed`; new write paths must call it. Listing is opt-in (`isPublic`); public data never carries a phone, an email or a payment id.
 
 ## Telegram bot
 

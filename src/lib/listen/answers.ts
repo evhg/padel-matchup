@@ -164,7 +164,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ n: sql<number>`count(*)` }).from(events).where(gte(events.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNull(telegramChats.leftAt), sql`${telegramChats.type} <> 'private'`)),
     db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt), isNull(answers.digestedAt))).orderBy(desc(answers.publishedAt)).limit(10),
-    db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts','errors_server','errors_client','errors_cron')`)).groupBy(metricsDaily.key),
+    db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts','errors_server','errors_client','errors_cron','api_calls','api_calls_agent','mcp_calls')`)).groupBy(metricsDaily.key),
   ]);
   const spent = Object.fromEntries(spend.map((r) => [r.key, Number(r.total)]));
   const openErrors = await listErrors(db, { since, limit: 5 });
@@ -192,6 +192,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
     `Press desk: sent ${mail.sent} · received ${mail.received} · waiting for your tap ${mail.waiting}`,
+    `Assistants and programs: API calls ${spent.api_calls ?? 0} (from assistants ${spent.api_calls_agent ?? 0}) · MCP calls ${spent.mcp_calls ?? 0}`,
     `Feedback from players: received ${notes.received} · shipped ${notes.shipped} · declined ${notes.declined} · in the loop ${notes.waiting}`,
     search ? `Google search (${search.from} to ${search.to}): ${search.impressions} impressions (ru ${search.byLocale.ru} · es ${search.byLocale.es}) · ${search.clicks} clicks` : searchConsoleEnabled() ? "Google search: no answer from Search Console this week" : "Google search: not connected",
     `Errors: server ${spent.errors_server ?? 0} · client ${spent.errors_client ?? 0} · cron ${spent.errors_cron ?? 0} · open kinds ${openErrors.length}${openErrors[0] ? ` (latest: ${esc(openErrors[0].message.slice(0, 80))})` : ""}`,

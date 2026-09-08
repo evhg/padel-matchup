@@ -199,6 +199,45 @@ try {
   await olga.reload();
   check("the coach sees the manager listed", (await olga.getByTestId("coach-managers").getByText("Nina").count()) === 1);
 
+  // Findable: Olga lists her page; the city list, the API and the MCP server see her; an assistant asks, Olga accepts, it books and cancels.
+  await olga.goto(BASE + "/coach/settings");
+  await olga.getByRole("checkbox", { name: /Listed publicly/ }).check();
+  // The browser here runs in UTC; a Phuket coach's phone says Asia/Bangkok, which is what puts her on the Phuket list.
+  await olga.getByLabel("Time zone").fill("Asia/Bangkok");
+  await olga.getByRole("button", { name: "Save" }).click();
+  await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+  const listed = await fetch(`${BASE}/api/v1/coaches?city=phuket`).then((r) => r.json());
+  check("the API lists the coach in her city without anything private", listed.coaches.some((c) => c.handle === handle && c.rules.cutoffHours === 12) && !JSON.stringify(listed).includes("0899999999"), JSON.stringify(listed).slice(0, 200));
+  await ivan.goto(`${BASE}/coaches/phuket`);
+  check("the city list shows the listed coach with structured data", (await ivan.getByTestId("coach-list").getByText("Olga").count()) >= 1 && (await ivan.locator('script[type="application/ld+json"]').count()) === 1);
+  const apiKey = await fetch(`${BASE}/api/v1/keys`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "e2e coach", agent: "playwright" }) }).then((r) => r.json());
+  const authed = { "content-type": "application/json", authorization: `Bearer ${apiKey.key}` };
+  const rpc = (body) => fetch(`${BASE}/mcp`, { method: "POST", headers: { ...authed, accept: "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+  const found = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "find_coaches", arguments: { city: "phuket" } } });
+  check("MCP find_coaches returns her", Boolean(found.result?.structuredContent?.coaches?.some((c) => c.handle === handle)), JSON.stringify(found).slice(0, 200));
+  const slotsRpc = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "coach_slots", arguments: { handle, days: 7 } } });
+  const slotList = slotsRpc.result?.structuredContent?.slots ?? [];
+  check("MCP coach_slots returns free starts", slotList.length > 3, JSON.stringify(slotsRpc).slice(0, 200));
+  const askRpc = await rpc({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "request_coach", arguments: { handle, name: "Agent Ann" } } });
+  const annToken = askRpc.result?.structuredContent?.student?.personalToken;
+  check("MCP request_coach creates the student and returns a private token", askRpc.result?.structuredContent?.status === "requested" && typeof annToken === "string", JSON.stringify(askRpc).slice(0, 200));
+  const tooEarly = await fetch(`${BASE}/api/v1/coaches/${handle}/lessons`, { method: "POST", headers: authed, body: JSON.stringify({ token: annToken, startsAt: slotList[2] }) });
+  check("booking before the coach accepts is refused with a hint", tooEarly.status === 403 && (await tooEarly.json()).error?.hint?.includes("request_coach"));
+  await olga.goto(BASE + "/coach/students");
+  await olga.getByText("Waiting for your yes").waitFor({ timeout: 20000 });
+  await olga.locator("li", { hasText: "Agent Ann" }).getByRole("button", { name: "Accept" }).click();
+  await olga.locator("li", { hasText: "Agent Ann" }).getByRole("button", { name: /New package/ }).waitFor({ timeout: 20000 });
+  const bookedRes = await fetch(`${BASE}/api/v1/coaches/${handle}/lessons`, { method: "POST", headers: authed, body: JSON.stringify({ token: annToken, startsAt: slotList[2] }) });
+  const bookedJ = await bookedRes.json();
+  check("an accepted student's assistant books a lesson through the API", bookedRes.status === 201 && bookedJ.lesson?.startsAt === slotList[2], JSON.stringify(bookedJ).slice(0, 200));
+  const cancelRes = await fetch(`${BASE}/api/v1/coaches/${handle}/lessons/${bookedJ.lesson.id}`, { method: "DELETE", headers: authed, body: JSON.stringify({ token: annToken }) });
+  const cancelJ = await cancelRes.json();
+  check("and cancels it under the coach's rules", cancelRes.status === 200 && ["none", "refunded", "free_pass", "counted"].includes(cancelJ.outcome), JSON.stringify(cancelJ));
+  const sitemap = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());
+  check("the listed coach and the city list are in the sitemap in three languages", sitemap.includes(`/c/${handle}</loc>`) && sitemap.includes(`/ru/c/${handle}</loc>`) && sitemap.includes("/coaches/phuket</loc>"));
+  const llms = await fetch(`${BASE}/llms.txt`).then((r) => r.text());
+  check("llms.txt tells assistants about coaches and the tools", llms.includes("/api/v1/coaches") && llms.includes("find_coaches"));
+
   // Russian path renders the coach page in Russian (last: it switches Ivan's language).
   await ivan.goto(`${BASE}/ru/c/${handle}`);
   check("the coach page has a Russian URL", (await ivan.getByText("Тренер по паделу").count()) === 1);

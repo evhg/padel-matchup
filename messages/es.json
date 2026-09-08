@@ -814,7 +814,9 @@
     "full": "Completo · lista de espera",
     "listedHelp": "Cualquiera en el club puede encontrar este partido y apuntarse.",
     "listedShort": "En el tablón del club",
-    "notListedShort": "No está en el tablón"
+    "notListedShort": "No está en el tablón",
+    "coaches": "Entrenadores aquí",
+    "coachesHelp": "Entrenadores que nombraron este club y eligieron aparecer."
   },
   "ranking": {
     "title": "Ranking",
@@ -1316,5 +1318,15 @@
       "joinGone": "Ese enlace ya no vale. Pide otro al entrenador.",
       "how": "Cualquiera con el enlace puede unirse una vez creado; crea uno nuevo y el anterior deja de funcionar. Un gestor ve y hace todo lo que tú haces aquí, salvo esta sección."
     }
+  },
+  "coaches": {
+    "title": "Entrenadores de pádel en {city}",
+    "metaDescription": "Entrenadores de pádel en {city} que llevan su agenda de clases en Kicksmash: clubes, duración de la clase, idiomas y horas libres que puedes reservar tú.",
+    "lead": "Los propios entrenadores se listan. Precios y niveles son cosa suya; reservar y cancelar sigue las reglas de cada entrenador, que están en su página.",
+    "empty": "Ningún entrenador ha publicado su página en {city} todavía.",
+    "open": "Abrir la agenda de {name}",
+    "coachQuestion": "¿Entrenas en {city}?",
+    "coachHelp": "Configura tu agenda en cuatro toques: los alumnos reservan las horas libres, los bonos se cuentan solos, tu calendario sigue siendo tuyo. Aparecer en la lista es opcional.",
+    "coachCta": "Configurar mi agenda"
   }
 }

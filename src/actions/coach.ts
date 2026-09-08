@@ -41,6 +41,7 @@ import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notif
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
+import { pingIndexNow } from "@/lib/indexnow";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -118,6 +119,8 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       tz: input.tz,
     });
     revalidateCoach(coach.handle);
+    // Search engines hear about a listed page the moment it changes (or is unlisted: they drop it).
+    if (Boolean(input.isPublic) || coach.isPublic) void pingIndexNow([`/c/${coach.handle}`, `/ru/c/${coach.handle}`, `/es/c/${coach.handle}`], { db }).catch(() => undefined);
     return null;
   });
 }

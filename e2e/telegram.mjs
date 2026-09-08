@@ -30,7 +30,11 @@ try {
   check("bot added to a chat: 200 and a welcome (even if Telegram is unreachable here)", added.status === 200 && added.json?.outcome === "welcome", JSON.stringify(added.json));
   const chatter = await hook({ update_id: 3, message: { message_id: 1, date: 0, chat: group, from: ivan, text: "who is playing tonight?" } });
   check("ordinary chatter is ignored", chatter.json?.outcome === "ignored");
-  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Kai" }, cost: "400 THB", listOnVenueBoard: true }) }).then((r) => r.json());
+  // The whole e2e run shares one address; a key keeps this suite clear of the per-address write allowance.
+  const tgKey = await fetch(`${BASE}/api/v1/keys`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "e2e telegram", agent: "playwright" }) }).then((r) => r.json());
+  const authed = { "content-type": "application/json", authorization: `Bearer ${tgKey.key}` };
+  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: authed, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Kai" }, cost: "400 THB", listOnVenueBoard: true }) }).then((r) => r.json());
+  check("the match for the chat is created (with a key, clear of the per-address allowance)", Boolean(created.match?.code), JSON.stringify(created).slice(0, 200));
   const code = created.match.code;
   check("the API accepts and returns the cost per player", created.match.cost === "400 THB", JSON.stringify(created.match).slice(0, 200));
   const posted = await hook({ update_id: 4, message: { message_id: 2, date: 0, chat: group, from: ivan, text: `/match ${code}` } });

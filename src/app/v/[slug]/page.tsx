@@ -11,6 +11,7 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
 import { getClub, isClubLive } from "@/lib/domain/clubs";
+import { coachesAtClub } from "@/lib/domain/coaching";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { embedHtml } from "@/lib/embed";
 import { rangeChip } from "@/lib/levelText";
@@ -42,7 +43,7 @@ export default async function VenueBoardPage({ params }: Props) {
   if (!boardRow && !club) notFound();
   const board = boardRow ?? { slug, name: club!.name, mapUrl: club!.mapUrl, events: [] };
   const mapUrl = club?.mapUrl ?? board.mapUrl;
-  const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, club?.name ?? board.name).catch(() => [])]);
   return (
     <>
       <Header />
@@ -124,6 +125,22 @@ export default async function VenueBoardPage({ params }: Props) {
             + {t("common.newMatch")}
           </Link>
         </div>
+        {coachesHere.length > 0 && (
+          <section className="card" data-testid="club-coaches">
+            <h2 className="text-lg font-extrabold">{t("venue.coaches")}</h2>
+            <p className="text-xs text-muted">{t("venue.coachesHelp")}</p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {coachesHere.map((c) => (
+                <li key={c.id}>
+                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 hover:border-ink/30">
+                    <span className="font-bold">{c.displayName}</span>
+                    <span className="text-xs text-muted">{t("coach.page.lesson", { minutes: c.lessonMinutes })} ›</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {!club && (!clubRow || clubRow.rejectedAt) && (
           <Link href={`/clubs/claim?name=${encodeURIComponent(board.name)}`} prefetch={false} className="card flex items-center justify-between gap-3 py-3 hover:border-ink/30">
             <span>
