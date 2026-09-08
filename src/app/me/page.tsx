@@ -10,6 +10,7 @@ import { baseUrl, emailEnabled } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
 import { telegramBotId } from "@/lib/telegram/api";
@@ -93,13 +94,7 @@ export default async function MePage({ searchParams }: Props) {
             </ul>
           </section>
         )}
-        <section className="card">
-          <h2 className="text-lg font-extrabold">💬 {t("feedback.title")}</h2>
-          <p className="mt-1 text-xs text-muted">{t("feedback.sub")}</p>
-          <Link href="/feedback" prefetch={false} className="btn-secondary mt-3 self-start">
-            {t("feedback.footerLink")} →
-          </Link>
-        </section>
+        <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
     </>

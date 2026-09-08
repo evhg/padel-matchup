@@ -288,4 +288,11 @@ try {
 } finally {
   await browser.close();
 }
+// The feedback door on a match page opens in place: no navigation, no popup.
+await a.goto(BASE + "/PLAY");
+const urlBefore = a.url();
+await a.getByRole("button", { name: /Tell us what should change/ }).click();
+await a.locator("#feedback-text").waitFor({ timeout: 10000 });
+check("feedback opens in place on the match page", a.url() === urlBefore && (await a.locator("#feedback-text").count()) === 1);
+
 finish(results);

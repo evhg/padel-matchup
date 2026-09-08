@@ -14,6 +14,7 @@ import { Footer, Header } from "@/components/Header";
 import { SourceTag } from "@/components/SourceTag";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { CreateGroupButton } from "@/components/GroupPanel";
 import { JoinRequests } from "@/components/JoinRequests";
 import { ConfirmLevels } from "@/components/ConfirmLevels";
@@ -449,12 +450,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             {t("event.createYourOwn")}
           </Link>
         )}
-        {/* The quiet door for what should change, where players actually are. A page, never a popup. */}
-        <p className="text-center text-xs text-faint">
-          <Link href="/feedback" prefetch={false} className="hover:text-muted">
-            💬 {t("feedback.title")} →
-          </Link>
-        </p>
+        {/* The quiet door for what should change, where players actually are: opens in place, never a popup. */}
+        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
       <JoinBar
