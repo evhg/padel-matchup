@@ -44,3 +44,7 @@ Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages
 ## Cron jobs
 
 - `kicksmash-sync` (Supabase pg_cron, every 10 min) → `/api/cron/sync`: the coaches' calendars, both ways. Waitlist offers, lapses and lesson reminders ride the 5-minute push job.
+
+## The Sunday digest, one line to watch
+
+`Funnel: visitors → matches → seats → scores → card views` is the week in five numbers: page renders (bots excluded), matches created, joins, matches with a result, result-card renders. A step that does not move for four weeks gets a design change, not a marketing push. The score nudge (every player, once, on their channel) and "same time next week?" exist to move the last three.

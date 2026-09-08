@@ -14,6 +14,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { createPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
+import { praiseLine } from "@/lib/domain/praise";
 import { isValidShareCode } from "@/lib/codes";
 import { botLocale, cardTitle, strings, whereLine, type BotLocale } from "@/lib/telegram/card";
 import { EPHEMERAL, INTERACTION, RESPONSE, createMessage, discordEnabled, editMessage, editOriginalResponse, messageUrl, type CommandSpec, type DcInteraction, type DcUser, type InteractionResponse } from "./api";
@@ -222,12 +223,13 @@ export async function sendDiscordReminders(db: Db, now = new Date()): Promise<nu
   return sent;
 }
 
-/** Once the organizer finalizes: the result, once per channel. Never throws. */
+/** The first result a player records: the card, once per channel, with a line for the winners. Never throws. */
 export async function postDiscordResult(db: Db, code: string): Promise<number> {
   if (!discordEnabled()) return 0;
   try {
     const detail = await getEventByCode(db, code);
-    if (!detail || !detail.event.scoreLockedByCreator) return 0;
+    if (!detail) return 0;
+    if (detail.event.type === "match" ? detail.scores.length === 0 : !detail.event.standings?.length) return 0;
     const ev = detail.event;
     const cards = await db
       .select({ card: discordCards, channel: discordChannels })
@@ -247,7 +249,11 @@ export async function postDiscordResult(db: Db, code: string): Promise<number> {
         );
         if (r) {
           if (r.score) lines.push(`**${r.score}**`);
-          if (r.hasTeams && r.winner !== "draw") lines.push(s.winner((r.winner === "a" ? r.a : r.b).join(" & ")));
+          if (r.hasTeams && r.winner !== "draw") {
+            const winners = (r.winner === "a" ? r.a : r.b).join(" & ");
+            lines.push(s.winner(winners));
+            lines.push(praiseLine(locale, ev.code, winners));
+          }
         }
       } else if (ev.standings?.length) {
         const names = new Map(detail.roster.filter((x) => x.playerId).map((x) => [x.playerId!, x.player?.displayName ?? "?"]));

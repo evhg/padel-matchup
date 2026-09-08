@@ -490,6 +490,12 @@
       "subject": "New match in {group}: {day} at {time}",
       "heading": "{group}: new match",
       "body": "{organizer} set up padel on {day} at {time} at {venue}. Tap to grab your spot."
+    },
+    "scoreNudge": {
+      "subject": "How did it go? Reply with the score",
+      "heading": "Your match is over",
+      "body": "Padel {day} at {time} at {venue}. Any player can enter the score; one tap and everyone's history is up to date. This is the only reminder you'll get.",
+      "cta": "Enter the score"
     }
   },
   "errors": {
@@ -622,7 +628,9 @@
     "reminderTitle": "🎾 Padel in 1 hour · {time}",
     "reminderBody": "{venue}. Don't be late!",
     "groupMatchTitle": "{group}: new match",
-    "groupMatchBody": "{day} at {time} · {venue}. Tap to join."
+    "groupMatchBody": "{day} at {time} · {venue}. Tap to join.",
+    "scoreTitle": "🏁 How did it go?",
+    "scoreBody": "{venue}. Enter the score; one tap."
   },
   "about": {
     "footerLink": "Privacy & terms (short, promise)",
@@ -738,7 +746,12 @@
     "poweredBy": "Padel in one link",
     "pts": "{points} pts",
     "teamA": "Team A",
-    "teamB": "Team B"
+    "teamB": "Team B",
+    "sameTime": "Same time next week?",
+    "sameTimeHelp": "Turns this crew into a group with a weekly slot. The next card posts itself; members tap in or out.",
+    "sameTimeDone": "Done: “{name}”. Every {when} a fresh card posts itself.",
+    "sameTimeExists": "This crew is already a group: {name}.",
+    "praise": "For the winners"
   },
   "group": {
     "title": "Group",

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getLocale } from "next-intl/server";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { createGroupFromEvent, deleteGroup, getGroupByCode, getGroupMember, joinGroup, leaveGroup, removeGroupMember, updateGroup } from "@/lib/domain/groups";
+import { createGroupFromEvent, deleteGroup, getGroupByCode, getGroupMember, joinGroup, leaveGroup, removeGroupMember, updateGroup, weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { isValidInviteCode } from "@/lib/codes";
 import { suggestGroupName } from "@/lib/domain/groupNames";
 import { getSessionPlayer } from "@/lib/session";
@@ -19,16 +19,18 @@ async function loadGroup(code: string) {
 }
 
 /** "Turn this crew into a group" from a match page: creator or any participant. */
-export async function createGroupFromEventAction(code: string, name?: string): Promise<ActionResult<{ code: string }>> {
+export async function createGroupFromEventAction(code: string, name?: string, weekly = false): Promise<ActionResult<{ code: string; name: string; created: boolean; recurDow: number | null; recurTime: string | null }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     const fallbackName = suggestGroupName(await getLocale(), detail.event.code);
-    const group = await createGroupFromEvent(db, { eventId: detail.event.id, actorPlayerId: me.id, name, fallbackName });
+    // "Same time next week?" gives the group the match's own weekly slot; the plain button leaves the rhythm to the admin.
+    const made = weekly ? await weeklyGroupFromEvent(db, { eventId: detail.event.id, actorPlayerId: me.id, fallbackName }) : { group: await createGroupFromEvent(db, { eventId: detail.event.id, actorPlayerId: me.id, name, fallbackName }), created: !detail.event.groupId };
     revalidatePath(`/${code}`);
+    revalidatePath(`/${code}/card`);
     revalidatePath("/me");
-    return { code: group.code };
+    return { code: made.group.code, name: made.group.name, created: made.created, recurDow: made.group.recurDow, recurTime: made.group.recurTime };
   });
 }
 

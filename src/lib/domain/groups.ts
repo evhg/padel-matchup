@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
+import { timePatternOf } from "@/lib/dates";
 import { events, groupMembers, groups, players, slots, type Event, type Group, type GroupMember, type Player } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isValidTimeZone, nextOccurrence, zonedTimeToUtc } from "@/lib/dates";
@@ -98,6 +99,21 @@ export async function createGroupFromEvent(db: Db, input: { eventId: string; act
   });
   await db.update(events).set({ groupId: group.id }).where(eq(events.id, ev.id));
   return group;
+}
+
+/**
+ * "Same time next week?": the match's crew becomes a group with a weekly slot at the match's
+ * own day and time, so the next card posts itself. An existing group keeps its settings.
+ */
+export async function weeklyGroupFromEvent(db: Db, input: { eventId: string; actorPlayerId: string; fallbackName: string }): Promise<{ group: Group; created: boolean }> {
+  const [ev] = await db.select().from(events).where(eq(events.id, input.eventId));
+  if (!ev) throw new DomainError("not_found");
+  const existed = Boolean(ev.groupId);
+  const group = await createGroupFromEvent(db, { eventId: ev.id, actorPlayerId: input.actorPlayerId, fallbackName: input.fallbackName });
+  if (existed || group.recurDow !== null) return { group, created: false };
+  const { dow, time } = timePatternOf(ev.startsAt, ev.tz);
+  const [updated] = await db.update(groups).set({ recurDow: dow, recurTime: time, recurLastCreatedFor: null }).where(eq(groups.id, group.id)).returning();
+  return { group: updated ?? group, created: true };
 }
 
 export async function getGroupByCode(db: Db, code: string): Promise<Group | null> {
