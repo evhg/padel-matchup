@@ -23,7 +23,8 @@ export function matchResult(scores: Pick<Score, "sideA" | "sideB" | "setNumber">
   const sets = [...scores].sort((x, y) => x.setNumber - y.setNumber).map((s) => ({ sideA: s.sideA, sideB: s.sideB }));
   const t = tally(sets);
   const winnerOnly = isWinnerOnly(sets);
-  const inPlay = roster.filter((s) => s.status === "joined" || s.status === "confirmed");
+  // Once a score exists the line-up played: a seat the organizer reserved by name counts even if that person never tapped Confirm.
+  const inPlay = roster.filter((s) => s.status === "joined" || s.status === "confirmed" || (s.status === "invited" && s.name.trim() !== "" && s.name !== "?"));
   const a = inPlay.filter((s) => s.team === "a").map((s) => s.name);
   const b = inPlay.filter((s) => s.team === "b").map((s) => s.name);
   return {
