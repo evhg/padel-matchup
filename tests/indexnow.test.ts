@@ -44,7 +44,7 @@ describe("IndexNow", () => {
     const r = await pingIndexNow(["/phuket", "https://kicksma.sh/phuket", "/ru/phuket", "https://evil.example/x"], { db, fetchImpl });
     expect(r).toEqual({ status: "sent", urls: 2, httpStatus: 202 });
     expect(calls[0].url).toBe("https://api.indexnow.org/indexnow");
-    expect(calls[0].body).toEqual({ host: "kicksma.sh", key: "a1b2c3d4e5f6a7b8c9d0", keyLocation: "https://kicksma.sh/indexnow/a1b2c3d4e5f6a7b8c9d0.txt", urlList: ["https://kicksma.sh/phuket", "https://kicksma.sh/ru/phuket"] });
+    expect(calls[0].body).toEqual({ host: "kicksma.sh", key: "a1b2c3d4e5f6a7b8c9d0", keyLocation: "https://kicksma.sh/a1b2c3d4e5f6a7b8c9d0.txt", urlList: ["https://kicksma.sh/phuket", "https://kicksma.sh/ru/phuket"] });
     const boom = (async () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;

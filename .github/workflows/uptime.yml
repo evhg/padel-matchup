@@ -116,7 +116,7 @@ jobs:
           else
             text="✅ kicksma.sh is answering again."
           fi
-          url="https://github.com/${GITHUB_REPOSITORY}/issues/${NUMBER}"
+          if [ "$NUMBER" = "0" ]; then url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/uptime.yml"; else url="https://github.com/${GITHUB_REPOSITORY}/issues/${NUMBER}"; fi
           curl -sS --max-time 20 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TG_OWNER}" --data-urlencode "text=${text}" \
             --data-urlencode "reply_markup={\"inline_keyboard\":[[{\"text\":\"Details\",\"url\":\"${url}\"}]]}" -o /tmp/tg.json || true
