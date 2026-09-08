@@ -32,13 +32,6 @@ describe("groups", () => {
     const titled = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 3 * HOUR), tz: "Asia/Singapore", venueName: "Club X", title: "Sunday social", whenFull: "closed" });
     await joinEvent(db, { eventId: titled.id, playerId: p2.id });
     expect((await createGroupFromEvent(db, { eventId: titled.id, actorPlayerId: org.id, fallbackName: "x" })).name).toBe("Sunday social");
-    // Only an admin disbands it; matches stay, unlinked.
-    await expect(deleteGroup(db, g.id, p3.id)).rejects.toMatchObject({ code: "forbidden" });
-    await deleteGroup(db, g.id, p2.id);
-    expect(await getGroupByCode(db, g.code)).toBeNull();
-    const [evAfter] = await db.select().from(events).where(eq(events.id, ev.id));
-    expect(evAfter.groupId).toBeNull();
-    expect(await db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id))).toHaveLength(0);
     expect(g.whenFull).toBe("closed");
     expect(g.levelMin).toBe(3);
     expect(g.creatorPlayerId).toBe(p2.id);
@@ -53,6 +46,13 @@ describe("groups", () => {
     const stranger = await makePlayer(db, "Stranger");
     const ev2 = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + HOUR), tz: "UTC", whenFull: "waitlist" });
     await expect(createGroupFromEvent(db, { eventId: ev2.id, actorPlayerId: stranger.id, fallbackName: "x" })).rejects.toMatchObject({ code: "forbidden" });
+    // Only an admin disbands it; matches stay, unlinked.
+    await expect(deleteGroup(db, g.id, p3.id)).rejects.toMatchObject({ code: "forbidden" });
+    await deleteGroup(db, g.id, p2.id);
+    expect(await getGroupByCode(db, g.code)).toBeNull();
+    const [evAfter] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(evAfter.groupId).toBeNull();
+    expect(await db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id))).toHaveLength(0);
   });
 
   it("membership: join is idempotent, creator can't leave, only admins remove", async () => {
