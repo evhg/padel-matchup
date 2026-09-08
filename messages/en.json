@@ -1006,6 +1006,8 @@
     "tooShort": "A few more words, please.",
     "tooMany": "That is plenty for today. Thank you.",
     "footerLink": "Feedback",
-    "viaTelegram": "You signed in with Telegram, so I will answer you there."
+    "viaTelegram": "You signed in with Telegram, so I will answer you there.",
+    "notFeedback": "That one I cannot act on.",
+    "tryAgain": "Write it differently"
   }
 }
