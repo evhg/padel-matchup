@@ -585,3 +585,29 @@ export async function getCoachQr(db: Db, coachId: string): Promise<{ mime: strin
     .limit(1);
   return row ? { mime: row.mime, bytes: Buffer.from(row.data, "base64") } : null;
 }
+
+// ---------------------------------------------------------------- blocks
+
+/** Time the coach keeps free: a whole day off or a range. Existing lessons inside stay until the coach cancels them. */
+export async function addBlock(db: Db, coachId: string, from: Date, to: Date, reason?: string | null, externalId?: string | null): Promise<CoachBlock> {
+  if (!(to.getTime() > from.getTime())) throw new DomainError("invalid", "range");
+  const [row] = await db
+    .insert(coachBlocks)
+    .values({ coachId, startsAt: from, endsAt: to, reason: reason?.slice(0, 120) ?? null, externalId: externalId ?? null })
+    .returning();
+  return row;
+}
+
+export async function removeBlock(db: Db, coachId: string, blockId: string): Promise<void> {
+  await db.delete(coachBlocks).where(and(eq(coachBlocks.id, blockId), eq(coachBlocks.coachId, coachId)));
+}
+
+export async function getLesson(db: Db, lessonId: string): Promise<Lesson | null> {
+  const [row] = await db.select().from(lessons).where(eq(lessons.id, lessonId)).limit(1);
+  return row ?? null;
+}
+
+export async function getPlayerById(db: Db, playerId: string): Promise<Player | null> {
+  const [row] = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+  return row ?? null;
+}

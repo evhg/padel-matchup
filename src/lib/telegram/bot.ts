@@ -21,6 +21,7 @@ import { CITIES, cityInText, cityOf, type City } from "@/lib/domain/cities";
 import { getCityBoard, withCounts } from "@/lib/domain/venueBoard";
 import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
+import { coachAssistantMessage, handleCoachCallback, lessonsFor } from "./coach";
 import { isValidShareCode } from "@/lib/codes";
 import { answerCallbackQuery, answerInlineQuery, deleteMessage, editInlineMessageText, editMessageText, esc, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
@@ -1039,6 +1040,10 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       return "lang";
     }
     if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale);
+    if (cmd.command === "lessons" && isPrivate) {
+      const player = await findOrCreateTelegramPlayer(db, from);
+      return lessonsFor(db, player, chat.chatId);
+    }
     if (cmd.command === "coach" && isPrivate) {
       // The coach's book opens on the web with this device signed in; the courtside one-liners follow in the next round.
       const player = await findOrCreateTelegramPlayer(db, from);
@@ -1084,6 +1089,10 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   }
   if (codes.length) return "card";
   if (isPrivate) {
+    // A coach's one-liner or a student's day and time: the book answers before the generic help does.
+    const player = await findOrCreateTelegramPlayer(db, from);
+    const assisted = await coachAssistantMessage(db, msg, from, player);
+    if (assisted) return assisted;
     await sendMessage(chat.chatId, esc(s.privateHelp), { silent: true });
     return "private_other";
   }
@@ -1155,6 +1164,10 @@ async function handleOutreachCallback(db: Db, cb: NonNullable<TgUpdate["callback
 
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
+  if (/^(cu|cp|cs|lc|lx|lb|ld|cb):/.test(data)) {
+    const handled = await handleCoachCallback(db, cb, await findOrCreateTelegramPlayer(db, cb.from));
+    if (handled) return handled;
+  }
   const listen = data.match(/^(la|ls|lu):([0-9a-f-]{36})$/);
   if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
   const mail = data.match(/^(oa|os):([0-9a-f-]{36})$/);
@@ -1252,6 +1265,7 @@ export const BOT_COMMANDS = {
     { command: "tz", description: "This chat's time zone, once: /tz phuket" },
     { command: "lang", description: "Bot language: /lang en or /lang ru" },
     { command: "feedback", description: "Tell me what should change; I answer within a day" },
+    { command: "lessons", description: "Your lessons and package with your coach (private chat)" },
     { command: "coach", description: "Your lessons book, if you coach (write to me privately)" },
     { command: "help", description: "What I do (very little, on purpose)" },
   ],
@@ -1263,6 +1277,7 @@ export const BOT_COMMANDS = {
     { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
     { command: "lang", description: "Язык бота: /lang ru или /lang en" },
     { command: "feedback", description: "Что стоит изменить; отвечу в течение суток" },
+    { command: "lessons", description: "Ваши занятия и абонемент у тренера (в личке)" },
     { command: "coach", description: "Книга занятий, если вы тренер (напишите мне в личку)" },
     { command: "help", description: "Что я умею (нарочно немного)" },
   ],

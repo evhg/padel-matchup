@@ -1181,6 +1181,18 @@
       "too_soon": "До этого времени слишком мало.",
       "no_coach": "Книги здесь пока нет.",
       "past": "Это время уже прошло."
+    },
+    "email": {
+      "inviteSubject": "Занятие с {coach}: {when}",
+      "inviteHeading": "Занятие записано",
+      "inviteBody": "{when} с {coach}{where}. {package}",
+      "cancelSubject": "Занятие с {coach} отменено: {when}",
+      "cancelHeading": "Занятие отменено",
+      "cancelBody": "{when} с {coach} отменено. {package}",
+      "coachInviteHeading": "Занятие записано",
+      "coachInviteBody": "{student}, {when}{where}. {package}",
+      "packageNone": "Без абонемента.",
+      "open": "Открыть занятия"
     }
   }
 }

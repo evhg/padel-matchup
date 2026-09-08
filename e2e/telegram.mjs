@@ -115,6 +115,57 @@ try {
   check("the player is signed in and told so, on the same page", (await page.getByText("Telegram linked. Your matches from the bot are here now.").count()) === 1 && (await page.getByText("Linked: @olya_e2e").count()) === 1);
   const exported = await page.request.get(`${BASE}/api/me/export`).then((r) => r.json());
   check("the session belongs to the Telegram user", exported.player?.displayName === "Оля");
+  // The courtside assistant: Оля opens her book on the web, then runs it from the bot's private chat in one-liners.
+  await page.goto(`${BASE}/coach`);
+  await page.locator("#coach-clubs").waitFor({ timeout: 20000 });
+  await page.locator("#coach-clubs").fill("DPC");
+  await page.getByRole("button", { name: "Create my book" }).click();
+  await page.waitForURL(/\/coach\?welcome=1$/, { timeout: 30000 });
+  const olyaPrivate = { id: 515151, type: "private" };
+  const say = (id, text) => hook({ update_id: 200 + id, message: { message_id: 200 + id, date: 0, chat: olyaPrivate, from: olya, text } });
+  const booked = await say(1, "Anna tomorrow 15");
+  check("a coach's one-liner books a new student", booked.json?.outcome === "coach:booked", JSON.stringify(booked.json));
+  const agenda = await say(2, "tomorrow");
+  check("a day word lists the agenda", agenda.json?.outcome === "coach:agenda", JSON.stringify(agenda.json));
+  const pkg = await say(3, "anna +10 90d 6000");
+  check("name +10 starts a package", pkg.json?.outcome === "coach:package", JSON.stringify(pkg.json));
+  const low = await say(4, "low");
+  check("low lists who is almost out", low.json?.outcome === "coach:low", JSON.stringify(low.json));
+  const cancelled = await say(5, "cancel anna tomorrow");
+  check("cancel name day cancels the lesson", cancelled.json?.outcome === "coach:cancelled", JSON.stringify(cancelled.json));
+  const blocked = await say(6, "block tomorrow 9-10");
+  check("block day time keeps a window free", blocked.json?.outcome === "coach:block", JSON.stringify(blocked.json));
+  const nonsense = await say(7, "what is the meaning of padel");
+  check("anything unclear gets the short help, never a booking", nonsense.json?.outcome === "coach:help", JSON.stringify(nonsense.json));
+
+  // Ivan, a Telegram user, asks to join through the page; Оля accepts on the web; from then on his private chat answers him.
+  const ivanPrivate = { id: 424242, type: "private" };
+  const ivanSays = (id, text) => hook({ update_id: 300 + id, message: { message_id: 300 + id, date: 0, chat: ivanPrivate, from: ivan, text } });
+  const notYet = await ivanSays(1, "завтра 16");
+  check("a player with no coach falls through to the ordinary help", notYet.json?.outcome === "private_other", JSON.stringify(notYet.json));
+  const ivanCtx = await browser.newContext(iphone);
+  const ivanPage = await ivanCtx.newPage();
+  await ivanPage.goto("about:blank");
+  await ivanPage.goto(`${BASE}/me#tgAuthResult=${authResultHash(ivan)}`);
+  await ivanPage.waitForURL(/\/me\?telegram=linked$/, { timeout: 30000 });
+  await ivanPage.goto(`${BASE}/c/olya`);
+  await ivanPage.getByRole("button", { name: "Ask to become a student" }).click();
+  await ivanPage.getByText(/Asked\./).waitFor({ timeout: 20000 });
+  await page.goto(`${BASE}/coach/students`);
+  await page.getByRole("button", { name: "Accept" }).first().click();
+  await page.getByRole("button", { name: /New package/ }).first().waitFor({ timeout: 20000 });
+  const studentBooked = await ivanSays(2, "завтра 16");
+  check("an accepted student books by writing a day and a time", studentBooked.json?.outcome === "student:booked", JSON.stringify(studentBooked.json));
+  const leftLine = await ivanSays(3, "осталось");
+  check("'left' answers with the package line", leftLine.json?.outcome === "student:left", JSON.stringify(leftLine.json));
+  const lessonsCmd = await ivanSays(4, "/lessons");
+  check("/lessons lists the student's lessons", lessonsCmd.json?.outcome === "student:lessons", JSON.stringify(lessonsCmd.json));
+  const slots = await ivanSays(5, "завтра");
+  check("a day alone offers the free times as buttons", slots.json?.outcome === "student:slots" || slots.json?.outcome === "student:no_free", JSON.stringify(slots.json));
+  const studentCancel = await ivanSays(6, "отмена завтра");
+  check("the student cancels in one line", studentCancel.json?.outcome === "student:cancelled" || studentCancel.json?.outcome === "student:cancel:confirm", JSON.stringify(studentCancel.json));
+  await ivanCtx.close();
+
   const forgedCtx = await browser.newContext(iphone);
   const forged = await forgedCtx.newPage();
   const bad = authResultHash(olya).replace(/^./, (c) => (c === "A" ? "B" : "A"));
