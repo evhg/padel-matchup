@@ -115,7 +115,7 @@ export async function offerFreedSlot(db: Db, coach: Coach, startsAt: Date, now =
     const clash = await db
       .select({ id: lessons.id })
       .from(lessons)
-      .where(and(eq(lessons.studentPlayerId, entry.studentPlayerId), eq(lessons.status, "booked"), lt(lessons.startsAt, end), gt(sql`${lessons.startsAt} + make_interval(mins => ${lessons.minutes})`, startsAt)))
+      .where(and(eq(lessons.studentPlayerId, entry.studentPlayerId), eq(lessons.status, "booked"), lt(lessons.startsAt, end), sql`${lessons.startsAt} + make_interval(mins => ${lessons.minutes}) > ${startsAt.toISOString()}::timestamptz`))
       .limit(1);
     if (clash.length) continue;
     const player = await getPlayerById(db, entry.studentPlayerId);
@@ -196,7 +196,10 @@ export type Freed = { alternatives: Date[]; offer: Offer | null };
 /** Every cancellation path ends here: alternatives for the student when the coach cancelled, the slot to the waitlist. */
 export async function afterLessonFreed(db: Db, coach: Coach, lesson: Lesson, by: "coach" | "student", now = new Date()): Promise<Freed> {
   const alternatives = by === "coach" && lesson.studentPlayerId ? await alternativesFor(db, coach, lesson.startsAt, now) : [];
-  const offer = await offerFreedSlot(db, coach, lesson.startsAt, now).catch(() => null);
+  const offer = await offerFreedSlot(db, coach, lesson.startsAt, now).catch((e) => {
+    console.error("[coach-chain] offer failed", e);
+    return null;
+  });
   return { alternatives, offer };
 }
 
