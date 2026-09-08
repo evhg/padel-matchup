@@ -4,6 +4,7 @@ import { activity, answers, clubs, discordChannels, events, listenItems, players
 import { listErrors } from "@/lib/alerts";
 import { feedbackWeek } from "@/lib/feedback/store";
 import { outreachWeek } from "@/lib/outreach/desk";
+import { searchConsoleEnabled, searchWeek } from "@/lib/search/console";
 import { pingIndexNow } from "@/lib/indexnow";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
@@ -93,6 +94,33 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
   }
 }
 
+export type AnswerPageInput = { slug?: string | null; language: string; title: string; question: string; answer: string; publish?: boolean };
+
+export const slugifyTitle = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\u0400-\u04ff]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "answer";
+
+/** A page written by the operator or the daily loop rather than grown from a reply. Published pages are pushed to IndexNow. */
+export async function createAnswerPage(db: Db, input: AnswerPageInput, now = new Date()): Promise<Answer> {
+  const language = ["en", "ru", "es"].includes(input.language) ? input.language : "en";
+  const title = input.title.trim().slice(0, 140);
+  const question = input.question.trim().slice(0, 1000);
+  const answer = input.answer.replace(/\r\n/g, "\n").trim().slice(0, 8000);
+  if (!title || !question || answer.length < 80) throw new Error("invalid_page");
+  const slug = await uniqueSlug(db, slugifyTitle(input.slug?.trim() || title));
+  const [row] = await db
+    .insert(answers)
+    .values({ slug, language, title, question, answer, publishedAt: input.publish === false ? null : now })
+    .returning();
+  if (row.publishedAt) await pingIndexNow([`/answers/${row.slug}`, "/answers"], { db });
+  return row;
+}
+
 export async function listPublishedAnswers(db: Db, limit = 100): Promise<Answer[]> {
   return db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt))).orderBy(desc(answers.publishedAt)).limit(limit);
 }
@@ -137,6 +165,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const openErrors = await listErrors(db, { since, limit: 5 });
   const mail = await outreachWeek(db, since);
   const notes = await feedbackWeek(db, since);
+  const search = searchConsoleEnabled() ? await searchWeek() : null;
   // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
   const [[newPlayers], [joins], [results], [newClubs], [channels]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
@@ -153,6 +182,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
     `Press desk: sent ${mail.sent} · received ${mail.received} · waiting for your tap ${mail.waiting}`,
     `Feedback from players: received ${notes.received} · shipped ${notes.shipped} · declined ${notes.declined} · in the loop ${notes.waiting}`,
+    search ? `Google search (${search.from} to ${search.to}): ${search.impressions} impressions (ru ${search.byLocale.ru} · es ${search.byLocale.es}) · ${search.clicks} clicks` : searchConsoleEnabled() ? "Google search: no answer from Search Console this week" : "Google search: not connected",
     `Errors: server ${spent.errors_server ?? 0} · client ${spent.errors_client ?? 0} · cron ${spent.errors_cron ?? 0} · open kinds ${openErrors.length}${openErrors[0] ? ` (latest: ${esc(openErrors[0].message.slice(0, 80))})` : ""}`,
     newAnswers.length ? `\nNew answer pages (${newAnswers.length}), each with an Unpublish button below:` : "\nNo new answer pages this week.",
   ];
