@@ -27,6 +27,16 @@ export const API = "https://discord.com/api/v10";
 
 export type DcResult<T> = { ok: true; result: T } | { ok: false; status: number; error: string };
 
+/** One counter per call, for the service board; never blocks and never throws. */
+async function countDiscord(): Promise<void> {
+  try {
+    const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
+    await bumpMetric(await getDb(), "discord_sent");
+  } catch {
+    /* metrics are optional */
+  }
+}
+
 export async function dc<T = unknown>(method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", path: string, body?: unknown): Promise<DcResult<T>> {
   if (!discordEnabled()) return { ok: false, status: 0, error: "discord disabled" };
   try {
@@ -36,6 +46,7 @@ export async function dc<T = unknown>(method: "GET" | "POST" | "PATCH" | "PUT" |
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
+    void countDiscord();
     if (res.status === 204) return { ok: true, result: undefined as T };
     const json = (await res.json().catch(() => null)) as (T & { message?: string; code?: number }) | null;
     if (!res.ok) return { ok: false, status: res.status, error: json?.message ? `${json.message} (${json.code ?? res.status})` : `HTTP ${res.status}` };

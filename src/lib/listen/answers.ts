@@ -9,6 +9,7 @@ import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
+import { boardHighlights, serviceBoard } from "@/lib/ops/services";
 import { metricsDaily } from "@/db/schema";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { draftingEnabled, withinBudget } from "./draft";
@@ -178,6 +179,9 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ n: sql<number>`count(*)` }).from(clubs).where(gte(clubs.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
   ]);
+  const board = await serviceBoard(db, now);
+  const hot = boardHighlights(board);
+  const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(`${r.name} ${r.pct !== null ? `${r.pct.toFixed(0)}%` : r.usage}`)).join(" · ")}` : "Services: everything under 60% of its ceiling.";
   const lines = [
     "<b>Kicksmash, this week</b>",
     `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,
@@ -188,6 +192,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Feedback from players: received ${notes.received} · shipped ${notes.shipped} · declined ${notes.declined} · in the loop ${notes.waiting}`,
     search ? `Google search (${search.from} to ${search.to}): ${search.impressions} impressions (ru ${search.byLocale.ru} · es ${search.byLocale.es}) · ${search.clicks} clicks` : searchConsoleEnabled() ? "Google search: no answer from Search Console this week" : "Google search: not connected",
     `Errors: server ${spent.errors_server ?? 0} · client ${spent.errors_client ?? 0} · cron ${spent.errors_cron ?? 0} · open kinds ${openErrors.length}${openErrors[0] ? ` (latest: ${esc(openErrors[0].message.slice(0, 80))})` : ""}`,
+    ceilingsLine,
     newAnswers.length ? `\nNew answer pages (${newAnswers.length}), each with an Unpublish button below:` : "\nNo new answer pages this week.",
   ];
   const head = await sendMessage(owner, lines.join("\n"), { keyboard: { inline_keyboard: [[{ text: "Listening desk", url: `${baseUrl()}/admin/listen` }]] } });

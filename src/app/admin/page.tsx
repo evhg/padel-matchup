@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { APP_NAME, emailEnabled } from "@/lib/config";
 import { activitySeries, metricSeries, totals } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
+import { serviceBoard, type ServiceState } from "@/lib/ops/services";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin", robots: { index: false, follow: false } };
@@ -55,6 +56,9 @@ function Meter({ label, used, limit, format, note }: { label: string; used: numb
   );
 }
 
+const stateColor = (st: ServiceState) => (st === "ok" ? STATUS.good : st === "warn" ? STATUS.warning : st === "alert" ? STATUS.critical : st === "off" ? "#8a919b" : SERIES.blue);
+const stateLabel = (st: ServiceState, pct: number | null) => (st === "off" ? "off" : st === "info" ? "dashboard" : pct !== null ? `${pct.toFixed(pct < 10 ? 1 : 0)}%` : st === "ok" ? "ok" : st === "warn" ? "watch" : "act");
+
 function Tile({ label, value, sub, spark, color }: { label: string; value: string; sub?: string; spark?: number[]; color?: string }) {
   const s = spark ?? [];
   const max = Math.max(1, ...s);
@@ -84,6 +88,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const tot = await totals(db, now);
   const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at", "errors_server", "errors_client", "errors_cron", "api_calls", "mcp_calls"], range, now);
   const act = await activitySeries(db, range, now);
+  const board = await serviceBoard(db, now);
   const month = await metricSeries(db, ["emails_sent"], now.getUTCDate(), now);
   const emailsToday = metrics.values.emails_sent.at(-1) ?? 0;
   const emailsMonth = sum(month.values.emails_sent);
@@ -152,29 +157,54 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <Tile label="API & agents" value={fmtCompact(sum(metrics.values.api_calls) + sum(metrics.values.mcp_calls))} sub={`${fmtInt(sum(metrics.values.mcp_calls))} MCP calls in ${range}d`} spark={metrics.values.api_calls.map((v, i) => v + (metrics.values.mcp_calls[i] ?? 0))} color={SERIES.aqua} />
         </section>
 
-        <section className="card flex flex-col gap-5">
-          <div>
-            <h2 className="font-extrabold">Free-tier limits</h2>
-            <p className="text-xs text-muted">Measured by the app. Bandwidth and function counts live in the Vercel dashboard (no public API on Hobby).</p>
+        <section className="card flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="font-extrabold">Service board</h2>
+              <p className="text-xs text-muted">Every service the stack leans on, this month against its free ceiling. Measured by the app where the provider will not say; a link where only a dashboard knows.</p>
+            </div>
+            <span className="text-xs text-faint">{board.month} · refreshed hourly</span>
           </div>
-          <Meter label="Supabase database size" used={tot.dbBytes} limit={LIMITS.supabaseDbBytes} format={fmtMb} note="free project: 500 MB" />
-          <Meter label="Resend emails this month" used={emailsMonth} limit={LIMITS.resendPerMonth} format={fmtInt} note="free: 3,000 / month" />
-          <Meter label="Resend emails today" used={emailsToday} limit={LIMITS.resendPerDay} format={fmtInt} note="free: 100 / day" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-faint">
+                  <th className="py-2 pr-3 font-bold">Service</th>
+                  <th className="py-2 pr-3 font-bold">Used</th>
+                  <th className="py-2 pr-3 font-bold">Ceiling</th>
+                  <th className="py-2 font-bold">State</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {board.rows.map((r) => (
+                  <tr key={r.key} className="align-top">
+                    <td className="py-2.5 pr-3">
+                      <div className="font-bold">{r.link ? <a href={r.link} target="_blank" rel="noopener noreferrer" className="underline decoration-line underline-offset-4 hover:decoration-ink">{r.name} ↗</a> : r.name}</div>
+                      <div className="text-xs text-muted">{r.role}</div>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <div className="tabular-nums">{r.usage}</div>
+                      {r.pct !== null && (
+                        <div className="mt-1 h-1.5 w-32 overflow-hidden rounded-full" style={{ background: "#e9f2fb" }} aria-hidden>
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(r.pct > 0 ? 2 : 0, r.pct))}%`, background: stateColor(r.state) }} />
+                        </div>
+                      )}
+                      <div className="mt-1 max-w-xs text-xs text-faint">{r.note}</div>
+                    </td>
+                    <td className="py-2.5 pr-3 text-xs text-muted">{r.ceiling}</td>
+                    <td className="py-2.5">
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold text-white" style={{ background: stateColor(r.state) }}>
+                        {stateLabel(r.state, r.pct)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <a href="https://vercel.com/dashboard/usage" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-2xl bg-bg px-4 py-3 hover:bg-line/60">
-              <span>
-                <span className="font-bold">Vercel bandwidth &amp; functions</span>
-                <span className="block text-xs text-muted">Hobby: {LIMITS.vercelBandwidthGb} GB · {fmtCompact(LIMITS.vercelInvocations)} invocations / month</span>
-              </span>
-              <span className="text-faint">↗</span>
-            </a>
-            <a href="https://supabase.com/dashboard/project/udvtuxaxzfimeoubofdz/reports" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-2xl bg-bg px-4 py-3 hover:bg-line/60">
-              <span>
-                <span className="font-bold">Supabase egress &amp; compute</span>
-                <span className="block text-xs text-muted">free: 5 GB egress / month</span>
-              </span>
-              <span className="text-faint">↗</span>
-            </a>
+            <Meter label="Supabase database size" used={tot.dbBytes} limit={LIMITS.supabaseDbBytes} format={fmtMb} note="free project: 500 MB" />
+            <Meter label="Resend emails this month" used={emailsMonth} limit={LIMITS.resendPerMonth} format={fmtInt} note="free: 3,000 / month" />
           </div>
         </section>
 
