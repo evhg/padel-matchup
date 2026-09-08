@@ -1070,7 +1070,12 @@
         "cancelled": "cancelled by you",
         "cancelled_by_student": "cancelled",
         "late_cancelled": "late cancel"
-      }
+      },
+      "requests": "Asking for a time outside your hours",
+      "yes": "Yes",
+      "no": "No",
+      "waiting": "{count, plural, one {# student waiting} other {# students waiting}} for a spot",
+      "month": "{month}: {done, plural, one {# lesson} other {# lessons}} done{noShows, plural, =0 {} one {, # no-show} other {, # no-shows}}"
     },
     "book": {
       "student": "Student",
@@ -1112,7 +1117,8 @@
       "qrHelp": "Opens in any Thai banking app with the amount filled in. Nothing passes through Kicksmash.",
       "payLink": "Pay by link",
       "how": "Accept a request and the student can book free times alone. A package is a number of lessons with an expiry; every booking counts one down, and a timely cancellation puts it back. Payment is between you and them: show the QR, then tap paid.",
-      "emailOptional": "Email, optional. They get your link once."
+      "emailOptional": "Email, optional. They get your link once.",
+      "thisMonth": "{count, plural, one {# this month} other {# this month}}"
     },
     "settings": {
       "title": "Settings",
@@ -1166,7 +1172,24 @@
       "cancelledCounted": "Cancelled late; this one counts.",
       "whatsapp": "Message on WhatsApp",
       "private": "This page is private.",
-      "how": "Tap a free time and it is yours at once. Cancel freely until {hours} hours before; later than that uses a free pass, then counts. Your package, when you have one, counts down under each lesson."
+      "how": "Tap a free time and it is yours at once. Cancel freely until {hours} hours before; later than that uses a free pass, then counts. Your package, when you have one, counts down under each lesson.",
+      "taken": "Taken. Tap to be told if it frees up.",
+      "waitlisted": "On the list for {when}. The first free spot is yours for 30 minutes.",
+      "weekWait": "Nothing suits? Tell me when anything frees up that week",
+      "weekWaitlisted": "On the list for the week of {week}.",
+      "waitingFor": "Waiting for",
+      "leaveList": "Leave",
+      "offerTitle": "A spot opened",
+      "offerLine": "{when}, yours for {minutes} more minutes.",
+      "offerTake": "Book it",
+      "offerNo": "No thanks",
+      "otherTime": "Another time",
+      "otherTimeHelp": "Outside the usual hours? Ask; {name} answers yes or no.",
+      "otherTimeNote": "A word for the coach, optional",
+      "ask": "Ask {name}",
+      "asked": "Asked {name} for {when}. The answer comes here and by message.",
+      "askedList": "Asked for",
+      "requestBooked": "Booked {when}."
     },
     "me": {
       "title": "Your lessons",
@@ -1196,7 +1219,24 @@
       "open": "Open your lessons",
       "invitedSubject": "{coach} added you on {app}",
       "invitedHeading": "You are on {coach}'s list",
-      "invitedBody": "Book and cancel lessons with {coach} from one page. Your package and its expiry are always there."
+      "invitedBody": "Book and cancel lessons with {coach} from one page. Your package and its expiry are always there.",
+      "offerSubject": "A spot with {coach}: {when}",
+      "offerHeading": "A spot opened",
+      "offerBody": "{when} with {coach} is free and held for you for {minutes} minutes. Open your page to take it.",
+      "offerCta": "Take the spot",
+      "requestSubject": "{student} asks for {when}",
+      "requestHeading": "A time outside your hours",
+      "requestBody": "{student} asks for {when}. Say yes or no from your book.",
+      "requestCta": "Open your book",
+      "declinedSubject": "{coach} can't do {when}",
+      "declinedHeading": "Not that time",
+      "declinedBody": "{coach} can't do {when}. Pick another time on their page.",
+      "reminderSubject": "Tomorrow: {when} with {coach}",
+      "reminderHeading": "Your lesson tomorrow",
+      "reminderBody": "{when} with {coach}. Cancel from your page if you must; the usual rule applies.",
+      "lowSubject": "Your package with {coach}",
+      "lowHeading": "Nearly there",
+      "lowBody": "{line} Time to ask {coach} for the next package."
     },
     "calendar": {
       "title": "Your calendar",
@@ -1250,6 +1290,18 @@
       "notShared": "That sheet is not shared. In Google Sheets: Share → Anyone with the link → Viewer, then try again.",
       "unreachable": "That link could not be fetched. Try pasting the rows instead.",
       "done": "{created, plural, one {# package} other {# packages}} added: {students, plural, =0 {no new students} one {# new student} other {# new students}}, {matched} already here."
+    },
+    "managers": {
+      "title": "Who runs your book with you",
+      "lead": "A partner or an assistant can book, cancel and note payments. Students still see one name: yours.",
+      "makeLink": "Make a link for them",
+      "shareText": "Run my lesson book with me: {url}",
+      "remove": "Remove",
+      "joinTitle": "Run a coach's book",
+      "joinLead": "{name} asked you to help run their lessons. Your name, and you are in.",
+      "joinButton": "Join {name}'s book",
+      "joinGone": "That link is not valid any more. Ask the coach for a new one.",
+      "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section."
     }
   }
 }

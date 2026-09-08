@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { coachBookAction, coachCancelAction, coachNoShowAction } from "@/actions/coach";
+import { coachBookAction, coachCancelAction, coachNoShowAction, decideRequestAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { HowThisWorks } from "./HowThisWorks";
 
@@ -13,10 +13,12 @@ export type LessonDTO = { id: string; iso: string; day: string; time: string; da
 export type SlotDTO = { iso: string; day: string; time: string };
 export type StudentOption = { id: string; name: string };
 
-type Props = { handle: string; url: string; today: string; welcome: boolean; students: StudentOption[]; lessons: LessonDTO[]; slots: SlotDTO[]; dayLabels: Record<string, string>; days: string[] };
+export type RequestDTO = { id: string; name: string; label: string; note: string | null };
+export type MonthDTO = { label: string; done: number; noShows: number };
+type Props = { handle: string; url: string; today: string; welcome: boolean; students: StudentOption[]; lessons: LessonDTO[]; slots: SlotDTO[]; dayLabels: Record<string, string>; days: string[]; requests?: RequestDTO[]; waiting?: number; month?: MonthDTO | null };
 
 /** The coach's book: today, the next days, one button to book. Everything else behind "More". */
-export function CoachHome({ handle, url, today, welcome, students, lessons, slots, dayLabels, days }: Props) {
+export function CoachHome({ handle, url, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null }: Props) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -46,6 +48,12 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
   const noShow = (l: LessonDTO) =>
     start(async () => {
       await coachNoShowAction(l.id);
+      router.refresh();
+    });
+  const decide = (r: RequestDTO, accept: boolean) =>
+    start(async () => {
+      const res = await decideRequestAction(r.id, accept);
+      if (!res.ok) setError(errorText(res.error));
       router.refresh();
     });
 
@@ -97,11 +105,39 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
         </section>
       )}
 
+      {requests.length > 0 && (
+        <section className="card animate-pop" data-testid="coach-requests">
+          <div className="text-sm font-extrabold">{t("home.requests")}</div>
+          <ul className="mt-2 flex flex-col gap-2">
+            {requests.map((r) => (
+              <li key={r.id} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-bold">{r.name} · {r.label}</div>
+                  {r.note && <div className="truncate text-xs text-muted">“{r.note}”</div>}
+                </div>
+                <button type="button" className="btn-primary btn-xs" disabled={pending} onClick={() => decide(r, true)}>
+                  ✓ {t("home.yes")}
+                </button>
+                <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => decide(r, false)}>
+                  ✕ {t("home.no")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="card">
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-3xl font-extrabold tracking-tight">{t("home.title")}</h1>
           <span className="text-sm text-muted">{dayLabels[today]}</span>
         </div>
+        {(waiting > 0 || month) && (
+          <p className="mt-1 text-xs text-faint" data-testid="coach-pulse">
+            {month ? t("home.month", { month: month.label, done: month.done, noShows: month.noShows }) : ""}
+            {month && waiting > 0 ? " · " : ""}
+            {waiting > 0 ? t("home.waiting", { count: waiting }) : ""}
+          </p>
+        )}
         {todayLessons.length > 0 ? <ul className="mt-3 flex flex-col gap-2">{todayLessons.map(row)}</ul> : <p className="mt-3 text-sm text-muted">{lessons.length === 0 ? t("home.none") : "—"}</p>}
         {note && <p className="mt-3 rounded-2xl bg-ok-soft px-4 py-2 text-sm font-semibold text-ok">{note}</p>}
         {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}

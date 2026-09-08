@@ -6,6 +6,7 @@ import { CoachStudents } from "@/components/coach/CoachStudents";
 import { ImportSheet } from "@/components/coach/ImportSheet";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
+import { monthCounts, monthRange } from "@/lib/coach/chains";
 import { getCoachForActor, listStudents, packageLine } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -23,7 +24,9 @@ export default async function CoachStudentsPage() {
   if (!found) redirect("/coach");
   const { coach } = found;
   const now = new Date();
-  const [students, t] = await Promise.all([listStudents(db, coach.id, now), getTranslations("coach")]);
+  const month = monthRange(coach.tz, now);
+  const [students, t, counts] = await Promise.all([listStudents(db, coach.id, now), getTranslations("coach"), monthCounts(db, coach.id, month.from, month.to)]);
+  const thisMonth = new Map(counts.perStudent.map((p) => [p.playerId, p.done]));
   return (
     <>
       <Header />
@@ -45,6 +48,7 @@ export default async function CoachStudentsPage() {
               name: s.player.displayName,
               status: s.status,
               lessonsDone: s.lessonsDone,
+              thisMonth: thisMonth.get(s.player.id) ?? 0,
               pkg: p && line ? { id: p.id, left: line.left, size: p.size, days: line.daysLeft, amount: p.amount, currency: p.currency, paid: Boolean(p.paidAt) } : null,
             };
           })}

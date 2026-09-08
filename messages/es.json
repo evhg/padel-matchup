@@ -1070,7 +1070,12 @@
         "cancelled": "cancelada por ti",
         "cancelled_by_student": "cancelada",
         "late_cancelled": "cancelación tardía"
-      }
+      },
+      "requests": "Piden una hora fuera de tu horario",
+      "yes": "Sí",
+      "no": "No",
+      "waiting": "{count, plural, one {# alumno espera} other {# alumnos esperan}} un hueco",
+      "month": "{month}: {done, plural, one {# clase} other {# clases}} dadas{noShows, plural, =0 {} one {, # ausencia} other {, # ausencias}}"
     },
     "book": {
       "student": "Alumno",
@@ -1112,7 +1117,8 @@
       "qrHelp": "Se abre en cualquier app bancaria tailandesa con el importe puesto. Nada pasa por Kicksmash.",
       "payLink": "Pagar por enlace",
       "how": "Acepta una solicitud y el alumno podrá reservar solo las horas libres. Un bono es un número de clases con caducidad; cada reserva descuenta una y una cancelación a tiempo la devuelve. El pago es entre vosotros: muestra el QR y luego toca pagado.",
-      "emailOptional": "Email, opcional. Recibe tu enlace una vez."
+      "emailOptional": "Email, opcional. Recibe tu enlace una vez.",
+      "thisMonth": "{count} este mes"
     },
     "settings": {
       "title": "Ajustes",
@@ -1166,7 +1172,24 @@
       "cancelledCounted": "Cancelada tarde; esta cuenta.",
       "whatsapp": "Escribir por WhatsApp",
       "private": "Esta página es privada.",
-      "how": "Toca una hora libre y es tuya al instante. Cancela gratis hasta {hours} horas antes; después usa un pase gratis y luego cuenta. Tu bono, cuando lo tengas, se descuenta bajo cada clase."
+      "how": "Toca una hora libre y es tuya al instante. Cancela gratis hasta {hours} horas antes; después usa un pase gratis y luego cuenta. Tu bono, cuando lo tengas, se descuenta bajo cada clase.",
+      "taken": "Ocupado. Toca para que te avise si se libera.",
+      "waitlisted": "En la lista para {when}. El primer hueco libre es tuyo durante 30 minutos.",
+      "weekWait": "¿Nada te cuadra? Avísame cuando se libere algo esa semana",
+      "weekWaitlisted": "En la lista para la semana del {week}.",
+      "waitingFor": "Esperando",
+      "leaveList": "Salir",
+      "offerTitle": "Se ha liberado un hueco",
+      "offerLine": "{when}, tuyo durante {minutes} minutos más.",
+      "offerTake": "Reservar",
+      "offerNo": "No, gracias",
+      "otherTime": "Otra hora",
+      "otherTimeHelp": "¿Fuera del horario habitual? Pregunta; {name} responde sí o no.",
+      "otherTimeNote": "Una nota para el entrenador, opcional",
+      "ask": "Preguntar a {name}",
+      "asked": "Pedido a {name}: {when}. La respuesta llega aquí y por mensaje.",
+      "askedList": "Pedido",
+      "requestBooked": "Reservado: {when}."
     },
     "me": {
       "title": "Tus clases",
@@ -1196,7 +1219,24 @@
       "open": "Abrir tus clases",
       "invitedSubject": "{coach} te ha añadido en {app}",
       "invitedHeading": "Estás en la lista de {coach}",
-      "invitedBody": "Reserva y cancela clases con {coach} desde una sola página. Tu bono y su caducidad siempre están ahí."
+      "invitedBody": "Reserva y cancela clases con {coach} desde una sola página. Tu bono y su caducidad siempre están ahí.",
+      "offerSubject": "Un hueco con {coach}: {when}",
+      "offerHeading": "Se ha liberado un hueco",
+      "offerBody": "{when} con {coach} está libre y reservado para ti durante {minutes} minutos. Abre tu página para cogerlo.",
+      "offerCta": "Coger el hueco",
+      "requestSubject": "{student} pide {when}",
+      "requestHeading": "Una hora fuera de tu horario",
+      "requestBody": "{student} pide {when}. Di sí o no desde tu agenda.",
+      "requestCta": "Abrir la agenda",
+      "declinedSubject": "{coach} no puede {when}",
+      "declinedHeading": "A esa hora no",
+      "declinedBody": "{coach} no puede {when}. Elige otra hora en su página.",
+      "reminderSubject": "Mañana: {when} con {coach}",
+      "reminderHeading": "Tu clase de mañana",
+      "reminderBody": "{when} con {coach}. Si tienes que cancelar, hazlo desde tu página; se aplica la regla habitual.",
+      "lowSubject": "Tu bono con {coach}",
+      "lowHeading": "Casi al final",
+      "lowBody": "{line} Es hora de pedir a {coach} el siguiente bono."
     },
     "calendar": {
       "title": "Tu calendario",
@@ -1250,6 +1290,18 @@
       "notShared": "Esa hoja no está compartida. En Google Sheets: Compartir → Cualquiera con el enlace → Lector, y prueba de nuevo.",
       "unreachable": "No se pudo descargar ese enlace. Prueba a pegar las filas.",
       "done": "{created, plural, one {# bono añadido} other {# bonos añadidos}}: {students, plural, =0 {sin alumnos nuevos} one {# alumno nuevo} other {# alumnos nuevos}}, {matched} ya estaban."
+    },
+    "managers": {
+      "title": "Quién lleva tu agenda contigo",
+      "lead": "Una pareja o un asistente puede reservar, cancelar y anotar pagos. Los alumnos siguen viendo un solo nombre: el tuyo.",
+      "makeLink": "Crear un enlace para esa persona",
+      "shareText": "Lleva mi agenda de clases conmigo: {url}",
+      "remove": "Quitar",
+      "joinTitle": "Llevar la agenda de un entrenador",
+      "joinLead": "{name} te ha pedido ayuda con sus clases. Tu nombre, y dentro.",
+      "joinButton": "Unirme a la agenda de {name}",
+      "joinGone": "Ese enlace ya no vale. Pide otro al entrenador.",
+      "how": "Cualquiera con el enlace puede unirse una vez creado; crea uno nuevo y el anterior deja de funcionar. Un gestor ve y hace todo lo que tú haces aquí, salvo esta sección."
     }
   }
 }

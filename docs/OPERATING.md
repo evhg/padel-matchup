@@ -40,3 +40,7 @@ Vercel Web Analytics: 2,500 events a month (we count page renders ourselves).
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. Discord: 50 requests a second. GitHub Actions: free on a public repository.
+
+## Cron jobs
+
+- `kicksmash-sync` (Supabase pg_cron, every 10 min) → `/api/cron/sync`: the coaches' calendars, both ways. Waitlist offers, lapses and lesson reminders ride the 5-minute push job.

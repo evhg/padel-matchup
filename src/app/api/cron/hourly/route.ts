@@ -14,6 +14,8 @@ import { refreshAllAvailability } from "@/lib/booking/availability";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { completePastLessons } from "@/lib/domain/coaching";
 import { syncAllCoachCalendars } from "@/lib/coach/sync";
+import { lowPackageNoticesDue } from "@/lib/coach/chains";
+import { notifyLowPackage } from "@/lib/coach/notify";
 import { runBackup, type BackupResult } from "@/lib/backup";
 import { pruneErrors } from "@/lib/alerts";
 import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
@@ -48,7 +50,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, serviceAlerts: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -65,6 +67,10 @@ export async function GET(req: Request) {
 
   try {
     summary.lessonsDone = await completePastLessons(db, now);
+    for (const n of await lowPackageNoticesDue(db, now)) {
+      await notifyLowPackage(n).catch(() => undefined);
+      summary.lowPackages++;
+    }
   } catch (e) {
     summary.errors.push(`lessons: ${String(e)}`);
   }

@@ -3,9 +3,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { CoachCalendar } from "@/components/coach/CoachCalendar";
+import { CoachManagers } from "@/components/coach/CoachManagers";
 import { CoachSettings } from "@/components/coach/CoachSettings";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
+import { listManagers } from "@/lib/coach/chains";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
 import { formatHoursLine, getCoachForActor } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
@@ -22,8 +24,8 @@ export default async function CoachSettingsPage() {
   const me = await getSessionPlayer(db);
   const found = me ? await getCoachForActor(db, me.id) : null;
   if (!found) redirect("/coach");
-  const { coach } = found;
-  const t = await getTranslations("coach");
+  const { coach, role } = found;
+  const [t, managers] = await Promise.all([getTranslations("coach"), listManagers(db, coach.id)]);
   return (
     <>
       <Header />
@@ -53,6 +55,7 @@ export default async function CoachSettingsPage() {
           serviceEmail={serviceAccountEmail()}
           initial={{ gcalId: coach.gcalId ?? "", icalUrl: coach.icalUrl ?? "", status: coach.gcalStatus, syncedAt: coach.calendarSyncedAt?.toISOString() ?? null, error: coach.calendarError }}
         />
+        <CoachManagers managers={managers.map((m) => ({ id: m.id, name: m.displayName }))} isOwner={role === "coach"} />
       </main>
       <Footer />
     </>

@@ -8,7 +8,7 @@ import { HowThisWorks } from "./HowThisWorks";
 import { PromptPayQr } from "./PromptPayQr";
 
 export type PackageDTO = { id: string; left: number; size: number; days: number | null; amount: number | null; currency: string; paid: boolean };
-export type StudentDTO = { playerId: string; name: string; status: string; lessonsDone: number; pkg: PackageDTO | null };
+export type StudentDTO = { playerId: string; name: string; status: string; lessonsDone: number; thisMonth?: number; pkg: PackageDTO | null };
 
 type Props = { coachName: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string };
 

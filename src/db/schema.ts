@@ -957,6 +957,8 @@ export const coaches = pgTable(
     icalUrl: text("ical_url"),
     calendarSyncedAt: timestamp("calendar_synced_at", { withTimezone: true }),
     calendarError: text("calendar_error"),
+    /** Short code in the link a coach hands the person who runs their bookings. */
+    managerCode: text("manager_code"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -1021,6 +1023,8 @@ export const lessonPackages = pgTable(
     note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true }),
+    /** The one "two lessons left / expires in a week" note, once sent. */
+    lowRemindedAt: timestamp("low_reminded_at", { withTimezone: true }),
   },
   (t) => [index("lesson_packages_student_idx").on(t.coachId, t.studentPlayerId, t.createdAt)],
 );
@@ -1052,6 +1056,8 @@ export const lessons = pgTable(
     createdByPlayerId: uuid("created_by_player_id").references(() => players.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** The one "tomorrow at 15:00" reminder, once sent. */
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
   },
   (t) => [index("lessons_coach_time_idx").on(t.coachId, t.startsAt), index("lessons_student_idx").on(t.studentPlayerId, t.startsAt), index("lessons_external_idx").on(t.coachId, t.externalId)],
 );
@@ -1114,6 +1120,31 @@ export const coachManagers = pgTable(
   },
   (t) => [primaryKey({ columns: [t.coachId, t.playerId] })],
 );
+
+/** A student asks for a time outside the coach's hours; the coach answers with one tap. */
+export const lessonRequests = pgTable(
+  "lesson_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    studentPlayerId: uuid("student_player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    minutes: integer("minutes").notNull(),
+    note: text("note"),
+    /** open → accepted | declined | expired */
+    status: text("status").notNull().default("open"),
+    lessonId: uuid("lesson_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [index("lesson_requests_coach_idx").on(t.coachId, t.status, t.startsAt)],
+);
+export type LessonRequest = typeof lessonRequests.$inferSelect;
+export type LessonWaitlistRow = typeof lessonWaitlist.$inferSelect;
 
 export const coachesRelations = relations(coaches, ({ one, many }) => ({
   player: one(players, { fields: [coaches.playerId], references: [players.id] }),

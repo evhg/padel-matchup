@@ -8,6 +8,8 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
+import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
+import { whenLabel } from "@/lib/coach/strings";
 import { busyBetween, DAY_MS, getCoachForActor, listCoachLessons, listStudents, openSlots } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -41,7 +43,9 @@ export default async function CoachPage({ searchParams }: Props) {
   const days = dayRange(today, 14);
   const from = zonedTimeToUtc(today, "00:00", coach.tz);
   const to = new Date(from.getTime() + 14 * DAY_MS);
-  const [rows, students, busy] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to)]);
+  const month = monthRange(coach.tz, now);
+  const [rows, students, busy, requests, waiting, counts] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to)]);
+  const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", timeZone: coach.tz }).format(now);
   const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   // The coach may book at short notice: no minimum notice on their own grid.
   const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now });
@@ -56,6 +60,9 @@ export default async function CoachPage({ searchParams }: Props) {
       slots={slotDTOs(slots, coach.tz, locale)}
       dayLabels={labels}
       days={days}
+      requests={requests.map((r) => ({ id: r.id, name: r.player.displayName, label: whenLabel(r.startsAt, coach.tz, locale), note: r.note }))}
+      waiting={new Set(waiting.map((w) => w.studentPlayerId)).size}
+      month={counts.done + counts.noShows > 0 ? { label: monthLabel, done: counts.done, noShows: counts.noShows } : null}
     />,
   );
 }

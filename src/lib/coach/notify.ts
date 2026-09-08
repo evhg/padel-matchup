@@ -6,7 +6,9 @@ import { getPlayerById, packageLine, type CancelOutcome } from "@/lib/domain/coa
 import { sendEmail } from "@/lib/email/send";
 import { layout, translatorFor } from "@/lib/email/templates";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { epochMin, OFFER_MINUTES, type Offer } from "./chains";
 import { coachBotLocale, coachStrings, whenLabel, type CoachBotStrings } from "./strings";
+import type { LessonRequest } from "@/db/schema";
 
 /**
  * What leaves the book when something changes: one quiet line to the other side,
@@ -14,7 +16,7 @@ import { coachBotLocale, coachStrings, whenLabel, type CoachBotStrings } from ".
  * about students' moves; students hear about the coach's. Nobody is pestered twice.
  */
 
-export type LessonNotice = { lesson: Lesson; coach: Coach; student: Player; pkg: LessonPackage | null; by: "coach" | "student" };
+export type LessonNotice = { lesson: Lesson; coach: Coach; student: Player; pkg: LessonPackage | null; by: "coach" | "student"; /** Free times to tap instead, when the coach cancelled. */ alternatives?: Date[] };
 
 const pkgText = (s: CoachBotStrings, pkg: LessonPackage | null, now = new Date()) => {
   if (!pkg) return s.noPackage;
@@ -46,7 +48,10 @@ export async function notifyLessonCancelled(db: Db, n: LessonNotice & { outcome:
   const coachPlayer = await getPlayerById(db, n.coach.playerId);
   if (n.by === "coach" && n.student.telegramId) {
     const s = coachStrings(coachBotLocale(n.student.locale));
-    await dm(n.student.telegramId, s.coachCancelled(n.coach.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale)));
+    const alts = n.alternatives ?? [];
+    const text = s.coachCancelled(n.coach.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale)) + (alts.length ? `\n${s.altTimes}` : "");
+    const keyboard = alts.length ? { inline_keyboard: [alts.map((d) => ({ text: whenLabel(d, n.coach.tz, n.student.locale), callback_data: `lb:${n.coach.id}:${epochMin(d)}` }))] } : undefined;
+    await dm(n.student.telegramId, text, keyboard);
   }
   if (n.by === "student" && coachPlayer?.telegramId) {
     const s = coachStrings(coachBotLocale(coachPlayer.locale));
@@ -83,6 +88,104 @@ export async function notifyStudentAccepted(coach: Coach, student: Player): Prom
   if (!student.telegramId) return;
   const s = coachStrings(coachBotLocale(student.locale));
   await dm(student.telegramId, s.youWereAccepted(coach.displayName), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] });
+}
+
+/** A freed slot offered to the first in line: one message with a button, thirty minutes on the clock. */
+export async function notifyOffer(db: Db, coach: Coach, offer: Offer): Promise<void> {
+  const student = offer.player;
+  const when = whenLabel(offer.startsAt, coach.tz, student.locale);
+  if (student.telegramId) {
+    const s = coachStrings(coachBotLocale(student.locale));
+    await dm(student.telegramId, s.offer(coach.displayName, when, OFFER_MINUTES), { inline_keyboard: [[{ text: s.offerTake, callback_data: `lo:${offer.entry.id}` }, { text: s.offerNo, callback_data: `lw:${offer.entry.id}` }]] });
+    return;
+  }
+  if (!emailEnabled() || !student.email) return;
+  const { t } = await translatorFor(student.locale);
+  const url = `${baseUrl()}/c/${coach.handle}`;
+  const vars = { coach: coach.displayName, when, minutes: OFFER_MINUTES };
+  const { html, text } = layout({ heading: t("coach.email.offerHeading", vars), body: t("coach.email.offerBody", vars), cta: { label: t("coach.email.offerCta"), url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("coach.email.offerCta") });
+  await sendEmail({ to: student.email, subject: t("coach.email.offerSubject", vars), html, text });
+}
+
+export async function notifyOfferLapsed(coach: Coach, student: Player, startsAt: Date): Promise<void> {
+  if (!student.telegramId) return;
+  const s = coachStrings(coachBotLocale(student.locale));
+  await dm(student.telegramId, s.offerLapsed(whenLabel(startsAt, coach.tz, student.locale)));
+}
+
+/** A time outside the hours: the coach gets one yes/no. Telegram when they have it, email otherwise. */
+export async function notifyRequest(db: Db, coach: Coach, student: Player, request: LessonRequest): Promise<void> {
+  const coachPlayer = await getPlayerById(db, coach.playerId);
+  if (!coachPlayer) return;
+  const when = whenLabel(request.startsAt, coach.tz, coachPlayer.locale);
+  if (coachPlayer.telegramId) {
+    const s = coachStrings(coachBotLocale(coachPlayer.locale));
+    await dm(coachPlayer.telegramId, s.requestAsk(student.displayName, when) + (request.note ? `\n“${request.note}”` : ""), { inline_keyboard: [[{ text: `✓ ${s.requestYes}`, callback_data: `rq:${request.id}:y` }, { text: `✕ ${s.requestNo}`, callback_data: `rq:${request.id}:n` }]] });
+    return;
+  }
+  if (!emailEnabled() || !coachPlayer.email) return;
+  const { t } = await translatorFor(coachPlayer.locale);
+  const url = `${baseUrl()}/coach`;
+  const vars = { student: student.displayName, when };
+  const { html, text } = layout({ heading: t("coach.email.requestHeading", vars), body: t("coach.email.requestBody", vars), cta: { label: t("coach.email.requestCta"), url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("coach.email.requestCta") });
+  await sendEmail({ to: coachPlayer.email, subject: t("coach.email.requestSubject", vars), html, text });
+}
+
+export async function notifyRequestDecided(db: Db, n: { coach: Coach; student: Player; request: LessonRequest; lesson: Lesson | null; pkg: LessonPackage | null }): Promise<void> {
+  const { coach, student, request, lesson } = n;
+  const when = whenLabel(request.startsAt, coach.tz, student.locale);
+  if (student.telegramId) {
+    const s = coachStrings(coachBotLocale(student.locale));
+    if (lesson) await dm(student.telegramId, s.requestAccepted(coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${lesson.id}` }]] });
+    else await dm(student.telegramId, s.requestDeclined(coach.displayName, when), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] });
+  }
+  if (lesson) await emailLesson({ lesson, coach, student, pkg: n.pkg, by: "coach" }, "REQUEST").catch(() => undefined);
+  else if (emailEnabled() && student.email) {
+    const { t } = await translatorFor(student.locale);
+    const url = `${baseUrl()}/c/${coach.handle}`;
+    const vars = { coach: coach.displayName, when };
+    const { html, text } = layout({ heading: t("coach.email.declinedHeading", vars), body: t("coach.email.declinedBody", vars), cta: { label: t("coach.email.open"), url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("coach.email.open") });
+    await sendEmail({ to: student.email, subject: t("coach.email.declinedSubject", vars), html, text }).catch(() => undefined);
+  }
+}
+
+/** The evening-before reminder: one line, a cancel button, nothing else. */
+export async function notifyLessonReminder(n: { lesson: Lesson; coach: Coach; student: Player; pkg: LessonPackage | null }): Promise<void> {
+  const when = whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale);
+  if (n.student.telegramId) {
+    const s = coachStrings(coachBotLocale(n.student.locale));
+    await dm(n.student.telegramId, s.reminder(n.coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${n.lesson.id}` }]] });
+    return;
+  }
+  if (!emailEnabled() || !n.student.email) return;
+  const { t } = await translatorFor(n.student.locale);
+  const url = `${baseUrl()}/c/${n.coach.handle}`;
+  const vars = { coach: n.coach.displayName, when };
+  const { html, text } = layout({ heading: t("coach.email.reminderHeading", vars), body: t("coach.email.reminderBody", vars), cta: { label: t("coach.email.open"), url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("coach.email.open") });
+  await sendEmail({ to: n.student.email, subject: t("coach.email.reminderSubject", vars), html, text });
+}
+
+/** Nearly out, or nearly expired: one note to the student, which is also the rebooking nudge. */
+export async function notifyLowPackage(n: { pkg: LessonPackage; coach: Coach; student: Player; left: number; daysLeft: number | null }): Promise<void> {
+  if (n.student.telegramId) {
+    const s = coachStrings(coachBotLocale(n.student.locale));
+    await dm(n.student.telegramId, s.lowPackage(n.coach.displayName, s.pkgLine(n.left, n.pkg.size, n.daysLeft)), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${n.coach.handle}` }]] });
+    return;
+  }
+  if (!emailEnabled() || !n.student.email) return;
+  const { t } = await translatorFor(n.student.locale);
+  const url = `${baseUrl()}/c/${n.coach.handle}`;
+  const line = n.daysLeft === null ? t("coach.packageLineNoExpiry", { left: n.left, size: n.pkg.size }) : t("coach.packageLine", { left: n.left, size: n.pkg.size, days: n.daysLeft });
+  const vars = { coach: n.coach.displayName, line };
+  const { html, text } = layout({ heading: t("coach.email.lowHeading", vars), body: t("coach.email.lowBody", vars), cta: { label: t("coach.email.open"), url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("coach.email.open") });
+  await sendEmail({ to: n.student.email, subject: t("coach.email.lowSubject", vars), html, text });
+}
+
+export async function notifyManagerJoined(db: Db, coach: Coach, manager: Player): Promise<void> {
+  const coachPlayer = await getPlayerById(db, coach.playerId);
+  if (!coachPlayer?.telegramId) return;
+  const s = coachStrings(coachBotLocale(coachPlayer.locale));
+  await dm(coachPlayer.telegramId, s.managerJoined(manager.displayName));
 }
 
 // ------------------------------------------------------------------ email

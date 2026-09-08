@@ -2,7 +2,8 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { lessonPackages, type Coach, type Player } from "@/db/schema";
 import { parseCoachLine, parseStudentLine, type CoachIntent, type Match, type StudentRef } from "@/lib/coach/assistant";
-import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted } from "@/lib/coach/notify";
+import { acceptOffer, afterLessonFreed, decideRequest, epochMin, fromEpochMin, getWaitlistEntry, withdrawWaitlist } from "@/lib/coach/chains";
+import { notifyLessonBooked, notifyLessonCancelled, notifyOffer, notifyRequestDecided, notifyStudentAccepted } from "@/lib/coach/notify";
 import { coachBotLocale, coachStrings, dayOnlyLabel, whenLabel, type CoachBotLocale, type CoachBotStrings } from "@/lib/coach/strings";
 import { baseUrl } from "@/lib/config";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
@@ -39,8 +40,6 @@ import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, type
  */
 
 type Cb = NonNullable<TgUpdate["callback_query"]>;
-const epochMin = (d: Date) => Math.floor(d.getTime() / 60_000).toString(36);
-const fromEpochMin = (s: string) => new Date(parseInt(s, 36) * 60_000);
 const kb = (rows: { text: string; callback_data?: string; url?: string }[][]): InlineKeyboard => ({ inline_keyboard: rows });
 
 const pkgText = (s: CoachBotStrings, pkg: { size: number; used: number; expiresAt: Date | null; closedAt: Date | null } | null, now = new Date()) => {
@@ -185,7 +184,9 @@ async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBot
   const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "coach", coach });
   const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
   const pkg = lesson.packageId ? (await db.select().from(lessonPackages).where(eq(lessonPackages.id, lesson.packageId)).limit(1))[0] ?? null : null;
-  if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg, by: "coach", outcome });
+  const freed = await afterLessonFreed(db, coach, lesson, "coach");
+  if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg, by: "coach", outcome, alternatives: freed.alternatives });
+  if (freed.offer) await notifyOffer(db, coach, freed.offer).catch(() => undefined);
   const text = s.cancelled(student?.displayName ?? "?", whenLabel(lesson.startsAt, coach.tz, locale));
   if (editMessageId) await editMessageText(chatId, editMessageId, esc(text), null).catch(() => undefined);
   else await sendMessage(chatId, esc(text), { silent: true });
@@ -275,6 +276,8 @@ async function studentCancel(db: Db, player: Player, lessonId: string, s: CoachB
   const { lesson: updated, outcome } = await cancelLesson(db, { lessonId, by: "student", coach: coachRow, actorPlayerId: player.id });
   const pkg = updated.packageId ? (await db.select().from(lessonPackages).where(eq(lessonPackages.id, updated.packageId)).limit(1))[0] ?? null : null;
   await notifyLessonCancelled(db, { lesson: updated, coach: coachRow, student: player, pkg, by: "student", outcome });
+  const freed = await afterLessonFreed(db, coachRow, updated, "student");
+  if (freed.offer) await notifyOffer(db, coachRow, freed.offer).catch(() => undefined);
   const text = esc(s.youCancelled(outcome === "free_pass" ? s.outcomeFreePass : outcome === "counted" ? s.outcomeCounted : outcome === "refunded" ? s.outcomeRefunded : ""));
   if (editMessageId) await editMessageText(chatId, editMessageId, text, null).catch(() => undefined);
   else await sendMessage(chatId, text, { silent: true });
@@ -315,7 +318,7 @@ export async function coachAssistantMessage(db: Db, msg: TgMessage, from: TgUser
 /** Buttons under the assistant's messages. Null when the data is not ours. */
 export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promise<string | null> {
   const data = cb.data ?? "";
-  const m = /^(cu|cp|cs|lc|lx|lb|ld|cb):([0-9a-z-]{1,36})(?::([0-9a-z-]{1,10}))?$/i.exec(data);
+  const m = /^(cu|cp|cs|lc|lx|lb|ld|cb|lo|lw|rq):([0-9a-z-]{1,36})(?::([0-9a-z-]{1,10}))?$/i.exec(data);
   if (!m || !cb.message) return null;
   const [, action, id, extra] = m;
   const chatId = cb.message.chat.id;
@@ -323,6 +326,48 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
   const locale = coachBotLocale(player.locale);
   const s = coachStrings(locale);
 
+  if (action === "rq") {
+    const found = await getCoachForActor(db, player.id);
+    if (!found) {
+      await answerCallbackQuery(cb.id);
+      return "coach:rq:not_coach";
+    }
+    try {
+      const { request, lesson, package: pkg } = await decideRequest(db, found.coach, id, extra === "y");
+      const student = await getPlayerById(db, request.studentPlayerId);
+      if (student) await notifyRequestDecided(db, { coach: found.coach, student, request, lesson, pkg }).catch(() => undefined);
+      await editMessageText(chatId, messageId, esc(s.requestAnswered(student?.displayName ?? "?", Boolean(lesson))), null).catch(() => undefined);
+      await answerCallbackQuery(cb.id);
+      return lesson ? "coach:request:yes" : "coach:request:no";
+    } catch {
+      await answerCallbackQuery(cb.id, s.requestGone);
+      return "coach:request:gone";
+    }
+  }
+  if (action === "lo" || action === "lw") {
+    const hit = await getWaitlistEntry(db, id);
+    if (!hit || hit.entry.studentPlayerId !== player.id) {
+      await answerCallbackQuery(cb.id, s.offerGone);
+      return "student:offer:none";
+    }
+    if (action === "lw") {
+      await withdrawWaitlist(db, hit.coach.id, id, player.id);
+      await editMessageText(chatId, messageId, esc(s.offerWithdrawn), null).catch(() => undefined);
+      await answerCallbackQuery(cb.id);
+      return "student:offer:withdrawn";
+    }
+    try {
+      const { lesson, package: pkg } = await acceptOffer(db, hit.coach, id, player.id);
+      await notifyLessonBooked(db, { lesson, coach: hit.coach, student: player, pkg, by: "student" });
+      await editMessageText(chatId, messageId, esc(s.offerTaken(whenLabel(lesson.startsAt, hit.coach.tz, locale), pkgText(s, pkg))), kb([[{ text: s.cancel, callback_data: `lc:${lesson.id}` }]])).catch(() => undefined);
+      await answerCallbackQuery(cb.id);
+      return "student:offer:booked";
+    } catch {
+      await editMessageText(chatId, messageId, esc(s.offerGone), null).catch(() => undefined);
+      await answerCallbackQuery(cb.id, s.offerGone);
+      return "student:offer:gone";
+    }
+  }
   if (action === "cu" || action === "cp" || action === "cs" || action === "cb") {
     const found = await getCoachForActor(db, player.id);
     if (!found) {

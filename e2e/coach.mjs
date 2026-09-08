@@ -129,7 +129,77 @@ try {
   await ivan.getByText("Your lessons").waitFor({ timeout: 20000 });
   check("My matches shows the lesson and the package with Olga", (await ivan.getByText("with Olga").count()) === 1 && (await ivan.getByText(/9 of 10 left/).count()) === 1);
 
-  // Russian path renders the coach page in Russian.
+  // The chain: Olga books Pavel tomorrow; Ivan waits for that exact time; Olga cancels; Ivan is offered it and takes it.
+  await olga.goto(BASE + "/coach");
+  await olga.getByRole("button", { name: "Book a lesson" }).click();
+  await olga.locator("#book-student").waitFor({ timeout: 10000 });
+  await olga.locator("#book-student").selectOption({ label: "Pavel" });
+  const olgaForm = olga.locator("form");
+  const tomorrowChip = olgaForm.locator('button[data-kind="day"]').nth(1);
+  const dayText = (await tomorrowChip.textContent())?.trim() ?? "";
+  await tomorrowChip.click();
+  const lastTime = olgaForm.locator('button[data-kind="time"]').last();
+  const timeText = (await lastTime.textContent())?.trim() ?? "";
+  await lastTime.click();
+  await olgaForm.getByRole("button", { name: "Book", exact: true }).click();
+  await olga.getByText(/^Booked Pavel/).waitFor({ timeout: 20000 });
+
+  await ivan.goto(`${BASE}/c/${handle}`);
+  await ivan.getByRole("heading", { name: "Book a lesson" }).waitFor({ timeout: 20000 });
+  await ivan.locator('button[data-kind="day"]', { hasText: dayText }).first().click();
+  const takenChip = ivan.locator('button[data-kind="taken"]', { hasText: timeText }).first();
+  check("a taken time shows as waitable on the student's page", (await takenChip.count()) === 1, `${dayText} ${timeText}`);
+  await takenChip.click();
+  await ivan.getByText(/^On the list for/).waitFor({ timeout: 20000 });
+  check("a student joins the waitlist for a taken time with one tap", true);
+
+  await olga.goto(BASE + "/coach");
+  await olga.getByText(/1 student waiting/).waitFor({ timeout: 20000 });
+  check("the coach's book shows who is waiting", true);
+  await olga.locator("li", { hasText: "Pavel" }).getByRole("button", { name: "Cancel" }).first().click();
+  await olga.locator("li", { hasText: "Pavel" }).getByText(/cancelled by you/).first().waitFor({ timeout: 20000 });
+
+  await ivan.goto(`${BASE}/c/${handle}`);
+  await ivan.getByTestId("offers").waitFor({ timeout: 20000 });
+  check("the freed time is offered to the waiting student with the minutes left", (await ivan.getByText(/yours for \d+ more minutes/).count()) === 1);
+  await ivan.getByTestId("offer-take").click();
+  await ivan.getByText(/^Booked /).waitFor({ timeout: 20000 });
+  await ivan.getByText(/8 of 10 left/).waitFor({ timeout: 20000 });
+  check("taking the offer books the lesson and draws from the package", true);
+  await shot(ivan, "64-student-offer");
+
+  // A special request outside the hours: Ivan asks for tomorrow 23:30; Olga says yes from her book.
+  await ivan.getByTestId("other-time").click();
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  await ivan.locator('input[type="datetime-local"]').fill(`${tomorrow}T23:30`);
+  await ivan.getByPlaceholder("A word for the coach, optional").fill("after work?");
+  await ivan.getByRole("button", { name: "Ask Olga" }).click();
+  await ivan.getByText(/^Asked Olga for/).waitFor({ timeout: 20000 });
+  check("a time outside the hours becomes a request, not an error", true);
+  await olga.goto(BASE + "/coach");
+  await olga.getByTestId("coach-requests").waitFor({ timeout: 20000 });
+  check("the coach sees the request with the student's note", (await olga.getByText(/after work\?/).count()) === 1);
+  await olga.getByTestId("coach-requests").getByRole("button", { name: /Yes/ }).click();
+  await olga.getByTestId("coach-requests").waitFor({ state: "detached", timeout: 20000 });
+  await ivan.goto(`${BASE}/c/${handle}`);
+  await ivan.getByText(/7 of 10 left/).waitFor({ timeout: 20000 });
+  check("the coach's yes books the lesson at the requested time", (await ivan.getByText(/23:30/).count()) >= 1);
+
+  // A manager: Olga makes one link; Nina opens it, gives a name, and sees Olga's book.
+  await olga.goto(BASE + "/coach/settings");
+  await olga.getByRole("button", { name: "Make a link for them" }).click();
+  const managerLink = (await olga.getByTestId("manager-link").textContent({ timeout: 20000 }))?.trim() ?? "";
+  check("the coach gets one manager link", /\/coach\/join\/[a-z0-9]{8}$/.test(managerLink), managerLink);
+  const nina = await newPage();
+  await nina.goto(managerLink);
+  await nina.getByPlaceholder("e.g. Alex").fill("Nina");
+  await nina.getByRole("button", { name: /Join Olga/ }).click();
+  await nina.getByRole("heading", { name: "Today" }).waitFor({ timeout: 20000 });
+  check("the manager lands in the coach's book after one name", (await nina.getByText("Pavel").count()) >= 1 || (await nina.getByText("Ivan").count()) >= 1);
+  await olga.reload();
+  check("the coach sees the manager listed", (await olga.getByTestId("coach-managers").getByText("Nina").count()) === 1);
+
+  // Russian path renders the coach page in Russian (last: it switches Ivan's language).
   await ivan.goto(`${BASE}/ru/c/${handle}`);
   check("the coach page has a Russian URL", (await ivan.getByText("Тренер по паделу").count()) === 1);
 } catch (e) {
