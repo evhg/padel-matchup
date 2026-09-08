@@ -49,6 +49,7 @@ export function ImportSheet() {
       setDone(r.data);
       setPreview(null);
       setText("");
+      setOpen(false);
       router.refresh();
     });
   };
