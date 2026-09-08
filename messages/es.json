@@ -780,7 +780,9 @@
     "defaultName": "Los del {day} {time}",
     "nameHelp": "El sitio se queda en el partido. Llama a la pandilla como la llamáis vosotros.",
     "createNow": "Crear el grupo",
-    "invite": "Invita a otros a este grupo"
+    "invite": "Invita a otros a este grupo",
+    "delete": "Eliminar grupo",
+    "deleteConfirm": "¿Eliminar {name}? Los miembros conservan sus partidos y el hueco semanal se detiene. No se puede deshacer."
   },
   "venue": {
     "board": "Tablón del club",

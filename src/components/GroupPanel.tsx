@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createGroupFromEventAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction } from "@/actions/groups";
+import { createGroupFromEventAction, deleteGroupAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction } from "@/actions/groups";
 import { formatLevel } from "@/lib/domain/levels";
 
 const errKey = (e: string) => (e === "name_required" || e === "no_identity" || e === "level_required" ? "generic" : e);
@@ -164,6 +164,7 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
 /** Admin: name and the weekly slot that creates matches automatically. */
 export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, weekdays }: { code: string; name: string; recurDow: number | null; recurTime: string | null; recurLeadDays: number; weekdays: string[] }) {
   const t = useTranslations();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(name);
   const [dow, setDow] = useState<number | null>(recurDow);
@@ -226,6 +227,21 @@ export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, 
         </button>
         <button type="button" className="btn-ghost btn-sm" onClick={() => setOpen(false)}>
           {t("common.cancel")}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost btn-sm ml-auto text-danger"
+          disabled={pending}
+          onClick={() => {
+            if (!confirm(t("group.deleteConfirm", { name }))) return;
+            start(async () => {
+              const r = await deleteGroupAction(code);
+              if (r.ok) router.push("/me");
+              else setError(t(`errors.${errKey(r.error)}` as "errors.generic"));
+            });
+          }}
+        >
+          {t("group.delete")}
         </button>
       </div>
     </form>

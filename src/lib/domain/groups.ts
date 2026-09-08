@@ -162,6 +162,14 @@ export type UpdateGroupInput = {
   tz?: string;
 };
 
+/** An admin disbands the group: members and the weekly slot go; matches stay, unlinked; chats keep their cards. */
+export async function deleteGroup(db: Db, groupId: string, actorPlayerId: string): Promise<void> {
+  const [member] = await db.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, actorPlayerId))).limit(1);
+  if (!member || member.role !== "admin") throw new DomainError("forbidden");
+  await db.update(events).set({ groupId: null }).where(eq(events.groupId, groupId));
+  await db.delete(groups).where(eq(groups.id, groupId));
+}
+
 export async function updateGroup(db: Db, groupId: string, actorPlayerId: string, patch: UpdateGroupInput): Promise<Group> {
   const actor = await getGroupMember(db, groupId, actorPlayerId);
   if (!actor || actor.role !== "admin") throw new DomainError("forbidden");

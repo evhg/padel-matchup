@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getLocale, getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { createGroupFromEvent, getGroupByCode, getGroupMember, joinGroup, leaveGroup, removeGroupMember, updateGroup } from "@/lib/domain/groups";
+import { createGroupFromEvent, deleteGroup, getGroupByCode, getGroupMember, joinGroup, leaveGroup, removeGroupMember, updateGroup } from "@/lib/domain/groups";
 import { isValidInviteCode } from "@/lib/codes";
 import { formatEventTime, weekdayName } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
@@ -75,6 +75,19 @@ const updateSchema = z.object({
   recurLeadDays: z.number().int().min(1).max(14).optional(),
 });
 export type UpdateGroupActionInput = z.infer<typeof updateSchema>;
+
+/** Admin only: the group goes, its matches stay. */
+export async function deleteGroupAction(code: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, group } = await loadGroup(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    await deleteGroup(db, group.id, me.id);
+    revalidatePath(`/g/${code}`);
+    revalidatePath("/me");
+    return null;
+  });
+}
 
 export async function updateGroupAction(code: string, raw: UpdateGroupActionInput): Promise<ActionResult<null>> {
   return runA(async () => {

@@ -780,7 +780,9 @@
     "defaultName": "{day} {time} crew",
     "nameHelp": "The place stays on the match. Call the crew what you call it.",
     "createNow": "Create the group",
-    "invite": "Invite others to this group"
+    "invite": "Invite others to this group",
+    "delete": "Delete group",
+    "deleteConfirm": "Delete {name}? Members keep their matches and the weekly slot stops. No undo."
   },
   "venue": {
     "board": "Venue board",
