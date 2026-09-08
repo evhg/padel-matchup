@@ -484,7 +484,7 @@ export async function completePastLessons(db: Db, now = new Date()): Promise<num
   const rows = await db
     .update(lessons)
     .set({ status: "done" })
-    .where(and(eq(lessons.status, "booked"), lt(sql`${lessons.startsAt} + make_interval(mins => ${lessons.minutes})`, now)))
+    .where(and(eq(lessons.status, "booked"), sql`${lessons.startsAt} + make_interval(mins => ${lessons.minutes}) < ${now.toISOString()}::timestamptz`))
     .returning({ id: lessons.id });
   return rows.length;
 }
