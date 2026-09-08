@@ -6,6 +6,7 @@ import { feedbackWeek } from "@/lib/feedback/store";
 import { outreachWeek } from "@/lib/outreach/desk";
 import { searchConsoleEnabled, searchWeek } from "@/lib/search/console";
 import { pingIndexNow } from "@/lib/indexnow";
+import { localePath } from "@/lib/seo";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { metricsDaily } from "@/db/schema";
@@ -94,6 +95,9 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
   }
 }
 
+/** A page lives at its language's path (/ru/answers/…, /es/answers/…), so its canonical URL carries the right lang. */
+export const answerPath = (a: Pick<Answer, "slug" | "language">) => localePath(`/answers/${a.slug}`, a.language);
+
 export type AnswerPageInput = { slug?: string | null; language: string; title: string; question: string; answer: string; publish?: boolean };
 
 export const slugifyTitle = (s: string) =>
@@ -117,7 +121,7 @@ export async function createAnswerPage(db: Db, input: AnswerPageInput, now = new
     .insert(answers)
     .values({ slug, language, title, question, answer, publishedAt: input.publish === false ? null : now })
     .returning();
-  if (row.publishedAt) await pingIndexNow([`/answers/${row.slug}`, "/answers"], { db });
+  if (row.publishedAt) await pingIndexNow([answerPath(row), "/answers"], { db });
   return row;
 }
 
@@ -137,7 +141,7 @@ export async function getPublishedAnswer(db: Db, slug: string): Promise<Answer |
 export async function setAnswerPublished(db: Db, id: string, on: boolean, now = new Date()): Promise<Answer | null> {
   const [row] = await db.update(answers).set(on ? { publishedAt: now, unpublishedAt: null } : { unpublishedAt: now }).where(eq(answers.id, id)).returning();
   // Search engines hear about the page either way: a new one to index, a gone one to drop.
-  if (row) await pingIndexNow([`/answers/${row.slug}`, "/answers"], { db });
+  if (row) await pingIndexNow([answerPath(row), "/answers"], { db });
   return row ?? null;
 }
 
@@ -194,7 +198,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
       keyboard: {
         inline_keyboard: [
           [
-            { text: "Open", url: `${baseUrl()}/answers/${a.slug}` },
+            { text: "Open", url: `${baseUrl()}${answerPath(a)}` },
             { text: "🗑 Unpublish", callback_data: `lu:${a.id}` },
           ],
         ],

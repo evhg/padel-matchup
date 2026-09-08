@@ -132,7 +132,7 @@ export default async function GroupPage({ params }: Props) {
         </section>
 
         <section className="card">
-          <h2 className="text-lg font-extrabold">{t("event.share")}</h2>
+          <h2 className="text-lg font-extrabold">{t("group.invite")}</h2>
           <div className="mt-1 mb-3 truncate text-sm font-semibold text-muted">
             {shortHost()}/g/{code}
           </div>

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, groupMembers, slots } from "@/db/schema";
 import { createEvent, duplicateEvent } from "@/lib/domain/events";
-import { autoCreateGroupMatches, createGroup, createGroupFromEvent, getGroupDetail, getPlayerGroups, joinGroup, leaveGroup, nextGroupSlot, recurrenceDue, removeGroupMember, updateGroup } from "@/lib/domain/groups";
+import { autoCreateGroupMatches, createGroup, createGroupFromEvent, deleteGroup, getGroupByCode, getGroupDetail, getPlayerGroups, joinGroup, leaveGroup, nextGroupSlot, recurrenceDue, removeGroupMember, updateGroup } from "@/lib/domain/groups";
 import { joinEvent } from "@/lib/domain/slots";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
@@ -25,6 +25,13 @@ describe("groups", () => {
     expect(g.code).toHaveLength(6);
     expect(g.name).toBe("Padel crew");
     expect(g.venueName).toBe("Club X");
+    // A match titled after its venue does not pass the venue on as the group's name; a real title does.
+    const named = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 2 * HOUR), tz: "Asia/Singapore", venueName: "Club X", title: "Club X", whenFull: "closed" });
+    await joinEvent(db, { eventId: named.id, playerId: p2.id });
+    expect((await createGroupFromEvent(db, { eventId: named.id, actorPlayerId: org.id, fallbackName: "Thursday 19:00 crew" })).name).toBe("Thursday 19:00 crew");
+    const titled = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 3 * HOUR), tz: "Asia/Singapore", venueName: "Club X", title: "Sunday social", whenFull: "closed" });
+    await joinEvent(db, { eventId: titled.id, playerId: p2.id });
+    expect((await createGroupFromEvent(db, { eventId: titled.id, actorPlayerId: org.id, fallbackName: "x" })).name).toBe("Sunday social");
     expect(g.whenFull).toBe("closed");
     expect(g.levelMin).toBe(3);
     expect(g.creatorPlayerId).toBe(p2.id);
@@ -39,6 +46,13 @@ describe("groups", () => {
     const stranger = await makePlayer(db, "Stranger");
     const ev2 = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + HOUR), tz: "UTC", whenFull: "waitlist" });
     await expect(createGroupFromEvent(db, { eventId: ev2.id, actorPlayerId: stranger.id, fallbackName: "x" })).rejects.toMatchObject({ code: "forbidden" });
+    // Only an admin disbands it; matches stay, unlinked.
+    await expect(deleteGroup(db, g.id, p3.id)).rejects.toMatchObject({ code: "forbidden" });
+    await deleteGroup(db, g.id, p2.id);
+    expect(await getGroupByCode(db, g.code)).toBeNull();
+    const [evAfter] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(evAfter.groupId).toBeNull();
+    expect(await db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id))).toHaveLength(0);
   });
 
   it("membership: join is idempotent, creator can't leave, only admins remove", async () => {

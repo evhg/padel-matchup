@@ -772,11 +772,17 @@
     "save": "Save",
     "partOf": "Part of {name}",
     "forGroup": "For {name}",
-    "shareHelp": "Share this link: whoever joins can create the next match.",
+    "shareHelp": "Send this link. Whoever joins becomes a member and can create the next match.",
     "memberOnly": "Join the group first: then you can create its next match.",
     "venue": "Usual place",
     "tz": "Time zone",
-    "type": "Format"
+    "type": "Format",
+    "defaultName": "{day} {time} crew",
+    "nameHelp": "The place stays on the match. Call the crew what you call it.",
+    "createNow": "Create the group",
+    "invite": "Invite others to this group",
+    "delete": "Delete group",
+    "deleteConfirm": "Delete {name}? Members keep their matches and the weekly slot stops. No undo."
   },
   "venue": {
     "board": "Venue board",

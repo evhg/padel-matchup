@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { createAnswerPage, getPublishedAnswer, slugifyTitle } from "@/lib/listen/answers";
+import { answerPath, createAnswerPage, getPublishedAnswer, slugifyTitle } from "@/lib/listen/answers";
 import { createTestDb } from "./helpers/db";
 
 describe("answer pages written by the operator", () => {
@@ -21,6 +21,8 @@ describe("answer pages written by the operator", () => {
     expect(b.slug).toBe("gde-poigrat-v-padel-na-phukete-vecherom-2");
     expect(a.publishedAt).toBeInstanceOf(Date);
     expect((await getPublishedAnswer(db, a.slug))?.language).toBe("ru");
+    expect(answerPath(a)).toBe(`/ru/answers/${a.slug}`);
+    expect(answerPath({ slug: "x", language: "en" })).toBe("/answers/x");
     const draft = await createAnswerPage(db, { language: "en", title: "Draft only", question: "q", answer: body, publish: false });
     expect(draft.publishedAt).toBeNull();
     await expect(createAnswerPage(db, { language: "en", title: "Too short", question: "q", answer: "short" })).rejects.toThrow("invalid_page");

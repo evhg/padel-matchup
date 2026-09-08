@@ -3,37 +3,54 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createGroupFromEventAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction } from "@/actions/groups";
+import { createGroupFromEventAction, deleteGroupAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction } from "@/actions/groups";
 import { formatLevel } from "@/lib/domain/levels";
 
 const errKey = (e: string) => (e === "name_required" || e === "no_identity" || e === "level_required" ? "generic" : e);
 
-/** Match page: "Turn this crew into a group" (creator or any participant). */
-export function CreateGroupButton({ code }: { code: string }) {
+/** Match page: "Turn this crew into a group" (creator or any participant). The name is seen, and can be changed, before the group exists. */
+export function CreateGroupButton({ code, suggestedName }: { code: string; suggestedName: string }) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(suggestedName);
   const [error, setError] = useState<string | null>(null);
+  const create = () =>
+    start(async () => {
+      setError(null);
+      const r = await createGroupFromEventAction(code, name.trim() || undefined);
+      if (r.ok) router.push(`/g/${r.data.code}`);
+      else setError(t(`errors.${errKey(r.error)}` as "errors.generic"));
+    });
+  if (!open) {
+    return (
+      <div className="mt-5 border-t border-line pt-4">
+        <button type="button" className="btn-secondary w-full" onClick={() => setOpen(true)}>
+          {`👥 ${t("group.create")}`}
+        </button>
+        <p className="mt-1.5 text-xs text-faint">{t("group.createHelp")}</p>
+      </div>
+    );
+  }
   return (
-    <div className="mt-5 border-t border-line pt-4">
-      <button
-        type="button"
-        className="btn-secondary w-full"
-        disabled={pending}
-        onClick={() =>
-          start(async () => {
-            setError(null);
-            const r = await createGroupFromEventAction(code);
-            if (r.ok) router.push(`/g/${r.data.code}`);
-            else setError(t(`errors.${errKey(r.error)}` as "errors.generic"));
-          })
-        }
-      >
-        {pending ? t("group.creating") : `👥 ${t("group.create")}`}
+    <form
+      className="mt-5 flex flex-col gap-2 border-t border-line pt-4 animate-pop"
+      onSubmit={(e) => {
+        e.preventDefault();
+        create();
+      }}
+    >
+      <label className="text-sm font-bold" htmlFor="group-name">
+        {t("group.name")}
+      </label>
+      <input id="group-name" className="input" autoFocus value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder={t("group.namePlaceholder")} enterKeyHint="go" />
+      <p className="text-xs text-faint">{t("group.nameHelp")}</p>
+      <button type="submit" className="btn-primary w-full" disabled={pending}>
+        {pending ? t("group.creating") : `👥 ${t("group.createNow")}`}
       </button>
-      <p className="mt-1.5 text-xs text-faint">{t("group.createHelp")}</p>
       {error && <p className="mt-1 text-sm font-semibold text-danger">{error}</p>}
-    </div>
+    </form>
   );
 }
 
@@ -147,6 +164,7 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
 /** Admin: name and the weekly slot that creates matches automatically. */
 export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, weekdays }: { code: string; name: string; recurDow: number | null; recurTime: string | null; recurLeadDays: number; weekdays: string[] }) {
   const t = useTranslations();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(name);
   const [dow, setDow] = useState<number | null>(recurDow);
@@ -209,6 +227,21 @@ export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, 
         </button>
         <button type="button" className="btn-ghost btn-sm" onClick={() => setOpen(false)}>
           {t("common.cancel")}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost btn-sm ml-auto text-danger"
+          disabled={pending}
+          onClick={() => {
+            if (!confirm(t("group.deleteConfirm", { name }))) return;
+            start(async () => {
+              const r = await deleteGroupAction(code);
+              if (r.ok) router.push("/me");
+              else setError(t(`errors.${errKey(r.error)}` as "errors.generic"));
+            });
+          }}
+        >
+          {t("group.delete")}
         </button>
       </div>
     </form>

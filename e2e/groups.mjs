@@ -33,10 +33,17 @@ try {
   await olga.goto(`${BASE}/${code}`);
   check("match page offers to form a group", (await olga.getByRole("button", { name: /Turn this crew into a group/ }).count()) === 1);
   await olga.getByRole("button", { name: /Turn this crew into a group/ }).click();
+  // The name is seen before the group exists: suggested from the rhythm, never the venue; Olga types her own.
+  const nameField = olga.locator("#group-name");
+  await nameField.waitFor({ timeout: 10000 });
+  const suggested = await nameField.inputValue();
+  check("the suggested group name is the crew's rhythm, not the venue", /crew$/.test(suggested) && !/Club Nine/.test(suggested), suggested);
+  await nameField.fill("Club Nine");
+  await olga.getByRole("button", { name: /Create the group/ }).click();
   await olga.waitForURL(/\/g\/[^/]{6}$/, { timeout: 30000 });
   const gcode = olga.url().split("/").pop();
   await shot(olga, "g1-group");
-  check("group page: named after the venue, 2 members, admin chip", (await olga.getByRole("heading", { name: "Club Nine" }).count()) === 1 && (await olga.getByText("2 members").count()) > 0 && (await olga.getByText("Admin").count()) === 1);
+  check("group page: named as typed, 2 members, admin chip", (await olga.getByRole("heading", { name: "Club Nine" }).count()) === 1 && (await olga.getByText("2 members").count()) > 0 && (await olga.getByText("Admin").count()) === 1);
   check("the original match is listed as upcoming", (await olga.locator("a[href='/" + code + "']").count()) >= 1);
   await olga.goto(`${BASE}/${code}`);
   check("match now shows its group", (await olga.getByText("Part of Club Nine").count()) === 1 && (await olga.getByRole("button", { name: /Turn this crew/ }).count()) === 0);

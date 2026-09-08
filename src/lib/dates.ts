@@ -98,6 +98,11 @@ export function formatEventDay(date: Date, tz: string, locale: string): string {
   }).format(date);
 }
 
+/** The weekday alone ("Thursday", "четверг"), in the event's zone. */
+export function weekdayName(date: Date, tz: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: "long" }).format(date);
+}
+
 export function formatEventDayLong(date: Date, tz: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
     timeZone: tz,
