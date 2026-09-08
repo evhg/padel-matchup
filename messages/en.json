@@ -748,7 +748,7 @@
     "createHelp": "Same players, same place. Any member creates the next match in one tap; set a weekly slot and it creates itself.",
     "creating": "Creating…",
     "name": "Group name",
-    "namePlaceholder": "Thursday crew",
+    "namePlaceholder": "Court Jesters",
     "fallbackName": "Padel crew",
     "members": "Members",
     "memberCount": "{count, plural, one {# member} other {# members}}",
@@ -777,12 +777,12 @@
     "venue": "Usual place",
     "tz": "Time zone",
     "type": "Format",
-    "defaultName": "{day} {time} crew",
-    "nameHelp": "The place stays on the match. Call the crew what you call it.",
+    "nameHelp": "The place stays on the match. Keep this one, roll the dice, or type your own.",
     "createNow": "Create the group",
     "invite": "Invite others to this group",
     "delete": "Delete group",
-    "deleteConfirm": "Delete {name}? Members keep their matches and the weekly slot stops. No undo."
+    "deleteConfirm": "Delete {name}? Members keep their matches and the weekly slot stops. No undo.",
+    "anotherName": "Another name"
   },
   "venue": {
     "board": "Venue board",

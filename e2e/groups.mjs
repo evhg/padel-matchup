@@ -37,7 +37,9 @@ try {
   const nameField = olga.locator("#group-name");
   await nameField.waitFor({ timeout: 10000 });
   const suggested = await nameField.inputValue();
-  check("the suggested group name is the crew's rhythm, not the venue", /crew$/.test(suggested) && !/Club Nine/.test(suggested), suggested);
+  check("the suggested group name is a real name, not the venue", suggested.length > 3 && !/Club Nine/.test(suggested) && !/\d{2}:\d{2}/.test(suggested), suggested);
+  await olga.getByRole("button", { name: "Another name" }).click();
+  check("the dice rolls another name", (await nameField.inputValue()) !== suggested, await nameField.inputValue());
   await nameField.fill("Club Nine");
   await olga.getByRole("button", { name: /Create the group/ }).click();
   await olga.waitForURL(/\/g\/[^/]{6}$/, { timeout: 30000 });

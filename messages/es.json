@@ -748,7 +748,7 @@
     "createHelp": "Mismos jugadores, mismo sitio. Cualquier miembro crea el siguiente partido con un toque; fija un hueco semanal y se crea solo.",
     "creating": "Creando…",
     "name": "Nombre del grupo",
-    "namePlaceholder": "Pandilla de los jueves",
+    "namePlaceholder": "Los Bufones de la Pista",
     "fallbackName": "Pandilla de pádel",
     "members": "Miembros",
     "memberCount": "{count, plural, one {# miembro} other {# miembros}}",
@@ -777,12 +777,12 @@
     "venue": "Sitio habitual",
     "tz": "Zona horaria",
     "type": "Formato",
-    "defaultName": "Los del {day} {time}",
-    "nameHelp": "El sitio se queda en el partido. Llama a la pandilla como la llamáis vosotros.",
+    "nameHelp": "El sitio se queda en el partido. Quédate con este, tira el dado o escribe el tuyo.",
     "createNow": "Crear el grupo",
     "invite": "Invita a otros a este grupo",
     "delete": "Eliminar grupo",
-    "deleteConfirm": "¿Eliminar {name}? Los miembros conservan sus partidos y el hueco semanal se detiene. No se puede deshacer."
+    "deleteConfirm": "¿Eliminar {name}? Los miembros conservan sus partidos y el hueco semanal se detiene. No se puede deshacer.",
+    "anotherName": "Otro nombre"
   },
   "venue": {
     "board": "Tablón del club",

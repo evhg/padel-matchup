@@ -28,7 +28,8 @@ import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
+import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
@@ -387,7 +388,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
             </div>
           )}
-          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} suggestedName={t("group.defaultName", { day: weekdayName(ev.startsAt, ev.tz, locale), time: formatEventTime(ev.startsAt, ev.tz, locale) })} />}
+          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
         </section>
 
         {/* Share */}
