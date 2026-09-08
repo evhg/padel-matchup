@@ -155,7 +155,11 @@
     "titleTournament": "Your tournament is live",
     "subtitleTournament": "Send the link. Players tap, enter a name, they're in.",
     "openMatch": "Go to match",
-    "openTournament": "Go to tournament"
+    "openTournament": "Go to tournament",
+    "story": "Story image for Instagram",
+    "storyHint": "9:16, ready for a story. Add the link sticker with {link} so people tap straight into the match.",
+    "storyOpen": "Open image",
+    "storyCopy": "Copy Instagram link"
   },
   "event": {
     "match": "Padel match",

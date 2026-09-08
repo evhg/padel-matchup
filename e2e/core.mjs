@@ -21,6 +21,8 @@ try {
   check("no quick picks for a first-timer", (await a.getByText("Your usual times").count()) === 0);
   check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
   await a.goto(BASE + "/PLAY");
+  const story = await fetch(BASE + "/PLAY/story");
+  check("story image renders as a 9:16 PNG", story.status === 200 && (story.headers.get("content-type") || "").startsWith("image/png"), `${story.status} ${story.headers.get("content-type")}`);
   await shot(a, "02-event-anon");
   check("event page shows 2/4 players", (await a.getByText("2/4 players").count()) > 0);
   check("reserved slot visible", (await a.getByText("Reserved for Jordi").count()) > 0);

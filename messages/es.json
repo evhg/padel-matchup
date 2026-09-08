@@ -155,7 +155,11 @@
     "titleTournament": "Tu torneo está en marcha",
     "subtitleTournament": "Envía el enlace. Los jugadores tocan, ponen su nombre y dentro.",
     "openMatch": "Ir al partido",
-    "openTournament": "Ir al torneo"
+    "openTournament": "Ir al torneo",
+    "story": "Imagen para historias de Instagram",
+    "storyHint": "9:16, lista para una historia. Añade el sticker de enlace con {link} para que la gente entre directa al partido.",
+    "storyOpen": "Abrir imagen",
+    "storyCopy": "Copiar enlace para Instagram"
   },
   "event": {
     "match": "Partido de pádel",
