@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { CoachCalendar } from "@/components/coach/CoachCalendar";
 import { CoachSettings } from "@/components/coach/CoachSettings";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
+import { serviceAccountEmail } from "@/lib/coach/gcal";
 import { formatHoursLine, getCoachForActor } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -46,6 +48,10 @@ export default async function CoachSettingsPage() {
             isPublic: coach.isPublic,
             tz: coach.tz,
           }}
+        />
+        <CoachCalendar
+          serviceEmail={serviceAccountEmail()}
+          initial={{ gcalId: coach.gcalId ?? "", icalUrl: coach.icalUrl ?? "", status: coach.gcalStatus, syncedAt: coach.calendarSyncedAt?.toISOString() ?? null, error: coach.calendarError }}
         />
       </main>
       <Footer />

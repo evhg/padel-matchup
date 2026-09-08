@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { CoachStudents } from "@/components/coach/CoachStudents";
+import { ImportSheet } from "@/components/coach/ImportSheet";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { getCoachForActor, listStudents, packageLine } from "@/lib/domain/coaching";
@@ -48,6 +49,7 @@ export default async function CoachStudentsPage() {
             };
           })}
         />
+        <ImportSheet />
       </main>
       <Footer />
     </>

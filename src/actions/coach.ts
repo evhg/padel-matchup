@@ -17,6 +17,7 @@ import {
   getCoachForActor,
   getPlayerById,
   LESSON_MINUTES,
+  listStudents,
   markNoShow,
   parseHoursLine,
   presetHours,
@@ -33,7 +34,10 @@ import {
   type StudentStatus,
 } from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
-import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentRequest } from "@/lib/coach/notify";
+import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
+import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
+import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentRequest } from "@/lib/coach/notify";
+import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -200,15 +204,107 @@ export async function setStudentStatusAction(playerId: string, status: "accepted
   });
 }
 
-export async function addStudentAction(name: string): Promise<ActionResult<{ playerId: string }>> {
+export async function addStudentAction(name: string, email?: string | null): Promise<ActionResult<{ playerId: string }>> {
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
     const clean = (name ?? "").trim();
     if (!clean) throw new ActionFailure("name_required");
-    const player = await addStudentByName(db, coach.id, clean, await getLocale());
+    const address = (email ?? "").trim().toLowerCase();
+    const player = await addStudentByName(db, coach.id, clean, await getLocale(), /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) ? address : null);
+    if (player.email) await notifyStudentInvited(coach, player).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { playerId: player.id };
+  });
+}
+
+// ---------------------------------------------------------------- calendar
+
+export type CalendarState = { gcal: CalendarAccess | null; ical: { ok: boolean; error: string | null; busy: number } | null };
+
+async function checkAndSync(db: Awaited<ReturnType<typeof getDb>>, coachId: string): Promise<CalendarState> {
+  const [coach] = await db.select().from(coaches).where(eq(coaches.id, coachId)).limit(1);
+  const state: CalendarState = { gcal: null, ical: null };
+  if (coach.gcalId) {
+    state.gcal = await checkCalendarAccess(coach.gcalId);
+    const status = state.gcal.ok ? "linked" : state.gcal.reason;
+    await db.update(coaches).set({ gcalStatus: status, gcalCheckedAt: new Date(), calendarError: state.gcal.ok ? null : (state.gcal.detail ?? state.gcal.reason) }).where(eq(coaches.id, coach.id));
+    if (state.gcal.ok) await syncGoogleCalendar(db, coach).catch(() => undefined);
+  }
+  if (coach.icalUrl) {
+    const r = await syncIcal(db, coach);
+    state.ical = { ok: !r.error, error: r.error, busy: r.busy };
+  }
+  return state;
+}
+
+/** The coach names a calendar (Google address shared with our service account, or a secret iCal link); we check at once. */
+export async function saveCalendarAction(input: { gcalId?: string | null; icalUrl?: string | null }): Promise<ActionResult<CalendarState>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    const settings = cleanCalendarSettings(input);
+    if ((input.gcalId ?? "").trim() && !settings.gcalId) throw new DomainError("invalid", "gcal");
+    if ((input.icalUrl ?? "").trim() && !settings.icalUrl) throw new DomainError("invalid", "ical");
+    await setCoachCalendar(db, coach.id, settings);
+    const state = await checkAndSync(db, coach.id);
+    revalidateCoach(coach.handle);
+    return state;
+  });
+}
+
+export async function checkCalendarAction(): Promise<ActionResult<CalendarState>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    const state = await checkAndSync(db, coach.id);
+    revalidateCoach(coach.handle);
+    return state;
+  });
+}
+
+// ---------------------------------------------------------------- sheet import
+
+export type ImportPreview = { rows: ImportRow[]; skipped: number; known: string[] };
+
+/** Pasted rows or a Google Sheet link, read into a preview. Nothing is written yet. */
+export async function previewImportAction(text: string): Promise<ActionResult<ImportPreview>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    let body = (text ?? "").slice(0, 200_000);
+    if (looksLikeLink(body)) {
+      const url = sheetCsvUrl(body);
+      if (!url) throw new DomainError("invalid", "link");
+      try {
+        body = await fetchSheet(url);
+      } catch (e) {
+        throw new DomainError("invalid", e instanceof Error && e.message === "not shared" ? "not_shared" : "unreachable");
+      }
+    }
+    const parsed = parsePackageSheet(body);
+    const existing = new Set((await listStudents(db, coach.id)).map((s) => s.player.displayName.trim().toLowerCase()));
+    return { ...parsed, known: parsed.rows.filter((r) => existing.has(r.name.trim().toLowerCase())).map((r) => r.name) };
+  });
+}
+
+export async function confirmImportAction(rows: ImportRow[]): Promise<ActionResult<ImportOutcome>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    const clean = (rows ?? []).slice(0, 200).map((r) => ({
+      name: String(r.name ?? "").trim().slice(0, 40),
+      email: r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email)) ? String(r.email).toLowerCase() : null,
+      size: Number(r.size),
+      used: Number(r.used ?? 0),
+      expires: r.expires && /^\d{4}-\d{2}-\d{2}$/.test(String(r.expires)) ? String(r.expires) : null,
+      amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
+      paid: Boolean(r.paid),
+    })).filter((r) => r.name && Number.isFinite(r.size) && r.size >= 1 && r.size <= 200);
+    if (clean.length === 0) throw new DomainError("invalid", "empty");
+    const out = await importPackages(db, coach, clean, await getLocale());
+    revalidateCoach(coach.handle);
+    return out;
   });
 }
 

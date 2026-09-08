@@ -62,6 +62,23 @@ export async function notifyStudentRequest(db: Db, coach: Coach, student: Player
   await dm(coachPlayer.telegramId, s.studentAsked(student.displayName), { inline_keyboard: [[{ text: s.accept, callback_data: `cs:${student.id}` }]] });
 }
 
+/** A student the coach added by hand, with an email: one note with the coach's link, nothing else. */
+export async function notifyStudentInvited(coach: Coach, student: Player): Promise<void> {
+  if (!emailEnabled() || !student.email) return;
+  const { t } = await translatorFor(student.locale);
+  const url = `${baseUrl()}/c/${coach.handle}`;
+  const vars = { coach: coach.displayName, app: APP_NAME };
+  const { html, text } = layout({
+    heading: t("coach.email.invitedHeading", vars),
+    body: t("coach.email.invitedBody", vars),
+    cta: { label: t("coach.email.open"), url },
+    footer: t("email.footer", { app: APP_NAME }),
+    eventUrl: url,
+    openLabel: t("coach.email.open"),
+  });
+  await sendEmail({ to: student.email, subject: t("coach.email.invitedSubject", vars), html, text });
+}
+
 export async function notifyStudentAccepted(coach: Coach, student: Player): Promise<void> {
   if (!student.telegramId) return;
   const s = coachStrings(coachBotLocale(student.locale));
