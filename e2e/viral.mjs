@@ -49,7 +49,7 @@ try {
   check("finished match offers Share result", (await p.getByRole("link", { name: /Share result/ }).count()) === 1);
   await p.goto(`${BASE}/PAST/card`);
   await shot(p, "v2-card");
-  check("card page shows the image and the result line", (await p.locator('img[src="/PAST/card/opengraph-image"]').count()) === 1 && (await p.getByText(/beat|drew|Result/).count()) > 0);
+  check("card page shows the image and the result line", (await p.locator('img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByText(/beat|drew|Result/).count()) > 0);
   const img = await p.request.get(`${BASE}/PAST/card/opengraph-image`);
   check("card image is a PNG", img.status() === 200 && (img.headers()["content-type"] ?? "").startsWith("image/png") && (await img.body()).length > 10000);
   const html = await p.request.get(`${BASE}/PAST/card`);
