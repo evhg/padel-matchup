@@ -4,7 +4,8 @@ import { coachBlocks, coaches, lessons, type Coach } from "@/db/schema";
 import { cancelLesson, DAY_MS, getPlayerById } from "@/lib/domain/coaching";
 import { deleteCalendarEvent, eventSpan, insertCalendarEvent, isOurs, listCalendarEvents, type GcalEvent } from "./gcal";
 import { parseIcsBusy } from "./ical";
-import { notifyLessonCancelled } from "./notify";
+import { afterLessonFreed } from "./chains";
+import { notifyLessonCancelled, notifyOffer } from "./notify";
 
 /**
  * Keeps a coach's book and their calendar telling the same story, both ways:
@@ -95,7 +96,9 @@ export async function syncGoogleCalendar(db: Db, coach: Coach, now = new Date(),
       const { lesson, outcome } = await cancelLesson(db, { lessonId: l.id, by: "coach", coach }, now);
       await db.update(lessons).set({ externalId: null }).where(eq(lessons.id, l.id));
       const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
-      if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg: null, by: "coach", outcome }).catch(() => undefined);
+      const freed = await afterLessonFreed(db, coach, lesson, "coach", now);
+      if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg: null, by: "coach", outcome, alternatives: freed.alternatives }).catch(() => undefined);
+      if (freed.offer) await notifyOffer(db, coach, freed.offer).catch(() => undefined);
       result.cancelledHere++;
     }
   }

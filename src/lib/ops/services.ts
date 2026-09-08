@@ -44,6 +44,7 @@ export const CEILINGS = {
   backupMaxAgeHours: 36,
   hourlyCronMaxAgeMin: 120,
   pushCronMaxAgeMin: 20,
+  syncCronMaxAgeMin: 40,
 } as const;
 
 export const stateForPct = (pct: number | null): ServiceState => (pct === null ? "info" : pct < 60 ? "ok" : pct < 85 ? "warn" : "alert");
@@ -102,6 +103,8 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const dbBytes = (await latest(db, "db_bytes"))?.value ?? 0;
   const hourlyAt = (await latest(db, "cron_hourly_at"))?.value ?? 0;
   const pushAt = (await latest(db, "cron_push_at"))?.value ?? 0;
+  const syncAt = (await latest(db, "cron_sync_at"))?.value ?? 0;
+  const syncAge = syncAt ? Math.round((now.getTime() / 1000 - syncAt) / 60) : null;
   const pushSubs = (await latest(db, "push_subs"))?.value ?? 0;
   const backup = await latest(db, "backup_done");
   const domainExp = (await latest(db, "domain_expires_at"))?.value ?? 0;
@@ -123,7 +126,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   push({ key: "supabase_egress", name: "Supabase egress", role: "bytes out of the database", used: null, limit: null, usage: "dashboard only", ceiling: `${CEILINGS.supabaseEgressGb} GB / month`, note: "No API for it on the free plan.", link: "https://supabase.com/dashboard/project/udvtuxaxzfimeoubofdz/reports", state: "info" });
   const hourlyAge = hourlyAt ? minutesAgo(hourlyAt, now) : null;
   const pushAge = pushAt ? minutesAgo(pushAt, now) : null;
-  push({ key: "pg_cron", name: "Supabase pg_cron + pg_net", role: "hourly job and the five-minute push job", used: null, limit: null, usage: `hourly ${hourlyAge === null ? "never" : `${hourlyAge} min ago`} · push ${pushAge === null ? "never" : `${pushAge} min ago`}`, ceiling: `hourly < ${CEILINGS.hourlyCronMaxAgeMin} min · push < ${CEILINGS.pushCronMaxAgeMin} min`, note: "Reminders, waitlists, lessons, listening, backups, digests all hang off these two.", state: hourlyAge !== null && hourlyAge < CEILINGS.hourlyCronMaxAgeMin && pushAge !== null && pushAge < CEILINGS.pushCronMaxAgeMin ? "ok" : "alert" });
+  push({ key: "pg_cron", name: "Supabase pg_cron + pg_net", role: "hourly job, the five-minute push job, the ten-minute calendar sync", used: null, limit: null, usage: `hourly ${hourlyAge === null ? "never" : `${hourlyAge} min ago`} · push ${pushAge === null ? "never" : `${pushAge} min ago`} · sync ${syncAge === null ? "never" : `${syncAge} min ago`}`, ceiling: `hourly < ${CEILINGS.hourlyCronMaxAgeMin} min · push < ${CEILINGS.pushCronMaxAgeMin} min · sync < ${CEILINGS.syncCronMaxAgeMin} min`, note: "Reminders, waitlists, lessons, offers, calendars, listening, backups, digests all hang off these three.", state: hourlyAge !== null && hourlyAge < CEILINGS.hourlyCronMaxAgeMin && pushAge !== null && pushAge < CEILINGS.pushCronMaxAgeMin && (syncAge === null || syncAge < CEILINGS.syncCronMaxAgeMin) ? "ok" : "alert" });
 
   // Mail
   push({ key: "resend_month", name: "Resend, this month", role: "outbound email", used: emailEnabled() ? (month.emails_sent ?? 0) : null, limit: CEILINGS.resendPerMonth, usage: emailEnabled() ? `${fmt(month.emails_sent ?? 0)} sent` : "off", ceiling: `${fmt(CEILINGS.resendPerMonth)} / month`, note: "Free plan. Paid tiers only past fifty emails a day, by decision.", state: emailEnabled() ? undefined : "off" });

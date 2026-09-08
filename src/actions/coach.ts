@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getLocale } from "next-intl/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
+import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import {
@@ -38,6 +39,8 @@ import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
 import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
+import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
+import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -173,7 +176,9 @@ export async function coachCancelAction(lessonId: string): Promise<ActionResult<
     const { me, coach } = await requireCoach(db);
     const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "coach", coach, actorPlayerId: me.id });
     const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
-    if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg: null, by: "coach", outcome }).catch(() => undefined);
+    const freed = await afterLessonFreed(db, coach, lesson, "coach");
+    if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg: null, by: "coach", outcome, alternatives: freed.alternatives }).catch(() => undefined);
+    if (freed.offer) await notifyOffer(db, coach, freed.offer).catch(() => undefined);
     revalidateCoach(coach.handle);
     return null;
   });
@@ -385,7 +390,120 @@ export async function studentCancelAction(lessonId: string): Promise<ActionResul
     if (!row) throw new ActionFailure("not_found");
     const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "student", coach: row.coach, actorPlayerId: me.id });
     await notifyLessonCancelled(db, { lesson, coach: row.coach, student: me, pkg: null, by: "student", outcome }).catch(() => undefined);
+    const freed = await afterLessonFreed(db, row.coach, lesson, "student");
+    if (freed.offer) await notifyOffer(db, row.coach, freed.offer).catch(() => undefined);
     revalidateCoach(row.coach.handle);
     return { outcome };
+  });
+}
+
+// ---------------------------------------------------------------- chains: waitlist, offers, requests
+
+async function studentOf(db: Awaited<ReturnType<typeof getDb>>, handle: string) {
+  const coach = await getCoachByHandle(db, handle);
+  if (!coach) throw new ActionFailure("no_coach");
+  const me = await getSessionPlayer(db);
+  if (!me) throw new ActionFailure("no_identity");
+  return { coach, me };
+}
+
+/** "Tell me if this frees up": a slot, or any slot in a week. */
+export async function joinWaitlistAction(handle: string, want: { slot?: string | null; weekStart?: string | null }): Promise<ActionResult<{ id: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach, me } = await studentOf(db, handle);
+    const slot = want.slot ? new Date(want.slot) : null;
+    if (slot && Number.isNaN(slot.getTime())) throw new DomainError("invalid", "time");
+    const row = await joinWaitlist(db, coach, me.id, { slotStartsAt: slot, weekStart: want.weekStart ?? null });
+    revalidateCoach(coach.handle);
+    return { id: row.id };
+  });
+}
+
+export async function leaveWaitlistAction(handle: string, entryId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach, me } = await studentOf(db, handle);
+    await withdrawWaitlist(db, coach.id, entryId, me.id);
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+/** The student takes the spot they were offered. */
+export async function acceptOfferAction(handle: string, entryId: string): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach, me } = await studentOf(db, handle);
+    const { lesson, package: pkg } = await acceptOffer(db, coach, entryId, me.id);
+    await notifyLessonBooked(db, { lesson, coach, student: me, pkg, by: "student" }).catch(() => undefined);
+    revalidateCoach(coach.handle);
+    return { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() };
+  });
+}
+
+/** A time of the student's own: booked when the rules allow, otherwise a request to the coach. */
+export async function requestTimeAction(handle: string, local: string, note?: string | null): Promise<ActionResult<{ kind: "booked" | "requested"; startsAt: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach, me } = await studentOf(db, handle);
+    // "2026-09-12T23:00" as the student typed it, read in the coach's zone.
+    const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(local ?? "");
+    if (!m) throw new DomainError("invalid", "time");
+    const at = zonedTimeToUtc(m[1], m[2], coach.tz);
+    if (Number.isNaN(at.getTime())) throw new DomainError("invalid", "time");
+    const r = await requestOrBook(db, coach, me.id, at, note ?? null);
+    if (r.kind === "booked") await notifyLessonBooked(db, { lesson: r.lesson, coach, student: me, pkg: r.package, by: "student" }).catch(() => undefined);
+    else await notifyRequest(db, coach, me, r.request).catch(() => undefined);
+    revalidateCoach(coach.handle);
+    return { kind: r.kind, startsAt: (r.kind === "booked" ? r.lesson.startsAt : r.request.startsAt).toISOString() };
+  });
+}
+
+/** The coach's yes or no, from the web. */
+export async function decideRequestAction(requestId: string, accept: boolean): Promise<ActionResult<{ booked: boolean }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    const { request, lesson, package: pkg } = await decideRequest(db, coach, requestId, Boolean(accept));
+    const student = await getPlayerById(db, request.studentPlayerId);
+    if (student) await notifyRequestDecided(db, { coach, student, request, lesson, pkg }).catch(() => undefined);
+    revalidateCoach(coach.handle);
+    return { booked: Boolean(lesson) };
+  });
+}
+
+// ---------------------------------------------------------------- managers
+
+export async function managerLinkAction(renew = false): Promise<ActionResult<{ url: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach, role } = await requireCoach(db);
+    if (role !== "coach") throw new ActionFailure("forbidden");
+    const code = await managerCode(db, coach.id, Boolean(renew));
+    return { url: `${baseUrl()}/coach/join/${code}` };
+  });
+}
+
+export async function removeManagerAction(playerId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach, role } = await requireCoach(db);
+    if (role !== "coach") throw new ActionFailure("forbidden");
+    await removeManager(db, coach.id, playerId);
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+/** Opening the manager link: a name is enough for a newcomer. */
+export async function claimManagerAction(code: string, name?: string | null): Promise<ActionResult<{ handle: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await requirePlayer(db, name);
+    const coach = await claimManager(db, code, me.id);
+    if (coach.playerId !== me.id) await notifyManagerJoined(db, coach, me).catch(() => undefined);
+    revalidateCoach(coach.handle);
+    return { handle: coach.handle };
   });
 }

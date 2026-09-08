@@ -6,7 +6,10 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
-import { activePackage, availableSlots, DAY_MS, getCoachByHandle, listStudentLessons, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
+import { whenLabel } from "@/lib/coach/strings";
+import { activePackage, availableSlots, DAY_MS, getCoachByHandle, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 import { whatsappShareUrl } from "@/lib/share";
@@ -43,16 +46,30 @@ export default async function CoachPublicPage({ params }: Props) {
   const status = me ? await studentStatus(db, coach.id, me.id) : "none";
   const today = todayIn(coach.tz, now);
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);
-  const [slots, lessons, pkg] = await Promise.all([
-    status === "accepted" ? availableSlots(db, coach, now, to, now) : Promise.resolve([]),
+  const accepted = status === "accepted";
+  const [slots, lessons, pkg, waits, requests] = await Promise.all([
+    accepted ? availableSlots(db, coach, now, to, now) : Promise.resolve([]),
     me ? listStudentLessons(db, me.id, new Date(now.getTime() - 2 * 3_600_000)) : Promise.resolve([]),
     me ? activePackage(db, coach.id, me.id, now) : Promise.resolve(null),
+    accepted && me ? studentWaitlist(db, coach.id, me.id, now) : Promise.resolve([]),
+    accepted && me ? studentRequests(db, coach.id, me.id, now) : Promise.resolve([]),
   ]);
+  // Every slot inside the hours, minus the free ones: what a student can wait for.
+  const everySlot = accepted ? openSlots({ coach, from: now, to, busy: [], now }) : [];
+  const freeIso = new Set(slots.map((d) => d.toISOString()));
+  const takenSlots = everySlot.filter((d) => !freeIso.has(d.toISOString()));
   const mine = lessons.filter((l) => l.coachId === coach.id);
   const allDays = dayRange(today, STUDENT_HORIZON_DAYS + 1);
   const labels = labelsFor(allDays, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   const slotDtos = slotDTOs(slots, coach.tz, locale);
-  const days = allDays.filter((d) => slotDtos.some((s) => s.day === d));
+  const takenDtos = slotDTOs(takenSlots, coach.tz, locale);
+  const days = allDays.filter((d) => slotDtos.some((s) => s.day === d) || takenDtos.some((s) => s.day === d));
+  const weekOf = Object.fromEntries(days.map((d) => [d, weekStartOf(new Date(`${d}T12:00:00Z`), "UTC")]));
+  const label = (at: Date) => whenLabel(at, coach.tz, locale);
+  const offers = waits.filter((w) => w.status === "offered" && w.slotStartsAt && w.offerExpiresAt).map((w) => ({ id: w.id, label: label(w.slotStartsAt!), minutesLeft: Math.max(1, Math.round((w.offerExpiresAt!.getTime() - now.getTime()) / 60_000)) }));
+  const waiting = waits.filter((w) => w.status === "waiting").map((w) => ({ id: w.id, label: w.slotStartsAt ? label(w.slotStartsAt) : w.weekStart ?? "", week: !w.slotStartsAt }));
+  const asked = requests.map((r) => ({ id: r.id, label: label(r.startsAt) }));
+  const minLocal = `${utcToZonedParts(now, coach.tz).date}T${utcToZonedParts(now, coach.tz).time}`;
   const line = pkg ? packageLine(pkg, now) : null;
   const url = `${baseUrl()}/c/${coach.handle}`;
   const jsonLd = {
@@ -87,8 +104,14 @@ export default async function CoachPublicPage({ params }: Props) {
           signedIn={Boolean(me)}
           status={status}
           slots={slotDtos}
+          taken={takenDtos}
           days={days}
           dayLabels={labels}
+          weekOf={weekOf}
+          waits={waiting}
+          offers={offers}
+          requests={asked}
+          minLocal={minLocal}
           lessons={mine.map((l) => studentLessonDTO(l, locale, labels, now))}
           pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft } : null}
           cutoffHours={coach.cutoffHours}

@@ -13,6 +13,10 @@ import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
 import { refreshStartedCards, sendTelegramReminders } from "@/lib/telegram/bot";
+import { expireRequests, lessonRemindersDue, tickWaitlist } from "@/lib/coach/chains";
+import { notifyLessonReminder, notifyOffer, notifyOfferLapsed } from "@/lib/coach/notify";
+import { lessonPackages } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { sendDiscordReminders } from "@/lib/discord/bot";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +44,24 @@ export async function GET(req: Request) {
   });
   // Cards of matches that just started grow their Result button.
   await refreshStartedCards(db, now).catch((e) => reportError("cron", e));
-  if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram, discord });
+  // The coach's book: lapsed offers move down the line, tomorrow's lessons get their one reminder.
+  const coachTick = { lapsed: 0, offered: 0, reminded: 0, requestsExpired: 0 };
+  try {
+    const { lapsed, offers } = await tickWaitlist(db, now);
+    coachTick.lapsed = lapsed.length;
+    coachTick.offered = offers.length;
+    for (const l of lapsed) if (l.player) await notifyOfferLapsed(l.coach, l.player, l.startsAt).catch(() => undefined);
+    for (const o of offers) await notifyOffer(db, o.coach, o).catch(() => undefined);
+    for (const r of await lessonRemindersDue(db, now)) {
+      const pkg = r.lesson.packageId ? ((await db.select().from(lessonPackages).where(eq(lessonPackages.id, r.lesson.packageId)).limit(1))[0] ?? null) : null;
+      await notifyLessonReminder({ ...r, pkg }).catch(() => undefined);
+      coachTick.reminded++;
+    }
+    coachTick.requestsExpired = await expireRequests(db, now);
+  } catch (e) {
+    void reportError("cron", e, { path: "/api/cron/push" });
+  }
+  if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram, discord, coach: coachTick });
 
   const summary = { events: 0, players: 0, sent: 0, gone: 0, failed: 0, telegram, discord, errors: [] as string[] };
   try {
@@ -80,5 +101,5 @@ export async function GET(req: Request) {
     summary.errors.push(`metrics: ${String(e)}`);
   }
   if (summary.errors.length) await reportError("cron", summary.errors.join(" | "));
-  return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary });
+  return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary, coach: coachTick });
 }
