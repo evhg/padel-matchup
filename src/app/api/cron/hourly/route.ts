@@ -12,6 +12,7 @@ import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
 import { listenTick, type ListenSummary } from "@/lib/listen/tick";
 import { refreshAllAvailability } from "@/lib/booking/availability";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
+import { completePastLessons } from "@/lib/domain/coaching";
 import { runBackup, type BackupResult } from "@/lib/backup";
 import { pruneErrors } from "@/lib/alerts";
 import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
@@ -45,12 +46,18 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
   } catch (e) {
     summary.errors.push(`past: ${String(e)}`);
+  }
+
+  try {
+    summary.lessonsDone = await completePastLessons(db, now);
+  } catch (e) {
+    summary.errors.push(`lessons: ${String(e)}`);
   }
 
   try {

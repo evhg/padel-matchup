@@ -36,7 +36,7 @@ const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   invalid: 422,
   locked: 409,
   not_started: 409,
-  not_participant: 403,
+  not_participant: 403, slot_taken: 409, not_student: 403, outside_hours: 422, too_soon: 422, no_coach: 404,
 };
 
 const DOMAIN_HINT: Partial<Record<DomainErrorCode, string>> = {

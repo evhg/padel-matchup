@@ -10,7 +10,12 @@ export type DomainErrorCode =
   | "invalid"
   | "locked"
   | "not_started"
-  | "not_participant";
+  | "not_participant"
+  | "slot_taken"
+  | "not_student"
+  | "outside_hours"
+  | "too_soon"
+  | "no_coach";
 
 export class DomainError extends Error {
   constructor(
