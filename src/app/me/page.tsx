@@ -93,6 +93,13 @@ export default async function MePage({ searchParams }: Props) {
             </ul>
           </section>
         )}
+        <section className="card">
+          <h2 className="text-lg font-extrabold">💬 {t("feedback.title")}</h2>
+          <p className="mt-1 text-xs text-muted">{t("feedback.sub")}</p>
+          <Link href="/feedback" prefetch={false} className="btn-secondary mt-3 self-start">
+            {t("feedback.footerLink")} →
+          </Link>
+        </section>
       </main>
       <Footer />
     </>

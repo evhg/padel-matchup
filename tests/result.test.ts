@@ -26,4 +26,24 @@ describe("match result names", () => {
     expect(partial.b).toEqual([]);
     expect(partial.hasTeams).toBe(false);
   });
+
+  it("a player with no side assigned lands on the short side", () => {
+    const r = matchResult(sets, [
+      { team: "a", status: "joined", name: "Erik" },
+      { team: "b", status: "confirmed", name: "Micky" },
+      { team: "a", status: "confirmed", name: "Adrian" },
+      { team: null, status: "invited", name: "Timo" },
+    ])!;
+    expect(r.a).toEqual(["Erik", "Adrian"]);
+    expect(r.b).toEqual(["Micky", "Timo"]);
+    // Two unassigned players split one each; nothing is dropped.
+    const two = matchResult(sets, [
+      { team: "a", status: "joined", name: "Erik" },
+      { team: "b", status: "joined", name: "Micky" },
+      { team: null, status: "joined", name: "Adrian" },
+      { team: null, status: "joined", name: "Timo" },
+    ])!;
+    expect(two.a).toEqual(["Erik", "Adrian"]);
+    expect(two.b).toEqual(["Micky", "Timo"]);
+  });
 });
