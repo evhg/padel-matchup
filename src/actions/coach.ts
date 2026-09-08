@@ -15,6 +15,7 @@ import {
   extendPackage,
   getCoachByHandle,
   getCoachForActor,
+  getPlayerById,
   LESSON_MINUTES,
   markNoShow,
   parseHoursLine,
@@ -32,6 +33,7 @@ import {
   type StudentStatus,
 } from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
+import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentRequest } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -153,7 +155,9 @@ export async function coachBookAction(input: { studentPlayerId?: string | null; 
       if (!name) throw new ActionFailure("name_required");
       studentPlayerId = (await addStudentByName(db, coach.id, name, locale)).id;
     }
-    const { lesson } = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: true, source: "web", createdByPlayerId: me.id });
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: true, source: "web", createdByPlayerId: me.id });
+    const student = await getPlayerById(db, studentPlayerId);
+    if (student) await notifyLessonBooked(db, { lesson, coach, student, pkg, by: "coach" }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { lessonId: lesson.id, studentPlayerId, startsAt: lesson.startsAt.toISOString() };
   });
@@ -163,7 +167,9 @@ export async function coachCancelAction(lessonId: string): Promise<ActionResult<
   return runA(async () => {
     const db = await getDb();
     const { me, coach } = await requireCoach(db);
-    await cancelLesson(db, { lessonId, by: "coach", coach, actorPlayerId: me.id });
+    const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "coach", coach, actorPlayerId: me.id });
+    const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
+    if (student) await notifyLessonCancelled(db, { lesson, coach, student, pkg: null, by: "coach", outcome }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return null;
   });
@@ -183,7 +189,12 @@ export async function setStudentStatusAction(playerId: string, status: "accepted
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
+    const before = await studentStatus(db, coach.id, playerId);
     await setStudentStatus(db, coach.id, playerId, status);
+    if (status === "accepted" && before !== "accepted") {
+      const student = await getPlayerById(db, playerId);
+      if (student) await notifyStudentAccepted(coach, student).catch(() => undefined);
+    }
     revalidateCoach(coach.handle);
     return null;
   });
@@ -239,7 +250,9 @@ export async function requestCoachAction(handle: string, name?: string | null): 
     const coach = await getCoachByHandle(db, handle);
     if (!coach) throw new ActionFailure("no_coach");
     const me = await requirePlayer(db, name);
+    const before = await studentStatus(db, coach.id, me.id);
     const status = await requestStudent(db, coach.id, me.id);
+    if (before === "none") await notifyStudentRequest(db, coach, me).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { status };
   });
@@ -255,7 +268,8 @@ export async function studentBookAction(handle: string, startsAt: string): Promi
     const at = new Date(startsAt);
     if (Number.isNaN(at.getTime())) throw new DomainError("invalid", "time");
     if ((await studentStatus(db, coach.id, me.id)) !== "accepted") throw new ActionFailure("not_student");
-    const { lesson } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id });
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id });
+    await notifyLessonBooked(db, { lesson, coach, student: me, pkg, by: "student" }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() };
   });
@@ -273,7 +287,8 @@ export async function studentCancelAction(lessonId: string): Promise<ActionResul
       .where(and(eq(lessons.id, lessonId), eq(lessons.studentPlayerId, me.id)))
       .limit(1);
     if (!row) throw new ActionFailure("not_found");
-    const { outcome } = await cancelLesson(db, { lessonId, by: "student", coach: row.coach, actorPlayerId: me.id });
+    const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "student", coach: row.coach, actorPlayerId: me.id });
+    await notifyLessonCancelled(db, { lesson, coach: row.coach, student: me, pkg: null, by: "student", outcome }).catch(() => undefined);
     revalidateCoach(row.coach.handle);
     return { outcome };
   });

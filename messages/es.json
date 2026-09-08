@@ -1181,6 +1181,18 @@
       "too_soon": "Demasiado poca antelación para esa hora.",
       "no_coach": "Aquí no hay agenda todavía.",
       "past": "Esa hora ya pasó."
+    },
+    "email": {
+      "inviteSubject": "Clase con {coach}: {when}",
+      "inviteHeading": "Tu clase está reservada",
+      "inviteBody": "{when} con {coach}{where}. {package}",
+      "cancelSubject": "Clase con {coach} cancelada: {when}",
+      "cancelHeading": "Clase cancelada",
+      "cancelBody": "{when} con {coach} queda cancelada. {package}",
+      "coachInviteHeading": "Clase reservada",
+      "coachInviteBody": "{student}, {when}{where}. {package}",
+      "packageNone": "Sin bono en esta clase.",
+      "open": "Abrir tus clases"
     }
   }
 }

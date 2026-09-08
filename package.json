@@ -37,6 +37,7 @@
     "next": "15.5.25",
     "next-intl": "4.14.2",
     "postgres": "3.4.9",
+    "qrcode": "1.5.4",
     "qrcode.react": "4.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -47,6 +48,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "22.20.1",
+    "@types/qrcode": "1.5.5",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@types/web-push": "^3.6.4",

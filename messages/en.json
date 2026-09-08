@@ -1181,6 +1181,18 @@
       "too_soon": "Too short notice for that time.",
       "no_coach": "No book here yet.",
       "past": "That time has passed."
+    },
+    "email": {
+      "inviteSubject": "Lesson with {coach}: {when}",
+      "inviteHeading": "Your lesson is booked",
+      "inviteBody": "{when} with {coach}{where}. {package}",
+      "cancelSubject": "Lesson with {coach} cancelled: {when}",
+      "cancelHeading": "Lesson cancelled",
+      "cancelBody": "{when} with {coach} is cancelled. {package}",
+      "coachInviteHeading": "Lesson booked",
+      "coachInviteBody": "{student}, {when}{where}. {package}",
+      "packageNone": "No package on this lesson.",
+      "open": "Open your lessons"
     }
   }
 }
