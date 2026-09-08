@@ -2,8 +2,8 @@
 
 import { getLocale } from "next-intl/server";
 import { getDb } from "@/db";
-import { createFeedback, feedbackCountToday, FeedbackError, markAcknowledged } from "@/lib/feedback/store";
-import { feedbackStrings } from "@/lib/feedback/strings";
+import { composeAck } from "@/lib/feedback/ack";
+import { createFeedback, feedbackCountToday, FeedbackError, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, clientIp, runA, type ActionResult } from "./shared";
@@ -11,7 +11,7 @@ import { ActionFailure, assertRate, clientIp, runA, type ActionResult } from "./
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 /** The web form: stored, thanked, answered within a day where an answer can reach the person. */
-export async function sendFeedbackAction(text: string, contact: string, context: string): Promise<ActionResult<{ id: string; channel: "telegram" | "email" | "none" }>> {
+export async function sendFeedbackAction(text: string, contact: string, context: string): Promise<ActionResult<{ id: string; channel: "telegram" | "email" | "none"; kind: "feedback" | "not_feedback"; reply: string }>> {
   return runA(async () => {
     const db = await getDb();
     const clean = text.trim();
@@ -35,7 +35,9 @@ export async function sendFeedbackAction(text: string, contact: string, context:
       if (e instanceof FeedbackError) throw new ActionFailure("generic");
       throw e;
     });
-    await markAcknowledged(db, row.id, feedbackStrings(locale).thanks(player?.displayName ?? ""));
-    return { id: row.id, channel: player?.telegramId ? "telegram" : email ? "email" : "none" };
+    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web" });
+    if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
+    else await markAcknowledged(db, row.id, ack.reply);
+    return { id: row.id, channel: player?.telegramId ? "telegram" : email ? "email" : "none", kind: ack.kind, reply: ack.reply };
   });
 }

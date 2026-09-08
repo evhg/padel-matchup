@@ -28,7 +28,8 @@ import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 import { approveOutreach, skipOutreach } from "@/lib/outreach/desk";
-import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged } from "@/lib/feedback/store";
+import { composeAck } from "@/lib/feedback/ack";
+import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { decideClub, getClubByToken } from "@/lib/domain/clubs";
 
@@ -981,9 +982,13 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
     telegramThreadId: msg.message_thread_id ?? null,
     telegramMessageId: msg.message_id,
   });
-  const ack = fs.thanks(from.first_name);
-  const res = await sendMessage(chat.chatId, esc(ack), { silent: !isPrivate, replyTo: msg.message_id });
-  if (res.ok) await markAcknowledged(db, row.id, ack);
+  const ack = await composeAck(db, { text, name: from.first_name, locale, source: "telegram" });
+  const res = await sendMessage(chat.chatId, esc(ack.reply), { silent: !isPrivate, replyTo: msg.message_id });
+  if (ack.kind === "not_feedback") {
+    await markNotFeedback(db, row.id, ack.reply);
+    return `feedback_not:${row.id}`;
+  }
+  if (res.ok) await markAcknowledged(db, row.id, ack.reply);
   return `feedback:${row.id}`;
 }
 

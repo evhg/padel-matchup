@@ -9,14 +9,19 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
   const t = useTranslations("feedback");
   const [text, setText] = useState("");
   const [contact, setContact] = useState("");
-  const [state, setState] = useState<{ kind: "idle" } | { kind: "sent"; channel: string } | { kind: "error"; msg: string }>({ kind: "idle" });
+  const [state, setState] = useState<{ kind: "idle" } | { kind: "sent"; channel: string; reply: string; feedback: boolean } | { kind: "error"; msg: string }>({ kind: "idle" });
   const [pending, start] = useTransition();
   if (state.kind === "sent") {
     return (
       <section className="card">
-        <h2 className="text-xl font-extrabold">✅ {t("sent")}</h2>
-        <p className="mt-2 text-sm text-muted">{t("sentSub")}</p>
-        {state.channel === "telegram" && <p className="mt-2 text-sm text-muted">{t("viaTelegram")}</p>}
+        <h2 className="text-xl font-extrabold">{state.feedback ? "✅" : "💬"} {state.feedback ? t("sent") : t("notFeedback")}</h2>
+        <p className="mt-2 text-sm text-ink-soft">{state.reply}</p>
+        {state.feedback && state.channel === "telegram" && <p className="mt-2 text-sm text-muted">{t("viaTelegram")}</p>}
+        {!state.feedback && (
+          <button type="button" className="btn-secondary btn-sm mt-3" onClick={() => setState({ kind: "idle" })}>
+            {t("tryAgain")}
+          </button>
+        )}
       </section>
     );
   }
@@ -27,7 +32,10 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
     }
     start(async () => {
       const r = await sendFeedbackAction(text, contact, typeof location === "undefined" ? "" : document.referrer ? new URL(document.referrer).pathname : "/feedback");
-      if (r.ok) setState({ kind: "sent", channel: r.data.channel });
+      if (r.ok) {
+        setState({ kind: "sent", channel: r.data.channel, reply: r.data.reply, feedback: r.data.kind === "feedback" });
+        if (r.data.kind !== "feedback") setText("");
+      }
       else setState({ kind: "error", msg: r.error === "too_many" ? t("tooMany") : t("tooShort") });
     });
   };

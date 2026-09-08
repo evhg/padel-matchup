@@ -6,6 +6,7 @@ import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
 import { cleanFeedbackText, createFeedback, decideFeedback, FEEDBACK_LIMITS, feedbackWeek, getFeedback, listFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
+import { composeAck, fallbackAck, parseAck } from "@/lib/feedback/ack";
 import { signSvix } from "@/lib/outreach/svix";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
@@ -110,7 +111,12 @@ describe("the feedback loop", () => {
     const ben = user(880001, "Ben");
     const handled = await handleInteraction(db, command("feedback", ben, { text: "let /new accept a court number too" }), NO_SIDE_EFFECTS);
     expect(handled.outcome).toMatch(/^feedback:/);
-    expect(handled.response.data?.content).toContain("Thanks, Ben");
+    // Discord gives three seconds; the line is written for this note, so the bot defers and edits.
+    expect(handled.response.type).toBe(5);
+    expect(handled.response.data?.flags).toBe(64);
+    await handled.followUp?.();
+    const edited = calls.find((c) => c.method === "PATCH" && c.url.includes("/messages/@original"));
+    expect(String(edited?.body.content)).toContain("Ben");
     const id = handled.outcome.slice("feedback:".length);
     expect(await getFeedback(db, id)).toMatchObject({ source: "discord", status: "acknowledged", discordUserId: ben.id, discordChannelId: "1545987795863085099", context: "padel" });
     const short = await handleInteraction(db, command("feedback", ben, { text: "no" }), NO_SIDE_EFFECTS);
@@ -178,5 +184,80 @@ describe("the feedback loop", () => {
     delete process.env.OPERATOR_VERCEL_PROJECT;
     forgetOperators();
     expect(await operatorAuthorized(req("vercel_good_token_1234567890"))).toBe(false);
+  });
+});
+
+
+describe("the instant reply", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+  });
+  afterAll(async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    await close();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it("without the model, the line still differs from note to note and names the person", () => {
+    const a = fallbackAck({ text: "the reminder should come two hours before", name: "Olga", locale: "ru" });
+    const b = fallbackAck({ text: "let /new accept a court number", name: "Olga", locale: "ru" });
+    const c = fallbackAck({ text: "the reminder should come two hours before", name: "Olga", locale: "ru" });
+    expect(a).not.toBe(b);
+    expect(a).toBe(c);
+    expect(a).toContain("Olga");
+    expect(fallbackAck({ text: "anything", name: null, locale: "en" })).not.toContain("{name}");
+    expect(fallbackAck({ text: "algo", name: "Lucía", locale: "es" })).toMatch(/Lucía/);
+    const distinct = new Set(Array.from({ length: 40 }, (_, i) => fallbackAck({ text: `note ${i}`, name: "Sam", locale: "en" })));
+    expect(distinct.size).toBeGreaterThan(10);
+  });
+
+  it("parses the model's JSON and drops anything else", () => {
+    expect(parseAck('{"kind":"feedback","reply":"Thanks Olga, two hours instead of one, noted; you hear back within a day."}')).toEqual({ kind: "feedback", reply: "Thanks Olga, two hours instead of one, noted; you hear back within a day." });
+    expect(parseAck('Sure! {"kind":"not_feedback","reply":"I can only act on what should change; tell me that and I answer within a day. see https://evil.example/x"}')).toEqual({ kind: "not_feedback", reply: "I can only act on what should change; tell me that and I answer within a day. see" });
+    expect(parseAck("no json here")).toBeNull();
+    expect(parseAck('{"kind":"praise","reply":"x"}')).toBeNull();
+  });
+
+  it("with the model: an insult gets no thanks and is closed at once; real feedback gets its own line", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const tg: Record<string, unknown>[] = [];
+    let answer = { kind: "not_feedback", reply: "Мне нечего с этим сделать: напишите одним предложением, что стоит изменить в Kicksmash, и я отвечу в течение суток." };
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("api.anthropic.com")) return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(answer) }], usage: { input_tokens: 300, output_tokens: 40 } }), { headers: { "content-type": "application/json" } });
+      tg.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 5 } }), { headers: { "content-type": "application/json" } });
+    });
+    const group = { id: -100777009, type: "supergroup" as const, title: "Late night" };
+    const troll = { id: 770009, first_name: "Vlad", username: "vlad_tg", language_code: "ru" };
+    const out = await handleTelegramUpdate(db, { update_id: 9, message: { message_id: 91, date: 0, chat: group, from: troll, text: "/feedback вы все идиоты" } }, NO_SIDE_EFFECTS);
+    expect(out).toMatch(/^feedback_not:/);
+    const row = await getFeedback(db, out.slice("feedback_not:".length));
+    expect(row).toMatchObject({ status: "declined", verdict: "not_feedback", messagesSent: 1 });
+    expect(String(tg.at(-1)?.text)).not.toMatch(/Спасибо|Thanks/);
+    expect(String(tg.at(-1)?.text)).toContain("что стоит изменить");
+
+    answer = { kind: "feedback", reply: "Vlad, a compliment after a win: I like it, and I will look at how the card could say it. You hear back within a day." };
+    const ok = await handleTelegramUpdate(db, { update_id: 10, message: { message_id: 92, date: 0, chat: group, from: { ...troll, language_code: "en" }, text: "/feedback when I win a match I'd like a compliment from you" } }, NO_SIDE_EFFECTS);
+    expect(ok).toMatch(/^feedback:/);
+    expect(String(tg.at(-1)?.text)).toContain("a compliment after a win");
+    expect((await getFeedback(db, ok.slice("feedback:".length)))?.status).toBe("acknowledged");
+    const direct = await composeAck(db, { text: "hello?", name: null, locale: "en", source: "web" });
+    expect(direct.by).toBe("model");
+  });
+
+  it("when the model fails, the fallback still answers as feedback", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    vi.stubGlobal("fetch", async () => new Response("upstream down", { status: 500 }));
+    const ack = await composeAck(db, { text: "the court name could be bigger on the card", name: "Ana", locale: "es", source: "web" });
+    expect(ack.by).toBe("fallback");
+    expect(ack.kind).toBe("feedback");
+    expect(ack.reply).toContain("Ana");
   });
 });

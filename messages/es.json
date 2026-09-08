@@ -1006,6 +1006,8 @@
     "tooShort": "Unas palabras más, por favor.",
     "tooMany": "Con eso basta por hoy. Gracias.",
     "footerLink": "Opiniones",
-    "viaTelegram": "Entraste con Telegram, así que te responderé allí."
+    "viaTelegram": "Entraste con Telegram, así que te responderé allí.",
+    "notFeedback": "Con eso no puedo hacer nada.",
+    "tryAgain": "Escribirlo de otra forma"
   }
 }

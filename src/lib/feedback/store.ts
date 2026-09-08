@@ -106,6 +106,14 @@ export async function markAcknowledged(db: Db, id: string, replyText: string, no
     .where(and(eq(feedback.id, id), eq(feedback.status, "new")));
 }
 
+/** Not feedback (an insult, a test, spam): closed at once with the one line that was sent, never on the loop's desk. */
+export async function markNotFeedback(db: Db, id: string, replyText: string, now = new Date()): Promise<void> {
+  await db
+    .update(feedback)
+    .set({ status: "declined", verdict: "not_feedback", assessment: "instant: not feedback", replyText, repliedAt: now, messagesSent: sql`${feedback.messagesSent} + 1` })
+    .where(and(eq(feedback.id, id), eq(feedback.status, "new")));
+}
+
 export type Delivery = { status: "sent" | "failed" | "capped" | "no_channel" | "not_found"; error?: string };
 
 /** The one way out: the person hears from us on the channel they used. */
@@ -170,7 +178,7 @@ export async function feedbackWeek(db: Db, since: Date): Promise<{ received: num
   const [[r], [s], [d], [w]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(feedback).where(gte(feedback.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(feedback).where(and(eq(feedback.status, "shipped"), gte(feedback.shippedAt, since))),
-    db.select({ n: sql<number>`count(*)` }).from(feedback).where(and(eq(feedback.status, "declined"), gte(feedback.repliedAt, since))),
+    db.select({ n: sql<number>`count(*)` }).from(feedback).where(and(eq(feedback.status, "declined"), gte(feedback.repliedAt, since), sql`coalesce(${feedback.verdict}, '') <> 'not_feedback'`)),
     db.select({ n: sql<number>`count(*)` }).from(feedback).where(inArray(feedback.status, ["new", "acknowledged", "asked", "planned"])),
   ]);
   return { received: Number(r.n), shipped: Number(s.n), declined: Number(d.n), waiting: Number(w.n) };

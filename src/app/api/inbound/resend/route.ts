@@ -1,7 +1,8 @@
 import { after, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { reportError } from "@/lib/alerts";
-import { createFeedback, markAcknowledged } from "@/lib/feedback/store";
+import { composeAck } from "@/lib/feedback/ack";
+import { createFeedback, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { guessLanguage } from "@/lib/listen/parse";
 import { draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
@@ -65,11 +66,13 @@ async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: Inbo
   const row = await createFeedback(db, { source: "email", text, locale, name: from.name, email: from.email, emailMessageId: mail.messageId ?? mail.emailId, context: "email" }).catch(() => null);
   if (!row) return NextResponse.json({ ok: true, ignored: "empty" });
   const fs = feedbackStrings(locale);
-  const ack = fs.emailThanks(from.name ?? "");
   const followUp = async () => {
     try {
-      const res = await sendPlainEmail({ to: from.email, subject: `Re: ${mail.subject ?? fs.emailSubject}`, text: ack, inReplyTo: mail.messageId });
-      if (res.ok) await markAcknowledged(db, row.id, ack);
+      const ack = await composeAck(db, { text, name: from.name, locale, source: "email" });
+      const body = `${ack.reply}\n\nClaude, for Kicksmash\nhttps://kicksma.sh`;
+      const res = await sendPlainEmail({ to: from.email, subject: `Re: ${mail.subject ?? fs.emailSubject}`, text: body, inReplyTo: mail.messageId });
+      if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
+      else if (res.ok) await markAcknowledged(db, row.id, ack.reply);
     } catch (e) {
       void reportError("server", e, { path: "/api/inbound/resend" });
     }

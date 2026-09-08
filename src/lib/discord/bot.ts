@@ -5,7 +5,8 @@ import { discordCards, discordChannels, events, players, type DiscordChannel, ty
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
-import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged } from "@/lib/feedback/store";
+import { composeAck } from "@/lib/feedback/ack";
+import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { formatEventTime } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
@@ -314,9 +315,18 @@ async function handleCommand(db: Db, i: DcInteraction, user: DcUser, ctx: OpCont
     if (text.length < 3) return { response: ephemeral(fs.how.replace("/feedback and the text", "/feedback text").replace("/feedback и текст", "/feedback text").replace("/feedback y el texto", "/feedback text")), outcome: "feedback_short" };
     if ((await feedbackCountToday(db, { discordUserId: user.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return { response: ephemeral(fs.thanks(who)), outcome: "feedback_too_many" };
     const row = await createFeedback(db, { source: "discord", text, locale, name: who, context: (channel as { name?: string | null }).name ?? null, discordChannelId: channel.channelId, discordUserId: user.id, discordGuildId: channel.guildId });
-    const ack = fs.thanks(who);
-    await markAcknowledged(db, row.id, ack);
-    return { response: ephemeral(ack), outcome: `feedback:${row.id}` };
+    const token = i.token;
+    // The reply is written for this note; that takes longer than Discord's three seconds, so defer and edit.
+    return {
+      response: { type: RESPONSE.DEFERRED_MESSAGE, data: { flags: EPHEMERAL } },
+      outcome: `feedback:${row.id}`,
+      followUp: async () => {
+        const ack = await composeAck(db, { text, name: who, locale, source: "discord" });
+        const res = await editOriginalResponse(token, { content: ack.reply });
+        if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
+        else if (res.ok) await markAcknowledged(db, row.id, ack.reply);
+      },
+    };
   }
   if (name === "ask") {
     const question = String(option(i, "question") ?? "").trim().slice(0, 1500);
