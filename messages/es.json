@@ -772,14 +772,15 @@
     "save": "Guardar",
     "partOf": "Parte de {name}",
     "forGroup": "Para {name}",
-    "shareHelp": "Comparte este enlace: quien se una podrá crear el siguiente partido.",
+    "shareHelp": "Envía este enlace. Quien se una será miembro y podrá crear el siguiente partido.",
     "memberOnly": "Únete al grupo primero: después podrás crear su siguiente partido.",
     "venue": "Sitio habitual",
     "tz": "Zona horaria",
     "type": "Formato",
     "defaultName": "Los del {day} {time}",
     "nameHelp": "El sitio se queda en el partido. Llama a la pandilla como la llamáis vosotros.",
-    "createNow": "Crear el grupo"
+    "createNow": "Crear el grupo",
+    "invite": "Invita a otros a este grupo"
   },
   "venue": {
     "board": "Tablón del club",
