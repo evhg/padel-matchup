@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      test_alert:
+        description: "Send a test line to the owner's Telegram to prove the alert path (no issue is touched)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -96,26 +101,29 @@ jobs:
 
       - name: Tell the owner on Telegram
         id: telegram
-        if: env.TG_TOKEN != '' && env.TG_OWNER != '' && (steps.state.outputs.transition == 'went_down' || steps.state.outputs.transition == 'recovered')
+        if: env.TG_TOKEN != '' && env.TG_OWNER != '' && (steps.state.outputs.transition == 'went_down' || steps.state.outputs.transition == 'recovered' || inputs.test_alert == true)
         shell: bash
         env:
           TRANSITION: ${{ steps.state.outputs.transition }}
           FAIL: ${{ steps.probe.outputs.fail }}
           NUMBER: ${{ steps.state.outputs.number }}
+          TEST_ALERT: ${{ inputs.test_alert }}
         run: |
-          if [ "$TRANSITION" = "went_down" ]; then
+          if [ "$TEST_ALERT" = "true" ] && [ "$TRANSITION" != "went_down" ] && [ "$TRANSITION" != "recovered" ]; then
+            text="✅ Test: the uptime alert path works. kicksma.sh is up; you would read this line while it is down, and once more when it is back."
+          elif [ "$TRANSITION" = "went_down" ]; then
             text="⚠️ kicksma.sh is not answering (${FAIL:0:200}). Outside probe, three tries. I will say when it is back."
           else
             text="✅ kicksma.sh is answering again."
           fi
-          url="https://github.com/${GITHUB_REPOSITORY}/issues/${NUMBER}"
+          if [ "$NUMBER" = "0" ]; then url="https://github.com/${GITHUB_REPOSITORY}/actions/workflows/uptime.yml"; else url="https://github.com/${GITHUB_REPOSITORY}/issues/${NUMBER}"; fi
           curl -sS --max-time 20 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TG_OWNER}" --data-urlencode "text=${text}" \
             --data-urlencode "reply_markup={\"inline_keyboard\":[[{\"text\":\"Details\",\"url\":\"${url}\"}]]}" -o /tmp/tg.json || true
           if grep -q '"ok":true' /tmp/tg.json 2>/dev/null; then echo "sent=1" >> "$GITHUB_OUTPUT"; else echo "sent=0" >> "$GITHUB_OUTPUT"; cat /tmp/tg.json || true; fi
 
       - name: Mark the issue as relayed
-        if: steps.telegram.outputs.sent == '1' && steps.state.outputs.number != '0'
+        if: steps.telegram.outputs.sent == '1' && steps.state.outputs.number != '0' && steps.state.outputs.transition != 'up'
         uses: actions/github-script@v7
         env:
           NUMBER: ${{ steps.state.outputs.number }}

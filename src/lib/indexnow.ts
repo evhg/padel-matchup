@@ -8,7 +8,7 @@ import { bumpMetric, dayKey } from "@/lib/domain/metrics";
  * IndexNow: one POST tells Bing, Yandex, Seznam, Naver and the rest that a page
  * changed. Google is not in the protocol; it reads the sitemap. Enabled by
  * INDEXNOW_KEY (8–128 letters, digits, dashes); the key file is served at
- * /indexnow/<key>.txt. Never throws.
+ * /<key>.txt (rewritten by the middleware to /indexnow/<key>.txt). Never throws.
  */
 export const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
 
@@ -17,7 +17,8 @@ export function indexNowKey(): string | null {
   return /^[A-Za-z0-9-]{8,128}$/.test(k) ? k : null;
 }
 export const indexNowEnabled = () => indexNowKey() !== null;
-export const indexNowKeyPath = (key: string) => `/indexnow/${key}.txt`;
+/** The key file must sit at the root: IndexNow trusts only URLs under the key file's directory. The middleware rewrites /<key>.txt to the route below. */
+export const indexNowKeyPath = (key: string) => `/${key}.txt`;
 
 export type IndexNowResult = { status: "skipped" | "sent" | "failed"; urls: number; httpStatus?: number; error?: string };
 

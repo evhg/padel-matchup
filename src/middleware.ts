@@ -10,6 +10,13 @@ import { LOCALE_COOKIE } from "@/i18n/config";
  * in that language.
  */
 export function middleware(req: NextRequest) {
+  // IndexNow key file at the root (/<key>.txt), served by the route under /indexnow.
+  const keyFile = req.nextUrl.pathname.match(/^\/([A-Za-z0-9-]{8,128})\.txt$/);
+  if (keyFile) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/indexnow/${keyFile[1]}.txt`;
+    return NextResponse.rewrite(url);
+  }
   const m = req.nextUrl.pathname.match(/^\/(ru|es)(\/.*)?$/);
   if (!m) return NextResponse.next();
   const locale = m[1];
@@ -22,4 +29,4 @@ export function middleware(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/ru", "/ru/:path*", "/es", "/es/:path*"] };
+export const config = { matcher: ["/ru", "/ru/:path*", "/es", "/es/:path*", "/:key([A-Za-z0-9-]{8,128}).txt"] };
