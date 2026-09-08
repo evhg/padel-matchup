@@ -183,6 +183,13 @@
       "when": 1788867056658,
       "tag": "0025_coaches",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788871476086,
+      "tag": "0026_coach_calendars",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [packageFor, setPackageFor] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<PackageDTO | null>(null);
 
@@ -130,21 +131,25 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
           </button>
         ) : (
           <form
-            className="mt-4 flex gap-2 animate-pop"
+            className="mt-4 flex flex-col gap-2 animate-pop"
             onSubmit={(e) => {
               e.preventDefault();
               if (!newName.trim()) return;
               act(async () => {
-                await addStudentAction(newName);
+                await addStudentAction(newName, newEmail);
                 setNewName("");
+                setNewEmail("");
                 setAdding(false);
               });
             }}
           >
-            <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("book.newStudentName")} maxLength={40} autoFocus />
-            <button type="submit" className="btn-primary" disabled={pending || !newName.trim()}>
-              {t("students.add")}
-            </button>
+            <div className="flex gap-2">
+              <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("book.newStudentName")} maxLength={40} autoFocus />
+              <button type="submit" className="btn-primary" disabled={pending || !newName.trim()}>
+                {t("students.add")}
+              </button>
+            </div>
+            <input className="input" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder={t("students.emailOptional")} inputMode="email" autoComplete="off" maxLength={120} />
           </form>
         )}
         {adding && <p className="mt-1 text-xs text-faint">{t("students.addHelp")}</p>}

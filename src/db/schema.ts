@@ -948,6 +948,15 @@ export const coaches = pgTable(
     whatsapp: text("whatsapp"),
     /** Listed on the public page, city list and sitemap. */
     isPublic: boolean("is_public").notNull().default(true),
+    /** The coach's Google Calendar, shared with our service account: read for busy time, written with lessons. */
+    gcalId: text("gcal_id"),
+    /** linked | no_access | error, after the last check. */
+    gcalStatus: text("gcal_status"),
+    gcalCheckedAt: timestamp("gcal_checked_at", { withTimezone: true }),
+    /** A secret iCal address (Apple, Outlook, Google without sharing): read-only busy time. */
+    icalUrl: text("ical_url"),
+    calendarSyncedAt: timestamp("calendar_synced_at", { withTimezone: true }),
+    calendarError: text("calendar_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -1058,10 +1067,12 @@ export const coachBlocks = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     reason: text("reason"),
+    /** web | telegram | gcal | ical: blocks from a calendar are replaced on every sync. */
+    source: text("source").notNull().default("web"),
     externalId: text("external_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("coach_blocks_coach_time_idx").on(t.coachId, t.startsAt)],
+  (t) => [index("coach_blocks_coach_time_idx").on(t.coachId, t.startsAt), index("coach_blocks_external_idx").on(t.coachId, t.externalId)],
 );
 export type CoachBlock = typeof coachBlocks.$inferSelect;
 

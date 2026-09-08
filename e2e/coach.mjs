@@ -51,6 +51,12 @@ try {
   await olga.getByRole("button", { name: "Save" }).click();
   await olga.getByText("Saved.").waitFor({ timeout: 20000 });
   check("settings save with a PromptPay number", true);
+  const calendarCard = olga.getByTestId("coach-calendar");
+  check("settings carry the calendar attachment with its two steps", (await calendarCard.count()) === 1 && (await calendarCard.getByText(/Share your Google Calendar/).count()) === 1 && (await calendarCard.locator("#gcal-id").count()) === 1);
+  await calendarCard.locator("#gcal-id").fill("not an address");
+  await calendarCard.getByRole("button", { name: "Attach and check" }).click();
+  await calendarCard.getByText("That does not look like a calendar address.").waitFor({ timeout: 20000 });
+  check("a bad calendar address is refused in place", true);
 
   // Ivan finds Olga's page, asks to join.
   const ivan = await newPage();
@@ -78,6 +84,17 @@ try {
   await olga.getByRole("button", { name: "Mark paid" }).click();
   await olga.getByText(/· Paid/).waitFor({ timeout: 20000 });
   await shot(olga, "61-coach-students");
+
+  // Olga brings her sheet: paste, look, confirm. Pavel arrives with six of ten left.
+  await olga.getByRole("button", { name: "Import" }).click();
+  await olga.getByTestId("import-text").fill("Name\tLessons\tUsed\tExpires\tPaid\nPavel\t10\t4\t2027-01-31\tyes\nnonsense line\n");
+  await olga.getByRole("button", { name: "Read it" }).click();
+  await olga.getByTestId("import-preview").waitFor({ timeout: 20000 });
+  check("the sheet preview shows the row and the skipped line before anything is written", (await olga.getByText(/1 row read, 1 line skipped/).count()) === 1 && (await olga.getByTestId("import-preview").getByText("6/10").count()) === 1);
+  await olga.getByTestId("import-confirm").click();
+  await olga.getByText(/1 package added: 1 new student/).waitFor({ timeout: 20000 });
+  await olga.getByText("Pavel").first().waitFor({ timeout: 20000 });
+  check("the imported student appears with lessons left and the expiry", (await olga.getByText(/6 of 10 left/).count()) === 1);
 
   // Ivan books a free time himself, then cancels in time: the lesson goes back on the package.
   await ivan.reload();

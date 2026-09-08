@@ -212,8 +212,8 @@ export async function setStudentStatus(db: Db, coachId: string, playerId: string
 }
 
 /** The coach adds a student by name (courtside, no phone needed): a player is created and accepted at once. */
-export async function addStudentByName(db: Db, coachId: string, name: string, locale: string): Promise<Player> {
-  const player = await createPlayer(db, { displayName: name, locale });
+export async function addStudentByName(db: Db, coachId: string, name: string, locale: string, email?: string | null): Promise<Player> {
+  const player = await createPlayer(db, { displayName: name, locale, email: email ?? null });
   await setStudentStatus(db, coachId, player.id, "accepted");
   return player;
 }
@@ -259,7 +259,7 @@ export function packageLine(p: LessonPackage, now = new Date()): { left: number;
   return { left, daysLeft, expired: daysLeft !== null && daysLeft <= 0 };
 }
 
-export type CreatePackageInput = { coachId: string; studentPlayerId: string; size: number; validDays?: number | null; expiresAt?: Date | null; amount?: number | null; currency?: string | null; note?: string | null; paid?: boolean };
+export type CreatePackageInput = { coachId: string; studentPlayerId: string; size: number; validDays?: number | null; expiresAt?: Date | null; amount?: number | null; currency?: string | null; note?: string | null; paid?: boolean; /** Lessons already taken before the package came here (a sheet import). */ used?: number | null };
 
 export async function createPackage(db: Db, input: CreatePackageInput, now = new Date()): Promise<LessonPackage> {
   const size = Math.round(input.size);
@@ -272,6 +272,7 @@ export async function createPackage(db: Db, input: CreatePackageInput, now = new
       coachId: input.coachId,
       studentPlayerId: input.studentPlayerId,
       size,
+      used: Math.min(size, Math.max(0, Math.round(input.used ?? 0))),
       expiresAt,
       amount,
       currency: (input.currency ?? "THB").toUpperCase().slice(0, 3),
