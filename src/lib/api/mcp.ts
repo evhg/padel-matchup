@@ -12,6 +12,9 @@ import { createApiKey } from "./keys";
 import { openapiDocument } from "./openapi";
 import { createMatch, createMatchSchema, generateSchedule, joinMatch, joinMatchSchema, scheduleSchema, type OpContext } from "./operations";
 import { boardToPublic, clubToPublic, groupToPublic, matchToPublic } from "./serialize";
+import { bookLessonApi, bookLessonSchema, cancelLessonApi, cancelLessonSchema, coachSlots, coachSlotsSchema, publicCoach, requestCoach, requestCoachSchema } from "./coachOps";
+import { CITIES, cityBySlug } from "@/lib/domain/cities";
+import { listPublicCoaches } from "@/lib/domain/coaching";
 
 /**
  * A minimal, dependency-free MCP server over streamable HTTP (JSON responses,
@@ -34,6 +37,7 @@ const toSchema = (s: z.ZodType) => {
 const codeSchema = z.object({ code: z.string().min(4).max(6).describe("The code from the link.") });
 const venueSchema = z.object({ venue: z.string().min(2).max(80).describe("Venue name or its slug, e.g. 'Padel Indoor BCN' or 'padel-indoor-bcn'.") });
 const clubsSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore"), name: z.string().max(80).optional().describe("One club by name; the slug is derived") });
+const coachesSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore; omit for every listed coach") });
 const keySchema = z.object({ name: z.string().min(1).max(80).describe("Who or what will use the key."), agent: z.string().max(80).optional().describe("Your name as an assistant, e.g. 'claude'."), email: z.email().optional() });
 
 type Tool = {
@@ -122,6 +126,53 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "find_coaches",
+    title: "Find coaches",
+    description: "Padel coaches who listed their page: clubs, lesson length, languages, the rules students book under (cancellation cutoff, free late passes, notice). Filter by city. Prices are the coach's to tell; nothing is paid through Kicksmash.",
+    schema: coachesSchema,
+    readOnly: true,
+    run: async (db, args) => {
+      const { city } = coachesSchema.parse(args);
+      const c = city ? cityBySlug(city.toLowerCase()) : null;
+      if (city && !c) return { coaches: [], note: `Unknown city "${city}". Known: ${CITIES.map((x) => x.slug).join(", ")}.` };
+      const rows = await listPublicCoaches(db, c?.tz ?? null);
+      const coaches = await Promise.all(rows.map((r) => publicCoach(db, r, false)));
+      return { coaches, note: coaches.length ? "Show the coach's page link; students ask to join there or through request_coach." : `No coach has listed their page${c ? ` in ${c.name}` : ""} yet. Coaches set up their book at ${baseUrl()}/coach in under a minute.` };
+    },
+  },
+  {
+    name: "coach_slots",
+    title: "A coach's free times",
+    description: "Free starts inside a coach's hours for the next days (default 14). Only accepted students can book them: request_coach first.",
+    schema: coachSlotsSchema,
+    readOnly: true,
+    run: async (db, args) => coachSlots(db, args),
+  },
+  {
+    name: "request_coach",
+    title: "Ask to become a student",
+    description: "Ask a coach to accept a person as their student, by first name or personal token. The coach answers with one tap. Keep the returned personalToken private to the student; book_lesson needs it. Ask the person before calling.",
+    schema: requestCoachSchema,
+    readOnly: false,
+    run: async (db, args) => requestCoach(db, args),
+  },
+  {
+    name: "book_lesson",
+    title: "Book a lesson",
+    description: "Book one lesson at a free start for an accepted student (their personal token). Draws from their open package when they have one. Confirm the time with the person first.",
+    schema: bookLessonSchema,
+    readOnly: false,
+    run: async (db, args) => bookLessonApi(db, args),
+  },
+  {
+    name: "cancel_lesson",
+    title: "Cancel a lesson",
+    description: "Cancel a student's lesson under the coach's rules; the outcome says whether it was refunded, covered by a free pass, or counted. Say the rule to the person before cancelling late.",
+    schema: cancelLessonSchema,
+    readOnly: false,
+    run: async (db, args) => cancelLessonApi(db, args),
+  },
+  {
     name: "create_match",
     title: "Create a match",
     description: "Create a padel match (4 players) or an americano tournament for a person. Returns the share link for the players and the organizer's private links. Give the person all links; keep personalToken and manageUrl private. Ask before creating; one request, one match.",
@@ -164,7 +215,7 @@ function negotiate(requested: unknown): string {
   return typeof requested === "string" && (MCP_PROTOCOL_VERSIONS as readonly string[]).includes(requested) ? requested : MCP_PROTOCOL_VERSIONS[0];
 }
 
-export const MCP_INSTRUCTIONS = `${VALUE_PROP} Call about_kicksmash once to learn the model. Reads are free. Before create_match or join_match, confirm the details with the person and afterwards give them the links from the response; personalToken and manageUrl are private to them.`;
+export const MCP_INSTRUCTIONS = `${VALUE_PROP} Call about_kicksmash once to learn the model. Reads are free. Before create_match, join_match, request_coach, book_lesson or cancel_lesson, confirm the details with the person and afterwards give them the links from the response; personalToken and manageUrl are private to them.`;
 
 async function handleOne(db: Db, req: JsonRpcRequest, ctx: OpContext): Promise<JsonRpcResponse | null> {
   const id = req.id ?? null;

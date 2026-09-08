@@ -71,6 +71,7 @@ export function openapiDocument(base: string) {
       { name: "matches", description: "Create, read and join matches and tournaments" },
       { name: "venues", description: "Public venue boards" },
       { name: "clubs", description: "Club pages: booking links, free courts, founding clubs" },
+      { name: "coaches", description: "Listed coaches: free times, becoming a student, booking and cancelling lessons under the coach's rules" },
       { name: "groups", description: "Crews that play together" },
       { name: "schedules", description: "Americano rotations, no data stored" },
       { name: "keys", description: "Optional keys for roomier limits and webhooks" },
@@ -111,6 +112,50 @@ export function openapiDocument(base: string) {
       },
       "/api/v1/clubs/{slug}": {
         get: { tags: ["clubs"], operationId: "getClub", summary: "A club page: booking link, courts, today's free courts when the club shares a feed", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], responses: { "200": jsonResponse("The club", ref("Club")), "404": jsonResponse("No live club page", ref("Error")) } },
+      },
+      "/api/v1/coaches": {
+        get: { tags: ["coaches"], operationId: "listCoaches", summary: "Listed coaches, optionally in one city", parameters: [{ name: "city", in: "query", schema: { type: "string" }, description: "phuket or singapore" }], responses: { "200": jsonResponse("Coaches", { type: "object", properties: { city: { type: ["string", "null"] }, coaches: { type: "array", items: ref("Coach") }, cities: { type: "array", items: { type: "object", properties: { slug: { type: "string" }, name: { type: "string" }, url: { type: "string" } } } }, note: { type: "string" } } }) } },
+      },
+      "/api/v1/coaches/{handle}": {
+        get: { tags: ["coaches"], operationId: "getCoach", summary: "A coach with their next free starts", parameters: [{ name: "handle", in: "path", required: true, schema: { type: "string" } }], responses: { "200": jsonResponse("The coach", ref("Coach")), "404": jsonResponse("No listed coach", ref("Error")) } },
+      },
+      "/api/v1/coaches/{handle}/slots": {
+        get: { tags: ["coaches"], operationId: "getCoachSlots", summary: "Free starts inside the coach's hours", parameters: [{ name: "handle", in: "path", required: true, schema: { type: "string" } }, { name: "days", in: "query", schema: { type: "integer", minimum: 1, maximum: 30 }, description: "Default 14" }], responses: { "200": jsonResponse("Slots", ref("CoachSlots")), "404": jsonResponse("No listed coach", ref("Error")) } },
+      },
+      "/api/v1/coaches/{handle}/requests": {
+        post: {
+          tags: ["coaches"],
+          operationId: "requestCoach",
+          summary: "Ask to become the coach's student",
+          description: "By first name (a new player) or personal token. The coach accepts with one tap; the response's personalToken is what book_lesson needs afterwards. Keep it private to the student.",
+          security: [{}, { bearer: [] }],
+          parameters: [{ name: "handle", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: jsonBody({ type: "object", properties: { name: { type: "string", maxLength: 40 }, token: { type: "string" } } }),
+          responses: { "201": jsonResponse("Status", { type: "object", properties: { status: { type: "string", enum: ["requested", "accepted", "paused"] }, coach: ref("Coach"), student: { type: "object", properties: { name: { type: "string" }, personalToken: { type: "string" }, personalUrl: { type: "string" } } }, next: { type: "string" } } }), "404": jsonResponse("No listed coach", ref("Error")), ...errors },
+        },
+      },
+      "/api/v1/coaches/{handle}/lessons": {
+        post: {
+          tags: ["coaches"],
+          operationId: "bookLesson",
+          summary: "Book a lesson at a free start (accepted students only)",
+          security: [{}, { bearer: [] }],
+          parameters: [{ name: "handle", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: jsonBody({ type: "object", properties: { token: { type: "string" }, startsAt: { type: "string", format: "date-time" } }, required: ["token", "startsAt"] }),
+          responses: { "201": jsonResponse("Booked", ref("LessonBooking")), "403": jsonResponse("Not accepted yet", ref("Error")), "409": jsonResponse("Slot taken", ref("Error")), "404": jsonResponse("No listed coach or unknown token", ref("Error")), ...errors },
+        },
+      },
+      "/api/v1/coaches/{handle}/lessons/{id}": {
+        delete: {
+          tags: ["coaches"],
+          operationId: "cancelLesson",
+          summary: "Cancel a lesson under the coach's rules",
+          description: "The outcome says what happened to the package: refunded (in time), free_pass (late, covered), counted (late), none (no package).",
+          security: [{}, { bearer: [] }],
+          parameters: [{ name: "handle", in: "path", required: true, schema: { type: "string" } }, { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }, { name: "token", in: "query", schema: { type: "string" }, description: "Or in the JSON body" }],
+          requestBody: jsonBody({ type: "object", properties: { token: { type: "string" } } }),
+          responses: { "200": jsonResponse("Cancelled", { type: "object", properties: { lessonId: { type: "string" }, outcome: { type: "string", enum: ["refunded", "free_pass", "counted", "none"] }, next: { type: "string" } } }), "404": jsonResponse("No such lesson for this token", ref("Error")), ...errors },
+        },
       },
       "/api/v1/groups/{code}": {
         get: { tags: ["groups"], operationId: "getGroup", summary: "A group: members, weekly slot, upcoming matches", parameters: [{ name: "code", in: "path", required: true, schema: { type: "string", minLength: 6, maxLength: 6 } }], responses: { "200": jsonResponse("The group", ref("Group")), "404": jsonResponse("No such group", ref("Error")) } },
@@ -159,6 +204,9 @@ export function openapiDocument(base: string) {
     components: {
       securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "Optional for writes, required for webhooks. Keys start with ks_live_." } },
       schemas: {
+        Coach: { type: "object", properties: { handle: { type: "string" }, name: { type: "string" }, url: { type: "string" }, bookUrl: { type: "string" }, city: { type: ["string", "null"] }, tz: { type: "string" }, clubs: { type: "array", items: { type: "string" } }, lessonMinutes: { type: "integer" }, languages: { type: "array", items: { type: "string" } }, bio: { type: ["string", "null"] }, rules: { type: "object", properties: { cutoffHours: { type: "integer" }, latePasses: { type: "integer" }, minNoticeHours: { type: "integer" } } }, nextSlots: { type: "array", items: { type: "string", format: "date-time" } } } },
+        CoachSlots: { type: "object", properties: { coach: ref("Coach"), days: { type: "integer" }, slots: { type: "array", items: { type: "string", format: "date-time" } }, rules: { type: "object" }, next: { type: "string" } } },
+        LessonBooking: { type: "object", properties: { lesson: { type: "object", properties: { id: { type: "string" }, startsAt: { type: "string", format: "date-time" }, minutes: { type: "integer" }, coach: { type: "string" }, url: { type: "string" } } }, package: { type: ["object", "null"], properties: { left: { type: "integer" }, size: { type: "integer" }, expiresAt: { type: ["string", "null"] } } }, rules: { type: "object" }, next: { type: "string" } } },
         Error: errorSchema,
         Match: publicMatch,
         CreateMatch: schema(createMatchSchema),

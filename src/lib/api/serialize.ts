@@ -1,4 +1,4 @@
-import type { Event, Player } from "@/db/schema";
+import type { Coach, Event, Player } from "@/db/schema";
 import { EVENT_DURATION_MS } from "@/lib/config";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import type { GroupDetail } from "@/lib/domain/groups";
@@ -129,6 +129,40 @@ export function groupToPublic(detail: GroupDetail, base: string): PublicGroup {
     weekly: g.recurDow != null && g.recurTime ? { weekday: g.recurDow, time: g.recurTime, leadDays: g.recurLeadDays } : null,
     members: detail.members.map((m) => ({ name: m.player.displayName, level: m.player.level, admin: m.role === "admin" })),
     upcoming: detail.upcoming.map((e: Event) => ({ code: e.code, url: `${base}/${e.code}`, startsAt: e.startsAt.toISOString(), title: e.title })),
+  };
+}
+
+export type PublicCoach = {
+  handle: string;
+  name: string;
+  url: string;
+  bookUrl: string;
+  city: string | null;
+  tz: string;
+  clubs: string[];
+  lessonMinutes: number;
+  languages: string[];
+  bio: string | null;
+  rules: { cutoffHours: number; latePasses: number; minNoticeHours: number };
+  /** Next free starts (ISO), when asked for. */
+  nextSlots?: string[];
+};
+
+/** A listed coach: what they put on their page and the rules students book under. Never a phone, an email or a payment id. */
+export function coachToPublic(c: Coach, base: string, extra: { city?: string | null; slots?: Date[] } = {}): PublicCoach {
+  return {
+    handle: c.handle,
+    name: c.displayName,
+    url: `${base}/c/${c.handle}`,
+    bookUrl: `${base}/c/${c.handle}`,
+    city: extra.city ?? null,
+    tz: c.tz,
+    clubs: c.clubNames,
+    lessonMinutes: c.lessonMinutes,
+    languages: c.languages,
+    bio: c.bio,
+    rules: { cutoffHours: c.cutoffHours, latePasses: c.latePasses, minNoticeHours: c.minNoticeHours },
+    ...(extra.slots ? { nextSlots: extra.slots.map((d) => d.toISOString()) } : {}),
   };
 }
 

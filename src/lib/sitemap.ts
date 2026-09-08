@@ -3,6 +3,7 @@ import type { Db } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
 import { listLiveClubs } from "@/lib/domain/clubs";
+import { listPublicCoaches } from "@/lib/domain/coaching";
 import { answerPath, listPublishedAnswers } from "@/lib/listen/answers";
 import { locales } from "@/i18n/config";
 import { localePath } from "@/lib/seo";
@@ -15,13 +16,21 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
   const base = baseUrl();
   let answerPages: MetadataRoute.Sitemap = [];
   let clubPages: MetadataRoute.Sitemap = [];
+  let coachPages: MetadataRoute.Sitemap = [];
   if (db) {
     try {
       answerPages = (await listPublishedAnswers(db, 500)).map((a) => ({ url: `${base}${answerPath(a)}`, lastModified: a.publishedAt ?? now, changeFrequency: "monthly" as const, priority: 0.6 }));
       clubPages = (await listLiveClubs(db)).map((c) => ({ url: `${base}/v/${c.slug}`, lastModified: c.updatedAt, changeFrequency: "daily" as const, priority: 0.7 }));
+      // A listed coach's page exists in every language, each naming the others.
+      coachPages = (await listPublicCoaches(db)).flatMap((c) => {
+        const path = `/c/${c.handle}`;
+        const languages = Object.fromEntries([...locales.map((l) => [l, `${base}${localePath(path, l)}`]), ["x-default", `${base}${localePath(path, "en")}`]]);
+        return locales.map((l) => ({ url: `${base}${localePath(path, l)}`, lastModified: c.updatedAt, changeFrequency: "weekly" as const, priority: l === "en" ? 0.7 : 0.6, alternates: { languages } }));
+      });
     } catch {
       answerPages = [];
       clubPages = [];
+      coachPages = [];
     }
   }
   // Pages that exist in every language: one entry per language, each naming the others (hreflang).
@@ -39,6 +48,8 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
     ...CITIES.flatMap((c) => inEveryLanguage(`/${c.slug}`, "daily", 0.8)),
     ...inEveryLanguage("/clubs", "weekly", 0.7),
     ...clubPages,
+    ...CITIES.flatMap((c) => inEveryLanguage(`/coaches/${c.slug}`, "daily", 0.7)),
+    ...coachPages,
     { url: `${base}/answers`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     ...answerPages,
     ...inEveryLanguage("/about", "yearly", 0.3),
