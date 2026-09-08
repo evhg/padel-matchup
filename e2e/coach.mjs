@@ -89,10 +89,12 @@ try {
   await ivan.getByText(/9 of 10 left/).waitFor({ timeout: 20000 });
   check("booking draws one lesson from the package", true);
   await shot(ivan, "62-student-booked");
+  // Depending on the hour this runs, the first free slot may be inside the cutoff: then the free pass covers it. Either way the lesson goes back.
   await ivan.locator("main").getByRole("button", { name: "Cancel" }).first().click();
-  await ivan.getByText("Cancelled. The lesson is back on your package.").waitFor({ timeout: 20000 });
+  await ivan.getByText(/^Cancelled/).waitFor({ timeout: 20000 });
+  const cancelNote = await ivan.getByText(/^Cancelled/).textContent();
   await ivan.getByText(/10 of 10 left/).waitFor({ timeout: 20000 });
-  check("a timely cancellation refunds the lesson", true);
+  check("a cancellation before the cutoff, or covered by the free pass, refunds the lesson", /back on your package|free pass covered/.test(cancelNote ?? ""), cancelNote?.trim());
 
   // Olga books Ivan from her book in two taps.
   await olga.goto(BASE + "/coach");
