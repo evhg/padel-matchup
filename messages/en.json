@@ -776,7 +776,10 @@
     "memberOnly": "Join the group first: then you can create its next match.",
     "venue": "Usual place",
     "tz": "Time zone",
-    "type": "Format"
+    "type": "Format",
+    "defaultName": "{day} {time} crew",
+    "nameHelp": "The place stays on the match. Call the crew what you call it.",
+    "createNow": "Create the group"
   },
   "venue": {
     "board": "Venue board",

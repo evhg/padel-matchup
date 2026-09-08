@@ -82,7 +82,8 @@ export async function createGroupFromEvent(db: Db, input: { eventId: string; act
   const memberIds = roster.map((r) => r.playerId!).filter(Boolean);
   if (!memberIds.includes(input.actorPlayerId) && ev.creatorPlayerId !== input.actorPlayerId) throw new DomainError("forbidden");
   const group = await createGroup(db, {
-    name: cleanName(input.name) || ev.title?.trim() || input.fallbackName,
+    // The place stays on the match; a group is called by its rhythm ("Thursday 19:00 crew") unless the match had a real title.
+    name: cleanName(input.name) || (ev.title?.trim() && ev.title.trim().toLowerCase() !== (ev.venueName ?? "").trim().toLowerCase() ? ev.title.trim() : "") || input.fallbackName,
     creatorPlayerId: input.actorPlayerId,
     tz: ev.tz,
     venueName: ev.venueName,

@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { createGroupFromEvent, getGroupByCode, getGroupMember, joinGroup, leaveGroup, removeGroupMember, updateGroup } from "@/lib/domain/groups";
 import { isValidInviteCode } from "@/lib/codes";
+import { formatEventTime, weekdayName } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, loadEvent, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -24,7 +25,9 @@ export async function createGroupFromEventAction(code: string, name?: string): P
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     const t = await getTranslations();
-    const group = await createGroupFromEvent(db, { eventId: detail.event.id, actorPlayerId: me.id, name, fallbackName: detail.event.venueName ?? t("group.fallbackName") });
+    const locale = await getLocale();
+    const fallbackName = t("group.defaultName", { day: weekdayName(detail.event.startsAt, detail.event.tz, locale), time: formatEventTime(detail.event.startsAt, detail.event.tz, locale) });
+    const group = await createGroupFromEvent(db, { eventId: detail.event.id, actorPlayerId: me.id, name, fallbackName });
     revalidatePath(`/${code}`);
     revalidatePath("/me");
     return { code: group.code };

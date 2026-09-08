@@ -776,7 +776,10 @@
     "memberOnly": "Únete al grupo primero: después podrás crear su siguiente partido.",
     "venue": "Sitio habitual",
     "tz": "Zona horaria",
-    "type": "Formato"
+    "type": "Formato",
+    "defaultName": "Los del {day} {time}",
+    "nameHelp": "El sitio se queda en el partido. Llama a la pandilla como la llamáis vosotros.",
+    "createNow": "Crear el grupo"
   },
   "venue": {
     "board": "Tablón del club",

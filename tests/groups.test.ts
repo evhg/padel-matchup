@@ -25,6 +25,13 @@ describe("groups", () => {
     expect(g.code).toHaveLength(6);
     expect(g.name).toBe("Padel crew");
     expect(g.venueName).toBe("Club X");
+    // A match titled after its venue does not pass the venue on as the group's name; a real title does.
+    const named = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 2 * HOUR), tz: "Asia/Singapore", venueName: "Club X", title: "Club X", whenFull: "closed" });
+    await joinEvent(db, { eventId: named.id, playerId: p2.id });
+    expect((await createGroupFromEvent(db, { eventId: named.id, actorPlayerId: org.id, fallbackName: "Thursday 19:00 crew" })).name).toBe("Thursday 19:00 crew");
+    const titled = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 3 * HOUR), tz: "Asia/Singapore", venueName: "Club X", title: "Sunday social", whenFull: "closed" });
+    await joinEvent(db, { eventId: titled.id, playerId: p2.id });
+    expect((await createGroupFromEvent(db, { eventId: titled.id, actorPlayerId: org.id, fallbackName: "x" })).name).toBe("Sunday social");
     expect(g.whenFull).toBe("closed");
     expect(g.levelMin).toBe(3);
     expect(g.creatorPlayerId).toBe(p2.id);
