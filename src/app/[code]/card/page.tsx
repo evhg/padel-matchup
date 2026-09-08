@@ -9,6 +9,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay } from "@/lib/dates";
+import { fnv1a } from "@/lib/hash";
 import { isOccupied } from "@/lib/domain/events";
 import { getEventByCode } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
@@ -24,8 +25,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const detail = await getEventByCode(db, code);
   if (!detail) return {};
   const title = `${t("card.title")} · ${calendarTitle(detail.event, t(detail.event.type === "match" ? "event.match" : "event.tournament"))}`;
-  return { title, robots: { index: false, follow: true }, openGraph: { title, type: "website", url: `${baseUrl()}/${code}/card` }, twitter: { card: "summary_large_image", title } };
+  // The picture's URL carries the score's version, so an edited score is never served from a cache of the old one.
+  const image = { url: `${baseUrl()}/${code}/card/opengraph-image?v=${resultVersion(detail)}`, width: 1200, height: 630 };
+  return { title, robots: { index: false, follow: true }, openGraph: { title, type: "website", url: `${baseUrl()}/${code}/card`, images: [image] }, twitter: { card: "summary_large_image", title, images: [image.url] } };
 }
+
+/** Changes exactly when the recorded result changes. */
+const resultVersion = (detail: { scores: unknown; event: { status: string } }) => fnv1a(JSON.stringify(detail.scores) + detail.event.status);
 
 /** A page whose link unfurls with the result picture, plus the picture itself to save. The viral loop ends in "organize your own". */
 export default async function CardPage({ params }: Props) {
@@ -63,7 +69,7 @@ export default async function CardPage({ params }: Props) {
         <h1 className="text-2xl font-extrabold tracking-tight">{t("card.title")}</h1>
         <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/${code}/card/opengraph-image`} alt={line} width={1200} height={630} className="block h-auto w-full" />
+          <img src={`/${code}/card/opengraph-image?v=${resultVersion(detail)}`} alt={line} width={1200} height={630} className="block h-auto w-full" />
         </div>
         <p className="text-sm font-semibold">{line}</p>
         <p className="text-xs text-faint">{t("card.saveHint")}</p>
