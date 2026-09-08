@@ -30,8 +30,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title, robots: { index: false, follow: true }, openGraph: { title, type: "website", url: `${baseUrl()}/${code}/card`, images: [image] }, twitter: { card: "summary_large_image", title, images: [image.url] } };
 }
 
-/** Changes exactly when the recorded result changes. */
-const resultVersion = (detail: { scores: unknown; event: { status: string } }) => fnv1a(JSON.stringify(detail.scores) + detail.event.status);
+/** Changes exactly when what the picture shows changes: the recorded sets, the match state, and who stands on which side under what name. */
+const resultVersion = (detail: { scores: unknown; event: { status: string }; roster: { status: string; team: string | null; player: { displayName: string } | null; invitedName: string | null }[] }) =>
+  fnv1a(JSON.stringify(detail.scores) + detail.event.status + JSON.stringify(detail.roster.map((s) => [s.status, s.team, s.player?.displayName ?? s.invitedName ?? ""])));
 
 /** A page whose link unfurls with the result picture, plus the picture itself to save. The viral loop ends in "organize your own". */
 export default async function CardPage({ params }: Props) {
