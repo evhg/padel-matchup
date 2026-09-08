@@ -21,6 +21,7 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";
 import { eventUrl, manageUrl } from "@/lib/share";
+import { taggedUrl } from "@/lib/source";
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -70,6 +71,16 @@ export default async function SharePage({ params }: Props) {
         <ShareButtons url={url} text={text} />
         <section className="card">
           <QrPanel url={url} hint={t("share.qrHint")} />
+        </section>
+        <section className="card">
+          <h2 className="font-extrabold">📸 {t("share.story")}</h2>
+          <p className="mt-0.5 text-sm text-muted">{t("share.storyHint", { link: `${shortHost()}/${code}` })}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <a href={`/${code}/story`} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm">
+              {t("share.storyOpen")}
+            </a>
+            <CopyButton value={taggedUrl(url, "ig")} label={t("share.storyCopy")} className="btn-ghost btn-sm" />
+          </div>
         </section>
         <Link href={`/${code}`} prefetch={false} className="btn-secondary w-full text-lg">
           {t(isTournament ? "share.openTournament" : "share.openMatch")} →

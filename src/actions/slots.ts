@@ -1,6 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cleanSource, SOURCE_COOKIE } from "@/lib/source";
+import { bumpMetric } from "@/lib/domain/metrics";
+import { cookies } from "next/headers";
 import { after } from "next/server";
 import { getDb } from "@/db";
 import { baseUrl, emailEnabled } from "@/lib/config";
@@ -61,6 +64,9 @@ export async function joinAction(code: string, name?: string, level?: number | n
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
       // Joining a group's match makes you part of the group (so the next match pings you too).
       if (ev.groupId) await joinGroup(db, ev.groupId, me.id).catch(() => undefined);
+      // A join that started from a tagged link (an Instagram story, a poster) is counted per source.
+      const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
+      if (source) await bumpMetric(db, `join_src_${source}`).catch(() => undefined);
       after(async () => {
         await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", me.displayName, me.id);
         const fresh = await notifyLineupChange(db, res.event, before, me.id);

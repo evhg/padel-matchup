@@ -155,7 +155,11 @@
     "titleTournament": "Турнир создан",
     "subtitleTournament": "Отправьте ссылку. Игроки нажимают, вводят имя — и в игре.",
     "openMatch": "К матчу",
-    "openTournament": "К турниру"
+    "openTournament": "К турниру",
+    "story": "Картинка для сторис в Instagram",
+    "storyHint": "9:16, готова для сторис. Добавьте стикер-ссылку {link}, чтобы люди попадали прямо в матч.",
+    "storyOpen": "Открыть картинку",
+    "storyCopy": "Скопировать ссылку для Instagram"
   },
   "event": {
     "match": "Матч по паделу",
