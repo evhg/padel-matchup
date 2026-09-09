@@ -25,6 +25,7 @@ import { weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { suggestGroupName } from "@/lib/domain/groupNames";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { coachAssistantMessage, handleCoachCallback, lessonsFor } from "./coach";
+import { verifyPlayerTicket } from "@/lib/coach/link";
 import { isValidShareCode } from "@/lib/codes";
 import { answerCallbackQuery, answerInlineQuery, deleteMessage, editInlineMessageText, editMessageText, esc, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
@@ -1064,8 +1065,19 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
         await sendMessage(chat.chatId, s.help, { silent: true });
         return "help";
       }
-      // Deep links: t.me/bot?start=r_CODE asks for a result here; ?start=CODE shows a card; ?start=new explains /new.
+      // Deep links: t.me/bot?start=r_CODE asks for a result here; ?start=CODE shows a card; ?start=new explains /new;
+      // ?start=coach_TICKET comes from the setup's "open your assistant" button and binds this account to the coach.
       const payload = cmd.args.trim();
+      const coachLink = payload.match(/^coach_(.+)$/);
+      if (coachLink) {
+        const playerId = verifyPlayerTicket(coachLink[1]);
+        if (playerId) {
+          const linked = await linkTelegram(db, playerId, from);
+          const token = await getOrCreatePersonalToken(db, linked.id);
+          await sendMessage(chat.chatId, esc(s.coachLinked), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
+          return "coach_linked";
+        }
+      }
       const result = payload.match(/^r_([A-Za-z0-9]{4})$/);
       if (result) {
         const detail = await getEventByCode(db, result[1]);

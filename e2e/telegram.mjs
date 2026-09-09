@@ -146,7 +146,18 @@ try {
   await page.goto(`${BASE}/coach`);
   await page.locator("#coach-clubs").waitFor({ timeout: 20000 });
   await page.locator("#coach-clubs").fill("DPC");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Set up my assistant" }).click();
+  await page.getByTestId(/setup-(calendar|pay)/).waitFor({ timeout: 30000 });
+  for (let i = 0; i < 4 && !/welcome=1/.test(page.url()); i++) {
+    const later = page.getByRole("button", { name: "Later" });
+    const done = page.getByTestId("setup-finish");
+    if (await done.count()) await done.click();
+    else if (await later.count()) await later.first().click();
+    else break;
+    await page.waitForTimeout(300);
+  }
   await page.waitForURL(/\/coach\?welcome=1$/, { timeout: 30000 });
   const olyaPrivate = { id: 515151, type: "private" };
   const say = (id, text) => hook({ update_id: 200 + id, message: { message_id: 200 + id, date: 0, chat: olyaPrivate, from: olya, text } });
