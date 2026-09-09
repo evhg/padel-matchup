@@ -27,15 +27,21 @@ let nextMessageId = 100;
 
 // Chat ids the fake Bot API refuses (a user who never pressed Start, or blocked the bot).
 let unreachable = new Set<number>();
+let editFailures: { error_code: number; description: string }[] = [];
 function stubTelegram() {
   calls = [];
   unreachable = new Set();
+  editFailures = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL, init?: RequestInit) => {
       const method = String(url).split("/").pop()!;
       const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
       calls.push({ method, body });
+      if (method === "editMessageText" && editFailures.length) {
+        const f = editFailures.shift()!;
+        return new Response(JSON.stringify({ ok: false, ...f }), { status: f.error_code, headers: { "content-type": "application/json" } });
+      }
       if (unreachable.has(Number(body.chat_id))) return new Response(JSON.stringify({ ok: false, error_code: 403, description: "Forbidden: bot can't initiate conversation with a user" }), { status: 403, headers: { "content-type": "application/json" } });
       const result = method === "sendMessage" || method === "sendPhoto" ? { message_id: nextMessageId++, chat: { id: body.chat_id } } : true;
       return new Response(JSON.stringify({ ok: true, result }), { status: 200, headers: { "content-type": "application/json" } });
@@ -364,9 +370,26 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     const [feedRow] = await db.select().from(telegramCards).where(eq(telegramCards.kind, "feed"));
     expect(feedRow.chatId).toBe(31);
     expect(JSON.parse(feedRow.rendered ?? "[]")).toHaveLength(3);
-    // A day later the running message is stale: a join starts a new one.
-    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Lena", new Date(Date.now() + 25 * HOUR))).toBe(true);
+    // A rate limit at Telegram loses nothing: the line is stored first, the retry shows it, no new message.
+    editFailures = [{ error_code: 429, description: "Too Many Requests: retry after 1" }];
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Nina")).toBe(true);
+    expect(sent("sendMessage")).toHaveLength(sentBefore);
+    expect(String(sent("editMessageText").at(-1)!.body.text)).toContain("Nina");
+    // The organizer deleted the running message: the next quiet note starts a new one and the row follows it.
+    editFailures = [{ error_code: 400, description: "Bad Request: message to edit not found" }];
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Oleg")).toBe(true);
     expect(sent("sendMessage")).toHaveLength(sentBefore + 1);
+    const [repointed] = await db.select().from(telegramCards).where(eq(telegramCards.kind, "feed"));
+    expect(repointed.messageId).not.toBe(feedRow.messageId);
+    expect(JSON.parse(repointed.rendered ?? "[]")).toEqual([expect.stringContaining("Oleg")]);
+    // An ask the organizer has to answer speaks up, with a sound.
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "requested", "Vova")).toBe(true);
+    const ask = sent("sendMessage").at(-1)!;
+    expect(ask.body.disable_notification).toBe(false);
+    const sentAfterAsk = sent("sendMessage").length;
+    // A day after the running message was sent it is stale: a join starts a new one.
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Lena", new Date(Date.now() + 25 * HOUR))).toBe(true);
+    expect(sent("sendMessage")).toHaveLength(sentAfterAsk + 1);
     // Someone leaving speaks up in a new message, with a sound.
     await notifyCreator(db, ev, "left", "Petr", petr.id);
     const leftMsg = sent("sendMessage").at(-1)!;

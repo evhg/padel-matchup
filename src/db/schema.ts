@@ -610,9 +610,9 @@ export const telegramCards = pgTable(
       .notNull()
       .references(() => telegramChats.chatId, { onDelete: "cascade" }),
     messageId: bigint("message_id", { mode: "number" }).notNull(),
-    /** card = the live match card; result = the result picture posted once. */
+    /** card = the live match card; result = the result picture posted once; feed = the organizer's running message in their private chat. */
     kind: text("kind").notNull().default("card"),
-    /** Hash of the last rendered text, to skip no-op edits. */
+    /** card/result: hash of the last rendered text, to skip no-op edits; feed: the JSON array of lines the running message shows. */
     rendered: text("rendered"),
     /** The "line-up complete" note has been posted for this card. */
     completeNotedAt: timestamp("complete_noted_at", { withTimezone: true }),

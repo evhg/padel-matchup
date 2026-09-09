@@ -16,6 +16,11 @@ export const telegramBotId = () => {
 };
 
 export type TgResult<T> = { ok: true; result: T } | { ok: false; error_code: number; description: string };
+
+/** An edit that changed nothing is still a success. */
+export const editOk = (r: TgResult<unknown>): boolean => r.ok || /message is not modified/i.test(r.description);
+/** The message is gone or frozen: deleted by its owner, too old, or never ours. Anything else (a rate limit, a hiccup) is transient. */
+export const messageGone = (r: TgResult<unknown>): boolean => !r.ok && /message to edit not found|can't be edited|MESSAGE_ID_INVALID|message_id_invalid/i.test(r.description);
 export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: string; url?: string; switch_inline_query?: string }[][] };
 /** Buttons under the text field that stay: the menu a coach or a student taps instead of typing commands. */
 export type ReplyKeyboard = { keyboard: { text: string }[][]; is_persistent?: boolean; resize_keyboard?: boolean; input_field_placeholder?: string };
