@@ -34,16 +34,27 @@ try {
   await olga.goto(BASE + "/coach");
   await olga.getByPlaceholder("e.g. Alex").fill("Olga");
   await olga.locator("form button[type=submit]").click();
-  await olga.getByText("Your lessons book").first().waitFor({ timeout: 20000 });
+  await olga.getByText("Your assistant").first().waitFor({ timeout: 20000 });
   check("setup asks where, how long and when on one screen", (await olga.locator("#coach-clubs").count()) === 1 && (await olga.getByRole("radio", { name: "Both" }).count()) === 1);
   await olga.locator("#coach-clubs").fill("Warehaus");
-  await olga.getByRole("button", { name: "Create my book" }).click();
+  await olga.getByRole("button", { name: "Set up my assistant" }).click();
   await olga.waitForURL(/\/coach\?welcome=1$/, { timeout: 30000 });
-  await olga.getByText("Your book is ready").waitFor({ timeout: 20000 });
+  await olga.getByText("Your assistant is ready").waitFor({ timeout: 20000 });
   const body = await olga.locator("main").innerText();
   const handle = body.match(/\/c\/([a-z0-9-]+)/)?.[1];
-  check("the welcome card shows the coach's link and a QR", Boolean(handle) && (await olga.locator("main svg").count()) > 0, handle);
+  const welcome = olga.getByTestId("coach-welcome");
+  // The welcome shows the link and the message to forward; no referral ask and no fence QR on day one.
+  const tgHref = await welcome.locator('a[href*="t.me/share"]').getAttribute("href");
+  const studentUrl = tgHref ? new URL(tgHref).searchParams.get("url") : null;
+  const inviteCode = studentUrl ? new URL(studentUrl).searchParams.get("i") : null;
+  check("the welcome card shows the link and a student link that carries the invite code", Boolean(handle) && Boolean(inviteCode) && studentUrl?.includes(`/c/${handle}?i=`), `${handle} ${studentUrl}`);
+  check("the fresh welcome asks for no referral and shows no QR", (await welcome.getByText("Know a coach?").count()) === 0 && (await welcome.locator('svg[height="160"]').count()) === 0);
+  check("the invite to other coaches waits until the assistant has earned it", (await olga.getByTestId("invite-coach").count()) === 0);
   await shot(olga, "60-coach-welcome");
+  await olga.goto(BASE + "/");
+  check("the header shows the way back to the assistant in a coach's browser", (await olga.getByTestId("assistant-link").count()) === 1);
+  await olga.goto(BASE + "/me");
+  check("My matches puts the assistant first for a coach", (await olga.getByTestId("coach-card").count()) === 1 && (await olga.getByText("Nothing booked today").count()) === 1);
 
   // Settings: PromptPay and a cutoff, saved once.
   await olga.goto(BASE + "/coach/settings");
@@ -68,21 +79,35 @@ try {
   await ivan.getByText(/Asked\. Olga will confirm/).waitFor({ timeout: 20000 });
   check("a newcomer asks to join with just a name", true);
 
+  // Dasha opens the link Olga forwarded: her name, and she is on the list without anyone approving.
+  const dasha = await newPage();
+  await dasha.goto(`${BASE}/c/${handle}?i=${inviteCode}`);
+  check("the forwarded link greets the student as added, not as an applicant", (await dasha.getByTestId("invited-join").count()) === 1 && (await dasha.getByText("Olga added you. Your name, and you can book.").count()) === 1);
+  await dasha.getByPlaceholder("e.g. Alex").fill("Dasha");
+  await dasha.getByRole("button", { name: "I'm in" }).click();
+  await dasha.getByText("Pick a day").waitFor({ timeout: 20000 });
+  check("a student from the coach's link books at once, no request, no yes", (await dasha.getByTestId("ask-to-join").count()) === 0);
+  const wrong = await newPage();
+  await wrong.goto(`${BASE}/c/${handle}?i=notthecode`);
+  check("a wrong code is just the public page", (await wrong.getByTestId("ask-to-join").count()) === 1);
+
   // Olga accepts and starts a package of ten.
   await olga.goto(BASE + "/coach/students");
   await olga.getByText("Waiting for your yes").waitFor({ timeout: 20000 });
   await olga.getByRole("button", { name: "Accept" }).click();
-  await olga.getByRole("button", { name: /New package/ }).waitFor({ timeout: 20000 });
-  await olga.getByRole("button", { name: /New package/ }).click();
-  await olga.locator('input[type="number"]').nth(2).fill("6000");
-  await olga.getByRole("button", { name: "Create package" }).click();
-  await olga.getByText(/10 of 10 left · 90 days/).waitFor({ timeout: 20000 });
-  check("a package shows lessons left and days left, not paid yet", (await olga.getByText(/Not paid yet/).count()) === 1);
-  await olga.getByRole("button", { name: "Show payment QR" }).click();
-  await olga.getByText(/Scan to pay Olga · 6000 THB/).waitFor({ timeout: 10000 });
-  check("the PromptPay QR renders with the amount", (await olga.locator("main svg").count()) > 0);
-  await olga.getByRole("button", { name: "Mark paid" }).click();
-  await olga.getByText(/· Paid/).waitFor({ timeout: 20000 });
+  // Two students on the list now (Dasha came through the link): everything below is Ivan's row.
+  const ivanRow = olga.locator("li", { hasText: "Ivan" }).first();
+  await ivanRow.getByRole("button", { name: /New package/ }).waitFor({ timeout: 20000 });
+  await ivanRow.getByRole("button", { name: /New package/ }).click();
+  await ivanRow.locator('input[type="number"]').nth(2).fill("6000");
+  await ivanRow.getByRole("button", { name: "Create package" }).click();
+  await ivanRow.getByText(/10 of 10 left · 90 days/).waitFor({ timeout: 20000 });
+  check("a package shows lessons left and days left, not paid yet", (await ivanRow.getByText(/Not paid yet/).count()) === 1);
+  await ivanRow.getByRole("button", { name: "Show payment QR" }).click();
+  await ivanRow.getByText(/Scan to pay Olga · 6000 THB/).waitFor({ timeout: 10000 });
+  check("the PromptPay QR renders with the amount", (await ivanRow.locator("svg").count()) > 0);
+  await ivanRow.getByRole("button", { name: "Mark paid" }).click();
+  await ivanRow.getByText(/· Paid/).waitFor({ timeout: 20000 });
   await shot(olga, "61-coach-students");
 
   // Olga brings her sheet: paste, look, confirm. Pavel arrives with six of ten left.
@@ -118,6 +143,7 @@ try {
   await olga.getByRole("button", { name: "Book a lesson" }).click();
   await olga.locator("#book-student").waitFor({ timeout: 10000 });
   check("the book form offers Ivan", (await olga.locator("#book-student option", { hasText: "Ivan" }).count()) === 1);
+  await olga.locator("#book-student").selectOption({ label: "Ivan" });
   const when = await pickFirstFreeTime(olga, olga.locator("form"));
   await olga.locator("form").getByRole("button", { name: "Book", exact: true }).click();
   await olga.getByText(/^Booked Ivan/).waitFor({ timeout: 20000 });

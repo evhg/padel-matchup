@@ -965,11 +965,13 @@ export const coaches = pgTable(
     calendarError: text("calendar_error"),
     /** Short code in the link a coach hands the person who runs their bookings. */
     managerCode: text("manager_code"),
+    /** Code in the link a coach sends their students: opening it puts the student on the list, no asking. */
+    inviteCode: text("invite_code"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
-  (t) => [uniqueIndex("coaches_handle_idx").on(t.handle), uniqueIndex("coaches_player_idx").on(t.playerId)],
+  (t) => [uniqueIndex("coaches_handle_idx").on(t.handle), uniqueIndex("coaches_player_idx").on(t.playerId), uniqueIndex("coaches_invite_code_idx").on(t.inviteCode)],
 );
 export type Coach = typeof coaches.$inferSelect;
 

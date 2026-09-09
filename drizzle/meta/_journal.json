@@ -232,6 +232,13 @@
       "when": 1788944297967,
       "tag": "0032_verified_levels",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788950650403,
+      "tag": "0033_coach_invite_code",
+      "breakpoints": true
     }
   ]
 }

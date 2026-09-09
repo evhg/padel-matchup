@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
+import { CODE_ALPHABET } from "@/lib/codes";
 import { coachAssets, coachBlocks, coachManagers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
@@ -209,6 +210,29 @@ export async function setStudentStatus(db: Db, coachId: string, playerId: string
     .insert(coachStudents)
     .values({ coachId, playerId, status, acceptedAt: status === "accepted" ? now : null })
     .onConflictDoUpdate({ target: [coachStudents.coachId, coachStudents.playerId], set: { status, ...(status === "accepted" ? { acceptedAt: now } : {}) } });
+}
+
+/** The code in the coach's student link, minted once. A student who opens the link is on the list without asking. */
+export async function inviteCode(db: Db, coachId: string): Promise<string> {
+  const [row] = await db.select({ code: coaches.inviteCode }).from(coaches).where(eq(coaches.id, coachId)).limit(1);
+  if (row?.code) return row.code;
+  const code = Array.from({ length: 8 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join("");
+  await db.update(coaches).set({ inviteCode: code, updatedAt: new Date() }).where(eq(coaches.id, coachId));
+  return code;
+}
+
+/** The link the coach forwards: their page with the invite code, so the student lands on the list. */
+export const studentLink = (base: string, handle: string, code: string): string => `${base}/c/${handle}?i=${code}`;
+
+/** True when this code is the coach's live invite code (case-sensitive, eight characters). */
+export const inviteMatches = (coach: Pick<Coach, "inviteCode">, code: string | null | undefined): boolean => Boolean(code && coach.inviteCode && code.trim() === coach.inviteCode);
+
+/** Opening the coach's link: the player becomes an accepted student (a paused one stays paused, an accepted one stays). */
+export async function acceptByInvite(db: Db, coachId: string, playerId: string): Promise<StudentStatus> {
+  const current = await studentStatus(db, coachId, playerId);
+  if (current === "accepted" || current === "paused") return current;
+  await setStudentStatus(db, coachId, playerId, "accepted");
+  return "accepted";
 }
 
 /** The coach adds a student by name (courtside, no phone needed): a player is created and accepted at once. */

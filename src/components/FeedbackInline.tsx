@@ -16,11 +16,13 @@ export function FeedbackInline({ signedInVia, variant }: { signedInVia: "telegra
     );
   }
   if (variant === "line") {
+    // Visible without being a box: one bold line and its promise, opening in place.
     return (
-      <p className="text-center text-xs text-faint">
-        <button type="button" className="hover:text-muted" onClick={() => setOpen(true)}>
-          💬 {t("title")} →
+      <p className="text-center">
+        <button type="button" className="text-sm font-bold text-muted underline decoration-dotted underline-offset-4 hover:text-ink" onClick={() => setOpen(true)}>
+          💬 {t("title")}
         </button>
+        <span className="mt-1 block text-xs text-faint">{t("lineHelp")}</span>
       </p>
     );
   }

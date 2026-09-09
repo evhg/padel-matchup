@@ -29,7 +29,6 @@
   html {
     color-scheme: light;
     -webkit-text-size-adjust: 100%;
-    scroll-behavior: smooth;
   }
   body {
     @apply bg-bg text-ink font-sans antialiased;
@@ -142,5 +141,12 @@
     box-shadow: none;
     border: 1px solid #ddd;
     break-inside: avoid;
+  }
+}
+
+/* Smooth scrolling only for people who have not asked for less motion (it also keeps automated taps honest). */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
   }
 }

@@ -9,7 +9,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { activePackage, availableSlots, DAY_MS, foundingRank, getCoachByHandle, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, availableSlots, DAY_MS, foundingRank, getCoachByHandle, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
@@ -18,7 +18,7 @@ import { whatsappShareUrl } from "@/lib/share";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ handle: string }> };
+type Props = { params: Promise<{ handle: string }>; searchParams: Promise<{ i?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { handle } = await params;
@@ -38,15 +38,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** A coach's public page: who, where, and the booking that answers students while the coach is on court. */
-export default async function CoachPublicPage({ params }: Props) {
-  const { handle } = await params;
+export default async function CoachPublicPage({ params, searchParams }: Props) {
+  const [{ handle }, sp] = await Promise.all([params, searchParams]);
   const db = await getDb();
   const coach = await getCoachByHandle(db, handle.toLowerCase());
   if (!coach) notFound();
   const foundingCity = isFoundingCoach(await foundingRank(db, coach)) ? (CITIES.find((c) => c.tz === coach.tz)?.name ?? null) : null;
   const [t, locale, me] = await Promise.all([getTranslations("coach"), getLocale(), getSessionPlayer(db)]);
   const now = new Date();
-  const status = me ? await studentStatus(db, coach.id, me.id) : "none";
+  // The coach's own link carries their invite code: whoever opens it is on the list, nobody asks and nobody approves.
+  const invite = inviteMatches(coach, sp.i) ? coach.inviteCode : null;
+  let status = me ? await studentStatus(db, coach.id, me.id) : "none";
+  let justJoined = false;
+  if (invite && me && status !== "accepted" && status !== "paused") {
+    status = await acceptByInvite(db, coach.id, me.id);
+    justJoined = status === "accepted";
+  }
   const today = todayIn(coach.tz, now);
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);
   const accepted = status === "accepted";
@@ -107,6 +114,8 @@ export default async function CoachPublicPage({ params }: Props) {
           coachName={coach.displayName}
           signedIn={Boolean(me)}
           status={status}
+          invite={invite}
+          justJoined={justJoined}
           slots={slotDtos}
           taken={takenDtos}
           days={days}

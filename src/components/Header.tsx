@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { APP_NAME } from "@/lib/config";
+import { HeaderNav } from "./AssistantLink";
 import { LocaleToggle } from "./LocaleToggle";
 
 export async function Header({ minimal = false }: { minimal?: boolean }) {
@@ -14,11 +15,7 @@ export async function Header({ minimal = false }: { minimal?: boolean }) {
         <span>{APP_NAME}</span>
       </Link>
       <div className="flex items-center gap-2">
-        {!minimal && (
-          <Link href="/me" prefetch={false} className="btn-ghost btn-xs">
-            {t("common.myMatches")}
-          </Link>
-        )}
+        {!minimal && <HeaderNav assistantLabel={t("common.assistant")} myMatchesLabel={t("common.myMatches")} />}
         <LocaleToggle />
       </div>
     </header>

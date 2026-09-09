@@ -17,6 +17,7 @@
     "organizer": "organizer",
     "language": "Language",
     "myMatches": "My matches",
+    "assistant": "Assistant",
     "newMatch": "New match",
     "home": "Home",
     "working": "One sec…",
@@ -627,7 +628,6 @@
     "enableHelp": "One notification an hour before each of your matches. Late is a no-no, remember.",
     "on": "Reminders on · 1 hour before each match",
     "off": "Turn off",
-    "iosHint": "iPhone: add Kicksmash to your home screen first, then turn on reminders here.",
     "denied": "Notifications are blocked for this site in your browser settings.",
     "reminderTitle": "🎾 Padel in 1 hour · {time}",
     "reminderBody": "{venue}. Don't be late!",
@@ -1055,6 +1055,7 @@
   },
   "feedback": {
     "title": "Tell us what should change",
+    "lineHelp": "One idea or one bug. Answered within a day.",
     "sub": "One idea, one bug, one wish. I read every note myself and answer within a day. If it changes Kicksmash, you hear about it first, with what changed.",
     "placeholder": "What should be different?",
     "contactLabel": "Email, so I can answer (optional)",
@@ -1070,7 +1071,7 @@
     "tryAgain": "Write it differently"
   },
   "coach": {
-    "invite": {"title": "Know a coach? Send them this", "text": "I run my lessons book on Kicksmash: students book free times themselves, packages count themselves, my calendar stays mine. Free, four taps: {url}"},
+    "invite": {"title": "Know a coach? Send them this", "text": "I run my lessons with an assistant on Kicksmash: students book available times themselves, packages count themselves, my calendar stays mine. Free, one minute: {url}"},
     "eyebrow": "Coach",
     "how": "How this works",
     "minutes": "{n} min",
@@ -1081,8 +1082,8 @@
     "packageLineNoExpiry": "{left} of {size} left",
     "noPackage": "no package",
     "setup": {
-      "title": "Your lessons book",
-      "sub": "Students book themselves, packages count themselves, and you get one link. Under a minute.",
+      "title": "Your assistant",
+      "sub": "Students book available times themselves, packages count themselves, every reschedule happens while you coach. One minute.",
       "nameTitle": "First, your name as students know it",
       "club": "Where do you coach?",
       "clubHelp": "One club or several, separated by commas. Students see it on your page.",
@@ -1093,16 +1094,16 @@
       "afternoons": "Afternoons 15–20",
       "both": "Both",
       "custom": "Set later",
-      "create": "Create my book",
-      "how": "You get a page at kicksma.sh/c/your-name. Students ask once to join; after your yes they book free times themselves. You can book anyone, any time, from your book. Your Google Calendar and package sheet can be attached later; nothing has to move."
+      "create": "Set up my assistant",
+      "how": "You get a page at kicksma.sh/c/your-name. A student who opens your link is on your list; they book available times themselves, and you can book anyone, any time. Your Google Calendar and package sheet can be attached in settings; nothing has to move."
     },
     "done": {
-      "title": "Your book is ready",
+      "title": "Your assistant is ready",
       "link": "Your link, for students and the Instagram bio",
-      "forward": "Forward this to your students",
-      "forwardText": "Hi! I now take bookings here: {url}. Ask once to join, then tap any free time. Your lessons and your package are always visible there.",
+      "forward": "Send this to your students",
+      "forwardText": "Hi! This is {coach}'s assistant. Your lessons with {coach} now live here: {url}\nOpen it once and you are on the list. After that, book or move a lesson in one tap, any time; your package and what is left are always there.",
       "qr": "QR for the court fence",
-      "open": "Open my book"
+      "open": "Open my assistant"
     },
     "home": {
       "title": "Today",
@@ -1202,7 +1203,7 @@
       "how": "These are the rules your students see and the assistant applies. Change them any time; lessons already booked keep the rules they were booked under."
     },
     "page": {
-      "ownBook": "Coach? Your own book in a minute →",
+      "ownBook": "Coach? Your own assistant in a minute →",
       "founding": "Founding coach · {city}",
       "coach": "Padel coach",
       "at": "at {clubs}",
@@ -1210,6 +1211,9 @@
       "book": "Book a lesson",
       "nameFirst": "Your name, and you can ask to book",
       "request": "Ask to become a student",
+      "invited": "{name} added you. Your name, and you can book.",
+      "invitedIn": "I'm in",
+      "invitedSignedIn": "{name} added you. Pick a time below.",
       "requested": "Asked. {name} will confirm, and the free times appear here after that.",
       "paused": "Your bookings are paused. Message {name}.",
       "pickDay": "Pick a day",
@@ -1251,8 +1255,11 @@
       "title": "Your lessons",
       "with": "with {name}",
       "book": "Book more",
-      "coachLine": "Do you coach? Set up your book",
-      "requested": "asked to join; waiting for a yes"
+      "coachLine": "Do you coach? Set up your assistant",
+      "requested": "asked to join; waiting for a yes",
+      "assistant": "Your assistant",
+      "assistantToday": "{count, plural, =0 {Nothing booked today} one {# lesson today} other {# lessons today}}",
+      "assistantOpen": "Open"
     },
     "errors": {
       "slot_taken": "That time just got taken. Pick another.",
@@ -1362,14 +1369,14 @@
   },
   "coachFront": {
     "metaTitle": "Padel coach? Your students book themselves",
-    "metaDescription": "A free lessons book for padel coaches: one link, students book free times themselves, packages count themselves, your Google Calendar and your sheet stay yours. Set up in four taps.",
+    "metaDescription": "A free assistant for padel coaches: one link, students book available times themselves, packages count themselves, every reschedule happens while you coach. Your Google Calendar stays yours. Set up in a minute.",
     "eyebrow": "For coaches",
     "title": "Your students book themselves. Your calendar stays yours.",
-    "lead": "One link for your students. They ask once to join; after your yes they book free times, cancel by your rules and see their package. You get one line per booking and answer nothing while you teach.",
-    "cta": "Set up my book",
-    "ctaHelp": "Four taps, under a minute. Free, no commission, no app.",
-    "t1Title": "Answered while you teach",
-    "t1": "“Is Friday at three free?” gets an answer at once, inside your rules. You see decisions only: a new student, a time outside your hours.",
+    "lead": "One link for your students. They join once; from then on they book available times, cancel by your rules and see their package. Every reschedule happens while you coach: you look at your calendar and it is already up to date. Nobody to reply to.",
+    "cta": "Set up my assistant",
+    "ctaHelp": "One minute. Free, no commission, no app.",
+    "t1Title": "The questions stop",
+    "t1": "“Is Friday at three free?” “How many lessons do I have left?” “Can we move tomorrow to five?” The assistant answers all of them, inside your rules, while you are on court. You hear about two things only, a new student and a time outside your hours, and both are one tap.",
     "t2Title": "Packages count themselves",
     "t2": "“6 of 10 left, 23 days” under every lesson. Expiry reminders go out by themselves. Paid is one tap for you.",
     "t3Title": "Nothing moves",

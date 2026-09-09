@@ -45,11 +45,13 @@ export async function MyLessons({ db, playerId }: { db: Db; playerId: string }) 
           </ul>
         </section>
       )}
-      <p className="text-center text-xs text-faint">
-        <Link href="/coach" prefetch={false} className="hover:text-muted">
-          {asCoach ? `🎾 ${t("setup.title")} →` : `${t("me.coachLine")} →`}
-        </Link>
-      </p>
+      {!asCoach && (
+        <p className="text-center text-xs text-faint">
+          <Link href="/coach" prefetch={false} className="hover:text-muted">
+            {t("me.coachLine")} →
+          </Link>
+        </p>
+      )}
     </>
   );
 }
