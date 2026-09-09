@@ -35,7 +35,7 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 - Webhooks: match.created, match.joined, match.full, match.cancelled, match.result, signed with HMAC.
 
 ## Feedback
-Players and assistants can tell us what should change: /feedback in Telegram or Discord, ${base}/feedback, or email feedback@kicksma.sh. Every note is read and answered within a day; changes it causes are announced to the person who asked.
+Players and assistants can tell us what should change: /feedback in Telegram or Discord, ${base}/feedback, or email feedback@kicksma.sh. Every note is read; when it changes Kicksmash, the person who sent it hears what changed.
 
 ## Telegram, for people who live there
 

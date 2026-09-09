@@ -17,7 +17,7 @@ The first global padel match-up layer: one link that works in any chat, a card t
 7. **Privacy by default.** First names only, no phone numbers or emails shown, public profiles off until switched on, nothing personal in Telegram cards beyond what the person typed there. Personal tokens and manage links never appear in public data.
 8. **Free tiers first.** No feature may require a paid plan (Vercel, Supabase, Resend, Telegram, Discord) below fifty emails a day. A request that needs one is "later", not "no".
 9. **Small and finished.** A change ships with a unit test, passes typecheck, lint, the browser suites and a production check. Anything that needs a migration, touches sessions, authentication or personal data, or changes behaviour people rely on, is a design decision: it is recorded as planned and reviewed by a person, not shipped by the daily session.
-10. **Honest answers.** We tell people what we did, what we did not do, and why, in their language, in one message. We never promise a date. We say thank you when their note changed the product, and we name the change.
+10. **Honest answers.** We tell people what we did, what we did not do, and why, in their language, in one message. We never promise a date. We say thank you when their note changed the product, and we name the change. We owe nobody an answer: the thank-you says the note was read and that the person hears if something gets built, never "within a day". A shipped message is one plain sentence in the first person, what changed and nothing else: no desk, no dates, no process.
 
 ## Verdicts
 
