@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("title"), description: t("sub"), alternates: localeAlternates("/feedback", locale) };
 }
 
-/** Where anyone tells us what should change. The answer comes back within a day, from the same loop that ships it. */
+/** Where anyone tells us what should change. The loop that ships it tells them what changed. */
 export default async function FeedbackPage() {
   const t = await getTranslations("feedback");
   let via: "telegram" | "none" = "none";

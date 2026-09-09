@@ -10,7 +10,7 @@ import { ActionFailure, assertRate, clientIp, runA, type ActionResult } from "./
 
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
-/** The web form: stored, thanked, answered within a day where an answer can reach the person. */
+/** The web form: stored and thanked; the person hears back where a reply can reach them if something gets built. */
 export async function sendFeedbackAction(text: string, contact: string, context: string): Promise<ActionResult<{ id: string; channel: "telegram" | "email" | "none"; kind: "feedback" | "not_feedback"; reply: string }>> {
   return runA(async () => {
     const db = await getDb();

@@ -1011,7 +1011,7 @@ export function codesInText(text: string | undefined, base = baseUrl()): string[
   return [...new Set(out)];
 }
 
-/** /feedback and your words: stored, thanked at once, answered within a day by the daily session, on this same chat. */
+/** /feedback and your words: stored, thanked at once; the daily session reads it and tells the person here if something gets built. */
 async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, locale: BotLocale): Promise<string> {
   const fs = feedbackStrings(locale);
   const text = args.trim();
@@ -1395,7 +1395,7 @@ export const BOT_COMMANDS = {
     { command: "score", description: "Sets after a match: /score CODE 6-3 6-4" },
     { command: "tz", description: "This chat's time zone, once: /tz phuket" },
     { command: "lang", description: "Bot language: /lang en or /lang ru" },
-    { command: "feedback", description: "Tell me what should change; I answer within a day" },
+    { command: "feedback", description: "Tell me what should change" },
     { command: "lessons", description: "Your lessons and package with your coach (private chat)" },
     { command: "coach", description: "Your lessons book, if you coach (write to me privately)" },
     { command: "help", description: "What I do (very little, on purpose)" },
@@ -1407,7 +1407,7 @@ export const BOT_COMMANDS = {
     { command: "score", description: "Счёт после матча: /score КОД 6-3 6-4" },
     { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
     { command: "lang", description: "Язык бота: /lang ru или /lang en" },
-    { command: "feedback", description: "Что стоит изменить; отвечу в течение суток" },
+    { command: "feedback", description: "Что стоит изменить" },
     { command: "lessons", description: "Ваши занятия и абонемент у тренера (в личке)" },
     { command: "coach", description: "Книга занятий, если вы тренер (напишите мне в личку)" },
     { command: "help", description: "Что я умею (нарочно немного)" },
