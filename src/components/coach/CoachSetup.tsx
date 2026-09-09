@@ -8,11 +8,11 @@ import { HowThisWorks } from "./HowThisWorks";
 import type { HoursPreset } from "@/lib/domain/coaching";
 
 /** Four taps: where, how long, when, done. The name is already known. */
-export function CoachSetup() {
+export function CoachSetup({ initialClubs = "" }: { initialClubs?: string }) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [clubs, setClubs] = useState("");
+  const [clubs, setClubs] = useState(initialClubs);
   const [minutes, setMinutes] = useState<60 | 90>(60);
   const [preset, setPreset] = useState<HoursPreset | "custom">("both");
   const [error, setError] = useState<string | null>(null);

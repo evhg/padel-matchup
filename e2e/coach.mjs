@@ -238,6 +238,20 @@ try {
   const llms = await fetch(`${BASE}/llms.txt`).then((r) => r.text());
   check("llms.txt tells assistants about coaches and the tools", llms.includes("/api/v1/coaches") && llms.includes("find_coaches"));
 
+  // ---- Coaches arrive on their own: every coach-facing page is a door ----
+  await ivan.goto(`${BASE}/coaches`);
+  check("the front door for coaches renders with one button to the book", (await ivan.getByText("Your students book themselves. Your calendar stays yours.").count()) === 1 && (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach");
+  await ivan.goto(`${BASE}/coaches?s=invite`);
+  check("a tagged front door passes the door on to the setup link", (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach?s=invite");
+  await ivan.goto(`${BASE}/c/${handle}`);
+  check("the coach page carries the quiet door for other coaches", (await ivan.getByTestId("own-book").getAttribute("href")) === "/coaches?s=coachpage");
+  await ivan.goto(`${BASE}/coaches/phuket`);
+  check("the first coach in the city carries the founding badge", (await ivan.getByText("Founding coach · Phuket").count()) >= 1);
+  await ivan.goto(`${BASE}/`);
+  check("the landing page has one quiet line for coaches", (await ivan.getByRole("link", { name: /Padel coach\? Your students book themselves/ }).count()) === 1);
+  const front = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());
+  check("the front door is in the sitemap in three languages", front.includes("/coaches</loc>") && front.includes("/ru/coaches</loc>") && front.includes("/es/coaches</loc>"));
+
   // Russian path renders the coach page in Russian (last: it switches Ivan's language).
   await ivan.goto(`${BASE}/ru/c/${handle}`);
   check("the coach page has a Russian URL", (await ivan.getByText("Тренер по паделу").count()) === 1);

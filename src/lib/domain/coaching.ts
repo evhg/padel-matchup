@@ -625,6 +625,20 @@ export async function listPublicCoaches(db: Db, cityTz?: string | null, limit = 
     .limit(limit);
 }
 
+/** The first ten listed coaches of a city carry a founding badge, and everything stays free for them (mirrors founding clubs). */
+export const FOUNDING_COACHES = 10;
+
+/** Position among the listed coaches of the same city (time zone) by creation, from 0; null for a coach who is not listed. */
+export async function foundingRank(db: Db, coach: Pick<Coach, "tz" | "createdAt" | "isPublic" | "archivedAt">): Promise<number | null> {
+  if (!coach.isPublic || coach.archivedAt) return null;
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(coaches)
+    .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), eq(coaches.tz, coach.tz), lt(coaches.createdAt, coach.createdAt)));
+  return Number(row?.n ?? 0);
+}
+export const isFoundingCoach = (rank: number | null): boolean => rank !== null && rank < FOUNDING_COACHES;
+
 /** Listed coaches who named this club among theirs (case aside): the club page's "coaches here". */
 export async function coachesAtClub(db: Db, clubName: string): Promise<Coach[]> {
   const name = clubName.trim().toLowerCase();

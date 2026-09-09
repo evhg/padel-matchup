@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, answers, clubs, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
+import { activity, answers, clubs, coaches, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
 import { listErrors } from "@/lib/alerts";
 import { feedbackWeek } from "@/lib/feedback/store";
 import { outreachWeek } from "@/lib/outreach/desk";
@@ -179,9 +179,11 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     db.select({ n: sql<number>`count(*)` }).from(clubs).where(gte(clubs.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
   ]);
-  const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`(${metricsDaily.key} in ('pageviews','card_views') or ${metricsDaily.key} like 'join_src_%')`)).groupBy(metricsDaily.key);
+  const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`(${metricsDaily.key} in ('pageviews','card_views') or ${metricsDaily.key} like 'join_src_%' or ${metricsDaily.key} like 'coach_src_%')`)).groupBy(metricsDaily.key);
   const funnel = Object.fromEntries(funnelRows.map((r) => [r.key, Number(r.total)]));
   const bySource = funnelRows.filter((r) => r.key.startsWith("join_src_")).map((r) => `${r.key.slice("join_src_".length)} ${Number(r.total)}`).sort();
+  const coachDoors = funnelRows.filter((r) => r.key.startsWith("coach_src_")).map((r) => `${r.key.slice("coach_src_".length)} ${Number(r.total)}`).sort();
+  const [[newCoaches]] = await Promise.all([db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since))]);
   const board = await serviceBoard(db, now);
   const hot = boardHighlights(board);
   const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(`${r.name} ${r.pct !== null ? `${r.pct.toFixed(0)}%` : r.usage}`)).join(" · ")}` : "Services: everything under 60% of its ceiling.";
@@ -191,6 +193,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Funnel: visitors ${funnel.pageviews ?? 0} → matches ${Number(matches.n)} → seats ${Number(joins.n)} → scores ${Number(results.n)} → card views ${funnel.card_views ?? 0}`,
     `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : "none this week (ig, poster, card, moment, podium are the tags)"}`,
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
+    `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : "none tagged (coachpage, club, citylist, invite, search)"}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
     `Press desk: sent ${mail.sent} · received ${mail.received} · waiting for your tap ${mail.waiting}`,

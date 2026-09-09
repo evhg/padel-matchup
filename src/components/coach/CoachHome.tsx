@@ -20,6 +20,8 @@ type Props = { handle: string; url: string; today: string; welcome: boolean; stu
 /** The coach's book: today, the next days, one button to book. Everything else behind "More". */
 export function CoachHome({ handle, url, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null }: Props) {
   const t = useTranslations("coach");
+  // The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in.
+  const inviteUrl = `${url.replace(/\/c\/[^/]+$/, "")}/coaches?s=invite`;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [booking, setBooking] = useState(false);
@@ -92,6 +94,10 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
           <p className="mt-4 text-sm font-bold">{t("done.forward")}</p>
           <div className="mt-2">
             <ShareButtons url={url} text={t("done.forwardText", { url })} size="sm" />
+          </div>
+          <p className="mt-4 text-sm font-bold">{t("invite.title")}</p>
+          <div className="mt-2">
+            <ShareButtons url={inviteUrl} text={t("invite.text", { url: inviteUrl })} size="sm" />
           </div>
           <p className="mt-4 text-sm font-bold">{t("done.qr")}</p>
           <div className="mt-2 inline-block rounded-xl border border-line bg-white p-2">
@@ -198,6 +204,12 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
         )}
       </div>
       <HowThisWorks text={t("home.how")} />
+      <details className="px-1 text-xs text-faint">
+        <summary className="cursor-pointer hover:text-muted">{t("invite.title")}</summary>
+        <div className="mt-2">
+          <ShareButtons url={inviteUrl} text={t("invite.text", { url: inviteUrl })} size="sm" />
+        </div>
+      </details>
     </div>
   );
 }

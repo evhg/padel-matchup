@@ -141,6 +141,9 @@ export default async function VenueBoardPage({ params }: Props) {
             </ul>
           </section>
         )}
+        <Link href={`/coach?s=club&club=${encodeURIComponent(club?.name ?? board.name)}`} prefetch={false} className="px-1 text-xs text-faint hover:text-muted" data-testid="coach-here">
+          {t("venue.coachHere", { venue: club?.name ?? board.name })}
+        </Link>
         {!club && (!clubRow || clubRow.rejectedAt) && (
           <Link href={`/clubs/claim?name=${encodeURIComponent(board.name)}`} prefetch={false} className="card flex items-center justify-between gap-3 py-3 hover:border-ink/30">
             <span>

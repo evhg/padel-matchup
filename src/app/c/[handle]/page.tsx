@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { StudentBooking } from "@/components/coach/StudentBooking";
@@ -8,7 +9,8 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { activePackage, availableSlots, DAY_MS, getCoachByHandle, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { activePackage, availableSlots, DAY_MS, foundingRank, getCoachByHandle, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
@@ -41,6 +43,7 @@ export default async function CoachPublicPage({ params }: Props) {
   const db = await getDb();
   const coach = await getCoachByHandle(db, handle.toLowerCase());
   if (!coach) notFound();
+  const foundingCity = isFoundingCoach(await foundingRank(db, coach)) ? (CITIES.find((c) => c.tz === coach.tz)?.name ?? null) : null;
   const [t, locale, me] = await Promise.all([getTranslations("coach"), getLocale(), getSessionPlayer(db)]);
   const now = new Date();
   const status = me ? await studentStatus(db, coach.id, me.id) : "none";
@@ -90,6 +93,7 @@ export default async function CoachPublicPage({ params }: Props) {
         {coach.isPublic && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
         <section className="card">
           <span className="chip-muted">🎾 {t("page.coach")}</span>
+          {foundingCity && <span className="chip-muted ml-2">🏅 {t("page.founding", { city: foundingCity })}</span>}
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{coach.displayName}</h1>
           <p className="mt-1 text-sm text-muted">
             {coach.clubNames.length ? `${t("page.at", { clubs: coach.clubNames.join(", ") })} · ` : ""}
@@ -117,6 +121,11 @@ export default async function CoachPublicPage({ params }: Props) {
           cutoffHours={coach.cutoffHours}
           whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
         />
+        <p className="text-center text-xs text-faint">
+          <Link href="/coaches?s=coachpage" prefetch={false} className="hover:text-muted" data-testid="own-book">
+            {t("page.ownBook")}
+          </Link>
+        </p>
       </main>
       <Footer />
     </>
