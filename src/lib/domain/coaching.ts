@@ -1,3 +1,4 @@
+import { transliterate } from "@/lib/translit";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { CODE_ALPHABET } from "@/lib/codes";
@@ -84,14 +85,9 @@ export function hoursFromLines(lines: readonly string[]): { hours: Hours; invali
   return { hours, invalidDay: null };
 }
 
-const CYRILLIC: Record<string, string> = { а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya" };
-
 /** A URL handle from a name: transliterated, lowercase, dashes. "Benji Å" → "benji-a", "Даниил" → "daniil". */
 export function handleFromName(name: string): string {
-  const lower = (name ?? "").toLowerCase();
-  let out = "";
-  for (const ch of lower) out += CYRILLIC[ch] ?? ch;
-  out = out
+  const out = transliterate(name ?? "")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")

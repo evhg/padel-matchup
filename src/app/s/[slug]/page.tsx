@@ -109,9 +109,15 @@ export default async function SeriesPage({ params }: Props) {
                 </div>
                 <div className={`mt-1 text-sm font-bold ${next.spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{next.spotsLeft > 0 ? t("event.spotsLeft", { count: next.spotsLeft }) : t("venue.full")}</div>
               </div>
-              <Link href={`/${next.event.code}?s=series`} prefetch={false} className="btn-primary shrink-0">
-                {next.spotsLeft > 0 ? t("series.join") : t("event.joinWaitlist")}
-              </Link>
+              {next.spotsLeft > 0 || next.event.whenFull !== "closed" ? (
+                <Link href={`/${next.event.code}?s=series`} prefetch={false} className="btn-primary shrink-0">
+                  {next.spotsLeft > 0 ? t("series.join") : t("event.joinWaitlist")}
+                </Link>
+              ) : (
+                <Link href={`/${next.event.code}?s=series`} prefetch={false} className="btn-ghost shrink-0">
+                  {t("venue.full")}
+                </Link>
+              )}
             </div>
           ) : (
             <p className="mt-2 text-sm text-muted">{s.active ? t("series.nextNone") : t("series.paused")}</p>

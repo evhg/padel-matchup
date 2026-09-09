@@ -8,12 +8,12 @@ import { createSeriesAction, setSeriesActiveAction } from "@/actions/series";
  * The door on a finished tournament, for its organizer: a name, a rhythm, one
  * button. The series page opens with the next edition already on it.
  */
-const FIELD_SIZES = [4, 8, 12, 16, 20, 24];
+const FIELD_SIZES = Array.from({ length: 16 }, (_, i) => (i + 1) * 4);
 
 export function SeriesDoor({ code, suggestedName, suggestedCapacity }: { code: string; suggestedName: string; suggestedCapacity: number }) {
   const t = useTranslations();
   const [name, setName] = useState(suggestedName);
-  const [capacity, setCapacity] = useState(FIELD_SIZES.find((n) => n >= suggestedCapacity) ?? 24);
+  const [capacity, setCapacity] = useState(FIELD_SIZES.find((n) => n >= suggestedCapacity) ?? 64);
   const [every, setEvery] = useState<"week" | "fortnight" | "month">("week");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);

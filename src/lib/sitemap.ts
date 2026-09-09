@@ -30,7 +30,7 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
         return locales.map((l) => ({ url: `${base}${localePath(path, l)}`, lastModified: c.updatedAt, changeFrequency: "weekly" as const, priority: l === "en" ? 0.7 : 0.6, alternates: { languages } }));
       });
       // A series page exists in every language too; it changes with every edition.
-      seriesPages = (await listSeries(db, null, now)).flatMap(({ series: s }) => {
+      seriesPages = (await listSeries(db, null, now, { includePaused: true })).flatMap(({ series: s }) => {
         const path = `/s/${s.slug}`;
         const languages = Object.fromEntries([...locales.map((l) => [l, `${base}${localePath(path, l)}`]), ["x-default", `${base}${localePath(path, "en")}`]]);
         return locales.map((l) => ({ url: `${base}${localePath(path, l)}`, lastModified: s.updatedAt, changeFrequency: "weekly" as const, priority: l === "en" ? 0.7 : 0.6, alternates: { languages } }));

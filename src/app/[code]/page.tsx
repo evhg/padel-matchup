@@ -151,7 +151,7 @@ export default async function EventPage({ params, searchParams }: Props) {
   // An Open that repeats: every edition names its series; a finished tournament offers its organizer the door once.
   const seriesRow = ev.seriesId ? await seriesOfEvent(db, ev) : null;
   const seriesNext = seriesRow ? await nextEdition(db, seriesRow.id, now) : null;
-  const canMakeSeries = viewer.isCreator && isTournament && Boolean(ev.standings) && !ev.seriesId && !cancelled;
+  const canMakeSeries = Boolean(me) && me?.id === ev.creatorPlayerId && isTournament && Boolean(ev.standings) && !ev.seriesId && !cancelled;
   const levelChip = rangeChip(t, levelRange);
   const levelRangeText = ranged ? rangeText(t, levelRange) : "";
   const statusChip = cancelled

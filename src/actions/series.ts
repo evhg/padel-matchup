@@ -9,6 +9,7 @@ import { baseUrl } from "@/lib/config";
 import { DomainError } from "@/lib/domain/errors";
 import { createSeriesFromEvent, isRhythm, setSeriesActive } from "@/lib/domain/series";
 import { pingIndexNow } from "@/lib/indexnow";
+import { emitMatchEvent } from "@/lib/api/webhooks";
 import { getSessionPlayer } from "@/lib/session";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -22,12 +23,15 @@ export async function createSeriesAction(code: string, name: string, every: stri
   const [ev] = await db.select({ id: events.id }).from(events).where(eq(events.code, code)).limit(1);
   if (!ev) return { ok: false, error: "not_found" };
   let slug: string;
+  let nextCode: string;
   try {
-    const { series } = await createSeriesFromEvent(db, { eventId: ev.id, organizerPlayerId: me.id, name, every, capacity: Number.isInteger(capacity) ? capacity : undefined });
+    const { series, next } = await createSeriesFromEvent(db, { eventId: ev.id, organizerPlayerId: me.id, name, every, capacity: Number.isInteger(capacity) ? capacity : undefined });
     slug = series.slug;
+    nextCode = next.code;
   } catch (e) {
     return { ok: false, error: e instanceof DomainError ? e.message : "error" };
   }
+  await emitMatchEvent(db, "match.created", nextCode, { automatic: true, series: slug });
   void pingIndexNow([`${baseUrl()}/s/${slug}`], { db }).catch(() => undefined);
   revalidatePath(`/${code}`);
   redirect(`/s/${slug}`);

@@ -149,7 +149,7 @@ export async function welcomeEmail(db: Db, player: Player, ev: Event | null): Pr
   await sendPersonalLinkEmail(db, player);
 }
 
-type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" | "promoted" | "requested";
+export type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" | "promoted" | "requested";
 
 /** Creator notifications (decision 11). Skipped when the actor is the creator. */
 export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorName: string, actorPlayerId?: string | null): Promise<void> {

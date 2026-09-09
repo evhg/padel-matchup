@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
+import type { CreatorKind } from "@/lib/notify";
 import { events, players, telegramCards, telegramChats, telegramInlineCards, type Event, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
@@ -27,7 +28,7 @@ import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { coachAssistantMessage, handleCoachCallback, lessonsFor, sendRoleMenu } from "./coach";
 import { verifyPlayerTicket } from "@/lib/coach/link";
 import { isValidShareCode } from "@/lib/codes";
-import { answerCallbackQuery, answerInlineQuery, deleteMessage, editInlineMessageText, editMessageText, esc, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
+import { answerCallbackQuery, answerInlineQuery, deleteMessage, editInlineMessageText, editMessageText, editOk, esc, messageGone, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
 import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse";
 import { setAnswerPublished } from "@/lib/listen/answers";
@@ -186,7 +187,7 @@ export async function syncTelegram(db: Db, code: string, now = new Date()): Prom
       const hash = renderHash(text, keyboard);
       if (hash !== card.rendered) {
         const res = await editMessageText(chat.chatId, card.messageId, text, keyboard);
-        if (res.ok || /message is not modified/i.test(res.description)) {
+        if (editOk(res)) {
           await db.update(telegramCards).set({ rendered: hash, updatedAt: new Date() }).where(eq(telegramCards.id, card.id));
           edits++;
         }
@@ -205,7 +206,7 @@ export async function syncTelegram(db: Db, code: string, now = new Date()): Prom
       const hash = renderHash(text, keyboard);
       if (hash === c.rendered) continue;
       const res = await editInlineMessageText(c.inlineMessageId, text, keyboard);
-      if (res.ok || /message is not modified/i.test(res.description)) {
+      if (editOk(res)) {
         await db.update(telegramInlineCards).set({ rendered: hash, updatedAt: new Date() }).where(eq(telegramInlineCards.inlineMessageId, c.inlineMessageId));
         edits++;
       }
@@ -927,12 +928,14 @@ export async function postTelegramNotice(db: Db, code: string, kind: "updated" |
   }
 }
 
-/** The organizer's private feed: who joined, left, asked. One short line, their locale, a button to the match. Never throws. */
-/** The organizer's running message keeps this many lines and is edited for a day; after that a new one starts. */
+/** The organizer's running message keeps this many lines and lives a day from the moment it was sent; after that a new one starts. */
 const FEED_LINES = 8;
-const FEED_WINDOW_MS = 24 * 3_600_000;
-/** Changes that quietly update the running message; a leave, a decline or an ask speaks up in a new one. */
-const FEED_QUIET = new Set(["joined", "waitlisted", "confirmed", "promoted"]);
+const FEED_WINDOW_MS = DAY_MS;
+/** Changes that quietly update the running message. */
+const FEED_QUIET: ReadonlySet<CreatorKind> = new Set<CreatorKind>(["joined", "waitlisted", "confirmed", "promoted"]);
+/** Changes that speak up in a new message, with a sound: a leave, a decline, an ask the organizer has to answer. */
+const FEED_LOUD: ReadonlySet<CreatorKind> = new Set<CreatorKind>(["left", "declined", "requested"]);
+const FEED_RETRY_MS = 1200;
 const feedLines = (raw: string | null): string[] => {
   try {
     const v = JSON.parse(raw ?? "[]") as unknown;
@@ -945,9 +948,11 @@ const feedLines = (raw: string | null): string[] => {
 /**
  * The organizer's private feed: one running message per match, edited as people join
  * (padel chats have message fatigue; the fewer messages the better), a new message only
- * when someone leaves, declines or asks. The feed row lives in telegram_cards as kind "feed".
+ * when someone leaves, declines or asks. The feed row in telegram_cards (kind "feed") is
+ * the source of truth: a line is appended there first, atomically, and the message follows
+ * it, so two joins in the same second both show and a hiccup at Telegram loses nothing.
  */
-export async function telegramCreatorNote(db: Db, detail: EventDetail, creator: Player, kind: string, actorName: string, now = new Date()): Promise<boolean> {
+export async function telegramCreatorNote(db: Db, detail: EventDetail, creator: Player, kind: CreatorKind, actorName: string, now = new Date()): Promise<boolean> {
   if (!telegramEnabled() || !creator.telegramId) return false;
   try {
     const locale = botLocale(creator.locale);
@@ -959,27 +964,44 @@ export async function telegramCreatorNote(db: Db, detail: EventDetail, creator: 
     const line = s.orgNote(kind, actorName, n, ev.capacity);
     const footer = `<i>${esc(cardTitle(detail, locale))} · ${esc(whenLine(detail, locale))} · ${esc(whereLine(detail, locale))}</i>`;
     const keyboard = { inline_keyboard: [[{ text: s.open, url: personalEventUrl(baseUrl(), token, ev.code) }]] };
-    const [feed] = await db
-      .select()
-      .from(telegramCards)
-      .where(and(eq(telegramCards.eventId, ev.id), eq(telegramCards.chatId, chatId), eq(telegramCards.kind, "feed")))
-      .limit(1);
-    if (feed && FEED_QUIET.has(kind) && now.getTime() - feed.updatedAt.getTime() < FEED_WINDOW_MS) {
-      const lines = [...feedLines(feed.rendered), line].slice(-FEED_LINES);
-      const edited = await editMessageText(chatId, feed.messageId, `${lines.map(esc).join("\n")}\n${footer}`, keyboard);
-      if (edited.ok || /message is not modified/i.test(edited.description)) {
-        await db.update(telegramCards).set({ rendered: JSON.stringify(lines), updatedAt: now }).where(eq(telegramCards.id, feed.id));
-        return true;
+    const render = (lines: string[]) => `${lines.map(esc).join("\n")}\n${footer}`;
+    const feedWhere = and(eq(telegramCards.eventId, ev.id), eq(telegramCards.chatId, chatId), eq(telegramCards.kind, "feed"));
+    if (FEED_QUIET.has(kind)) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const [feed] = await db.select().from(telegramCards).where(feedWhere).limit(1);
+        if (!feed || now.getTime() - feed.createdAt.getTime() >= FEED_WINDOW_MS) break;
+        const lines = [...feedLines(feed.rendered), line].slice(-FEED_LINES);
+        // Compare-and-set on the lines: a neighbour who appended first wins, and we add ours after theirs on the next pass.
+        const [claimed] = await db
+          .update(telegramCards)
+          .set({ rendered: JSON.stringify(lines), updatedAt: now })
+          .where(and(eq(telegramCards.id, feed.id), sql`${telegramCards.rendered} is not distinct from ${feed.rendered}`))
+          .returning({ id: telegramCards.id });
+        if (!claimed) continue;
+        let edited = await editMessageText(chatId, feed.messageId, render(lines), keyboard);
+        if (!editOk(edited) && !messageGone(edited)) {
+          await new Promise((r) => setTimeout(r, FEED_RETRY_MS));
+          edited = await editMessageText(chatId, feed.messageId, render(lines), keyboard);
+        }
+        if (editOk(edited)) {
+          // Someone may have appended while we edited: show the latest lines, once more.
+          const [latest] = await db.select({ rendered: telegramCards.rendered }).from(telegramCards).where(eq(telegramCards.id, feed.id)).limit(1);
+          if (latest && latest.rendered !== JSON.stringify(lines)) await editMessageText(chatId, feed.messageId, render(feedLines(latest.rendered)), keyboard);
+          return true;
+        }
+        // Still failing after the retry but the line is stored: the next edit carries it. Only a message that is gone starts a new one.
+        if (!messageGone(edited)) return true;
+        break;
       }
     }
-    const res = await sendMessage(chatId, `${esc(line)}\n${footer}`, { keyboard, silent: kind !== "left" && kind !== "declined" });
+    const res = await sendMessage(chatId, render([line]), { keyboard, silent: !FEED_LOUD.has(kind) });
     if (!res.ok) return false;
     // The private chat may be new to us (the organizer linked through the web): the feed row needs its chat row.
     await db.insert(telegramChats).values({ chatId, type: "private", locale }).onConflictDoNothing();
     await db
       .insert(telegramCards)
-      .values({ eventId: ev.id, chatId, messageId: res.result.message_id, kind: "feed", rendered: JSON.stringify([line]), updatedAt: now })
-      .onConflictDoUpdate({ target: [telegramCards.eventId, telegramCards.chatId, telegramCards.kind], set: { messageId: res.result.message_id, rendered: JSON.stringify([line]), updatedAt: now } });
+      .values({ eventId: ev.id, chatId, messageId: res.result.message_id, kind: "feed", rendered: JSON.stringify([line]), createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({ target: [telegramCards.eventId, telegramCards.chatId, telegramCards.kind], set: { messageId: res.result.message_id, rendered: JSON.stringify([line]), createdAt: now, updatedAt: now } });
     return true;
   } catch {
     return false;

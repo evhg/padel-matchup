@@ -58,6 +58,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The runner image carries Google's Chrome apt source, which has served mismatched indexes and broke apt-get update
+      # inside --with-deps twice in one evening. Playwright's system packages come from Ubuntu's own repositories.
+      - run: sudo rm -f /etc/apt/sources.list.d/google-chrome* /etc/apt/sources.list.d/google.list
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm build
         env:
