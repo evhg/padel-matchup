@@ -197,6 +197,13 @@
       "when": 1788877723769,
       "tag": "0027_coach_chains",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788883834941,
+      "tag": "0028_worth_sharing",
+      "breakpoints": true
     }
   ]
 }

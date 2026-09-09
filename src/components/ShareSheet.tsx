@@ -29,13 +29,29 @@ export function CopyButton({ value, label, className = "btn-ghost", copiedLabel 
   );
 }
 
-export function ShareButtons({ url, text, phone, size = "lg" }: { url: string; text: string; phone?: string | null; size?: "lg" | "sm" }) {
+export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url: string; text: string; phone?: string | null; size?: "lg" | "sm"; /** A picture to attach in the phone's share sheet (Instagram Stories, WhatsApp, Telegram all take it). */ imageUrl?: string }) {
   const t = useTranslations();
   const [canShare, setCanShare] = useState(false);
   useEffect(() => {
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
   }, []);
   const sm = size === "sm" ? " btn-sm" : "";
+  const shareNative = async () => {
+    const plain = text.replace(url, "").trim();
+    try {
+      if (imageUrl && typeof navigator.canShare === "function") {
+        const blob = await fetch(imageUrl).then((r) => r.blob());
+        const file = new File([blob], "kicksmash.png", { type: blob.type || "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text: `${plain} ${url}`.trim() });
+          return;
+        }
+      }
+      await navigator.share({ url, text: plain });
+    } catch {
+      /* the person closed the sheet */
+    }
+  };
   return (
     <div className={`grid gap-2 ${size === "sm" ? "grid-cols-3" : "grid-cols-2"}`}>
       <a href={whatsappShareUrl(text, phone)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#25D366] text-white hover:brightness-95`}>
@@ -46,12 +62,8 @@ export function ShareButtons({ url, text, phone, size = "lg" }: { url: string; t
       </a>
       <CopyButton value={url} label={t("share.copyLink")} className={`btn-ghost${sm}${size === "sm" ? "" : " col-span-2"}`} />
       {canShare && size === "lg" && (
-        <button
-          type="button"
-          className="btn-ghost col-span-2"
-          onClick={() => navigator.share({ url, text: text.replace(url, "").trim() }).catch(() => {})}
-        >
-          {t("share.nativeShare")}
+        <button type="button" className="btn-ghost col-span-2" onClick={shareNative} data-testid="native-share">
+          {imageUrl ? t("share.nativeShareImage") : t("share.nativeShare")}
         </button>
       )}
     </div>

@@ -126,6 +126,20 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
   } catch (e) {
     console.warn("[webhooks] emit failed", event, code, e);
   }
+  // A confirmed result earns moments (once per player and kind) and tells the player who earned one.
+  if (event === "match.result" && extra.confirmed === true) {
+    try {
+      const { awardMilestones } = await import("@/lib/domain/milestones");
+      const { notifyMilestones } = await import("@/lib/afterMatch");
+      const detail = await getEventByCode(db, code);
+      if (detail) {
+        const awarded = await awardMilestones(db, detail.event.id);
+        if (awarded.length) await notifyMilestones(awarded);
+      }
+    } catch (e) {
+      console.warn("[moments] award failed", code, e);
+    }
+  }
   // Every change also reaches the Telegram cards (edited in place; the result is posted once). Loaded lazily: the bot imports the operations.
   try {
     const bot = await import("@/lib/telegram/bot");

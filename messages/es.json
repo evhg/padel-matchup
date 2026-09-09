@@ -159,7 +159,8 @@
     "story": "Imagen para historias de Instagram",
     "storyHint": "9:16, lista para una historia. Añade el sticker de enlace con {link} para que la gente entre directa al partido.",
     "storyOpen": "Abrir imagen",
-    "storyCopy": "Copiar enlace para Instagram"
+    "storyCopy": "Copiar enlace para Instagram",
+    "nativeShareImage": "Compartir la imagen…"
   },
   "event": {
     "match": "Partido de pádel",
@@ -751,7 +752,11 @@
     "sameTimeHelp": "Convierte a este grupo de juego en un grupo con un hueco semanal. La próxima tarjeta se publica sola; cada uno toca dentro o fuera.",
     "sameTimeDone": "Hecho: «{name}». Cada {when} se publica sola una tarjeta nueva.",
     "sameTimeExists": "Este grupo ya existe: {name}.",
-    "praise": "Para los ganadores"
+    "praise": "Para los ganadores",
+    "addPhoto": "Añadir la foto de la pista",
+    "photoHelp": "Los cuatro después del partido. La tarjeta pasa a ser esa foto con el resultado encima. Tuya para publicar; no se pide dos veces.",
+    "photoFailed": "No se pudo usar esa imagen. Prueba con otra.",
+    "removePhoto": "Quitar la foto"
   },
   "group": {
     "title": "Grupo",
@@ -1328,5 +1333,25 @@
     "coachQuestion": "¿Entrenas en {city}?",
     "coachHelp": "Configura tu agenda en cuatro toques: los alumnos reservan las horas libres, los bonos se cuentan solos, tu calendario sigue siendo tuyo. Aparecer en la lista es opcional.",
     "coachCta": "Configurar mi agenda"
+  },
+  "moments": {
+    "title": "Tus momentos",
+    "lead": "Ganados, no regalados. Comparte los que quieras.",
+    "share": "Compartir",
+    "open": "Abrir",
+    "first_win": "Primera victoria",
+    "matches_10": "Diez partidos",
+    "matches_50": "Cincuenta partidos",
+    "streak_3": "Tres victorias seguidas",
+    "partners_10": "Diez compañeros distintos",
+    "level_up": "Subes a {band}",
+    "podium": "Podio: {place}",
+    "place1": "1.º",
+    "place2": "2.º",
+    "place3": "3.º",
+    "on": "{day} · {venue}",
+    "pageTitle": "{name}: {moment}",
+    "cta": "Tus momentos empiezan con un partido",
+    "byName": "{name}"
   }
 }

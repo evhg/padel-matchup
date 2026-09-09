@@ -159,7 +159,8 @@
     "story": "Story image for Instagram",
     "storyHint": "9:16, ready for a story. Add the link sticker with {link} so people tap straight into the match.",
     "storyOpen": "Open image",
-    "storyCopy": "Copy Instagram link"
+    "storyCopy": "Copy Instagram link",
+    "nativeShareImage": "Share the picture…"
   },
   "event": {
     "match": "Padel match",
@@ -751,7 +752,11 @@
     "sameTimeHelp": "Turns this crew into a group with a weekly slot. The next card posts itself; members tap in or out.",
     "sameTimeDone": "Done: “{name}”. Every {when} a fresh card posts itself.",
     "sameTimeExists": "This crew is already a group: {name}.",
-    "praise": "For the winners"
+    "praise": "For the winners",
+    "addPhoto": "Add the court photo",
+    "photoHelp": "The four of you after the match. The card becomes that photo with the score on it. Yours to post, never asked twice.",
+    "photoFailed": "That picture could not be used. Try another one.",
+    "removePhoto": "Remove the photo"
   },
   "group": {
     "title": "Group",
@@ -1328,5 +1333,25 @@
     "coachQuestion": "Do you coach in {city}?",
     "coachHelp": "Set up your book in four taps: students book free times themselves, packages count themselves, your calendar stays yours. Listing is optional.",
     "coachCta": "Set up your book"
+  },
+  "moments": {
+    "title": "Your moments",
+    "lead": "Earned, not handed out. Share the ones you like.",
+    "share": "Share",
+    "open": "Open",
+    "first_win": "First win",
+    "matches_10": "Ten matches",
+    "matches_50": "Fifty matches",
+    "streak_3": "Three wins in a row",
+    "partners_10": "Ten different partners",
+    "level_up": "Moved up to {band}",
+    "podium": "Podium: {place}",
+    "place1": "1st",
+    "place2": "2nd",
+    "place3": "3rd",
+    "on": "{day} · {venue}",
+    "pageTitle": "{name}: {moment}",
+    "cta": "Your own moments start with one match",
+    "byName": "{name}"
   }
 }
