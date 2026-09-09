@@ -1,12 +1,14 @@
 import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, series, slots, type Event, type Series, type SeriesRhythm } from "@/db/schema";
-import { nextOccurrence, timePatternOf, wallClock, zonedTimeToUtc } from "@/lib/dates";
+import { events, players, series, type Event, type Series, type SeriesRhythm } from "@/db/schema";
+import { EVENT_DURATION_MS } from "@/lib/config";
+import { nextOccurrence, timePatternOf, wallClock, weekdayName, zonedTimeToUtc } from "@/lib/dates";
+import { slugFrom } from "@/lib/translit";
 import { bumpMetric } from "./metrics";
 import { venueInCity, type City } from "./cities";
-import { createEvent, cleanText, isRosterSlot, isOccupied, resolveCapacity } from "./events";
+import { createEvent, cleanText, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
-import { venueSlug } from "./venueBoard";
+import { venueSlug, withCounts } from "./venueBoard";
 
 /**
  * A series is an Open that repeats. The organizer of a finished tournament
@@ -90,17 +92,32 @@ export function seriesDue(s: Rhythm & Pick<Series, "active" | "leadDays" | "last
 
 export const isRhythm = (v: unknown): v is SeriesRhythm => v === "week" || v === "fortnight" || v === "month";
 
-const slugBase = (name: string) => venueSlug(name)?.slice(0, 48) ?? "open";
+/** An edition still counts as current while it is running; "past" means over or marked past. */
+const isCurrent = (e: Pick<Event, "startsAt" | "status">, now: Date) => e.status !== "past" && e.status !== "cancelled" && e.startsAt.getTime() + EVENT_DURATION_MS > now.getTime();
+const sinceRunning = (now: Date) => new Date(now.getTime() - EVENT_DURATION_MS);
 
-async function freeSlug(db: Db, name: string): Promise<string> {
-  const base = slugBase(name);
+/** The slug from the name, transliterated; a name with nothing usable in it falls back to the venue and the weekday, never to a constant. */
+export function seriesSlugBase(name: string, fallback: Pick<Event, "venueName" | "startsAt" | "tz">): string {
+  const fromName = slugFrom(name, 48);
+  if (fromName.length >= 2) return fromName;
+  const venue = venueSlug(fallback.venueName)?.slice(0, 32);
+  const day = slugFrom(weekdayName(fallback.startsAt, fallback.tz, "en"), 12);
+  return [venue, day, "open"].filter(Boolean).join("-");
+}
+
+async function freeSlug(db: Db, base: string): Promise<string> {
   const taken = new Set((await db.select({ slug: series.slug }).from(series).where(sql`${series.slug} = ${base} or ${series.slug} like ${base + "-%"}`)).map((r) => r.slug));
   if (!taken.has(base)) return base;
   for (let i = 2; i < 1000; i++) if (!taken.has(`${base}-${i}`)) return `${base}-${i}`;
   throw new DomainError("invalid", "slug");
 }
 
-/** One edition from the template: a public tournament by the organizer, on the series. */
+async function activeSeriesCount(db: Db, organizerPlayerId: string): Promise<number> {
+  const [{ n }] = await db.select({ n: count() }).from(series).where(and(eq(series.organizerPlayerId, organizerPlayerId), eq(series.active, true)));
+  return Number(n);
+}
+
+/** One edition from the template: a public tournament by the organizer, on the series. `lastCreatedFor` moves with it. */
 export async function createEdition(db: Db, s: Series, startsAt: Date): Promise<Event> {
   const event = await createEvent(db, {
     creatorPlayerId: s.organizerPlayerId,
@@ -113,6 +130,7 @@ export async function createEdition(db: Db, s: Series, startsAt: Date): Promise<
     capacity: s.capacity,
     whenFull: s.whenFull as "waitlist" | "closed",
     courts: s.courts,
+    pointsPerMatch: s.pointsPerMatch,
     format: s.format,
     levelMin: s.levelMin,
     levelMax: s.levelMax,
@@ -121,10 +139,10 @@ export async function createEdition(db: Db, s: Series, startsAt: Date): Promise<
     bookingUrl: s.bookingUrl,
     cost: s.cost,
   });
-  await db.update(events).set({ seriesId: s.id, pointsPerMatch: s.pointsPerMatch, courtNames: s.courtNames }).where(eq(events.id, event.id));
+  await db.update(events).set({ seriesId: s.id, courtNames: s.courtNames }).where(eq(events.id, event.id));
   await db.update(series).set({ lastCreatedFor: startsAt, updatedAt: new Date() }).where(eq(series.id, s.id));
   await bumpMetric(db, "series_editions");
-  return { ...event, seriesId: s.id, pointsPerMatch: s.pointsPerMatch, courtNames: s.courtNames };
+  return { ...event, seriesId: s.id, courtNames: s.courtNames };
 }
 
 /** Hourly: every active series whose next edition is within its lead days gets it, once. */
@@ -141,54 +159,58 @@ export async function autoCreateSeriesEditions(db: Db, now = new Date()): Promis
 
 export type CreateSeriesInput = { eventId: string; organizerPlayerId: string; name: string; every: SeriesRhythm; capacity?: number; now?: Date };
 
-/** The door on a finished tournament: the organizer names the series and picks the rhythm; the next edition exists before the page reloads. */
+/**
+ * The door on a finished tournament: the organizer names the series, picks the field size and the
+ * rhythm; the next edition exists before the page reloads. One transaction: the series row carries
+ * `lastCreatedFor` from the start, so a half-made series can never double its first edition.
+ */
 export async function createSeriesFromEvent(db: Db, input: CreateSeriesInput): Promise<{ series: Series; next: Event }> {
   const now = input.now ?? new Date();
   const name = cleanText(input.name, SERIES.nameMax);
   if (!name || name.length < 2) throw new DomainError("invalid", "name");
   if (!isRhythm(input.every)) throw new DomainError("invalid", "every");
-  const [ev] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
-  if (!ev) throw new DomainError("not_found", "event");
-  if (ev.creatorPlayerId !== input.organizerPlayerId) throw new DomainError("forbidden", "organizer");
-  if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
-  if (ev.seriesId) throw new DomainError("invalid", "already_a_series");
-  const [{ n }] = await db.select({ n: count() }).from(series).where(and(eq(series.organizerPlayerId, input.organizerPlayerId), eq(series.active, true)));
-  if (Number(n) >= SERIES.perOrganizer) throw new DomainError("invalid", "too_many");
-  const { dow, time } = timePatternOf(ev.startsAt, ev.tz);
-  const [s] = await db
-    .insert(series)
-    .values({
-      slug: await freeSlug(db, name),
-      name,
-      organizerPlayerId: input.organizerPlayerId,
-      tz: ev.tz,
-      venueName: ev.venueName,
-      venueMapUrl: ev.venueMapUrl,
-      venueSlug: ev.venueSlug,
-      format: ev.format ?? "americano",
-      // The field the organizer wants, not the size the last edition shrank to.
-      capacity: resolveCapacity("tournament", input.capacity ?? ev.capacity),
-      courts: input.capacity && input.capacity !== ev.capacity ? null : ev.courts,
-      pointsPerMatch: ev.pointsPerMatch,
-      courtNames: ev.courtNames,
-      levelMin: ev.levelMin,
-      levelMax: ev.levelMax,
-      levelVerifiedOnly: ev.levelVerifiedOnly,
-      whenFull: ev.whenFull,
-      cost: ev.cost,
-      bookingUrl: ev.bookingUrl,
-      dow,
-      time,
-      every: input.every,
-      nth: input.every === "month" ? nthWeekdayOf(ev.startsAt, ev.tz) : null,
-      anchorAt: ev.startsAt,
-      leadDays: SERIES.leadDays[input.every],
-    })
-    .returning();
-  await db.update(events).set({ seriesId: s.id }).where(eq(events.id, ev.id));
-  const next = await createEdition(db, s, nextEditionAt(s, new Date(Math.max(now.getTime(), ev.startsAt.getTime()))));
-  await bumpMetric(db, "series_created");
-  return { series: { ...s, lastCreatedFor: next.startsAt }, next };
+  return db.transaction(async (tx) => {
+    const [ev] = await tx.select().from(events).where(eq(events.id, input.eventId)).limit(1);
+    if (!ev) throw new DomainError("not_found", "event");
+    if (ev.creatorPlayerId !== input.organizerPlayerId) throw new DomainError("forbidden", "organizer");
+    if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
+    if (ev.seriesId) throw new DomainError("invalid", "already_a_series");
+    if (ev.status === "cancelled" || !ev.standings) throw new DomainError("invalid", "not_finished");
+    if ((await activeSeriesCount(tx, input.organizerPlayerId)) >= SERIES.perOrganizer) throw new DomainError("invalid", "too_many");
+    const { dow, time } = timePatternOf(ev.startsAt, ev.tz);
+    const rhythm: Rhythm = { dow, time, every: input.every, nth: input.every === "month" ? nthWeekdayOf(ev.startsAt, ev.tz) : null, tz: ev.tz, anchorAt: ev.startsAt };
+    const nextAt = nextEditionAt(rhythm, new Date(Math.max(now.getTime(), ev.startsAt.getTime())));
+    const [s] = await tx
+      .insert(series)
+      .values({
+        slug: await freeSlug(tx, seriesSlugBase(name, ev)),
+        name,
+        organizerPlayerId: input.organizerPlayerId,
+        venueName: ev.venueName,
+        venueMapUrl: ev.venueMapUrl,
+        venueSlug: ev.venueSlug,
+        format: ev.format ?? "americano",
+        // The field the organizer wants, not the size the last edition shrank to.
+        capacity: resolveCapacity("tournament", input.capacity ?? ev.capacity),
+        courts: input.capacity && input.capacity !== ev.capacity ? null : ev.courts,
+        pointsPerMatch: ev.pointsPerMatch,
+        courtNames: ev.courtNames,
+        levelMin: ev.levelMin,
+        levelMax: ev.levelMax,
+        levelVerifiedOnly: ev.levelVerifiedOnly,
+        whenFull: ev.whenFull,
+        cost: ev.cost,
+        bookingUrl: ev.bookingUrl,
+        ...rhythm,
+        leadDays: SERIES.leadDays[input.every],
+        lastCreatedFor: nextAt,
+      })
+      .returning();
+    await tx.update(events).set({ seriesId: s.id }).where(eq(events.id, ev.id));
+    const next = await createEdition(tx, s, nextAt);
+    await bumpMetric(tx, "series_created");
+    return { series: s, next };
+  });
 }
 
 export async function getSeries(db: Db, slug: string): Promise<Series | null> {
@@ -196,15 +218,15 @@ export async function getSeries(db: Db, slug: string): Promise<Series | null> {
   return s ?? null;
 }
 
-/** The next edition of a series after `now`, if one exists. */
+/** The current edition of a series: the next one to come, or the one running right now. */
 export async function nextEdition(db: Db, seriesId: string, now = new Date()): Promise<Event | null> {
-  const [e] = await db
+  const rows = await db
     .select()
     .from(events)
-    .where(and(eq(events.seriesId, seriesId), gt(events.startsAt, now), sql`${events.status} <> 'cancelled'`))
+    .where(and(eq(events.seriesId, seriesId), gt(events.startsAt, sinceRunning(now)), sql`${events.status} <> 'cancelled'`))
     .orderBy(asc(events.startsAt))
-    .limit(1);
-  return e ?? null;
+    .limit(3);
+  return rows.find((e) => isCurrent(e, now)) ?? null;
 }
 
 export async function seriesOfEvent(db: Db, ev: Pick<Event, "seriesId">): Promise<Series | null> {
@@ -213,11 +235,12 @@ export async function seriesOfEvent(db: Db, ev: Pick<Event, "seriesId">): Promis
   return s ?? null;
 }
 
-/** The organizer pauses or resumes: paused, no edition is made; the page stays, with the past. */
+/** The organizer pauses or resumes: paused, no edition is made; the page stays, with the past. Resuming counts against the limit like creating. */
 export async function setSeriesActive(db: Db, input: { slug: string; organizerPlayerId: string; active: boolean }): Promise<Series> {
   const s = await getSeries(db, input.slug);
   if (!s) throw new DomainError("not_found", "series");
   if (s.organizerPlayerId !== input.organizerPlayerId) throw new DomainError("forbidden", "organizer");
+  if (input.active && !s.active && (await activeSeriesCount(db, input.organizerPlayerId)) >= SERIES.perOrganizer) throw new DomainError("invalid", "too_many");
   const [updated] = await db.update(series).set({ active: input.active, updatedAt: new Date() }).where(eq(series.id, s.id)).returning();
   return updated;
 }
@@ -226,21 +249,21 @@ export type Podium = { playerId: string; name: string; rank: number }[];
 export type Edition = { event: Event; spotsLeft: number; podium: Podium };
 export type SeriesPage = { series: Series; organizerName: string; next: Edition | null; past: Edition[]; editions: number };
 
+/** Seats the way the board counts them (reserved names are taken), and the top three from the standings. */
 async function editionsWithDetail(db: Db, rows: Event[]): Promise<Edition[]> {
   if (rows.length === 0) return [];
-  const ids = rows.map((e) => e.id);
-  const seats = await db.select({ eventId: slots.eventId, position: slots.position, status: slots.status }).from(slots).where(inArray(slots.eventId, ids));
+  const counted = await withCounts(db, rows);
   const podiumIds = [...new Set(rows.flatMap((e) => (e.standings ?? []).slice(0, 3)))];
   const named = podiumIds.length ? await db.select({ id: players.id, name: players.displayName }).from(players).where(inArray(players.id, podiumIds)) : [];
   const nameOf = new Map(named.map((p) => [p.id, p.name]));
-  return rows.map((event) => {
-    const taken = seats.filter((s) => s.eventId === event.id && isOccupied(s) && isRosterSlot(s, event.capacity)).length;
-    const podium = (event.standings ?? []).slice(0, 3).map((playerId, i) => ({ playerId, name: nameOf.get(playerId) ?? "?", rank: i + 1 }));
-    return { event, spotsLeft: Math.max(0, event.capacity - taken), podium };
-  });
+  return counted.map(({ event, spotsLeft }) => ({
+    event,
+    spotsLeft,
+    podium: (event.standings ?? []).slice(0, 3).map((playerId, i) => ({ playerId, name: nameOf.get(playerId) ?? "?", rank: i + 1 })),
+  }));
 }
 
-/** Everything the series page shows: the next edition, the past ones with their podiums. */
+/** Everything the series page shows: the current edition, the past ones with their podiums. */
 export async function seriesPage(db: Db, s: Series, now = new Date()): Promise<SeriesPage> {
   const rows = await db
     .select()
@@ -249,31 +272,31 @@ export async function seriesPage(db: Db, s: Series, now = new Date()): Promise<S
     .orderBy(desc(events.startsAt))
     .limit(SERIES.pastShown + 3);
   const [organizer] = await db.select({ name: players.displayName }).from(players).where(eq(players.id, s.organizerPlayerId)).limit(1);
-  const upcoming = rows.filter((e) => e.startsAt > now && e.status !== "past").sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  const past = rows.filter((e) => !(e.startsAt > now && e.status !== "past")).slice(0, SERIES.pastShown);
-  const [next] = await editionsWithDetail(db, upcoming.slice(0, 1));
+  const current = rows.filter((e) => isCurrent(e, now)).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()).slice(0, 1);
+  const past = rows.filter((e) => !isCurrent(e, now)).slice(0, SERIES.pastShown);
+  const detailed = await editionsWithDetail(db, [...current, ...past]);
   const [{ n }] = await db.select({ n: count() }).from(events).where(and(eq(events.seriesId, s.id), sql`${events.status} <> 'cancelled'`));
-  return { series: s, organizerName: organizer?.name ?? "", next: next ?? null, past: await editionsWithDetail(db, past), editions: Number(n) };
+  return { series: s, organizerName: organizer?.name ?? "", next: current.length ? detailed[0] : null, past: detailed.slice(current.length), editions: Number(n) };
 }
 
 export type SeriesListing = { series: Series; next: Event | null };
 
-/** Active series, optionally those in one city, each with its next edition. */
-export async function listSeries(db: Db, city: City | null = null, now = new Date()): Promise<SeriesListing[]> {
-  const rows = await db.select().from(series).where(eq(series.active, true)).orderBy(asc(series.createdAt)).limit(200);
+/** Series, optionally those in one city, each with its current edition. Active ones by default; the sitemap asks for every page that exists. */
+export async function listSeries(db: Db, city: City | null = null, now = new Date(), o: { includePaused?: boolean } = {}): Promise<SeriesListing[]> {
+  const rows = await db
+    .select()
+    .from(series)
+    .where(o.includePaused ? undefined : eq(series.active, true))
+    .orderBy(asc(series.createdAt))
+    .limit(200);
   const inCity = city ? rows.filter((s) => venueInCity(city, s.venueSlug, s.tz)) : rows;
   if (inCity.length === 0) return [];
   const upcoming = await db
     .select()
     .from(events)
-    .where(and(inArray(events.seriesId, inCity.map((s) => s.id)), gt(events.startsAt, now), sql`${events.status} <> 'cancelled'`))
+    .where(and(inArray(events.seriesId, inCity.map((s) => s.id)), gt(events.startsAt, sinceRunning(now)), sql`${events.status} <> 'cancelled'`))
     .orderBy(asc(events.startsAt));
   const nextOf = new Map<string, Event>();
-  for (const e of upcoming) if (e.seriesId && !nextOf.has(e.seriesId)) nextOf.set(e.seriesId, e);
+  for (const e of upcoming) if (e.seriesId && !nextOf.has(e.seriesId) && isCurrent(e, now)) nextOf.set(e.seriesId, e);
   return inCity.map((s) => ({ series: s, next: nextOf.get(s.id) ?? null })).sort((a, b) => (a.next?.startsAt.getTime() ?? Infinity) - (b.next?.startsAt.getTime() ?? Infinity));
-}
-
-/** The organizer's own series, for My matches. */
-export async function seriesByOrganizer(db: Db, playerId: string): Promise<Series[]> {
-  return db.select().from(series).where(eq(series.organizerPlayerId, playerId)).orderBy(asc(series.createdAt));
 }

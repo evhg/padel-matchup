@@ -87,6 +87,7 @@ export async function GET(req: Request) {
     // An Open that repeats: the next edition of every active series, a few days ahead, once; its page is re-pinged.
     const editions = await autoCreateSeriesEditions(db, now);
     summary.seriesEditions = editions.length;
+    for (const e of editions) await emitMatchEvent(db, "match.created", e.event.code, { automatic: true, series: e.series.slug });
     if (editions.length) await pingIndexNow([...new Set(editions.map((e) => `${baseUrl()}/s/${e.series.slug}`))], { db }).catch(() => undefined);
   } catch (e) {
     summary.errors.push(`series: ${String(e)}`);

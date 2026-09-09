@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events } from "@/db/schema";
+import { events, type Series } from "@/db/schema";
 import { cityBySlug } from "@/lib/domain/cities";
 import { createEvent } from "@/lib/domain/events";
-import { autoCreateSeriesEditions, createSeriesFromEvent, listSeries, nextEditionAt, nthWeekdayOf, seriesDue, seriesPage, setSeriesActive } from "@/lib/domain/series";
-import { joinEvent } from "@/lib/domain/slots";
+import { autoCreateSeriesEditions, createSeriesFromEvent, listSeries, nextEdition, nextEditionAt, nthWeekdayOf, seriesDue, seriesPage, seriesSlugBase, setSeriesActive } from "@/lib/domain/series";
+import { joinEvent, reserveSlot } from "@/lib/domain/slots";
 import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 
 const TZ = "Asia/Bangkok";
@@ -104,6 +104,55 @@ describe("a series from a finished tournament", () => {
     expect(n3.capacity).toBe(12);
     const fourth = await finishedTournament(org.id, ids, new Date("2026-09-08T02:00:00Z"));
     await expect(createSeriesFromEvent(db, { eventId: fourth.id, organizerPlayerId: org.id, name: "Odd", every: "week", capacity: 10, now: NOW })).rejects.toThrow();
+
+    // Only a finished tournament: no standings, or cancelled, is refused on the server, not only hidden on the page.
+    const unfinished = await createEvent(db, { creatorPlayerId: org.id, type: "tournament", title: null, startsAt: SAT_5, tz: TZ, venueName: "Rawai Padel", capacity: 8, whenFull: "waitlist" });
+    await expect(createSeriesFromEvent(db, { eventId: unfinished.id, organizerPlayerId: org.id, name: "Too soon", every: "week", now: NOW })).rejects.toThrow("not_finished");
+    await db.update(events).set({ standings: [org.id], status: "cancelled" }).where(eq(events.id, unfinished.id));
+    await expect(createSeriesFromEvent(db, { eventId: unfinished.id, organizerPlayerId: org.id, name: "Too late", every: "week", now: NOW })).rejects.toThrow("not_finished");
+  });
+
+  it("counts reserved names as taken, keeps a running edition current, and transliterates a Russian name", async () => {
+    const org = await makePlayer(db, "Seat", { level: 4 });
+    const ids = [org.id, ...(await Promise.all(["Hal", "Ira", "Jo"].map((n) => makePlayer(db, n)))).map((p) => p.id)];
+    const source = await finishedTournament(org.id, ids, SAT_5, "Kata Padel");
+    const { series: s, next } = await createSeriesFromEvent(db, { eventId: source.id, organizerPlayerId: org.id, name: "Открытый турнир Ката", every: "week", now: NOW });
+    expect(s.slug).toBe("otkrytyy-turnir-kata");
+    expect(s.lastCreatedFor?.toISOString()).toBe(next.startsAt.toISOString());
+    // Two reserved names and one join: the board and the series page agree on five seats left of eight.
+    await reserveSlot(db, { eventId: next.id, actorPlayerId: org.id, name: "Kim", now: NOW });
+    await reserveSlot(db, { eventId: next.id, actorPlayerId: org.id, name: "Lou", now: NOW });
+    await joinEvent(db, { eventId: next.id, playerId: ids[1], now: NOW });
+    expect((await seriesPage(db, s, NOW)).next?.spotsLeft).toBe(5);
+    // Half an hour into the edition it is still the current one, not a past one without a podium.
+    const running = new Date(next.startsAt.getTime() + 30 * 60_000);
+    const page = await seriesPage(db, s, running);
+    expect(page.next?.event.id).toBe(next.id);
+    expect(page.past.map((e) => e.event.id)).toEqual([source.id]);
+    expect((await nextEdition(db, s.id, running))?.id).toBe(next.id);
+    expect((await listSeries(db, null, running)).find((r) => r.series.id === s.id)?.next?.id).toBe(next.id);
+    // Three hours later it is over: no current edition until the job makes the next one.
+    const over = new Date(next.startsAt.getTime() + 3 * HOUR);
+    expect((await seriesPage(db, s, over)).next).toBeNull();
+    expect(seriesSlugBase("!!!", { venueName: "Kata Padel", startsAt: SAT_5, tz: TZ })).toBe("kata-padel-saturday-open");
+  });
+
+  it("holds five per organizer, on creation and on resume, and lists paused series for the sitemap only", async () => {
+    const org = await makePlayer(db, "Busy", { level: 4 });
+    const ids = [org.id, ...(await Promise.all(["Mo", "Ned", "Oz"].map((n) => makePlayer(db, n)))).map((p) => p.id)];
+    const made: Series[] = [];
+    for (let i = 0; i < 5; i++) {
+      const src = await finishedTournament(org.id, ids, new Date(SAT_5.getTime() + i * HOUR), `Court ${i}`);
+      made.push((await createSeriesFromEvent(db, { eventId: src.id, organizerPlayerId: org.id, name: `Series ${i}`, every: "week", now: NOW })).series);
+    }
+    const sixth = await finishedTournament(org.id, ids, new Date(SAT_5.getTime() + 6 * HOUR), "Court 6");
+    await expect(createSeriesFromEvent(db, { eventId: sixth.id, organizerPlayerId: org.id, name: "Series 6", every: "week", now: NOW })).rejects.toThrow("too_many");
+    await setSeriesActive(db, { slug: made[0].slug, organizerPlayerId: org.id, active: false });
+    await createSeriesFromEvent(db, { eventId: sixth.id, organizerPlayerId: org.id, name: "Series 6", every: "week", now: NOW });
+    await expect(setSeriesActive(db, { slug: made[0].slug, organizerPlayerId: org.id, active: true })).rejects.toThrow("too_many");
+    const listed = await listSeries(db, null, NOW);
+    expect(listed.some((r) => r.series.id === made[0].id)).toBe(false);
+    expect((await listSeries(db, null, NOW, { includePaused: true })).some((r) => r.series.id === made[0].id)).toBe(true);
   });
 
   it("makes the following editions from the hourly job, once each, not while paused, and lists by city", async () => {
