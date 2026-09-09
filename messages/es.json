@@ -69,6 +69,7 @@
     "formTitle": "Monta un partido en 10 segundos",
     "formSub": "Elige una hora, consigue un enlace, compártelo. Los jugadores se apuntan con un toque. Sin app, sin registro.",
     "americanoLink": "¿Organizas un americano? Generador de cuadros gratis →",
+    "coachesLink": "¿Entrenas pádel? Tus alumnos reservan solos →",
     "metaTitle": "Pádel en un enlace",
     "metaDescription": "Crea un partido de pádel o un torneo americano, comparte un enlace corto por WhatsApp o Telegram y tus amigos se apuntan con un toque. Sin app ni cuentas. Invitaciones de calendario, recordatorios, resultados, niveles."
   },
@@ -823,7 +824,8 @@
     "listedShort": "En el tablón del club",
     "notListedShort": "No está en el tablón",
     "coaches": "Entrenadores aquí",
-    "coachesHelp": "Entrenadores que nombraron este club y eligieron aparecer."
+    "coachesHelp": "Entrenadores que nombraron este club y eligieron aparecer.",
+    "coachHere": "¿Entrenas en {venue}? Crea tu agenda →"
   },
   "ranking": {
     "title": "Ranking",
@@ -1039,6 +1041,7 @@
     "tryAgain": "Escribirlo de otra forma"
   },
   "coach": {
+    "invite": {"title": "¿Conoces a otro entrenador? Envíale esto", "text": "Llevo mi agenda de clases en Kicksmash: los alumnos reservan solos las horas libres, los bonos se cuentan solos, mi calendario sigue siendo mío. Gratis, cuatro toques: {url}"},
     "eyebrow": "Entrenador",
     "how": "Cómo funciona",
     "minutes": "{n} min",
@@ -1170,6 +1173,8 @@
       "how": "Estas son las reglas que ven tus alumnos y que aplica el asistente. Cámbialas cuando quieras; las clases ya reservadas mantienen las reglas con las que se reservaron."
     },
     "page": {
+      "ownBook": "¿Entrenas? Tu propia agenda en un minuto →",
+      "founding": "Entrenador fundador · {city}",
       "coach": "Entrenador de pádel",
       "at": "en {clubs}",
       "lesson": "clases de {minutes} minutos",
@@ -1326,6 +1331,32 @@
       "how": "Cualquiera con el enlace puede unirse una vez creado; crea uno nuevo y el anterior deja de funcionar. Un gestor ve y hace todo lo que tú haces aquí, salvo esta sección."
     }
   },
+  "coachFront": {
+    "metaTitle": "¿Entrenas pádel? Tus alumnos reservan solos",
+    "metaDescription": "Una agenda de clases gratis para entrenadores de pádel: un enlace, los alumnos reservan solos las horas libres, los bonos se cuentan solos, tu Google Calendar y tu hoja siguen siendo tuyos. Lista en cuatro toques.",
+    "eyebrow": "Para entrenadores",
+    "title": "Tus alumnos reservan solos. Tu calendario sigue siendo tuyo.",
+    "lead": "Un enlace para tus alumnos. Piden entrar una vez; tras tu sí reservan horas libres, cancelan según tus reglas y ven su bono. Tú recibes una línea por reserva y no contestas nada mientras das clase.",
+    "cta": "Crear mi agenda",
+    "ctaHelp": "Cuatro toques, menos de un minuto. Gratis, sin comisión, sin app.",
+    "t1Title": "Respuestas mientras das clase",
+    "t1": "«¿El viernes a las tres está libre?» se responde al momento, dentro de tus reglas. Tú solo ves decisiones: un alumno nuevo, una hora fuera de tu horario.",
+    "t2Title": "Los bonos se cuentan solos",
+    "t2": "«Quedan 6 de 10, 23 días» bajo cada clase. Los avisos de caducidad salen solos. Pagado es un toque para ti.",
+    "t3Title": "Nada se mueve",
+    "t3": "Comparte tu Google Calendar con nuestra dirección y las reservas aparecen allí; lo que escribes allí bloquea tiempo aquí. Pega tu hoja de bonos una vez. Apple y Outlook funcionan con un enlace iCal.",
+    "t4Title": "El dinero sigue siendo tuyo",
+    "t4": "Un QR de PromptPay con el importe, o tu propio QR o enlace de pago. Nunca tocamos un baht.",
+    "t5Title": "Cancelaciones a tu manera",
+    "t5": "Tu plazo, un pase tardío gratis por bono y después la clase cuenta. Una hora liberada se ofrece a tu lista de espera durante treinta minutos.",
+    "t6Title": "Cómo te encuentran los alumnos",
+    "t6": "Tu enlace y un QR para la valla, tu bio de Instagram, la página de tu club y la lista de la ciudad si eliges aparecer. Un alumno que también entrena crea su propia agenda desde tu página.",
+    "telegramTitle": "También desde Telegram",
+    "telegram": "Escribe «ana vie 15» y la clase queda reservada, con botón de deshacer. Tus alumnos escriben al bot y reciben respuesta en su idioma mientras estás en la pista.",
+    "foundingTitle": "Entrenadores fundadores",
+    "founding": "Los diez primeros entrenadores de cada ciudad llevan una insignia de fundador en su página, y para ellos todo sigue siendo gratis.",
+    "cities": "Ya en la lista:"
+  },
   "coaches": {
     "title": "Entrenadores de pádel en {city}",
     "metaDescription": "Entrenadores de pádel en {city} que llevan su agenda de clases en Kicksmash: clubes, duración de la clase, idiomas y horas libres que puedes reservar tú.",
@@ -1334,6 +1365,7 @@
     "open": "Abrir la agenda de {name}",
     "coachQuestion": "¿Entrenas en {city}?",
     "coachHelp": "Configura tu agenda en cuatro toques: los alumnos reservan las horas libres, los bonos se cuentan solos, tu calendario sigue siendo tuyo. Aparecer en la lista es opcional.",
+    "coachMore": "Qué reciben los entrenadores →",
     "coachCta": "Configurar mi agenda"
   },
   "moments": {

@@ -4,6 +4,8 @@ import { CoachHome } from "@/components/coach/CoachHome";
 import { CoachSetup } from "@/components/coach/CoachSetup";
 import { Footer, Header } from "@/components/Header";
 import { NameGate } from "@/components/NameGate";
+import { SourceTag } from "@/components/SourceTag";
+import { cleanSource } from "@/lib/source";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { zonedTimeToUtc } from "@/lib/dates";
@@ -20,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("setup.title"), robots: { index: false, follow: false } };
 }
 
-type Props = { searchParams: Promise<{ welcome?: string }> };
+type Props = { searchParams: Promise<{ welcome?: string; s?: string; club?: string }> };
 
 /** The coach's book, or the four taps that create it. One screen, one job. */
 export default async function CoachPage({ searchParams }: Props) {
@@ -33,9 +35,23 @@ export default async function CoachPage({ searchParams }: Props) {
       <Footer />
     </>
   );
-  if (!me) return shell(<NameGate title={t("setup.nameTitle")} />);
+  // The door a coach came through (?s=citylist, club, coachpage, invite…) is remembered for a day and counted on setup.
+  const tag = <SourceTag source={cleanSource(sp.s)} />;
+  if (!me)
+    return shell(
+      <>
+        {tag}
+        <NameGate title={t("setup.nameTitle")} />
+      </>,
+    );
   const found = await getCoachForActor(db, me.id);
-  if (!found) return shell(<CoachSetup />);
+  if (!found)
+    return shell(
+      <>
+        {tag}
+        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} />
+      </>,
+    );
 
   const { coach } = found;
   const now = new Date();

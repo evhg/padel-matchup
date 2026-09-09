@@ -69,6 +69,7 @@
     "formTitle": "Set up a match in 10 seconds",
     "formSub": "Pick a time, get a link, share it. Players tap to join. No app, no signup.",
     "americanoLink": "Running an americano? Free schedule generator →",
+    "coachesLink": "Padel coach? Your students book themselves →",
     "metaTitle": "Padel in one link",
     "metaDescription": "Create a padel match or americano tournament, share one short link on WhatsApp or Telegram, friends tap to join. No app, no accounts. Calendar invites, reminders, scores, levels."
   },
@@ -823,7 +824,8 @@
     "listedShort": "On the venue board",
     "notListedShort": "Not on the venue board",
     "coaches": "Coaches here",
-    "coachesHelp": "Coaches who named this club and chose to be listed."
+    "coachesHelp": "Coaches who named this club and chose to be listed.",
+    "coachHere": "Coach at {venue}? Set up your book →"
   },
   "ranking": {
     "title": "Ranking",
@@ -1039,6 +1041,7 @@
     "tryAgain": "Write it differently"
   },
   "coach": {
+    "invite": {"title": "Know a coach? Send them this", "text": "I run my lessons book on Kicksmash: students book free times themselves, packages count themselves, my calendar stays mine. Free, four taps: {url}"},
     "eyebrow": "Coach",
     "how": "How this works",
     "minutes": "{n} min",
@@ -1170,6 +1173,8 @@
       "how": "These are the rules your students see and the assistant applies. Change them any time; lessons already booked keep the rules they were booked under."
     },
     "page": {
+      "ownBook": "Coach? Your own book in a minute →",
+      "founding": "Founding coach · {city}",
       "coach": "Padel coach",
       "at": "at {clubs}",
       "lesson": "{minutes}-minute lessons",
@@ -1326,6 +1331,32 @@
       "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section."
     }
   },
+  "coachFront": {
+    "metaTitle": "Padel coach? Your students book themselves",
+    "metaDescription": "A free lessons book for padel coaches: one link, students book free times themselves, packages count themselves, your Google Calendar and your sheet stay yours. Set up in four taps.",
+    "eyebrow": "For coaches",
+    "title": "Your students book themselves. Your calendar stays yours.",
+    "lead": "One link for your students. They ask once to join; after your yes they book free times, cancel by your rules and see their package. You get one line per booking and answer nothing while you teach.",
+    "cta": "Set up my book",
+    "ctaHelp": "Four taps, under a minute. Free, no commission, no app.",
+    "t1Title": "Answered while you teach",
+    "t1": "“Is Friday at three free?” gets an answer at once, inside your rules. You see decisions only: a new student, a time outside your hours.",
+    "t2Title": "Packages count themselves",
+    "t2": "“6 of 10 left, 23 days” under every lesson. Expiry reminders go out by themselves. Paid is one tap for you.",
+    "t3Title": "Nothing moves",
+    "t3": "Share your Google Calendar with our address and bookings appear there; what you write there blocks time here. Paste your package sheet once. Apple and Outlook work through an iCal link.",
+    "t4Title": "Money stays yours",
+    "t4": "A PromptPay QR with the amount, or your own QR or payment link. We never touch a baht.",
+    "t5Title": "Cancellations, your way",
+    "t5": "Your cutoff, one free late pass per package, then the lesson counts. A freed slot is offered to your waitlist for thirty minutes.",
+    "t6Title": "How students find you",
+    "t6": "Your link and a QR for the fence, your Instagram bio, your club's page, and the city list if you choose to be listed. A student who coaches gets their own book from your page.",
+    "telegramTitle": "Also from Telegram",
+    "telegram": "Type “anna fri 15” and the lesson is booked, with an undo button. Your students write to the bot and get answers in their language while you are on court.",
+    "foundingTitle": "Founding coaches",
+    "founding": "The first ten coaches listed in each city carry a founding badge on their page, and everything stays free for them.",
+    "cities": "Coaches already listed:"
+  },
   "coaches": {
     "title": "Padel coaches in {city}",
     "metaDescription": "Padel coaches in {city} who list their lessons book on Kicksmash: clubs, lesson length, languages, and free times you can book yourself.",
@@ -1334,6 +1365,7 @@
     "open": "Open {name}'s book",
     "coachQuestion": "Do you coach in {city}?",
     "coachHelp": "Set up your book in four taps: students book free times themselves, packages count themselves, your calendar stays yours. Listing is optional.",
+    "coachMore": "What coaches get →",
     "coachCta": "Set up your book"
   },
   "moments": {

@@ -1,6 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { bumpMetric } from "@/lib/domain/metrics";
+import { cleanSource, SOURCE_COOKIE } from "@/lib/source";
 import { getLocale } from "next-intl/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
@@ -71,6 +74,10 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
     const tz = input.tz && isValidTimeZone(input.tz) ? input.tz : "Asia/Bangkok";
     const hours: Hours = input.preset === "custom" ? presetHours("both") : presetHours(input.preset);
     const coach = await createCoach(db, { playerId: me.id, displayName: me.displayName, clubNames: input.clubs, lessonMinutes: input.minutes, hours, tz, languages: [locale] });
+    // Which door this coach came through (a coach page, a club page, the city list, an invite, search): the Sunday digest counts them.
+    const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
+    await bumpMetric(db, "coaches_created").catch(() => undefined);
+    if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { handle: coach.handle };
   });

@@ -6,7 +6,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
-import { listPublicCoaches } from "@/lib/domain/coaching";
+import { FOUNDING_COACHES, listPublicCoaches } from "@/lib/domain/coaching";
 import { localeAlternates } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -54,8 +54,9 @@ export default async function CoachesInCityPage({ params }: Props) {
           </section>
         ) : (
           <ul className="flex flex-col gap-3" data-testid="coach-list">
-            {coaches.map((c) => (
+            {coaches.map((c, i) => (
               <li key={c.id} className="card flex flex-col gap-2">
+                {i < FOUNDING_COACHES && <span className="chip-muted self-start">🏅 {tCoach("page.founding", { city: city.name })}</span>}
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="text-xl font-extrabold tracking-tight">{c.displayName}</h2>
                   <span className="text-xs text-muted">{tCoach("page.lesson", { minutes: c.lessonMinutes })}</span>
@@ -75,8 +76,11 @@ export default async function CoachesInCityPage({ params }: Props) {
         <section className="card">
           <p className="text-sm font-bold">{t("coachQuestion", { city: city.name })}</p>
           <p className="mt-1 text-xs text-muted">{t("coachHelp")}</p>
-          <Link href="/coach" prefetch={false} className="btn-ghost mt-3 w-full">
+          <Link href="/coach?s=citylist" prefetch={false} className="btn-ghost mt-3 w-full">
             {t("coachCta")}
+          </Link>
+          <Link href="/coaches?s=citylist" prefetch={false} className="mt-2 block text-center text-xs text-faint hover:text-muted">
+            {t("coachMore")}
           </Link>
         </section>
         <p className="text-center text-xs text-faint">
