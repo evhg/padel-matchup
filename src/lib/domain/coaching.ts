@@ -87,7 +87,7 @@ export function hoursFromLines(lines: readonly string[]): { hours: Hours; invali
 
 /** A URL handle from a name: transliterated, lowercase, dashes. "Benji Å" → "benji-a", "Даниил" → "daniil". */
 export function handleFromName(name: string): string {
-  let out = transliterate(name ?? "")
+  const out = transliterate(name ?? "")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")

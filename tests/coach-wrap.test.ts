@@ -22,10 +22,12 @@ describe("the monthly wrap", () => {
   beforeAll(async () => ({ db, close } = await createTestDb()));
   afterAll(() => close());
 
-  it("is due on the 1st in the morning, local time, and names the previous month", () => {
+  it("is due from nine on the 1st, with two days to catch up, and names the previous month", () => {
     expect(wrapDue("Asia/Bangkok", FIRST)).toBe(true);
-    expect(wrapDue("Asia/Bangkok", new Date("2026-10-01T06:30:00Z"))).toBe(false); // 13:30 local
-    expect(wrapDue("Asia/Bangkok", new Date("2026-10-02T02:30:00Z"))).toBe(false);
+    expect(wrapDue("Asia/Bangkok", new Date("2026-10-01T01:30:00Z"))).toBe(false); // 08:30 local, too early
+    expect(wrapDue("Asia/Bangkok", new Date("2026-10-01T06:30:00Z"))).toBe(true); // 13:30 local: a missed morning is caught up
+    expect(wrapDue("Asia/Bangkok", new Date("2026-10-03T02:30:00Z"))).toBe(true); // the 3rd still counts
+    expect(wrapDue("Asia/Bangkok", new Date("2026-10-04T02:30:00Z"))).toBe(false);
     expect(wrapDue("Europe/Madrid", FIRST)).toBe(false); // 04:30 in Madrid
     const m = previousMonth("Asia/Bangkok", FIRST);
     expect(m.label).toBe("2026-09");
@@ -41,7 +43,7 @@ describe("the monthly wrap", () => {
     await createPackage(db, { coachId: ana.id, studentPlayerId: mia.id, size: 10, validDays: 90 }, SEP(2, 10));
     const rows = [
       ...[3, 5, 10, 12, 17, 19, 24, 26].map((d) => ({ coachId: ana.id, studentPlayerId: mia.id, startsAt: SEP(d, 15), minutes: 60, status: "done" as const })),
-      { coachId: ana.id, studentPlayerId: leo.id, startsAt: SEP(8, 9), minutes: 60, status: "done" as const },
+      { coachId: ana.id, studentPlayerId: leo.id, startsAt: SEP(3, 9), minutes: 60, status: "done" as const },
       { coachId: ana.id, studentPlayerId: leo.id, startsAt: SEP(15, 9), minutes: 60, status: "no_show" as const },
       { coachId: ana.id, studentPlayerId: leo.id, startsAt: new Date("2026-10-03T08:00:00Z"), minutes: 60, status: "booked" as const },
     ];
@@ -67,7 +69,7 @@ describe("the monthly wrap", () => {
     const delivered: { to: Player; note: WrapNote }[] = [];
     const deps = { deliver: async (to: Player, note: WrapNote) => void delivered.push({ to, note }), translate, baseUrl: "https://kicksma.sh", appName: "Kicksmash" };
     // Too early in the day: nothing goes.
-    expect(await monthlyWraps(db, new Date("2026-09-30T20:00:00Z"), deps)).toEqual({ coaches: 0, clubs: 0, skipped: 0 });
+    expect(await monthlyWraps(db, new Date("2026-09-30T20:00:00Z"), deps)).toEqual({ coaches: 0, clubs: 0, skipped: 0, errors: [] });
     const sent = await monthlyWraps(db, FIRST, deps);
     expect(sent.coaches).toBe(1);
     expect(sent.clubs).toBe(1);
@@ -84,7 +86,7 @@ describe("the monthly wrap", () => {
     expect(toNok.note.body).toContain('"rate":75');
     expect(toNok.note.url).toContain(`/v/${club.slug}/manage/`);
     // The same morning again: already sent, nothing more.
-    expect(await monthlyWraps(db, new Date(FIRST.getTime() + HOUR), deps)).toEqual({ coaches: 0, clubs: 0, skipped: 0 });
+    expect(await monthlyWraps(db, new Date(FIRST.getTime() + HOUR), deps)).toEqual({ coaches: 0, clubs: 0, skipped: 0, errors: [] });
     expect((await db.select().from(coaches).where(eq(coaches.id, ana.id)))[0].wrapSentFor).toBe("2026-09");
     expect((await db.select().from(clubs).where(eq(clubs.slug, club.slug)))[0].wrapSentFor).toBe("2026-09");
   });

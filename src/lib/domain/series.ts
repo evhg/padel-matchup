@@ -92,8 +92,8 @@ export function seriesDue(s: Rhythm & Pick<Series, "active" | "leadDays" | "last
 
 export const isRhythm = (v: unknown): v is SeriesRhythm => v === "week" || v === "fortnight" || v === "month";
 
-/** An edition still counts as current while it is running; "past" means over or marked past. */
-const isCurrent = (e: Pick<Event, "startsAt" | "status">, now: Date) => e.status !== "past" && e.status !== "cancelled" && e.startsAt.getTime() + EVENT_DURATION_MS > now.getTime();
+/** An edition still counts as current while it is running; finalized (standings written), marked past, cancelled or over means past. */
+const isCurrent = (e: Pick<Event, "startsAt" | "status" | "standings">, now: Date) => e.status !== "past" && e.status !== "cancelled" && !e.standings && e.startsAt.getTime() + EVENT_DURATION_MS > now.getTime();
 const sinceRunning = (now: Date) => new Date(now.getTime() - EVENT_DURATION_MS);
 
 /** The slug from the name, transliterated; a name with nothing usable in it falls back to the venue and the weekday, never to a constant. */

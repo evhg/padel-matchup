@@ -97,6 +97,7 @@ export async function GET(req: Request) {
     // The 1st of the month, in the morning where they are: one wrap per coach and per club, once.
     const wraps = await monthlyWraps(db, now, { deliver: deliverWrap, translate: translatorFor, baseUrl: baseUrl(), appName: APP_NAME });
     summary.wraps = wraps.coaches + wraps.clubs;
+    for (const err of wraps.errors) summary.errors.push(`wrap: ${err}`);
   } catch (e) {
     summary.errors.push(`wraps: ${String(e)}`);
   }

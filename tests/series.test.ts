@@ -131,6 +131,14 @@ describe("a series from a finished tournament", () => {
     expect(page.past.map((e) => e.event.id)).toEqual([source.id]);
     expect((await nextEdition(db, s.id, running))?.id).toBe(next.id);
     expect((await listSeries(db, null, running)).find((r) => r.series.id === s.id)?.next?.id).toBe(next.id);
+    // A finalized edition is over even inside its two hours: the source, finished an hour ago, sits under past.
+    const early = await createEvent(db, { creatorPlayerId: org.id, type: "tournament", title: null, startsAt: new Date(NOW.getTime() - HOUR), tz: TZ, venueName: "Kata Padel", capacity: 8, whenFull: "waitlist" });
+    await db.update(events).set({ scoreLockedByCreator: true, standings: [org.id] }).where(eq(events.id, early.id));
+    const { series: fresh, next: freshNext } = await createSeriesFromEvent(db, { eventId: early.id, organizerPlayerId: org.id, name: "Fresh", every: "week", now: NOW });
+    const freshPage = await seriesPage(db, fresh, NOW);
+    expect(freshPage.next?.event.id).toBe(freshNext.id);
+    expect(freshPage.past.map((e) => e.event.id)).toEqual([early.id]);
+    expect((await nextEdition(db, fresh.id, NOW))?.id).toBe(freshNext.id);
     // Three hours later it is over: no current edition until the job makes the next one.
     const over = new Date(next.startsAt.getTime() + 3 * HOUR);
     expect((await seriesPage(db, s, over)).next).toBeNull();
