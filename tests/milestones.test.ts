@@ -59,9 +59,10 @@ describe("moments, detected", () => {
 describe("moments, awarded", () => {
   it("awards a first win once for the winners of a confirmed match, never for the losers", async () => {
     const [a, b, c, d] = await Promise.all(["Ana", "Bo", "Cy", "Di"].map((n) => makePlayer(db, n)));
-    const startsAt = new Date(Date.now() - 3 * HOUR);
-    const e = await createEvent(db, { creatorPlayerId: a.id, type: "match", startsAt, tz: "UTC", whenFull: "closed" });
+    // Joined while the match was ahead, then it happened: the same order as real life.
+    const e = await createEvent(db, { creatorPlayerId: a.id, type: "match", startsAt: new Date(Date.now() + 2 * HOUR), tz: "UTC", whenFull: "closed" });
     for (const p of [a, b, c, d]) await joinEvent(db, { eventId: e.id, playerId: p.id }).catch(() => undefined);
+    await db.update(events).set({ startsAt: new Date(Date.now() - 3 * HOUR) }).where(eq(events.id, e.id));
     await db.update(slots).set({ team: "a" }).where(eq(slots.playerId, a.id));
     await db.update(slots).set({ team: "a" }).where(eq(slots.playerId, b.id));
     await db.update(slots).set({ team: "b" }).where(eq(slots.playerId, c.id));
@@ -81,8 +82,9 @@ describe("the court photo", () => {
     const org = await makePlayer(db, "Org");
     const mate = await makePlayer(db, "Mate");
     const stranger = await makePlayer(db, "Stranger");
-    const e = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() - HOUR), tz: "UTC", whenFull: "closed" });
+    const e = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + HOUR), tz: "UTC", whenFull: "closed" });
     await joinEvent(db, { eventId: e.id, playerId: mate.id });
+    await db.update(events).set({ startsAt: new Date(Date.now() - HOUR) }).where(eq(events.id, e.id));
     const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex").toString("base64");
     await expect(setEventPhoto(db, { eventId: e.id, playerId: stranger.id, mime: "image/png", dataBase64: png })).rejects.toMatchObject({ code: "forbidden" });
     await expect(setEventPhoto(db, { eventId: e.id, playerId: mate.id, mime: "image/gif", dataBase64: png })).rejects.toMatchObject({ code: "invalid" });
