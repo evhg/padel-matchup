@@ -33,6 +33,7 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 7. **Additive migrations.** Production applies them automatically; no drops without discussion.
 8. **Sequential DB queries in server components** (the Supabase pooler stalls on pipelined bursts).
 9. **Write copy from the user's side.** Active voice, short sentences, no jargon. Three languages.
+10. **Every table is locked.** Supabase serves `public` through its Data API; Kicksmash never uses it and connects as the role `kicksmash`. Every table has Row Level Security on and one policy (`app`) for that role; a new table adds the same two statements to its migration (see `drizzle/0029_rls_everywhere.sql`) or `tests/rls.test.ts` fails. Production migrations run as `postgres` through the Supabase MCP before the merge, with `GRANT ALL ON TABLE … TO kicksmash`; the API roles (`anon`, `authenticated`) hold no privileges on `public`.
 
 ## Agent-native surfaces (keep them in sync when the API changes)
 

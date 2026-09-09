@@ -25,6 +25,7 @@ export const LIMITS = {
   joinsPerPlayerPerHour: 30,
   emailChangesPerPlayerPerDay: 10,
   personalLinkMailsPerPlayerPerDay: 5,
+  inviteResendsPerPlayerPerDay: 6,
   restoreCodesPerIpPerDay: 20,
   clientErrorReportsPerIpPerDay: 60,
   feedbackPerIpPerDay: 5,

@@ -26,6 +26,7 @@ export type OutgoingEmail = {
 export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
   const r = resend();
   if (!r) return false;
+  if (process.env.EMAIL_SINK_FILE) return sink(msg);
   const from = emailFrom();
   try {
     const { error } = await r.emails.send({
@@ -60,4 +61,12 @@ export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
     console.error("[email] send threw", e);
     return false;
   }
+}
+
+/** Test servers set EMAIL_SINK_FILE: every message lands there as one JSON line and nothing is sent. */
+async function sink(msg: OutgoingEmail): Promise<boolean> {
+  const { appendFile } = await import("node:fs/promises");
+  const line = { at: new Date().toISOString(), to: msg.to, subject: msg.subject, text: msg.text, ics: msg.ics ?? null };
+  await appendFile(process.env.EMAIL_SINK_FILE!, JSON.stringify(line) + "\n");
+  return true;
 }

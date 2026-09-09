@@ -2,18 +2,21 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
+import { resendCalendarInviteAction } from "@/actions/calendar";
 import { updateMyEmail } from "@/actions/identity";
 
 /**
  * "Add to your calendar" = give us an email. The invite we send is a real
  * calendar invitation that updates itself on changes and cancellation,
  * unlike a copy created through a Google/Apple button. With an email on file
- * the invite already went out, so only a confirmation line is shown.
+ * the invite already went out (on joining, or the moment the organizer created
+ * the match), so a confirmation line is shown, with one quiet way to send it again.
  */
-export function CalendarEmail({ code, email, emailEnabled, className = "" }: { code: string; email: string | null; emailEnabled: boolean; className?: string }) {
+export function CalendarEmail({ code, email, emailEnabled, member = true, className = "" }: { code: string; email: string | null; emailEnabled: boolean; member?: boolean; className?: string }) {
   const t = useTranslations();
   const [value, setValue] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(email);
+  const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   if (!emailEnabled) return null;
@@ -21,7 +24,31 @@ export function CalendarEmail({ code, email, emailEnabled, className = "" }: { c
   if (sentTo) {
     return (
       <div className={`rounded-2xl bg-bg px-4 py-3 text-sm ${className}`}>
-        <span className="font-semibold text-ok">📅 {t("calendar.sentTo", { email: sentTo })}</span>
+        <div className="font-semibold text-ok">📅 {t("calendar.sentTo", { email: sentTo })}</div>
+        {member && (
+          <div className="mt-1 text-muted">
+            {resent ? (
+              t("calendar.resent")
+            ) : (
+              <button
+                type="button"
+                className="underline disabled:opacity-60"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const r = await resendCalendarInviteAction(code);
+                    if (r.ok) setResent(true);
+                    else setError(t("common.somethingWrong"));
+                  })
+                }
+              >
+                {pending ? t("common.working") : t("calendar.resend")}
+              </button>
+            )}
+            {error && <span className="ml-2 font-semibold text-danger">{error}</span>}
+          </div>
+        )}
       </div>
     );
   }

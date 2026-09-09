@@ -15,7 +15,8 @@ import { normalizeEmail } from "@/lib/domain/players";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
-import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, welcomeEmail } from "@/lib/notify";
+import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { getPlayer } from "@/lib/domain/players";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -104,7 +105,9 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
     if (input.joinSelf !== false) {
       // Organizers play too. Skip silently if the match was logged after the fact.
       const { joinEvent } = await import("@/lib/domain/slots");
-      await joinEvent(db, { eventId: ev.id, playerId: me.id }).catch(() => undefined);
+      const joined = await joinEvent(db, { eventId: ev.id, playerId: me.id }).catch(() => null);
+      // The organizer's own calendar entry: the same invite every player gets, the moment the match exists.
+      if (joined?.outcome === "joined") after(() => sendCalendarInvite(db, ev, me));
     }
     code = ev.code;
     return { code: ev.code };
@@ -144,7 +147,11 @@ export async function duplicateEventAction(code: string): Promise<ActionResult<{
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
     const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
     const { joinEvent } = await import("@/lib/domain/slots");
-    await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => undefined);
+    const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
+    if (joined?.outcome === "joined") {
+      const organizer = viewer.player?.id === creatorId ? viewer.player : await getPlayer(db, creatorId);
+      if (organizer) after(() => sendCalendarInvite(db, ev, organizer));
+    }
     after(async () => {
       await emitMatchEvent(db, "match.created", ev.code, { playAgainOf: code });
     });

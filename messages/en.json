@@ -617,7 +617,9 @@
     "emailTitle": "Add to your calendar",
     "emailHelp": "Enter your email and we'll send a real calendar invite. It updates itself if the time changes or the match is cancelled, and you'll get match updates.",
     "send": "Send invite",
-    "sentTo": "Calendar invite sent to {email}. It updates automatically if anything changes."
+    "sentTo": "Calendar invite sent to {email}. It updates automatically if anything changes.",
+    "resend": "Not in your calendar? Send it again",
+    "resent": "Sent again. Open the email and tap Yes on the invitation."
   },
   "push": {
     "enable": "Remind me 1 hour before",
