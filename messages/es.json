@@ -617,7 +617,9 @@
     "emailTitle": "Añádelo a tu calendario",
     "emailHelp": "Escribe tu email y te enviamos una invitación de calendario de verdad. Se actualiza sola si cambia la hora o se cancela el partido, y recibirás las novedades.",
     "send": "Enviar invitación",
-    "sentTo": "Invitación de calendario enviada a {email}. Se actualiza automáticamente si algo cambia."
+    "sentTo": "Invitación de calendario enviada a {email}. Se actualiza automáticamente si algo cambia.",
+    "resend": "¿No está en tu calendario? Enviarla otra vez",
+    "resent": "Enviada otra vez. Abre el email y toca Sí en la invitación."
   },
   "push": {
     "enable": "Recordármelo 1 hora antes",

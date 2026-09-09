@@ -16,8 +16,9 @@ const env = {
   DATABASE_URL: "",
   POSTGRES_URL: "",
   APP_BASE_URL: BASE,
-  // Enables the email UIs; sends fail harmlessly (no real key).
+  // Enables the email UIs; every message is written to this file instead of being sent, so suites can read it.
   RESEND_API_KEY: process.env.RESEND_API_KEY || "re_dummy_local_only",
+  EMAIL_SINK_FILE: path.join(dataDir, "emails.jsonl"),
   SESSION_SECRET: process.env.SESSION_SECRET || "e2e-session-secret-not-for-production",
   CRON_SECRET: process.env.CRON_SECRET || "e2e-cron-secret",
   // A fake bot: the Bot API answers 401 (or is unreachable) and the code must stay quiet about it.

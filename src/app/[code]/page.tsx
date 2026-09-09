@@ -310,7 +310,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               <div className="text-sm text-muted">{t("event.pastNoScore")}</div>
             </div>
           )}
-          {me && (isMember || isWaitlisted) && !cancelled && !over && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} className="mt-4" />}
+          {me && (isMember || isWaitlisted) && !cancelled && !over && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} member={isMember} className="mt-4" />}
         </section>
 
         {creatorBanner && (

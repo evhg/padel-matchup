@@ -74,6 +74,33 @@ try {
   check("calendar.ics serves a VCALENDAR with court in title", ics.status === 200 && ics.body.includes("BEGIN:VCALENDAR") && ics.body.includes("Court 3"), String(ics.status));
   check("calendar.ics carries one short private link, no personal-link line", /URL:http:\/\/localhost:3001\/p\/[A-Za-z0-9]{12}\//.test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(/http:\/\/localhost:3001/g) || []).length === 2);
 
+  // ---- The invite really went out: the test server writes every email to a file instead of sending ----
+  const { readFileSync } = await import("node:fs");
+  const unfoldIcs = (t) => t.replace(/\r?\n[ \t]/g, "");
+  const mails = () => (process.env.EMAIL_SINK_FILE ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
+  const invitesFor = (c) => mails().filter((m) => m.to === "dana@example.com" && m.ics?.method === "REQUEST" && unfoldIcs(m.ics.content).includes(`/${c}`));
+  const waitUntil = async (fn, ms = 20000) => { const end = Date.now() + ms; for (;;) { const v = fn(); if (v || Date.now() > end) return v; await new Promise((r) => setTimeout(r, 400)); } };
+  const firstInvite = await waitUntil(() => invitesFor(code)[0]);
+  check("entering an email sent a real invite: METHOD:REQUEST, Dana as attendee, the private link", Boolean(firstInvite) && unfoldIcs(firstInvite.ics.content).includes("METHOD:REQUEST") && unfoldIcs(firstInvite.ics.content).includes("mailto:dana@example.com"), firstInvite ? firstInvite.subject : "no invite in the sink");
+  await a.getByRole("button", { name: /Send it again/ }).click();
+  await a.getByText(/Sent again/).waitFor({ timeout: 20000 });
+  check("'Send it again' sends the same invite once more", Boolean(await waitUntil(() => invitesFor(code).length >= 2)), String(invitesFor(code).length));
+
+  // ---- With an email on file, creating a match puts it in the organizer's calendar at once ----
+  await a.goto(BASE + "/new");
+  const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  const sp = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(soon);
+  const sg = (t) => sp.find((p) => p.type === t).value;
+  await a.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
+  await a.locator("input[type=time]").fill("11:30");
+  await a.getByPlaceholder("Court TBD · or type a club").fill("Club Padel Test");
+  await a.getByRole("button", { name: "Create & get the link" }).click();
+  await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const code2 = a.url().split("/").slice(-2)[0];
+  const organizerInvite = await waitUntil(() => invitesFor(code2)[0]);
+  check("organizer with an email on file gets the calendar invite the moment the match exists", Boolean(organizerInvite) && unfoldIcs(organizerInvite.ics.content).includes("DTSTART:"), organizerInvite ? organizerInvite.subject : `no invite for ${code2}`);
+  await a.goto(`${BASE}/${code}`);
+
   // ---- Reserve a spot for Jordi by tapping an open spot ----
   check("creator sees tappable open spots", (await a.getByText("Tap to reserve for someone").count()) === 3);
   await a.getByRole("button", { name: /Open spot/ }).first().click();
