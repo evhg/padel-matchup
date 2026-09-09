@@ -166,6 +166,8 @@ export const events = pgTable(
     levelsAppliedAt: timestamp("levels_applied_at", { withTimezone: true }),
     /** The group this match belongs to (created from a group, or the group was formed from it). */
     groupId: uuid("group_id").references((): AnyPgColumn => groups.id, { onDelete: "set null" }),
+    /** The club programme slot this match was created from (the club's weekly template), if any. */
+    clubSlotId: uuid("club_slot_id").references((): AnyPgColumn => clubSlots.id, { onDelete: "set null" }),
     /** Organizer opted in to the public venue board (/v/{venue_slug}). Off by default. */
     publicListing: boolean("public_listing").notNull().default(false),
     /** URL-safe key of venue_name, kept in sync on create/update. */
@@ -1259,3 +1261,39 @@ export const researchCache = pgTable("research_cache", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ResearchCacheRow = typeof researchCache.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Club programme: the week a club fills once; every slot becomes a public match players run themselves
+// ---------------------------------------------------------------------------
+
+export const clubSlots = pgTable(
+  "club_slots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clubSlug: text("club_slug")
+      .notNull()
+      .references(() => clubs.slug, { onDelete: "cascade" }),
+    /** 0 = Sunday … 6 = Saturday, "HH:MM" in the club's zone. */
+    dow: integer("dow").notNull(),
+    time: text("time").notNull(),
+    /** match | tournament */
+    type: text("type").notNull().default("match"),
+    /** americano | mexicano | king; null for a match. */
+    format: text("format"),
+    capacity: integer("capacity").notNull().default(4),
+    courts: integer("courts"),
+    levelMin: real("level_min"),
+    levelMax: real("level_max"),
+    /** "Ladies social", "Gold night"; shown as the match title. */
+    title: text("title"),
+    /** The match appears on the page this many days ahead. */
+    leadDays: integer("lead_days").notNull().default(6),
+    whenFull: text("when_full").notNull().default("waitlist"),
+    cost: text("cost"),
+    active: boolean("active").notNull().default(true),
+    lastCreatedFor: timestamp("last_created_for", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("club_slots_club_idx").on(t.clubSlug)],
+);
+export type ClubSlot = typeof clubSlots.$inferSelect;

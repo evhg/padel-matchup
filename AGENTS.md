@@ -67,3 +67,5 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 
 Coach growth: `/coaches` is the indexed front door (three languages, JSON-LD); `/coach` is the noindex book. Every coach-facing surface links to one of them with a source tag (`?s=coachpage|club|citylist|invite`), `setupCoachAction` counts `coach_src_<tag>`, and the Sunday digest prints the doors. The first ten listed coaches per city (`foundingRank`) carry a founding badge. Add a door, keep the tag.
 
+`src/lib/domain/clubWeek.ts`: the club programme. `club_slots` is the weekly template a club edits from its manage page (`ClubWeekEditor`); the hourly job's `autoCreateClubEvents` turns due slots into public matches on the club's board (`events.club_slot_id`, creator = the claimant), `clubWeek` groups the coming days for `/v/[slug]`, `clubDay` is the staff view with names and waiting counts. Rule 20: the club watches, it never approves or types.
+

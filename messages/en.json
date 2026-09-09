@@ -907,6 +907,7 @@
     "metaDescription": "The padel level scale explained: what 0 to 7 means, how results move it, what a confirmed level is, and how level ranges work on a match."
   },
   "club": {
+    "week": {"title": "This week", "help": "The club's programme. Tap a match to sign up or pull out; the club only watches.", "none": "—", "todayTitle": "Today at {club}", "todayEmpty": "Nothing today.", "nobodyYet": "Nobody yet", "waiting": "{count} waiting", "seePublic": "This week as players see it →", "editorTitle": "Your week", "editorHelp": "Add the socials, americanos and level nights that repeat every week. Each becomes a match on your page {days} days ahead; players sign up and pull out themselves. You only watch.", "players": "{count} players", "paused": "paused", "nextUp": "next: {code}", "pause": "Pause", "resume": "Resume", "remove": "Remove", "removeConfirm": "Remove this slot? Matches already on the page stay.", "weekday": "Weekday", "time": "Time", "capacity": "Players", "format": "Format", "levelLabel": "Level", "titleLabel": "Name (optional)", "titlePlaceholder": "Ladies social", "add": "Add to the week", "added": "Added. The first match appears on your page {days} days before it starts.", "kind": {"match": "Match", "americano": "Americano", "mexicano": "Mexicano", "king": "King of the Court"}},
     "title": "Clubs",
     "eyebrow": "Clubs",
     "sub": "A club page on Kicksmash: open matches, the club ranking, a poster for the courts, a booking button, and free courts when the club shares its calendar. Free for clubs, for good.",

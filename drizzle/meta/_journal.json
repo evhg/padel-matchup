@@ -218,6 +218,13 @@
       "when": 1788931561513,
       "tag": "0030_research_desk",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788941942431,
+      "tag": "0031_club_week",
+      "breakpoints": true
     }
   ]
 }
