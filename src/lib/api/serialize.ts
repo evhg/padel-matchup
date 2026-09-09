@@ -1,4 +1,5 @@
-import type { Coach, Event, Player } from "@/db/schema";
+import type { Coach, Event, Player, Series } from "@/db/schema";
+import type { SeriesPage } from "@/lib/domain/series";
 import { EVENT_DURATION_MS } from "@/lib/config";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import type { GroupDetail } from "@/lib/domain/groups";
@@ -203,5 +204,49 @@ export function clubToPublic(c: Club, base: string): PublicClub {
     boardUrl: `${base}/v/${c.slug}`,
     rankingUrl: `${base}/v/${c.slug}/ranking`,
     calendarUrl: `${base}/v/${c.slug}/calendar.ics`,
+  };
+}
+
+export type PublicSeries = {
+  slug: string;
+  name: string;
+  url: string;
+  organizer: string | null;
+  format: string;
+  rhythm: { every: string; weekday: number; time: string; nth: number | null; tz: string };
+  venue: { name: string; slug: string | null; mapUrl: string | null } | null;
+  level: { min: number | null; max: number | null; verifiedOnly: boolean };
+  capacity: number;
+  cost: string | null;
+  active: boolean;
+  next: { code: string; url: string; startsAt: string; spotsLeft?: number } | null;
+};
+export type PublicSeriesPage = PublicSeries & { editions: number; past: { code: string; url: string; startsAt: string; podium: { name: string; rank: number }[] }[] };
+
+/** A series as the API and MCP show it: the template, the rhythm, the next edition; never a payment note. */
+export function seriesToPublic(s: Series, next: Event | null, base: string, organizer: string | null = null): PublicSeries {
+  return {
+    slug: s.slug,
+    name: s.name,
+    url: `${base}/s/${s.slug}`,
+    organizer,
+    format: s.format,
+    rhythm: { every: s.every, weekday: s.dow, time: s.time, nth: s.nth, tz: s.tz },
+    venue: s.venueName ? { name: s.venueName, slug: s.venueSlug, mapUrl: s.venueMapUrl } : null,
+    level: { min: s.levelMin, max: s.levelMax, verifiedOnly: s.levelVerifiedOnly },
+    capacity: s.capacity,
+    cost: s.cost,
+    active: s.active,
+    next: next ? { code: next.code, url: `${base}/${next.code}`, startsAt: next.startsAt.toISOString() } : null,
+  };
+}
+
+export function seriesPageToPublic(page: SeriesPage, base: string): PublicSeriesPage {
+  const head = seriesToPublic(page.series, page.next?.event ?? null, base, page.organizerName || null);
+  return {
+    ...head,
+    next: page.next && head.next ? { ...head.next, spotsLeft: page.next.spotsLeft } : null,
+    editions: page.editions,
+    past: page.past.map((e) => ({ code: e.event.code, url: `${base}/${e.event.code}`, startsAt: e.event.startsAt.toISOString(), podium: e.podium.map((p) => ({ name: p.name, rank: p.rank })) })),
   };
 }

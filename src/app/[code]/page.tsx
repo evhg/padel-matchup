@@ -22,13 +22,14 @@ import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
+import { SeriesDoor } from "@/components/SeriesBits";
 import { QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { SlotActions } from "@/components/SlotActions";
 import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts } from "@/lib/dates";
+import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { getGroupById } from "@/lib/domain/groups";
@@ -40,6 +41,7 @@ import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/li
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
+import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
@@ -146,6 +148,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
 
   const group = ev.groupId ? await getGroupById(db, ev.groupId) : null;
+  // An Open that repeats: every edition names its series; a finished tournament offers its organizer the door once.
+  const seriesRow = ev.seriesId ? await seriesOfEvent(db, ev) : null;
+  const seriesNext = seriesRow ? await nextEdition(db, seriesRow.id, now) : null;
+  const canMakeSeries = viewer.isCreator && isTournament && Boolean(ev.standings) && !ev.seriesId && !cancelled;
   const levelChip = rangeChip(t, levelRange);
   const levelRangeText = ranged ? rangeText(t, levelRange) : "";
   const statusChip = cancelled
@@ -340,6 +346,14 @@ export default async function EventPage({ params, searchParams }: Props) {
             cardHref={detail.scores.length > 0 ? `/${code}/card` : undefined}
           />
         )}
+        {seriesRow && (
+          <p className="px-1 text-sm text-muted" data-testid="series-line">
+            <Link href={`/s/${seriesRow.slug}`} prefetch={false} className="link font-semibold">
+              ↻ {t("series.partOf", { name: seriesRow.name })}
+            </Link>
+            {seriesNext && seriesNext.id !== ev.id ? ` · ${t("series.partOfNext", { date: formatEventDayLong(seriesNext.startsAt, seriesNext.tz, locale) })}` : ""}
+          </p>
+        )}
         {isTournament && tstate && (
           <AmericanoPanel
             code={code}
@@ -366,6 +380,7 @@ export default async function EventPage({ params, searchParams }: Props) {
           />
         )}
         {viewer.isCreator && ev.scoreLockedByCreator && !cancelled && levelCandidates.length > 0 && <ConfirmLevels code={code} players={levelCandidates} />}
+        {canMakeSeries && <SeriesDoor code={code} suggestedName={ev.title ?? `${ev.venueName ?? "Padel"} ${weekdayName(ev.startsAt, ev.tz, locale)} Open`} suggestedCapacity={ev.capacity} />}
 
         {/* Players */}
         <section className="card">

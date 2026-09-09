@@ -11,10 +11,11 @@ import { ApiError } from "./http";
 import { createApiKey } from "./keys";
 import { openapiDocument } from "./openapi";
 import { createMatch, createMatchSchema, generateSchedule, joinMatch, joinMatchSchema, scheduleSchema, type OpContext } from "./operations";
-import { boardToPublic, clubToPublic, groupToPublic, matchToPublic } from "./serialize";
+import { boardToPublic, clubToPublic, groupToPublic, matchToPublic, seriesPageToPublic, seriesToPublic } from "./serialize";
 import { bookLessonApi, bookLessonSchema, cancelLessonApi, cancelLessonSchema, coachSlots, coachSlotsSchema, publicCoach, requestCoach, requestCoachSchema } from "./coachOps";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { listPublicCoaches } from "@/lib/domain/coaching";
+import { getSeries, listSeries, seriesPage } from "@/lib/domain/series";
 
 /**
  * A minimal, dependency-free MCP server over streamable HTTP (JSON responses,
@@ -38,6 +39,7 @@ const codeSchema = z.object({ code: z.string().min(4).max(6).describe("The code 
 const venueSchema = z.object({ venue: z.string().min(2).max(80).describe("Venue name or its slug, e.g. 'Padel Indoor BCN' or 'padel-indoor-bcn'.") });
 const clubsSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore"), name: z.string().max(80).optional().describe("One club by name; the slug is derived") });
 const coachesSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore; omit for every listed coach") });
+const seriesSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore; omit for every active series"), slug: z.string().max(60).optional().describe("One series by slug: its next edition and past podiums") });
 const keySchema = z.object({ name: z.string().min(1).max(80).describe("Who or what will use the key."), agent: z.string().max(80).optional().describe("Your name as an assistant, e.g. 'claude'."), email: z.email().optional() });
 
 type Tool = {
@@ -123,6 +125,26 @@ const TOOLS: Tool[] = [
       }
       const clubs = await listLiveClubs(db, city ?? null);
       return { clubs: clubs.map((c) => clubToPublic(c, base)), note: clubs.length ? undefined : `No club has claimed its page${city ? ` in ${city}` : ""} yet. The first ten per city become founding clubs: ${base}/clubs.` };
+    },
+  },
+  {
+    name: "find_series",
+    title: "Find series (Opens that repeat)",
+    description: "Tournament series: same weekday and time every week, fortnight or month, with the next edition to sign up for and the past podiums. Filter by city, or pass a slug for one series. Players sign up on the edition's match page.",
+    schema: seriesSchema,
+    readOnly: true,
+    run: async (db, args) => {
+      const { city, slug } = seriesSchema.parse(args);
+      if (slug) {
+        const s = await getSeries(db, slug.toLowerCase());
+        if (!s) throw new ApiError(404, "not_found", `No series "${slug}".`, "List them with find_series without a slug.");
+        return { series: seriesPageToPublic(await seriesPage(db, s), baseUrl()), note: "Sign up through join_match with the next edition's code." };
+      }
+      const c = city ? cityBySlug(city.toLowerCase()) : null;
+      if (city && !c) return { series: [], note: `Unknown city "${city}". Known: ${CITIES.map((x) => x.slug).join(", ")}.` };
+      const rows = await listSeries(db, c);
+      const series = rows.map((r) => seriesToPublic(r.series, r.next, baseUrl()));
+      return { series, note: series.length ? "Each series names its next edition; join_match with that code signs the player up." : `No series${c ? ` in ${c.name}` : ""} yet. The organizer of a finished tournament makes one from its page.` };
     },
   },
   {
