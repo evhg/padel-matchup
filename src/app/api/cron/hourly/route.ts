@@ -17,6 +17,8 @@ import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { completePastLessons } from "@/lib/domain/coaching";
 import { syncAllCoachCalendars } from "@/lib/coach/sync";
 import { monthlyWraps } from "@/lib/coach/wrap";
+import { autoCreateSeriesEditions } from "@/lib/domain/series";
+import { pingIndexNow } from "@/lib/indexnow";
 import { deliverWrap } from "@/lib/coach/wrapSend";
 import { translatorFor } from "@/lib/email/templates";
 import { APP_NAME, baseUrl } from "@/lib/config";
@@ -56,7 +58,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, serviceAlerts: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -79,6 +81,15 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(`lessons: ${String(e)}`);
+  }
+
+  try {
+    // An Open that repeats: the next edition of every active series, a few days ahead, once; its page is re-pinged.
+    const editions = await autoCreateSeriesEditions(db, now);
+    summary.seriesEditions = editions.length;
+    if (editions.length) await pingIndexNow([...new Set(editions.map((e) => `${baseUrl()}/s/${e.series.slug}`))], { db }).catch(() => undefined);
+  } catch (e) {
+    summary.errors.push(`series: ${String(e)}`);
   }
 
   try {

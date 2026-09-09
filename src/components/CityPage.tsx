@@ -9,6 +9,8 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import type { City } from "@/lib/domain/cities";
 import { getRanking } from "@/lib/domain/ranking";
 import { getCityBoard } from "@/lib/domain/venueBoard";
+import { listSeries } from "@/lib/domain/series";
+import { rhythmLabel } from "@/lib/seriesText";
 import { ClubRow } from "@/components/ClubBits";
 import { CLUB_LIMITS, listLiveClubs } from "@/lib/domain/clubs";
 import { rangeChip } from "@/lib/levelText";
@@ -17,7 +19,7 @@ import { getSessionPlayer } from "@/lib/session";
 /** /phuket, /singapore: open matches across the city's clubs, the city ranking, and the pitch in four lines. */
 export async function CityPage({ city }: { city: City }) {
   const db = await getDb();
-  const [t, locale, me, board, ranking, clubs] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listLiveClubs(db, city.slug)]);
+  const [t, locale, me, board, ranking, clubs, opens] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listLiveClubs(db, city.slug), listSeries(db, city)]);
   const liveSlugs = new Set(clubs.map((c) => c.slug));
   const otherClubs = board.clubs.filter((c) => !liveSlugs.has(c.slug));
   const foundingLeft = Math.max(0, CLUB_LIMITS.foundingPerCity - clubs.filter((c) => c.founding).length);
@@ -64,6 +66,30 @@ export async function CityPage({ city }: { city: City }) {
             </ul>
           )}
         </section>
+
+        {opens.length > 0 && (
+          <section className="card" data-testid="city-opens">
+            <h2 className="text-lg font-extrabold">{t("series.cityTitle", { city: city.name })}</h2>
+            <p className="mt-1 text-sm text-muted">{t("series.citySub")}</p>
+            <ul className="mt-3 flex flex-col gap-2">
+              {opens.map(({ series: s, next }) => (
+                <li key={s.id}>
+                  <Link href={`/s/${s.slug}`} prefetch={false} className="flex items-center gap-4 rounded-2xl border border-line px-4 py-3 hover:border-ink/30">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-bold">{s.name}</div>
+                      <div className="truncate text-sm text-muted">
+                        {rhythmLabel(t, locale, s)}
+                        {s.venueName ? ` · ${s.venueName}` : ""}
+                      </div>
+                      {next && <div className="mt-1 text-sm font-bold text-ok">{t("series.partOfNext", { date: formatEventDay(next.startsAt, next.tz, locale) })}</div>}
+                    </div>
+                    <span className="shrink-0 text-muted">→</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="card">
           <div className="flex items-center justify-between gap-2">

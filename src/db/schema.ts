@@ -172,6 +172,8 @@ export const events = pgTable(
     groupId: uuid("group_id").references((): AnyPgColumn => groups.id, { onDelete: "set null" }),
     /** The club programme slot this match was created from (the club's weekly template), if any. */
     clubSlotId: uuid("club_slot_id").references((): AnyPgColumn => clubSlots.id, { onDelete: "set null" }),
+    /** The series (an Open that repeats) this tournament is an edition of, if any. */
+    seriesId: uuid("series_id").references((): AnyPgColumn => series.id, { onDelete: "set null" }),
     /** Organizer opted in to the public venue board (/v/{venue_slug}). Off by default. */
     publicListing: boolean("public_listing").notNull().default(false),
     /** URL-safe key of venue_name, kept in sync on create/update. */
@@ -194,6 +196,7 @@ export const events = pgTable(
     index("events_starts_at_idx").on(t.startsAt),
     index("events_group_idx").on(t.groupId),
     index("events_venue_slug_idx").on(t.venueSlug, t.startsAt),
+    index("events_series_idx").on(t.seriesId, t.startsAt),
   ],
 );
 
@@ -1309,6 +1312,58 @@ export const clubSlots = pgTable(
   (t) => [index("club_slots_club_idx").on(t.clubSlug)],
 );
 export type ClubSlot = typeof clubSlots.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Series: an Open that repeats. The organizer sets the rhythm once; every edition makes itself, lists itself and closes itself (rule 22)
+// ---------------------------------------------------------------------------
+
+export const seriesRhythms = ["week", "fortnight", "month"] as const;
+export type SeriesRhythm = (typeof seriesRhythms)[number];
+
+export const series = pgTable(
+  "series",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Public page: /s/{slug}. */
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    organizerPlayerId: uuid("organizer_player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "restrict" }),
+    tz: text("tz").notNull(),
+    venueName: text("venue_name"),
+    venueMapUrl: text("venue_map_url"),
+    venueSlug: text("venue_slug"),
+    /** The template every edition is made from: the tournament it started as. */
+    format: text("format").$type<TournamentFormat>().notNull().default("americano"),
+    capacity: integer("capacity").notNull(),
+    courts: integer("courts"),
+    pointsPerMatch: integer("points_per_match"),
+    courtNames: jsonb("court_names").$type<string[]>(),
+    levelMin: real("level_min"),
+    levelMax: real("level_max"),
+    levelVerifiedOnly: boolean("level_verified_only").notNull().default(false),
+    whenFull: text("when_full").notNull().default("waitlist"),
+    cost: text("cost"),
+    bookingUrl: text("booking_url"),
+    /** The rhythm: weekday (0 = Sunday) and "HH:MM" in tz; every week, fortnight or month. */
+    dow: integer("dow").notNull(),
+    time: text("time").notNull(),
+    every: text("every").$type<SeriesRhythm>().notNull().default("week"),
+    /** For a monthly series: which weekday of the month (1–4, 5 = the last). */
+    nth: integer("nth"),
+    /** The first edition: fixes a fortnight's parity. */
+    anchorAt: timestamp("anchor_at", { withTimezone: true }).notNull(),
+    /** The next edition appears this many days ahead. */
+    leadDays: integer("lead_days").notNull().default(6),
+    active: boolean("active").notNull().default(true),
+    lastCreatedFor: timestamp("last_created_for", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("series_slug_idx").on(t.slug), index("series_organizer_idx").on(t.organizerPlayerId), index("series_venue_idx").on(t.venueSlug)],
+);
+export type Series = typeof series.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Level checks: a player asks a coach or a club to confirm their level; one tap confirms it

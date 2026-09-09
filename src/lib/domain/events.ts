@@ -42,7 +42,7 @@ export type CreateEventInput = {
   payNote?: string | null;
 };
 
-function cleanText(v: string | null | undefined, max: number): string | null {
+export function cleanText(v: string | null | undefined, max: number): string | null {
   const s = (v ?? "").replace(/\s+/g, " ").trim();
   return s ? s.slice(0, max) : null;
 }

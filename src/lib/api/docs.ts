@@ -27,6 +27,7 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 - GET ${base}/api/v1/clubs?city=phuket and ${base}/api/v1/clubs/{slug}: club pages clubs manage themselves (booking link and platform, courts, today's free courts when the club shares its calendar, founding status).
 - GET ${base}/u/{slug}/passport.json: a player's signed level (Ed25519 over canonical JSON, key at ${base}/.well-known/kicksmash-passport.json; verifyPassport in @erikv69/levels checks it). Public profiles at /u/{slug} are opt-in and off by default; never guess a slug. Signed-in players export everything at /api/me/export.
 - GET ${base}/api/v1/groups/{code}: a group with members and upcoming matches.
+- GET ${base}/api/v1/series?city=phuket and ${base}/api/v1/series/{slug}: Opens that repeat (a tournament series: same weekday and time every week, fortnight or month), each with the next edition to sign up for and the past podiums. Pages at /s/{slug}.
 - GET ${base}/api/v1/coaches?city=phuket, ${base}/api/v1/coaches/{handle} and /slots: listed coaches, their rules and free starts. POST /requests (become a student, by name or token), POST /lessons (book, accepted students) and DELETE /lessons/{id} (cancel; the outcome says refunded, free_pass or counted). MCP tools: find_coaches, coach_slots, request_coach, book_lesson, cancel_lesson.
 - GET ${base}/api/v1/schedule?players=8&courts=2: an exact americano rotation.
 - POST ${base}/api/v1/matches: create a match (rate-limited per address without a key).
