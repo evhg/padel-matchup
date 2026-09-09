@@ -6,6 +6,7 @@ import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
 import { searchConsoleEnabled } from "@/lib/search/console";
 import { anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
+import { pacedTarget } from "@/lib/research/budget";
 
 /**
  * The service board: every service the stack leans on, what we use of it this month,
@@ -156,7 +157,20 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
     note: reportedUsd !== null ? "Billed figure from the organisation's cost report, refreshed hourly." : `Estimated from our own token counters at ${listenModel()} list prices${anthropicAdminKey() ? "; the cost report could not be read" : "; add ANTHROPIC_ADMIN_KEY for the billed figure"}.`,
   });
   const tavilyOn = Boolean(process.env.TAVILY_API_KEY);
-  push({ key: "tavily", name: "Tavily", role: "web search for the desk", used: tavilyOn ? (month.tavily_calls ?? 0) : null, limit: CEILINGS.tavilyCredits, usage: tavilyOn ? `${fmt(month.tavily_calls ?? 0)} credits this month` : "off", ceiling: `${fmt(CEILINGS.tavilyCredits)} credits / month`, note: tavilyOn && !(month.tavily_calls ?? 0) ? "Key stored; the app has not needed it yet." : "Free Researcher plan.", state: tavilyOn ? undefined : "off" });
+  const tavilyMeter = await latest(db, "tavily_plan_used");
+  const tavilyLimit = (await latest(db, "tavily_plan_limit"))?.value || CEILINGS.tavilyCredits;
+  const tavilyUsed = tavilyMeter ? tavilyMeter.value : (month.tavily_calls ?? 0);
+  push({
+    key: "tavily",
+    name: "Tavily",
+    role: "the research desk: listening searches, club and coach discovery, answer grounding",
+    used: tavilyOn ? tavilyUsed : null,
+    limit: tavilyLimit,
+    usage: tavilyOn ? `${fmt(tavilyUsed)} of ${fmt(tavilyLimit)} credits · even pace says ${fmt(pacedTarget(now, tavilyLimit))} by now` : "off",
+    ceiling: `${fmt(tavilyLimit)} credits / month, spent evenly, the last five never`,
+    note: !tavilyOn ? "Free Researcher plan." : tavilyUsed ? (tavilyMeter ? "Tavily's own meter, read hourly." : "Our counter; Tavily's meter has not answered yet.") : "Key stored; the desk starts spending on the next hourly run.",
+    state: tavilyOn ? undefined : "off",
+  });
   push({ key: "google", name: "Google Search Console", role: "impressions per language, sitemap", used: null, limit: null, usage: searchConsoleEnabled() ? "configured, read weekly" : "off", ceiling: "quota far above our use", note: "Service account; APIs enabled by it.", state: searchConsoleEnabled() ? "ok" : "off" });
   push({ key: "indexnow", name: "IndexNow", role: "Bing, Yandex, Seznam, Naver", used: null, limit: null, usage: `${fmt(month.indexnow_daily ?? 0)} submissions this month`, ceiling: "no practical ceiling", note: "Key file at the domain root.", state: "ok" });
 

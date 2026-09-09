@@ -41,6 +41,10 @@ Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 10
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. Discord: 50 requests a second. GitHub Actions: free on a public repository.
 
+## The research desk (Tavily)
+
+The free plan gives a thousand search credits a month. The hourly job spends them evenly: each run may spend up to twelve credits, only as far as the even pace allows, never the last five. Thirty listening queries in English, Russian and Spanish look for fresh threads (one credit each, daily, later when they yield nothing); thirty-three find queries map clubs, coaches, tournaments and communities in ten cities (every ten days); new clubs and coaches get their public contacts read once (ten pages for two credits). Hand searches for answer pages go through `POST /api/admin/research {"q": ...}` and are cached a week; `GET /api/admin/research` shows the meter, the pace, every query's yield and the finds. The board row "Tavily" reads Tavily's own meter. If credits run out early, lower `everyHours` in `src/lib/research/queries.ts`; if they are left over, raise `PLAN.reserve` down.
+
 ## Cron jobs
 
 - `kicksmash-sync` (Supabase pg_cron, every 10 min) → `/api/cron/sync`: the coaches' calendars, both ways. Waitlist offers, lapses and lesson reminders ride the 5-minute push job.
