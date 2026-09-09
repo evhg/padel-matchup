@@ -1011,6 +1011,8 @@
     "export": "Descargar mis datos",
     "exportHelp": "Todo lo que Kicksmash guarda sobre ti, en un archivo.",
     "memberSince": "En Kicksmash desde {date}",
+    "overTime": "Nivel en el tiempo",
+    "overTimeHelp": "{count, plural, =0 {sin resultados aún} one {# resultado lo movió} other {# resultados lo movieron}} · ✓ confirmado",
     "playsAt": "Juega en",
     "noLevel": "Sin nivel todavía",
     "verifiedBy": "Confirmado",

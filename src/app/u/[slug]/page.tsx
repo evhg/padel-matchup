@@ -6,6 +6,8 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { bandOf, formatLevel, isLevelVerified } from "@/lib/domain/levels";
+import { levelSeries } from "@/lib/domain/levelSeries";
+import { LevelLine } from "@/components/LevelLine";
 import { getPublicPlayer, profileStats } from "@/lib/domain/profile";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,8 @@ export default async function PublicProfilePage({ params }: Props) {
   if (!p) notFound();
   const [t, locale, stats] = await Promise.all([getTranslations(), getLocale(), profileStats(db, p)]);
   const verified = isLevelVerified(p);
+  // The level as a line: every result that moved it, the confirmation, today. Two points or nothing.
+  const series = levelSeries(p);
   const since = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(stats.since);
   const rows = [
     { label: t("level.stats.played"), value: String(stats.played) },
@@ -51,6 +55,7 @@ export default async function PublicProfilePage({ params }: Props) {
               {p.level != null && <span className="block text-xs">{verified ? `✓ ${t("passport.verifiedBy")}` : p.levelSource === "adjusted" ? t("passport.adjusted") : t("passport.selfDeclared")}</span>}
             </div>
           </div>
+          {series && <LevelLine series={series} caption={t("passport.overTimeHelp", { count: series.results })} ariaLabel={t("passport.overTime")} />}
           <p className="mt-3 text-xs text-faint">{t("passport.memberSince", { date: since })}</p>
         </section>
 
