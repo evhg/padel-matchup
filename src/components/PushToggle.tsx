@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { subscribePushAction, unsubscribePushAction } from "@/actions/push";
 
-type Status = "hidden" | "ios-needs-homescreen" | "denied" | "off" | "on" | "working";
+type Status = "hidden" | "denied" | "off" | "on" | "working";
 
 function keyBytes(b64url: string): Uint8Array {
   const pad = "=".repeat((4 - (b64url.length % 4)) % 4);
@@ -21,7 +21,9 @@ async function registration(): Promise<ServiceWorkerRegistration> {
 
 /**
  * "Remind me 1 hour before": Web Push for all of this player's matches.
- * iPhone supports it only from a home-screen app, so the hint says so there.
+ * Where the browser cannot do it (Safari on iPhone outside a home-screen app)
+ * nothing is shown: the calendar invite above already carries the reminder,
+ * and we never send anyone on a detour.
  */
 export function PushToggle({ vapidPublicKey, subscribed, compact = false }: { vapidPublicKey: string | null; subscribed: boolean; compact?: boolean }) {
   const t = useTranslations();
@@ -30,12 +32,9 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false }: { va
 
   useEffect(() => {
     if (!vapidPublicKey) return;
-    const ua = navigator.userAgent;
-    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
     const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
     if (!supported) {
-      setStatus(isIOS && !standalone ? "ios-needs-homescreen" : "hidden");
+      setStatus("hidden");
       return;
     }
     if (Notification.permission === "denied") {
@@ -96,7 +95,6 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false }: { va
   };
 
   if (status === "hidden") return null;
-  if (status === "ios-needs-homescreen") return <p className={`text-sm text-muted ${compact ? "" : "rounded-2xl bg-bg px-4 py-3"}`}>🔔 {t("push.iosHint")}</p>;
   if (status === "denied") return <p className="text-sm text-muted">🔕 {t("push.denied")}</p>;
   if (status === "on") {
     return (

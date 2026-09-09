@@ -146,7 +146,7 @@ try {
   await page.goto(`${BASE}/coach`);
   await page.locator("#coach-clubs").waitFor({ timeout: 20000 });
   await page.locator("#coach-clubs").fill("DPC");
-  await page.getByRole("button", { name: "Create my book" }).click();
+  await page.getByRole("button", { name: "Set up my assistant" }).click();
   await page.waitForURL(/\/coach\?welcome=1$/, { timeout: 30000 });
   const olyaPrivate = { id: 515151, type: "private" };
   const say = (id, text) => hook({ update_id: 200 + id, message: { message_id: 200 + id, date: 0, chat: olyaPrivate, from: olya, text } });

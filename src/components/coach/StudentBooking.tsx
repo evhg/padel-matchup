@@ -32,10 +32,14 @@ type Props = {
   offers?: OfferDTO[];
   requests?: RequestDTO[];
   minLocal?: string;
+  /** The coach's invite code when the page was opened through their link: a name puts the student on the list at once. */
+  invite?: string | null;
+  /** This visit put a signed-in player on the list: one line says so. */
+  justJoined?: boolean;
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, whatsappUrl, waits = [], offers = [], requests = [], minLocal }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -57,7 +61,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
     e.preventDefault();
     setError(null);
     start(async () => {
-      const r = await requestCoachAction(handle, signedIn ? null : name);
+      const r = await requestCoachAction(handle, signedIn ? null : name, invite);
       if (!r.ok) {
         setError(errorText(r.error));
         return;
@@ -148,18 +152,19 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
     <div className="flex flex-col gap-4">
       <section className="card">
         {status === "none" && (
-          <form onSubmit={request} className="flex flex-col gap-3">
+          <form onSubmit={request} className="flex flex-col gap-3" data-testid={invite ? "invited-join" : "ask-to-join"}>
             {!signedIn && (
               <>
-                <h2 className="text-xl font-extrabold tracking-tight">{t("page.nameFirst")}</h2>
+                <h2 className="text-xl font-extrabold tracking-tight">{invite ? t("page.invited", { name: coachName }) : t("page.nameFirst")}</h2>
                 <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={tRoot("identity.namePlaceholder")} maxLength={40} autoComplete="given-name" autoFocus />
               </>
             )}
             <button type="submit" className="btn-primary w-full" disabled={pending || (!signedIn && !name.trim())}>
-              {pending ? "…" : t("page.request")}
+              {pending ? "…" : invite ? t("page.invitedIn") : t("page.request")}
             </button>
           </form>
         )}
+        {status === "accepted" && justJoined && <p className="mb-3 text-sm font-semibold text-ok">✓ {t("page.invitedSignedIn", { name: coachName })}</p>}
         {status === "requested" && <p className="text-sm font-semibold">⏳ {t("page.requested", { name: coachName })}</p>}
         {status === "paused" && <p className="text-sm font-semibold">{t("page.paused", { name: coachName })}</p>}
         {status === "accepted" && offers.length > 0 && (

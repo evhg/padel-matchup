@@ -12,6 +12,7 @@ import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { MyLessons } from "@/components/coach/MyLessons";
+import { CoachCard } from "@/components/coach/CoachCard";
 import { MomentsStrip } from "@/components/MomentsStrip";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
@@ -72,6 +73,7 @@ export default async function MePage({ searchParams }: Props) {
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
         {note === "linked" && <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">✓ {t("telegram.justLinked")}</p>}
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
+        <CoachCard db={db} playerId={me.id} />
         <MyMatches player={me} personalToken={token} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />

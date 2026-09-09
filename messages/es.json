@@ -17,6 +17,7 @@
     "organizer": "organizador",
     "language": "Idioma",
     "myMatches": "Mis partidos",
+    "assistant": "Asistente",
     "newMatch": "Nuevo partido",
     "home": "Inicio",
     "working": "Un momento…",
@@ -627,7 +628,6 @@
     "enableHelp": "Una notificación una hora antes de cada partido. Llegar tarde es imperdonable, recuerda.",
     "on": "Recordatorios activados · 1 hora antes de cada partido",
     "off": "Desactivar",
-    "iosHint": "iPhone: añade primero Kicksmash a tu pantalla de inicio y luego activa aquí los recordatorios.",
     "denied": "Las notificaciones están bloqueadas para este sitio en los ajustes del navegador.",
     "reminderTitle": "🎾 Pádel en 1 hora · {time}",
     "reminderBody": "{venue}. ¡No llegues tarde!",
@@ -1055,6 +1055,7 @@
   },
   "feedback": {
     "title": "Cuéntanos qué debería cambiar",
+    "lineHelp": "Una idea o un fallo. Respuesta en un día.",
     "sub": "Una idea, un error, un deseo. Leo cada nota yo mismo y respondo en un día. Si cambia Kicksmash, lo sabrás primero, con lo que cambió.",
     "placeholder": "¿Qué debería ser distinto?",
     "contactLabel": "Email, para poder responderte (opcional)",
@@ -1070,7 +1071,7 @@
     "tryAgain": "Escribirlo de otra forma"
   },
   "coach": {
-    "invite": {"title": "¿Conoces a otro entrenador? Envíale esto", "text": "Llevo mi agenda de clases en Kicksmash: los alumnos reservan solos las horas libres, los bonos se cuentan solos, mi calendario sigue siendo mío. Gratis, cuatro toques: {url}"},
+    "invite": {"title": "¿Conoces a otro entrenador? Envíale esto", "text": "Llevo mis clases con un asistente en Kicksmash: los alumnos reservan horas disponibles ellos mismos, los bonos se cuentan solos, mi calendario sigue siendo mío. Gratis, un minuto: {url}"},
     "eyebrow": "Entrenador",
     "how": "Cómo funciona",
     "minutes": "{n} min",
@@ -1081,8 +1082,8 @@
     "packageLineNoExpiry": "quedan {left} de {size}",
     "noPackage": "sin bono",
     "setup": {
-      "title": "Tu agenda de clases",
-      "sub": "Los alumnos reservan solos, los bonos se cuentan solos y tú tienes un enlace. Menos de un minuto.",
+      "title": "Tu asistente",
+      "sub": "Los alumnos reservan horas disponibles ellos mismos, los bonos se cuentan solos, cada cambio ocurre mientras entrenas. Un minuto.",
       "nameTitle": "Primero, tu nombre como te conocen tus alumnos",
       "club": "¿Dónde entrenas?",
       "clubHelp": "Un club o varios, separados por comas. Los alumnos lo ven en tu página.",
@@ -1093,16 +1094,16 @@
       "afternoons": "Tardes 15–20",
       "both": "Ambas",
       "custom": "Ajustar después",
-      "create": "Crear mi agenda",
-      "how": "Tendrás una página en kicksma.sh/c/tu-nombre. El alumno pide unirse una vez; tras tu sí, reserva solo las horas libres. Tú puedes reservar a cualquiera, a cualquier hora, desde tu agenda. Google Calendar y tu hoja de bonos se pueden conectar después; nada tiene que moverse."
+      "create": "Configurar mi asistente",
+      "how": "Tienes una página en kicksma.sh/c/tu-nombre. Quien abre tu enlace ya está en tu lista; reserva horas disponibles por su cuenta y tú puedes reservar a cualquiera, cuando sea. Tu Google Calendar y tu hoja de bonos se conectan en ajustes; nada tiene que moverse."
     },
     "done": {
-      "title": "Tu agenda está lista",
+      "title": "Tu asistente está listo",
       "link": "Tu enlace, para alumnos y para la bio de Instagram",
-      "forward": "Reenvía esto a tus alumnos",
-      "forwardText": "¡Hola! Ahora reservo las clases aquí: {url}. Pide unirte una vez y luego toca cualquier hora libre. Tus clases y tu bono siempre están visibles ahí.",
+      "forward": "Envía esto a tus alumnos",
+      "forwardText": "¡Hola! Soy el asistente de {coach}. Tus clases con {coach} ahora viven aquí: {url}\nÁbrelo una vez y ya estás en la lista. Después, reserva o mueve una clase con un toque, cuando quieras; tu bono y lo que te queda están siempre ahí.",
       "qr": "QR para la valla de la pista",
-      "open": "Abrir mi agenda"
+      "open": "Abrir mi asistente"
     },
     "home": {
       "title": "Hoy",
@@ -1202,7 +1203,7 @@
       "how": "Estas son las reglas que ven tus alumnos y que aplica el asistente. Cámbialas cuando quieras; las clases ya reservadas mantienen las reglas con las que se reservaron."
     },
     "page": {
-      "ownBook": "¿Entrenas? Tu propia agenda en un minuto →",
+      "ownBook": "¿Entrenas? Tu propio asistente en un minuto →",
       "founding": "Entrenador fundador · {city}",
       "coach": "Entrenador de pádel",
       "at": "en {clubs}",
@@ -1210,6 +1211,9 @@
       "book": "Reservar una clase",
       "nameFirst": "Tu nombre, y podrás pedir reservar",
       "request": "Pedir ser alumno",
+      "invited": "{name} te ha añadido. Tu nombre, y ya puedes reservar.",
+      "invitedIn": "Ya estoy",
+      "invitedSignedIn": "{name} te ha añadido. Elige una hora abajo.",
       "requested": "Pedido. {name} confirmará y las horas libres aparecerán aquí después.",
       "paused": "Tus reservas están en pausa. Escribe a {name}.",
       "pickDay": "Elige un día",
@@ -1251,8 +1255,11 @@
       "title": "Tus clases",
       "with": "con {name}",
       "book": "Reservar más",
-      "coachLine": "¿Entrenas? Crea tu agenda",
-      "requested": "pedido enviado; esperando el sí"
+      "coachLine": "¿Entrenas? Configura tu asistente",
+      "requested": "pedido enviado; esperando el sí",
+      "assistant": "Tu asistente",
+      "assistantToday": "{count, plural, =0 {Nada reservado hoy} one {# clase hoy} other {# clases hoy}}",
+      "assistantOpen": "Abrir"
     },
     "errors": {
       "slot_taken": "Esa hora se acaba de ocupar. Elige otra.",
@@ -1362,14 +1369,14 @@
   },
   "coachFront": {
     "metaTitle": "¿Entrenas pádel? Tus alumnos reservan solos",
-    "metaDescription": "Una agenda de clases gratis para entrenadores de pádel: un enlace, los alumnos reservan solos las horas libres, los bonos se cuentan solos, tu Google Calendar y tu hoja siguen siendo tuyos. Lista en cuatro toques.",
+    "metaDescription": "Un asistente gratis para entrenadores de pádel: un enlace, los alumnos reservan las horas disponibles ellos mismos, los bonos se cuentan solos, cada cambio de hora ocurre mientras entrenas. Tu Google Calendar sigue siendo tuyo. Listo en un minuto.",
     "eyebrow": "Para entrenadores",
     "title": "Tus alumnos reservan solos. Tu calendario sigue siendo tuyo.",
-    "lead": "Un enlace para tus alumnos. Piden entrar una vez; tras tu sí reservan horas libres, cancelan según tus reglas y ven su bono. Tú recibes una línea por reserva y no contestas nada mientras das clase.",
-    "cta": "Crear mi agenda",
-    "ctaHelp": "Cuatro toques, menos de un minuto. Gratis, sin comisión, sin app.",
-    "t1Title": "Respuestas mientras das clase",
-    "t1": "«¿El viernes a las tres está libre?» se responde al momento, dentro de tus reglas. Tú solo ves decisiones: un alumno nuevo, una hora fuera de tu horario.",
+    "lead": "Un enlace para tus alumnos. Entran una vez; desde entonces reservan horas disponibles, cancelan según tus reglas y ven su bono. Cada cambio de hora ocurre mientras entrenas: miras tu calendario y ya está al día. Nadie a quien responder.",
+    "cta": "Configurar mi asistente",
+    "ctaHelp": "Un minuto. Gratis, sin comisión, sin app.",
+    "t1Title": "Se acaban las preguntas",
+    "t1": "«¿El viernes a las tres está libre?» «¿Cuántas clases me quedan?» «¿Podemos mover la de mañana a las cinco?» El asistente responde a todo, dentro de tus reglas, mientras estás en pista. Solo te enteras de dos cosas, un alumno nuevo y una hora fuera de tu horario, y las dos son un toque.",
     "t2Title": "Los bonos se cuentan solos",
     "t2": "«Quedan 6 de 10, 23 días» bajo cada clase. Los avisos de caducidad salen solos. Pagado es un toque para ti.",
     "t3Title": "Nada se mueve",

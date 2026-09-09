@@ -16,11 +16,32 @@ export type StudentOption = { id: string; name: string };
 
 export type RequestDTO = { id: string; name: string; label: string; note: string | null };
 export type MonthDTO = { label: string; done: number; noShows: number };
-type Props = { handle: string; url: string; today: string; welcome: boolean; students: StudentOption[]; lessons: LessonDTO[]; slots: SlotDTO[]; dayLabels: Record<string, string>; days: string[]; requests?: RequestDTO[]; waiting?: number; month?: MonthDTO | null; levelChecks?: LevelCheckDTO[] };
+type Props = {
+  handle: string;
+  /** How students know the coach; the forwarded text speaks as their assistant. */
+  coachName: string;
+  url: string;
+  /** The link the coach forwards: their page with the invite code, so a student lands on the list. */
+  studentUrl: string;
+  today: string;
+  welcome: boolean;
+  students: StudentOption[];
+  lessons: LessonDTO[];
+  slots: SlotDTO[];
+  dayLabels: Record<string, string>;
+  days: string[];
+  requests?: RequestDTO[];
+  waiting?: number;
+  month?: MonthDTO | null;
+  levelChecks?: LevelCheckDTO[];
+  /** The assistant has proved itself (a few students, a few lessons): only then is the coach asked to pass it on. */
+  earned?: boolean;
+};
 
 /** The coach's book: today, the next days, one button to book. Everything else behind "More". */
-export function CoachHome({ handle, url, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [] }: Props) {
+export function CoachHome({ handle, coachName, url, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false }: Props) {
   const t = useTranslations("coach");
+  const tRoot = useTranslations();
   // The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in.
   const inviteUrl = `${url.replace(/\/c\/[^/]+$/, "")}/coaches?s=invite`;
   const router = useRouter();
@@ -88,21 +109,13 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
   return (
     <div className="flex flex-col gap-4">
       {welcome && (
-        <section className="card animate-pop">
+        <section className="card animate-pop" data-testid="coach-welcome">
           <h1 className="text-2xl font-extrabold tracking-tight">🎾 {t("done.title")}</h1>
           <p className="mt-3 text-sm font-bold">{t("done.link")}</p>
           <p className="mt-1 break-all font-mono text-sm">{url}</p>
           <p className="mt-4 text-sm font-bold">{t("done.forward")}</p>
           <div className="mt-2">
-            <ShareButtons url={url} text={t("done.forwardText", { url })} size="sm" />
-          </div>
-          <p className="mt-4 text-sm font-bold">{t("invite.title")}</p>
-          <div className="mt-2">
-            <ShareButtons url={inviteUrl} text={t("invite.text", { url: inviteUrl })} size="sm" />
-          </div>
-          <p className="mt-4 text-sm font-bold">{t("done.qr")}</p>
-          <div className="mt-2 inline-block rounded-xl border border-line bg-white p-2">
-            <QRCodeSVG value={url} size={160} level="M" bgColor="#ffffff" fgColor="#14161a" marginSize={1} />
+            <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
           </div>
           <div className="mt-4">
             <Link href="/coach" prefetch={false} className="btn-secondary" onClick={() => router.replace("/coach")}>
@@ -199,19 +212,40 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
                 {t("home.settings")}
               </Link>
             </li>
+            <li>
+              <Link href="/me" prefetch={false} className="font-bold underline underline-offset-4">
+                {tRoot("common.myMatches")}
+              </Link>
+            </li>
             <li className="text-muted">
               {t("home.link")}: <span className="font-mono">{url}</span> · <span className="font-mono">/c/{handle}</span>
+            </li>
+            <li>
+              <div className="text-sm font-bold">{t("done.forward")}</div>
+              <div className="mt-1">
+                <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
+              </div>
+            </li>
+            <li>
+              <details>
+                <summary className="cursor-pointer font-bold">{t("done.qr")}</summary>
+                <div className="mt-2 inline-block rounded-xl border border-line bg-white p-2">
+                  <QRCodeSVG value={studentUrl} size={160} level="M" bgColor="#ffffff" fgColor="#14161a" marginSize={1} />
+                </div>
+              </details>
             </li>
           </ul>
         )}
       </div>
       <HowThisWorks text={t("home.how")} />
-      <details className="px-1 text-xs text-faint">
-        <summary className="cursor-pointer hover:text-muted">{t("invite.title")}</summary>
-        <div className="mt-2">
-          <ShareButtons url={inviteUrl} text={t("invite.text", { url: inviteUrl })} size="sm" />
-        </div>
-      </details>
+      {earned && (
+        <details className="px-1 text-xs text-faint" data-testid="invite-coach">
+          <summary className="cursor-pointer hover:text-muted">{t("invite.title")}</summary>
+          <div className="mt-2">
+            <ShareButtons url={inviteUrl} text={t("invite.text", { url: inviteUrl })} size="sm" />
+          </div>
+        </details>
+      )}
     </div>
   );
 }

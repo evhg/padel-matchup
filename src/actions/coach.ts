@@ -11,6 +11,7 @@ import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import {
+  acceptByInvite,
   addStudentByName,
   bookLesson,
   cancelLesson,
@@ -20,6 +21,7 @@ import {
   getCoachByHandle,
   getCoachForActor,
   getPlayerById,
+  inviteMatches,
   LESSON_MINUTES,
   listStudents,
   markNoShow,
@@ -47,6 +49,11 @@ import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided }
 import { pingIndexNow } from "@/lib/indexnow";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
+
+import { COACH_COOKIE } from "@/lib/coachCookie";
+async function rememberCoach(): Promise<void> {
+  (await cookies()).set(COACH_COOKIE, "1", { httpOnly: false, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 365 * 24 * 3600 });
+}
 
 /** The coach's book: every action here is one tap on a coach screen or a student screen. */
 
@@ -78,6 +85,7 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
     const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
     await bumpMetric(db, "coaches_created").catch(() => undefined);
     if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
+    await rememberCoach();
     revalidateCoach(coach.handle);
     return { handle: coach.handle };
   });
@@ -355,17 +363,33 @@ export async function extendPackageAction(packageId: string, days = 30): Promise
 
 // ------------------------------------------------------------------ students
 
-export async function requestCoachAction(handle: string, name?: string | null): Promise<ActionResult<{ status: StudentStatus }>> {
+/** Ask to join from the public page; with the coach's own invite code, the student is on the list at once. */
+export async function requestCoachAction(handle: string, name?: string | null, invite?: string | null): Promise<ActionResult<{ status: StudentStatus }>> {
   return runA(async () => {
     const db = await getDb();
     const coach = await getCoachByHandle(db, handle);
     if (!coach) throw new ActionFailure("no_coach");
     const me = await requirePlayer(db, name);
+    if (inviteMatches(coach, invite)) {
+      const status = await acceptByInvite(db, coach.id, me.id);
+      revalidateCoach(coach.handle);
+      return { status };
+    }
     const before = await studentStatus(db, coach.id, me.id);
     const status = await requestStudent(db, coach.id, me.id);
     if (before === "none") await notifyStudentRequest(db, coach, me).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { status };
+  });
+}
+
+/** The coach's own page marks this browser as a coach's (for the header link) when the setup happened elsewhere. */
+export async function rememberCoachAction(): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    await requireCoach(db);
+    await rememberCoach();
+    return null;
   });
 }
 

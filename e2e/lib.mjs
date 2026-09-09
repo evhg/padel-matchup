@@ -8,7 +8,7 @@ if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 /** Uses the Playwright-managed Chromium, or PW_CHROMIUM when a preinstalled binary should be used. */
 export const launch = () => chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, headless: true });
 
-export const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Europe/Madrid" };
+export const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Europe/Madrid", reducedMotion: "reduce" };
 
 /** Screenshots are optional: set SHOTS=<dir> to keep them. */
 export const shot = (page, name) => (SHOTS ? page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true }) : Promise.resolve());

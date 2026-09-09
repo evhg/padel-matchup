@@ -12,7 +12,8 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
 import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { busyBetween, DAY_MS, getCoachForActor, listCoachLessons, listStudents, openSlots } from "@/lib/domain/coaching";
+import { busyBetween, DAY_MS, getCoachForActor, inviteCode, listCoachLessons, listStudents, openSlots, studentLink } from "@/lib/domain/coaching";
+import { CoachHint } from "@/components/coach/CoachHint";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
@@ -62,26 +63,34 @@ export default async function CoachPage({ searchParams }: Props) {
   const from = zonedTimeToUtc(today, "00:00", coach.tz);
   const to = new Date(from.getTime() + 14 * DAY_MS);
   const month = monthRange(coach.tz, now);
-  const [rows, students, busy, requests, waiting, counts, checks] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id })]);
+  const [rows, students, busy, requests, waiting, counts, checks, invite] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id }), inviteCode(db, coach.id)]);
+  // The invitation to pass the assistant on waits until it has earned it: a few students on the list, or a few lessons done.
+  const earned = students.filter((s) => s.status !== "requested").length >= 3 || counts.done >= 5;
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", timeZone: coach.tz }).format(now);
   const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   // The coach may book at short notice: no minimum notice on their own grid.
   const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now });
   return shell(
-    <CoachHome
-      handle={coach.handle}
-      url={`${baseUrl()}/c/${coach.handle}`}
-      today={today}
-      welcome={sp.welcome === "1"}
-      students={students.filter((s) => s.status !== "requested").map((s) => ({ id: s.player.id, name: s.player.displayName }))}
-      lessons={rows.map((l) => coachLessonDTO(l, coach, locale, labels, now))}
-      slots={slotDTOs(slots, coach.tz, locale)}
-      dayLabels={labels}
-      days={days}
-      requests={requests.map((r) => ({ id: r.id, name: r.player.displayName, label: whenLabel(r.startsAt, coach.tz, locale), note: r.note }))}
-      waiting={new Set(waiting.map((w) => w.studentPlayerId)).size}
-      month={counts.done + counts.noShows > 0 ? { label: monthLabel, done: counts.done, noShows: counts.noShows } : null}
-      levelChecks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))}
-    />,
+    <>
+      <CoachHint />
+      <CoachHome
+        handle={coach.handle}
+        coachName={coach.displayName}
+        url={`${baseUrl()}/c/${coach.handle}`}
+        studentUrl={studentLink(baseUrl(), coach.handle, invite)}
+        earned={earned}
+        today={today}
+        welcome={sp.welcome === "1"}
+        students={students.filter((s) => s.status !== "requested").map((s) => ({ id: s.player.id, name: s.player.displayName }))}
+        lessons={rows.map((l) => coachLessonDTO(l, coach, locale, labels, now))}
+        slots={slotDTOs(slots, coach.tz, locale)}
+        dayLabels={labels}
+        days={days}
+        requests={requests.map((r) => ({ id: r.id, name: r.player.displayName, label: whenLabel(r.startsAt, coach.tz, locale), note: r.note }))}
+        waiting={new Set(waiting.map((w) => w.studentPlayerId)).size}
+        month={counts.done + counts.noShows > 0 ? { label: monthLabel, done: counts.done, noShows: counts.noShows } : null}
+        levelChecks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))}
+      />
+    </>,
   );
 }
