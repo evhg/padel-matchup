@@ -17,6 +17,8 @@ export const telegramBotId = () => {
 
 export type TgResult<T> = { ok: true; result: T } | { ok: false; error_code: number; description: string };
 export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: string; url?: string; switch_inline_query?: string }[][] };
+/** Buttons under the text field that stay: the menu a coach or a student taps instead of typing commands. */
+export type ReplyKeyboard = { keyboard: { text: string }[][]; is_persistent?: boolean; resize_keyboard?: boolean; input_field_placeholder?: string };
 export type TgUser = { id: number; is_bot?: boolean; first_name: string; last_name?: string; username?: string; language_code?: string };
 export type TgChat = { id: number; type: "private" | "group" | "supergroup" | "channel"; title?: string; username?: string };
 export type TgMessage = { message_id: number; date: number; chat: TgChat; from?: TgUser; text?: string; message_thread_id?: number; reply_to_message?: TgMessage; entities?: { type: string; offset: number; length: number; url?: string }[] };
@@ -66,7 +68,7 @@ export async function tg<T = unknown>(method: string, body: Record<string, unkno
 /** Escape for parse_mode=HTML. */
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export type SendOptions = { keyboard?: InlineKeyboard | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
+export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
 
 export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendMessage", {
@@ -150,6 +152,16 @@ export const getWebhookInfo = () => tg<{ url: string; pending_update_count: numb
 
 export function setMyCommands(commands: { command: string; description: string }[], languageCode?: string) {
   return tg<true>("setMyCommands", { commands, ...(languageCode ? { language_code: languageCode } : {}) });
+}
+
+/** Commands for one private chat only: a coach sees the coach's, a student the student's. */
+export function setChatCommands(chatId: number, commands: { command: string; description: string }[]) {
+  return tg<true>("setMyCommands", { commands, scope: { type: "chat", chat_id: chatId } });
+}
+
+/** Pins a message at the top of a private chat, quietly (bots may pin in private chats). */
+export function pinChatMessage(chatId: number, messageId: number) {
+  return tg<true>("pinChatMessage", { chat_id: chatId, message_id: messageId, disable_notification: true });
 }
 
 // ---------------------------------------------------------------------------

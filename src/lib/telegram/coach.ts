@@ -31,7 +31,8 @@ import {
   type LessonWithPeople,
 } from "@/lib/domain/coaching";
 import { isDomainError } from "@/lib/domain/errors";
-import { answerCallbackQuery, editMessageText, esc, sendMessage, sendPhoto, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "./api";
+import { coachCommands, coachKeyboard, menuWord, studentCommands, studentKeyboard } from "@/lib/coach/menu";
+import { answerCallbackQuery, editMessageText, esc, pinChatMessage, sendMessage, sendPhoto, setChatCommands, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "./api";
 
 /**
  * The courtside assistant. In the bot's private chat a coach types one line and the
@@ -84,13 +85,20 @@ async function bookForCoach(db: Db, coach: Coach, coachPlayer: Player, student: 
   }
 }
 
-async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, text: string, chatId: number): Promise<string> {
+async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: string, chatId: number): Promise<string> {
   const locale: CoachBotLocale = coachBotLocale(coachPlayer.locale);
   const s = coachStrings(locale);
   const now = new Date();
+  const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
+  // A tapped menu button is the same as the word typed; "Book" alone explains the one line it needs.
+  const tapped = menuWord(rawText);
+  if (tapped === "book") {
+    await say(s.menuBookHow);
+    return "coach:book_how";
+  }
+  const text = tapped && tapped !== "lessons" && tapped !== "left" ? tapped : rawText;
   const students = await studentRefs(db, coach.id);
   const intent: CoachIntent = parseCoachLine(text, { now, tz: coach.tz, students });
-  const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
 
   const resolve = async (m: Match, allowNew: boolean): Promise<StudentRef | null> => {
     if (m.kind === "one") return m.student;
@@ -195,15 +203,21 @@ async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBot
 
 // ------------------------------------------------------------------ student flow
 
-async function studentFlow(db: Db, player: Player, text: string, chatId: number): Promise<string | null> {
+async function studentFlow(db: Db, player: Player, rawText: string, chatId: number): Promise<string | null> {
   const mine = (await studentCoaches(db, player.id)).filter((m) => m.status === "accepted");
   if (mine.length === 0) return null;
   const locale: CoachBotLocale = coachBotLocale(player.locale);
   const s = coachStrings(locale);
   const now = new Date();
   const tz = mine[0].coach.tz;
-  const intent = parseStudentLine(text, { now, tz });
   const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
+  const tapped = menuWord(rawText);
+  if (tapped === "book") {
+    await say(s.menuBookHowStudent);
+    return "student:book_how";
+  }
+  const text = tapped === "lessons" || tapped === "left" ? tapped : rawText;
+  const intent = parseStudentLine(text, { now, tz });
 
   if (intent.kind === "help") return null;
   if (intent.kind === "left") {
@@ -303,6 +317,31 @@ export async function lessonsFor(db: Db, player: Player, chatId: number): Promis
 }
 
 // ------------------------------------------------------------------ entry points
+
+export type BotRole = "coach" | "student" | null;
+
+/** Coach (or their manager), student of an accepting coach, or neither. */
+export async function botRole(db: Db, player: Player): Promise<BotRole> {
+  if (await getCoachForActor(db, player.id)) return "coach";
+  const mine = (await studentCoaches(db, player.id)).filter((m) => m.status === "accepted");
+  return mine.length > 0 ? "student" : null;
+}
+
+/**
+ * The menu under the text field, pinned, with the chat's commands set for the role.
+ * Sent on /start, when the setup binds the account, and on /coach. Null for a plain player.
+ */
+export async function sendRoleMenu(db: Db, player: Player, chatId: number, lead?: string): Promise<string | null> {
+  const role = await botRole(db, player);
+  if (!role) return null;
+  const locale = coachBotLocale(player.locale);
+  const s = coachStrings(locale);
+  const text = `${lead ? `${lead}\n\n` : ""}${role === "coach" ? s.menuCoach : s.menuStudent}`;
+  const sent = await sendMessage(chatId, esc(text), { silent: true, keyboard: role === "coach" ? coachKeyboard(s) : studentKeyboard(s) });
+  if (sent.ok) await pinChatMessage(chatId, sent.result.message_id).catch(() => undefined);
+  await setChatCommands(chatId, role === "coach" ? coachCommands(locale) : studentCommands(locale)).catch(() => undefined);
+  return role === "coach" ? "coach_menu" : "student_menu";
+}
 
 /** A private message that is not a command: the coach's book or the student's lessons answer it. Null when neither applies. */
 export async function coachAssistantMessage(db: Db, msg: TgMessage, from: TgUser, player: Player): Promise<string | null> {
