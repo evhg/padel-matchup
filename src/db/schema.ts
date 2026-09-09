@@ -1164,3 +1164,40 @@ export const lessonPackagesRelations = relations(lessonPackages, ({ one }) => ({
   coach: one(coaches, { fields: [lessonPackages.coachId], references: [coaches.id] }),
   student: one(players, { fields: [lessonPackages.studentPlayerId], references: [players.id] }),
 }));
+
+// ---------------------------------------------------------------------------
+// After the match, worth sharing: the court photo behind the result, and earned moments.
+// ---------------------------------------------------------------------------
+/** One court photo per match, added by any participant; the result card becomes that photo with a quiet layer. */
+export const eventPhotos = pgTable(
+  "event_photos",
+  {
+    eventId: uuid("event_id")
+      .primaryKey()
+      .references(() => events.id, { onDelete: "cascade" }),
+    uploadedByPlayerId: uuid("uploaded_by_player_id").references(() => players.id, { onDelete: "set null" }),
+    mime: text("mime").notNull(),
+    dataBase64: text("data_base64").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+export type EventPhoto = typeof eventPhotos.$inferSelect;
+
+/** A moment a player earned: first win, tenth match, a streak, a podium, a level up. Rare on purpose, announced once. */
+export const milestones = pgTable(
+  "milestones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** first_win | matches_10 | matches_50 | streak_3 | partners_10 | level_up | podium */
+    kind: text("kind").notNull(),
+    /** What the kind counts: 10, 50, the new band, the placement. */
+    value: text("value").notNull().default(""),
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("milestones_once_idx").on(t.playerId, t.kind, t.value), index("milestones_player_idx").on(t.playerId, t.createdAt)],
+);
+export type Milestone = typeof milestones.$inferSelect;

@@ -9,6 +9,7 @@ import { isValidShareCode } from "@/lib/codes";
 import { shortHost } from "@/lib/config";
 import { formatEventDay } from "@/lib/dates";
 import { isOccupied } from "@/lib/domain/events";
+import { getEventPhoto, photoDataUrl } from "@/lib/domain/photos";
 import { getEventByCode } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import { getTournamentState } from "@/lib/domain/tournament";
@@ -43,6 +44,10 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
     return new ImageResponse(<div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: BG, color: INK, fontSize: 64, fontWeight: 800, fontFamily: "Inter" }}>{host}</div>, { ...size, fonts: fontList });
   }
   const { event: ev, roster } = detail;
+  const photo = await getEventPhoto(db, ev.id).catch(() => null);
+  const onPhoto = Boolean(photo);
+  const ink = onPhoto ? "#FFFFFF" : INK;
+  const muted = onPhoto ? "rgba(255,255,255,0.78)" : MUTED;
   const locale = toLocale(detail.creator.locale) ?? "en";
   const t = createTranslator({ locale, messages: await loadMessages(locale) });
   const title = calendarTitle(ev, t(ev.type === "match" ? "og.match" : "og.tournament"));
@@ -57,13 +62,13 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
     const rowB = r?.hasTeams ? r.b.join(" & ") : t("card.teamB");
     const row = (label: string, side: "a" | "b") => (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
-        <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: -1, color: r && r.winner !== side && r.winner !== "draw" ? MUTED : INK, maxWidth: 720, overflow: "hidden", whiteSpace: "nowrap" }}>{label}</div>
+        <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: -1, color: r && r.winner !== side && r.winner !== "draw" ? muted : ink, maxWidth: 720, overflow: "hidden", whiteSpace: "nowrap" }}>{label}</div>
         <div style={{ display: "flex", gap: 14 }}>
           {(r?.sets ?? []).map((s, i) => {
             const mine = side === "a" ? s.sideA : s.sideB;
             const theirs = side === "a" ? s.sideB : s.sideA;
             return (
-              <div key={i} style={{ width: 96, height: 96, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56, fontWeight: 800, background: mine > theirs ? ACCENT : "#E4E2DA", color: mine > theirs ? INK : MUTED }}>
+              <div key={i} style={{ width: 96, height: 96, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56, fontWeight: 800, background: mine > theirs ? ACCENT : onPhoto ? "rgba(255,255,255,0.22)" : "#E4E2DA", color: mine > theirs ? INK : muted }}>
                 {mine}
               </div>
             );
@@ -83,14 +88,31 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
     const state = await getTournamentState(db, ev, ids);
     const names = new Map(named.filter((s) => s.playerId).map((s) => [s.playerId!, nameOf(s)]));
     const top = state.standings.slice(0, 5);
-    body = (
+    const podium = ev.scoreLockedByCreator && state.standings.length >= 3;
+    const step = (rank: 1 | 2 | 3, height: number) => {
+      const row = state.standings[rank - 1];
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 }}>
+          <div style={{ fontSize: rank === 1 ? 40 : 32, fontWeight: 800, letterSpacing: -1, color: ink, maxWidth: 340, overflow: "hidden", whiteSpace: "nowrap" }}>{names.get(row.playerId) ?? "?"}</div>
+          <div style={{ fontSize: 24, color: muted }}>{t("card.pts", { points: row.points })}</div>
+          <div style={{ width: "100%", height, borderRadius: "18px 18px 0 0", background: rank === 1 ? ACCENT : onPhoto ? "rgba(255,255,255,0.28)" : "#E4E2DA", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 10, fontSize: 40, fontWeight: 800, color: rank === 1 ? INK : ink }}>{rank}</div>
+        </div>
+      );
+    };
+    body = podium ? (
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 18, height: 320 }}>
+        {step(2, 150)}
+        {step(1, 220)}
+        {step(3, 110)}
+      </div>
+    ) : (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: MUTED }}>{ev.scoreLockedByCreator ? t("card.standingsFinal") : t("card.standingsLive")}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: muted }}>{ev.scoreLockedByCreator ? t("card.standingsFinal") : t("card.standingsLive")}</div>
         {top.map((s) => (
-          <div key={s.playerId} style={{ display: "flex", alignItems: "center", gap: 20, background: s.rank === 1 ? ACCENT : "transparent", borderRadius: 18, padding: "6px 16px" }}>
+          <div key={s.playerId} style={{ display: "flex", alignItems: "center", gap: 20, background: s.rank === 1 ? ACCENT : "transparent", borderRadius: 18, padding: "6px 16px", color: s.rank === 1 ? INK : ink }}>
             <div style={{ width: 56, fontSize: 40, fontWeight: 800 }}>{s.rank}</div>
             <div style={{ flex: 1, fontSize: 40, fontWeight: 800, letterSpacing: -1, overflow: "hidden", whiteSpace: "nowrap" }}>{names.get(s.playerId) ?? "?"}</div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: s.rank === 1 ? INK : MUTED }}>{t("card.pts", { points: s.points })}</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: s.rank === 1 ? INK : muted }}>{t("card.pts", { points: s.points })}</div>
           </div>
         ))}
       </div>
@@ -99,7 +121,14 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
 
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", background: BG, fontFamily: "Inter", color: INK }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", background: BG, fontFamily: "Inter", color: ink, position: "relative" }}>
+        {photo && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photoDataUrl(photo)} alt="" width={1200} height={630} style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, objectFit: "cover" }} />
+            <div style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, background: "linear-gradient(180deg, rgba(10,12,16,0.35) 0%, rgba(10,12,16,0.62) 60%, rgba(10,12,16,0.82) 100%)", display: "flex" }} />
+          </>
+        )}
         <div style={{ width: 28, height: "100%", background: ACCENT, display: "flex" }} />
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "48px 64px 44px 56px", flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -109,12 +138,12 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
               </div>
               <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5 }}>{host}</div>
             </div>
-            <div style={{ fontSize: 26, color: MUTED, maxWidth: 700, overflow: "hidden", whiteSpace: "nowrap" }}>{`${title} · ${day} · ${venue}`}</div>
+            <div style={{ fontSize: 26, color: muted, maxWidth: 700, overflow: "hidden", whiteSpace: "nowrap" }}>{`${title} · ${day} · ${venue}`}</div>
           </div>
           {body}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", background: INK, color: "#fff", padding: "14px 26px", borderRadius: 999, fontSize: 28, fontWeight: 800 }}>{t("card.result")}</div>
-            <div style={{ fontSize: 26, color: MUTED }}>{`${t("card.poweredBy")} · ${host}`}</div>
+            <div style={{ display: "flex", background: onPhoto ? ACCENT : INK, color: onPhoto ? INK : "#fff", padding: "14px 26px", borderRadius: 999, fontSize: 28, fontWeight: 800 }}>{t("card.result")}</div>
+            <div style={{ fontSize: 26, color: muted }}>{`${t("card.poweredBy")} · ${host}`}</div>
           </div>
         </div>
       </div>

@@ -12,7 +12,9 @@ import { layout, translatorFor } from "@/lib/email/templates";
 import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
-import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { esc, sendMessage, sendPhoto, telegramEnabled } from "@/lib/telegram/api";
+import type { Awarded } from "@/lib/domain/milestones";
+import { momentLine } from "@/lib/moments";
 import { strings, botLocale } from "@/lib/telegram/card";
 import { cardTitle } from "@/lib/telegram/card";
 
@@ -68,4 +70,21 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
     }
   }
   return out;
+}
+
+/** A moment, once, to the player who earned it: the picture and one button, silent. Web and email players find it on My matches. */
+export async function notifyMilestones(awarded: Awarded[]): Promise<number> {
+  if (!telegramEnabled()) return 0;
+  const base = baseUrl();
+  let sent = 0;
+  for (const { milestone, player } of awarded) {
+    if (!player.telegramId) continue;
+    const line = await momentLine(milestone, player.locale);
+    const url = `${base}/m/${milestone.id}`;
+    const keyboard = { inline_keyboard: [[{ text: player.locale === "ru" ? "Открыть" : player.locale === "es" ? "Abrir" : "Open", url }]] };
+    const photo = await sendPhoto(player.telegramId, `${url}/opengraph-image`, esc(line), { keyboard, silent: true }).catch(() => ({ ok: false as const }));
+    const res = photo.ok ? photo : await sendMessage(player.telegramId, `${esc(line)}\n${url}`, { keyboard, silent: true }).catch(() => ({ ok: false as const }));
+    if (res.ok) sent++;
+  }
+  return sent;
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
+import { PhotoButton } from "@/components/PhotoButton";
 import { SameTimeButton } from "@/components/SameTimeButton";
 import { ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
@@ -12,6 +13,8 @@ import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { praiseLine } from "@/lib/domain/praise";
+import { getEventPhoto } from "@/lib/domain/photos";
+import { taggedUrl } from "@/lib/source";
 import { getSessionPlayer } from "@/lib/session";
 import { fnv1a } from "@/lib/hash";
 import { isOccupied } from "@/lib/domain/events";
@@ -30,7 +33,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!detail) return {};
   const title = `${t("card.title")} · ${calendarTitle(detail.event, t(detail.event.type === "match" ? "event.match" : "event.tournament"))}`;
   // The picture's URL carries the score's version, so an edited score is never served from a cache of the old one.
-  const image = { url: `${baseUrl()}/${code}/card/opengraph-image?v=${resultVersion(detail)}`, width: 1200, height: 630 };
+  const photo = await getEventPhoto(db, detail.event.id).catch(() => null);
+  const image = { url: `${baseUrl()}/${code}/card/opengraph-image?v=${resultVersion(detail)}${photo ? `-p${photo.createdAt.getTime().toString(36)}` : ""}`, width: 1200, height: 630 };
   return { title, robots: { index: false, follow: true }, openGraph: { title, type: "website", url: `${baseUrl()}/${code}/card`, images: [image] }, twitter: { card: "summary_large_image", title, images: [image.url] } };
 }
 
@@ -45,8 +49,9 @@ export default async function CardPage({ params }: Props) {
   const db = await getDb();
   const detail = await getEventByCode(db, code);
   if (!detail) notFound();
-  const [t, locale, me] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db)]);
+  const [t, locale, me, photo] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getEventPhoto(db, detail.event.id).catch(() => null)]);
   const ev = detail.event;
+  const participant = Boolean(me && (ev.creatorPlayerId === me.id || detail.roster.some((s) => isOccupied(s) && s.playerId === me.id)));
   const nameOf = (s: (typeof detail.roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
   // One count per render: the funnel's last step.
   void bumpMetric(db, "card_views").catch(() => undefined);
@@ -69,8 +74,10 @@ export default async function CardPage({ params }: Props) {
     line = first ? `${t("card.winner", { name: name ? nameOf(name) : "?" })} · ${t("card.pts", { points: first.points })}` : t("card.result");
   }
   const url = `${baseUrl()}/${code}/card`;
+  const shareUrl = taggedUrl(url, "card");
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
-  const text = t("shareText.result", { line, day, url });
+  const text = t("shareText.result", { line, day, url: shareUrl });
+  const version = `${resultVersion(detail)}${photo ? `-p${photo.createdAt.getTime().toString(36)}` : ""}`;
   return (
     <>
       <Header minimal />
@@ -78,12 +85,13 @@ export default async function CardPage({ params }: Props) {
         <h1 className="text-2xl font-extrabold tracking-tight">{t("card.title")}</h1>
         <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/${code}/card/opengraph-image?v=${resultVersion(detail)}`} alt={line} width={1200} height={630} className="block h-auto w-full" />
+          <img src={`/${code}/card/opengraph-image?v=${version}`} alt={line} width={1200} height={630} className="block h-auto w-full" />
         </div>
         <p className="text-sm font-semibold">{line}</p>
         {praise && <p className="text-sm text-muted" data-testid="praise">{praise}</p>}
         <p className="text-xs text-faint">{t("card.saveHint")}</p>
-        <ShareButtons url={url} text={text} />
+        {participant && ev.type === "match" && <PhotoButton code={code} hasPhoto={Boolean(photo)} canRemove={Boolean(me && photo && (photo.uploadedByPlayerId === me.id || ev.creatorPlayerId === me.id))} />}
+        <ShareButtons url={shareUrl} text={text} imageUrl={`/${code}/card/opengraph-image?v=${version}`} />
         {ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || detail.roster.some((s) => isOccupied(s) && s.playerId === me.id)) && <SameTimeButton code={code} when={`${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}`} />}
         <Link href="/" prefetch={false} className="btn-primary w-full text-lg">
           {t("card.organize")}

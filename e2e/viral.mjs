@@ -57,6 +57,53 @@ try {
   check("card CTA leads back to creating a match", (await p.getByRole("link", { name: "Organize your own match" }).count()) === 1);
   await p.goto(`${BASE}/PLAY/card`);
   check("no result yet → back to the match page", new URL(p.url()).pathname === "/PLAY");
+
+  // ---- Their photo, our frame; earned moments ----
+  const key = await p.request.post(`${BASE}/api/v1/keys`, { data: { name: "e2e viral", agent: "playwright" } }).then((r) => r.json());
+  const auth = { authorization: `Bearer ${key.key}` };
+  const made = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Ana" } } }).then((r) => r.json());
+  const mcode = made.match?.code;
+  check("a match played ninety minutes ago is created for Ana", Boolean(mcode) && Boolean(made.organizer?.personalUrl), JSON.stringify(made).slice(0, 160));
+  for (const name of ["Bo", "Cy", "Di"]) await p.request.post(`${BASE}/api/v1/matches/${mcode}/join`, { headers: auth, data: { name } });
+  // The personal link hands the device its cookie in the browser, then sends it on to the match.
+  await p.goto(`${made.organizer.personalUrl}?next=/${mcode}`);
+  await p.waitForURL(`**/${mcode}`, { timeout: 20000 });
+  await p.getByRole("button", { name: "Enter score" }).waitFor({ timeout: 20000 });
+  await p.getByRole("button", { name: "Enter score" }).click();
+  await p.getByRole("button", { name: /^Ana/ }).click();
+  await p.getByRole("button", { name: /^Bo/ }).click();
+  await p.getByRole("button", { name: "Save score" }).click();
+  await p.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
+  check("the organizer's score is confirmed at once", true);
+  await p.goto(`${BASE}/${mcode}/card`);
+  check("the card page praises the winners and offers the weekly group", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 1);
+  const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGNgYGD4z8DAwAAABAAC/wKzCgAAAABJRU5ErkJggg==", "base64");
+  await p.getByTestId("photo-input").setInputFiles({ name: "court.png", mimeType: "image/png", buffer: tinyPng });
+  await p.locator(`img[src^="/${mcode}/card/opengraph-image?v="][src*="-p"]`).waitFor({ timeout: 30000 });
+  check("a participant's photo becomes the card's background and the picture's version changes", true);
+  const withPhoto = await p.request.get(`${BASE}/${mcode}/card/opengraph-image`);
+  check("the card with the photo is still a PNG", withPhoto.status() === 200 && (withPhoto.headers()["content-type"] ?? "").startsWith("image/png") && (await withPhoto.body()).length > 10000);
+  const canShareHere = await p.evaluate(() => typeof navigator.share === "function");
+  check("the share button offers the picture where the phone can share files (hidden where it cannot)", canShareHere ? (await p.getByRole("button", { name: "Share the picture…" }).count()) === 1 : (await p.getByRole("button", { name: "Share the picture…" }).count()) === 0, `navigator.share ${canShareHere ? "present" : "absent"}`);
+  check("the uploader can take the photo down", (await p.getByTestId("photo-remove").count()) === 1);
+  await shot(p, "v3-card-photo");
+  let momentsSeen = false;
+  for (let i = 0; i < 5 && !momentsSeen; i++) {
+    await p.goto(`${BASE}/me`);
+    momentsSeen = (await p.getByTestId("moments").count()) === 1;
+    if (!momentsSeen) await p.waitForTimeout(1500);
+  }
+  check("My matches shows Ana's first win as a moment", momentsSeen && (await p.getByText("First win").count()) >= 1);
+  const momentHref = momentsSeen ? await p.getByTestId("moments").locator("a").first().getAttribute("href") : null;
+  if (momentHref) {
+    await p.goto(`${BASE}${momentHref}`);
+    check("the moment page names the player and the moment", (await p.getByRole("heading", { name: "First win" }).count()) === 1 && (await p.getByText(/Ana/).count()) >= 1);
+    const mimg = await p.request.get(`${BASE}${momentHref}/opengraph-image`);
+    check("the moment picture is a PNG", mimg.status() === 200 && (mimg.headers()["content-type"] ?? "").startsWith("image/png"));
+    const mhtml = await p.request.get(`${BASE}${momentHref}`).then((r) => r.text());
+    check("the moment page unfurls with its picture and is not indexed", mhtml.includes('property="og:image"') && /noindex/.test(mhtml));
+    await shot(p, "v4-moment");
+  }
 } catch (e) {
   console.error("✗ crashed:", e);
   results.push({ name: "crash", ok: false });
