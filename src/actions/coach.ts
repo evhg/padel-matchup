@@ -21,6 +21,7 @@ import {
   getCoachByHandle,
   getCoachForActor,
   getPlayerById,
+  hoursFromLines,
   inviteMatches,
   LESSON_MINUTES,
   listStudents,
@@ -51,6 +52,8 @@ import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
 import { COACH_COOKIE } from "@/lib/coachCookie";
+import { playerTicket } from "@/lib/coach/link";
+import { botDeepLink } from "@/lib/telegram/bot";
 async function rememberCoach(): Promise<void> {
   (await cookies()).set(COACH_COOKIE, "1", { httpOnly: false, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 365 * 24 * 3600 });
 }
@@ -73,20 +76,26 @@ const revalidateCoach = (handle: string) => {
   revalidatePath("/me");
 };
 
-export async function setupCoachAction(input: { name?: string | null; clubs: string; minutes: number; preset: HoursPreset | "custom"; tz?: string | null }): Promise<ActionResult<{ handle: string }>> {
+/** The first three steps of the setup: where, how long, when. Seven hour lines (index 0 = Sunday); an empty list means the usual hours. */
+export async function setupCoachAction(input: { name?: string | null; clubs: string; minutes: number; hoursLines?: string[]; preset?: HoursPreset | "custom"; tz?: string | null }): Promise<ActionResult<{ handle: string }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
     const locale = await getLocale();
     const tz = input.tz && isValidTimeZone(input.tz) ? input.tz : "Asia/Bangkok";
-    const hours: Hours = input.preset === "custom" ? presetHours("both") : presetHours(input.preset);
+    let hours: Hours = input.preset && input.preset !== "custom" ? presetHours(input.preset) : presetHours("both");
+    if (input.hoursLines && input.hoursLines.length === 7) {
+      const parsed = hoursFromLines(input.hoursLines);
+      if (parsed.invalidDay !== null) throw new DomainError("invalid", String(parsed.invalidDay));
+      hours = parsed.hours;
+    }
     const coach = await createCoach(db, { playerId: me.id, displayName: me.displayName, clubNames: input.clubs, lessonMinutes: input.minutes, hours, tz, languages: [locale] });
     // Which door this coach came through (a coach page, a club page, the city list, an invite, search): the Sunday digest counts them.
     const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
     await bumpMetric(db, "coaches_created").catch(() => undefined);
     if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
-    await rememberCoach();
-    revalidateCoach(coach.handle);
+    // Neither a revalidation nor a cookie here, on purpose: either would refresh /coach and swap the setup walk for the book
+    // mid-way. The walk moves itself to /coach?setup=1; the coach page sets the browser hint once the walk is done.
     return { handle: coach.handle };
   });
 }
@@ -380,6 +389,26 @@ export async function requestCoachAction(handle: string, name?: string | null, i
     if (before === "none") await notifyStudentRequest(db, coach, me).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { status };
+  });
+}
+
+/** Setup step: how students pay. Both optional; the same fields as in settings. */
+export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null }): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    await updateCoach(db, coach.id, { promptpayId: input.promptpayId ?? "", payLink: input.payLink ?? "" });
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+/** Setup step: the link that opens the bot and binds this Telegram account to the coach's player. Null without a bot. */
+export async function coachBotLinkAction(): Promise<ActionResult<{ url: string | null }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { me } = await requireCoach(db);
+    return { url: botDeepLink(`coach_${playerTicket(me.id)}`) };
   });
 }
 

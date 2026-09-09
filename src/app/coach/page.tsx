@@ -17,6 +17,8 @@ import { CoachHint } from "@/components/coach/CoachHint";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
+import { serviceAccountEmail } from "@/lib/coach/gcal";
+import { telegramBotUsername } from "@/lib/telegram/api";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("setup.title"), robots: { index: false, follow: false } };
 }
 
-type Props = { searchParams: Promise<{ welcome?: string; s?: string; club?: string }> };
+type Props = { searchParams: Promise<{ welcome?: string; s?: string; club?: string; setup?: string }> };
 
 /** The coach's book, or the four taps that create it. One screen, one job. */
 export default async function CoachPage({ searchParams }: Props) {
@@ -48,11 +50,12 @@ export default async function CoachPage({ searchParams }: Props) {
       </>,
     );
   const found = await getCoachForActor(db, me.id);
-  if (!found)
+  // The setup walk stays on screen after the third step makes the assistant (?setup=1), so the calendar, payment and bot steps can follow.
+  if (!found || sp.setup === "1")
     return shell(
       <>
         {tag}
-        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} />
+        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} botUsername={telegramBotUsername()} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
       </>,
     );
 

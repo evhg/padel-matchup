@@ -73,6 +73,17 @@ export function parseHoursLine(line: string): [string, string][] | null {
 
 export const formatHoursLine = (ranges: [string, string][] | undefined): string => (ranges && ranges.length ? ranges.map((r) => `${r[0]}-${r[1]}`).join(", ") : "");
 
+/** Seven lines (index 0 = Sunday) into hours; the first day that does not parse is reported instead. */
+export function hoursFromLines(lines: readonly string[]): { hours: Hours; invalidDay: null } | { hours: null; invalidDay: number } {
+  const hours: Hours = {};
+  for (let d = 0; d < 7; d++) {
+    const ranges = parseHoursLine(lines[d] ?? "");
+    if (!ranges) return { hours: null, invalidDay: d };
+    hours[String(d)] = ranges;
+  }
+  return { hours, invalidDay: null };
+}
+
 const CYRILLIC: Record<string, string> = { а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya" };
 
 /** A URL handle from a name: transliterated, lowercase, dashes. "Benji Å" → "benji-a", "Даниил" → "daniil". */

@@ -5,6 +5,8 @@ import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 const browser = await launch();
 const results = [];
 const check = makeCheck(results);
+const TG_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret";
+const hook = (update) => fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": TG_SECRET }, body: JSON.stringify(update) }).then((r) => r.json());
 const newPage = async () => {
   const ctx = await browser.newContext(iphone);
   const page = await ctx.newPage();
@@ -35,9 +37,37 @@ try {
   await olga.getByPlaceholder("e.g. Alex").fill("Olga");
   await olga.locator("form button[type=submit]").click();
   await olga.getByText("Your assistant").first().waitFor({ timeout: 20000 });
-  check("setup asks where, how long and when on one screen", (await olga.locator("#coach-clubs").count()) === 1 && (await olga.getByRole("radio", { name: "Both" }).count()) === 1);
+  // The setup is a short walk: where, how long, when (that makes the assistant), then calendar, payment and the bot, each skippable.
+  check("setup starts with where you coach, one question per screen", (await olga.getByTestId("setup-where").count()) === 1 && (await olga.locator("#coach-clubs").count()) === 1 && (await olga.getByText("Step 1 of").count()) === 1);
   await olga.locator("#coach-clubs").fill("Warehaus");
+  await olga.getByRole("button", { name: "Next" }).click();
+  await olga.getByTestId("setup-length").waitFor({ timeout: 10000 });
+  await olga.getByRole("button", { name: "Next" }).click();
+  await olga.getByTestId("setup-hours").waitFor({ timeout: 10000 });
+  const grid = olga.getByTestId("hours-grid");
+  check("hours are set per day with a start and an end, Sunday off by default", (await grid.getByRole("button", { pressed: true }).count()) === 6 && (await grid.getByRole("button", { pressed: false }).count()) === 1 && (await grid.locator('input[type="time"]').count()) === 14);
+  await grid.getByRole("button", { name: "Saturday" }).click();
   await olga.getByRole("button", { name: "Set up my assistant" }).click();
+  await olga.getByTestId(/setup-(calendar|pay)/).waitFor({ timeout: 30000 });
+  check("the assistant exists after the third step; the rest can wait", (await olga.getByText(/Your assistant exists/).count()) === 1);
+  for (let i = 0; i < 4 && !/welcome=1/.test(olga.url()); i++) {
+    const later = olga.getByRole("button", { name: "Later" });
+    const done = olga.getByTestId("setup-finish");
+    if (await done.count()) {
+      // The bot step: the button carries a signed ticket; opening it binds that Telegram account to Olga, who then runs her book from the chat.
+      const href = await olga.getByTestId("open-bot").getAttribute("href");
+      const ticket = href?.match(/start=coach_([^&]+)/)?.[1];
+      check("the bot step opens @kicksmash_bot with a signed ticket", Boolean(ticket), href ?? "");
+      const tgOlga = { id: 616161, is_bot: false, first_name: "Olga", username: "olga_coach_e2e" };
+      const linked = await hook({ update_id: 900001, message: { message_id: 900001, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: `/start coach_${decodeURIComponent(ticket ?? "")}` } });
+      check("opening the bot from the setup binds that Telegram account to the coach", linked.outcome === "coach_linked", JSON.stringify(linked));
+      const agenda = await hook({ update_id: 900002, message: { message_id: 900002, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: "tomorrow" } });
+      check("the bound account runs the coach's book from the chat", agenda.outcome === "coach:agenda", JSON.stringify(agenda));
+      await done.click();
+    } else if (await later.count()) await later.first().click();
+    else break;
+    await olga.waitForTimeout(300);
+  }
   await olga.waitForURL(/\/coach\?welcome=1$/, { timeout: 30000 });
   await olga.getByText("Your assistant is ready").waitFor({ timeout: 20000 });
   const body = await olga.locator("main").innerText();
