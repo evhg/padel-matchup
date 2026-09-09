@@ -351,8 +351,27 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(dm.body.chat_id).toBe(31);
     expect(String(dm.body.text)).toContain("✅ Petr играет · 2/4");
     expect(String(dm.body.text)).toContain("Rawai Padel Club");
+    // The next joins edit that same message instead of sending another (message fatigue is real): one running message per match.
+    const sentBefore = sent("sendMessage").length;
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Masha")).toBe(true);
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "waitlisted", "Dima")).toBe(true);
+    expect(sent("sendMessage")).toHaveLength(sentBefore);
+    const edit = sent("editMessageText").at(-1)!;
+    expect(edit.body.chat_id).toBe(31);
+    expect(String(edit.body.text)).toContain("Petr");
+    expect(String(edit.body.text)).toContain("Masha");
+    expect(String(edit.body.text)).toContain("Dima");
+    const [feedRow] = await db.select().from(telegramCards).where(eq(telegramCards.kind, "feed"));
+    expect(feedRow.chatId).toBe(31);
+    expect(JSON.parse(feedRow.rendered ?? "[]")).toHaveLength(3);
+    // A day later the running message is stale: a join starts a new one.
+    expect(await telegramCreatorNote(db, detail, { ...linked, locale: "ru" }, "joined", "Lena", new Date(Date.now() + 25 * HOUR))).toBe(true);
+    expect(sent("sendMessage")).toHaveLength(sentBefore + 1);
+    // Someone leaving speaks up in a new message, with a sound.
     await notifyCreator(db, ev, "left", "Petr", petr.id);
-    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("↩️ Petr");
+    const leftMsg = sent("sendMessage").at(-1)!;
+    expect(String(leftMsg.body.text)).toContain("↩️ Petr");
+    expect(leftMsg.body.disable_notification).toBe(false);
     // The organizer's own actions are not echoed back.
     calls = [];
     await notifyCreator(db, ev, "joined", "Olga", org.id);
