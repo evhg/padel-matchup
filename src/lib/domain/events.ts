@@ -6,7 +6,7 @@ import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { formatOf } from "./formats";
-import { normalizeRange } from "./levels";
+import { hasRange, normalizeRange } from "./levels";
 import { venueSlug } from "./venueBoard";
 
 export type CreateEventInput = {
@@ -29,6 +29,8 @@ export type CreateEventInput = {
   /** Level range; omitted or 0–7 = open to everyone. */
   levelMin?: number | null;
   levelMax?: number | null;
+  /** Verified levels only: inside the range but unconfirmed still asks to join. Ignored without a range. */
+  levelVerifiedOnly?: boolean;
   /** The group this match belongs to. */
   groupId?: string | null;
   /** Opt-in to the public venue board. */
@@ -113,6 +115,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           pointsPerMatch: input.type === "tournament" && input.pointsPerMatch ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
           levelMin: range.min,
           levelMax: range.max,
+          levelVerifiedOnly: Boolean(input.levelVerifiedOnly) && hasRange(range),
           groupId: input.groupId ?? null,
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
           venueSlug: venueSlug(venueName),
@@ -168,6 +171,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     format: src.format,
     levelMin: src.levelMin,
     levelMax: src.levelMax,
+    levelVerifiedOnly: src.levelVerifiedOnly,
     groupId: src.groupId,
     publicListing: src.publicListing,
     bookingUrl: src.bookingUrl,
@@ -188,6 +192,7 @@ export type UpdateEventInput = {
   capacity?: number;
   levelMin?: number | null;
   levelMax?: number | null;
+  levelVerifiedOnly?: boolean;
   publicListing?: boolean;
   bookingUrl?: string | null;
   cost?: string | null;
@@ -218,6 +223,11 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
       const r = normalizeRange(patch.levelMin !== undefined ? patch.levelMin : ev.levelMin, patch.levelMax !== undefined ? patch.levelMax : ev.levelMax);
       if (r.min !== ev.levelMin) set.levelMin = r.min;
       if (r.max !== ev.levelMax) set.levelMax = r.max;
+    }
+    if (patch.levelVerifiedOnly !== undefined || patch.levelMin !== undefined || patch.levelMax !== undefined) {
+      const after = { min: "levelMin" in set ? (set.levelMin ?? null) : ev.levelMin, max: "levelMax" in set ? (set.levelMax ?? null) : ev.levelMax };
+      const want = (patch.levelVerifiedOnly ?? ev.levelVerifiedOnly) && hasRange(after);
+      if (want !== ev.levelVerifiedOnly) set.levelVerifiedOnly = want;
     }
     if (patch.tz !== undefined) {
       if (!isValidTimeZone(patch.tz)) throw new DomainError("invalid", "tz");

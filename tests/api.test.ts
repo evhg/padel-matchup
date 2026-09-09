@@ -51,7 +51,7 @@ describe("public shapes", () => {
     expect(text).not.toContain("+65");
     expect(text).not.toContain(ev.manageCode);
     expect(pub.players[0]).toMatchObject({ name: "Ana", level: 3.5, organizer: true });
-    expect(pub.level).toEqual({ min: 3, max: 4.5, preset: "gold" });
+    expect(pub.level).toEqual({ min: 3, max: 4.5, preset: "gold", verifiedOnly: false });
     expect(pub.venue?.slug).toBe("club-nine");
     expect(pub.bookingUrl).toBe("https://example.com/b/1");
     expect(pub.spotsLeft).toBe(3);

@@ -51,6 +51,7 @@ export function CreatorPanel({
         capacity: values.type === "tournament" ? values.capacity : undefined,
         levelMin: values.levelMin,
         levelMax: values.levelMax,
+        levelVerifiedOnly: values.levelVerifiedOnly,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl,
         cost: values.cost,

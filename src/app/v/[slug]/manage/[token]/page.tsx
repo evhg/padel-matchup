@@ -5,8 +5,10 @@ import { getTranslations } from "next-intl/server";
 import { FreeCourts } from "@/components/ClubBits";
 import { ClubManageForm } from "@/components/ClubManageForm";
 import { ClubWeekEditor } from "@/components/ClubWeekEditor";
+import { LevelChecks } from "@/components/LevelChecks";
+import { listLevelChecks } from "@/lib/domain/verify";
 import { CLUB_WEEK, clubDay, listClubSlots, upcomingBySlot } from "@/lib/domain/clubWeek";
-import { formatEventTime } from "@/lib/dates";
+import { formatEventTime, relativeTime } from "@/lib/dates";
 import { rangeChip } from "@/lib/levelText";
 import { calendarTitle } from "@/lib/calendar";
 import { getLocale } from "next-intl/server";
@@ -37,6 +39,7 @@ export default async function ClubManagePage({ params }: Props) {
   const day = await clubDay(db, club, now);
   const slots = await listClubSlots(db, club.slug);
   const nextBySlot = await upcomingBySlot(db, club.slug, now);
+  const checks = await listLevelChecks(db, { clubSlug: club.slug });
   return (
     <>
       <Header />
@@ -103,12 +106,13 @@ export default async function ClubManagePage({ params }: Props) {
             {t("club.week.seePublic")}
           </Link>
         </section>
+        <LevelChecks checks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))} by={{ kind: "club", token }} />
         <ClubWeekEditor
           token={token}
           leadDays={CLUB_WEEK.leadDaysDefault}
           slots={slots.map((s) => {
             const next = nextBySlot.get(s.id);
-            return { id: s.id, dow: s.dow, time: s.time, type: s.type, format: s.format, capacity: s.capacity, levelMin: s.levelMin, levelMax: s.levelMax, title: s.title, active: s.active, leadDays: s.leadDays, next: next ? { code: next.code, startsAt: next.startsAt.toISOString() } : null };
+            return { id: s.id, dow: s.dow, time: s.time, type: s.type, format: s.format, capacity: s.capacity, levelMin: s.levelMin, levelMax: s.levelMax, verifiedOnly: s.verifiedOnly, title: s.title, active: s.active, leadDays: s.leadDays, next: next ? { code: next.code, startsAt: next.startsAt.toISOString() } : null };
           })}
         />
         <section className="card">

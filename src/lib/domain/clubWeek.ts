@@ -6,7 +6,7 @@ import { DomainError } from "./errors";
 import { createEvent, isOccupied } from "./events";
 import { formatOf } from "./formats";
 import { nextGroupSlot } from "./groups";
-import { normalizeRange } from "./levels";
+import { hasRange, normalizeRange } from "./levels";
 import { getEventDetail } from "./queries";
 import { withCounts, type BoardEvent } from "./venueBoard";
 
@@ -28,6 +28,8 @@ export type SlotInput = {
   courts?: number | null;
   levelMin?: unknown;
   levelMax?: unknown;
+  /** The matches take confirmed levels only (needs a range). */
+  verifiedOnly?: boolean;
   title?: string | null;
   leadDays?: number;
   whenFull?: "waitlist" | "closed";
@@ -54,6 +56,7 @@ export function cleanSlotInput(i: SlotInput) {
     courts,
     levelMin: range.min,
     levelMax: range.max,
+    verifiedOnly: Boolean(i.verifiedOnly) && hasRange(range),
     title: (i.title ?? "").trim().slice(0, 80) || null,
     leadDays,
     whenFull: i.whenFull === "closed" ? ("closed" as const) : ("waitlist" as const),
@@ -77,7 +80,7 @@ export async function addClubSlot(db: Db, clubSlug: string, input: SlotInput): P
 export async function updateClubSlot(db: Db, clubSlug: string, id: string, patch: Partial<SlotInput> & { active?: boolean }): Promise<ClubSlot | null> {
   const [cur] = await db.select().from(clubSlots).where(and(eq(clubSlots.id, id), eq(clubSlots.clubSlug, clubSlug))).limit(1);
   if (!cur) return null;
-  const merged = cleanSlotInput({ dow: cur.dow, time: cur.time, type: cur.type as "match" | "tournament", format: cur.format as TournamentFormat | null, capacity: cur.capacity, courts: cur.courts, levelMin: cur.levelMin, levelMax: cur.levelMax, title: cur.title, leadDays: cur.leadDays, whenFull: cur.whenFull as "waitlist" | "closed", cost: cur.cost, ...patch });
+  const merged = cleanSlotInput({ dow: cur.dow, time: cur.time, type: cur.type as "match" | "tournament", format: cur.format as TournamentFormat | null, capacity: cur.capacity, courts: cur.courts, levelMin: cur.levelMin, levelMax: cur.levelMax, verifiedOnly: cur.verifiedOnly, title: cur.title, leadDays: cur.leadDays, whenFull: cur.whenFull as "waitlist" | "closed", cost: cur.cost, ...patch });
   const moved = merged.dow !== cur.dow || merged.time !== cur.time;
   const [row] = await db
     .update(clubSlots)
@@ -128,6 +131,7 @@ export async function autoCreateClubEvents(db: Db, now = new Date()): Promise<{ 
       format: slot.format as TournamentFormat | null,
       levelMin: slot.levelMin,
       levelMax: slot.levelMax,
+      levelVerifiedOnly: slot.verifiedOnly,
       publicListing: true,
       bookingUrl: club.bookingUrl,
       cost: slot.cost,

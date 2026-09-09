@@ -3,11 +3,14 @@
 import { useTranslations } from "next-intl";
 import { startTransition, useState, useTransition } from "react";
 import { joinAction, leaveAction, withdrawJoinRequestAction } from "@/actions/slots";
+import { askLevelCheckAction } from "@/actions/verify";
 import { formatLevel, levelFit, type LevelRange } from "@/lib/domain/levels";
 import { requestJoin } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past" | "requested" | "request_declined";
+/** Someone who can confirm the viewer's level for this event: a coach at the club, or the club. */
+export type VerifierDTO = { key: string; name: string; target: { coachId: string } | { clubSlug: string } };
 
 export function JoinBar({
   code,
@@ -20,6 +23,10 @@ export function JoinBar({
   rangeText = "",
   myLevel = null,
   organizerName = "",
+  verifiedOnly = false,
+  verified = false,
+  verifiers = [],
+  asked = [],
 }: {
   code: string;
   state: JoinState;
@@ -33,17 +40,27 @@ export function JoinBar({
   rangeText?: string;
   myLevel?: number | null;
   organizerName?: string;
+  /** The event takes confirmed levels only. */
+  verifiedOnly?: boolean;
+  /** The viewer's level carries a tick. */
+  verified?: boolean;
+  verifiers?: VerifierDTO[];
+  /** Keys of verifiers the viewer already asked. */
+  asked?: string[];
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
   const [error, setError] = useState<string | null>(null);
+  const [askedKeys, setAskedKeys] = useState<string[]>(asked);
   const [pending, start] = useTransition();
 
   const fit = levelFit(levelRange, myLevel);
   const needsLevel = Boolean(levelRange) && myLevel == null;
   const outOfRange = fit === "below" || fit === "above";
+  // Inside the range, but the event wants a confirmed level and this one is only declared.
+  const unverified = Boolean(levelRange) && verifiedOnly && fit === "ok" && !verified;
 
   // State updates after an awaited server action are wrapped in startTransition
   // so they join the router's transition instead of interrupting it (React 19).
@@ -75,9 +92,18 @@ export function JoinBar({
       });
     });
 
+  const ask = (v: VerifierDTO) =>
+    start(async () => {
+      const r = await askLevelCheckAction(code, v.target);
+      startTransition(() => {
+        if (!r.ok) setError(r.error === "too_many" ? t("errors.too_many") : t("errors.generic"));
+        else setAskedKeys((k) => (k.includes(v.key) ? k : [...k, v.key]));
+      });
+    });
+
   if (state === "cancelled" || state === "past") return null;
 
-  const joinLabel = outOfRange ? t("level.askToJoin") : state === "join_waitlist" ? t("event.joinWaitlist") : isTournament ? t("event.joinTournament") : t("event.join");
+  const joinLabel = outOfRange || unverified ? t("level.askToJoin") : state === "join_waitlist" ? t("event.joinWaitlist") : isTournament ? t("event.joinTournament") : t("event.join");
 
   // No identity yet (or no level yet on a ranged event): expand an in-flow spot
   // instead of opening a sheet (fixed overlays drift off screen on iOS once the keyboard shows).
@@ -117,16 +143,34 @@ export function JoinBar({
                 </button>
               )}
               <div className="flex justify-between gap-2 text-xs font-semibold text-muted">
-                <span>{outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
+                <span>{outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : unverified && myLevel != null ? t("levelCheck.gate", { level: formatLevel(myLevel) }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
                 {error && <span className="text-danger">{error}</span>}
               </div>
             </div>
           )}
           {state === "requested" && (
             <>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="text-base font-extrabold">✋ {t("level.requestSent")}</div>
                 <div className="text-xs text-muted">{t("level.requestSentHelp", { name: organizerName })}</div>
+                {unverified &&
+                  (verifiers.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5" data-testid="ask-verifiers">
+                      {verifiers.map((v) =>
+                        askedKeys.includes(v.key) ? (
+                          <span key={v.key} className="chip-open">
+                            {t("levelCheck.askedVerifier", { name: v.name })}
+                          </span>
+                        ) : (
+                          <button key={v.key} type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => ask(v)}>
+                            {t("levelCheck.askVerifier", { name: v.name })}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted">{t("levelCheck.noVerifier")}</div>
+                  ))}
                 {error && <div className="text-xs text-danger">{error}</div>}
               </div>
               <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={withdraw}>

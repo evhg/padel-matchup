@@ -16,7 +16,7 @@ const errorSchema = {
   required: ["error"],
 };
 
-const level = { type: ["object", "null"], properties: { min: { type: ["number", "null"] }, max: { type: ["number", "null"] }, preset: { type: ["string", "null"], description: "bronze, silver, gold, platinum or custom" } } };
+const level = { type: ["object", "null"], properties: { min: { type: ["number", "null"] }, max: { type: ["number", "null"] }, preset: { type: ["string", "null"], description: "bronze, silver, gold, platinum or custom" }, verifiedOnly: { type: "boolean", description: "Only levels confirmed by an organizer, a coach or the club walk in; declared levels inside the range ask to join." } } };
 
 const publicMatch = {
   type: "object",
@@ -97,7 +97,7 @@ export function openapiDocument(base: string) {
           tags: ["matches"],
           operationId: "joinMatch",
           summary: "Join a match by name (or by an existing personal token)",
-          description: "Outcomes: joined, waitlisted, already_in, full, or requested when the player's level is outside the match's range (the organizer approves on the match page).",
+          description: "Outcomes: joined, waitlisted, already_in, full, or requested when the player's level is outside the match's range, or declared but unconfirmed on a match that takes confirmed levels only (the organizer approves on the match page; a coach's or the club's confirmation seats the player).",
           security: [{}, { bearer: [] }],
           parameters: [{ name: "code", in: "path", required: true, schema: { type: "string" } }],
           requestBody: jsonBody(ref("JoinMatch")),

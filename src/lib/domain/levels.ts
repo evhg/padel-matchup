@@ -195,3 +195,17 @@ export function fromScale(scaleId: string, value: unknown): number | null {
   if (!scale || !Number.isFinite(v) || v < scale.min || v > scale.max) return null;
   return clampLevel(Math.round(scale.toLevel(v) / LEVEL_STEP) * LEVEL_STEP);
 }
+
+export type Admission = LevelFit | "unverified";
+
+/**
+ * Who walks in. Open events admit everyone; a ranged event admits levels inside
+ * the range; a verified-only event admits only levels inside the range that
+ * someone confirmed (organizer, coach or club). Everyone else asks to join.
+ */
+export function admission(ev: { levelMin: number | null; levelMax: number | null; levelVerifiedOnly?: boolean | null }, p: { level: number | null | undefined; levelVerifiedLevel?: number | null } | null | undefined): Admission {
+  const r = { min: ev.levelMin, max: ev.levelMax };
+  const fit = levelFit(r, p?.level);
+  if (fit !== "ok" || !hasRange(r) || !ev.levelVerifiedOnly) return fit;
+  return p && isLevelVerified({ level: p.level ?? null, levelVerifiedLevel: p.levelVerifiedLevel ?? null }) ? "ok" : "unverified";
+}

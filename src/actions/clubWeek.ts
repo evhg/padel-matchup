@@ -15,6 +15,7 @@ const slotSchema = z.object({
   capacity: z.number().int().min(4).max(64).optional(),
   levelMin: z.number().min(0).max(7).nullable().optional(),
   levelMax: z.number().min(0).max(7).nullable().optional(),
+  verifiedOnly: z.boolean().optional(),
   title: z.string().max(80).optional(),
   leadDays: z.number().int().min(1).max(14).optional(),
 });

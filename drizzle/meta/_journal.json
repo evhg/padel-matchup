@@ -225,6 +225,13 @@
       "when": 1788941942431,
       "tag": "0031_club_week",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788944297967,
+      "tag": "0032_verified_levels",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,7 @@ import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
-import { hasRange, levelFit } from "@/lib/domain/levels";
+import { admission, hasRange } from "@/lib/domain/levels";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
@@ -44,6 +44,7 @@ export const createMatchSchema = z.object({
   whenFull: z.enum(["waitlist", "closed"]).default("waitlist"),
   levelMin: levelField.describe("Level range 0 to 7 (Playtomic-style). Omit both for any level."),
   levelMax: levelField,
+  verifiedLevelsOnly: z.boolean().default(false).describe("With a range: only levels confirmed by an organizer, a coach or a club walk in; declared levels inside the range ask to join."),
   title: z.string().max(80).optional(),
   note: z.string().max(500).optional(),
   bookingUrl: z.url().max(500).optional().describe("The club's booking page or confirmation link, shown to players."),
@@ -138,6 +139,7 @@ export async function createMatch(db: Db, raw: unknown, ctx: OpContext, locale =
     pointsPerMatch: input.pointsPerMatch ?? DEFAULT_POINTS[formatOf(input.format)],
     levelMin: input.levelMin ?? null,
     levelMax: input.levelMax ?? null,
+    levelVerifiedOnly: input.verifiedLevelsOnly,
     publicListing: input.listOnVenueBoard,
     bookingUrl: input.bookingUrl,
     cost: input.cost,
@@ -182,7 +184,7 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
   const token = await getOrCreatePersonalToken(db, player.id);
   const me = { name: player.displayName, personalToken: token, personalUrl: personalUrl(base, token) };
   if (hasRange(range) && player.id !== ev.creatorPlayerId) {
-    const fit = levelFit(range, player.level);
+    const fit = admission(ev, player);
     if (fit === "unknown") throw new ApiError(422, "level_required", `This match is for levels ${range.min ?? 0}–${range.max ?? 7}. Pass the player's level (0–7) to join.`, "Levels are self-declared in quarter steps; 3.0 is a consistent intermediate player.");
     if (fit !== "ok") {
       const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === player.id);
@@ -190,7 +192,11 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
         await createJoinRequest(db, { eventId: ev.id, playerId: player.id, level: player.level });
         ctx.afterwards(async () => notifyCreator(db, ev, "requested", `${player.displayName} (${player.level})`, player.id));
         const fresh = (await getEventByCode(db, ev.code))!;
-        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, next: "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page." };
+        const next =
+          fit === "unverified"
+            ? "This match takes confirmed levels only. The player's level is inside the range but nobody has confirmed it, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
+            : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
+        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, next };
       }
     }
   }

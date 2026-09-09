@@ -35,6 +35,7 @@ import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
+import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
 import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
@@ -98,6 +99,11 @@ export default async function EventPage({ params, searchParams }: Props) {
   const requests = ranged ? await getJoinRequests(db, ev.id) : [];
   const myRequest = me ? requests.find((r) => r.playerId === me.id) : undefined;
   const pendingRequests = viewer.isCreator ? requests.filter((r) => r.status === "pending") : [];
+  // Confirmed levels only: who can confirm the viewer's, and whom they already asked.
+  const verifiers = ranged && ev.levelVerifiedOnly && !cancelled && !over ? await verifiersFor(db, ev) : [];
+  const myChecks = me && verifiers.length > 0 ? await myLevelChecks(db, me.id) : [];
+  const verifierDTOs = verifiers.map((v) => (v.kind === "coach" ? { key: `coach:${v.id}`, name: v.name, target: { coachId: v.id } } : { key: `club:${v.slug}`, name: v.name, target: { clubSlug: v.slug } }));
+  const askedKeys = myChecks.map((c) => (c.coachId ? `coach:${c.coachId}` : `club:${c.clubSlug}`));
 
   let joinState: JoinState = "join";
   if (cancelled) joinState = "cancelled";
@@ -252,6 +258,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             <span className={statusChip.cls}>{statusChip.label}</span>
             <span className="text-xs font-bold uppercase tracking-wider text-faint">{typeLabel}</span>
             {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
+            {levelChip && ev.levelVerifiedOnly && <span className="chip-muted">✓ {t("levelCheck.chip")}</span>}
             {group && (
               <Link href={`/g/${group.code}`} prefetch={false} className="chip-muted hover:bg-line">
                 👥 {t("group.partOf", { name: group.name })}
@@ -427,6 +434,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               pointsPerMatch: ev.pointsPerMatch,
               levelMin: ev.levelMin,
               levelMax: ev.levelMax,
+              levelVerifiedOnly: ev.levelVerifiedOnly,
               myLevel: creator.level,
               publicListing: ev.publicListing,
               format: ev.format ?? "americano",
@@ -466,6 +474,10 @@ export default async function EventPage({ params, searchParams }: Props) {
         rangeText={levelRangeText}
         myLevel={me?.level ?? null}
         organizerName={creator.displayName}
+        verifiedOnly={ev.levelVerifiedOnly}
+        verified={me ? isLevelVerified(me) : false}
+        verifiers={verifierDTOs}
+        asked={askedKeys}
       />
     </>
   );

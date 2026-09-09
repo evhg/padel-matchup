@@ -65,6 +65,8 @@ export const players = pgTable(
     levelVerifiedAt: timestamp("level_verified_at", { withTimezone: true }),
     levelVerifiedBy: uuid("level_verified_by"),
     levelVerifiedLevel: real("level_verified_level"),
+    /** Who confirmed: organizer (played with them), coach or club (a level check). */
+    levelVerifiedSource: text("level_verified_source"),
     /** Opted in to the public club and city rankings. Off by default. */
     rankingOptIn: boolean("ranking_opt_in").notNull().default(false),
     /** Telegram account linked by the bot or the login widget. */
@@ -162,6 +164,8 @@ export const events = pgTable(
     /** Level range (0–7). Both null = open to everyone; outside the range players ask to join. */
     levelMin: real("level_min"),
     levelMax: real("level_max"),
+    /** Verified levels only: a self-declared level inside the range still asks to join; a confirmed one walks in. */
+    levelVerifiedOnly: boolean("level_verified_only").notNull().default(false),
     /** Result-based level adjustment ran for this event (once, on the organizer's finalize/confirm). */
     levelsAppliedAt: timestamp("levels_applied_at", { withTimezone: true }),
     /** The group this match belongs to (created from a group, or the group was formed from it). */
@@ -1284,6 +1288,8 @@ export const clubSlots = pgTable(
     courts: integer("courts"),
     levelMin: real("level_min"),
     levelMax: real("level_max"),
+    /** The matches made from this slot take confirmed levels only (see events.level_verified_only). */
+    verifiedOnly: boolean("verified_only").notNull().default(false),
     /** "Ladies social", "Gold night"; shown as the match title. */
     title: text("title"),
     /** The match appears on the page this many days ahead. */
@@ -1297,3 +1303,33 @@ export const clubSlots = pgTable(
   (t) => [index("club_slots_club_idx").on(t.clubSlug)],
 );
 export type ClubSlot = typeof clubSlots.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Level checks: a player asks a coach or a club to confirm their level; one tap confirms it
+// ---------------------------------------------------------------------------
+
+export const levelChecks = pgTable(
+  "level_checks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** Exactly one of the two: the coach asked, or the club asked. */
+    coachId: uuid("coach_id").references(() => coaches.id, { onDelete: "cascade" }),
+    clubSlug: text("club_slug").references(() => clubs.slug, { onDelete: "cascade" }),
+    /** The player's level when they asked. */
+    level: real("level"),
+    /** The match the player was trying to join, if any (so the answer can point back to it). */
+    eventId: uuid("event_id").references(() => events.id, { onDelete: "set null" }),
+    /** pending | confirmed | declined | withdrawn */
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedByPlayerId: uuid("decided_by_player_id").references(() => players.id, { onDelete: "set null" }),
+    /** The level the verifier confirmed (may differ from what the player declared). */
+    decidedLevel: real("decided_level"),
+  },
+  (t) => [index("level_checks_player_idx").on(t.playerId), index("level_checks_coach_idx").on(t.coachId), index("level_checks_club_idx").on(t.clubSlug)],
+);
+export type LevelCheck = typeof levelChecks.$inferSelect;

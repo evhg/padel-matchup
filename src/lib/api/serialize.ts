@@ -33,7 +33,7 @@ export type PublicMatch = {
   spotsLeft: number;
   waitlist: number;
   whenFull: "waitlist" | "closed";
-  level: { min: number | null; max: number | null; preset: string | null } | null;
+  level: { min: number | null; max: number | null; preset: string | null; /** Only confirmed levels walk in; declared ones ask. */ verifiedOnly?: boolean } | null;
   group: { code: string; name: string; url: string } | null;
   listed: boolean;
   bookingUrl: string | null;
@@ -71,7 +71,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     spotsLeft: detail.roster.filter(isClaimable).length,
     waitlist: detail.waitlist.filter((s) => s.status === "joined").length,
     whenFull: ev.whenFull,
-    level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range) } : null,
+    level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range), verifiedOnly: ev.levelVerifiedOnly } : null,
     group: group ? { code: group.code, name: group.name, url: `${base}/g/${group.code}` } : null,
     listed: ev.publicListing,
     bookingUrl: ev.bookingUrl,
@@ -93,7 +93,7 @@ export function boardToPublic(board: VenueBoard, base: string): PublicBoard {
     calendarUrl: `${base}/v/${board.slug}/calendar.ics`,
     matches: board.events.map(({ event: ev, occupied, spotsLeft }) => {
       const range = { min: ev.levelMin, max: ev.levelMax };
-      return { code: ev.code, url: `${base}/${ev.code}`, type: ev.type, title: ev.title, startsAt: ev.startsAt.toISOString(), tz: ev.tz, capacity: ev.capacity, players: occupied, spotsLeft, level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range) } : null };
+      return { code: ev.code, url: `${base}/${ev.code}`, type: ev.type, title: ev.title, startsAt: ev.startsAt.toISOString(), tz: ev.tz, capacity: ev.capacity, players: occupied, spotsLeft, level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range), verifiedOnly: ev.levelVerifiedOnly } : null };
     }),
   };
 }

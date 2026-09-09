@@ -84,6 +84,7 @@ try {
   await page.getByTestId("slot-time").fill("23:00");
   await page.getByRole("radio", { name: "Americano" }).click();
   await page.getByRole("radio", { name: /Gold/ }).click();
+  await page.getByTestId("slot-verified-only").check();
   await page.getByTestId("slot-title").fill("Gold night");
   await page.getByTestId("slot-add").click();
   await page.getByText(/Added\. The first match appears/).waitFor({ timeout: 20000 });
@@ -95,6 +96,32 @@ try {
   check("the club page shows this week with the gold night and eight open seats", (await weekCard.count()) === 1 && (await weekCard.getByText("Gold night").count()) >= 1 && (await weekCard.getByText("0/8").count()) >= 1);
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the editor names the next match of the slot", (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).count()) === 1);
+
+  // ---- Confirmed levels only: a declared level asks, the club confirms in one tap, the player is seated ----
+  const slotText = (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).textContent()) ?? "";
+  const goldCode = slotText.match(/next: ([A-Za-z0-9]{4})/)?.[1];
+  check("the slot row says its matches take confirmed levels", /confirmed levels/.test(slotText), slotText);
+  const gold = await fetch(`${BASE}/api/v1/matches/${goldCode}`).then((r) => r.json());
+  check("the API marks the gold night as confirmed levels only", (gold.match ?? gold).level?.verifiedOnly === true, JSON.stringify((gold.match ?? gold).level));
+  const asked = await fetch(`${BASE}/api/v1/matches/${goldCode}/join`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Mia", level: 3.5 }) }).then((r) => r.json());
+  check("a declared level inside the range lands on the organizer's list, with the confirmation hint", asked.outcome === "requested" && /confirmed levels/.test(asked.next ?? ""), JSON.stringify(asked).slice(0, 200));
+  const mia = await (await browser.newContext(iphone)).newPage();
+  await mia.goto(`${BASE}/p/${asked.player.personalToken}/${goldCode}`);
+  await mia.getByText("Request sent").waitFor({ timeout: 20000 });
+  check("the match page carries the confirmed-levels chip", (await mia.getByText(/confirmed levels/).count()) >= 1);
+  const askClub = mia.getByRole("button", { name: `Ask ${CLUB} to confirm my level` });
+  check("Mia can ask the club to confirm her level in one tap", (await askClub.count()) === 1);
+  await askClub.click();
+  await mia.getByText(`Asked ${CLUB} ✓`).waitFor({ timeout: 20000 });
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  const checks = page.getByTestId("level-checks");
+  check("the manage page lists Mia's level to confirm", (await checks.count()) === 1 && (await checks.getByText("Mia").count()) === 1 && (await checks.getByText("says 3.5").count()) === 1);
+  await page.getByTestId("level-check-confirm").click();
+  await page.getByText(/Mia: confirmed at 3\.5, seated in 1 match\./).waitFor({ timeout: 20000 });
+  await mia.reload();
+  check("Mia is in the gold night once the club confirmed, nobody else tapped", (await mia.getByText(/You.re in/).count()) === 1);
+  const seated = await fetch(`${BASE}/api/v1/matches/${goldCode}`).then((r) => r.json());
+  check("the API shows Mia seated with her level", ((seated.match ?? seated).players ?? []).some((p) => p.name === "Mia" && p.level === 3.5), JSON.stringify((seated.match ?? seated).players));
   const bad = await fetch(`${BASE}/v/${SLUG}/manage/not-the-token`);
   check("a wrong manage token is 404", bad.status === 404);
 } finally {

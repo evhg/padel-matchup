@@ -21,7 +21,7 @@ import {
   type JoinOutcome,
 } from "@/lib/domain/slots";
 import { joinGroup } from "@/lib/domain/groups";
-import { formatLevel, hasRange, levelFit } from "@/lib/domain/levels";
+import { admission, formatLevel, hasRange } from "@/lib/domain/levels";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { lineupComplete } from "@/lib/lineup";
@@ -47,7 +47,8 @@ export async function joinAction(code: string, name?: string, level?: number | n
     const ev = detail.event;
     const range = { min: ev.levelMin, max: ev.levelMax };
     if (hasRange(range) && me.id !== ev.creatorPlayerId) {
-      const fit = levelFit(range, myLevel);
+      // Inside the range and confirmed (or the event takes declared levels): in. Otherwise the organizer's list.
+      const fit = admission(ev, { level: myLevel, levelVerifiedLevel: me.levelVerifiedLevel });
       if (fit === "unknown") throw new ActionFailure("level_required");
       if (fit !== "ok") {
         const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
