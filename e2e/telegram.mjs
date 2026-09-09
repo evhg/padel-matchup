@@ -175,6 +175,17 @@ try {
   check("block day time keeps a window free", blocked.json?.outcome === "coach:block", JSON.stringify(blocked.json));
   const nonsense = await say(7, "what is the meaning of padel");
   check("anything unclear gets the short help, never a booking", nonsense.json?.outcome === "coach:help", JSON.stringify(nonsense.json));
+  // Buttons, not commands: /start gives a coach the menu under the text field; a tapped label is the same as the word typed.
+  const menu = await say(8, "/start");
+  check("/start gives a coach the assistant's menu", menu.json?.outcome === "coach_menu", JSON.stringify(menu.json));
+  const tappedToday = await say(9, "📅 Today");
+  check("the Today button lists the agenda", tappedToday.json?.outcome === "coach:agenda", JSON.stringify(tappedToday.json));
+  const tappedBook = await say(10, "＋ Book");
+  check("the Book button explains the one line it needs", tappedBook.json?.outcome === "coach:book_how", JSON.stringify(tappedBook.json));
+  const slashWeek = await say(11, "/week");
+  check("the menu's /week command is the week's agenda", slashWeek.json?.outcome === "coach:agenda", JSON.stringify(slashWeek.json));
+  const coachCmd = await say(12, "/coach");
+  check("/coach sends the menu and the link to the book", coachCmd.json?.outcome === "coach_link", JSON.stringify(coachCmd.json));
 
   // Ivan, a Telegram user, asks to join through the page; Оля accepts on the web; from then on his private chat answers him.
   const ivanPrivate = { id: 424242, type: "private" };
