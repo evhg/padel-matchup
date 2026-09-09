@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { coachBookAction, coachCancelAction, coachNoShowAction, decideRequestAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
+import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
 
 export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; pkg: { left: number; size: number; days: number | null } | null };
@@ -15,10 +16,10 @@ export type StudentOption = { id: string; name: string };
 
 export type RequestDTO = { id: string; name: string; label: string; note: string | null };
 export type MonthDTO = { label: string; done: number; noShows: number };
-type Props = { handle: string; url: string; today: string; welcome: boolean; students: StudentOption[]; lessons: LessonDTO[]; slots: SlotDTO[]; dayLabels: Record<string, string>; days: string[]; requests?: RequestDTO[]; waiting?: number; month?: MonthDTO | null };
+type Props = { handle: string; url: string; today: string; welcome: boolean; students: StudentOption[]; lessons: LessonDTO[]; slots: SlotDTO[]; dayLabels: Record<string, string>; days: string[]; requests?: RequestDTO[]; waiting?: number; month?: MonthDTO | null; levelChecks?: LevelCheckDTO[] };
 
 /** The coach's book: today, the next days, one button to book. Everything else behind "More". */
-export function CoachHome({ handle, url, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null }: Props) {
+export function CoachHome({ handle, url, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [] }: Props) {
   const t = useTranslations("coach");
   // The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in.
   const inviteUrl = `${url.replace(/\/c\/[^/]+$/, "")}/coaches?s=invite`;
@@ -132,6 +133,7 @@ export function CoachHome({ handle, url, today, welcome, students, lessons, slot
           </ul>
         </section>
       )}
+      <LevelChecks checks={levelChecks} by={{ kind: "coach" }} />
       <section className="card">
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-3xl font-extrabold tracking-tight">{t("home.title")}</h1>

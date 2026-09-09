@@ -33,6 +33,8 @@ export type EventFormValues = {
   /** Level range; both null = open to everyone. */
   levelMin: number | null;
   levelMax: number | null;
+  /** With a range: only confirmed levels walk in; declared ones ask to join. */
+  levelVerifiedOnly: boolean;
   /** Organizer's own level, asked once when they set a range without having one. */
   myLevel: number | null;
   /** Opt-in to the public venue board (needs a venue). */
@@ -288,6 +290,15 @@ export function EventFields({
           </div>
         )}
         <p className="mt-1.5 text-sm text-muted">{hasRange(range) ? t("level.rangeHelp", { range: rangeText(t, range) }) : t("level.anyHelp")}</p>
+        {hasRange(range) && (
+          <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.levelVerifiedOnly} onChange={(e) => onChange({ levelVerifiedOnly: e.target.checked })} data-testid="verified-only" />
+            <span className="min-w-0">
+              <span className="block font-bold">✓ {t("levelCheck.verifiedOnly")}</span>
+              <span className="block text-xs text-muted">{t("levelCheck.verifiedOnlyHelp")}</span>
+            </span>
+          </label>
+        )}
         {hasRange(range) && !hasLevel && (
           <div className="mt-3 rounded-2xl bg-bg p-3">
             <label className="label">{t("level.yourLevel")}</label>

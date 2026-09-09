@@ -7,7 +7,7 @@ import { addClubSlotAction, removeClubSlotAction, setClubSlotActiveAction, type 
 import { LEVEL_PRESETS, type PresetKey } from "@/lib/domain/levels";
 import { rangeChip } from "@/lib/levelText";
 
-export type EditorSlot = { id: string; dow: number; time: string; type: string; format: string | null; capacity: number; levelMin: number | null; levelMax: number | null; title: string | null; active: boolean; leadDays: number; next: { code: string; startsAt: string } | null };
+export type EditorSlot = { id: string; dow: number; time: string; type: string; format: string | null; capacity: number; levelMin: number | null; levelMax: number | null; verifiedOnly: boolean; title: string | null; active: boolean; leadDays: number; next: { code: string; startsAt: string } | null };
 
 const KINDS = [
   { key: "match", type: "match" as const, format: null, capacity: 4 },
@@ -27,6 +27,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   const [kind, setKind] = useState<(typeof KINDS)[number]["key"]>("americano");
   const [capacity, setCapacity] = useState(8);
   const [preset, setPreset] = useState<PresetKey | "any">("any");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [title, setTitle] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
     e.preventDefault();
     const k = KINDS.find((x) => x.key === kind)!;
     const range = preset === "any" ? null : LEVEL_PRESETS.find((p) => p.key === preset)!;
-    const input: ClubSlotInput = { dow, time, type: k.type, format: k.format, capacity, levelMin: range?.min ?? null, levelMax: range?.max ?? null, title: title.trim() || undefined, leadDays };
+    const input: ClubSlotInput = { dow, time, type: k.type, format: k.format, capacity, levelMin: range?.min ?? null, levelMax: range?.max ?? null, verifiedOnly: Boolean(range) && verifiedOnly, title: title.trim() || undefined, leadDays };
     start(async () => {
       setError(null);
       const r = await addClubSlotAction(token, input);
@@ -87,6 +88,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
                   <div className="truncate text-xs text-muted">
                     {t("club.week.players", { count: s.capacity })}
                     {level ? ` · ${level}` : ""}
+                    {s.verifiedOnly ? ` · ✓ ${t("levelCheck.chip")}` : ""}
                     {!s.active ? ` · ${t("club.week.paused")}` : s.next ? ` · ${t("club.week.nextUp", { code: s.next.code })}` : ""}
                   </div>
                 </div>
@@ -146,6 +148,15 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
             </button>
           ))}
         </div>
+        {preset !== "any" && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white px-4 py-3">
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} data-testid="slot-verified-only" />
+            <span className="min-w-0">
+              <span className="block text-sm font-bold">✓ {t("levelCheck.verifiedOnly")}</span>
+              <span className="block text-xs text-muted">{t("levelCheck.verifiedOnlyHelp")}</span>
+            </span>
+          </label>
+        )}
         <label className="block">
           <span className="text-xs font-bold">{t("club.week.titleLabel")}</span>
           <input className="input mt-1" value={title} maxLength={80} placeholder={t("club.week.titlePlaceholder")} onChange={(e) => setTitle(e.target.value)} data-testid="slot-title" />

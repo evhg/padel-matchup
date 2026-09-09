@@ -26,6 +26,8 @@ export const LIMITS = {
   emailChangesPerPlayerPerDay: 10,
   personalLinkMailsPerPlayerPerDay: 5,
   inviteResendsPerPlayerPerDay: 6,
+  /** "Confirm my level" asks a player may send in a day (coaches and clubs together). */
+  levelChecksPerPlayerPerDay: 6,
   restoreCodesPerIpPerDay: 20,
   clientErrorReportsPerIpPerDay: 60,
   feedbackPerIpPerDay: 5,

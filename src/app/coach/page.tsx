@@ -13,6 +13,8 @@ import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/co
 import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
 import { busyBetween, DAY_MS, getCoachForActor, listCoachLessons, listStudents, openSlots } from "@/lib/domain/coaching";
+import { listLevelChecks } from "@/lib/domain/verify";
+import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +62,7 @@ export default async function CoachPage({ searchParams }: Props) {
   const from = zonedTimeToUtc(today, "00:00", coach.tz);
   const to = new Date(from.getTime() + 14 * DAY_MS);
   const month = monthRange(coach.tz, now);
-  const [rows, students, busy, requests, waiting, counts] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to)]);
+  const [rows, students, busy, requests, waiting, counts, checks] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id })]);
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", timeZone: coach.tz }).format(now);
   const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   // The coach may book at short notice: no minimum notice on their own grid.
@@ -79,6 +81,7 @@ export default async function CoachPage({ searchParams }: Props) {
       requests={requests.map((r) => ({ id: r.id, name: r.player.displayName, label: whenLabel(r.startsAt, coach.tz, locale), note: r.note }))}
       waiting={new Set(waiting.map((w) => w.studentPlayerId)).size}
       month={counts.done + counts.noShows > 0 ? { label: monthLabel, done: counts.done, noShows: counts.noShows } : null}
+      levelChecks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))}
     />,
   );
 }

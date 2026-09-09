@@ -660,6 +660,32 @@
     "badLinkTitle": "That link doesn't check out",
     "badLinkBody": "It may be incomplete or expired. Use the link from the email you received."
   },
+  "levelCheck": {
+    "verifiedOnly": "Confirmed levels only",
+    "verifiedOnlyHelp": "A level confirmed by an organizer, a coach or the club walks in; a declared one asks to join.",
+    "chip": "confirmed levels",
+    "gate": "Confirmed levels only. Yours ({level}) fits but nobody has confirmed it yet: ask to join, then ask a coach to confirm.",
+    "askVerifier": "Ask {name} to confirm my level",
+    "askedVerifier": "Asked {name} ✓",
+    "noVerifier": "No coach at this club is on Kicksmash yet; the organizer decides.",
+    "checksTitle": "Levels to confirm",
+    "checksHelp": "Players asking you to confirm their level. Pick the number you have seen them play at.",
+    "declared": "says {level}",
+    "confirm": "Confirm",
+    "decline": "Not yet",
+    "done": "{name}: confirmed at {level}{admitted, plural, =0 {} one {, seated in # match} other {, seated in # matches}}.",
+    "declined": "{name}: not confirmed.",
+    "notify": {
+      "askedSubject": "{name} asks you to confirm their level",
+      "askedBody": "{name} plays at {level} and asked you to confirm it. One tap: the level you have seen, or not yet.",
+      "open": "Open",
+      "confirmedSubject": "Your level {level} is confirmed",
+      "confirmedBody": "{verifier} confirmed your level at {level}. Matches that take confirmed levels now let you straight in.",
+      "admittedBody": "You are in: {matches}.",
+      "declinedSubject": "About your level",
+      "declinedBody": "{verifier} did not confirm your level this time. Play with them and ask again, or ask another coach."
+    }
+  },
   "level": {
     "label": "Level",
     "any": "Any level",
@@ -726,7 +752,7 @@
       "podiums": "Podiums"
     },
     "levelNeeded": "Pick your level to join",
-    "verified": "Confirmed by an organizer",
+    "verified": "Confirmed",
     "confirmTitle": "Confirm levels",
     "confirmHelp": "You played with them. If a level looks right, confirm it: the player gets a tick next to their level, and rankings can trust it.",
     "confirmHelpShort": "{count, plural, one {# player to confirm} other {# players to confirm}}",
@@ -987,7 +1013,7 @@
     "memberSince": "On Kicksmash since {date}",
     "playsAt": "Plays at",
     "noLevel": "No level yet",
-    "verifiedBy": "Confirmed by an organizer",
+    "verifiedBy": "Confirmed",
     "selfDeclared": "Self-declared",
     "adjusted": "Moved by results",
     "verify": "Verify this level",
