@@ -928,17 +928,59 @@ export async function postTelegramNotice(db: Db, code: string, kind: "updated" |
 }
 
 /** The organizer's private feed: who joined, left, asked. One short line, their locale, a button to the match. Never throws. */
-export async function telegramCreatorNote(db: Db, detail: EventDetail, creator: Player, kind: string, actorName: string): Promise<boolean> {
+/** The organizer's running message keeps this many lines and is edited for a day; after that a new one starts. */
+const FEED_LINES = 8;
+const FEED_WINDOW_MS = 24 * 3_600_000;
+/** Changes that quietly update the running message; a leave, a decline or an ask speaks up in a new one. */
+const FEED_QUIET = new Set(["joined", "waitlisted", "confirmed", "promoted"]);
+const feedLines = (raw: string | null): string[] => {
+  try {
+    const v = JSON.parse(raw ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * The organizer's private feed: one running message per match, edited as people join
+ * (padel chats have message fatigue; the fewer messages the better), a new message only
+ * when someone leaves, declines or asks. The feed row lives in telegram_cards as kind "feed".
+ */
+export async function telegramCreatorNote(db: Db, detail: EventDetail, creator: Player, kind: string, actorName: string, now = new Date()): Promise<boolean> {
   if (!telegramEnabled() || !creator.telegramId) return false;
   try {
     const locale = botLocale(creator.locale);
     const s = strings(locale);
     const ev = detail.event;
+    const chatId = creator.telegramId;
     const n = detail.roster.filter((x) => x.position <= ev.capacity && isOccupied(x)).length;
     const token = await getOrCreatePersonalToken(db, creator.id);
-    const text = `${esc(s.orgNote(kind, actorName, n, ev.capacity))}\n<i>${esc(cardTitle(detail, locale))} · ${esc(whenLine(detail, locale))} · ${esc(whereLine(detail, locale))}</i>`;
-    const res = await sendMessage(creator.telegramId, text, { keyboard: { inline_keyboard: [[{ text: s.open, url: personalEventUrl(baseUrl(), token, ev.code) }]] }, silent: kind !== "left" && kind !== "declined" });
-    return res.ok;
+    const line = s.orgNote(kind, actorName, n, ev.capacity);
+    const footer = `<i>${esc(cardTitle(detail, locale))} · ${esc(whenLine(detail, locale))} · ${esc(whereLine(detail, locale))}</i>`;
+    const keyboard = { inline_keyboard: [[{ text: s.open, url: personalEventUrl(baseUrl(), token, ev.code) }]] };
+    const [feed] = await db
+      .select()
+      .from(telegramCards)
+      .where(and(eq(telegramCards.eventId, ev.id), eq(telegramCards.chatId, chatId), eq(telegramCards.kind, "feed")))
+      .limit(1);
+    if (feed && FEED_QUIET.has(kind) && now.getTime() - feed.updatedAt.getTime() < FEED_WINDOW_MS) {
+      const lines = [...feedLines(feed.rendered), line].slice(-FEED_LINES);
+      const edited = await editMessageText(chatId, feed.messageId, `${lines.map(esc).join("\n")}\n${footer}`, keyboard);
+      if (edited.ok || /message is not modified/i.test(edited.description)) {
+        await db.update(telegramCards).set({ rendered: JSON.stringify(lines), updatedAt: now }).where(eq(telegramCards.id, feed.id));
+        return true;
+      }
+    }
+    const res = await sendMessage(chatId, `${esc(line)}\n${footer}`, { keyboard, silent: kind !== "left" && kind !== "declined" });
+    if (!res.ok) return false;
+    // The private chat may be new to us (the organizer linked through the web): the feed row needs its chat row.
+    await db.insert(telegramChats).values({ chatId, type: "private", locale }).onConflictDoNothing();
+    await db
+      .insert(telegramCards)
+      .values({ eventId: ev.id, chatId, messageId: res.result.message_id, kind: "feed", rendered: JSON.stringify([line]), updatedAt: now })
+      .onConflictDoUpdate({ target: [telegramCards.eventId, telegramCards.chatId, telegramCards.kind], set: { messageId: res.result.message_id, rendered: JSON.stringify([line]), updatedAt: now } });
+    return true;
   } catch {
     return false;
   }
