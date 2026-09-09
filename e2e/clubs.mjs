@@ -74,6 +74,27 @@ try {
   await page.getByText("Saved").waitFor({ timeout: 15000 });
   const after = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
   check("edits through the manage link go live at once", after.booking?.platform === "playtomic");
+
+  // ---- The club watches: one slot on the week, the hourly job makes the match, players see it ----
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  check("the manage page shows today's view and the week editor", (await page.getByTestId("club-day").count()) === 1 && (await page.getByTestId("club-week-editor").count()) === 1);
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).getUTCDay();
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  await page.getByRole("radio", { name: dayNames[tomorrow] }).click();
+  await page.getByTestId("slot-time").fill("23:00");
+  await page.getByRole("radio", { name: "Americano" }).click();
+  await page.getByRole("radio", { name: /Gold/ }).click();
+  await page.getByTestId("slot-title").fill("Gold night");
+  await page.getByTestId("slot-add").click();
+  await page.getByText(/Added\. The first match appears/).waitFor({ timeout: 20000 });
+  await page.getByTestId("club-slots").getByText("Gold night").waitFor({ timeout: 20000 });
+  const hourly = await fetch(`${BASE}/api/cron/hourly`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((r) => r.json());
+  check("the hourly job turns the slot into a match", hourly.clubMatches >= 1, JSON.stringify(hourly).slice(0, 200));
+  await page.goto(`${BASE}/v/${SLUG}`);
+  const weekCard = page.getByTestId("club-week");
+  check("the club page shows this week with the gold night and eight open seats", (await weekCard.count()) === 1 && (await weekCard.getByText("Gold night").count()) >= 1 && (await weekCard.getByText("0/8").count()) >= 1);
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  check("the editor names the next match of the slot", (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).count()) === 1);
   const bad = await fetch(`${BASE}/v/${SLUG}/manage/not-the-token`);
   check("a wrong manage token is 404", bad.status === 404);
 } finally {

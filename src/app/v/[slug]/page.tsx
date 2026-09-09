@@ -12,6 +12,8 @@ import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
 import { getClub, isClubLive } from "@/lib/domain/clubs";
 import { coachesAtClub } from "@/lib/domain/coaching";
+import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
+import { zonedTimeToUtc } from "@/lib/dates";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { embedHtml } from "@/lib/embed";
 import { rangeChip } from "@/lib/levelText";
@@ -44,6 +46,11 @@ export default async function VenueBoardPage({ params }: Props) {
   const board = boardRow ?? { slug, name: club!.name, mapUrl: club!.mapUrl, events: [] };
   const mapUrl = club?.mapUrl ?? board.mapUrl;
   const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, club?.name ?? board.name).catch(() => [])]);
+  // A live club with a programme shows its week, day by day; matches beyond the week stay in the list below.
+  const programme = club ? await listClubSlots(db, club.slug) : [];
+  const week = club && programme.length > 0 ? await clubWeek(db, club) : null;
+  const tz = club?.tz ?? "UTC";
+  const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: tz }).format(zonedTimeToUtc(date, "12:00", tz));
   return (
     <>
       <Header />
@@ -77,6 +84,38 @@ export default async function VenueBoardPage({ params }: Props) {
             <div className="mt-2">
               <FreeCourts club={club} />
             </div>
+          </section>
+        )}
+        {week && (
+          <section className="card" data-testid="club-week">
+            <h2 className="text-lg font-extrabold">{t("club.week.title")}</h2>
+            <p className="text-xs text-muted">{t("club.week.help")}</p>
+            <ul className="mt-3 flex flex-col divide-y divide-line">
+              {week.map((d) => (
+                <li key={d.date} className="flex gap-3 py-2">
+                  <div className="w-20 shrink-0 pt-0.5 text-xs font-bold uppercase text-faint">{dayLabel(d.date)}</div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    {d.events.length === 0 ? (
+                      <span className="text-sm text-faint">{t("club.week.none")}</span>
+                    ) : (
+                      d.events.map(({ event: ev, occupied, spotsLeft }) => {
+                        const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+                        return (
+                          <Link key={ev.id} href={`/${ev.code}`} prefetch={false} className="flex items-center gap-2 text-sm hover:underline">
+                            <span className="font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
+                            <span className="truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
+                            {level && <span className="chip-muted">{level}</span>}
+                            <span className={`ml-auto shrink-0 tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
+                              {occupied}/{ev.capacity}
+                            </span>
+                          </Link>
+                        );
+                      })
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
         {board.events.length === 0 ? (
