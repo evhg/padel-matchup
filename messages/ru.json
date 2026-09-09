@@ -686,6 +686,7 @@
       "declinedBody": "{verifier} пока не подтвердил(а) ваш уровень. Сыграйте вместе и попросите снова или обратитесь к другому тренеру."
     }
   },
+  "wrap": {"coachSubject": "{month}: {done, plural, one {# занятие} few {# занятия} many {# занятий} other {# занятия}} с вами", "coachBody": "{done, plural, =0 {Занятий не было} one {# занятие} few {# занятия} many {# занятий} other {# занятия}}: {students, plural, one {# ученик} few {# ученика} many {# учеников} other {# ученика}}, {noShows, plural, =0 {без неявок} one {# неявка} few {# неявки} many {# неявок} other {# неявки}}. {packages, plural, =0 {Новых абонементов нет} one {# новый абонемент} few {# новых абонемента} many {# новых абонементов} other {# новых абонемента}}; на открытых осталось {left, plural, =0 {ничего} one {# занятие} few {# занятия} many {# занятий} other {# занятия}}.{busiest, select, none {} other { Самый занятый день: {busiest}.}}", "coachInvite": "Если это сэкономило вам время, знакомый тренер получит то же самое за минуту: {url}", "clubSubject": "{month} на странице {club}: {matches, plural, one {# матч} few {# матча} many {# матчей} other {# матча}}", "clubBody": "{matches, plural, one {# матч} few {# матча} many {# матчей} other {# матча}} на вашей странице, занято {filled} из {seats} мест ({rate}%), {players, plural, one {# игрок} few {# игрока} many {# игроков} other {# игрока}}.{busiest, select, none {} other { Самый популярный слот: {busiest}.}}", "open": "Открыть"},
   "level": {
     "label": "Уровень",
     "any": "Любой уровень",

@@ -686,6 +686,7 @@
       "declinedBody": "{verifier} no confirmó tu nivel esta vez. Juega con esa persona y vuelve a pedirlo, o pregunta a otro entrenador."
     }
   },
+  "wrap": {"coachSubject": "{month}: {done, plural, one {# clase} other {# clases}} contigo", "coachBody": "{done, plural, =0 {Ninguna clase} one {# clase} other {# clases}} con {students, plural, one {# alumno} other {# alumnos}}, {noShows, plural, =0 {sin ausencias} one {# ausencia} other {# ausencias}}. {packages, plural, =0 {Ningún bono nuevo} one {# bono nuevo} other {# bonos nuevos}}; {left, plural, =0 {nada} one {# clase} other {# clases}} por usar en los abiertos.{busiest, select, none {} other { Día más ocupado: {busiest}.}}", "coachInvite": "Si esto te ahorró tiempo, un entrenador que conozcas lo tiene igual en un minuto: {url}", "clubSubject": "{month} en la página de {club}: {matches, plural, one {# partido} other {# partidos}}", "clubBody": "{matches, plural, one {# partido} other {# partidos}} en tu página, {filled} de {seats} plazas ocupadas ({rate}%), {players, plural, one {# jugador} other {# jugadores}}.{busiest, select, none {} other { Franja más popular: {busiest}.}}", "open": "Abrir"},
   "level": {
     "label": "Nivel",
     "any": "Cualquier nivel",
