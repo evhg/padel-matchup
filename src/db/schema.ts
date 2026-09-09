@@ -734,6 +734,8 @@ export const clubs = pgTable(
     founding: boolean("founding").notNull().default(false),
     /** The owner's Telegram message asking for approval. */
     notifyMessageId: bigint("notify_message_id", { mode: "number" }),
+    /** The last month ("2026-09") whose wrap went to the claimant, so the 1st sends it once. */
+    wrapSentFor: text("wrap_sent_for"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -967,6 +969,8 @@ export const coaches = pgTable(
     managerCode: text("manager_code"),
     /** Code in the link a coach sends their students: opening it puts the student on the list, no asking. */
     inviteCode: text("invite_code"),
+    /** The last month ("2026-09") whose wrap went out, so the 1st sends it once. */
+    wrapSentFor: text("wrap_sent_for"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),

@@ -239,6 +239,13 @@
       "when": 1788950650403,
       "tag": "0033_coach_invite_code",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788954589751,
+      "tag": "0034_monthly_wrap",
+      "breakpoints": true
     }
   ]
 }

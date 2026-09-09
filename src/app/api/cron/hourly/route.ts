@@ -16,6 +16,10 @@ import { refreshAllAvailability } from "@/lib/booking/availability";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
 import { completePastLessons } from "@/lib/domain/coaching";
 import { syncAllCoachCalendars } from "@/lib/coach/sync";
+import { monthlyWraps } from "@/lib/coach/wrap";
+import { deliverWrap } from "@/lib/coach/wrapSend";
+import { translatorFor } from "@/lib/email/templates";
+import { APP_NAME, baseUrl } from "@/lib/config";
 import { lowPackageNoticesDue } from "@/lib/coach/chains";
 import { notifyLowPackage } from "@/lib/coach/notify";
 import { runBackup, type BackupResult } from "@/lib/backup";
@@ -52,7 +56,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, serviceAlerts: 0, errors: [] as string[] };
+  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -75,6 +79,14 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(`lessons: ${String(e)}`);
+  }
+
+  try {
+    // The 1st of the month, in the morning where they are: one wrap per coach and per club, once.
+    const wraps = await monthlyWraps(db, now, { deliver: deliverWrap, translate: translatorFor, baseUrl: baseUrl(), appName: APP_NAME });
+    summary.wraps = wraps.coaches + wraps.clubs;
+  } catch (e) {
+    summary.errors.push(`wraps: ${String(e)}`);
   }
 
   try {
