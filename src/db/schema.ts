@@ -1201,3 +1201,61 @@ export const milestones = pgTable(
   (t) => [uniqueIndex("milestones_once_idx").on(t.playerId, t.kind, t.value), index("milestones_player_idx").on(t.playerId, t.createdAt)],
 );
 export type Milestone = typeof milestones.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Research desk: paced web search (Tavily) for listening, discovery and grounding
+// ---------------------------------------------------------------------------
+
+/** One row per query in `src/lib/research/queries.ts`: when it last ran and what it yielded. */
+export const researchRuns = pgTable("research_runs", {
+  key: text("key").primaryKey(),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }).notNull(),
+  runs: integer("runs").notNull().default(0),
+  credits: integer("credits").notNull().default(0),
+  results: integer("results").notNull().default(0),
+  newItems: integer("new_items").notNull().default(0),
+  /** Consecutive runs that found nothing new; stretches the query's interval. */
+  emptyStreak: integer("empty_streak").notNull().default(0),
+  lastError: text("last_error"),
+});
+export type ResearchRun = typeof researchRuns.$inferSelect;
+
+/** A place the desk found on the web: a club, a coach, a tournament, a community. Contacts are public ones from the page itself. */
+export const researchFinds = pgTable(
+  "research_finds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** club | coach | tournament | community | other */
+    kind: text("kind").notNull(),
+    city: text("city"),
+    url: text("url").notNull(),
+    domain: text("domain").notNull(),
+    title: text("title").notNull(),
+    snippet: text("snippet").notNull().default(""),
+    queryKey: text("query_key").notNull(),
+    score: real("score"),
+    emails: jsonb("emails").$type<string[]>().notNull().default([]),
+    instagram: text("instagram"),
+    phone: text("phone"),
+    extractedAt: timestamp("extracted_at", { withTimezone: true }),
+    seen: integer("seen").notNull().default(1),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    /** new | used | dismissed */
+    status: text("status").notNull().default("new"),
+    note: text("note"),
+  },
+  (t) => [uniqueIndex("research_finds_url_idx").on(t.url), index("research_finds_kind_city_idx").on(t.kind, t.city)],
+);
+export type ResearchFind = typeof researchFinds.$inferSelect;
+
+/** Hand searches (answer grounding) are remembered for a week so the same question never costs twice. */
+export const researchCache = pgTable("research_cache", {
+  hash: text("hash").primaryKey(),
+  query: text("query").notNull(),
+  kind: text("kind").notNull(),
+  payload: jsonb("payload").notNull(),
+  credits: integer("credits").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ResearchCacheRow = typeof researchCache.$inferSelect;
