@@ -64,8 +64,8 @@ export function CoachSetup({ initialClubs = "", botUsername = null, serviceEmail
         return;
       }
       // From here the assistant exists: the page keeps this walk on screen under ?setup=1 while the next steps save.
-      window.history.replaceState(null, "", "/coach?setup=1");
       after("hours")();
+      router.replace("/coach?setup=1", { scroll: false });
     });
   };
 

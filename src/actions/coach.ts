@@ -94,8 +94,8 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
     const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
     await bumpMetric(db, "coaches_created").catch(() => undefined);
     if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
-    await rememberCoach();
-    // No revalidation here on purpose: a refresh of /coach would swap the setup walk for the book mid-way. The walk moves to /coach?setup=1 itself.
+    // Neither a revalidation nor a cookie here, on purpose: either would refresh /coach and swap the setup walk for the book
+    // mid-way. The walk moves itself to /coach?setup=1; the coach page sets the browser hint once the walk is done.
     return { handle: coach.handle };
   });
 }
