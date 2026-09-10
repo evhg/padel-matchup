@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
+import { newManagerCode } from "@/lib/codes";
 import { coaches, coachManagers, lessonPackages, lessonRequests, lessons, lessonWaitlist, players, type Coach, type Lesson, type LessonPackage, type LessonRequest, type LessonWaitlistRow, type Player } from "@/db/schema";
 import { utcToZonedParts } from "@/lib/dates";
 import { availableSlots, bookLesson, busyBetween, DAY_MS, getPlayerById, HOUR_MS, isPackageOpen, packageLine, studentStatus, withinHours } from "@/lib/domain/coaching";
@@ -326,14 +327,12 @@ export async function lowPackageNoticesDue(db: Db, now = new Date()): Promise<Lo
 
 // ---------------------------------------------------------------- managers
 
-const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
-const newCode = () => Array.from({ length: 8 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join("");
 
 /** The link a coach hands the person who runs their bookings. Made once, kept until renewed. */
 export async function managerCode(db: Db, coachId: string, renew = false): Promise<string> {
   const [row] = await db.select({ code: coaches.managerCode }).from(coaches).where(eq(coaches.id, coachId)).limit(1);
   if (row?.code && !renew) return row.code;
-  const code = newCode();
+  const code = newManagerCode();
   await db.update(coaches).set({ managerCode: code, updatedAt: new Date() }).where(eq(coaches.id, coachId));
   return code;
 }

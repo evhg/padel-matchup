@@ -13,6 +13,7 @@ import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { MyLessons } from "@/components/coach/MyLessons";
 import { CoachCard } from "@/components/coach/CoachCard";
+import { getCoachForActor } from "@/lib/domain/coaching";
 import { MomentsStrip } from "@/components/MomentsStrip";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
@@ -66,14 +67,14 @@ export default async function MePage({ searchParams }: Props) {
     );
   }
 
-  const [token, myClubs, t] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations()]);
+  const [token, myClubs, t, asCoach] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id)]);
   return (
     <>
       <Header minimal />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
         {note === "linked" && <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">✓ {t("telegram.justLinked")}</p>}
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
-        <CoachCard db={db} playerId={me.id} />
+        {asCoach && <CoachCard db={db} coach={asCoach.coach} />}
         <MyMatches player={me} personalToken={token} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
@@ -99,7 +100,7 @@ export default async function MePage({ searchParams }: Props) {
             </ul>
           </section>
         )}
-        <MyLessons db={db} playerId={me.id} />
+        <MyLessons db={db} playerId={me.id} asCoach={Boolean(asCoach)} />
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />

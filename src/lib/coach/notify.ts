@@ -60,6 +60,14 @@ export async function notifyLessonCancelled(db: Db, n: LessonNotice & { outcome:
   await emailLesson(n, "CANCEL").catch(() => undefined);
 }
 
+/** A student came in through the coach's own link: one quiet line, no button, nothing to decide. */
+export async function notifyStudentJoined(db: Db, coach: Coach, student: Player): Promise<void> {
+  const coachPlayer = await getPlayerById(db, coach.playerId);
+  if (!coachPlayer?.telegramId) return;
+  const s = coachStrings(coachBotLocale(coachPlayer.locale));
+  await dm(coachPlayer.telegramId, s.studentJoined(student.displayName));
+}
+
 export async function notifyStudentRequest(db: Db, coach: Coach, student: Player): Promise<void> {
   const coachPlayer = await getPlayerById(db, coach.playerId);
   if (!coachPlayer?.telegramId) return;

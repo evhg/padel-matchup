@@ -40,6 +40,7 @@ const S = {
     outcomeCounted: "Late; counted.",
     outcomeNone: "",
     studentAsked: (name: string) => `${name} asks to become your student.`,
+    studentJoined: (name: string) => `${name} is on your list now, through your link.`,
     accept: "Accept",
     accepted: (name: string) => `${name} accepted. They can book now.`,
     // to students
@@ -133,6 +134,7 @@ const S = {
     outcomeCounted: "Поздно; занятие списано.",
     outcomeNone: "",
     studentAsked: (name: string) => `${name} просится к вам в ученики.`,
+    studentJoined: (name: string) => `${name} теперь в вашем списке — по вашей ссылке.`,
     accept: "Принять",
     accepted: (name: string) => `${name}: принят(а). Теперь может записываться.`,
     yourLessons: "Ваши занятия",
@@ -225,6 +227,7 @@ const S = {
     outcomeCounted: "Tarde; cuenta.",
     outcomeNone: "",
     studentAsked: (name: string) => `${name} pide ser tu alumno.`,
+    studentJoined: (name: string) => `${name} ya está en tu lista, por tu enlace.`,
     accept: "Aceptar",
     accepted: (name: string) => `${name} aceptado. Ya puede reservar.`,
     yourLessons: "Tus clases",

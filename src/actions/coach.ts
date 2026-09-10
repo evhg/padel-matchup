@@ -43,7 +43,7 @@ import {
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
-import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentRequest } from "@/lib/coach/notify";
+import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
@@ -380,7 +380,9 @@ export async function requestCoachAction(handle: string, name?: string | null, i
     if (!coach) throw new ActionFailure("no_coach");
     const me = await requirePlayer(db, name);
     if (inviteMatches(coach, invite)) {
+      const before = await studentStatus(db, coach.id, me.id);
       const status = await acceptByInvite(db, coach.id, me.id);
+      if (status === "accepted" && before !== "accepted") await notifyStudentJoined(db, coach, me).catch(() => undefined);
       revalidateCoach(coach.handle);
       return { status };
     }
@@ -418,6 +420,14 @@ export async function rememberCoachAction(): Promise<ActionResult<null>> {
     const db = await getDb();
     await requireCoach(db);
     await rememberCoach();
+    return null;
+  });
+}
+
+/** The header's hint was left behind by another identity: take it away. */
+export async function forgetCoachAction(): Promise<ActionResult<null>> {
+  return runA(async () => {
+    (await cookies()).delete(COACH_COOKIE);
     return null;
   });
 }
