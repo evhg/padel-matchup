@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
+import { players as playersTable } from "@/db/schema";
 import { buildHistory, mulberry32 } from "@/lib/domain/americano";
 import { CITIES, venueInCity } from "@/lib/domain/cities";
 import { createEvent } from "@/lib/domain/events";
@@ -190,6 +192,37 @@ describe("formats, verified levels and rankings (db)", () => {
     await setPlayerLevel(db, players[0].id, 5);
     const [far] = await db.select().from((await import("@/db/schema")).players).where((await import("drizzle-orm")).eq((await import("@/db/schema")).players.id, players[0].id));
     expect(isLevelVerified(far)).toBe(false);
+  });
+
+  it("the organizer's tick lands on the number they were shown; a number that moved far since is not confirmed blind", async () => {
+    const { creator, ev, players } = await tournament("king", 4);
+    const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    await scoreAll(ev.id, r1.matches, creator.id);
+    await setTournamentLock(db, { eventId: ev.id, locked: true, actorPlayerId: creator.id });
+    const load = async (id: string) => (await db.select().from(playersTable).where(eq(playersTable.id, id)))[0];
+    // The page showed the result-adjusted number: the tick is on exactly that, two decimals and all.
+    const [a, b, c] = players;
+    const shownA = (await load(a.id)).level!;
+    const tickedA = await verifyPlayerLevel(db, { eventId: ev.id, byPlayerId: creator.id, playerId: a.id, level: shownA });
+    expect(tickedA.levelVerifiedLevel).toBe(shownA);
+    expect(tickedA.level).toBe(shownA);
+    expect(isLevelVerified(tickedA)).toBe(true);
+    // B re-declared a quarter step by hand after the page was drawn: the same tick, on the number the organizer saw; the new declaration stays.
+    const shownB = (await load(b.id)).level!;
+    await setPlayerLevel(db, b.id, 3.25);
+    const tickedB = await verifyPlayerLevel(db, { eventId: ev.id, byPlayerId: creator.id, playerId: b.id, level: shownB });
+    expect(tickedB.levelVerifiedLevel).toBe(shownB);
+    expect(tickedB.level).toBe(3.25);
+    expect(tickedB.levelSource).not.toBe("confirmed");
+    expect(isLevelVerified(tickedB)).toBe(true);
+    // C moved to 4.5 in between: the organizer never saw that number, so the tap is refused and C stays unconfirmed.
+    const shownC = (await load(c.id)).level!;
+    await setPlayerLevel(db, c.id, 4.5);
+    await expect(verifyPlayerLevel(db, { eventId: ev.id, byPlayerId: creator.id, playerId: c.id, level: shownC })).rejects.toThrow(/level_changed/);
+    expect(isLevelVerified(await load(c.id))).toBe(false);
+    // Without a shown number (the old callers) the current number is ticked, as before.
+    const fresh = await verifyPlayerLevel(db, { eventId: ev.id, byPlayerId: creator.id, playerId: c.id });
+    expect(fresh.levelVerifiedLevel).toBe(4.5);
   });
 
   it("rankings list opted-in players only, per club and per city", async () => {

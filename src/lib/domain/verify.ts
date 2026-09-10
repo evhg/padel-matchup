@@ -5,7 +5,7 @@ import { isClubLive } from "./clubs";
 import { coachesAtClub } from "./coaching";
 import { DomainError } from "./errors";
 import { joinGroup } from "./groups";
-import { admission, normalizeLevel } from "./levels";
+import { admission, clampLevel, normalizeLevel } from "./levels";
 import { decideJoinRequest } from "./requests";
 import type { JoinOutcome } from "./slots";
 
@@ -35,14 +35,19 @@ export async function verifiersFor(db: Db, ev: Pick<Event, "venueName" | "venueS
 }
 
 /** Confirms a player's level: the verifier's number becomes the level when it differs, and the tick records who confirmed. */
-export async function confirmLevel(db: Db, input: { playerId: string; level?: unknown; byPlayerId: string | null; source: VerifierSource; now?: Date }): Promise<Player> {
+/**
+ * The stamp every verifier leaves. `level` is the verifier's number: a coach or
+ * club corrects the player to it; with `asSeen` it is the number the verifier
+ * was shown (result precision), vouched for and left as it is.
+ */
+export async function confirmLevel(db: Db, input: { playerId: string; level?: unknown; asSeen?: boolean; byPlayerId: string | null; source: VerifierSource; now?: Date }): Promise<Player> {
   const now = input.now ?? new Date();
   const [p] = await db.select().from(players).where(eq(players.id, input.playerId)).limit(1);
   if (!p) throw new DomainError("not_found");
-  const wanted = input.level === undefined || input.level === null ? p.level : normalizeLevel(input.level);
-  if (wanted == null) throw new DomainError("invalid", "level_required");
+  const wanted = input.level === undefined || input.level === null ? p.level : input.asSeen ? clampLevel(Number(input.level)) : normalizeLevel(input.level);
+  if (wanted == null || !Number.isFinite(wanted)) throw new DomainError("invalid", "level_required");
   const set: Partial<typeof players.$inferInsert> = { levelVerifiedAt: now, levelVerifiedBy: input.byPlayerId, levelVerifiedLevel: wanted, levelVerifiedSource: input.source };
-  if (p.level == null || Math.abs(p.level - wanted) > 1e-9) Object.assign(set, { level: wanted, levelSource: "confirmed", levelUpdatedAt: now });
+  if (!input.asSeen && (p.level == null || Math.abs(p.level - wanted) > 1e-9)) Object.assign(set, { level: wanted, levelSource: "confirmed", levelUpdatedAt: now });
   const [u] = await db.update(players).set(set).where(eq(players.id, p.id)).returning();
   return u;
 }

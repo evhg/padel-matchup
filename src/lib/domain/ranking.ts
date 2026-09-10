@@ -4,7 +4,7 @@ import { events, players, scores, slots, type Event, type Player } from "@/db/sc
 import { venueInCity, type City } from "./cities";
 import { DomainError } from "./errors";
 import { confirmLevel } from "./verify";
-import { isLevelVerified } from "./levels";
+import { clampLevel, isLevelVerified, VERIFIED_TOLERANCE } from "./levels";
 import { tally } from "./scores";
 
 export { isLevelVerified, VERIFIED_TOLERANCE } from "./levels";
@@ -12,8 +12,10 @@ export { isLevelVerified, VERIFIED_TOLERANCE } from "./levels";
 /**
  * The organizer of a finished event confirms a participant's level. Nothing
  * changes on the number itself: it is a second pair of eyes, shown as a tick.
+ * `level` is the number the organizer was shown: a nudge since then is the
+ * same tick, a bigger move is a number they never saw, so the tap is refused.
  */
-export async function verifyPlayerLevel(db: Db, input: { eventId: string; byPlayerId: string; playerId: string; now?: Date }): Promise<Player> {
+export async function verifyPlayerLevel(db: Db, input: { eventId: string; byPlayerId: string; playerId: string; level?: unknown; now?: Date }): Promise<Player> {
   const now = input.now ?? new Date();
   const [ev] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
   if (!ev) throw new DomainError("not_found");
@@ -29,8 +31,10 @@ export async function verifyPlayerLevel(db: Db, input: { eventId: string; byPlay
   const [target] = await db.select().from(players).where(eq(players.id, input.playerId)).limit(1);
   if (!target) throw new DomainError("not_found");
   if (target.level == null) throw new DomainError("invalid", "level_required");
-  // The same stamp a coach or club leaves, with its source, so the organizer's tick counts everywhere the others do.
-  return confirmLevel(db, { playerId: target.id, byPlayerId: input.byPlayerId, source: "organizer", now });
+  const seen = input.level == null ? target.level : clampLevel(Number(input.level));
+  if (!Number.isFinite(seen) || Math.abs(target.level - seen) > VERIFIED_TOLERANCE + 1e-9) throw new DomainError("invalid", "level_changed");
+  // The same stamp a coach or club leaves, with its source, so the organizer's tick counts everywhere the others do; it lands on the number they saw.
+  return confirmLevel(db, { playerId: target.id, level: seen, asSeen: true, byPlayerId: input.byPlayerId, source: "organizer", now });
 }
 
 export async function setRankingOptIn(db: Db, playerId: string, on: boolean): Promise<Player> {

@@ -83,12 +83,13 @@ export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; pl
 
 /**
  * After a confirmation seated someone: the organizer hears about the new name
- * (they did not tap), the line-up notice goes round, the player hears they are
- * in, and the webhooks fire, the same as a join by hand.
+ * (unless the tap was theirs: a coach or club who also runs that match, or the
+ * organizer confirming after another game), the line-up notice goes round, the
+ * player hears they are in, and the webhooks fire, the same as a join by hand.
  */
-export async function announceAdmission(db: Db, player: Player, admitted: Admitted[], confirmedBy: VerifierSource): Promise<void> {
+export async function announceAdmission(db: Db, player: Player, admitted: Admitted[], confirmedBy: VerifierSource, byPlayerId: string | null): Promise<void> {
   for (const a of admitted) {
-    await notifyCreator(db, a.event, a.join.outcome === "joined" ? "joined" : "waitlisted", player.displayName, player.id).catch(() => undefined);
+    await notifyCreator(db, a.event, a.join.outcome === "joined" ? "joined" : "waitlisted", player.displayName, byPlayerId).catch(() => undefined);
     // Seated: the line-up may have just become complete. Waitlisted: it already was.
     const fresh = await notifyLineupChange(db, a.event, a.join.outcome !== "joined", player.id);
     if (a.join.outcome === "joined") await notifyRequestDecided(db, fresh ?? a.event, player, true);

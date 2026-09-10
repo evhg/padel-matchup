@@ -27,6 +27,8 @@ export function LevelChecks({ checks, by }: { checks: LevelCheckDTO[]; by: { kin
       if (!r.ok) {
         setNote(null);
         setError(t("common.somethingWrong"));
+        // A check a colleague already answered is gone on refresh, so its buttons do not sit there failing.
+        router.refresh();
         return;
       }
       setNote(approve ? t("levelCheck.done", { name: c.name, level: formatLevel(level ?? 0), admitted: r.data.admitted }) : t("levelCheck.declined", { name: c.name }));

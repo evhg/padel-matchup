@@ -760,7 +760,8 @@
     "confirmAll": "Confirmar todos ({count})",
     "confirmOne": "Es correcto",
     "confirmed": "Confirmado",
-    "confirmedCount": "{count, plural, one {# nivel confirmado} other {# niveles confirmados}}"
+    "confirmedCount": "{count, plural, one {# nivel confirmado} other {# niveles confirmados}}",
+    "changedSince": "Cambió desde que lo viste: {names}. Se muestra el nuevo nivel; confírmalo si sigue siendo correcto."
   },
   "card": {
     "title": "Tarjeta de resultado",

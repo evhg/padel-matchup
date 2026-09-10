@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
 import { claimClub, decideClub } from "@/lib/domain/clubs";
 import { createCoach, presetHours } from "@/lib/domain/coaching";
@@ -12,6 +12,7 @@ import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, getJoinRequests } from "@/lib/domain/requests";
 import { joinEvent } from "@/lib/domain/slots";
 import { admitConfirmed, askLevelCheck, confirmLevel, decideLevelCheck, isVerifierFor, listLevelChecks, myLevelChecks, verifiersFor, withdrawLevelCheck } from "@/lib/domain/verify";
+import { announceAdmission } from "@/lib/levelChecks";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
 
 /** Tuesday 8 September 2026, 16:00 in Phuket. */
@@ -187,5 +188,38 @@ describe("verified levels", () => {
     expect(admission(ev, confirmed)).toBe("ok");
     expect(confirmed.level).toBe(4);
     expect(confirmed.levelVerifiedSource).toBe("organizer");
+  });
+
+  it("the seat a confirmation causes is announced to the other organizer, not to the verifier who caused it", async () => {
+    // Ana and Ben both run a Gold match that Sam is waiting on; Ana confirms Sam after her own game. Ben hears about the new name on Telegram; Ana tapped, so she does not.
+    process.env.TELEGRAM_BOT_TOKEN = "123456:TESTTOKEN";
+    const calls: { method: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        calls.push({ method: String(url).split("/").pop()!, body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
+        return new Response(JSON.stringify({ ok: true, result: { message_id: calls.length, chat: { id: 0 } } }), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    try {
+      const ana = await makePlayer(db, "Ana", { level: 4, telegramId: 41 });
+      const ben = await makePlayer(db, "Ben", { level: 4, telegramId: 42 });
+      const gold = (org: { id: string }) => createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 2 * DAY), tz: "Asia/Bangkok", venueName: "Coast Padel", whenFull: "waitlist", levelMin: 3, levelMax: 4.5, levelVerifiedOnly: true });
+      const anas = await gold(ana);
+      const bens = await gold(ben);
+      const sam = await makePlayer(db, "Sam2", { level: 3.5 });
+      await createJoinRequest(db, { eventId: anas.id, playerId: sam.id, level: 3.5, now: NOW });
+      await createJoinRequest(db, { eventId: bens.id, playerId: sam.id, level: 3.5, now: NOW });
+      const confirmed = await confirmLevel(db, { playerId: sam.id, byPlayerId: ana.id, source: "organizer", now: NOW });
+      const admitted = await admitConfirmed(db, confirmed, ana.id, NOW);
+      expect(admitted.map((a) => a.event.id).sort()).toEqual([anas.id, bens.id].sort());
+      await announceAdmission(db, confirmed, admitted, "organizer", ana.id);
+      const told = calls.filter((c) => c.method === "sendMessage").map((c) => Number(c.body.chat_id));
+      expect(told).toContain(42);
+      expect(told).not.toContain(41);
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.TELEGRAM_BOT_TOKEN;
+    }
   });
 });

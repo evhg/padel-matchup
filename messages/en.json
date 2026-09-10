@@ -760,7 +760,8 @@
     "confirmAll": "Confirm all {count}",
     "confirmOne": "Looks right",
     "confirmed": "Confirmed",
-    "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}"
+    "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}",
+    "changedSince": "Changed since you looked: {names}. The new number is shown; confirm it if it still looks right."
   },
   "card": {
     "title": "Result card",
