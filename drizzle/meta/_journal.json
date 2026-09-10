@@ -267,6 +267,13 @@
       "when": 1789020919417,
       "tag": "0037_events_club_slot_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789029229551,
+      "tag": "0038_coach_founding_at",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,8 @@ type Props = {
   /** How students know the coach; the forwarded text speaks as their assistant. */
   coachName: string;
   url: string;
+  /** The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in. */
+  inviteUrl: string;
   /** The link the coach forwards: their page with the invite code, so a student lands on the list. */
   studentUrl: string;
   today: string;
@@ -39,11 +41,10 @@ type Props = {
 };
 
 /** The coach's book: today, the next days, one button to book. Everything else behind "More". */
-export function CoachHome({ handle, coachName, url, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false }: Props) {
+export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   // The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in.
-  const inviteUrl = `${url.replace(/\/c\/[^/]+$/, "")}/coaches?s=invite`;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [booking, setBooking] = useState(false);

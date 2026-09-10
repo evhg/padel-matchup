@@ -6,7 +6,7 @@ import { SourceTag } from "@/components/SourceTag";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
 import { localeAlternates } from "@/lib/seo";
-import { cleanSource } from "@/lib/source";
+import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,7 @@ export default async function CoachesFrontPage({ searchParams }: Props) {
   return (
     <>
       <Header />
-      <SourceTag source={source} />
+      <SourceTag source={source} cookie={COACH_SOURCE_COOKIE} />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <section className="card">

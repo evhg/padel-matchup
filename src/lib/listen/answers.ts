@@ -172,18 +172,18 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const notes = await feedbackWeek(db, since);
   const search = searchConsoleEnabled() ? await searchWeek() : null;
   // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
-  const [[newPlayers], [joins], [results], [newClubs], [channels]] = await Promise.all([
+  const [[newPlayers], [joins], [results], [newClubs], [channels], [newCoaches]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(activity).where(and(eq(activity.verb, "joined"), gte(activity.createdAt, since))),
     db.select({ n: sql<number>`count(distinct ${activity.eventId})` }).from(activity).where(and(eq(activity.verb, "score_entered"), gte(activity.createdAt, since))),
     db.select({ n: sql<number>`count(*)` }).from(clubs).where(gte(clubs.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
+    db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since)),
   ]);
   const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`(${metricsDaily.key} in ('pageviews','card_views') or ${metricsDaily.key} like 'join_src_%' or ${metricsDaily.key} like 'coach_src_%')`)).groupBy(metricsDaily.key);
   const funnel = Object.fromEntries(funnelRows.map((r) => [r.key, Number(r.total)]));
   const bySource = funnelRows.filter((r) => r.key.startsWith("join_src_")).map((r) => `${r.key.slice("join_src_".length)} ${Number(r.total)}`).sort();
   const coachDoors = funnelRows.filter((r) => r.key.startsWith("coach_src_")).map((r) => `${r.key.slice("coach_src_".length)} ${Number(r.total)}`).sort();
-  const [[newCoaches]] = await Promise.all([db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since))]);
   const board = await serviceBoard(db, now);
   const hot = boardHighlights(board);
   const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(`${r.name} ${r.pct !== null ? `${r.pct.toFixed(0)}%` : r.usage}`)).join(" · ")}` : "Services: everything under 60% of its ceiling.";

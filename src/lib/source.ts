@@ -4,11 +4,13 @@
  * cookie so the join that follows can be counted per source. Nothing personal.
  */
 export const SOURCE_COOKIE = "ks_src";
+/** The coach doors keep their own cookie, so a match link's tag and a coach door's tag never count each other's sign-ups. */
+export const COACH_SOURCE_COOKIE = "ks_csrc";
 export const SOURCE_MAX_AGE = 24 * 60 * 60;
 
-/** Short lowercase tokens only: ig, poster, coach, tg… Anything else is ignored. */
-export function cleanSource(v: string | null | undefined): string | null {
-  const s = (v ?? "").trim().toLowerCase();
+/** Short lowercase tokens only: ig, poster, coach, tg… Anything else is ignored; a repeated parameter counts its first value. */
+export function cleanSource(v: string | string[] | null | undefined): string | null {
+  const s = ((Array.isArray(v) ? v[0] : v) ?? "").trim().toLowerCase();
   return /^[a-z0-9_-]{1,16}$/.test(s) ? s : null;
 }
 
