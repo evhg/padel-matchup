@@ -209,7 +209,7 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
   });
 }
 
-/** Called by the personal-link page so the device that opened it gets the cookie. */
+/** Called by the personal-link page so the device that opened it gets the cookie. A link with a destination is handed on server-side instead (`/p/[token]/go`). */
 export async function adoptPersonalToken(token: string): Promise<ActionResult<PublicPlayer | null>> {
   return runA(async () => {
     const db = await getDb();

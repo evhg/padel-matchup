@@ -1,6 +1,6 @@
 // Groups: form one from a match, member creates the next match from the group page (prefilled,
 // linked back), anyone with the link joins, admin sets the weekly slot, a member leaves.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -94,8 +94,7 @@ try {
   await olga.goto(`${BASE}/g/${gcode}`);
   check("admin sees a remove button for Bea only", (await olga.getByRole("button", { name: "Remove" }).count()) === 1);
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

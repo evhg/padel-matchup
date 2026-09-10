@@ -1,6 +1,6 @@
 // Viral pieces: robots/sitemap, the public americano generator with its prefill link,
 // and the shareable result card.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -67,7 +67,7 @@ try {
   for (const name of ["Bo", "Cy", "Di"]) await p.request.post(`${BASE}/api/v1/matches/${mcode}/join`, { headers: auth, data: { name } });
   // The personal link hands the device its cookie in the browser, then sends it on to the match.
   await p.goto(`${made.organizer.personalUrl}?next=/${mcode}`);
-  await p.waitForURL(`**/${mcode}`, { timeout: 20000 });
+  await p.waitForURL((u) => u.pathname === `/${mcode}`, { timeout: 20000 });
   await p.getByRole("button", { name: "Enter score" }).waitFor({ timeout: 20000 });
   await p.getByRole("button", { name: "Enter score" }).click();
   await p.getByRole("button", { name: /^Ana/ }).click();
@@ -105,8 +105,7 @@ try {
     await shot(p, "v4-moment");
   }
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

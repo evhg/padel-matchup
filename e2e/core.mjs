@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -316,8 +316,7 @@ try {
   check("no matches left after deletion", (await a.getByText("Dana").count()) === 0);
   await a.getByRole("button", { name: "en", exact: true }).click().catch(() => undefined);
 } catch (e) {
-  console.error("E2E crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

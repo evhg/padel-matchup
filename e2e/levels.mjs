@@ -1,6 +1,6 @@
 // Levels: ranged match (Gold preset), level chips, out-of-range request → approve/decline,
 // in-range direct join, level editor on My matches.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -116,8 +116,7 @@ try {
   await org.getByText("Gold · 3.0–4.5").waitFor({ state: "detached", timeout: 20000 }).catch(() => undefined);
   check("range removed via edit", (await org.getByText("Gold · 3.0–4.5").count()) === 0);
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

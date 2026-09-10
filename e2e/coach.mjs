@@ -1,6 +1,6 @@
 // The coach's book: Olga sets up in four taps, Ivan asks to join through her page, Olga accepts and
 // starts a package, Ivan books and cancels a lesson himself, Olga books one for him from her book.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -312,8 +312,7 @@ try {
   await ivan.goto(`${BASE}/ru/c/${handle}`);
   check("the coach page has a Russian URL", (await ivan.getByText("Тренер по паделу").count()) === 1);
 } catch (e) {
-  console.error("E2E crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }
