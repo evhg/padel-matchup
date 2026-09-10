@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isUuid } from "@/lib/uuid";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { allowance, cycleOf, pacedTarget, readMeter } from "@/lib/research/budget";
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { q?: unknown; timeRange?: unknown; maxResults?: unknown; depth?: unknown; id?: unknown; status?: unknown; note?: unknown };
   const db = await getDb();
   if (typeof body.id === "string") {
-    if (!/^[0-9a-f-]{36}$/i.test(body.id)) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (!isUuid(body.id)) return NextResponse.json({ error: "not_found" }, { status: 404 });
     const status = body.status === "used" || body.status === "dismissed" || body.status === "new" ? body.status : null;
     if (!status) return NextResponse.json({ error: "status must be used, dismissed or new" }, { status: 400 });
     const row = await setFindStatus(db, body.id, status, typeof body.note === "string" ? body.note.slice(0, 500) : null);

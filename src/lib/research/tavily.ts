@@ -10,7 +10,7 @@ const API = "https://api.tavily.com";
 
 export type Depth = "basic" | "advanced";
 export type TimeRange = "day" | "week" | "month" | "year";
-export type SearchOpts = { depth?: Depth; maxResults?: number; timeRange?: TimeRange; topic?: "general" | "news"; includeDomains?: string[]; excludeDomains?: string[]; country?: string };
+export type SearchOpts = { depth?: Depth; maxResults?: number; timeRange?: TimeRange; topic?: "general" | "news"; includeDomains?: string[]; excludeDomains?: string[]; country?: string; timeoutMs?: number };
 export type Hit = { title: string; url: string; content: string; score: number; publishedAt: Date | null };
 export type SearchOutcome = { ok: true; hits: Hit[]; credits: number } | { ok: false; error: string; status: number | null; credits: 0 };
 export type ExtractOutcome = { ok: true; pages: { url: string; content: string }[]; failed: string[]; credits: number } | { ok: false; error: string; credits: 0 };
@@ -48,7 +48,7 @@ export async function tavilySearch(query: string, o: SearchOpts = {}, fetchImpl:
     ...(o.country ? { country: o.country } : {}),
   };
   try {
-    const res = await fetchImpl(`${API}/search`, { method: "POST", headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
+    const res = await fetchImpl(`${API}/search`, { method: "POST", headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(Math.max(1_000, Math.min(20_000, o.timeoutMs ?? 20_000))) });
     const json = (await res.json().catch(() => null)) as { results?: { title?: string; url?: string; content?: string; score?: number; published_date?: string }[]; detail?: { error?: string }; error?: string } | null;
     if (!res.ok) return { ok: false, error: json?.detail?.error ?? json?.error ?? `HTTP ${res.status}`, status: res.status, credits: 0 };
     const own = apexHost();
@@ -67,12 +67,12 @@ export async function tavilySearch(query: string, o: SearchOpts = {}, fetchImpl:
   }
 }
 
-export async function tavilyExtract(urls: string[], depth: Depth = "basic", fetchImpl: typeof fetch = fetch): Promise<ExtractOutcome> {
+export async function tavilyExtract(urls: string[], depth: Depth = "basic", fetchImpl: typeof fetch = fetch, timeoutMs = 30_000): Promise<ExtractOutcome> {
   if (!tavilyEnabled()) return { ok: false, error: "no key", credits: 0 };
   const list = [...new Set(urls)].slice(0, 20);
   if (list.length === 0) return { ok: true, pages: [], failed: [], credits: 0 };
   try {
-    const res = await fetchImpl(`${API}/extract`, { method: "POST", headers: headers(), body: JSON.stringify({ urls: list, extract_depth: depth }), signal: AbortSignal.timeout(30_000) });
+    const res = await fetchImpl(`${API}/extract`, { method: "POST", headers: headers(), body: JSON.stringify({ urls: list, extract_depth: depth }), signal: AbortSignal.timeout(Math.max(1_000, Math.min(30_000, timeoutMs))) });
     const json = (await res.json().catch(() => null)) as { results?: { url: string; raw_content?: string }[]; failed_results?: { url: string }[]; detail?: { error?: string } } | null;
     if (!res.ok) return { ok: false, error: json?.detail?.error ?? `HTTP ${res.status}`, credits: 0 };
     return { ok: true, pages: (json?.results ?? []).map((p) => ({ url: p.url, content: (p.raw_content ?? "").slice(0, 20_000) })), failed: (json?.failed_results ?? []).map((f) => f.url), credits: extractCredits(list.length, depth) };

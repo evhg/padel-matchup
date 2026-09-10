@@ -6,7 +6,7 @@ import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
 import { searchConsoleEnabled } from "@/lib/search/console";
 import { anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
-import { PLAN, cycleOf, pacedTarget } from "@/lib/research/budget";
+import { PLAN, pacedTarget } from "@/lib/research/budget";
 
 /**
  * The service board: every service the stack leans on, what we use of it this month,
@@ -67,7 +67,6 @@ async function sumSince(db: Db, keys: string[], sinceDay: string): Promise<Sums>
   return out;
 }
 
-/** The latest day with a value for a key, and that value (snapshots and heartbeats). */
 /** The newest reading of a gauge; by default a positive one, optionally only from a given day on and zero included (a monthly meter reads 0 on the 1st). */
 async function latest(db: Db, key: string, o: { since?: string; zero?: boolean } = {}): Promise<{ day: string; value: number } | null> {
   const rows = await db
@@ -158,7 +157,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
     note: reportedUsd !== null ? "Billed figure from the organisation's cost report, refreshed hourly." : `Estimated from our own token counters at ${listenModel()} list prices${anthropicAdminKey() ? "; the cost report could not be read" : "; add ANTHROPIC_ADMIN_KEY for the billed figure"}.`,
   });
   const tavilyOn = Boolean(process.env.TAVILY_API_KEY);
-  const tavilyMeter = await latest(db, "tavily_plan_used", { since: dayKey(cycleOf(now).start), zero: true });
+  const tavilyMeter = await latest(db, "tavily_plan_used", { since, zero: true });
   const tavilyLimit = (await latest(db, "tavily_plan_limit"))?.value || CEILINGS.tavilyCredits;
   const tavilyUsed = tavilyMeter ? tavilyMeter.value : (month.tavily_calls ?? 0);
   const tavilyPace = pacedTarget(now, tavilyLimit);

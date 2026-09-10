@@ -257,12 +257,21 @@ describe("the research desk", () => {
     const t = await researchTick(db, hours(4), fetch, { queries: [bad, good] });
     expect(t.errors).toEqual(["listen:en:fails: boom"]);
     expect(t.searches).toBe(1);
-    expect(await db.select().from(researchRuns).where(eq(researchRuns.key, bad.key))).toEqual([]);
+    // The failed query is due again next hour, behind anything more overdue, with the error noted and no run counted.
+    const [failedRow] = await db.select().from(researchRuns).where(eq(researchRuns.key, bad.key));
+    expect(failedRow.runs).toBe(0);
+    expect(failedRow.lastError).toBe("boom");
+    expect(dueQueries(hours(4.5), await db.select().from(researchRuns), [bad, good]).map((q) => q.key)).toEqual([]);
     expect(dueQueries(hours(5), await db.select().from(researchRuns), [bad, good]).map((q) => q.key)).toEqual([bad.key]);
+    // Two failures in a row end the hour: two never-run failing queries sort first (by key), and the fresh query behind them stays untouched.
     const bad2 = { ...bad, key: "listen:en:fails2", q: "also FAILS" };
-    const twice = await researchTick(db, hours(5), fetch, { queries: [bad, bad2, good] });
+    const bad3 = { ...bad, key: "listen:en:fails3", q: "FAILS as well" };
+    const fresh = LISTEN_QUERIES[6];
+    expect(fresh.key > bad3.key).toBe(true);
+    const twice = await researchTick(db, hours(5), fetch, { queries: [fresh, bad2, bad3] });
     expect(twice.errors).toHaveLength(2);
     expect(twice.searches).toBe(0);
+    expect(await db.select().from(researchRuns).where(eq(researchRuns.key, fresh.key))).toEqual([]);
     stubNetwork();
   });
 });
