@@ -75,6 +75,9 @@ const S = {
     menuStudent: "Your lessons. Tap a button, or write a day and a time: fri 15.",
     menuBookHow: "Name, day and time: anna fri 15. A new name becomes a new student.",
     menuBookHowStudent: "A day and a time: fri 15. Just a day shows the free times.",
+    // the bind from the setup's button
+    coachLinked: "Linked. I am your assistant here too: write me one line (anna fri 15 books, tomorrow shows the day, low says who is almost out) and I answer your students while you teach.",
+    coachOpen: "Open my assistant",
     commandsCoach: [
       { command: "today", description: "Today's lessons" },
       { command: "week", description: "The week" },
@@ -178,6 +181,9 @@ const S = {
     menuStudent: "Ваши занятия. Нажмите кнопку или напишите день и время: пт 15.",
     menuBookHow: "Имя, день и время: анна пт 15. Новое имя становится новым учеником.",
     menuBookHowStudent: "День и время: пт 15. Только день — покажу свободное время.",
+    // привязка по кнопке из настройки
+    coachLinked: "Связано. Здесь я тоже ваш ассистент: напишите одну строку (анна пт 15 — запись, завтра — день, мало — кто на исходе), а ученикам я отвечаю, пока вы тренируете.",
+    coachOpen: "Открыть ассистента",
     commandsCoach: [
       { command: "today", description: "Занятия сегодня" },
       { command: "week", description: "Неделя" },
@@ -281,6 +287,9 @@ const S = {
     menuStudent: "Tus clases. Toca un botón o escribe un día y una hora: vie 15.",
     menuBookHow: "Nombre, día y hora: anna vie 15. Un nombre nuevo se convierte en alumno nuevo.",
     menuBookHowStudent: "Un día y una hora: vie 15. Solo el día muestra las horas libres.",
+    // el enlace desde el botón de la configuración
+    coachLinked: "Enlazado. Aquí también soy tu asistente: escríbeme una línea (anna vie 15 reserva, mañana muestra el día, bajo dice a quién se le acaban las clases) y respondo a tus alumnos mientras enseñas.",
+    coachOpen: "Abrir mi asistente",
     commandsCoach: [
       { command: "today", description: "Clases de hoy" },
       { command: "week", description: "La semana" },

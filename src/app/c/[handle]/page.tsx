@@ -9,7 +9,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
@@ -47,11 +47,14 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const foundingCity = isFoundingCoach(coach) ? (CITIES.find((c) => c.tz === coach.tz)?.name ?? null) : null;
   const [t, locale, me] = await Promise.all([getTranslations("coach"), getLocale(), getSessionPlayer(db)]);
   const now = new Date();
+  // The coach, or one of their managers, opening their own student link: the page as students see it, never a form to join oneself.
+  const own = me ? await getCoachForActor(db, me.id) : null;
+  const owner = own?.coach.id === coach.id;
   // The coach's own link carries their invite code: whoever opens it is on the list, nobody asks and nobody approves.
   const invite = inviteMatches(coach, sp.i) ? coach.inviteCode : null;
   let status = me ? await studentStatus(db, coach.id, me.id) : "none";
   let justJoined = false;
-  if (invite && me && status !== "accepted" && status !== "paused") {
+  if (invite && me && !owner && status !== "accepted" && status !== "paused") {
     status = await acceptByInvite(db, coach.id, me.id);
     justJoined = status === "accepted";
     if (justJoined) await notifyStudentJoined(db, coach, me).catch(() => undefined);
@@ -111,32 +114,43 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
           {coach.bio && <p className="mt-2 text-sm">{coach.bio}</p>}
           {!coach.isPublic && status === "none" && !me && <p className="mt-2 text-xs text-faint">{t("page.private")}</p>}
         </section>
-        <StudentBooking
-          handle={coach.handle}
-          coachName={coach.displayName}
-          signedIn={Boolean(me)}
-          status={status}
-          invite={invite}
-          justJoined={justJoined}
-          slots={slotDtos}
-          taken={takenDtos}
-          days={days}
-          dayLabels={labels}
-          weekOf={weekOf}
-          waits={waiting}
-          offers={offers}
-          requests={asked}
-          minLocal={minLocal}
-          lessons={mine.map((l) => studentLessonDTO(l, locale, labels, now))}
-          pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft } : null}
-          cutoffHours={coach.cutoffHours}
-          whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
-        />
-        <p className="text-center text-xs text-faint">
-          <Link href="/coaches?s=coachpage" prefetch={false} className="hover:text-muted" data-testid="own-book">
-            {t("page.ownBook")}
-          </Link>
-        </p>
+        {owner ? (
+          <section className="card" data-testid="owner-note">
+            <p className="text-sm text-muted">{t("page.ownerNote")}</p>
+            <Link href="/coach" prefetch={false} className="btn-primary mt-3 w-full">
+              {t("page.ownerOpen")}
+            </Link>
+          </section>
+        ) : (
+          <StudentBooking
+            handle={coach.handle}
+            coachName={coach.displayName}
+            signedIn={Boolean(me)}
+            status={status}
+            invite={invite}
+            justJoined={justJoined}
+            slots={slotDtos}
+            taken={takenDtos}
+            days={days}
+            dayLabels={labels}
+            weekOf={weekOf}
+            waits={waiting}
+            offers={offers}
+            requests={asked}
+            minLocal={minLocal}
+            lessons={mine.map((l) => studentLessonDTO(l, locale, labels, now))}
+            pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft } : null}
+            cutoffHours={coach.cutoffHours}
+            whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
+          />
+        )}
+        {!owner && (
+          <p className="text-center text-xs text-faint">
+            <Link href="/coaches?s=coachpage" prefetch={false} className="hover:text-muted" data-testid="own-book">
+              {t("page.ownBook")}
+            </Link>
+          </p>
+        )}
       </main>
       <Footer />
     </>

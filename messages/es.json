@@ -1228,6 +1228,8 @@
       "invited": "{name} te ha añadido. Tu nombre, y ya puedes reservar.",
       "invitedIn": "Ya estoy",
       "invitedSignedIn": "{name} te ha añadido. Elige una hora abajo.",
+      "ownerNote": "Tu página, tal como la ven tus alumnos. Sus reservas, bonos y cancelaciones viven en tu asistente.",
+      "ownerOpen": "Abrir mi asistente",
       "requested": "Pedido. {name} confirmará y las horas libres aparecerán aquí después.",
       "paused": "Tus reservas están en pausa. Escribe a {name}.",
       "pickDay": "Elige un día",

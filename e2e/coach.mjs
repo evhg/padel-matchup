@@ -50,6 +50,8 @@ try {
   await olga.getByRole("button", { name: "Set up my assistant" }).click();
   await olga.getByTestId(/setup-(calendar|pay)/).waitFor({ timeout: 30000 });
   check("the assistant exists after the third step; the rest can wait", (await olga.getByText(/Your assistant exists/).count()) === 1);
+  // A second Telegram account that gets hold of Olga's bot links.
+  const stranger = { id: 616162, is_bot: false, first_name: "Someone", username: "someone_e2e" };
   for (let i = 0; i < 4 && !/welcome=1/.test(olga.url()); i++) {
     const later = olga.getByRole("button", { name: "Later" });
     const done = olga.getByTestId("setup-finish");
@@ -65,6 +67,13 @@ try {
       check("opening the bot from the setup binds that Telegram account to the coach", linked.outcome === "coach_linked", JSON.stringify(linked));
       const agenda = await hook({ update_id: 900002, message: { message_id: 900002, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: "tomorrow" } });
       check("the bound account runs the coach's book from the chat", agenda.outcome === "coach:agenda", JSON.stringify(agenda));
+      // The ticket is salted with the binding: the moment Olga is bound, the ticket that bound her is dead, so a second account replaying it gets nothing; a ticket with one character changed is dead too.
+      const rawTicket = decodeURIComponent(ticket ?? "");
+      const replayed = await hook({ update_id: 900003, message: { message_id: 900003, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${rawTicket}` } });
+      check("the ticket that bound the coach is dead once she is bound: replayed from a second Telegram account it is refused as expired", replayed.outcome === "coach_link_expired", JSON.stringify(replayed));
+      const tampered = rawTicket.slice(0, -1) + (rawTicket.endsWith("0") ? "1" : "0");
+      const dead = await hook({ update_id: 900004, message: { message_id: 900004, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${tampered}` } });
+      check("a tampered ticket is refused as expired", dead.outcome === "coach_link_expired", JSON.stringify(dead));
       await done.click();
     } else if (await later.count()) await later.first().click();
     else break;
@@ -87,6 +96,22 @@ try {
   check("the header shows the way back to the assistant in a coach's browser", (await olga.getByTestId("assistant-link").count()) === 1);
   await olga.goto(BASE + "/me");
   check("My matches puts the assistant first for a coach", (await olga.getByTestId("coach-card").count()) === 1 && (await olga.getByText("Nothing booked today").count()) === 1);
+  // The coach opens her own student link: the page as students see it, with the way to her book, and no form to join herself.
+  await olga.goto(`${BASE}/c/${handle}?i=${inviteCode}`);
+  check("the coach's own student link shows the owner's note instead of the join form", (await olga.getByTestId("owner-note").count()) === 1 && (await olga.getByTestId("invited-join").count()) === 0 && (await olga.getByTestId("ask-to-join").count()) === 0 && (await olga.getByRole("link", { name: "Open my assistant" }).getAttribute("href")) === "/coach");
+  // A ticket minted after the bind (the setup walk reopened) is live; opened from a second Telegram account it is refused and the assistant stays with Olga.
+  await olga.goto(BASE + "/coach?setup=1");
+  await olga.getByTestId(/setup-(calendar|pay|bot)/).waitFor({ timeout: 20000 });
+  for (let i = 0; i < 4 && !(await olga.getByTestId("setup-finish").count()); i++) {
+    await olga.getByRole("button", { name: "Later" }).first().click();
+    await olga.waitForTimeout(300);
+  }
+  const freshHref = await olga.getByTestId("open-bot").getAttribute("href");
+  const freshTicket = decodeURIComponent(freshHref?.match(/start=coach_([^&]+)/)?.[1] ?? "");
+  const other = await hook({ update_id: 900005, message: { message_id: 900005, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${freshTicket}` } });
+  check("a live ticket opened from a second Telegram account is refused: the assistant stays with the first", Boolean(freshTicket) && other.outcome === "coach_link_other", JSON.stringify(other));
+  const still = await hook({ update_id: 900006, message: { message_id: 900006, date: 0, chat: { id: 616161, type: "private" }, from: { id: 616161, is_bot: false, first_name: "Olga", username: "olga_coach_e2e" }, text: "tomorrow" } });
+  check("and the first account still runs the book", still.outcome === "coach:agenda", JSON.stringify(still));
 
   // Settings: PromptPay and a cutoff, saved once.
   await olga.goto(BASE + "/coach/settings");

@@ -75,6 +75,15 @@ export type MyEvent = {
   isCreator: boolean;
 };
 
+/** One entry of the /me list: a match or a lesson, with the moment it starts. */
+export type TimelineEntry<M, L> = { kind: "match"; at: number; match: M } | { kind: "lesson"; at: number; lesson: L };
+
+/** Matches and lessons on one timeline, soonest first: a lesson takes its place among the matches by time, not a section of its own. */
+export function mergeTimeline<M extends { event: { startsAt: Date } }, L extends { startsAt: Date }>(matches: readonly M[], lessons: readonly L[]): TimelineEntry<M, L>[] {
+  const entries: TimelineEntry<M, L>[] = [...matches.map((match) => ({ kind: "match" as const, at: match.event.startsAt.getTime(), match })), ...lessons.map((lesson) => ({ kind: "lesson" as const, at: lesson.startsAt.getTime(), lesson }))];
+  return entries.sort((a, b) => a.at - b.at);
+}
+
 export async function getPlayerEvents(db: Db, playerId: string, now = new Date()): Promise<{ upcoming: MyEvent[]; past: MyEvent[] }> {
   const rows = await db
     .select({ event: events, slot: slots })

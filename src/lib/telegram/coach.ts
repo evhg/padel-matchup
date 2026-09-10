@@ -346,7 +346,7 @@ export async function sendRoleMenu(db: Db, player: Player, chatId: number, o: { 
     await pinChatMessage(chatId, sent.result.message_id).catch(() => undefined);
   }
   const own = role === "coach" ? coachCommands(locale) : studentCommands(locale);
-  const general = BOT_COMMANDS[locale === "ru" ? "ru" : "en"].filter((c) => !own.some((mine) => mine.command === c.command));
+  const general = BOT_COMMANDS[locale].filter((c) => !own.some((mine) => mine.command === c.command));
   await setChatCommands(chatId, [...own, ...general]).catch(() => undefined);
   return role === "coach" ? "coach_menu" : "student_menu";
 }

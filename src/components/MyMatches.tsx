@@ -7,8 +7,8 @@ import { baseUrl, emailEnabled } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { playerHasPush } from "@/lib/domain/push";
 import { getPlayerGroups } from "@/lib/domain/groups";
-import { getPlayerEvents, type MyEvent } from "@/lib/domain/queries";
-import { listStudentLessons, packageLine, studentCoaches, type StudentLesson } from "@/lib/domain/coaching";
+import { getPlayerEvents, mergeTimeline, type MyEvent } from "@/lib/domain/queries";
+import { listStudentCoaches, listStudentLessons, packageLine, type StudentLesson } from "@/lib/domain/coaching";
 import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath, personalUrl } from "@/lib/personal";
@@ -27,11 +27,14 @@ import { DeleteAccount } from "./DeleteAccount";
 export async function MyMatches({ player, personalToken }: { player: Player; personalToken: string }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
   const now = new Date();
-  const [{ upcoming, past }, hasPush, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), studentCoaches(db, player.id, now)]);
+  const [{ upcoming, past }, hasPush, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), listStudentCoaches(db, player.id)]);
   // A lesson is an appointment on the same calendar as a match: it takes its place in the list by time, not a section of its own.
   const booked = lessons.filter((l) => l.status === "booked");
-  const myCoaches = coaches.filter((c) => c.status === "accepted");
-  const hasHistory = upcoming.length > 0 || past.length > 0 || booked.length > 0;
+  // The coach's door stays whatever the match history: to book with a coach who said yes, or to see that the ask still waits.
+  const myCoaches = coaches.filter((c) => c.status === "accepted" || c.status === "requested");
+  // Matches only: what earns the ranking offer and lets the restore card go. Lessons count for the list, not for those.
+  const hasMatches = upcoming.length > 0 || past.length > 0;
+  const hasHistory = hasMatches || booked.length > 0;
   // Stats strip: only matches the player was actually in (not organized-from-the-sidelines).
   const playedList = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
   const won = playedList.filter((m) => m.outcome === "won").length;
@@ -121,7 +124,17 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
     );
   };
   // Matches and lessons on one timeline, soonest first.
-  const timeline = [...upcoming.map((m) => ({ at: m.event.startsAt.getTime(), node: row(m) })), ...booked.map((l) => ({ at: l.startsAt.getTime(), node: lessonRow(l) }))].sort((a, b) => a.at - b.at).map((x) => x.node);
+  const timeline = mergeTimeline(upcoming, booked).map((x) => (x.kind === "match" ? row(x.match) : lessonRow(x.lesson)));
+  const coachDoors = (center: boolean) =>
+    myCoaches.length > 0 && (
+      <div className={`mt-2 flex flex-wrap gap-2${center ? " justify-center" : ""}`}>
+        {myCoaches.map(({ coach, status }) => (
+          <Link key={coach.id} href={`/c/${coach.handle}`} prefetch={false} className="btn-ghost btn-sm" data-testid={status === "requested" ? "coach-requested" : "book-more"}>
+            {status === "requested" ? `${coach.displayName} · ${t("coach.me.requested")}` : `${t("coach.me.book")} · ${coach.displayName}`}
+          </Link>
+        ))}
+      </div>
+    );
 
   return (
     <>
@@ -133,6 +146,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
           <Link href="/" prefetch={false} className="btn-primary mt-4 w-full">
             {t("me.emptyCta")}
           </Link>
+          {coachDoors(true)}
         </section>
       ) : (
         <>
@@ -149,15 +163,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
           <section>
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.upcoming")}</h2>
             {timeline.length ? <ul className="flex flex-col gap-2">{timeline}</ul> : <p className="text-sm text-faint">—</p>}
-            {myCoaches.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {myCoaches.map(({ coach, status }) => (
-                  <Link key={coach.id} href={`/c/${coach.handle}`} prefetch={false} className="btn-ghost btn-sm" data-testid="book-more">
-                    {status === "requested" ? t("coach.me.requested") : `${t("coach.me.book")} · ${coach.displayName}`}
-                  </Link>
-                ))}
-              </div>
-            )}
+            {coachDoors(false)}
           </section>
           <section>
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.past")}</h2>
@@ -199,7 +205,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
       <section className="card">
         <NameEditor name={player.displayName} />
         <div className="mt-4 border-t border-line pt-4">
-          <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasHistory} />
+          <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasMatches} />
         </div>
         {telegramBotId() && (
           <div className="mt-4 border-t border-line pt-4">
@@ -209,7 +215,7 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
         <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
       </section>
 
-      {!hasHistory && emailEnabled() && (
+      {!hasMatches && emailEnabled() && (
         <section className="card">
           <RestoreWithEmail initialEmail={player.email ?? ""} />
         </section>

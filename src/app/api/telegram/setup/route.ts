@@ -13,8 +13,10 @@ export async function GET(req: Request) {
   const hook = await setWebhook(url, telegramWebhookSecret()!);
   const commands = await setMyCommands(BOT_COMMANDS.en);
   const commandsRu = await setMyCommands(BOT_COMMANDS.ru, "ru");
+  const commandsEs = await setMyCommands(BOT_COMMANDS.es, "es");
   // The Mini App button in the private chat needs no BotFather step: the page signs the player in from initData.
   const menu = await setMenuButton(`${baseUrl()}/tg`, "Kicksmash");
   const info = await getWebhookInfo();
-  return Response.json({ ok: hook.ok && commands.ok && commandsRu.ok, url, hook, commands: commands.ok && commandsRu.ok, menuButton: menu.ok, info: info.ok ? info.result : info });
+  const allCommands = commands.ok && commandsRu.ok && commandsEs.ok;
+  return Response.json({ ok: hook.ok && allCommands, url, hook, commands: allCommands, menuButton: menu.ok, info: info.ok ? info.result : info });
 }

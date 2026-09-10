@@ -103,7 +103,6 @@ const STRINGS = {
     coachOpen: "Open my assistant",
     coachLinkExpired: "That link has expired. Open kicksma.sh/coach and tap the button again.",
     coachLinkOther: "This assistant is already linked to another Telegram account.",
-    coachLinked: "Linked. I am your assistant here too: write me one line (anna fri 15 books, tomorrow shows the day, low says who is almost out) and I answer your students while you teach.",
     gamesTitle: (city: string) => `Open matches · ${city}`,
     gamesMine: "Your upcoming matches",
     gamesNone: (city: string) => `No open matches listed in ${city} right now. Create one: /new tomorrow 19:00 <club>.`,
@@ -206,7 +205,6 @@ const STRINGS = {
     coachOpen: "Открыть ассистента",
     coachLinkExpired: "Эта ссылка устарела. Откройте kicksma.sh/coach и нажмите кнопку ещё раз.",
     coachLinkOther: "Этот ассистент уже связан с другим аккаунтом Telegram.",
-    coachLinked: "Связано. Здесь я тоже ваш ассистент: напишите одну строку (анна пт 15 — запись, завтра — день, мало — кто на исходе), а ученикам я отвечаю, пока вы тренируете.",
 
     gamesTitle: (city: string) => `Открытые матчи · ${city}`,
     gamesMine: "Ваши ближайшие матчи",

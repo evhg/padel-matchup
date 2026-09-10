@@ -1228,6 +1228,8 @@
       "invited": "{name} added you. Your name, and you can book.",
       "invitedIn": "I'm in",
       "invitedSignedIn": "{name} added you. Pick a time below.",
+      "ownerNote": "Your page, as your students see it. Their bookings, packages and cancellations live in your assistant.",
+      "ownerOpen": "Open my assistant",
       "requested": "Asked. {name} will confirm, and the free times appear here after that.",
       "paused": "Your bookings are paused. Message {name}.",
       "pickDay": "Pick a day",
