@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, id: row.id, fresh });
 }
 
-/** feedback@<apex>: a note for the loop, thanked at once, answered by the daily session in the same thread. */
+/** feedback@<apex>: a note for the loop, thanked at once; if something gets built from it, the word comes back in the same thread. */
 async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: InboundMail) {
   const from = parseAddress(mail.from);
   if (isAutomatedSender(from.email)) return NextResponse.json({ ok: true, ignored: "automated" });
