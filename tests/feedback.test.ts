@@ -6,7 +6,8 @@ import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
 import { cleanFeedbackText, createFeedback, decideFeedback, FEEDBACK_LIMITS, feedbackWeek, getFeedback, listFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
-import { composeAck, fallbackAck, parseAck } from "@/lib/feedback/ack";
+import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
+import { readFileSync } from "node:fs";
 import { signSvix } from "@/lib/outreach/svix";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
@@ -202,6 +203,25 @@ describe("the instant reply", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it("promises nothing, anywhere: no day, no date, no answer, in any language", () => {
+    const forbidden = /within a day|usually within|hear back|в течение (суток|дня)|обычно в течение|отвечу вам|en un día|normalmente en un día|te responderé|will answer you|I will answer/i;
+    const lines: string[] = [];
+    for (const locale of ["en", "ru", "es"] as const) {
+      const p = POOL[locale];
+      lines.push(...p.open, ...p.openNoName, ...p.mid, ...p.close, ...p.closeNoReply, p.notFeedback);
+      const s = feedbackStrings(locale);
+      lines.push(s.how, s.thanks("Olga"), s.added, s.emailSubject, s.emailThanks("Olga"));
+      const messages = JSON.parse(readFileSync(`messages/${locale}.json`, "utf8")) as { feedback: Record<string, string>; club: Record<string, string> };
+      lines.push(...Object.values(messages.feedback), messages.club.claimSub);
+    }
+    for (const line of lines) expect(line, line).not.toMatch(forbidden);
+    // A note with no way back gets a closer that does not say "here".
+    const web = fallbackAck({ text: "the reminder should come two hours before", name: "Olga", locale: "en", canReply: false });
+    expect(web).not.toMatch(/here|let you know/);
+    expect(web).toMatch(/Kicksmash|the app/);
+    expect(fallbackAck({ text: "the reminder should come two hours before", name: "Olga", locale: "en", canReply: true })).toMatch(/here|let you know/);
   });
 
   it("without the model, the line still differs from note to note and names the person", () => {

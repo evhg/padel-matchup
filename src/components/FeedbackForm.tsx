@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { sendFeedbackAction } from "@/actions/feedback";
 
-/** One textarea, one optional email, one button. The thank-you says where the answer will arrive. */
+/** One textarea, one optional email, one button. The thank-you says the note was read; a channel is named only when one exists, and nothing is promised. */
 export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none" }) {
   const t = useTranslations("feedback");
   const [text, setText] = useState("");

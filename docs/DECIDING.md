@@ -1,6 +1,6 @@
 # How Kicksmash decides what to build
 
-The daily checklist that goes with this yardstick is in `docs/OPERATING.md` (the service board, the weekly domain check). This is the yardstick for every idea, bug report and wish that reaches us, whoever brings it: a player on Telegram, a club by email, a developer in Discussions, or the daily session reading `/api/admin/feedback`. It is short on purpose. If a request fails a rule here, we say so kindly and honestly; if it passes, we ship it, usually within a day, and we tell the person what changed because of them.
+The daily checklist that goes with this yardstick is in `docs/OPERATING.md` (the service board, the weekly domain check). This is the yardstick for every idea, bug report and wish that reaches us, whoever brings it: a player on Telegram, a club by email, a developer in Discussions, or the daily session reading `/api/admin/feedback`. It is short on purpose. If a request fails a rule here, we say so kindly and honestly; if it passes, we ship it and tell the person what changed because of them.
 
 ## What we are
 

@@ -35,7 +35,7 @@ export async function sendFeedbackAction(text: string, contact: string, context:
       if (e instanceof FeedbackError) throw new ActionFailure("generic");
       throw e;
     });
-    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web" });
+    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web", canReply: Boolean(player?.telegramId || email) });
     if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
     else await markAcknowledged(db, row.id, ack.reply);
     return { id: row.id, channel: player?.telegramId ? "telegram" : email ? "email" : "none", kind: ack.kind, reply: ack.reply };
