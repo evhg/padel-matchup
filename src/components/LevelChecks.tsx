@@ -26,8 +26,8 @@ export function LevelChecks({ checks, by }: { checks: LevelCheckDTO[]; by: { kin
       const r = by.kind === "coach" ? await decideLevelCheckAction(c.id, approve, level) : await decideClubLevelCheckAction(by.token, c.id, approve, level);
       if (!r.ok) {
         setNote(null);
-        setError(t("common.somethingWrong"));
-        // A check a colleague already answered is gone on refresh, so its buttons do not sit there failing.
+        // A check a colleague already answered is not a failure: say so, and it is gone on refresh, so its buttons do not sit there failing.
+        setError(r.detail === "not_pending" || r.detail === "not_found" ? t("levelCheck.alreadyAnswered") : t("common.somethingWrong"));
         router.refresh();
         return;
       }

@@ -17,7 +17,9 @@ export type LevelPick = { id: string; level: number };
  */
 export async function verifyLevelsAction(code: string, picks: LevelPick[]): Promise<ActionResult<{ verified: number; skipped: { id: string; name: string }[] }>> {
   return runA(async () => {
-    const { db, detail } = await requireCreator(code);
+    const { db, detail, viewer } = await requireCreator(code);
+    // The tick is attributed to whoever tapped: a co-organizer on the manage link is not the creator, who must still hear about the new name.
+    const actor = viewer.player?.id ?? null;
     let verified = 0;
     const skipped: { id: string; name: string }[] = [];
     const seated: { player: Awaited<ReturnType<typeof verifyPlayerLevel>>; admitted: Admitted[] }[] = [];
@@ -36,7 +38,7 @@ export async function verifyLevelsAction(code: string, picks: LevelPick[]): Prom
     }
     if (seated.length) {
       after(async () => {
-        for (const s of seated) await announceAdmission(db, s.player, s.admitted, "organizer", detail.event.creatorPlayerId);
+        for (const s of seated) await announceAdmission(db, s.player, s.admitted, "organizer", actor);
       });
       for (const s of seated) for (const a of s.admitted) revalidatePath(`/${a.event.code}`);
     }

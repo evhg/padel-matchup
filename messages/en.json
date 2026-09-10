@@ -661,6 +661,7 @@
     "badLinkBody": "It may be incomplete or expired. Use the link from the email you received."
   },
   "levelCheck": {
+    "alreadyAnswered": "Someone else already answered this one; the list is refreshed.",
     "verifiedOnly": "Confirmed levels only",
     "verifiedOnlyHelp": "A level confirmed by an organizer, a coach or the club walks in; a declared one asks to join.",
     "chip": "confirmed levels",

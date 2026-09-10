@@ -34,7 +34,6 @@ export async function verifiersFor(db: Db, ev: Pick<Event, "venueName" | "venueS
   return out;
 }
 
-/** Confirms a player's level: the verifier's number becomes the level when it differs, and the tick records who confirmed. */
 /**
  * The stamp every verifier leaves. `level` is the verifier's number: a coach or
  * club corrects the player to it; with `asSeen` it is the number the verifier
