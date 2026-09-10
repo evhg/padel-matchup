@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const db = await getDb();
   const now = new Date();
   const meter = tavilyEnabled() ? await readMeter(db, now) : null;
-  const [runs, finds] = await Promise.all([listRuns(db), listFinds(db, { status: url.searchParams.get("status") ?? "new", kind: url.searchParams.get("kind") ?? undefined, city: url.searchParams.get("city") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 100) || 100 })]);
+  const [runs, finds] = await Promise.all([listRuns(db), listFinds(db, { status: url.searchParams.get("status") ?? "new", kind: url.searchParams.get("kind") ?? undefined, city: url.searchParams.get("city") ?? undefined, limit: Math.max(1, Math.min(500, Math.floor(Number(url.searchParams.get("limit") ?? 100)) || 100)) })]);
   const pace = meter ? { target: pacedTarget(now, meter.limit), allowanceNow: allowance(meter.used, now, meter.limit), daysLeft: cycleOf(now).daysLeft } : null;
   return NextResponse.json({ ok: true, at: now.toISOString(), enabled: tavilyEnabled(), meter, pace, runs, finds });
 }
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { q?: unknown; timeRange?: unknown; maxResults?: unknown; depth?: unknown; id?: unknown; status?: unknown; note?: unknown };
   const db = await getDb();
   if (typeof body.id === "string") {
+    if (!/^[0-9a-f-]{36}$/i.test(body.id)) return NextResponse.json({ error: "not_found" }, { status: 404 });
     const status = body.status === "used" || body.status === "dismissed" || body.status === "new" ? body.status : null;
     if (!status) return NextResponse.json({ error: "status must be used, dismissed or new" }, { status: 400 });
     const row = await setFindStatus(db, body.id, status, typeof body.note === "string" ? body.note.slice(0, 500) : null);

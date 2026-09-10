@@ -4,7 +4,7 @@ import type { Db } from "@/db";
 import { researchCache, researchFinds, researchRuns, type ResearchFind, type ResearchRun } from "@/db/schema";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import type { Candidate } from "@/lib/listen/parse";
-import { rememberCandidates } from "@/lib/listen/tick";
+import { rememberCandidates, WINDOW_MS } from "@/lib/listen/tick";
 import { allowance, canSpendByHand, readMeter, type Meter } from "./budget";
 import { dueQueries, type Query } from "./queries";
 import { extractCredits, hostOf, sameUrl, searchCredits, tavilyEnabled, tavilyExtract, tavilySearch, type Depth, type Hit, type TimeRange } from "./tavily";
@@ -16,9 +16,11 @@ import { extractCredits, hostOf, sameUrl, searchCredits, tavilyEnabled, tavilyEx
  * coaches get their public contacts read from the page once. Hand searches are
  * cached for a week. Every credit is counted in `tavily_calls`.
  */
-export type ResearchSummary = { enabled: boolean; meter: Meter | null; allowance: number; searches: number; credits: number; newItems: number; newFinds: number; extracted: number; errors: string[] };
+export type ResearchSummary = { enabled: boolean; meter: Meter | null; allowance: number; searches: number; credits: number; newItems: number; newFinds: number; extracted: number; errors: string[]; budgetHit: boolean };
 
-const WEEK_MS = 7 * 86_400_000;
+/** The hourly function has sixty seconds for everything; the desk takes at most this much of it and leaves the rest to the steps after it. */
+export const RESEARCH = { budgetMs: 20_000, failuresBeforeStop: 2 } as const;
+const WEEK_MS = WINDOW_MS;
 const SOCIAL = /(^|\.)(instagram|facebook|tiktok|youtube|twitter|x)\.com$|(^|\.)t\.me$/i;
 const SHOPS = /(^|\.)(pinterest|amazon|aliexpress|ebay|shopee|lazada)\./i;
 
@@ -48,6 +50,11 @@ async function upsertFind(db: Db, q: Query, h: Hit, now: Date): Promise<boolean>
     .onConflictDoUpdate({ target: researchFinds.url, set: { seen: sql`${researchFinds.seen} + 1`, lastSeenAt: now, score: h.score } })
     .returning({ seen: researchFinds.seen });
   return rows[0]?.seen === 1;
+}
+
+/** A failed search leaves the query where it was (due again next hour) and only notes the error; a never-run query gets no row at all. */
+async function recordFailure(db: Db, q: Query, error: string): Promise<void> {
+  await db.update(researchRuns).set({ lastError: error }).where(eq(researchRuns.key, q.key));
 }
 
 async function recordRun(db: Db, q: Query, now: Date, r: { credits: number; results: number; newItems: number; error: string | null }): Promise<void> {
@@ -94,9 +101,12 @@ async function extractContacts(db: Db, now: Date, room: number, fetchImpl: typeo
 }
 
 /** The hourly step. Idempotent; spends at most this hour's allowance. */
-export async function researchTick(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch, o: { queries?: readonly Query[] } = {}): Promise<ResearchSummary> {
-  const out: ResearchSummary = { enabled: tavilyEnabled(), meter: null, allowance: 0, searches: 0, credits: 0, newItems: 0, newFinds: 0, extracted: 0, errors: [] };
+export async function researchTick(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch, o: { queries?: readonly Query[]; budgetMs?: number } = {}): Promise<ResearchSummary> {
+  const out: ResearchSummary = { enabled: tavilyEnabled(), meter: null, allowance: 0, searches: 0, credits: 0, newItems: 0, newFinds: 0, extracted: 0, errors: [], budgetHit: false };
   if (!out.enabled) return out;
+  const started = Date.now();
+  const budgetMs = o.budgetMs ?? RESEARCH.budgetMs;
+  const overBudget = () => Date.now() - started > budgetMs;
   const day = dayKey(now);
   const meter = await readMeter(db, now, fetchImpl);
   out.meter = meter;
@@ -113,14 +123,22 @@ export async function researchTick(db: Db, now = new Date(), fetchImpl: typeof f
   if (contacts.credits) await spend(contacts.credits);
   if (contacts.error) out.errors.push(`extract: ${contacts.error}`);
   const runs = await db.select().from(researchRuns);
+  let failures = 0;
   for (const q of dueQueries(now, runs, o.queries)) {
     if (room < searchCredits("basic")) break;
-    const res = await tavilySearch(q.q, { depth: "basic", maxResults: 10, timeRange: q.timeRange, country: q.country }, fetchImpl);
-    if (!res.ok) {
-      out.errors.push(`${q.key}: ${res.error}`);
-      await recordRun(db, q, now, { credits: 0, results: 0, newItems: 0, error: res.error });
+    if (overBudget()) {
+      out.budgetHit = true;
       break;
     }
+    const res = await tavilySearch(q.q, { depth: "basic", maxResults: 10, timeRange: q.timeRange, country: q.country }, fetchImpl);
+    if (!res.ok) {
+      // The query stays due; one bad answer is not a reason to wait a day. Two in a row and Tavily is having a bad hour: stop.
+      out.errors.push(`${q.key}: ${res.error}`);
+      await recordFailure(db, q, res.error);
+      if (++failures >= RESEARCH.failuresBeforeStop) break;
+      continue;
+    }
+    failures = 0;
     await spend(res.credits);
     out.searches++;
     let fresh = 0;

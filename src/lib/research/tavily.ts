@@ -1,4 +1,4 @@
-import { shortHost } from "@/lib/config";
+import { apexHost } from "@/lib/config";
 
 /**
  * Tavily, the one web-search key we hold. Every call costs credits from a monthly
@@ -51,7 +51,7 @@ export async function tavilySearch(query: string, o: SearchOpts = {}, fetchImpl:
     const res = await fetchImpl(`${API}/search`, { method: "POST", headers: headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
     const json = (await res.json().catch(() => null)) as { results?: { title?: string; url?: string; content?: string; score?: number; published_date?: string }[]; detail?: { error?: string }; error?: string } | null;
     if (!res.ok) return { ok: false, error: json?.detail?.error ?? json?.error ?? `HTTP ${res.status}`, status: res.status, credits: 0 };
-    const own = shortHost();
+    const own = apexHost();
     const seen = new Set<string>();
     const hits: Hit[] = [];
     for (const r of json?.results ?? []) {

@@ -43,7 +43,7 @@ export async function alertOnServices(db: Db, now = new Date(), board?: ServiceB
   const month = now.toISOString().slice(0, 7);
   let sent = 0;
   for (const row of b.rows) {
-    const crossed = row.state === "alert" || (row.pct !== null && row.pct >= 85);
+    const crossed = row.state === "alert";
     if (!crossed) continue;
     const key = `svc_alert_${row.key}_${month}`;
     const [seen] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.key, key), eq(metricsDaily.day, dayKey(now)))).limit(1);

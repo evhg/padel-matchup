@@ -240,4 +240,29 @@ describe("the research desk", () => {
     const d = await groundedSearch(db, "something new", {}, hours(24 * 9));
     expect("error" in d && d.error.startsWith("budget")).toBe(true);
   });
+
+  it("stops at its time budget, and a failed search leaves the query due for the next hour", async () => {
+    const tight = await researchTick(db, hours(3), fetch, { queries: LISTEN_QUERIES.slice(2, 4), budgetMs: 0 });
+    expect(tight.searches).toBe(0);
+    expect(tight.budgetHit).toBe(true);
+    // One query answers 500, the next is fine: the bad one keeps no run row (still due), the good one runs; two failures in a row end the hour.
+    const real = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+      const body = init?.body && typeof init.body === "string" ? (JSON.parse(init.body) as { query?: string }) : null;
+      if (String(input).endsWith("/search") && String(body?.query ?? "").includes("FAILS")) return new Response(JSON.stringify({ detail: { error: "boom" } }), { status: 500 });
+      return real(input, init);
+    });
+    const bad = { key: "listen:en:fails", q: "this one FAILS", lang: "en" as const, kind: "listen" as const, everyHours: 24, timeRange: "week" as const };
+    const good = LISTEN_QUERIES[5];
+    const t = await researchTick(db, hours(4), fetch, { queries: [bad, good] });
+    expect(t.errors).toEqual(["listen:en:fails: boom"]);
+    expect(t.searches).toBe(1);
+    expect(await db.select().from(researchRuns).where(eq(researchRuns.key, bad.key))).toEqual([]);
+    expect(dueQueries(hours(5), await db.select().from(researchRuns), [bad, good]).map((q) => q.key)).toEqual([bad.key]);
+    const bad2 = { ...bad, key: "listen:en:fails2", q: "also FAILS" };
+    const twice = await researchTick(db, hours(5), fetch, { queries: [bad, bad2, good] });
+    expect(twice.errors).toHaveLength(2);
+    expect(twice.searches).toBe(0);
+    stubNetwork();
+  });
 });
