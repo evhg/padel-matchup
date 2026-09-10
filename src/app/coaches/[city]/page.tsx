@@ -6,7 +6,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
-import { FOUNDING_COACHES, listPublicCoaches } from "@/lib/domain/coaching";
+import { isFoundingCoach, listPublicCoaches } from "@/lib/domain/coaching";
 import { localeAlternates } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +56,7 @@ export default async function CoachesInCityPage({ params }: Props) {
           <ul className="flex flex-col gap-3" data-testid="coach-list">
             {coaches.map((c, i) => (
               <li key={c.id} className="card flex flex-col gap-2">
-                {i < FOUNDING_COACHES && <span className="chip-muted self-start">🏅 {tCoach("page.founding", { city: city.name })}</span>}
+                {isFoundingCoach(c) && <span className="chip-muted self-start">🏅 {tCoach("page.founding", { city: city.name })}</span>}
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="text-xl font-extrabold tracking-tight">{c.displayName}</h2>
                   <span className="text-xs text-muted">{tCoach("page.lesson", { minutes: c.lessonMinutes })}</span>

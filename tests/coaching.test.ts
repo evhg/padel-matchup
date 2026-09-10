@@ -1,32 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import {
-  activePackage,
-  addStudentByName,
-  bookLesson,
-  cancelLesson,
-  completePastLessons,
-  createCoach,
-  createPackage,
-  getCoachByHandle,
-  getCoachForActor,
-  handleFromName,
-  isCoachActor,
-  listCoachLessons,
-  listStudentLessons,
-  listStudents,
-  lowPackages,
-  openSlots,
-  packageLine,
-  parseHoursLine,
-  presetHours,
-  requestStudent,
-  setStudentStatus,
-  studentCoaches,
-  studentStatus,
-  updateCoach,
-  withinHours,
-} from "@/lib/domain/coaching";
+import { activePackage, addStudentByName, bookLesson, cancelLesson, completePastLessons, createCoach, createPackage, foundingPlaces, getCoachByHandle, getCoachForActor, handleFromName, insertCoach, isCoachActor, isFoundingCoach, listCoachLessons, listStudentLessons, listStudents, lowPackages, openSlots, packageLine, parseHoursLine, presetHours, requestStudent, setStudentStatus, studentCoaches, studentStatus, updateCoach, withinHours } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -195,5 +169,49 @@ describe("a coach's book", () => {
     expect((await activePackage(db, coach.id, s.id, now))?.id).toBe(soon.id);
     expect(packageLine(expired, now).expired).toBe(true);
     expect(later.expiresAt!.getTime()).toBeGreaterThan(soon.expiresAt!.getTime());
+  });
+
+  it("founding places: the first ten listed in a city keep them, a later coach never earns one by relisting", async () => {
+    const tz = "Pacific/Auckland";
+    const made = [];
+    for (let i = 0; i < 11; i++) {
+      const p = await makePlayer(db, `Founder ${i}`);
+      made.push(await createCoach(db, { playerId: p.id, displayName: `F${i}`, tz, clubNames: "Bay Padel" }));
+    }
+    expect(made.slice(0, 10).every((c) => c.foundingAt !== null && isFoundingCoach(c))).toBe(true);
+    expect(made[10].foundingAt).toBeNull();
+    expect(isFoundingCoach(made[10])).toBe(false);
+    // The tenth unlists and relists: the place was earned and stays. The eleventh unlists and relists: still no place, the city is full.
+    const tenth = await updateCoach(db, made[9].id, { isPublic: false });
+    expect(isFoundingCoach(tenth)).toBe(false);
+    expect(tenth.foundingAt).not.toBeNull();
+    expect(isFoundingCoach(await updateCoach(db, made[9].id, { isPublic: true }))).toBe(true);
+    await updateCoach(db, made[10].id, { isPublic: false });
+    expect((await updateCoach(db, made[10].id, { isPublic: true })).foundingAt).toBeNull();
+    // While a founder is unlisted the city still has no place left: a twelfth coach earns none either.
+    await updateCoach(db, made[0].id, { isPublic: false });
+    const twelfth = await createCoach(db, { playerId: (await makePlayer(db, "Founder 12")).id, displayName: "F12", tz, clubNames: "Bay Padel" });
+    expect(twelfth.foundingAt).toBeNull();
+    expect(await foundingPlaces(db, tz)).toBe(10);
+    // A founder who moves into a full city has no badge there and gives Auckland its place back; one who moves into an empty city is its first.
+    const full = "Pacific/Fiji";
+    for (let i = 0; i < 10; i++) await createCoach(db, { playerId: (await makePlayer(db, `Fiji ${i}`)).id, displayName: `Fj${i}`, tz: full, clubNames: "Reef Padel" });
+    const moved = await updateCoach(db, made[1].id, { tz: full });
+    expect(moved.foundingAt).toBeNull();
+    expect(isFoundingCoach(moved)).toBe(false);
+    expect(await foundingPlaces(db, tz)).toBe(9);
+    const home = await updateCoach(db, made[1].id, { tz });
+    expect(isFoundingCoach(home)).toBe(true);
+    expect(await foundingPlaces(db, tz)).toBe(10);
+    const pioneer = await updateCoach(db, made[2].id, { tz: "Pacific/Tongatapu" });
+    expect(isFoundingCoach(pioneer)).toBe(true);
+    expect(pioneer.foundingTz).toBe("Pacific/Tongatapu");
+    // Two submits for one player make one book, and only the first says it was created.
+    const p = await makePlayer(db, "Twice");
+    const first = await insertCoach(db, { playerId: p.id, displayName: "Twice", tz, clubNames: "Bay Padel" });
+    const second = await insertCoach(db, { playerId: p.id, displayName: "Twice", tz, clubNames: "Bay Padel" });
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.coach.id).toBe(first.coach.id);
   });
 });

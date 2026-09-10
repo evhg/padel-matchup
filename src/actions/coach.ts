@@ -3,43 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { bumpMetric } from "@/lib/domain/metrics";
-import { cleanSource, SOURCE_COOKIE } from "@/lib/source";
+import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 import { getLocale } from "next-intl/server";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import {
-  acceptByInvite,
-  addStudentByName,
-  bookLesson,
-  cancelLesson,
-  createCoach,
-  createPackage,
-  extendPackage,
-  getCoachByHandle,
-  getCoachForActor,
-  getPlayerById,
-  hoursFromLines,
-  inviteMatches,
-  isPayLink,
-  LESSON_MINUTES,
-  listStudents,
-  markNoShow,
-  presetHours,
-  removeCoachQr,
-  requestStudent,
-  setCoachQr,
-  setPackagePaid,
-  setStudentStatus,
-  studentStatus,
-  type CancelOutcome,
-  type Hours,
-  type HoursPreset,
-  type StudentStatus,
-  updateCoach,
-} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach } from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -87,11 +58,13 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
       if (parsed.invalidDay !== null) throw new DomainError("invalid", String(parsed.invalidDay));
       hours = parsed.hours;
     }
-    const coach = await createCoach(db, { playerId: me.id, displayName: me.displayName, clubNames: input.clubs, lessonMinutes: input.minutes, hours, tz, languages: [locale] });
-    // Which door this coach came through (a coach page, a club page, the city list, an invite, search): the Sunday digest counts them.
-    const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
-    await bumpMetric(db, "coaches_created").catch(() => undefined);
-    if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
+    const { coach, created } = await insertCoach(db, { playerId: me.id, displayName: me.displayName, clubNames: input.clubs, lessonMinutes: input.minutes, hours, tz, languages: [locale] });
+    // Which door this coach came through (a coach page, a club page, the city list, an invite, the landing page): the Sunday digest counts them, once per book.
+    if (created) {
+      const source = cleanSource((await cookies()).get(COACH_SOURCE_COOKIE)?.value);
+      await bumpMetric(db, "coaches_created").catch(() => undefined);
+      if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
+    }
     // Neither a revalidation nor a cookie here, on purpose: either would refresh /coach and swap the setup walk for the book
     // mid-way. The walk moves itself to /coach?setup=1 and ends through /coach/done, which sets the browser hint on the way.
     return { handle: coach.handle };

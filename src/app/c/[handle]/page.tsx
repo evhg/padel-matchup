@@ -9,7 +9,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, availableSlots, DAY_MS, foundingRank, getCoachByHandle, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
@@ -44,7 +44,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const db = await getDb();
   const coach = await getCoachByHandle(db, handle.toLowerCase());
   if (!coach) notFound();
-  const foundingCity = isFoundingCoach(await foundingRank(db, coach)) ? (CITIES.find((c) => c.tz === coach.tz)?.name ?? null) : null;
+  const foundingCity = isFoundingCoach(coach) ? (CITIES.find((c) => c.tz === coach.tz)?.name ?? null) : null;
   const [t, locale, me] = await Promise.all([getTranslations("coach"), getLocale(), getSessionPlayer(db)]);
   const now = new Date();
   // The coach's own link carries their invite code: whoever opens it is on the list, nobody asks and nobody approves.

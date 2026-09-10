@@ -5,7 +5,7 @@ import { CoachSetup } from "@/components/coach/CoachSetup";
 import { Footer, Header } from "@/components/Header";
 import { NameGate } from "@/components/NameGate";
 import { SourceTag } from "@/components/SourceTag";
-import { cleanSource } from "@/lib/source";
+import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { zonedTimeToUtc } from "@/lib/dates";
@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("setup.title"), robots: { index: false, follow: false } };
 }
 
-type Props = { searchParams: Promise<{ welcome?: string; s?: string; club?: string; setup?: string }> };
+type Props = { searchParams: Promise<{ welcome?: string; s?: string | string[]; club?: string | string[]; setup?: string }> };
 
 /** The coach's book, or the four taps that create it. One screen, one job. */
 export default async function CoachPage({ searchParams }: Props) {
@@ -43,7 +43,7 @@ export default async function CoachPage({ searchParams }: Props) {
     </>
   );
   // The door a coach came through (?s=citylist, club, coachpage, invite…) is remembered for a day and counted on setup.
-  const tag = <SourceTag source={cleanSource(sp.s)} />;
+  const tag = <SourceTag source={cleanSource(sp.s)} cookie={COACH_SOURCE_COOKIE} />;
   if (!me)
     return shell(
       <>
@@ -58,7 +58,7 @@ export default async function CoachPage({ searchParams }: Props) {
       <>
         {tag}
         {!found && <CoachHint present={false} />}
-        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
+        <CoachSetup initialClubs={((Array.isArray(sp.club) ? sp.club[0] : sp.club) ?? "").slice(0, 80)} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
       </>,
     );
 
@@ -83,6 +83,7 @@ export default async function CoachPage({ searchParams }: Props) {
         handle={coach.handle}
         coachName={coach.displayName}
         url={`${baseUrl()}/c/${coach.handle}`}
+        inviteUrl={`${baseUrl()}/coaches?s=invite`}
         studentUrl={studentLink(baseUrl(), coach.handle, invite)}
         earned={earned}
         today={today}

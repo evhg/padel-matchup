@@ -960,6 +960,10 @@ export const coaches = pgTable(
     whatsapp: text("whatsapp"),
     /** Listed on the public page, city list and sitemap. */
     isPublic: boolean("is_public").notNull().default(true),
+    /** Among the first ten listed coaches of their city when they listed: earned once, never taken back. */
+    foundingAt: timestamp("founding_at", { withTimezone: true }),
+    /** The city (time zone) the place was earned in; a coach who moves city does not carry it. */
+    foundingTz: text("founding_tz"),
     /** The coach's Google Calendar, shared with our service account: read for busy time, written with lessons. */
     gcalId: text("gcal_id"),
     /** linked | no_access | error, after the last check. */
