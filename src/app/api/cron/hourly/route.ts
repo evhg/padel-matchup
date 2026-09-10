@@ -147,8 +147,8 @@ export async function GET(req: Request) {
     const created = await autoCreateGroupMatches(db, now);
     summary.groupMatches = created.length;
     for (const c of created) {
-      await notifyGroupMatch(db, c.group, c.event, null);
-      // The organizer is seated by the job, so their calendar gets the invitation the web form would have sent.
+      await notifyGroupMatch(db, c.group, c.event, c.group.creatorPlayerId);
+      // The organizer is seated by the job, so their calendar gets the invitation the web form would have sent, and not the group note as well.
       const organizer = await getPlayer(db, c.group.creatorPlayerId);
       if (organizer) await sendCalendarInvite(db, c.event, organizer).catch(() => undefined);
       await emitMatchEvent(db, "match.created", c.event.code, { automatic: true });

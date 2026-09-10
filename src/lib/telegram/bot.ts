@@ -399,11 +399,15 @@ async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input
   } catch {
     return { ok: false, reason: "invalid" };
   }
-  await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => undefined);
-  // The organizer's own calendar invitation, as from the web form: the match page says it was sent, so it is.
-  await sendCalendarInvite(db, ev, player).catch(() => undefined);
+  const seated = await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => null);
   await rememberChatDefaults(db, chat, ev);
   const detail = (await getEventByCode(db, ev.code))!;
+  // The organizer's own calendar invitation, as from the web form (the match page says it was sent, so it is): after the reply, only when they hold a seat.
+  if (seated?.outcome === "joined") {
+    ctx.afterwards(async () => {
+      await sendCalendarInvite(db, ev, player, "joined", detail).catch(() => undefined);
+    });
+  }
   await postCard(db, detail, chat, o);
   ctx.emit("match.created", ev.code);
   return { ok: true, ev };

@@ -10,7 +10,7 @@ export async function resendCalendarInviteAction(code: string): Promise<ActionRe
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const { player: me } = await getViewer(db, detail);
-    if (!me?.email || !isSeated(detail, me.id) || detail.event.status === "cancelled") throw new ActionFailure("forbidden");
+    if (!me?.email || !isSeated({ roster: detail.roster }, me.id) || detail.event.status === "cancelled") throw new ActionFailure("forbidden");
     await assertRate(db, "invite_resend", me.id, LIMITS.inviteResendsPerPlayerPerDay);
     const sent = await sendCalendarInvite(db, detail.event, me, "joined", detail);
     if (!sent) throw new ActionFailure("generic");

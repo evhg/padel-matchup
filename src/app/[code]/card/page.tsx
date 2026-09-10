@@ -17,7 +17,7 @@ import { getEventPhoto } from "@/lib/domain/photos";
 import { taggedUrl } from "@/lib/source";
 import { getSessionPlayer } from "@/lib/session";
 import { fnv1a } from "@/lib/hash";
-import { isOccupied } from "@/lib/domain/events";
+import { isOccupied, isSeated } from "@/lib/domain/events";
 import { getEventByCode } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import { getTournamentState } from "@/lib/domain/tournament";
@@ -51,7 +51,7 @@ export default async function CardPage({ params }: Props) {
   if (!detail) notFound();
   const [t, locale, me, photo] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getEventPhoto(db, detail.event.id).catch(() => null)]);
   const ev = detail.event;
-  const participant = Boolean(me && (ev.creatorPlayerId === me.id || detail.roster.some((s) => isOccupied(s) && s.playerId === me.id)));
+  const participant = Boolean(me && (ev.creatorPlayerId === me.id || isSeated({ roster: detail.roster }, me.id)));
   const nameOf = (s: (typeof detail.roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
   // One count per render: the funnel's last step.
   void bumpMetric(db, "card_views").catch(() => undefined);
@@ -92,7 +92,7 @@ export default async function CardPage({ params }: Props) {
         <p className="text-xs text-faint">{t("card.saveHint")}</p>
         {participant && ev.type === "match" && <PhotoButton code={code} hasPhoto={Boolean(photo)} canRemove={Boolean(me && photo && (photo.uploadedByPlayerId === me.id || ev.creatorPlayerId === me.id))} />}
         <ShareButtons url={shareUrl} text={text} imageUrl={`/${code}/card/opengraph-image?v=${version}`} />
-        {ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || detail.roster.some((s) => isOccupied(s) && s.playerId === me.id)) && <SameTimeButton code={code} when={`${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}`} />}
+        {ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster: detail.roster }, me.id)) && <SameTimeButton code={code} when={`${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}`} />}
         <Link href="/" prefetch={false} className="btn-primary w-full text-lg">
           {t("card.organize")}
         </Link>

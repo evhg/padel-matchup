@@ -24,11 +24,19 @@ export type OutgoingEmail = {
  * whole email subsystem is silently disabled (decision: deploy never blocks on
  * email DNS), and delivery errors are logged, not surfaced to players.
  */
+let warnedSink = false;
+
 export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
   const r = resend();
   if (!r) return false;
-  // A file sink for local and CI runs only: on Vercel a stray variable must not swallow real mail.
-  if (process.env.EMAIL_SINK_FILE && !onVercel()) return sink(msg);
+  // A file sink for local and CI runs only: on Vercel a stray variable must not swallow real mail, and the log says it was ignored.
+  if (process.env.EMAIL_SINK_FILE) {
+    if (!onVercel()) return sink(msg);
+    if (!warnedSink) {
+      warnedSink = true;
+      console.warn("[email] EMAIL_SINK_FILE is set but ignored on Vercel; mail goes out for real");
+    }
+  }
   const from = emailFrom();
   try {
     const { error } = await r.emails.send({

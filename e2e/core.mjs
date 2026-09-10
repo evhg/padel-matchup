@@ -75,7 +75,7 @@ try {
   check("calendar.ics carries one short private link, no personal-link line", /URL:http:\/\/localhost:3001\/p\/[A-Za-z0-9]{12}\//.test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(/http:\/\/localhost:3001/g) || []).length === 2);
 
   // ---- The invite really went out: the test server writes every email to a file instead of sending ----
-  const { readFileSync } = await import("node:fs");
+  const { existsSync, readFileSync } = await import("node:fs");
   const unfoldIcs = (t) => t.replace(/\r?\n[ \t]/g, "");
   const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
   const invitesFor = (c) => mails().filter((m) => m.to === "dana@example.com" && m.ics?.method === "REQUEST" && unfoldIcs(m.ics.content).includes(`/${c}`));
