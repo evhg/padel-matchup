@@ -12,7 +12,7 @@ import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
-import { isOccupied } from "@/lib/domain/events";
+import { isOccupied, isSeated } from "@/lib/domain/events";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
@@ -93,9 +93,9 @@ export async function icsForDownload(db: Db, detail: EventDetail, viewer: Recipi
 }
 
 /** Player joined/confirmed/was promoted: calendar invite (.ics REQUEST). */
-export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind: "joined" | "promoted" = "joined"): Promise<void> {
-  if (!emailEnabled() || !player.email) return;
-  const c = await ctx(db, ev, player.locale, player);
+export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind: "joined" | "promoted" = "joined", detail?: EventDetail): Promise<boolean> {
+  if (!emailEnabled() || !player.email) return false;
+  const c = await ctx(db, ev, player.locale, player, detail);
   const ns = kind === "promoted" ? "email.promotedPlayer" : "email.calendarInvite";
   const { html, text } = layout({
     heading: c.t(`${ns}.heading` as "email.calendarInvite.heading"),
@@ -107,7 +107,7 @@ export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind
     openLabel: c.openLabel,
     personal: c.personal,
   });
-  await sendEmail({
+  return sendEmail({
     to: player.email,
     subject: c.t(`${ns}.subject` as "email.calendarInvite.subject", c.vars),
     html,
@@ -140,9 +140,8 @@ export async function welcomeEmail(db: Db, player: Player, ev: Event | null): Pr
   if (!emailEnabled() || !player.email) return;
   if (ev) {
     const detail = await getEventDetail(db, ev);
-    const inEvent = detail.roster.some((s) => s.playerId === player.id && isOccupied(s));
-    if (inEvent && ev.status !== "cancelled") {
-      await sendCalendarInvite(db, ev, player);
+    if (isSeated({ roster: detail.roster }, player.id) && ev.status !== "cancelled") {
+      await sendCalendarInvite(db, ev, player, "joined", detail);
       return;
     }
   }
@@ -179,7 +178,10 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
 /** Join request decided: approved players get their calendar invite, declined ones a short, kind note. */
 export async function notifyRequestDecided(db: Db, ev: Event, player: Player, approved: boolean): Promise<void> {
   if (!emailEnabled()) return;
-  if (approved) return sendCalendarInvite(db, ev, player);
+  if (approved) {
+    await sendCalendarInvite(db, ev, player);
+    return;
+  }
   if (!player.email) return;
   const c = await ctx(db, ev, player.locale, player);
   const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };

@@ -77,7 +77,7 @@ try {
   // ---- The invite really went out: the test server writes every email to a file instead of sending ----
   const { readFileSync } = await import("node:fs");
   const unfoldIcs = (t) => t.replace(/\r?\n[ \t]/g, "");
-  const mails = () => (process.env.EMAIL_SINK_FILE ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
+  const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
   const invitesFor = (c) => mails().filter((m) => m.to === "dana@example.com" && m.ics?.method === "REQUEST" && unfoldIcs(m.ics.content).includes(`/${c}`));
   const waitUntil = async (fn, ms = 20000) => { const end = Date.now() + ms; for (;;) { const v = fn(); if (v || Date.now() > end) return v; await new Promise((r) => setTimeout(r, 400)); } };
   const firstInvite = await waitUntil(() => invitesFor(code)[0]);

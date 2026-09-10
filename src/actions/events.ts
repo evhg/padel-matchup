@@ -8,15 +8,14 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { zonedTimeToUtc } from "@/lib/dates";
-import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
+import { cancelEvent, createEvent, duplicateEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { changePlayerEmail } from "@/lib/domain/identity";
-import { normalizeEmail } from "@/lib/domain/players";
+import { getPlayer, normalizeEmail } from "@/lib/domain/players";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
-import { getPlayer } from "@/lib/domain/players";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -145,14 +144,14 @@ export async function duplicateEventAction(code: string): Promise<ActionResult<{
   const res = await runA(async () => {
     const { db, detail } = await loadEvent(code);
     const viewer = await getViewer(db, detail);
-    const isParticipant = Boolean(viewer.player && detail.roster.some((s) => s.playerId === viewer.player!.id && (s.status === "joined" || s.status === "confirmed")));
+    const isParticipant = isSeated({ roster: detail.roster }, viewer.player?.id);
     if (!viewer.isCreator && !isParticipant) throw new ActionFailure("forbidden");
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
     const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
     const { joinEvent } = await import("@/lib/domain/slots");
     const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
     if (joined?.outcome === "joined") {
-      const organizer = viewer.player?.id === creatorId ? viewer.player : await getPlayer(db, creatorId);
+      const organizer = viewer.player ?? (await getPlayer(db, creatorId));
       if (organizer) after(() => sendCalendarInvite(db, ev, organizer));
     }
     after(async () => {

@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import type { CreatorKind } from "@/lib/notify";
+import { sendCalendarInvite, type CreatorKind } from "@/lib/notify";
 import { events, players, telegramCards, telegramChats, telegramInlineCards, type Event, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
@@ -400,6 +400,8 @@ async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input
     return { ok: false, reason: "invalid" };
   }
   await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => undefined);
+  // The organizer's own calendar invitation, as from the web form: the match page says it was sent, so it is.
+  await sendCalendarInvite(db, ev, player).catch(() => undefined);
   await rememberChatDefaults(db, chat, ev);
   const detail = (await getEventByCode(db, ev.code))!;
   await postCard(db, detail, chat, o);
