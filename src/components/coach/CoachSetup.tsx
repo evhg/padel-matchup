@@ -41,9 +41,9 @@ export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = nul
   const index = steps.indexOf(step);
   const total = steps.length;
   const goNext = () => setStep(steps[Math.min(total - 1, index + 1)]);
+  // A full navigation through /coach/done: the response sets the header's coach hint and opens the welcome.
   const finish = () => {
-    router.push("/coach?welcome=1");
-    router.refresh();
+    window.location.assign("/coach/done");
   };
   const after = (s: Step) => (steps.indexOf(s) === total - 1 ? finish : goNext);
 

@@ -51,9 +51,9 @@ import { pingIndexNow } from "@/lib/indexnow";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
-import { COACH_COOKIE } from "@/lib/coachCookie";
+import { COACH_COOKIE, coachCookieOptions } from "@/lib/coachCookie";
 async function rememberCoach(): Promise<void> {
-  (await cookies()).set(COACH_COOKIE, "1", { httpOnly: false, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 365 * 24 * 3600 });
+  (await cookies()).set(COACH_COOKIE, "1", coachCookieOptions());
 }
 
 /** The coach's book: every action here is one tap on a coach screen or a student screen. */
@@ -93,7 +93,7 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
     await bumpMetric(db, "coaches_created").catch(() => undefined);
     if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
     // Neither a revalidation nor a cookie here, on purpose: either would refresh /coach and swap the setup walk for the book
-    // mid-way. The walk moves itself to /coach?setup=1; the coach page sets the browser hint once the walk is done.
+    // mid-way. The walk moves itself to /coach?setup=1 and ends through /coach/done, which sets the browser hint on the way.
     return { handle: coach.handle };
   });
 }
