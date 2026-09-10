@@ -193,11 +193,19 @@ describe("a coach's book", () => {
     const twelfth = await createCoach(db, { playerId: (await makePlayer(db, "Founder 12")).id, displayName: "F12", tz, clubNames: "Bay Padel" });
     expect(twelfth.foundingAt).toBeNull();
     expect(await foundingPlaces(db, tz)).toBe(10);
-    // A founder who moves city does not carry the badge; back home it shows again.
-    const moved = await updateCoach(db, made[1].id, { tz: "Pacific/Fiji" });
-    expect(moved.foundingAt).not.toBeNull();
+    // A founder who moves into a full city has no badge there and gives Auckland its place back; one who moves into an empty city is its first.
+    const full = "Pacific/Fiji";
+    for (let i = 0; i < 10; i++) await createCoach(db, { playerId: (await makePlayer(db, `Fiji ${i}`)).id, displayName: `Fj${i}`, tz: full, clubNames: "Reef Padel" });
+    const moved = await updateCoach(db, made[1].id, { tz: full });
+    expect(moved.foundingAt).toBeNull();
     expect(isFoundingCoach(moved)).toBe(false);
-    expect(isFoundingCoach(await updateCoach(db, made[1].id, { tz }))).toBe(true);
+    expect(await foundingPlaces(db, tz)).toBe(9);
+    const home = await updateCoach(db, made[1].id, { tz });
+    expect(isFoundingCoach(home)).toBe(true);
+    expect(await foundingPlaces(db, tz)).toBe(10);
+    const pioneer = await updateCoach(db, made[2].id, { tz: "Pacific/Tongatapu" });
+    expect(isFoundingCoach(pioneer)).toBe(true);
+    expect(pioneer.foundingTz).toBe("Pacific/Tongatapu");
     // Two submits for one player make one book, and only the first says it was created.
     const p = await makePlayer(db, "Twice");
     const first = await insertCoach(db, { playerId: p.id, displayName: "Twice", tz, clubNames: "Bay Padel" });

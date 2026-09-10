@@ -199,12 +199,21 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   if (clean.minNoticeHours !== undefined) clean.minNoticeHours = Math.min(48, Math.max(0, Math.round(clean.minNoticeHours)));
   if (clean.displayName !== undefined) clean.displayName = clean.displayName.replace(/\s+/g, " ").trim().slice(0, 40) || undefined;
   if (clean.whatsapp !== undefined) clean.whatsapp = (clean.whatsapp ?? "").replace(/\D/g, "").slice(0, 15) || null;
-  // Listing the book for the first time while the city still has founding places: earned now, kept whatever happens later.
+  // Founding places: listing the book for the first time takes one while the city has any; moving city takes one there when
+  // that city has any (a Bangkok founder does not walk into a full Singapore with a badge) and gives the old one back.
   const extra: Partial<typeof coaches.$inferInsert> = {};
-  if (clean.isPublic === true) {
-    const [cur] = await db.select({ isPublic: coaches.isPublic, foundingAt: coaches.foundingAt, tz: coaches.tz }).from(coaches).where(eq(coaches.id, coachId)).limit(1);
-    const tz = clean.tz ?? cur?.tz;
-    if (cur && tz && !cur.isPublic && !cur.foundingAt && (await foundingPlaces(db, tz)) < FOUNDING_COACHES) Object.assign(extra, { foundingAt: new Date(), foundingTz: tz });
+  if (clean.isPublic === true || clean.tz !== undefined) {
+    const [cur] = await db.select({ isPublic: coaches.isPublic, foundingAt: coaches.foundingAt, foundingTz: coaches.foundingTz, tz: coaches.tz }).from(coaches).where(eq(coaches.id, coachId)).limit(1);
+    if (cur) {
+      const tz = clean.tz ?? cur.tz;
+      const listed = clean.isPublic ?? cur.isPublic;
+      const moving = clean.tz !== undefined && clean.tz !== cur.tz;
+      const holdsHere = Boolean(cur.foundingAt) && cur.foundingTz === tz;
+      if (!holdsHere && listed && (moving || (!cur.isPublic && !cur.foundingAt))) {
+        if ((await foundingPlaces(db, tz)) < FOUNDING_COACHES) Object.assign(extra, { foundingAt: new Date(), foundingTz: tz });
+        else if (moving) Object.assign(extra, { foundingAt: null, foundingTz: null });
+      }
+    }
   }
   if (clean.promptpayId !== undefined) clean.promptpayId = (clean.promptpayId ?? "").replace(/[^\d+]/g, "").slice(0, 20) || null;
   if (clean.payLink !== undefined) clean.payLink = isPayLink((clean.payLink ?? "").trim()) ? (clean.payLink ?? "").trim() : null;
