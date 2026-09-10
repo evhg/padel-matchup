@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { getClubByToken } from "@/lib/domain/clubs";
-import { addClubSlot, removeClubSlot, updateClubSlot } from "@/lib/domain/clubWeek";
+import { getClubByToken, setClubTimezone } from "@/lib/domain/clubs";
+import { addClubSlot, CLUB_WEEK, removeClubSlot, updateClubSlot } from "@/lib/domain/clubWeek";
 import { ActionFailure, runA, type ActionResult } from "./shared";
 
 const slotSchema = z.object({
@@ -17,7 +17,7 @@ const slotSchema = z.object({
   levelMax: z.number().min(0).max(7).nullable().optional(),
   verifiedOnly: z.boolean().optional(),
   title: z.string().max(80).optional(),
-  leadDays: z.number().int().min(1).max(14).optional(),
+  leadDays: z.number().int().min(1).max(CLUB_WEEK.leadDaysMax).optional(),
 });
 export type ClubSlotInput = z.infer<typeof slotSchema>;
 
@@ -59,5 +59,16 @@ export async function removeClubSlotAction(token: string, id: string): Promise<A
     if (!(await removeClubSlot(db, club.slug, id))) throw new ActionFailure("not_found");
     revalidate(club.slug, token);
     return null;
+  });
+}
+
+/** A club claimed without a time zone sets it in one tap from the manage page (the device's zone); the week starts making matches from the next hour. */
+export async function setClubTimezoneAction(token: string, tz: string): Promise<ActionResult<{ tz: string }>> {
+  return runA(async () => {
+    const { db, club } = await clubFor(token);
+    const row = await setClubTimezone(db, club.slug, String(tz).slice(0, 64));
+    if (!row?.tz) throw new ActionFailure("not_found");
+    revalidate(club.slug, token);
+    return { tz: row.tz };
   });
 }

@@ -149,12 +149,18 @@ export async function GET(req: Request) {
       await notifyGroupMatch(db, c.group, c.event, null);
       await emitMatchEvent(db, "match.created", c.event.code, { automatic: true });
     }
-    // The club programme: every live club's due slots become matches on its board; nobody types anything.
-    const programme = await autoCreateClubEvents(db, now);
-    summary.clubMatches = programme.length;
-    for (const c of programme) await emitMatchEvent(db, "match.created", c.event.code, { automatic: true, club: c.club.slug });
   } catch (e) {
     summary.errors.push(`groups: ${String(e)}`);
+  }
+
+  try {
+    // The club programme: every live club's due slots become matches on its board; nobody types anything. One slot's trouble is one line here.
+    const programme = await autoCreateClubEvents(db, now);
+    summary.clubMatches = programme.created.length;
+    for (const e of programme.errors) summary.errors.push(`programme: ${e}`);
+    for (const c of programme.created) await emitMatchEvent(db, "match.created", c.event.code, { automatic: true, club: c.club.slug }).catch((e) => summary.errors.push(`programme webhook ${c.event.code}: ${String(e)}`));
+  } catch (e) {
+    summary.errors.push(`programme: ${String(e)}`);
   }
 
   try {

@@ -260,6 +260,13 @@
       "when": 1789019288009,
       "tag": "0036_level_checks_pending_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789020919417,
+      "tag": "0037_events_club_slot_idx",
+      "breakpoints": true
     }
   ]
 }

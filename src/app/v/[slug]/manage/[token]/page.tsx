@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { FreeCourts } from "@/components/ClubBits";
 import { ClubManageForm } from "@/components/ClubManageForm";
+import { ClubTimezoneFix } from "@/components/ClubTimezoneFix";
 import { ClubWeekEditor } from "@/components/ClubWeekEditor";
 import { LevelChecks } from "@/components/LevelChecks";
 import { listLevelChecks } from "@/lib/domain/verify";
@@ -14,7 +15,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { getLocale } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
-import { CITIES } from "@/lib/domain/cities";
+import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { clubStatus, getClubByToken } from "@/lib/domain/clubs";
 
 export const dynamic = "force-dynamic";
@@ -107,6 +108,7 @@ export default async function ClubManagePage({ params }: Props) {
           </Link>
         </section>
         <LevelChecks checks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))} by={{ kind: "club", token }} />
+        {!club.tz && <ClubTimezoneFix token={token} cityTz={club.city ? (cityBySlug(club.city)?.tz ?? null) : null} />}
         <ClubWeekEditor
           token={token}
           leadDays={CLUB_WEEK.leadDaysDefault}

@@ -1,0 +1,1 @@
+CREATE INDEX "events_club_slot_idx" ON "events" USING btree ("club_slot_id");

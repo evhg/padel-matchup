@@ -195,6 +195,7 @@ export const events = pgTable(
     index("events_creator_idx").on(t.creatorPlayerId),
     index("events_starts_at_idx").on(t.startsAt),
     index("events_group_idx").on(t.groupId),
+    index("events_club_slot_idx").on(t.clubSlotId),
     index("events_venue_slug_idx").on(t.venueSlug, t.startsAt),
     index("events_series_idx").on(t.seriesId, t.startsAt),
   ],

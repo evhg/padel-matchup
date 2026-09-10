@@ -49,6 +49,9 @@ export default async function VenueBoardPage({ params }: Props) {
   // A live club with a programme shows its week, day by day; matches beyond the week stay in the list below.
   const programme = club ? await listClubSlots(db, club.slug) : [];
   const week = club && programme.length > 0 ? await clubWeek(db, club) : null;
+  // The week card already shows these; the list below carries only what comes after it.
+  const inWeek = new Set((week ?? []).flatMap((d) => d.events.map((b) => b.event.id)));
+  const later = week ? board.events.filter((b) => !inWeek.has(b.event.id)) : board.events;
   const tz = club?.tz ?? "UTC";
   const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: tz }).format(zonedTimeToUtc(date, "12:00", tz));
   return (
@@ -118,16 +121,18 @@ export default async function VenueBoardPage({ params }: Props) {
             </ul>
           </section>
         )}
-        {board.events.length === 0 ? (
-          <section className="card text-center">
-            <p className="text-muted">{t("venue.empty", { venue: board.name })}</p>
-            <Link href={`/?venue=${encodeURIComponent(board.name)}`} prefetch={false} className="btn-primary mt-4 w-full">
-              {t("venue.emptyCta")}
-            </Link>
-          </section>
+        {later.length === 0 ? (
+          !week && (
+            <section className="card text-center">
+              <p className="text-muted">{t("venue.empty", { venue: board.name })}</p>
+              <Link href={`/?venue=${encodeURIComponent(board.name)}`} prefetch={false} className="btn-primary mt-4 w-full">
+                {t("venue.emptyCta")}
+              </Link>
+            </section>
+          )
         ) : (
           <ul className="flex flex-col gap-2">
-            {board.events.map(({ event: ev, occupied, spotsLeft }) => {
+            {later.map(({ event: ev, occupied, spotsLeft }) => {
               const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
               return (
                 <li key={ev.id}>
