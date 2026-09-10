@@ -28,7 +28,7 @@ import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { coachAssistantMessage, handleCoachCallback, lessonsFor, sendRoleMenu } from "./coach";
 import { ticketPlayerId, verifyPlayerTicket } from "@/lib/coach/link";
 import { isValidShareCode } from "@/lib/codes";
-import { answerCallbackQuery, answerInlineQuery, deleteMessage, editInlineMessageText, editMessageText, editOk, esc, messageGone, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
+import { answerCallbackQuery, answerInlineQuery, deleteChatCommands, deleteMessage, editInlineMessageText, editMessageText, editOk, esc, messageGone, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
 import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse";
 import { setAnswerPublished } from "@/lib/listen/answers";
@@ -1126,7 +1126,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     if (cmd.command === "coach" && isPrivate) {
       // The coach's assistant: the menu here, and the book on the web with this device signed in.
       const player = await findOrCreateTelegramPlayer(db, from);
-      await sendRoleMenu(db, player, chat.chatId);
+      await sendRoleMenu(db, player, chat.chatId, { pin: false });
       const token = await getOrCreatePersonalToken(db, player.id);
       await sendMessage(chat.chatId, esc(s.coachLink), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
       return "coach_link";
@@ -1154,10 +1154,11 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
           return "coach_link_other";
         }
         const linked = await linkTelegram(db, target.id, from);
-        // The assistant introduces itself with its buttons; the book stays one tap away.
-        await sendRoleMenu(db, linked, chat.chatId, s.coachLinked);
+        // One language, the coach's own: the confirmation with the way to the book, then the menu with its buttons, pinned.
+        const ls = strings(botLocale(linked.locale));
         const token = await getOrCreatePersonalToken(db, linked.id);
-        await sendMessage(chat.chatId, esc(s.coachOpen), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
+        await sendMessage(chat.chatId, esc(ls.coachLinked), { keyboard: { inline_keyboard: [[{ text: ls.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
+        await sendRoleMenu(db, linked, chat.chatId, { pin: true });
         return "coach_linked";
       }
       const result = payload.match(/^r_([A-Za-z0-9]{4})$/);
@@ -1176,11 +1177,17 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
         }
       }
       const player = await findOrCreateTelegramPlayer(db, from);
-      // A coach or a student gets their menu, not the general help.
-      const menu = await sendRoleMenu(db, player, chat.chatId);
-      if (menu) return menu;
+      // A coach or a student gets their menu, not the general help; /start pins it, /help only repeats it.
+      const menu = await sendRoleMenu(db, player, chat.chatId, { pin: cmd.command === "start" });
       const token = await getOrCreatePersonalToken(db, player.id);
-      await sendMessage(chat.chatId, `${esc(s.privateStart(personalUrl(base, token)))}\n\n${esc(s.privateHelp)}`, { keyboard: payload === "new" ? null : null });
+      if (menu === "student_menu") {
+        // A student still gets the link that signs their browser in for My matches.
+        await sendMessage(chat.chatId, esc(s.privateStart(personalUrl(base, token))), { silent: true });
+      }
+      if (menu) return menu;
+      // A plain player, or one whose coach or student days are over: the general start, and no role keyboard or commands left behind.
+      await sendMessage(chat.chatId, `${esc(s.privateStart(personalUrl(base, token)))}\n\n${esc(s.privateHelp)}`, { keyboard: { remove_keyboard: true } });
+      await deleteChatCommands(chat.chatId).catch(() => undefined);
       return "private_start";
     }
     return "ignored";
@@ -1192,12 +1199,16 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   if (appended) return appended;
   // A pasted kicksma.sh link becomes a live card (in groups this needs admin rights or privacy mode off); in the private chat a bare code works too.
   const codes = codesInText(msg.text, base);
-  if (isPrivate && codes.length === 0 && msg.text && isValidShareCode(msg.text.trim())) codes.push(msg.text.trim());
-  for (const code of codes.slice(0, 2)) {
+  // A bare four-letter word in the private chat is a code only when a match answers to it: "Week" or "Anna" belong to the assistant.
+  const bare = isPrivate && codes.length === 0 && msg.text && isValidShareCode(msg.text.trim()) ? msg.text.trim() : null;
+  let posted = 0;
+  for (const code of [...codes, ...(bare ? [bare] : [])].slice(0, 2)) {
     const detail = await getEventByCode(db, code);
-    if (detail) await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });
+    if (!detail) continue;
+    await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });
+    posted++;
   }
-  if (codes.length) return "card";
+  if (codes.length || posted) return "card";
   if (isPrivate) {
     // A coach's one-liner or a student's day and time: the book answers before the generic help does.
     const player = await findOrCreateTelegramPlayer(db, from);
@@ -1418,32 +1429,7 @@ export async function handleTelegramUpdate(db: Db, update: TgUpdate, ctx: OpCont
   }
 }
 
-export const BOT_COMMANDS = {
-  en: [
-    { command: "new", description: "Create a match: /new tomorrow 19:00 Rawai" },
-    { command: "match", description: "Post the card of a match: /match CODE" },
-    { command: "games", description: "Open matches near you: /games phuket" },
-    { command: "score", description: "Sets after a match: /score CODE 6-3 6-4" },
-    { command: "tz", description: "This chat's time zone, once: /tz phuket" },
-    { command: "lang", description: "Bot language: /lang en or /lang ru" },
-    { command: "feedback", description: "Tell me what should change" },
-    { command: "lessons", description: "Your lessons and package with your coach (private chat)" },
-    { command: "coach", description: "Your lessons book, if you coach (write to me privately)" },
-    { command: "help", description: "What I do (very little, on purpose)" },
-  ],
-  ru: [
-    { command: "new", description: "Создать матч: /new завтра 19:00 Равай" },
-    { command: "match", description: "Показать карточку матча: /match КОД" },
-    { command: "games", description: "Открытые матчи рядом: /games пхукет" },
-    { command: "score", description: "Счёт после матча: /score КОД 6-3 6-4" },
-    { command: "tz", description: "Часовой пояс чата, один раз: /tz пхукет" },
-    { command: "lang", description: "Язык бота: /lang ru или /lang en" },
-    { command: "feedback", description: "Что стоит изменить" },
-    { command: "lessons", description: "Ваши занятия и абонемент у тренера (в личке)" },
-    { command: "coach", description: "Книга занятий, если вы тренер (напишите мне в личку)" },
-    { command: "help", description: "Что я умею (нарочно немного)" },
-  ],
-};
+export { BOT_COMMANDS } from "./commands";
 
 export const botDeepLink = (payload?: string) => {
   const u = telegramBotUsername();

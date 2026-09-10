@@ -27,7 +27,6 @@ import { renderDiscordCard } from "./card";
  * complete line-up, the reminder about an hour before, the result, and a
  * reply to a question someone asked. Slash commands answer ephemerally.
  */
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Channel tickets: /new hands out a create link bound to the channel, so a

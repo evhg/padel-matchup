@@ -184,8 +184,9 @@ try {
 
   // Ivan sees it on My matches with the package line.
   await ivan.goto(BASE + "/me");
-  await ivan.getByText("Your lessons").waitFor({ timeout: 20000 });
-  check("My matches shows the lesson and the package with Olga", (await ivan.getByText("with Olga").count()) === 1 && (await ivan.getByText(/9 of 10 left/).count()) === 1);
+  await ivan.getByTestId("lesson-row").first().waitFor({ timeout: 20000 });
+  check("My matches lists the lesson among the upcoming things, with the package line", (await ivan.getByText("Lesson with Olga").count()) === 1 && (await ivan.getByText(/9 of 10 left/).count()) === 1 && (await ivan.getByTestId("book-more").count()) === 1);
+  check("the lesson row leads to the coach's page", ((await ivan.getByTestId("lesson-row").first().locator("a").getAttribute("href")) ?? "").startsWith("/c/"));
 
   // The chain: Olga books Pavel tomorrow; Ivan waits for that exact time; Olga cancels; Ivan is offered it and takes it.
   await olga.goto(BASE + "/coach");

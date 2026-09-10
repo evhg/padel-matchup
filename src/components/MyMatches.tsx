@@ -8,6 +8,7 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { playerHasPush } from "@/lib/domain/push";
 import { getPlayerGroups } from "@/lib/domain/groups";
 import { getPlayerEvents, type MyEvent } from "@/lib/domain/queries";
+import { listStudentLessons, packageLine, studentCoaches, type StudentLesson } from "@/lib/domain/coaching";
 import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath, personalUrl } from "@/lib/personal";
@@ -25,8 +26,12 @@ import { DeleteAccount } from "./DeleteAccount";
 /** "My matches": rendered on /me (cookie identity) and /p/{token} (personal link). */
 export async function MyMatches({ player, personalToken }: { player: Player; personalToken: string }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
-  const [{ upcoming, past }, hasPush, groups] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id), getPlayerGroups(db, player.id)]);
-  const hasHistory = upcoming.length > 0 || past.length > 0;
+  const now = new Date();
+  const [{ upcoming, past }, hasPush, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), studentCoaches(db, player.id, now)]);
+  // A lesson is an appointment on the same calendar as a match: it takes its place in the list by time, not a section of its own.
+  const booked = lessons.filter((l) => l.status === "booked");
+  const myCoaches = coaches.filter((c) => c.status === "accepted");
+  const hasHistory = upcoming.length > 0 || past.length > 0 || booked.length > 0;
   // Stats strip: only matches the player was actually in (not organized-from-the-sidelines).
   const playedList = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
   const won = playedList.filter((m) => m.outcome === "won").length;
@@ -91,6 +96,33 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
     );
   };
 
+  const lessonRow = (l: StudentLesson) => {
+    const line = l.package ? packageLine(l.package, now) : null;
+    return (
+      <li key={`lesson-${l.id}`} data-testid="lesson-row">
+        <Link href={`/c/${l.coach.handle}`} prefetch={false} className="card flex items-center gap-4 py-4 hover:border-ink/30">
+          <div className="w-14 shrink-0 text-center">
+            <div className="text-xs font-bold uppercase text-faint">{formatEventDay(l.startsAt, l.coach.tz, locale).split(" ").slice(0, 1)}</div>
+            <div className="text-2xl font-extrabold leading-none tabular-nums">{formatEventTime(l.startsAt, l.coach.tz, locale)}</div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="truncate font-bold">🎾 {t("coach.me.lesson", { name: l.coach.displayName })}</span>
+            </div>
+            <div className="truncate text-sm text-muted">
+              {formatEventDay(l.startsAt, l.coach.tz, locale)}
+              {l.coach.clubNames[0] ? ` · ${l.coach.clubNames[0]}` : ""}
+            </div>
+            <div className="mt-1 text-sm text-faint">{line ? (line.daysLeft === null ? t("coach.packageLineNoExpiry", { left: line.left, size: l.package!.size }) : t("coach.packageLine", { left: line.left, size: l.package!.size, days: line.daysLeft })) : t("coach.noPackage")}</div>
+          </div>
+          <span className="text-faint">›</span>
+        </Link>
+      </li>
+    );
+  };
+  // Matches and lessons on one timeline, soonest first.
+  const timeline = [...upcoming.map((m) => ({ at: m.event.startsAt.getTime(), node: row(m) })), ...booked.map((l) => ({ at: l.startsAt.getTime(), node: lessonRow(l) }))].sort((a, b) => a.at - b.at).map((x) => x.node);
+
   return (
     <>
       <h1 className="text-3xl font-extrabold tracking-tight">{t("me.title")}</h1>
@@ -116,7 +148,16 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
           )}
           <section>
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.upcoming")}</h2>
-            {upcoming.length ? <ul className="flex flex-col gap-2">{upcoming.map(row)}</ul> : <p className="text-sm text-faint">—</p>}
+            {timeline.length ? <ul className="flex flex-col gap-2">{timeline}</ul> : <p className="text-sm text-faint">—</p>}
+            {myCoaches.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {myCoaches.map(({ coach, status }) => (
+                  <Link key={coach.id} href={`/c/${coach.handle}`} prefetch={false} className="btn-ghost btn-sm" data-testid="book-more">
+                    {status === "requested" ? t("coach.me.requested") : `${t("coach.me.book")} · ${coach.displayName}`}
+                  </Link>
+                ))}
+              </div>
+            )}
           </section>
           <section>
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.past")}</h2>

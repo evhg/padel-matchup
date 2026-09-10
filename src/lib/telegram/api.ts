@@ -73,7 +73,9 @@ export async function tg<T = unknown>(method: string, body: Record<string, unkno
 /** Escape for parse_mode=HTML. */
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
+/** Takes a reply keyboard away (a role that ended). */
+export type ReplyKeyboardRemove = { remove_keyboard: true };
+export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
 
 export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendMessage", {
@@ -167,6 +169,16 @@ export function setChatCommands(chatId: number, commands: { command: string; des
 /** Pins a message at the top of a private chat, quietly (bots may pin in private chats). */
 export function pinChatMessage(chatId: number, messageId: number) {
   return tg<true>("pinChatMessage", { chat_id: chatId, message_id: messageId, disable_notification: true });
+}
+
+/** Unpins everything in a private chat: the menu is pinned once, never stacked. */
+export function unpinAllChatMessages(chatId: number) {
+  return tg<true>("unpinAllChatMessages", { chat_id: chatId });
+}
+
+/** Back to the bot's general commands for one private chat (a role that ended). */
+export function deleteChatCommands(chatId: number) {
+  return tg<true>("deleteMyCommands", { scope: { type: "chat", chat_id: chatId } });
 }
 
 // ---------------------------------------------------------------------------
