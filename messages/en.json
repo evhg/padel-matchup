@@ -1266,6 +1266,7 @@
     },
     "me": {
       "title": "Your lessons",
+      "lesson": "Lesson with {name}",
       "with": "with {name}",
       "book": "Book more",
       "coachLine": "Do you coach? Set up your assistant",

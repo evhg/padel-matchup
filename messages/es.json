@@ -1266,6 +1266,7 @@
     },
     "me": {
       "title": "Tus clases",
+      "lesson": "Clase con {name}",
       "with": "con {name}",
       "book": "Reservar más",
       "coachLine": "¿Entrenas? Configura tu asistente",

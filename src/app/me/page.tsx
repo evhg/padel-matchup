@@ -11,7 +11,6 @@ import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
-import { MyLessons } from "@/components/coach/MyLessons";
 import { CoachCard } from "@/components/coach/CoachCard";
 import { getCoachForActor } from "@/lib/domain/coaching";
 import { MomentsStrip } from "@/components/MomentsStrip";
@@ -100,7 +99,13 @@ export default async function MePage({ searchParams }: Props) {
             </ul>
           </section>
         )}
-        <MyLessons db={db} playerId={me.id} asCoach={Boolean(asCoach)} />
+        {!asCoach && (
+          <p className="text-center text-xs text-faint">
+            <Link href="/coach" prefetch={false} className="hover:text-muted">
+              {t("coach.me.coachLine")} →
+            </Link>
+          </p>
+        )}
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
