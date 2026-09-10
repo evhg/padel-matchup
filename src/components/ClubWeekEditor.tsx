@@ -4,13 +4,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { addClubSlotAction, removeClubSlotAction, setClubSlotActiveAction, type ClubSlotInput } from "@/actions/clubWeek";
+import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { LEVEL_PRESETS, type PresetKey } from "@/lib/domain/levels";
 import { rangeChip } from "@/lib/levelText";
 
 export type EditorSlot = { id: string; dow: number; time: string; type: string; format: string | null; capacity: number; levelMin: number | null; levelMax: number | null; verifiedOnly: boolean; title: string | null; active: boolean; leadDays: number; next: { code: string; startsAt: string } | null };
 
 const KINDS = [
-  { key: "match", type: "match" as const, format: null, capacity: 4 },
+  { key: "match", type: "match" as const, format: null, capacity: MATCH_CAPACITY },
   { key: "americano", type: "tournament" as const, format: "americano" as const, capacity: 8 },
   { key: "mexicano", type: "tournament" as const, format: "mexicano" as const, capacity: 8 },
   { key: "king", type: "tournament" as const, format: "king" as const, capacity: 8 },
@@ -36,17 +37,17 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   const kindLabel = (type: string, format: string | null) => t(`club.week.kind.${type === "tournament" ? (format ?? "americano") : "match"}` as "club.week.kind.match");
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
 
-  // Fours between 4 and 64; typed freely, settled when the field is left or the form sent.
+  // Fours within the tournament bounds; typed freely, settled when the field is left or the form sent.
   const clampCapacity = (raw: string, fallback: number) => {
     const n = Number(raw);
     if (!Number.isFinite(n) || raw.trim() === "") return fallback;
-    return Math.max(4, Math.min(64, Math.round(n / 4) * 4 || 4));
+    return Math.max(MATCH_CAPACITY, Math.min(MAX_TOURNAMENT_CAPACITY, Math.round(n / 4) * 4 || MATCH_CAPACITY));
   };
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const k = KINDS.find((x) => x.key === kind)!;
     const range = preset === "any" ? null : LEVEL_PRESETS.find((p) => p.key === preset)!;
-    const capacity = k.type === "match" ? 4 : clampCapacity(capacityText, k.capacity);
+    const capacity = k.type === "match" ? MATCH_CAPACITY : clampCapacity(capacityText, k.capacity);
     setCapacityText(String(capacity));
     const input: ClubSlotInput = { dow, time, type: k.type, format: k.format, capacity, levelMin: range?.min ?? null, levelMax: range?.max ?? null, verifiedOnly: Boolean(range) && verifiedOnly, title: title.trim() || undefined, leadDays };
     start(async () => {
@@ -133,11 +134,11 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
             <input
               className="input mt-1"
               type="number"
-              min={4}
-              max={64}
+              min={MATCH_CAPACITY}
+              max={MAX_TOURNAMENT_CAPACITY}
               step={4}
               inputMode="numeric"
-              value={kind === "match" ? 4 : capacityText}
+              value={kind === "match" ? MATCH_CAPACITY : capacityText}
               disabled={kind === "match"}
               onChange={(e) => setCapacityText(e.target.value)}
               onBlur={() => setCapacityText(String(clampCapacity(capacityText, KINDS.find((x) => x.key === kind)!.capacity)))}

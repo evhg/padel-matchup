@@ -114,7 +114,9 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   if (existing && !existing.rejectedAt && existing.claimedBy !== input.playerId) throw new DomainError("forbidden", "already_claimed");
   const fields = cleanClubInput(input);
   const city = fields.city ?? guessCity(slug, input.tz ?? existing?.tz) ?? existing?.city ?? null;
-  const values = { ...fields, city, name, tz: input.tz ?? existing?.tz ?? null, claimedBy: input.playerId, claimedAt: new Date(), rejectedAt: null, approvedAt: existing?.claimedBy === input.playerId ? existing.approvedAt : null, updatedAt: new Date() };
+  // No zone from the browser: the city's zone will do, and the week can make matches from the first hour.
+  const tz = input.tz ?? existing?.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
+  const values = { ...fields, city, name, tz, claimedBy: input.playerId, claimedAt: new Date(), rejectedAt: null, approvedAt: existing?.claimedBy === input.playerId ? existing.approvedAt : null, updatedAt: new Date() };
   if (existing) {
     const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning();
     return row;
@@ -133,9 +135,12 @@ export async function updateClub(db: Db, token: string, input: ClubInput): Promi
   const fields = cleanClubInput(input);
   // A new feed address starts a fresh cache.
   const feedChanged = ("availabilityUrl" in fields && fields.availabilityUrl !== club.availabilityUrl) || ("availabilityKind" in fields && fields.availabilityKind !== club.availabilityKind);
+  // A club without a zone that names (or has) a city takes the city's zone.
+  const cityNow = "city" in fields ? fields.city : club.city;
+  const tzFill = !club.tz && cityNow ? (cityBySlug(cityNow)?.tz ?? null) : null;
   const [row] = await db
     .update(clubs)
-    .set({ ...fields, ...(feedChanged ? { availability: null, availabilityAt: null } : {}), updatedAt: new Date() })
+    .set({ ...fields, ...(feedChanged ? { availability: null, availabilityAt: null } : {}), ...(tzFill ? { tz: tzFill } : {}), updatedAt: new Date() })
     .where(eq(clubs.slug, club.slug))
     .returning();
   return row;

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events } from "@/db/schema";
-import { claimClub, decideClub } from "@/lib/domain/clubs";
+import { claimClub, decideClub, updateClub } from "@/lib/domain/clubs";
 import { addClubSlot, autoCreateClubEvents, cleanSlotInput, clubDay, clubWeek, listClubSlots, removeClubSlot, slotDue, updateClubSlot, upcomingBySlot } from "@/lib/domain/clubWeek";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
@@ -100,6 +100,17 @@ describe("the club programme", () => {
     expect(kept.status).not.toBe("cancelled");
     expect(kept.clubSlotId).toBeNull();
     expect(await removeClubSlot(db, "another-club", paused.id)).toBe(false);
+  });
+
+  it("a club claimed without a zone takes its city's, at the claim or when the city is set later", async () => {
+    const owner = await makePlayer(db, "Somchai");
+    const fromCity = await claimClub(db, { name: "Kata Padel", playerId: owner.id, tz: null, city: "phuket" });
+    expect(fromCity.tz).toBe("Asia/Bangkok");
+    const owner2 = await makePlayer(db, "Lin");
+    const bare = await claimClub(db, { name: "Nowhere Courts", playerId: owner2.id, tz: null });
+    expect(bare.tz).toBeNull();
+    const later = await updateClub(db, bare.manageToken, { city: "singapore" });
+    expect(later?.tz).toBe("Asia/Singapore");
   });
 
   it("keeps a whole local day on a clock-change day", async () => {

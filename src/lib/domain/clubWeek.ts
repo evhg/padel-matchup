@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubSlots, clubs, events, players, slots, type Club, type ClubSlot, type Event, type TournamentFormat } from "@/db/schema";
-import { MATCH_CAPACITY } from "@/lib/config";
+import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { createEvent } from "./events";
@@ -45,7 +45,7 @@ export function cleanSlotInput(i: SlotInput) {
   const format = type === "tournament" ? formatOf(i.format ?? null) : null;
   // A match is four people, whatever was typed: the event it becomes has exactly four seats.
   const capacity = type === "match" ? MATCH_CAPACITY : Math.round(Number(i.capacity ?? 8));
-  if (!(capacity >= 4 && capacity <= 64 && capacity % 4 === 0)) throw new DomainError("invalid", "capacity");
+  if (!(capacity >= MATCH_CAPACITY && capacity <= MAX_TOURNAMENT_CAPACITY && capacity % 4 === 0)) throw new DomainError("invalid", "capacity");
   const range = normalizeRange(i.levelMin, i.levelMax);
   const leadDays = Math.min(CLUB_WEEK.leadDaysMax, Math.max(1, Math.round(Number(i.leadDays ?? CLUB_WEEK.leadDaysDefault)) || CLUB_WEEK.leadDaysDefault));
   const courts = type === "tournament" && i.courts != null && Number.isFinite(Number(i.courts)) ? Math.max(1, Math.min(16, Math.round(Number(i.courts)))) : null;
