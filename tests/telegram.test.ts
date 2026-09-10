@@ -8,6 +8,7 @@ import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { autoCreateGroupMatches, createGroup, updateGroup } from "@/lib/domain/groups";
 import { setTournamentLock } from "@/lib/domain/tournament";
+import { createCoach, presetHours } from "@/lib/domain/coaching";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
 import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
@@ -533,6 +534,35 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("Rawai Padel Club");
     // Unknown text in private: the help, not silence.
     expect(await send(707, "hello?")).toBe("private_other");
+  });
+
+  it("a coach's private chat: /start pins the menu once, /help repeats it without a new pin, the general commands stay, and a four-letter button is not a match code", async () => {
+    const olga = user(93, "Olga");
+    const dm = { id: 93, type: "private" as const };
+    const send = (id: number, text: string) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat: dm, from: olga, text } }, NO_SIDE_EFFECTS);
+    // A plain player first: the general start, and nothing of a role left behind.
+    calls = [];
+    expect(await send(720, "/start")).toBe("private_start");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
+    expect(sent("deleteMyCommands")).toHaveLength(1);
+    const [me] = await db.select().from(players).where(eq(players.telegramId, 93));
+    await createCoach(db, { playerId: me.id, displayName: "Olga", clubNames: "Warehaus", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok" });
+    calls = [];
+    expect(await send(721, "/start")).toBe("coach_menu");
+    expect(sent("pinChatMessage")).toHaveLength(1);
+    expect(sent("unpinAllChatMessages")).toHaveLength(1);
+    const commands = sent("setMyCommands").at(-1)!.body.commands as { command: string }[];
+    expect(commands.map((c) => c.command).slice(0, 4)).toEqual(["today", "week", "coach", "help"]);
+    expect(commands.map((c) => c.command)).toContain("new");
+    expect(commands.map((c) => c.command)).toContain("feedback");
+    expect(commands.filter((c) => c.command === "help")).toHaveLength(1);
+    calls = [];
+    expect(await send(722, "/help")).toBe("coach_menu");
+    expect(sent("pinChatMessage")).toHaveLength(0);
+    // "Week" is a valid share code by shape; with no such match it is the coach's button, not a card.
+    calls = [];
+    expect(await send(723, "Week")).toMatch(/^coach:/);
+    expect(await send(724, "Week")).not.toBe("card");
   });
 
   it("inline mode: @bot lists the city's open matches, an exact code gives that card, a chosen result stays live, taps under it join and edit it in place", async () => {

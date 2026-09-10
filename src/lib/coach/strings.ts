@@ -75,6 +75,16 @@ const S = {
     menuStudent: "Your lessons. Tap a button, or write a day and a time: fri 15.",
     menuBookHow: "Name, day and time: anna fri 15. A new name becomes a new student.",
     menuBookHowStudent: "A day and a time: fri 15. Just a day shows the free times.",
+    commandsCoach: [
+      { command: "today", description: "Today's lessons" },
+      { command: "week", description: "The week" },
+      { command: "coach", description: "Open my assistant" },
+      { command: "help", description: "What I do" },
+    ],
+    commandsStudent: [
+      { command: "lessons", description: "My lessons and package" },
+      { command: "help", description: "What I do" },
+    ],
     menuPlaceholder: "anna fri 15",
     menuPlaceholderStudent: "fri 15",
     // chains: offers, requests, reminders
@@ -168,6 +178,16 @@ const S = {
     menuStudent: "Ваши занятия. Нажмите кнопку или напишите день и время: пт 15.",
     menuBookHow: "Имя, день и время: анна пт 15. Новое имя становится новым учеником.",
     menuBookHowStudent: "День и время: пт 15. Только день — покажу свободное время.",
+    commandsCoach: [
+      { command: "today", description: "Занятия сегодня" },
+      { command: "week", description: "Неделя" },
+      { command: "coach", description: "Открыть ассистента" },
+      { command: "help", description: "Что я умею" },
+    ],
+    commandsStudent: [
+      { command: "lessons", description: "Мои занятия и абонемент" },
+      { command: "help", description: "Что я умею" },
+    ],
     menuPlaceholder: "анна пт 15",
     menuPlaceholderStudent: "пт 15",
     // chains: offers, requests, reminders
@@ -261,6 +281,16 @@ const S = {
     menuStudent: "Tus clases. Toca un botón o escribe un día y una hora: vie 15.",
     menuBookHow: "Nombre, día y hora: anna vie 15. Un nombre nuevo se convierte en alumno nuevo.",
     menuBookHowStudent: "Un día y una hora: vie 15. Solo el día muestra las horas libres.",
+    commandsCoach: [
+      { command: "today", description: "Clases de hoy" },
+      { command: "week", description: "La semana" },
+      { command: "coach", description: "Abrir mi asistente" },
+      { command: "help", description: "Qué hago" },
+    ],
+    commandsStudent: [
+      { command: "lessons", description: "Mis clases y mi bono" },
+      { command: "help", description: "Qué hago" },
+    ],
     menuPlaceholder: "anna vie 15",
     menuPlaceholderStudent: "vie 15",
     // chains: offers, requests, reminders

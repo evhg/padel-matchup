@@ -12,6 +12,11 @@ describe("the bot's menu buttons", () => {
     expect(menuWord("🎾 My lessons")).toBe("lessons");
     expect(menuWord("Package left")).toBe("left");
     expect(menuWord("✕ Cancel")).toBe("lessons");
+    // The bare word is the cancel intent, in every language: only the button lists lessons.
+    expect(menuWord("Cancel")).toBeNull();
+    expect(menuWord("cancel")).toBeNull();
+    expect(menuWord("отменить")).toBeNull();
+    expect(menuWord("cancelar")).toBeNull();
     expect(menuWord("📅 Сегодня")).toBe("today");
     expect(menuWord("＋ Записать")).toBe("book");
     expect(menuWord("Casi sin clases")).toBe("low");
