@@ -25,7 +25,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   const [dow, setDow] = useState(6);
   const [time, setTime] = useState("18:00");
   const [kind, setKind] = useState<(typeof KINDS)[number]["key"]>("americano");
-  const [capacity, setCapacity] = useState(8);
+  const [capacityText, setCapacityText] = useState("8");
   const [preset, setPreset] = useState<PresetKey | "any">("any");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [title, setTitle] = useState("");
@@ -36,10 +36,18 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   const kindLabel = (type: string, format: string | null) => t(`club.week.kind.${type === "tournament" ? (format ?? "americano") : "match"}` as "club.week.kind.match");
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
 
+  // Fours between 4 and 64; typed freely, settled when the field is left or the form sent.
+  const clampCapacity = (raw: string, fallback: number) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || raw.trim() === "") return fallback;
+    return Math.max(4, Math.min(64, Math.round(n / 4) * 4 || 4));
+  };
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const k = KINDS.find((x) => x.key === kind)!;
     const range = preset === "any" ? null : LEVEL_PRESETS.find((p) => p.key === preset)!;
+    const capacity = k.type === "match" ? 4 : clampCapacity(capacityText, k.capacity);
+    setCapacityText(String(capacity));
     const input: ClubSlotInput = { dow, time, type: k.type, format: k.format, capacity, levelMin: range?.min ?? null, levelMax: range?.max ?? null, verifiedOnly: Boolean(range) && verifiedOnly, title: title.trim() || undefined, leadDays };
     start(async () => {
       setError(null);
@@ -55,13 +63,17 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   };
   const toggle = (s: EditorSlot) =>
     start(async () => {
-      await setClubSlotActiveAction(token, s.id, !s.active);
+      setError(null);
+      const r = await setClubSlotActiveAction(token, s.id, !s.active);
+      if (!r.ok) setError(t("common.somethingWrong"));
       router.refresh();
     });
   const remove = (s: EditorSlot) => {
     if (!confirm(t("club.week.removeConfirm"))) return;
     start(async () => {
-      await removeClubSlotAction(token, s.id);
+      setError(null);
+      const r = await removeClubSlotAction(token, s.id);
+      if (!r.ok) setError(t("common.somethingWrong"));
       router.refresh();
     });
   };
@@ -118,7 +130,19 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
           </label>
           <label className="block">
             <span className="text-xs font-bold">{t("club.week.capacity")}</span>
-            <input className="input mt-1" type="number" min={4} max={64} step={4} value={capacity} onChange={(e) => setCapacity(Math.max(4, Math.min(64, Math.round(Number(e.target.value) / 4) * 4 || 4)))} />
+            <input
+              className="input mt-1"
+              type="number"
+              min={4}
+              max={64}
+              step={4}
+              inputMode="numeric"
+              value={kind === "match" ? 4 : capacityText}
+              disabled={kind === "match"}
+              onChange={(e) => setCapacityText(e.target.value)}
+              onBlur={() => setCapacityText(String(clampCapacity(capacityText, KINDS.find((x) => x.key === kind)!.capacity)))}
+              data-testid="slot-capacity"
+            />
           </label>
         </div>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("club.week.format")}>
@@ -131,7 +155,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
               className={chip(kind === k.key)}
               onClick={() => {
                 setKind(k.key);
-                setCapacity(k.capacity);
+                setCapacityText(String(k.capacity));
               }}
             >
               {kindLabel(k.type, k.format)}

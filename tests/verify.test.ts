@@ -71,7 +71,7 @@ describe("verified levels", () => {
     const club = await claimClub(db, { name: "Strict Padel Club", playerId: nok.id, tz: "Asia/Bangkok" });
     await decideClub(db, club.slug, true, NOW);
     await addClubSlot(db, club.slug, { dow: 4, time: "19:00", type: "tournament", format: "americano", capacity: 8, levelMin: 3, levelMax: 4.5, verifiedOnly: true, title: "Gold night" });
-    const made = (await autoCreateClubEvents(db, NOW)).filter((c) => c.club.slug === club.slug);
+    const made = (await autoCreateClubEvents(db, NOW)).created.filter((c) => c.club.slug === club.slug);
     expect(made).toHaveLength(1);
     expect(made[0].event.levelVerifiedOnly).toBe(true);
   });

@@ -241,14 +241,23 @@ export function nextGroupSlot(group: Pick<Group, "recurDow" | "recurTime" | "tz"
   return { startsAt: zonedTimeToUtc(next.date, next.time, group.tz), ...next };
 }
 
+/**
+ * The one due rule for a weekly slot (groups and club programmes share it):
+ * the next occurrence, once it is within the lead time, unless it was already
+ * created. Pure.
+ */
+export function weeklyDue(s: { dow: number; time: string; tz: string; leadDays: number; lastCreatedFor: Date | null }, now = new Date()): Date | null {
+  const slot = nextGroupSlot({ recurDow: s.dow, recurTime: s.time, tz: s.tz }, now);
+  if (!slot) return null;
+  if (slot.startsAt.getTime() - s.leadDays * DAY_MS > now.getTime()) return null;
+  if (s.lastCreatedFor && s.lastCreatedFor.getTime() >= slot.startsAt.getTime()) return null;
+  return slot.startsAt;
+}
+
 /** Would the cron create the next match now? Pure, for tests and the settings screen. */
 export function recurrenceDue(group: Pick<Group, "recurDow" | "recurTime" | "tz" | "recurLeadDays" | "recurLastCreatedFor" | "archivedAt">, now = new Date()): Date | null {
-  if (group.archivedAt) return null;
-  const slot = nextGroupSlot(group, now);
-  if (!slot) return null;
-  if (slot.startsAt.getTime() - group.recurLeadDays * DAY_MS > now.getTime()) return null;
-  if (group.recurLastCreatedFor && group.recurLastCreatedFor.getTime() >= slot.startsAt.getTime()) return null;
-  return slot.startsAt;
+  if (group.archivedAt || group.recurDow == null || !group.recurTime) return null;
+  return weeklyDue({ dow: group.recurDow, time: group.recurTime, tz: group.tz, leadDays: group.recurLeadDays, lastCreatedFor: group.recurLastCreatedFor }, now);
 }
 
 /** Hourly: create the next match for every group whose weekly slot is within its lead time. */

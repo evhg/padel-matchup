@@ -8,6 +8,7 @@ import { clubs, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, venueInCity } from "./cities";
+import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { isValidVenueSlug, venueSlug } from "./venueBoard";
 
@@ -168,4 +169,11 @@ export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined,
   const a = c?.availability;
   if (!a || a.error) return null;
   return a.slots.filter((s) => new Date(s.end) > now).reduce((sum, s) => sum + s.free, 0);
+}
+
+/** The club's time zone, set from the manage page when the claim came without one (the week cannot make matches without it). */
+export async function setClubTimezone(db: Db, slug: string, tz: string): Promise<Club | null> {
+  if (!isValidTimeZone(tz)) throw new DomainError("invalid", "tz");
+  const [row] = await db.update(clubs).set({ tz, updatedAt: new Date() }).where(eq(clubs.slug, slug)).returning();
+  return row ?? null;
 }

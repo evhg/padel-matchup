@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { FreeCourts } from "@/components/ClubBits";
 import { ClubManageForm } from "@/components/ClubManageForm";
+import { ClubTimezoneFix } from "@/components/ClubTimezoneFix";
 import { ClubWeekEditor } from "@/components/ClubWeekEditor";
 import { LevelChecks } from "@/components/LevelChecks";
 import { listLevelChecks } from "@/lib/domain/verify";
@@ -107,6 +108,7 @@ export default async function ClubManagePage({ params }: Props) {
           </Link>
         </section>
         <LevelChecks checks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))} by={{ kind: "club", token }} />
+        {!club.tz && <ClubTimezoneFix token={token} />}
         <ClubWeekEditor
           token={token}
           leadDays={CLUB_WEEK.leadDaysDefault}

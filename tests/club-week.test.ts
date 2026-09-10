@@ -4,6 +4,7 @@ import type { Db } from "@/db";
 import { events } from "@/db/schema";
 import { claimClub, decideClub } from "@/lib/domain/clubs";
 import { addClubSlot, autoCreateClubEvents, cleanSlotInput, clubDay, clubWeek, listClubSlots, removeClubSlot, slotDue, updateClubSlot, upcomingBySlot } from "@/lib/domain/clubWeek";
+import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 
@@ -18,11 +19,14 @@ describe("the club programme", () => {
 
   it("cleans a slot: weekday, time, format defaults, capacity in fours, level range, lead days", () => {
     const s = cleanSlotInput({ dow: 4, time: "19:00", type: "tournament", format: "mexicano", capacity: 12, levelMin: 3, levelMax: 4.5, title: "  Gold night ", leadDays: 30 });
-    expect(s).toMatchObject({ dow: 4, time: "19:00", type: "tournament", format: "mexicano", capacity: 12, levelMin: 3, levelMax: 4.5, title: "Gold night", leadDays: 14, whenFull: "waitlist" });
+    // A weekly slot looks one occurrence ahead, so the lead tops out at seven days.
+    expect(s).toMatchObject({ dow: 4, time: "19:00", type: "tournament", format: "mexicano", capacity: 12, levelMin: 3, levelMax: 4.5, title: "Gold night", leadDays: 7, whenFull: "waitlist" });
     expect(cleanSlotInput({ dow: 0, time: "07:30" })).toMatchObject({ type: "match", format: null, capacity: 4, levelMin: null, levelMax: null, leadDays: 6 });
+    // A match is four people whatever was typed: the slot and the event it becomes agree.
+    expect(cleanSlotInput({ dow: 0, time: "07:30", type: "match", capacity: 8 }).capacity).toBe(4);
     expect(() => cleanSlotInput({ dow: 7, time: "19:00" })).toThrow();
     expect(() => cleanSlotInput({ dow: 1, time: "25:00" })).toThrow();
-    expect(() => cleanSlotInput({ dow: 1, time: "19:00", capacity: 6 })).toThrow();
+    expect(() => cleanSlotInput({ dow: 1, time: "19:00", type: "tournament", capacity: 6 })).toThrow();
   });
 
   it("turns a live club's due slots into public matches on its board, once each, and shows the week and the day", async () => {
@@ -31,7 +35,7 @@ describe("the club programme", () => {
     // Not approved yet: nothing is created even with a due slot.
     const early = await addClubSlot(db, club.slug, { dow: 4, time: "19:00", type: "tournament", format: "americano", capacity: 8, levelMin: 3, levelMax: 4.5, title: "Gold night" });
     expect(slotDue(early, "Asia/Bangkok", NOW)?.toISOString()).toBe("2026-09-10T12:00:00.000Z");
-    expect((await autoCreateClubEvents(db, NOW)).filter((c) => c.club.slug === club.slug)).toHaveLength(0);
+    expect((await autoCreateClubEvents(db, NOW)).created.filter((c) => c.club.slug === club.slug)).toHaveLength(0);
 
     await decideClub(db, club.slug, true, NOW);
     await addClubSlot(db, club.slug, { dow: 6, time: "09:00", capacity: 4 });
@@ -39,7 +43,9 @@ describe("the club programme", () => {
     await updateClubSlot(db, club.slug, paused.id, { active: false });
     expect(await listClubSlots(db, club.slug)).toHaveLength(3);
 
-    const created = (await autoCreateClubEvents(db, NOW)).filter((c) => c.club.slug === club.slug);
+    const run = await autoCreateClubEvents(db, NOW);
+    expect(run.errors).toEqual([]);
+    const created = run.created.filter((c) => c.club.slug === club.slug);
     expect(created.map((c) => c.slot.id).sort()).toEqual([early.id, (await listClubSlots(db, club.slug)).find((s) => s.dow === 6)!.id].sort());
     const gold = created.find((c) => c.slot.id === early.id)!.event;
     expect(gold.creatorPlayerId).toBe(nok.id);
@@ -55,13 +61,17 @@ describe("the club programme", () => {
     const [stored] = await db.select().from(events).where(eq(events.id, gold.id));
     expect(stored.clubSlotId).toBe(early.id);
     // An hour later: nothing new. A week later: the next Thursday.
-    expect((await autoCreateClubEvents(db, new Date(NOW.getTime() + HOUR))).filter((c) => c.club.slug === club.slug)).toHaveLength(0);
-    const nextWeek = (await autoCreateClubEvents(db, new Date(NOW.getTime() + 7 * DAY))).filter((c) => c.club.slug === club.slug && c.slot.id === early.id);
+    expect((await autoCreateClubEvents(db, new Date(NOW.getTime() + HOUR))).created.filter((c) => c.club.slug === club.slug)).toHaveLength(0);
+    const nextWeek = (await autoCreateClubEvents(db, new Date(NOW.getTime() + 7 * DAY))).created.filter((c) => c.club.slug === club.slug && c.slot.id === early.id);
     expect(nextWeek).toHaveLength(1);
     expect(nextWeek[0].event.startsAt.toISOString()).toBe("2026-09-17T12:00:00.000Z");
 
+    // A social earlier today (09:00 local, it is 16:00): gone from the public week, still on the staff's day.
+    const morning = await createEvent(db, { creatorPlayerId: nok.id, type: "match", startsAt: new Date("2026-09-08T02:00:00Z"), tz: "Asia/Bangkok", venueName: club.name, whenFull: "waitlist", publicListing: true });
     // The week as players see it: seven local days from Tuesday, Thursday carrying the gold night with eight open seats.
     const week = await clubWeek(db, club, NOW);
+    expect(week[0].events.map((b) => b.event.id)).not.toContain(morning.id);
+    expect((await clubDay(db, club, NOW)).events.map((b) => b.event.id)).toContain(morning.id);
     expect(week.map((d) => d.date)).toEqual(["2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13", "2026-09-14"]);
     const thu = week.find((d) => d.date === "2026-09-10")!;
     expect(thu.events).toHaveLength(1);
@@ -90,5 +100,18 @@ describe("the club programme", () => {
     expect(kept.status).not.toBe("cancelled");
     expect(kept.clubSlotId).toBeNull();
     expect(await removeClubSlot(db, "another-club", paused.id)).toBe(false);
+  });
+
+  it("keeps a whole local day on a clock-change day", async () => {
+    const owner = await makePlayer(db, "Marta");
+    const club = await claimClub(db, { name: "Madrid Padel Norte", playerId: owner.id, tz: "Europe/Madrid" });
+    await decideClub(db, club.slug, true, NOW);
+    // Sunday 25 October 2026 has 25 hours in Madrid; a 23:00 match is 22:00Z after the clocks go back.
+    const late = await createEvent(db, { creatorPlayerId: owner.id, type: "match", startsAt: new Date("2026-10-25T22:00:00Z"), tz: "Europe/Madrid", venueName: club.name, whenFull: "waitlist", publicListing: true });
+    const day = await clubDay(db, club, new Date("2026-10-25T08:00:00Z"));
+    expect(day.date).toBe("2026-10-25");
+    expect(day.events.map((b) => b.event.id)).toContain(late.id);
+    const week = await clubWeek(db, club, new Date("2026-10-25T08:00:00Z"));
+    expect(week.map((d) => d.date)).toEqual(["2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31"]);
   });
 });
