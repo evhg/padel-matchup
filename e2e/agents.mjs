@@ -1,6 +1,6 @@
 // Agent-native surfaces: developer page and key form, REST reads and writes, the MCP server,
 // discovery files, calendar feed, booking link, and the simplified create screen.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -118,8 +118,7 @@ try {
   check("More options reveals them", (await p.getByRole("button", { name: "Gold", exact: true }).count()) === 1 && (await p.getByText("Court booking link").count()) === 1);
   await shot(p, "a3-create-more");
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

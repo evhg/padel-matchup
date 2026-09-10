@@ -1,7 +1,7 @@
 // A series, an Open that repeats (see e2e/run.mjs): a finished tournament becomes a series from its page,
 // the series page carries the next edition and the podium, a player signs up through it, the hourly job
 // makes nothing twice, the organizer pauses and resumes, the city page and the API list it.
-import { BASE, finish, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
 const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Asia/Bangkok", reducedMotion: "reduce" };
@@ -148,8 +148,7 @@ try {
   check("resumed", true);
   await shot(a, "s3-resumed");
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

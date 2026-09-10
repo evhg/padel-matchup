@@ -20,6 +20,25 @@ export function makeCheck(results) {
   };
 }
 
+/** A crash is only diagnosable with the scene: every open page's address and first lines, and a screenshot of each when SHOTS is set. */
+export async function crashed(browser, results, e, name = "crash") {
+  console.error("✗ crashed:", e);
+  let i = 0;
+  for (const ctx of browser.contexts()) {
+    for (const page of ctx.pages()) {
+      i++;
+      try {
+        const text = (await page.locator("body").innerText({ timeout: 2000 })).replace(/\s+/g, " ").slice(0, 400);
+        console.error(`  page ${i} at ${page.url()}: ${text}`);
+        await shot(page, `${name}-${i}`);
+      } catch {
+        console.error(`  page ${i} at ${page.url()}: (no text)`);
+      }
+    }
+  }
+  results.push({ name, ok: false });
+}
+
 export function finish(results) {
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

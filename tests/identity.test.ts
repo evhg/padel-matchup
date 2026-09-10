@@ -5,6 +5,7 @@ import { events, players, slots, venues } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { consumeEmailCode, findPlayerByPersonalToken, getOrCreatePersonalToken, issueEmailCode, mergePlayers, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
 import { joinEvent } from "@/lib/domain/slots";
+import { safeNext } from "@/lib/personal";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -26,6 +27,19 @@ describe("personal link", () => {
     expect(await findPlayerByPersonalToken(db, t1)).toBeNull();
     expect((await findPlayerByPersonalToken(db, t2))?.id).toBe(p.id);
     expect(await findPlayerByPersonalToken(db, "nope")).toBeNull();
+  });
+
+  it("sends the device on only to an internal path", () => {
+    expect(safeNext("/coach")).toBe("/coach");
+    expect(safeNext("/7zib")).toBe("/7zib");
+    expect(safeNext("/s/monday-open")).toBe("/s/monday-open");
+    expect(safeNext(null)).toBeNull();
+    expect(safeNext("")).toBeNull();
+    expect(safeNext("//evil.example")).toBeNull();
+    expect(safeNext("https://evil.example/")).toBeNull();
+    expect(safeNext("/coach?x=1")).toBeNull();
+    expect(safeNext("/" + "a".repeat(41))).toBe("/" + "a".repeat(41));
+    expect(safeNext("/" + "a".repeat(42))).toBeNull();
   });
 });
 

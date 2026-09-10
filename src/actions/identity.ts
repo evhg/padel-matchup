@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { after } from "next/server";
@@ -13,7 +14,7 @@ import { getPlayer, normalizeEmail, updatePlayer } from "@/lib/domain/players";
 import { sendPersonalLinkEmail } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
 import { sendEmailCode, welcomeEmail } from "@/lib/notify";
-import { personalUrl } from "@/lib/personal";
+import { personalUrl, safeNext } from "@/lib/personal";
 import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, setSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, clientIp, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
@@ -209,9 +210,15 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
   });
 }
 
-/** Called by the personal-link page so the device that opened it gets the cookie. */
-export async function adoptPersonalToken(token: string): Promise<ActionResult<PublicPlayer | null>> {
-  return runA(async () => {
+/**
+ * Personal link: this device gets the identity cookie once. With `next`, the
+ * same round trip carries the device on to it: the redirect happens inside the
+ * action, so the destination renders with the new cookie and nothing else
+ * navigates in parallel (a redirect thrown from the page's re-render and a
+ * client-side replace used to race each other there).
+ */
+export async function adoptPersonalToken(token: string, next: string | null = null): Promise<ActionResult<PublicPlayer | null>> {
+  const r = await runA(async () => {
     const db = await getDb();
     const p = await findPlayerByPersonalToken(db, token);
     if (!p) return null;
@@ -219,6 +226,9 @@ export async function adoptPersonalToken(token: string): Promise<ActionResult<Pu
     if (currentId !== p.id) await setSessionPlayer(p.id);
     return pub(p);
   });
+  const to = r.ok && r.data ? safeNext(next) : null;
+  if (to) redirect(to);
+  return r;
 }
 
 /** localStorage mirror → cookie restore (identity survives cookie loss on the same device). */

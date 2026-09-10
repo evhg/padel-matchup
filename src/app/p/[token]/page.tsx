@@ -7,6 +7,7 @@ import { MyMatches } from "@/components/MyMatches";
 import { getDb } from "@/db";
 import { findPlayerByPersonalToken } from "@/lib/domain/identity";
 import { markHomescreen } from "@/lib/domain/push";
+import { safeNext } from "@/lib/personal";
 import { getSessionPlayerId } from "@/lib/session";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -28,8 +29,8 @@ export default async function PersonalPage({ params, searchParams }: { params: P
     player.homescreenAt = new Date();
   }
   const sessionId = await getSessionPlayerId();
-  // A safe internal destination (the bot sends /coach): straight there once this device holds the identity.
-  const next = sp.next && /^\/[a-z][a-z0-9/_-]{0,40}$/i.test(sp.next) ? sp.next : null;
+  // A safe internal destination (the bot sends /coach, a match invite its code): straight there once this device holds the identity.
+  const next = safeNext(sp.next);
   if (next && sessionId === player.id) redirect(next);
   return (
     <>

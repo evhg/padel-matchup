@@ -1,6 +1,6 @@
 // Americano tournament journey on a fresh local server (see e2e/run.mjs):
 // create with names, invite, generate rounds, enter scores, standings, clone, locale switch.
-import { BASE, finish, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
 const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Asia/Bangkok" };
@@ -142,8 +142,7 @@ try {
   const ico = await a.request.get(`${BASE}/api/icon?size=192`);
   check("icon png", ico.status() === 200 && ico.headers()["content-type"]?.startsWith("image/png"));
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }

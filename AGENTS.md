@@ -28,7 +28,7 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 2. **Every string in every locale.** Add keys to en, ru and es in the same change.
 3. **Simplicity budget.** One job per screen; one primary action; anything optional goes behind the single "More options" section with a one-line summary. Nothing is offered before it can be useful.
 4. **Email, push, Telegram are optional.** Everything must work with their environment variables unset.
-5. **No accounts, no passwords.** Identity stays cookie + personal link (+ Telegram sign-in). Personal tokens and manage links are credentials: never log, never expose in public data.
+5. **No accounts, no passwords.** Identity stays cookie + personal link (+ Telegram sign-in). Personal tokens and manage links are credentials: never log, never expose in public data. A personal link with `?next=` hands the device on from inside the server action (`adoptPersonalToken`): one navigation, cookie already set. Never add a client-side navigation beside it; the page's own redirect covers a device that already holds the cookie.
 6. **Public API shapes contain first names and levels only.** See `src/lib/api/serialize.ts`.
 7. **Additive migrations.** Production applies them automatically; no drops without discussion.
 8. **Sequential DB queries in server components** (the Supabase pooler stalls on pipelined bursts).

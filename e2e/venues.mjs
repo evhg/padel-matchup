@@ -1,6 +1,6 @@
 // Venue boards: opt-in listing at create time, the public board, the printable poster,
 // unlisting from Edit match, the board's empty state prefilling the venue.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -67,8 +67,7 @@ try {
   await guest.goto(`${BASE}/v/no-such-venue`);
   check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
 } catch (e) {
-  console.error("✗ crashed:", e);
-  results.push({ name: "crash", ok: false });
+  await crashed(browser, results, e);
 } finally {
   await browser.close();
 }
