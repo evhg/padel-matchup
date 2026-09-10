@@ -3,11 +3,15 @@ import type { Db } from "@/db";
 import { claimClub, decideClub } from "@/lib/domain/clubs";
 import { createCoach, presetHours } from "@/lib/domain/coaching";
 import { addClubSlot, autoCreateClubEvents, cleanSlotInput } from "@/lib/domain/clubWeek";
+import { eq } from "drizzle-orm";
+import { events, groupMembers, players } from "@/db/schema";
 import { createEvent, updateEvent } from "@/lib/domain/events";
+import { createGroup } from "@/lib/domain/groups";
 import { admission, isLevelVerified } from "@/lib/domain/levels";
+import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, getJoinRequests } from "@/lib/domain/requests";
 import { joinEvent } from "@/lib/domain/slots";
-import { admitConfirmed, askLevelCheck, confirmLevel, decideLevelCheck, listLevelChecks, myLevelChecks, verifiersFor, withdrawLevelCheck } from "@/lib/domain/verify";
+import { admitConfirmed, askLevelCheck, confirmLevel, decideLevelCheck, isVerifierFor, listLevelChecks, myLevelChecks, verifiersFor, withdrawLevelCheck } from "@/lib/domain/verify";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
 
 /** Tuesday 8 September 2026, 16:00 in Phuket. */
@@ -18,6 +22,14 @@ describe("verified levels", () => {
   let close: () => Promise<void>;
   beforeAll(async () => ({ db, close } = await createTestDb()));
   afterAll(() => close());
+
+  it("admission: the confirmed number itself must fit; a self-declaration next to an old tick does not", () => {
+    const gold = { levelMin: 3.5, levelMax: 4.5, levelVerifiedOnly: true };
+    expect(admission(gold, { level: 3.5, levelVerifiedLevel: 3.5 })).toBe("ok");
+    // Confirmed at 3.0, typed 3.5 by hand: within the tolerance, still ticked, but 3.0 was never inside 3.5–4.5.
+    expect(admission(gold, { level: 3.5, levelVerifiedLevel: 3.0 })).toBe("unverified");
+    expect(admission(gold, { level: 4.0, levelVerifiedLevel: 4.25 })).toBe("ok");
+  });
 
   it("admission: open events admit everyone, ranged events admit levels inside, verified-only events admit confirmed levels inside", () => {
     const open = { levelMin: null, levelMax: null, levelVerifiedOnly: false };
@@ -85,11 +97,20 @@ describe("verified levels", () => {
     expect(admission(ev, mia)).toBe("unverified");
     await createJoinRequest(db, { eventId: ev.id, playerId: mia.id, level: 3.5, now: NOW });
 
-    // One open ask per pair; the coach cannot ask themself; no level, nothing to confirm.
-    const ask = await askLevelCheck(db, { playerId: mia.id, target: { coachId: coach.id }, eventId: ev.id, now: NOW });
+    // Only the event's verifiers can be asked from it.
+    expect(isVerifierFor(verifiers, { coachId: coach.id })).toBe(true);
+    expect(isVerifierFor(verifiers, { clubSlug: club.slug })).toBe(true);
+    expect(isVerifierFor(verifiers, { coachId: mia.id })).toBe(false);
+    expect(isVerifierFor(verifiers, { clubSlug: "elsewhere" })).toBe(false);
+    // One open ask per pair (the second tap finds the first, and nobody is notified twice); the coach cannot ask themself; no level, nothing to confirm.
+    const first = await askLevelCheck(db, { playerId: mia.id, target: { coachId: coach.id }, eventId: ev.id, now: NOW });
+    const ask = first.check;
+    expect(first.created).toBe(true);
     expect(ask.level).toBe(3.5);
     expect(ask.eventId).toBe(ev.id);
-    expect((await askLevelCheck(db, { playerId: mia.id, target: { coachId: coach.id }, now: NOW })).id).toBe(ask.id);
+    const again = await askLevelCheck(db, { playerId: mia.id, target: { coachId: coach.id }, now: NOW });
+    expect(again.check.id).toBe(ask.id);
+    expect(again.created).toBe(false);
     await expect(askLevelCheck(db, { playerId: coachPlayer.id, target: { coachId: coach.id } })).rejects.toThrow(/self/);
     await expect(askLevelCheck(db, { playerId: nok.id, target: { clubSlug: club.slug } })).rejects.toThrow(/self/);
     const noLevel = await makePlayer(db, "NoLevel");
@@ -113,22 +134,34 @@ describe("verified levels", () => {
     await expect(decideLevelCheck(db, { id: ask.id, target: { coachId: coach.id }, approve: true, byPlayerId: coachPlayer.id })).rejects.toThrow(/not_pending/);
     expect(await listLevelChecks(db, { coachId: coach.id })).toEqual([]);
 
-    // Seated where she asked, as if the organizer had tapped; nothing left to admit afterwards.
+    // Seated where she asked, as if the organizer had tapped, and in the match's group like any join; nothing left to admit afterwards.
+    const crew = await createGroup(db, { name: "Gold crew", creatorPlayerId: org.id, tz: "Asia/Bangkok" });
+    await db.update(events).set({ groupId: crew.id }).where(eq(events.id, ev.id));
     const admitted = await admitConfirmed(db, player, coachPlayer.id, NOW);
     expect(admitted.map((a) => a.event.id)).toEqual([ev.id]);
     expect(admitted[0].join.outcome).toBe("joined");
     expect((await getJoinRequests(db, ev.id)).find((r) => r.playerId === mia.id)?.status).toBe("approved");
+    expect((await db.select().from(groupMembers).where(eq(groupMembers.groupId, crew.id))).some((m) => m.playerId === mia.id)).toBe(true);
     expect(await admitConfirmed(db, player, coachPlayer.id, NOW)).toEqual([]);
+    // A number she types herself, far from the confirmed one, is a new claim: the tick goes; a quarter step keeps it.
+    const playerRow = async (id: string) => (await db.select().from(players).where(eq(players.id, id)))[0];
+    await setPlayerLevel(db, mia.id, 3.5);
+    expect(isLevelVerified(await playerRow(mia.id))).toBe(true);
+    await setPlayerLevel(db, mia.id, 4.5);
+    const reclaimed = await playerRow(mia.id);
+    expect(reclaimed.levelVerifiedLevel).toBeNull();
+    expect(reclaimed.levelVerifiedSource).toBeNull();
+    expect(admission(ev, reclaimed)).toBe("unverified");
 
     // The club declines someone; they may ask again; an ask can be withdrawn once.
     const leo = await makePlayer(db, "Leo", { level: 3 });
-    const a2 = await askLevelCheck(db, { playerId: leo.id, target: { clubSlug: club.slug }, now: NOW });
+    const { check: a2 } = await askLevelCheck(db, { playerId: leo.id, target: { clubSlug: club.slug }, now: NOW });
     expect((await listLevelChecks(db, { clubSlug: club.slug })).map((c) => c.id)).toEqual([a2.id]);
     const declined = await decideLevelCheck(db, { id: a2.id, target: { clubSlug: club.slug }, approve: false, byPlayerId: nok.id, now: NOW });
     expect(declined.check.status).toBe("declined");
     expect(declined.player.level).toBe(3);
     expect(isLevelVerified(declined.player)).toBe(false);
-    const a3 = await askLevelCheck(db, { playerId: leo.id, target: { clubSlug: club.slug }, now: NOW });
+    const { check: a3 } = await askLevelCheck(db, { playerId: leo.id, target: { clubSlug: club.slug }, now: NOW });
     expect(a3.id).not.toBe(a2.id);
     expect(await withdrawLevelCheck(db, a3.id, leo.id, NOW)).toBe(true);
     expect(await withdrawLevelCheck(db, a3.id, leo.id, NOW)).toBe(false);

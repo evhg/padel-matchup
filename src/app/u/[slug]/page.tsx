@@ -55,7 +55,13 @@ export default async function PublicProfilePage({ params }: Props) {
               {p.level != null && <span className="block text-xs">{verified ? `✓ ${t("passport.verifiedBy")}` : p.levelSource === "adjusted" ? t("passport.adjusted") : t("passport.selfDeclared")}</span>}
             </div>
           </div>
-          {series && <LevelLine series={series} caption={t("passport.overTimeHelp", { count: series.results })} ariaLabel={t("passport.overTime")} />}
+          {series && (
+            <LevelLine
+              series={series}
+              caption={[t(series.capped ? "passport.overTimeHelpCapped" : "passport.overTimeHelp", { count: series.results }), ...(series.confirmed ? [t("passport.overTimeConfirmed")] : [])].join(" · ")}
+              ariaLabel={t("passport.overTime")}
+            />
+          )}
           <p className="mt-3 text-xs text-faint">{t("passport.memberSince", { date: since })}</p>
         </section>
 

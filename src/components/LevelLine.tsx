@@ -8,7 +8,7 @@ export function LevelLine({ series, caption, ariaLabel }: { series: LevelSeries;
   const last = series.points[series.points.length - 1];
   return (
     <figure className="mt-3" data-testid="level-line">
-      <svg viewBox={`0 0 ${g.width} ${g.height}`} className="h-24 w-full text-ink" role="img" aria-label={ariaLabel}>
+      <svg viewBox={`0 0 ${g.width} ${g.height}`} className="h-auto w-full text-ink" role="img" aria-label={ariaLabel}>
         {g.yTicks.map((tk) => (
           <g key={tk.label}>
             <line x1={0} x2={g.width} y1={tk.y} y2={tk.y} stroke="currentColor" strokeOpacity={0.12} strokeDasharray="2 4" />
@@ -20,7 +20,7 @@ export function LevelLine({ series, caption, ariaLabel }: { series: LevelSeries;
         <path d={g.path} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {g.points.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r={p.kind === "confirmed" || p.kind === "now" ? 4 : 2.5} fill="currentColor" />
+            <circle cx={p.x} cy={p.y} r={p.kind === "confirmed" || p.kind === "now" ? 4 : 2.5} fill="currentColor" fillOpacity={p.kind === "adjusted" ? 0.35 : 1} />
             {p.kind === "confirmed" && (
               <text x={p.x} y={p.y - 7} textAnchor="middle" fontSize="10" fontWeight="800" fill="currentColor">
                 ✓

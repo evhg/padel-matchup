@@ -165,6 +165,8 @@ export function tournamentDeltas(rows: readonly { id: string; level: number | nu
 
 /** Half a step of drift keeps an organizer's confirmation valid while results nudge the level. */
 export const VERIFIED_TOLERANCE = 0.5;
+/** How many result moves the passport keeps; the level line says so when the log is full. */
+export const LEVEL_LOG_CAP = 20;
 
 /** An organizer who played with them confirmed the level, and it has not moved much since. */
 export function isLevelVerified(p: { level: number | null; levelVerifiedLevel: number | null }): boolean {
@@ -207,5 +209,7 @@ export function admission(ev: { levelMin: number | null; levelMax: number | null
   const r = { min: ev.levelMin, max: ev.levelMax };
   const fit = levelFit(r, p?.level);
   if (fit !== "ok" || !hasRange(r) || !ev.levelVerifiedOnly) return fit;
-  return p && isLevelVerified({ level: p.level ?? null, levelVerifiedLevel: p.levelVerifiedLevel ?? null }) ? "ok" : "unverified";
+  // Confirmed means: the tick still holds, and the number that was confirmed fits the range (not a later self-declaration next to it).
+  const verified = Boolean(p) && isLevelVerified({ level: p!.level ?? null, levelVerifiedLevel: p!.levelVerifiedLevel ?? null }) && levelFit(r, p!.levelVerifiedLevel) === "ok";
+  return verified ? "ok" : "unverified";
 }

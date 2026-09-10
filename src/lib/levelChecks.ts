@@ -2,12 +2,14 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, coaches, players, type Event, type LevelCheck, type Player } from "@/db/schema";
+import { emitMatchEvent } from "@/lib/api/webhooks";
 import { APP_NAME, baseUrl, emailEnabled } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { formatLevel } from "@/lib/domain/levels";
-import type { Admitted } from "@/lib/domain/verify";
+import type { Admitted, VerifierSource } from "@/lib/domain/verify";
 import { sendEmail } from "@/lib/email/send";
 import { layout, translatorFor } from "@/lib/email/templates";
+import { notifyCreator, notifyLineupChange, notifyRequestDecided } from "@/lib/notify";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 
 /**
@@ -16,8 +18,9 @@ import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
  * channels they have. Nothing here throws into the request path.
  */
 
-async function reach(p: Pick<Player, "email" | "telegramId" | "locale">, n: { subject: string; heading: string; body: string; url: string; open: string; footer: string }): Promise<void> {
-  if (emailEnabled() && p.email) {
+async function reach(p: Pick<Player, "email" | "telegramId" | "locale" | "emailNotifications">, n: { subject: string; heading: string; body: string; url: string; open: string; footer: string }): Promise<void> {
+  // An activity line, so the player's email opt-out applies (Telegram stays: it is the channel they chose for the bot).
+  if (emailEnabled() && p.email && p.emailNotifications !== false) {
     const { html, text } = layout({ heading: n.heading, body: n.body, cta: { label: n.open, url: n.url }, footer: n.footer, eventUrl: n.url, openLabel: n.open });
     await sendEmail({ to: p.email, subject: n.subject, html, text }).catch(() => undefined);
   }
@@ -76,4 +79,20 @@ export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; pl
     open: t("levelCheck.notify.open"),
     footer: t("email.footer", { app: APP_NAME }),
   });
+}
+
+/**
+ * After a confirmation seated someone: the organizer hears about the new name
+ * (they did not tap), the line-up notice goes round, the player hears they are
+ * in, and the webhooks fire, the same as a join by hand.
+ */
+export async function announceAdmission(db: Db, player: Player, admitted: Admitted[], confirmedBy: VerifierSource): Promise<void> {
+  for (const a of admitted) {
+    await notifyCreator(db, a.event, a.join.outcome === "joined" ? "joined" : "waitlisted", player.displayName, player.id).catch(() => undefined);
+    // Seated: the line-up may have just become complete. Waitlisted: it already was.
+    const fresh = await notifyLineupChange(db, a.event, a.join.outcome !== "joined", player.id);
+    if (a.join.outcome === "joined") await notifyRequestDecided(db, fresh ?? a.event, player, true);
+    await emitMatchEvent(db, "match.joined", a.event.code, { player: { name: player.displayName, level: player.level }, outcome: a.join.outcome, approved: true, confirmedBy });
+    if (a.event.status === "full") await emitMatchEvent(db, "match.full", a.event.code);
+  }
 }

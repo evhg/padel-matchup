@@ -253,6 +253,13 @@
       "when": 1788963702773,
       "tag": "0035_series",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789019288009,
+      "tag": "0036_level_checks_pending_unique",
+      "breakpoints": true
     }
   ]
 }

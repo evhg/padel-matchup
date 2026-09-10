@@ -1,5 +1,5 @@
 import "server-only";
-import { COACH_COOKIE } from "@/lib/coachCookie";
+import { COACH_COOKIE, hintCookieOptions } from "@/lib/coachCookie";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import type { Db } from "@/db";
@@ -62,7 +62,7 @@ export async function setSessionPlayer(playerId: string): Promise<void> {
     path: "/",
     maxAge: ONE_YEAR,
   });
-  store.set(HAS_ID_COOKIE, "1", { httpOnly: false, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: ONE_YEAR });
+  store.set(HAS_ID_COOKIE, "1", hintCookieOptions());
 }
 
 export async function clearSessionPlayer(): Promise<void> {

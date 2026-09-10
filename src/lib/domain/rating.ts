@@ -1,18 +1,19 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots, type LevelLogEntry } from "@/db/schema";
-import { clampLevel, matchDeltas, normalizeLevel, tournamentDeltas } from "./levels";
+import { clampLevel, LEVEL_LOG_CAP, matchDeltas, normalizeLevel, tournamentDeltas, VERIFIED_TOLERANCE } from "./levels";
 import { tally } from "./scores";
 import { lockEvent } from "./slots";
 import { getTournamentState } from "./tournament";
 
-const LOG_CAP = 20;
-
-/** Player declares (or re-declares) their level: quarter steps, source "self". */
+/** Player declares (or re-declares) their level: quarter steps, source "self". A new number far from a confirmed one is a new claim: the tick goes. */
 export async function setPlayerLevel(db: Db, playerId: string, raw: unknown, now = new Date()): Promise<number | null> {
   const level = normalizeLevel(raw);
   if (level == null) return null;
-  await db.update(players).set({ level, levelSource: "self", levelUpdatedAt: now }).where(eq(players.id, playerId));
+  const [p] = await db.select({ confirmed: players.levelVerifiedLevel }).from(players).where(eq(players.id, playerId)).limit(1);
+  const set: Partial<typeof players.$inferInsert> = { level, levelSource: "self", levelUpdatedAt: now };
+  if (p?.confirmed != null && Math.abs(p.confirmed - level) > VERIFIED_TOLERANCE + 1e-9) Object.assign(set, { levelVerifiedAt: null, levelVerifiedBy: null, levelVerifiedLevel: null, levelVerifiedSource: null });
+  await db.update(players).set(set).where(eq(players.id, playerId));
   return level;
 }
 
@@ -59,7 +60,7 @@ export async function applyEventLevels(db: Db, eventId: string, now = new Date()
       const entry: LevelLogEntry = { at: now.toISOString(), from: p.level, to, code: ev.code, type: ev.type };
       await tx
         .update(players)
-        .set({ level: to, levelSource: "adjusted", levelUpdatedAt: now, levelLog: [...(p.log ?? []).slice(-(LOG_CAP - 1)), entry] })
+        .set({ level: to, levelSource: "adjusted", levelUpdatedAt: now, levelLog: [...(p.log ?? []).slice(-(LEVEL_LOG_CAP - 1)), entry] })
         .where(eq(players.id, playerId));
       changes.push({ playerId, from: p.level, to });
     }

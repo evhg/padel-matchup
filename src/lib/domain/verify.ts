@@ -1,9 +1,10 @@
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, coaches, events, joinRequests, levelChecks, players, type Club, type Coach, type Event, type LevelCheck, type Player } from "@/db/schema";
 import { isClubLive } from "./clubs";
 import { coachesAtClub } from "./coaching";
 import { DomainError } from "./errors";
+import { joinGroup } from "./groups";
 import { admission, normalizeLevel } from "./levels";
 import { decideJoinRequest } from "./requests";
 import type { JoinOutcome } from "./slots";
@@ -18,14 +19,14 @@ import type { JoinOutcome } from "./slots";
  */
 
 export type VerifierSource = "organizer" | "coach" | "club";
-export type Verifier = { kind: "coach"; id: string; handle: string; name: string } | { kind: "club"; slug: string; name: string };
+export type Verifier = { kind: "coach"; id: string; name: string } | { kind: "club"; slug: string; name: string };
 export type LevelCheckTarget = { coachId: string } | { clubSlug: string };
 export type LevelCheckWithPlayer = LevelCheck & { player: Player };
 
 /** Who can confirm a level for this event: listed coaches who named the venue as their club, then the live club itself (when claimed). */
 export async function verifiersFor(db: Db, ev: Pick<Event, "venueName" | "venueSlug">): Promise<Verifier[]> {
   const out: Verifier[] = [];
-  if (ev.venueName) for (const c of await coachesAtClub(db, ev.venueName)) out.push({ kind: "coach", id: c.id, handle: c.handle, name: c.displayName });
+  if (ev.venueName) for (const c of await coachesAtClub(db, ev.venueName)) out.push({ kind: "coach", id: c.id, name: c.displayName });
   if (ev.venueSlug) {
     const [club] = await db.select().from(clubs).where(eq(clubs.slug, ev.venueSlug)).limit(1);
     if (club && isClubLive(club) && club.claimedBy) out.push({ kind: "club", slug: club.slug, name: club.name });
@@ -58,8 +59,16 @@ export async function resolveTarget(db: Db, t: LevelCheckTarget): Promise<{ coac
   return club && isClubLive(club) && club.claimedBy ? { coach: null, club } : null;
 }
 
-/** A player asks a coach or a club to confirm their level. One open ask per pair; asking again returns it. */
-export async function askLevelCheck(db: Db, input: { playerId: string; target: LevelCheckTarget; eventId?: string | null; now?: Date }): Promise<LevelCheck> {
+/** Is this target one of the event's verifiers (a coach at the venue, or the live club itself)? */
+export const isVerifierFor = (verifiers: Verifier[], t: LevelCheckTarget): boolean => verifiers.some((v) => ("coachId" in t ? v.kind === "coach" && v.id === t.coachId : v.kind === "club" && v.slug === t.clubSlug));
+
+/**
+ * A player asks a coach or a club to confirm their level. One open ask per
+ * pair: asking again returns the open one (`created: false`, so nobody is
+ * notified twice); two asks at the same instant meet the partial unique index
+ * and the second reads the first.
+ */
+export async function askLevelCheck(db: Db, input: { playerId: string; target: LevelCheckTarget; eventId?: string | null; now?: Date }): Promise<{ check: LevelCheck; created: boolean }> {
   const now = input.now ?? new Date();
   const [p] = await db.select().from(players).where(eq(players.id, input.playerId)).limit(1);
   if (!p) throw new DomainError("not_found");
@@ -67,17 +76,18 @@ export async function askLevelCheck(db: Db, input: { playerId: string; target: L
   const target = await resolveTarget(db, input.target);
   if (!target) throw new DomainError("not_found");
   if (target.coach?.playerId === p.id || target.club?.claimedBy === p.id) throw new DomainError("invalid", "self");
-  const [existing] = await db
-    .select()
-    .from(levelChecks)
-    .where(and(eq(levelChecks.playerId, p.id), targetWhere(input.target), eq(levelChecks.status, "pending")))
-    .limit(1);
-  if (existing) return existing;
+  const open = () => db.select().from(levelChecks).where(and(eq(levelChecks.playerId, p.id), targetWhere(input.target), eq(levelChecks.status, "pending"))).limit(1);
+  const [existing] = await open();
+  if (existing) return { check: existing, created: false };
   const [row] = await db
     .insert(levelChecks)
     .values({ playerId: p.id, coachId: target.coach?.id ?? null, clubSlug: target.club?.slug ?? null, level: p.level, eventId: input.eventId ?? null, status: "pending", createdAt: now })
+    .onConflictDoNothing()
     .returning();
-  return row;
+  if (row) return { check: row, created: true };
+  const [raced] = await open();
+  if (!raced) throw new DomainError("not_found");
+  return { check: raced, created: false };
 }
 
 /** Open asks for a coach or a club, oldest first, with the player. */
@@ -154,19 +164,14 @@ export async function admitConfirmed(db: Db, player: Player, byPlayerId: string 
     if (admission(event, player) !== "ok") continue;
     try {
       const res = await decideJoinRequest(db, { eventId: event.id, requestId: request.id, approve: true, actorPlayerId: byPlayerId, now });
-      if (res.join) out.push({ event: res.event, join: res.join });
+      if (res.join) {
+        out.push({ event: res.event, join: res.join });
+        // A seat in a group's match makes you part of the group, the same as tapping Join would.
+        if (event.groupId && (res.join.outcome === "joined" || res.join.outcome === "waitlisted")) await joinGroup(db, event.groupId, player.id).catch(() => undefined);
+      }
     } catch {
       // Full or already decided: the organizer's list keeps it.
     }
   }
-  return out;
-}
-
-/** Pending asks a set of players sent to anyone (for the organizer's list: "asked coach X"). */
-export async function pendingChecksFor(db: Db, playerIds: string[]): Promise<Map<string, LevelCheck[]>> {
-  const out = new Map<string, LevelCheck[]>();
-  if (playerIds.length === 0) return out;
-  const rows = await db.select().from(levelChecks).where(and(inArray(levelChecks.playerId, playerIds), eq(levelChecks.status, "pending")));
-  for (const r of rows) out.set(r.playerId, [...(out.get(r.playerId) ?? []), r]);
   return out;
 }

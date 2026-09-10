@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "level_checks_pending_coach_uq" ON "level_checks" USING btree ("player_id","coach_id") WHERE "level_checks"."status" = 'pending';--> statement-breakpoint
+CREATE UNIQUE INDEX "level_checks_pending_club_uq" ON "level_checks" USING btree ("player_id","club_slug") WHERE "level_checks"."status" = 'pending';

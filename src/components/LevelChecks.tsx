@@ -16,14 +16,17 @@ export function LevelChecks({ checks, by }: { checks: LevelCheckDTO[]; by: { kin
   const [pending, start] = useTransition();
   const [levels, setLevels] = useState<Record<string, number | null>>({});
   const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   if (checks.length === 0) return null;
 
   const decide = (c: LevelCheckDTO, approve: boolean) =>
     start(async () => {
       const level = levels[c.id] ?? c.level;
+      setError(null);
       const r = by.kind === "coach" ? await decideLevelCheckAction(c.id, approve, level) : await decideClubLevelCheckAction(by.token, c.id, approve, level);
       if (!r.ok) {
-        setNote(t("common.somethingWrong"));
+        setNote(null);
+        setError(t("common.somethingWrong"));
         return;
       }
       setNote(approve ? t("levelCheck.done", { name: c.name, level: formatLevel(level ?? 0), admitted: r.data.admitted }) : t("levelCheck.declined", { name: c.name }));
@@ -54,6 +57,7 @@ export function LevelChecks({ checks, by }: { checks: LevelCheckDTO[]; by: { kin
         ))}
       </ul>
       {note && <p className="mt-2 text-sm font-semibold text-ok">{note}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </section>
   );
 }
