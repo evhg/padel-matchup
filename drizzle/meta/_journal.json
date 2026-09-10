@@ -274,6 +274,13 @@
       "when": 1789029229551,
       "tag": "0038_coach_founding_at",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789031052701,
+      "tag": "0039_coach_founding_tz",
+      "breakpoints": true
     }
   ]
 }

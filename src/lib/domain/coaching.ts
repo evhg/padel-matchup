@@ -125,18 +125,24 @@ export const cleanClubNames = (names: string[] | string | null | undefined): str
 export type CreateCoachInput = { playerId: string; displayName: string; clubNames?: string[] | string | null; lessonMinutes?: number; hours?: Hours; tz: string; languages?: string[] };
 
 export async function createCoach(db: Db, input: CreateCoachInput): Promise<Coach> {
+  return (await insertCoach(db, input)).coach;
+}
+
+/** The same, saying whether a book was made or an existing one found; the unique player index decides, so two submits at once make one book. */
+export async function insertCoach(db: Db, input: CreateCoachInput): Promise<{ coach: Coach; created: boolean }> {
   if (!isValidTimeZone(input.tz)) throw new DomainError("invalid", "tz");
   const existing = await getCoachByPlayerId(db, input.playerId);
-  if (existing) return existing;
+  if (existing) return { coach: existing, created: false };
   const minutes = LESSON_MINUTES.includes((input.lessonMinutes ?? 60) as (typeof LESSON_MINUTES)[number]) ? (input.lessonMinutes ?? 60) : 60;
   const displayName = input.displayName.replace(/\s+/g, " ").trim().slice(0, 40) || "Coach";
-  // A new book is listed from the start: among the first ten in the city, it is a founding one, for good.
-  const founding = (await listedCount(db, input.tz)) < FOUNDING_COACHES;
+  // A new book is listed from the start: while the city has founding places left, it takes one, for good.
+  const founding = (await foundingPlaces(db, input.tz)) < FOUNDING_COACHES;
   const [row] = await db
     .insert(coaches)
     .values({
       playerId: input.playerId,
       foundingAt: founding ? new Date() : null,
+      foundingTz: founding ? input.tz : null,
       handle: await uniqueHandle(db, displayName),
       displayName,
       clubNames: cleanClubNames(input.clubNames),
@@ -145,8 +151,12 @@ export async function createCoach(db: Db, input: CreateCoachInput): Promise<Coac
       hours: input.hours ?? presetHours("both"),
       tz: input.tz,
     })
+    .onConflictDoNothing({ target: coaches.playerId })
     .returning();
-  return row;
+  if (row) return { coach: row, created: true };
+  const raced = await getCoachByPlayerId(db, input.playerId);
+  if (!raced) throw new DomainError("not_found");
+  return { coach: raced, created: false };
 }
 
 export async function getCoachByHandle(db: Db, handle: string): Promise<Coach | null> {
@@ -193,7 +203,8 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   const extra: Partial<typeof coaches.$inferInsert> = {};
   if (clean.isPublic === true) {
     const [cur] = await db.select({ isPublic: coaches.isPublic, foundingAt: coaches.foundingAt, tz: coaches.tz }).from(coaches).where(eq(coaches.id, coachId)).limit(1);
-    if (cur && !cur.isPublic && !cur.foundingAt && (await listedCount(db, clean.tz ?? cur.tz)) < FOUNDING_COACHES) extra.foundingAt = new Date();
+    const tz = clean.tz ?? cur?.tz;
+    if (cur && tz && !cur.isPublic && !cur.foundingAt && (await foundingPlaces(db, tz)) < FOUNDING_COACHES) Object.assign(extra, { foundingAt: new Date(), foundingTz: tz });
   }
   if (clean.promptpayId !== undefined) clean.promptpayId = (clean.promptpayId ?? "").replace(/[^\d+]/g, "").slice(0, 20) || null;
   if (clean.payLink !== undefined) clean.payLink = isPayLink((clean.payLink ?? "").trim()) ? (clean.payLink ?? "").trim() : null;
@@ -686,7 +697,15 @@ export async function listPublicCoaches(db: Db, cityTz?: string | null, limit = 
 /** The first ten listed coaches of a city carry a founding badge, and everything stays free for them (mirrors founding clubs). */
 export const FOUNDING_COACHES = 10;
 
-/** How many coaches are listed in a city (time zone) right now: the founding places are the first ten. */
+/** How many founding places a city (time zone) has handed out, listed or not: ten, and then no more, whatever happens to the ten. */
+export async function foundingPlaces(db: Db, tz: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(coaches)
+    .where(eq(coaches.foundingTz, tz));
+  return Number(row?.n ?? 0);
+}
+/** How many coaches are listed in a city (time zone) right now. */
 export async function listedCount(db: Db, tz: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)` })
@@ -694,8 +713,8 @@ export async function listedCount(db: Db, tz: string): Promise<number> {
     .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), eq(coaches.tz, tz)));
   return Number(row?.n ?? 0);
 }
-/** The badge shows while the book is listed; the place itself, once earned, is never taken back. */
-export const isFoundingCoach = (coach: Pick<Coach, "foundingAt" | "isPublic" | "archivedAt">): boolean => Boolean(coach.foundingAt) && coach.isPublic && !coach.archivedAt;
+/** The badge shows while the book is listed in the city the place was earned in; the place itself is never taken back. */
+export const isFoundingCoach = (coach: Pick<Coach, "foundingAt" | "foundingTz" | "tz" | "isPublic" | "archivedAt">): boolean => Boolean(coach.foundingAt) && coach.foundingTz === coach.tz && coach.isPublic && !coach.archivedAt;
 
 /** Listed coaches who named this club among theirs (case aside): the club page's "coaches here". */
 export async function coachesAtClub(db: Db, clubName: string): Promise<Coach[]> {

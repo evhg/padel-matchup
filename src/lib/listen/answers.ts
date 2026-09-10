@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { COACH_DOORS } from "@/lib/source";
 import type { Db } from "@/db";
 import { activity, answers, clubs, coaches, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
 import { listErrors } from "@/lib/alerts";
@@ -193,7 +194,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Funnel: visitors ${funnel.pageviews ?? 0} → matches ${Number(matches.n)} → seats ${Number(joins.n)} → scores ${Number(results.n)} → card views ${funnel.card_views ?? 0}`,
     `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : "none this week (ig, poster, card, moment, podium are the tags)"}`,
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
-    `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : "none tagged (coachpage, club, citylist, invite, search)"}`,
+    `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : `none tagged (${COACH_DOORS.join(", ")})`}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
     `Press desk: sent ${mail.sent} · received ${mail.received} · waiting for your tap ${mail.waiting}`,

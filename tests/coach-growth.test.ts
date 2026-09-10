@@ -13,12 +13,10 @@ describe("founding coaches", () => {
   afterAll(() => close());
 
   it("ranks listed coaches per city by creation and stops at ten", async () => {
-    const base = Date.UTC(2026, 8, 1, 8, 0, 0);
     const made: { id: string; tz: string }[] = [];
     for (let i = 0; i < 12; i++) {
       const p = await makePlayer(db, `Coach ${i}`);
       const c = await createCoach(db, { playerId: p.id, displayName: p.displayName, clubNames: "Warehaus", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok", languages: ["en"] });
-      await db.update(coaches).set({ createdAt: new Date(base + i * 60_000) }).where(eq(coaches.id, c.id));
       made.push({ id: c.id, tz: c.tz });
     }
     const sg = await makePlayer(db, "Singapore coach");

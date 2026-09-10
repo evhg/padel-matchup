@@ -44,7 +44,6 @@ type Props = {
 export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
-  // The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in.
   const router = useRouter();
   const [pending, start] = useTransition();
   const [booking, setBooking] = useState(false);

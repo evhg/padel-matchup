@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title, description, alternates: localeAlternates("/coaches", locale), openGraph: { title, description, type: "website", url: `${baseUrl()}/coaches` } };
 }
 
-type Props = { searchParams: Promise<{ s?: string }> };
+type Props = { searchParams: Promise<{ s?: string | string[] }> };
 
 /**
  * The coach's front door: what changes for them, in their words, and one button.

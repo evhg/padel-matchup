@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("setup.title"), robots: { index: false, follow: false } };
 }
 
-type Props = { searchParams: Promise<{ welcome?: string; s?: string; club?: string; setup?: string }> };
+type Props = { searchParams: Promise<{ welcome?: string; s?: string | string[]; club?: string | string[]; setup?: string }> };
 
 /** The coach's book, or the four taps that create it. One screen, one job. */
 export default async function CoachPage({ searchParams }: Props) {
