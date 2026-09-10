@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { coachBotLinkAction, saveCalendarAction, savePaymentAction, setupCoachAction, type CalendarState } from "@/actions/coach";
+import { saveCalendarAction, savePaymentAction, setupCoachAction, type CalendarState } from "@/actions/coach";
 import { HowThisWorks } from "./HowThisWorks";
 
 type Step = "where" | "length" | "hours" | "calendar" | "pay" | "bot";
@@ -16,28 +16,28 @@ const ORDER = [1, 2, 3, 4, 5, 6, 0];
  * then the calendar, the payment and the Telegram bot, each one tap or "Later".
  * One question per screen; the coach is never asked to come back and finish.
  */
-export function CoachSetup({ initialClubs = "", botUsername = null, serviceEmail = null, existing = false }: { initialClubs?: string; botUsername?: string | null; serviceEmail?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the calendar. */ existing?: boolean }) {
+export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = null, serviceEmail = null, existing = false }: { initialClubs?: string; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; serviceEmail?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the calendar. */ existing?: boolean }) {
   const t = useTranslations("coach");
   const tCal = useTranslations("coach.calendar");
   const locale = useLocale();
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [step, setStep] = useState<Step>(existing ? (serviceEmail ? "calendar" : "pay") : "where");
+  const [step, setStep] = useState<Step>(existing ? "calendar" : "where");
   const [clubs, setClubs] = useState(initialClubs);
   const [minutes, setMinutes] = useState<60 | 90>(60);
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [badDay, setBadDay] = useState<number | null>(null);
   const [gcalId, setGcalId] = useState("");
   const [icalUrl, setIcalUrl] = useState("");
-  const [showIcal, setShowIcal] = useState(false);
+  const [showIcal, setShowIcal] = useState(!serviceEmail);
   const [calState, setCalState] = useState<CalendarState | null>(null);
   const [promptpay, setPromptpay] = useState("");
   const [payLink, setPayLink] = useState("");
-  const [botUrl, setBotUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const steps: Step[] = ["where", "length", "hours", ...(serviceEmail ? (["calendar"] as Step[]) : []), "pay", ...(botUsername ? (["bot"] as Step[]) : [])];
+  // The calendar step stays without a Google service account: Apple and Outlook coaches attach an iCal address, which needs none.
+  const steps: Step[] = ["where", "length", "hours", "calendar", "pay", ...(botUsername ? (["bot"] as Step[]) : [])];
   const index = steps.indexOf(step);
   const total = steps.length;
   const goNext = () => setStep(steps[Math.min(total - 1, index + 1)]);
@@ -83,18 +83,14 @@ export function CoachSetup({ initialClubs = "", botUsername = null, serviceEmail
   const savePay = () =>
     start(async () => {
       setError(null);
-      const r = await savePaymentAction({ promptpayId: promptpay, payLink });
+      // Only what was typed is sent: a blank field here leaves a saved value alone.
+      const r = await savePaymentAction({ promptpayId: promptpay.trim() || undefined, payLink: payLink.trim() || undefined });
       if (!r.ok) {
-        setError(t("errors.no_coach"));
+        setError(r.error === "invalid" && r.detail === "payLink" ? t("setup.badPayLink") : t("errors.no_coach"));
         return;
       }
       after("pay")();
     });
-
-  useEffect(() => {
-    if (step !== "bot" || botUrl) return;
-    coachBotLinkAction().then((r) => setBotUrl(r.ok && r.data.url ? r.data.url : botUsername ? `https://t.me/${botUsername}` : null));
-  }, [step, botUrl, botUsername]);
 
   const copy = async () => {
     if (!serviceEmail) return;
@@ -202,6 +198,7 @@ export function CoachSetup({ initialClubs = "", botUsername = null, serviceEmail
             <h2 className="text-xl font-extrabold tracking-tight">{t("setup.calendarTitle")}</h2>
             <p className="mt-1 text-sm text-muted">{t("setup.calendarHelp")}</p>
           </div>
+          {serviceEmail && (
           <ol className="flex flex-col gap-3 text-sm">
             <li>
               <div className="font-bold">{tCal("step1")}</div>
@@ -223,6 +220,7 @@ export function CoachSetup({ initialClubs = "", botUsername = null, serviceEmail
               <input id="setup-gcal" className="input mt-1" value={gcalId} onChange={(e) => setGcalId(e.target.value)} inputMode="email" autoComplete="off" placeholder="name@gmail.com" maxLength={120} />
             </li>
           </ol>
+          )}
           {showIcal ? (
             <label className="block text-sm font-bold" htmlFor="setup-ical">
               {tCal("ical")}
@@ -252,7 +250,6 @@ export function CoachSetup({ initialClubs = "", botUsername = null, serviceEmail
 
       {step === "pay" && (
         <div className="flex flex-col gap-4">
-          {!serviceEmail && <p className="text-sm font-semibold text-ok">✓ {t("setup.created")}</p>}
           <div>
             <h2 className="text-xl font-extrabold tracking-tight">{t("setup.payTitle")}</h2>
             <p className="mt-1 text-sm text-muted">{t("setup.payHelp")}</p>

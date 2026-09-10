@@ -13,12 +13,13 @@ import { acceptByInvite, activePackage, availableSlots, DAY_MS, foundingRank, ge
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
+import { notifyStudentJoined } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
 import { whatsappShareUrl } from "@/lib/share";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ handle: string }>; searchParams: Promise<{ i?: string }> };
+type Props = { params: Promise<{ handle: string }>; searchParams: Promise<{ i?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { handle } = await params;
@@ -53,6 +54,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   if (invite && me && status !== "accepted" && status !== "paused") {
     status = await acceptByInvite(db, coach.id, me.id);
     justJoined = status === "accepted";
+    if (justJoined) await notifyStudentJoined(db, coach, me).catch(() => undefined);
   }
   const today = todayIn(coach.tz, now);
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);

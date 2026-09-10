@@ -2,12 +2,12 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Db } from "@/db";
 import { dayRange, labelsFor, studentLessonDTO, todayIn } from "@/lib/coach/view";
-import { getCoachForActor, listStudentLessons, packageLine, studentCoaches } from "@/lib/domain/coaching";
+import { listStudentLessons, packageLine, studentCoaches } from "@/lib/domain/coaching";
 
 /** On My matches: the lessons a player has with their coach, and the quiet door to the coach's own book. */
-export async function MyLessons({ db, playerId }: { db: Db; playerId: string }) {
+export async function MyLessons({ db, playerId, asCoach }: { db: Db; playerId: string; asCoach: boolean }) {
   const now = new Date();
-  const [t, locale, mine, lessons, asCoach] = await Promise.all([getTranslations("coach"), getLocale(), studentCoaches(db, playerId, now), listStudentLessons(db, playerId, now), getCoachForActor(db, playerId)]);
+  const [t, locale, mine, lessons] = await Promise.all([getTranslations("coach"), getLocale(), studentCoaches(db, playerId, now), listStudentLessons(db, playerId, now)]);
   return (
     <>
       {mine.length > 0 && (

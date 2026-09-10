@@ -16,7 +16,7 @@ import { saveMatchScore, type SetScore } from "@/lib/domain/scores";
 import { joinEvent } from "@/lib/domain/slots";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { mergePlayers } from "@/lib/domain/merge";
-import { createPlayer } from "@/lib/domain/players";
+import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getEventByCode, getPlayerEvents, getVenues, type EventDetail } from "@/lib/domain/queries";
 import { CITIES, cityInText, cityOf, type City } from "@/lib/domain/cities";
 import { getCityBoard, withCounts } from "@/lib/domain/venueBoard";
@@ -26,7 +26,7 @@ import { weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { suggestGroupName } from "@/lib/domain/groupNames";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { coachAssistantMessage, handleCoachCallback, lessonsFor, sendRoleMenu } from "./coach";
-import { verifyPlayerTicket } from "@/lib/coach/link";
+import { ticketPlayerId, verifyPlayerTicket } from "@/lib/coach/link";
 import { isValidShareCode } from "@/lib/codes";
 import { answerCallbackQuery, answerInlineQuery, deleteMessage, editInlineMessageText, editMessageText, editOk, esc, messageGone, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
@@ -1141,15 +1141,24 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       const payload = cmd.args.trim();
       const coachLink = payload.match(/^coach_(.+)$/);
       if (coachLink) {
-        const playerId = verifyPlayerTicket(coachLink[1]);
-        if (playerId) {
-          const linked = await linkTelegram(db, playerId, from);
-          // The assistant introduces itself with its buttons; the book stays one tap away.
-          await sendRoleMenu(db, linked, chat.chatId, s.coachLinked);
-          const token = await getOrCreatePersonalToken(db, linked.id);
-          await sendMessage(chat.chatId, esc(s.coachOpen), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
-          return "coach_linked";
+        const ticketId = ticketPlayerId(coachLink[1]);
+        const target = ticketId ? await getPlayer(db, ticketId) : null;
+        // The ticket is salted with the player's Telegram binding: a link minted before a bind, or after two days, is dead.
+        if (!target || !verifyPlayerTicket(coachLink[1], target)) {
+          await sendMessage(chat.chatId, esc(s.coachLinkExpired), { silent: true });
+          return "coach_link_expired";
         }
+        // Once bound, the assistant stays with that account: a forwarded link does not move it and never merges a stranger in.
+        if (target.telegramId !== null && target.telegramId !== from.id) {
+          await sendMessage(chat.chatId, esc(s.coachLinkOther), { silent: true });
+          return "coach_link_other";
+        }
+        const linked = await linkTelegram(db, target.id, from);
+        // The assistant introduces itself with its buttons; the book stays one tap away.
+        await sendRoleMenu(db, linked, chat.chatId, s.coachLinked);
+        const token = await getOrCreatePersonalToken(db, linked.id);
+        await sendMessage(chat.chatId, esc(s.coachOpen), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });
+        return "coach_linked";
       }
       const result = payload.match(/^r_([A-Za-z0-9]{4})$/);
       if (result) {

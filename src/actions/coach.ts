@@ -23,10 +23,10 @@ import {
   getPlayerById,
   hoursFromLines,
   inviteMatches,
+  isPayLink,
   LESSON_MINUTES,
   listStudents,
   markNoShow,
-  parseHoursLine,
   presetHours,
   removeCoachQr,
   requestStudent,
@@ -34,16 +34,16 @@ import {
   setPackagePaid,
   setStudentStatus,
   studentStatus,
-  updateCoach,
   type CancelOutcome,
   type Hours,
   type HoursPreset,
   type StudentStatus,
+  updateCoach,
 } from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
-import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentRequest } from "@/lib/coach/notify";
+import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
@@ -52,8 +52,6 @@ import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
 import { COACH_COOKIE } from "@/lib/coachCookie";
-import { playerTicket } from "@/lib/coach/link";
-import { botDeepLink } from "@/lib/telegram/bot";
 async function rememberCoach(): Promise<void> {
   (await cookies()).set(COACH_COOKIE, "1", { httpOnly: false, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 365 * 24 * 3600 });
 }
@@ -120,12 +118,9 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    const hours: Hours = {};
-    for (let d = 0; d < 7; d++) {
-      const ranges = parseHoursLine(input.hoursLines[d] ?? "");
-      if (!ranges) throw new DomainError("invalid", String(d));
-      hours[String(d)] = ranges;
-    }
+    const parsed = hoursFromLines(input.hoursLines);
+    if (parsed.invalidDay !== null) throw new DomainError("invalid", String(parsed.invalidDay));
+    const hours: Hours = parsed.hours;
     if (!LESSON_MINUTES.includes(input.lessonMinutes as (typeof LESSON_MINUTES)[number])) throw new DomainError("invalid", "minutes");
     if (!isValidTimeZone(input.tz)) throw new DomainError("invalid", "tz");
     await updateCoach(db, coach.id, {
@@ -380,7 +375,9 @@ export async function requestCoachAction(handle: string, name?: string | null, i
     if (!coach) throw new ActionFailure("no_coach");
     const me = await requirePlayer(db, name);
     if (inviteMatches(coach, invite)) {
+      const before = await studentStatus(db, coach.id, me.id);
       const status = await acceptByInvite(db, coach.id, me.id);
+      if (status === "accepted" && before !== "accepted") await notifyStudentJoined(db, coach, me).catch(() => undefined);
       revalidateCoach(coach.handle);
       return { status };
     }
@@ -393,22 +390,21 @@ export async function requestCoachAction(handle: string, name?: string | null, i
 }
 
 /** Setup step: how students pay. Both optional; the same fields as in settings. */
+/** Setup step: how students pay. A field left out stays as it is; an empty one clears; a link that is not a link is refused, not dropped. */
 export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null }): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    await updateCoach(db, coach.id, { promptpayId: input.promptpayId ?? "", payLink: input.payLink ?? "" });
+    const patch: { promptpayId?: string; payLink?: string } = {};
+    if (typeof input.promptpayId === "string") patch.promptpayId = input.promptpayId.trim();
+    if (typeof input.payLink === "string") {
+      const link = input.payLink.trim();
+      if (link && !isPayLink(link)) throw new DomainError("invalid", "payLink");
+      patch.payLink = link;
+    }
+    if (Object.keys(patch).length) await updateCoach(db, coach.id, patch);
     revalidateCoach(coach.handle);
     return null;
-  });
-}
-
-/** Setup step: the link that opens the bot and binds this Telegram account to the coach's player. Null without a bot. */
-export async function coachBotLinkAction(): Promise<ActionResult<{ url: string | null }>> {
-  return runA(async () => {
-    const db = await getDb();
-    const { me } = await requireCoach(db);
-    return { url: botDeepLink(`coach_${playerTicket(me.id)}`) };
   });
 }
 
@@ -418,6 +414,14 @@ export async function rememberCoachAction(): Promise<ActionResult<null>> {
     const db = await getDb();
     await requireCoach(db);
     await rememberCoach();
+    return null;
+  });
+}
+
+/** The header's hint was left behind by another identity: take it away. */
+export async function forgetCoachAction(): Promise<ActionResult<null>> {
+  return runA(async () => {
+    (await cookies()).delete(COACH_COOKIE);
     return null;
   });
 }

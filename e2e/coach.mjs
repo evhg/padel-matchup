@@ -57,6 +57,8 @@ try {
       // The bot step: the button carries a signed ticket; opening it binds that Telegram account to Olga, who then runs her book from the chat.
       const href = await olga.getByTestId("open-bot").getAttribute("href");
       const ticket = href?.match(/start=coach_([^&]+)/)?.[1];
+      const param = `coach_${decodeURIComponent(ticket ?? "")}`;
+      check("the bot link's start parameter is one Telegram accepts (at most 64 of [A-Za-z0-9_-])", param.length <= 64 && /^[A-Za-z0-9_-]+$/.test(param), param);
       check("the bot step opens @kicksmash_bot with a signed ticket", Boolean(ticket), href ?? "");
       const tgOlga = { id: 616161, is_bot: false, first_name: "Olga", username: "olga_coach_e2e" };
       const linked = await hook({ update_id: 900001, message: { message_id: 900001, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: `/start coach_${decodeURIComponent(ticket ?? "")}` } });

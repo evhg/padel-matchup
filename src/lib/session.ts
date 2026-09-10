@@ -1,4 +1,5 @@
 import "server-only";
+import { COACH_COOKIE } from "@/lib/coachCookie";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import type { Db } from "@/db";
@@ -51,6 +52,9 @@ export async function getSessionPlayer(db: Db): Promise<Player | null> {
 
 export async function setSessionPlayer(playerId: string): Promise<void> {
   const store = await cookies();
+  // The header's coach hint belongs to the identity that earned it.
+  const before = unsealPlayerId(store.get(PLAYER_COOKIE)?.value);
+  if (before && before !== playerId) store.delete(COACH_COOKIE);
   store.set(PLAYER_COOKIE, sealPlayerId(playerId), {
     httpOnly: true,
     sameSite: "lax",
@@ -65,6 +69,7 @@ export async function clearSessionPlayer(): Promise<void> {
   const store = await cookies();
   store.delete(PLAYER_COOKIE);
   store.delete(HAS_ID_COOKIE);
+  store.delete(COACH_COOKIE);
 }
 
 /** Per-event organizer access granted by visiting /{code}/manage/{manageCode}. */

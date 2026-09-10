@@ -1104,6 +1104,7 @@
       "payHelp": "Un QR de PromptPay con el importe, o tu enlace de pago, se muestra cuando empieza un bono. Nada pasa por Kicksmash.",
       "botTitle": "Tu asistente en Telegram",
       "botHelp": "Abre el bot una vez desde este teléfono. Desde entonces «anna vie 15» reserva, «mañana» muestra el día, y tus alumnos le escriben y reciben respuesta mientras entrenas.",
+      "badPayLink": "El enlace debe empezar por https://.",
       "botOpen": "Abrir @{bot}",
       "botAfter": "Luego vuelve aquí y toca Listo.",
       "create": "Configurar mi asistente",

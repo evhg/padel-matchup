@@ -3,13 +3,11 @@ import { getTranslations } from "next-intl/server";
 import type { Db } from "@/db";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { todayIn } from "@/lib/coach/view";
-import { DAY_MS, getCoachForActor, listCoachLessons } from "@/lib/domain/coaching";
+import { DAY_MS, listCoachLessons } from "@/lib/domain/coaching";
+import type { Coach } from "@/db/schema";
 
 /** On My matches, for a coach: the way back to the assistant, with today's count, above everything else. */
-export async function CoachCard({ db, playerId }: { db: Db; playerId: string }) {
-  const found = await getCoachForActor(db, playerId);
-  if (!found) return null;
-  const { coach } = found;
+export async function CoachCard({ db, coach }: { db: Db; coach: Coach }) {
   const now = new Date();
   const from = zonedTimeToUtc(todayIn(coach.tz, now), "00:00", coach.tz);
   const [t, lessons] = await Promise.all([getTranslations("coach"), listCoachLessons(db, coach.id, from, new Date(from.getTime() + DAY_MS))]);

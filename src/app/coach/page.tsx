@@ -12,12 +12,14 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
 import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { busyBetween, DAY_MS, getCoachForActor, inviteCode, listCoachLessons, listStudents, openSlots, studentLink } from "@/lib/domain/coaching";
+import { busyBetween, DAY_MS, earnedInvite, getCoachForActor, inviteCode, listCoachLessons, listStudents, openSlots, studentLink } from "@/lib/domain/coaching";
 import { CoachHint } from "@/components/coach/CoachHint";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
+import { playerTicket } from "@/lib/coach/link";
+import { botDeepLink } from "@/lib/telegram/bot";
 import { telegramBotUsername } from "@/lib/telegram/api";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +57,8 @@ export default async function CoachPage({ searchParams }: Props) {
     return shell(
       <>
         {tag}
-        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} botUsername={telegramBotUsername()} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
+        {!found && <CoachHint present={false} />}
+        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
       </>,
     );
 
@@ -66,16 +69,16 @@ export default async function CoachPage({ searchParams }: Props) {
   const from = zonedTimeToUtc(today, "00:00", coach.tz);
   const to = new Date(from.getTime() + 14 * DAY_MS);
   const month = monthRange(coach.tz, now);
-  const [rows, students, busy, requests, waiting, counts, checks, invite] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id }), inviteCode(db, coach.id)]);
-  // The invitation to pass the assistant on waits until it has earned it: a few students on the list, or a few lessons done.
-  const earned = students.filter((s) => s.status !== "requested").length >= 3 || counts.done >= 5;
+  const [rows, students, busy, requests, waiting, counts, checks, invite] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id }), inviteCode(db, coach)]);
+  // The invitation to pass the assistant on waits until it has earned it: a few students on the list, or a few lessons done, ever.
+  const earned = earnedInvite(students);
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", timeZone: coach.tz }).format(now);
   const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   // The coach may book at short notice: no minimum notice on their own grid.
   const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now });
   return shell(
     <>
-      <CoachHint />
+      <CoachHint present />
       <CoachHome
         handle={coach.handle}
         coachName={coach.displayName}
