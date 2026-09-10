@@ -112,9 +112,9 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
     const parsed = parseAck((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (!parsed) return fallback;
     // The model is asked not to promise a day, a date or an answer; a reply that does anyway is replaced by the pool line, which never does.
-    if (parsed.kind === "not_feedback") return { kind: "not_feedback", reply: parsed.reply && !promisesSomething(parsed.reply) ? parsed.reply : notFeedbackLine(note.locale), by: "model" };
-    if (!parsed.reply || promisesSomething(parsed.reply)) return fallback;
-    return { kind: "feedback", reply: parsed.reply, by: "model" };
+    const usable = Boolean(parsed.reply) && !promisesSomething(parsed.reply);
+    if (parsed.kind === "not_feedback") return { kind: "not_feedback", reply: usable ? parsed.reply : notFeedbackLine(note.locale), by: usable ? "model" : "fallback" };
+    return usable ? { kind: "feedback", reply: parsed.reply, by: "model" } : fallback;
   } catch {
     return fallback;
   }

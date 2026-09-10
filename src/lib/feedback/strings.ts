@@ -27,9 +27,42 @@ const STRINGS = {
   },
 } as const;
 
-/** A line that names a day, a date or an answer to come, in any of the three languages. The pool, the strings, the page copy and the model's own reply are all held to it. */
-export const PROMISE_RE =
-  /\bwithin\b|\btomorrow\b|\b\d+ ?(?:h|hrs?|hours?|days?|weeks?)\b|\bhear back\b|\b(?:I'll|we'll|you'll|I will|we will|you will) (?:answer|reply|respond|get back|write back)\b|\bas soon as\b|\bshortly\b|\bsoon\b|в течение|завтра|\b\d+ ?(?:ч|час|часа|часов|дн|дня|дней|сут|суток|недел)|отвечу|ответим|ответят|отвечаю|отвечают|скоро|в ближайш|\ben (?:un|una|\d+) (?:día|días|hora|horas|semana|semanas)\b|dentro de|mañana|responder(?:é|emos|án)|contestar(?:é|emos)|\bpronto\b|en breve/i;
-export const promisesSomething = (line: string) => PROMISE_RE.test(line);
+/**
+ * Lines that name a day, a date or an answer to come, in three languages: the pool, the strings,
+ * the page copy and the model's own reply are all held to them. A backstop, not a proof: tuned on
+ * the phrasings in tests/feedback.test.ts, and on the reflections a scheduling app gets most
+ * ("the reminder for tomorrow's match", "2 hours before"), which must pass. \b is ASCII-only, so
+ * Russian words are bounded by lookarounds; the text is lowercased and its apostrophes straightened first.
+ */
+const PROMISE_PATTERNS: RegExp[] = [
+  // English
+  /\bwithin (?:a|an|one|two|three|\d+|a few|a couple of|several) (?:minute|hour|day|week|month)s?\b/,
+  /\bin (?:a|an|one|two|three|a few|a couple of|several|\d+) (?:hour|day|week|month)s?\b/,
+  /\b(?:next|this) (?:week|month)\b/,
+  /\btomorrow\b(?!'s)/,
+  /\blater today\b|\bby (?:tonight|today|the end of)\b/,
+  /\bhear back\b|\bget back to you\b|\bin touch\b|\bfollow up\b/,
+  /\bwill (?:answer|reply|respond|write back|get back)\b/,
+  /\b(?:i'll|we'll) (?:answer|reply|respond|write back|get back|be in touch|follow up)\b/,
+  /\bas soon as\b|\bshortly\b/,
+  /\b(?:reply|answer|respond|write|hear|get back|be in touch)\b[^.]{0,24}\bsoon\b/,
+  // Russian
+  /в течение/,
+  /(?<![а-яё])завтра(?![а-яё])/,
+  /на днях|на этой неделе|на следующей неделе|в ближайш/,
+  /через (?:\S+ )?(?:день|дня|дней|недел|час|часа|часов|минут)/,
+  /отвечу|ответим|ответят|отвечаю|отвечают|дам ответ|с ответом|вернусь к вам|(?<![а-яё])скоро(?![а-яё])/,
+  /сегодня (?:напишу|отвечу|ответим)|(?:напишу|отвечу|ответим) сегодня/,
+  // Spanish
+  /\ben (?:un|una|uno|dos|tres|unos|unas|pocos|pocas|un par de|varios|varias|\d+) (?:minutos|hora|horas|día|días|semana|semanas|mes|meses)\b/,
+  /\bdentro de (?:un|una|unos|unas|poco|dos|tres|\d+)\b/,
+  /(?<!\bla |\bde |\besta )\bmañana\b/,
+  /\bpróxima semana\b|\besta semana\b|\blo antes posible\b|\bcuanto antes\b|\ben cuanto pueda\b|\ben breve\b|\bpronto\b/,
+  /\bte (?:respondo|contesto|escribo)\b|responder(?:é|emos|án)|contestar(?:é|emos|án)|\btendrás (?:respuesta|noticias)\b|\bcon (?:una )?respuesta\b/,
+];
+export const promisesSomething = (line: string): boolean => {
+  const s = line.replace(/[\u2018\u2019]/g, "'").toLowerCase();
+  return PROMISE_PATTERNS.some((p) => p.test(s));
+};
 
 export const feedbackStrings = (locale: string | null | undefined) => STRINGS[feedbackLocale(locale)];
