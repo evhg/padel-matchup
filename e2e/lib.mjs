@@ -27,13 +27,14 @@ export async function crashed(browser, results, e, name = "crash") {
   for (const ctx of browser.contexts()) {
     for (const page of ctx.pages()) {
       i++;
+      let text = "(no text)";
       try {
-        const text = (await page.locator("body").innerText({ timeout: 2000 })).replace(/\s+/g, " ").slice(0, 400);
-        console.error(`  page ${i} at ${page.url()}: ${text}`);
+        text = (await page.locator("body").innerText({ timeout: 2000 })).replace(/\s+/g, " ").slice(0, 400);
+      } catch {}
+      console.error(`  page ${i} at ${page.url()}: ${text}`);
+      try {
         await shot(page, `${name}-${i}`);
-      } catch {
-        console.error(`  page ${i} at ${page.url()}: (no text)`);
-      }
+      } catch {}
     }
   }
   results.push({ name, ok: false });

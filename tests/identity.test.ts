@@ -38,8 +38,9 @@ describe("personal link", () => {
     expect(safeNext("//evil.example")).toBeNull();
     expect(safeNext("https://evil.example/")).toBeNull();
     expect(safeNext("/coach?x=1")).toBeNull();
-    expect(safeNext("/" + "a".repeat(41))).toBe("/" + "a".repeat(41));
-    expect(safeNext("/" + "a".repeat(42))).toBeNull();
+    expect(safeNext("/s/wednesday-evening-open-at-padel-club-barcelona-2")).toBe("/s/wednesday-evening-open-at-padel-club-barcelona-2");
+    expect(safeNext("/" + "a".repeat(80))).toBe("/" + "a".repeat(80));
+    expect(safeNext("/" + "a".repeat(81))).toBeNull();
   });
 });
 

@@ -29,13 +29,14 @@ export default async function PersonalPage({ params, searchParams }: { params: P
     player.homescreenAt = new Date();
   }
   const sessionId = await getSessionPlayerId();
-  // A safe internal destination (the bot sends /coach, a match invite its code): straight there once this device holds the identity.
+  // A safe internal destination (the bot sends /coach, a match invite its code): straight there when this device holds the
+  // identity, and through the hand-off route, which sets the cookie and redirects on, when it does not. No client step either way.
   const next = safeNext(sp.next);
-  if (next && sessionId === player.id) redirect(next);
+  if (next) redirect(sessionId === player.id ? next : `/p/${token}/go?next=${encodeURIComponent(next)}`);
   return (
     <>
       <Header minimal />
-      <AdoptToken token={token} needsCookie={sessionId !== player.id} next={next} />
+      <AdoptToken token={token} needsCookie={sessionId !== player.id} />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
         <MyMatches player={player} personalToken={token} />
       </main>
