@@ -6,7 +6,7 @@ import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
 import { searchConsoleEnabled } from "@/lib/search/console";
 import { anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
-import { pacedTarget } from "@/lib/research/budget";
+import { PLAN, pacedTarget } from "@/lib/research/budget";
 
 /**
  * The service board: every service the stack leans on, what we use of it this month,
@@ -67,12 +67,12 @@ async function sumSince(db: Db, keys: string[], sinceDay: string): Promise<Sums>
   return out;
 }
 
-/** The latest day with a value for a key, and that value (snapshots and heartbeats). */
-async function latest(db: Db, key: string): Promise<{ day: string; value: number } | null> {
+/** The newest reading of a gauge; by default a positive one, optionally only from a given day on and zero included (a monthly meter reads 0 on the 1st). */
+async function latest(db: Db, key: string, o: { since?: string; zero?: boolean } = {}): Promise<{ day: string; value: number } | null> {
   const rows = await db
     .select({ day: metricsDaily.day, value: metricsDaily.value })
     .from(metricsDaily)
-    .where(and(sql`${metricsDaily.key} = ${key}`, sql`${metricsDaily.value} > 0`))
+    .where(and(sql`${metricsDaily.key} = ${key}`, ...(o.zero ? [] : [sql`${metricsDaily.value} > 0`]), ...(o.since ? [sql`${metricsDaily.day} >= ${o.since}`] : [])))
     .orderBy(sql`${metricsDaily.day} desc`)
     .limit(1);
   return rows[0] ? { day: rows[0].day, value: Number(rows[0].value) } : null;
@@ -157,19 +157,22 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
     note: reportedUsd !== null ? "Billed figure from the organisation's cost report, refreshed hourly." : `Estimated from our own token counters at ${listenModel()} list prices${anthropicAdminKey() ? "; the cost report could not be read" : "; add ANTHROPIC_ADMIN_KEY for the billed figure"}.`,
   });
   const tavilyOn = Boolean(process.env.TAVILY_API_KEY);
-  const tavilyMeter = await latest(db, "tavily_plan_used");
+  const tavilyMeter = await latest(db, "tavily_plan_used", { since, zero: true });
   const tavilyLimit = (await latest(db, "tavily_plan_limit"))?.value || CEILINGS.tavilyCredits;
   const tavilyUsed = tavilyMeter ? tavilyMeter.value : (month.tavily_calls ?? 0);
+  const tavilyPace = pacedTarget(now, tavilyLimit);
+  // Spent evenly by design, so the raw percentage means nothing here: the alarm is the hard stop, the warning is running ahead of the pace by more than the reserve.
+  const tavilyState: ServiceState = !tavilyOn ? "off" : tavilyUsed >= tavilyLimit - PLAN.hardStop ? "alert" : tavilyUsed > tavilyPace + PLAN.reserve ? "warn" : "ok";
   push({
     key: "tavily",
     name: "Tavily",
     role: "the research desk: listening searches, club and coach discovery, answer grounding",
     used: tavilyOn ? tavilyUsed : null,
     limit: tavilyLimit,
-    usage: tavilyOn ? `${fmt(tavilyUsed)} of ${fmt(tavilyLimit)} credits · even pace says ${fmt(pacedTarget(now, tavilyLimit))} by now` : "off",
+    usage: tavilyOn ? `${fmt(tavilyUsed)} of ${fmt(tavilyLimit)} credits · even pace says ${fmt(tavilyPace)} by now` : "off",
     ceiling: `${fmt(tavilyLimit)} credits / month, spent evenly, the last five never`,
     note: !tavilyOn ? "Free Researcher plan." : tavilyUsed ? (tavilyMeter ? "Tavily's own meter, read hourly." : "Our counter; Tavily's meter has not answered yet.") : "Key stored; the desk starts spending on the next hourly run.",
-    state: tavilyOn ? undefined : "off",
+    state: tavilyState,
   });
   push({ key: "google", name: "Google Search Console", role: "impressions per language, sitemap", used: null, limit: null, usage: searchConsoleEnabled() ? "configured, read weekly" : "off", ceiling: "quota far above our use", note: "Service account; APIs enabled by it.", state: searchConsoleEnabled() ? "ok" : "off" });
   push({ key: "indexnow", name: "IndexNow", role: "Bing, Yandex, Seznam, Naver", used: null, limit: null, usage: `${fmt(month.indexnow_daily ?? 0)} submissions this month`, ceiling: "no practical ceiling", note: "Key file at the domain root.", state: "ok" });
@@ -192,4 +195,4 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
 }
 
 /** Rows that deserve a line on Sunday: anything past sixty percent, plus anything alerting. */
-export const boardHighlights = (board: ServiceBoard): ServiceRow[] => board.rows.filter((r) => r.state === "alert" || (r.pct !== null && r.pct >= 60));
+export const boardHighlights = (board: ServiceBoard): ServiceRow[] => board.rows.filter((r) => r.state === "alert" || r.state === "warn");
