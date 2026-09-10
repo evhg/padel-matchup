@@ -3,6 +3,7 @@ import type { Db } from "@/db";
 import { events, players, scores, slots, type Event, type Player } from "@/db/schema";
 import { venueInCity, type City } from "./cities";
 import { DomainError } from "./errors";
+import { confirmLevel } from "./verify";
 import { isLevelVerified } from "./levels";
 import { tally } from "./scores";
 
@@ -28,12 +29,8 @@ export async function verifyPlayerLevel(db: Db, input: { eventId: string; byPlay
   const [target] = await db.select().from(players).where(eq(players.id, input.playerId)).limit(1);
   if (!target) throw new DomainError("not_found");
   if (target.level == null) throw new DomainError("invalid", "level_required");
-  const [updated] = await db
-    .update(players)
-    .set({ levelVerifiedAt: now, levelVerifiedBy: input.byPlayerId, levelVerifiedLevel: target.level })
-    .where(eq(players.id, target.id))
-    .returning();
-  return updated;
+  // The same stamp a coach or club leaves, with its source, so the organizer's tick counts everywhere the others do.
+  return confirmLevel(db, { playerId: target.id, byPlayerId: input.byPlayerId, source: "organizer", now });
 }
 
 export async function setRankingOptIn(db: Db, playerId: string, on: boolean): Promise<Player> {

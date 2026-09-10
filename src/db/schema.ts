@@ -1391,6 +1391,13 @@ export const levelChecks = pgTable(
     /** The level the verifier confirmed (may differ from what the player declared). */
     decidedLevel: real("decided_level"),
   },
-  (t) => [index("level_checks_player_idx").on(t.playerId), index("level_checks_coach_idx").on(t.coachId), index("level_checks_club_idx").on(t.clubSlug)],
+  (t) => [
+    index("level_checks_player_idx").on(t.playerId),
+    index("level_checks_coach_idx").on(t.coachId),
+    index("level_checks_club_idx").on(t.clubSlug),
+    // One open ask per player and verifier, even when two taps land at once.
+    uniqueIndex("level_checks_pending_coach_uq").on(t.playerId, t.coachId).where(sql`${t.status} = 'pending'`),
+    uniqueIndex("level_checks_pending_club_uq").on(t.playerId, t.clubSlug).where(sql`${t.status} = 'pending'`),
+  ],
 );
 export type LevelCheck = typeof levelChecks.$inferSelect;
