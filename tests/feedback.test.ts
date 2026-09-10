@@ -5,9 +5,10 @@ import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
 import { cleanFeedbackText, createFeedback, decideFeedback, FEEDBACK_LIMITS, feedbackWeek, getFeedback, listFeedback } from "@/lib/feedback/store";
-import { feedbackStrings } from "@/lib/feedback/strings";
+import { feedbackStrings, PROMISE_RE, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
 import { readFileSync } from "node:fs";
+import { llmsTxt } from "@/lib/api/docs";
 import { signSvix } from "@/lib/outreach/svix";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
@@ -206,17 +207,25 @@ describe("the instant reply", () => {
   });
 
   it("promises nothing, anywhere: no day, no date, no answer, in any language", () => {
-    const forbidden = /within a day|usually within|hear back|в течение (суток|дня)|обычно в течение|отвечу вам|en un día|normalmente en un día|te responderé|will answer you|I will answer/i;
+    const forbidden = PROMISE_RE;
+    // The guard itself is not vacuous: every shape of promise the copy has ever carried, and a few it has not, trip it.
+    for (const bad of ["we check each claim within 48 hours", "I will reply tomorrow", "you hear back within a day", "I'll get back to you shortly", "мы ответим в течение недели", "отвечу завтра", "обычно в течение суток", "responderemos en 24 horas", "te contestaré mañana", "normalmente en un día"]) expect(promisesSomething(bad), bad).toBe(true);
     const lines: string[] = [];
     for (const locale of ["en", "ru", "es"] as const) {
       const p = POOL[locale];
       lines.push(...p.open, ...p.openNoName, ...p.mid, ...p.close, ...p.closeNoReply, p.notFeedback);
       const s = feedbackStrings(locale);
-      lines.push(s.how, s.thanks("Olga"), s.added, s.emailSubject, s.emailThanks("Olga"));
+      lines.push(s.how, s.thanks("Olga"), s.added, s.emailSubject, s.tooMany);
       const messages = JSON.parse(readFileSync(`messages/${locale}.json`, "utf8")) as { feedback: Record<string, string>; club: Record<string, string> };
       lines.push(...Object.values(messages.feedback), messages.club.claimSub);
     }
+    lines.push(...llmsTxt("https://kicksma.sh").split("\n").filter((l) => /feedback/i.test(l)));
     for (const line of lines) expect(line, line).not.toMatch(forbidden);
+    // Without a way back the closer names no place in any language; with a way back that is not the page, it names no place either.
+    for (const l of [...POOL.ru.closeNoReply, ...POOL.ru.closeAway]) expect(l).not.toMatch(/здесь|туда/);
+    for (const l of [...POOL.es.closeNoReply, ...POOL.es.closeAway]) expect(l).not.toMatch(/aquí|allí/);
+    for (const l of [...POOL.en.closeNoReply, ...POOL.en.closeAway]) expect(l).not.toMatch(/\bhere\b/);
+    for (let i = 0; i < 12; i++) expect(fallbackAck({ text: `note ${i}`, name: "Olga", locale: "en", source: "web", canReply: true, replyVia: "email" })).not.toMatch(/\bhere\b/);
     // A note with no way back gets a closer that does not say "here".
     const web = fallbackAck({ text: "the reminder should come two hours before", name: "Olga", locale: "en", canReply: false });
     expect(web).not.toMatch(/here|let you know/);
@@ -263,13 +272,23 @@ describe("the instant reply", () => {
     expect(String(tg.at(-1)?.text)).not.toMatch(/Спасибо|Thanks/);
     expect(String(tg.at(-1)?.text)).toContain("что стоит изменить");
 
-    answer = { kind: "feedback", reply: "Vlad, a compliment after a win: I like it, and I will look at how the card could say it. You hear back within a day." };
+    answer = { kind: "feedback", reply: "Vlad, a compliment after a win: I like it, and I will look at how the card could say it. If it gets built, I'll let you know." };
     const ok = await handleTelegramUpdate(db, { update_id: 10, message: { message_id: 92, date: 0, chat: group, from: { ...troll, language_code: "en" }, text: "/feedback when I win a match I'd like a compliment from you" } }, NO_SIDE_EFFECTS);
     expect(ok).toMatch(/^feedback:/);
     expect(String(tg.at(-1)?.text)).toContain("a compliment after a win");
     expect((await getFeedback(db, ok.slice("feedback:".length)))?.status).toBe("acknowledged");
     const direct = await composeAck(db, { text: "hello?", name: null, locale: "en", source: "web" });
     expect(direct.by).toBe("model");
+    // A model reply that promises a day, a date or an answer never reaches anyone: the pool line takes its place.
+    answer = { kind: "feedback", reply: "Thanks Vlad, noted. You hear back within a day." };
+    const guarded = await composeAck(db, { text: "another idea", name: "Vlad", locale: "en", source: "web", canReply: true, replyVia: "telegram" });
+    expect(guarded.by).toBe("fallback");
+    expect(guarded.reply).not.toMatch(PROMISE_RE);
+    expect(guarded.reply).toContain("Vlad");
+    answer = { kind: "not_feedback", reply: "Tell me what should change and I answer within a day." };
+    const guardedNot = await composeAck(db, { text: "lol", name: null, locale: "en", source: "web" });
+    expect(guardedNot.kind).toBe("not_feedback");
+    expect(guardedNot.reply).not.toMatch(PROMISE_RE);
   });
 
   it("when the model fails, the fallback still answers as feedback", async () => {

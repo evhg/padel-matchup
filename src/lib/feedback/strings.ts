@@ -9,22 +9,27 @@ const STRINGS = {
     thanks: (name: string) => `Thanks, ${name}. I read every note myself, and I'll let you know if I build anything from it.`,
     added: "Added to your note, thank you.",
     emailSubject: "Got it, thank you",
-    emailThanks: (name: string) => `Thanks, ${name}.\n\nI read every note myself. If I build anything from yours, I'll let you know here, with what changed.\n\nClaude, for Kicksmash\nhttps://kicksma.sh`,
+    tooMany: "That is plenty for today. Thank you.",
   },
   ru: {
     how: "Напишите, что стоит изменить, своими словами: /feedback и текст. Я читаю каждое сообщение, и если что-то из этого сделаю, напишу здесь.",
     thanks: (name: string) => `Спасибо, ${name}. Я читаю каждое сообщение сам, и если что-то из этого сделаю, напишу здесь.`,
     added: "Добавил к вашей заметке, спасибо.",
     emailSubject: "Получил, спасибо",
-    emailThanks: (name: string) => `Спасибо, ${name}.\n\nЯ читаю каждое сообщение сам. Если что-то из вашей заметки войдёт в Kicksmash, напишу здесь, что именно изменилось.\n\nClaude, для Kicksmash\nhttps://kicksma.sh`,
+    tooMany: "На сегодня достаточно. Спасибо.",
   },
   es: {
     how: "Cuéntame qué debería cambiar, con tus palabras: /feedback y el texto. Leo cada nota, y si construyo algo a partir de ella te lo diré aquí.",
     thanks: (name: string) => `Gracias, ${name}. Leo cada nota yo mismo, y si construyo algo a partir de ella te lo diré aquí.`,
     added: "Añadido a tu nota, gracias.",
     emailSubject: "Recibido, gracias",
-    emailThanks: (name: string) => `Gracias, ${name}.\n\nLeo cada nota yo mismo. Si algo de la tuya entra en Kicksmash, te lo diré aquí, con lo que cambió.\n\nClaude, para Kicksmash\nhttps://kicksma.sh`,
+    tooMany: "Con eso basta por hoy. Gracias.",
   },
 } as const;
+
+/** A line that names a day, a date or an answer to come, in any of the three languages. The pool, the strings, the page copy and the model's own reply are all held to it. */
+export const PROMISE_RE =
+  /\bwithin\b|\btomorrow\b|\b\d+ ?(?:h|hrs?|hours?|days?|weeks?)\b|\bhear back\b|\b(?:I'll|we'll|you'll|I will|we will|you will) (?:answer|reply|respond|get back|write back)\b|\bas soon as\b|\bshortly\b|\bsoon\b|в течение|завтра|\b\d+ ?(?:ч|час|часа|часов|дн|дня|дней|сут|суток|недел)|отвечу|ответим|ответят|отвечаю|отвечают|скоро|в ближайш|\ben (?:un|una|\d+) (?:día|días|hora|horas|semana|semanas)\b|dentro de|mañana|responder(?:é|emos|án)|contestar(?:é|emos)|\bpronto\b|en breve/i;
+export const promisesSomething = (line: string) => PROMISE_RE.test(line);
 
 export const feedbackStrings = (locale: string | null | undefined) => STRINGS[feedbackLocale(locale)];
