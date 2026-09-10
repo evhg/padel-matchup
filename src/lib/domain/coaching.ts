@@ -172,6 +172,9 @@ export async function getCoachForActor(db: Db, playerId: string): Promise<{ coac
 
 export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> => (await getCoachForActor(db, playerId)) !== null;
 
+/** A payment link a student can open: http(s), at least a few characters, no spaces. */
+export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
+
 export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
@@ -184,7 +187,7 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   if (clean.displayName !== undefined) clean.displayName = clean.displayName.replace(/\s+/g, " ").trim().slice(0, 40) || undefined;
   if (clean.whatsapp !== undefined) clean.whatsapp = (clean.whatsapp ?? "").replace(/\D/g, "").slice(0, 15) || null;
   if (clean.promptpayId !== undefined) clean.promptpayId = (clean.promptpayId ?? "").replace(/[^\d+]/g, "").slice(0, 20) || null;
-  if (clean.payLink !== undefined) clean.payLink = /^https?:\/\/\S{4,200}$/.test((clean.payLink ?? "").trim()) ? (clean.payLink ?? "").trim() : null;
+  if (clean.payLink !== undefined) clean.payLink = isPayLink((clean.payLink ?? "").trim()) ? (clean.payLink ?? "").trim() : null;
   if (clean.bio !== undefined) clean.bio = (clean.bio ?? "").replace(/\s+/g, " ").trim().slice(0, 240) || null;
   if (clean.clubNames !== undefined) clean.clubNames = cleanClubNames(clean.clubNames);
   const [row] = await db

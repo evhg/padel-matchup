@@ -1104,6 +1104,7 @@
       "payHelp": "A PromptPay QR with the amount, or your payment link, shown when a package starts. Nothing passes through Kicksmash.",
       "botTitle": "Your assistant in Telegram",
       "botHelp": "Open the bot once from this phone. From then on “anna fri 15” books, “tomorrow” shows the day, and your students write to it and get answered while you teach.",
+      "badPayLink": "The link should start with https://.",
       "botOpen": "Open @{bot}",
       "botAfter": "Then come back here and tap Done.",
       "create": "Set up my assistant",

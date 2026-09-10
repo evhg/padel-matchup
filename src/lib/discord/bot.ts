@@ -1,4 +1,5 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
+import { mintTicket, readTicket } from "@/lib/ticket";
 import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { discordCards, discordChannels, events, players, type DiscordChannel, type Player } from "@/db/schema";
@@ -33,24 +34,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // stranger cannot make the bot post into a server it was not asked from.
 // ---------------------------------------------------------------------------
 const ticketSecret = () => createHash("sha256").update(`discord:${process.env.DISCORD_BOT_TOKEN ?? ""}`).digest("hex");
-const ticketSig = (channelId: string, bucket: number) => createHmac("sha256", ticketSecret()).update(`${channelId}.${bucket}`).digest("hex").slice(0, 20);
 
 export function channelTicket(channelId: string, now = new Date()): string {
-  const bucket = Math.floor(now.getTime() / DAY_MS);
-  return `${channelId}.${bucket}.${ticketSig(channelId, bucket)}`;
+  return mintTicket(ticketSecret(), channelId, { now });
 }
 
 /** The channel id behind a ticket issued in the last two days, or null. */
 export function verifyChannelTicket(ticket: string | null | undefined, now = new Date()): string | null {
-  if (!ticket) return null;
-  const [channelId, b, sig] = ticket.split(".");
-  const bucket = Number(b);
-  if (!/^\d{15,22}$/.test(channelId ?? "") || !Number.isInteger(bucket) || !sig) return null;
-  const current = Math.floor(now.getTime() / DAY_MS);
-  if (bucket !== current && bucket !== current - 1) return null;
-  const want = ticketSig(channelId, bucket);
-  if (want.length !== sig.length) return null;
-  return timingSafeEqual(Buffer.from(want), Buffer.from(sig)) ? channelId : null;
+  const channelId = readTicket(ticketSecret(), ticket, { now });
+  return channelId && /^\d{15,22}$/.test(channelId) ? channelId : null;
 }
 
 // ---------------------------------------------------------------------------

@@ -46,7 +46,7 @@ try {
   check("leave tap works", left.outcome === "leave:left" && left.json?.type === 7);
   const fresh = await interact(command("new", ivan));
   const url = fresh.json?.data?.components?.[0]?.components?.[0]?.url ?? "";
-  check("/new hands out a create link bound to the channel", fresh.outcome === "new" && /[?&]dc=\d+\.\d+\.[0-9a-f]{20}/.test(url), url);
+  check("/new hands out a create link bound to the channel", fresh.outcome === "new" && /[?&]dc=\d{15,22}_[0-9a-z]{1,8}_[0-9a-f]{16}(&|$)/.test(url), url);
   const unknown = await interact(command("match", ivan, { code: "ZZZZ" }));
   check("unknown code: a private note", unknown.outcome === "match_unknown" && unknown.json?.data?.flags === 64);
   const setup = await fetch(`${BASE}/api/discord/setup`);

@@ -18,6 +18,8 @@ import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
+import { playerTicket } from "@/lib/coach/link";
+import { botDeepLink } from "@/lib/telegram/bot";
 import { telegramBotUsername } from "@/lib/telegram/api";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +58,7 @@ export default async function CoachPage({ searchParams }: Props) {
       <>
         {tag}
         {!found && <CoachHint present={false} />}
-        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} botUsername={telegramBotUsername()} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
+        <CoachSetup initialClubs={(sp.club ?? "").slice(0, 80)} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
       </>,
     );
 
