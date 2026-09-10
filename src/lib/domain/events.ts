@@ -355,6 +355,8 @@ export async function cancelEvent(db: Db, eventId: string, actorPlayerId: string
 export const isRosterSlot = (slot: Pick<Slot, "position">, capacity: number) => slot.position <= capacity;
 export const isClaimable = (slot: Pick<Slot, "status">) => slot.status === "empty" || slot.status === "declined";
 export const isOccupied = (slot: Pick<Slot, "status">) => slot.status === "joined" || slot.status === "confirmed";
+/** Does this player hold a real seat on the roster (joined or confirmed)? The waitlist is not a seat. */
+export const isSeated = (detail: { roster: Pick<Slot, "status" | "playerId">[] }, playerId: string | null | undefined): boolean => Boolean(playerId) && detail.roster.some((s) => s.playerId === playerId && isOccupied(s));
 
 /**
  * open ↔ full is derived from roster occupancy. cancelled/past are terminal

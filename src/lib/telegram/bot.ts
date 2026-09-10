@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import type { CreatorKind } from "@/lib/notify";
+import { sendCalendarInvite, type CreatorKind } from "@/lib/notify";
 import { events, players, telegramCards, telegramChats, telegramInlineCards, type Event, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
@@ -399,9 +399,15 @@ async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input
   } catch {
     return { ok: false, reason: "invalid" };
   }
-  await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => undefined);
+  const seated = await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => null);
   await rememberChatDefaults(db, chat, ev);
   const detail = (await getEventByCode(db, ev.code))!;
+  // The organizer's own calendar invitation, as from the web form (the match page says it was sent, so it is): after the reply, only when they hold a seat.
+  if (seated?.outcome === "joined") {
+    ctx.afterwards(async () => {
+      await sendCalendarInvite(db, ev, player, "joined", detail).catch(() => undefined);
+    });
+  }
   await postCard(db, detail, chat, o);
   ctx.emit("match.created", ev.code);
   return { ok: true, ev };

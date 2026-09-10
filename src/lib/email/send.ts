@@ -1,4 +1,5 @@
 import "server-only";
+import { onVercel } from "@/lib/env";
 import { Resend } from "resend";
 import { emailEnabled, emailFrom } from "@/lib/config";
 
@@ -23,10 +24,19 @@ export type OutgoingEmail = {
  * whole email subsystem is silently disabled (decision: deploy never blocks on
  * email DNS), and delivery errors are logged, not surfaced to players.
  */
+let warnedSink = false;
+
 export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
   const r = resend();
   if (!r) return false;
-  if (process.env.EMAIL_SINK_FILE) return sink(msg);
+  // A file sink for local and CI runs only: on Vercel a stray variable must not swallow real mail, and the log says it was ignored.
+  if (process.env.EMAIL_SINK_FILE) {
+    if (!onVercel()) return sink(msg);
+    if (!warnedSink) {
+      warnedSink = true;
+      console.warn("[email] EMAIL_SINK_FILE is set but ignored on Vercel; mail goes out for real");
+    }
+  }
   const from = emailFrom();
   try {
     const { error } = await r.emails.send({
@@ -65,8 +75,13 @@ export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
 
 /** Test servers set EMAIL_SINK_FILE: every message lands there as one JSON line and nothing is sent. */
 async function sink(msg: OutgoingEmail): Promise<boolean> {
-  const { appendFile } = await import("node:fs/promises");
-  const line = { at: new Date().toISOString(), to: msg.to, subject: msg.subject, text: msg.text, ics: msg.ics ?? null };
-  await appendFile(process.env.EMAIL_SINK_FILE!, JSON.stringify(line) + "\n");
-  return true;
+  try {
+    const { appendFile } = await import("node:fs/promises");
+    const line = { at: new Date().toISOString(), to: msg.to, subject: msg.subject, text: msg.text, ics: msg.ics ?? null };
+    await appendFile(process.env.EMAIL_SINK_FILE!, JSON.stringify(line) + "\n");
+    return true;
+  } catch (e) {
+    console.error("[email] sink failed", e);
+    return false;
+  }
 }

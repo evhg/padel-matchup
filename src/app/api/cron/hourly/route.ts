@@ -32,7 +32,8 @@ import { alertOnServices, refreshAnthropicCost } from "@/lib/ops/alerts";
 import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
-import { notifyGroupMatch, notifyLineupChange, notifyPromotion, sendInviteReminder } from "@/lib/notify";
+import { getPlayer } from "@/lib/domain/players";
+import { notifyGroupMatch, notifyLineupChange, notifyPromotion, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
 import { nudgeForScore } from "@/lib/afterMatch";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
@@ -146,7 +147,10 @@ export async function GET(req: Request) {
     const created = await autoCreateGroupMatches(db, now);
     summary.groupMatches = created.length;
     for (const c of created) {
-      await notifyGroupMatch(db, c.group, c.event, null);
+      await notifyGroupMatch(db, c.group, c.event, c.group.creatorPlayerId);
+      // The organizer is seated by the job, so their calendar gets the invitation the web form would have sent, and not the group note as well.
+      const organizer = await getPlayer(db, c.group.creatorPlayerId);
+      if (organizer) await sendCalendarInvite(db, c.event, organizer).catch(() => undefined);
       await emitMatchEvent(db, "match.created", c.event.code, { automatic: true });
     }
   } catch (e) {

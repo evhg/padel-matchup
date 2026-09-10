@@ -22,7 +22,7 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:push": "drizzle-kit push",
+    "db:push": "echo 'db:push is disabled: drizzle-kit would drop the RLS policies it does not know about. Run db:generate and apply the SQL by hand (AGENTS.md rule 7).' && exit 1",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "pnpm db:migrate && pnpm db:seed",
