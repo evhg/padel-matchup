@@ -5,9 +5,10 @@ import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
 import { cleanFeedbackText, createFeedback, decideFeedback, FEEDBACK_LIMITS, feedbackWeek, getFeedback, listFeedback } from "@/lib/feedback/store";
-import { feedbackStrings } from "@/lib/feedback/strings";
+import { feedbackStrings, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
 import { readFileSync } from "node:fs";
+import { llmsTxt } from "@/lib/api/docs";
 import { signSvix } from "@/lib/outreach/svix";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
@@ -108,6 +109,17 @@ describe("the feedback loop", () => {
     expect((await getFeedback(db, id))?.messagesSent).toBe(FEEDBACK_LIMITS.messagesPerItem);
   });
 
+  it("Discord: the note over the daily cap is not stored and is not thanked", async () => {
+    const cap = user(880002, "Cap");
+    for (let i = 0; i < FEEDBACK_LIMITS.perPersonPerDay; i++) await createFeedback(db, { source: "discord", text: `note number ${i} about the card`, locale: "en", name: "Cap", context: null, discordChannelId: "1545987795863085099", discordUserId: cap.id });
+    const before = (await listFeedback(db)).length;
+    const over = await handleInteraction(db, command("feedback", cap, { text: "one more idea about the card" }), NO_SIDE_EFFECTS);
+    expect(over.outcome).toBe("feedback_too_many");
+    expect(over.response.data?.content).toBe(feedbackStrings("en").tooMany);
+    expect(String(over.response.data?.content)).not.toMatch(/Thanks|let you know/);
+    expect((await listFeedback(db)).length).toBe(before);
+  });
+
   it("Discord: /feedback text is stored and answered where it was said", async () => {
     const ben = user(880001, "Ben");
     const handled = await handleInteraction(db, command("feedback", ben, { text: "let /new accept a court number too" }), NO_SIDE_EFFECTS);
@@ -206,17 +218,36 @@ describe("the instant reply", () => {
   });
 
   it("promises nothing, anywhere: no day, no date, no answer, in any language", () => {
-    const forbidden = /within a day|usually within|hear back|в течение (суток|дня)|обычно в течение|отвечу вам|en un día|normalmente en un día|te responderé|will answer you|I will answer/i;
+    // The guard itself is not vacuous: every shape of promise the copy has ever carried, and the ordinary ones it never did, trip it.
+    const bad = [
+      "we check each claim within 48 hours", "I will reply tomorrow", "you hear back within a day", "I'll get back to you shortly", "I\u2019ll get back to you", "in two days", "in a few days", "next week", "later today", "I'll be in touch", "I'll follow up", "Claude will answer you", "I'll reply as soon as I can", "you'll hear from me soon",
+      "мы ответим в течение недели", "отвечу завтра", "обычно в течение суток", "на днях", "через два дня", "через неделю", "на этой неделе", "дам ответ", "вернусь с ответом", "сегодня напишу",
+      "responderemos en 24 horas", "te contestaré mañana", "normalmente en un día", "en unos días", "en dos días", "en un par de días", "la próxima semana", "esta semana", "lo antes posible", "cuanto antes", "en cuanto pueda", "te respondo", "te contesto", "tendrás respuesta",
+    ];
+    for (const l of bad) expect(promisesSomething(l), l).toBe(true);
+    // And the reflections a scheduling app gets most, plus our own honest lines, pass.
+    const good = [
+      "the reminder for tomorrow's match", "a reminder 2 hours before the match", "you'll see it within Kicksmash", "the reminder comes too soon", "Email, so I can answer (optional)", "That is plenty for today. Thank you.", "If anything comes of it, you'll hear from me.",
+      "напоминание о завтрашнем матче", "напоминание в 10 часов", "за 2 часа до матча", "скорость загрузки карточки", "не смогу написать в ответ",
+      "lo verás dentro de la app", "aparecerá dentro de Kicksmash", "el partido de la mañana", "Con eso basta por hoy. Gracias.", "te escribiré a la dirección que dejaste", "para poder responderte",
+    ];
+    for (const l of good) expect(promisesSomething(l), l).toBe(false);
     const lines: string[] = [];
     for (const locale of ["en", "ru", "es"] as const) {
       const p = POOL[locale];
-      lines.push(...p.open, ...p.openNoName, ...p.mid, ...p.close, ...p.closeNoReply, p.notFeedback);
+      lines.push(...p.open, ...p.openNoName, ...p.mid, ...p.close, ...p.closeAway, ...p.closeNoReply, p.notFeedback);
       const s = feedbackStrings(locale);
-      lines.push(s.how, s.thanks("Olga"), s.added, s.emailSubject, s.emailThanks("Olga"));
+      lines.push(s.how, s.thanks("Olga"), s.added, s.emailSubject, s.tooMany);
       const messages = JSON.parse(readFileSync(`messages/${locale}.json`, "utf8")) as { feedback: Record<string, string>; club: Record<string, string> };
       lines.push(...Object.values(messages.feedback), messages.club.claimSub);
     }
-    for (const line of lines) expect(line, line).not.toMatch(forbidden);
+    lines.push(...llmsTxt("https://kicksma.sh").split("\n").filter((l) => /feedback/i.test(l)));
+    for (const line of lines) expect(promisesSomething(line), line).toBe(false);
+    // Without a way back the closer names no place in any language; with a way back that is not the page, it names no place either.
+    for (const l of [...POOL.ru.closeNoReply, ...POOL.ru.closeAway]) expect(l).not.toMatch(/здесь|туда/);
+    for (const l of [...POOL.es.closeNoReply, ...POOL.es.closeAway]) expect(l).not.toMatch(/aquí|allí/);
+    for (const l of [...POOL.en.closeNoReply, ...POOL.en.closeAway]) expect(l).not.toMatch(/\bhere\b/);
+    for (let i = 0; i < 12; i++) expect(fallbackAck({ text: `note ${i}`, name: "Olga", locale: "en", source: "web", canReply: true, replyVia: "email" })).not.toMatch(/\bhere\b/);
     // A note with no way back gets a closer that does not say "here".
     const web = fallbackAck({ text: "the reminder should come two hours before", name: "Olga", locale: "en", canReply: false });
     expect(web).not.toMatch(/here|let you know/);
@@ -247,9 +278,11 @@ describe("the instant reply", () => {
   it("with the model: an insult gets no thanks and is closed at once; real feedback gets its own line", async () => {
     process.env.ANTHROPIC_API_KEY = "test-key";
     const tg: Record<string, unknown>[] = [];
+    const prompts: string[] = [];
     let answer = { kind: "not_feedback", reply: "Мне нечего с этим сделать: напишите одним предложением, что стоит изменить в Kicksmash, и я отвечу в течение суток." };
     vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
       const u = String(url);
+      if (u.includes("api.anthropic.com")) prompts.push(String((JSON.parse(String(init?.body)) as { messages: { content: string }[] }).messages[0].content));
       if (u.includes("api.anthropic.com")) return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(answer) }], usage: { input_tokens: 300, output_tokens: 40 } }), { headers: { "content-type": "application/json" } });
       tg.push(JSON.parse(String(init?.body)));
       return new Response(JSON.stringify({ ok: true, result: { message_id: 5 } }), { headers: { "content-type": "application/json" } });
@@ -263,13 +296,27 @@ describe("the instant reply", () => {
     expect(String(tg.at(-1)?.text)).not.toMatch(/Спасибо|Thanks/);
     expect(String(tg.at(-1)?.text)).toContain("что стоит изменить");
 
-    answer = { kind: "feedback", reply: "Vlad, a compliment after a win: I like it, and I will look at how the card could say it. You hear back within a day." };
+    answer = { kind: "feedback", reply: "Vlad, a compliment after a win: I like it, and I will look at how the card could say it. If it gets built, I'll let you know." };
     const ok = await handleTelegramUpdate(db, { update_id: 10, message: { message_id: 92, date: 0, chat: group, from: { ...troll, language_code: "en" }, text: "/feedback when I win a match I'd like a compliment from you" } }, NO_SIDE_EFFECTS);
     expect(ok).toMatch(/^feedback:/);
     expect(String(tg.at(-1)?.text)).toContain("a compliment after a win");
     expect((await getFeedback(db, ok.slice("feedback:".length)))?.status).toBe("acknowledged");
     const direct = await composeAck(db, { text: "hello?", name: null, locale: "en", source: "web" });
     expect(direct.by).toBe("model");
+    // A model reply that promises a day, a date or an answer never reaches anyone: the pool line takes its place.
+    answer = { kind: "feedback", reply: "Thanks Vlad, noted. You hear back within a day." };
+    const guarded = await composeAck(db, { text: "another idea", name: "Vlad", locale: "en", source: "web", canReply: true, replyVia: "telegram" });
+    expect(guarded.by).toBe("fallback");
+    expect(promisesSomething(guarded.reply)).toBe(false);
+    expect(guarded.reply).toContain("Vlad");
+    // The model is told the real way back: the channel for a web note, "none" when there is none.
+    expect(prompts.at(-1)).toMatch(/source: web\nreply channel: telegram\n/);
+    answer = { kind: "not_feedback", reply: "Tell me what should change and I answer within a day." };
+    const guardedNot = await composeAck(db, { text: "lol", name: null, locale: "en", source: "web", canReply: false });
+    expect(prompts.at(-1)).toMatch(/reply channel: none\n/);
+    expect(guardedNot.kind).toBe("not_feedback");
+    expect(guardedNot.by).toBe("fallback");
+    expect(promisesSomething(guardedNot.reply)).toBe(false);
   });
 
   it("when the model fails, the fallback still answers as feedback", async () => {

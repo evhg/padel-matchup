@@ -310,7 +310,7 @@ async function handleCommand(db: Db, i: DcInteraction, user: DcUser, ctx: OpCont
     const fs = feedbackStrings(locale);
     const who = displayNameOf(user);
     if (text.length < 3) return { response: ephemeral(fs.how.replace("/feedback and the text", "/feedback text").replace("/feedback и текст", "/feedback text").replace("/feedback y el texto", "/feedback text")), outcome: "feedback_short" };
-    if ((await feedbackCountToday(db, { discordUserId: user.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return { response: ephemeral(fs.thanks(who)), outcome: "feedback_too_many" };
+    if ((await feedbackCountToday(db, { discordUserId: user.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return { response: ephemeral(fs.tooMany), outcome: "feedback_too_many" };
     const row = await createFeedback(db, { source: "discord", text, locale, name: who, context: (channel as { name?: string | null }).name ?? null, discordChannelId: channel.channelId, discordUserId: user.id, discordGuildId: channel.guildId });
     const token = i.token;
     // The reply is written for this note; that takes longer than Discord's three seconds, so defer and edit.
