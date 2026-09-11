@@ -86,4 +86,23 @@ describe("the level over time", () => {
     expect(gt.yTicks.map((tk) => tk.label)).toEqual([6, 7]);
     for (const p of gt.points) expect(p.y).toBe(10);
   });
+
+  it("keeps a full level of height at the bottom of the scale too", () => {
+    // A first result from 0 to 0.04: the box cannot grow downwards, so it grows upwards, and the bottom point sits on the padding line.
+    const bottom = levelSeries({ level: 0.04, levelLog: [{ at: "2026-09-01T10:00:00Z", from: 0, to: 0.04, code: "AAAA", type: "match" }] }, NOW)!;
+    expect(bottom.points.map((p) => p.level)).toEqual([0, 0.04, 0.04]);
+    const g = lineGeometry(bottom, 320, 96, 10);
+    expect(g.yTicks.map((tk) => tk.label)).toEqual([0, 1]);
+    expect(g.yTicks[1].label - g.yTicks[0].label).toBeGreaterThanOrEqual(1);
+    expect(g.points[0].y).toBe(86);
+    // 0.04 is a hair above the floor, not halfway up the box.
+    expect(g.points[1].y).toBe(83);
+    // A level that never left 0 draws the same box.
+    const zero = levelSeries({ level: 0, levelLog: [], levelVerifiedAt: new Date(NOW.getTime() - 2 * 86_400_000), levelVerifiedLevel: 0 }, NOW)!;
+    expect(lineGeometry(zero, 320, 96, 10).yTicks.map((tk) => tk.label)).toEqual([0, 1]);
+    // And the top keeps its full level as before.
+    const top = levelSeries({ level: 7, levelLog: [], levelVerifiedAt: new Date(NOW.getTime() - 2 * 86_400_000), levelVerifiedLevel: 7 }, NOW)!;
+    const gt = lineGeometry(top, 320, 96, 10);
+    expect(gt.yTicks[1].label - gt.yTicks[0].label).toBeGreaterThanOrEqual(1);
+  });
 });

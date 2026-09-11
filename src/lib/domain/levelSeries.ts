@@ -47,9 +47,10 @@ export type LineGeometry = { width: number; height: number; path: string; points
 export function lineGeometry(s: LevelSeries, width = 320, height = 96, pad = 10): LineGeometry {
   const t0 = s.points[0].at.getTime();
   const t1 = s.points[s.points.length - 1].at.getTime();
-  const hi = Math.min(LEVEL_MAX, Math.max(Math.floor((s.min - 0.25) * 2) / 2 + 1, Math.ceil((s.max + 0.25) * 2) / 2));
-  // At least one level tall, even at the top of the scale: the box grows downwards there.
-  const lo = Math.max(LEVEL_MIN, Math.min(Math.floor((s.min - 0.25) * 2) / 2, hi - 1));
+  // At least one level tall at both ends of the scale: the floor is clamped first so the box grows upwards from the bottom; at the top, where it cannot, it grows downwards.
+  const floor = Math.max(LEVEL_MIN, Math.floor((s.min - 0.25) * 2) / 2);
+  const hi = Math.min(LEVEL_MAX, Math.max(floor + 1, Math.ceil((s.max + 0.25) * 2) / 2));
+  const lo = Math.min(floor, hi - 1);
   const n = s.points.length;
   const x = (i: number, t: number) => (t1 > t0 ? pad + ((t - t0) / (t1 - t0)) * (width - 2 * pad) : pad + (i / Math.max(1, n - 1)) * (width - 2 * pad));
   const y = (l: number) => pad + (1 - (l - lo) / (hi - lo)) * (height - 2 * pad);

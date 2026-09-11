@@ -661,6 +661,7 @@
     "badLinkBody": "It may be incomplete or expired. Use the link from the email you received."
   },
   "levelCheck": {
+    "alreadyAnswered": "Someone else already answered this one; the list is refreshed.",
     "verifiedOnly": "Confirmed levels only",
     "verifiedOnlyHelp": "A level confirmed by an organizer, a coach or the club walks in; a declared one asks to join.",
     "chip": "confirmed levels",
@@ -760,7 +761,8 @@
     "confirmAll": "Confirm all {count}",
     "confirmOne": "Looks right",
     "confirmed": "Confirmed",
-    "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}"
+    "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}",
+    "changedSince": "Changed since you looked: {names}. The new number is shown; confirm it if it still looks right."
   },
   "card": {
     "title": "Result card",

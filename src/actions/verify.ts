@@ -61,7 +61,7 @@ async function decide(db: Db, id: string, target: LevelCheckTarget, approve: boo
   const admitted = approve ? await admitConfirmed(db, player, byPlayerId) : [];
   after(async () => {
     await notifyLevelCheckDecided(db, { check, player, verifierName, approve: Boolean(approve), admitted });
-    await announceAdmission(db, player, admitted, "coachId" in target ? "coach" : "club");
+    await announceAdmission(db, player, admitted, "coachId" in target ? "coach" : "club", byPlayerId);
   });
   for (const a of admitted) revalidatePath(`/${a.event.code}`);
   return { admitted: admitted.length };

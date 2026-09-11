@@ -14,13 +14,20 @@ export function ConfirmLevels({ code, players }: { code: string; players: Candid
   const [done, setDone] = useState<Set<string>>(() => new Set(players.filter((p) => p.verified).map((p) => p.id)));
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [changed, setChanged] = useState<string[]>([]);
   const left = players.filter((p) => !done.has(p.id));
-  const confirm = (ids: string[]) =>
+  // The tick carries the number shown next to the name: a level that moved since the page was drawn is not confirmed blind, the player is named instead and the fresh number comes back with the page.
+  const confirm = (picks: Candidate[]) =>
     start(async () => {
       setError(null);
-      const r = await verifyLevelsAction(code, ids);
-      if (r.ok) setDone((d) => new Set([...d, ...ids]));
-      else setError(t("errors.generic"));
+      const r = await verifyLevelsAction(code, picks.map((p) => ({ id: p.id, level: p.level })));
+      if (!r.ok) {
+        setError(t("errors.generic"));
+        return;
+      }
+      const skipped = new Set(r.data.skipped.map((s) => s.id));
+      setDone((d) => new Set([...d, ...picks.filter((p) => !skipped.has(p.id)).map((p) => p.id)]));
+      setChanged(r.data.skipped.map((s) => s.name));
     });
   return (
     <section className="card">
@@ -45,7 +52,7 @@ export function ConfirmLevels({ code, players }: { code: string; players: Candid
                 {done.has(p.id) ? (
                   <span className="chip-open shrink-0">✓ {t("level.confirmed")}</span>
                 ) : (
-                  <button type="button" className="btn-secondary btn-xs shrink-0" disabled={pending} onClick={() => confirm([p.id])}>
+                  <button type="button" className="btn-secondary btn-xs shrink-0" disabled={pending} onClick={() => confirm([p])}>
                     {t("level.confirmOne")}
                   </button>
                 )}
@@ -53,10 +60,11 @@ export function ConfirmLevels({ code, players }: { code: string; players: Candid
             ))}
           </ul>
           {left.length > 1 && (
-            <button type="button" className="btn-primary mt-3 w-full" disabled={pending} onClick={() => confirm(left.map((p) => p.id))}>
+            <button type="button" className="btn-primary mt-3 w-full" disabled={pending} onClick={() => confirm(left)}>
               {pending ? t("common.working") : t("level.confirmAll", { count: left.length })}
             </button>
           )}
+          {changed.length > 0 && <p className="mt-2 text-sm text-muted">{t("level.changedSince", { names: changed.join(", ") })}</p>}
           {error && <p className="mt-2 text-sm font-semibold text-danger">{error}</p>}
         </div>
       )}
