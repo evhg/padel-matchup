@@ -4,9 +4,10 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
-import { cleanFeedbackText, createFeedback, decideFeedback, FEEDBACK_LIMITS, feedbackWeek, getFeedback, listFeedback } from "@/lib/feedback/store";
+import { FEEDBACK_LIMITS, cleanFeedbackText, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
+import { formatProposal, parseProposal, proposeToOwner } from "@/lib/feedback/propose";
 import { readFileSync } from "node:fs";
 import { llmsTxt } from "@/lib/api/docs";
 import { signSvix } from "@/lib/outreach/svix";
@@ -326,5 +327,99 @@ describe("the instant reply", () => {
     expect(ack.by).toBe("fallback");
     expect(ack.kind).toBe("feedback");
     expect(ack.reply).toContain("Ana");
+  });
+});
+
+describe("the note is the trigger: a proposal to the owner", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  const tg: Record<string, unknown>[] = [];
+  const stub = (answer: Record<string, unknown> | null) =>
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("api.anthropic.com")) return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(answer) }], usage: { input_tokens: 500, output_tokens: 120 } }), { headers: { "content-type": "application/json" } });
+      tg.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 9 } }), { headers: { "content-type": "application/json" } });
+    });
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+  });
+  afterAll(async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.TELEGRAM_OWNER_ID;
+    await close();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ANTHROPIC_API_KEY;
+    tg.length = 0;
+  });
+
+  it("parses the model's JSON and writes the owner's message: the note as data, the verdict, the change, the size, the two words", () => {
+    const p = parseProposal('{"verdict":"adopt","rule":"rule 2, a default","change":["The reminder goes out two hours before, not one","Copy in en, ru and es"],"size":"small","timeline":"the same day once you say go; an estimate made without reading the code","needs":"nothing","recommendation":"build"}');
+    expect(p?.verdict).toBe("adopt");
+    expect(p?.change).toHaveLength(2);
+    expect(parseProposal('{"verdict":"maybe","size":"small","change":["x"]}')).toBeNull();
+    expect(parseProposal("no json")).toBeNull();
+    const note = { id: "abcdefgh-1234-5678-9abc-def012345678", name: "Olga", source: "telegram", locale: "ru", text: "напоминание за два часа", role: null, createdAt: new Date("2026-09-11T02:00:00Z") };
+    const text = formatProposal(note, p);
+    expect(text).toContain("Feedback from Olga (telegram, ru,");
+    expect(text).toContain("“напоминание за два часа”");
+    expect(text).toContain("Verdict: adopt (rule 2, a default)");
+    expect(text).toContain("- The reminder goes out two hours before, not one");
+    expect(text).toContain("Size and timeline: small;");
+    expect(text).toContain("Say 'build abcdefgh' or 'skip abcdefgh' in your Claude session.");
+    expect(formatProposal({ ...note, role: "coach" }, null)).toContain("Feedback from Olga, a coach");
+    expect(formatProposal(note, null)).toContain("Analysis unavailable");
+  });
+
+  it("sends one proposal per real note, keeps it in the assessment, never twice, never for a note that was not feedback", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    stub({ verdict: "later", rule: "rule 9, a migration", change: ["A new column on players", "The passport shows it"], size: "large", timeline: "the next batch; an estimate made without reading the code", needs: "a migration and your decision", recommendation: "later" });
+    const row = await createFeedback(db, { source: "web", text: "I want my level history on the passport", locale: "en", name: "Sam", context: "/me" });
+    // Before the thank-you it is not yet a real note; the trigger is the acknowledgement.
+    expect(await proposeToOwner(db, row.id)).toBe("skipped:not_feedback");
+    await markAcknowledged(db, row.id, "Thanks, Sam.");
+    expect(await proposeToOwner(db, row.id)).toBe("sent");
+    const msg = tg.at(-1)!;
+    expect(msg.chat_id).toBe(777);
+    const text = String(msg.text);
+    expect(text).toContain("Feedback from Sam (web, en,");
+    expect(text).toContain("level history");
+    expect(text).toContain("Verdict: later (rule 9, a migration)");
+    expect(text).toContain("Size and timeline: large;");
+    expect(text).toContain("Needs: a migration and your decision");
+    expect(text).toContain(`build ${row.id.slice(0, 8)}`);
+    expect(JSON.stringify(msg.reply_markup)).toContain("/admin");
+    const stored = await getFeedback(db, row.id);
+    expect(stored?.status).toBe("acknowledged");
+    expect(stored?.assessment?.startsWith("proposed ")).toBe(true);
+    expect(stored?.assessment).toContain("later, large");
+    expect(await proposeToOwner(db, row.id)).toBe("skipped:already");
+    expect(tg).toHaveLength(1);
+    // Not feedback: closed at the thank-you, nothing to the owner.
+    const troll = await createFeedback(db, { source: "web", text: "you are all idiots", locale: "en", name: null });
+    await markNotFeedback(db, troll.id, "I read everything, but I can only act on what should change.");
+    expect(await proposeToOwner(db, troll.id)).toBe("skipped:not_feedback");
+    expect(tg).toHaveLength(1);
+    expect(await proposeToOwner(db, "00000000-0000-0000-0000-000000000000")).toBe("skipped:not_found");
+  });
+
+  it("without the model the owner still gets the note at once, with a line saying the analysis is missing; without an owner nothing is sent", async () => {
+    stub(null);
+    const row = await createFeedback(db, { source: "discord", text: "the card could show the court number", locale: "es", name: "Lucía" });
+    await markAcknowledged(db, row.id, "Gracias, Lucía.");
+    expect(await proposeToOwner(db, row.id)).toBe("sent");
+    const text = String(tg.at(-1)!.text);
+    expect(text).toContain("court number");
+    expect(text).toContain("Analysis unavailable");
+    expect((await getFeedback(db, row.id))?.assessment).toContain("no analysis");
+    delete process.env.TELEGRAM_OWNER_ID;
+    const other = await createFeedback(db, { source: "web", text: "another idea about the reminder", locale: "en", name: "Sam" });
+    await markAcknowledged(db, other.id, "Thanks.");
+    expect(await proposeToOwner(db, other.id)).toBe("skipped:no_owner");
+    process.env.TELEGRAM_OWNER_ID = "777";
   });
 });

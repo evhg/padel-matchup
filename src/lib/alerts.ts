@@ -17,7 +17,7 @@ export async function reportError(kind: ErrorKind, e?: unknown, ctx: ErrorContex
     const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
     const db = await getDb();
     await bumpMetric(db, `errors_${kind}`);
-    if (e) await recordError(db, kind, e, ctx);
+    if (e) await recordAndAlert(db, kind, e, ctx);
   } catch {
     /* metrics are optional */
   }
@@ -61,6 +61,31 @@ export function fingerprintOf(kind: ErrorKind, message: string, stack: string | 
   const h = createHash("sha1");
   h.update(`${kind}\n${normalizeMessage(message)}\n${topFrame(stack)}`);
   return h.digest("hex").slice(0, 16);
+}
+
+export const ERROR_ALERTS = { perHour: 3 } as const;
+
+/**
+ * A production error the store has never seen is worth one line to the owner, at once: the
+ * error is the trigger, not a morning loop. Repeats stay quiet (the row counts them), client
+ * errors stay quiet (browser noise), and never more than a few lines an hour.
+ */
+export async function recordAndAlert(db: Db, kind: ErrorKind, e: unknown, ctx: ErrorContext = {}, now = new Date()): Promise<ErrorEvent> {
+  const row = await recordError(db, kind, e, ctx, now);
+  if (row.count === 1 && kind !== "client") await alertNewError(db, row, now).catch(() => undefined);
+  return row;
+}
+
+export async function alertNewError(db: Db, row: ErrorEvent, now = new Date()): Promise<boolean> {
+  const [{ ownerTelegramId }, { esc, sendMessage, telegramEnabled }, { baseUrl }] = await Promise.all([import("@/lib/listen/tick"), import("@/lib/telegram/api"), import("@/lib/config")]);
+  const owner = ownerTelegramId();
+  if (!owner || !telegramEnabled()) return false;
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(errorEvents).where(and(gt(errorEvents.firstAt, hourAgo), lt(errorEvents.firstAt, now)));
+  if (Number(n) > ERROR_ALERTS.perHour) return false;
+  const text = `New production error (${row.kind}): ${row.message.slice(0, 200)}${row.path ? ` on ${row.path}` : ""}. Say 'fix errors' in your Claude session.`;
+  const res = await sendMessage(owner, esc(text), { keyboard: { inline_keyboard: [[{ text: "Errors", url: `${baseUrl()}/admin` }]] } });
+  return res.ok;
 }
 
 /** One row per fingerprint; a repeat bumps the count and refreshes the sample. */

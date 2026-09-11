@@ -2,7 +2,9 @@
 
 import { getLocale } from "next-intl/server";
 import { getDb } from "@/db";
+import { after } from "next/server";
 import { composeAck } from "@/lib/feedback/ack";
+import { proposeToOwner } from "@/lib/feedback/propose";
 import { createFeedback, feedbackCountToday, FeedbackError, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { getSessionPlayer } from "@/lib/session";
@@ -38,7 +40,16 @@ export async function sendFeedbackAction(text: string, contact: string, context:
     const replyVia = player?.telegramId ? "telegram" : email ? "email" : null;
     const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web", canReply: replyVia !== null, replyVia });
     if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
-    else await markAcknowledged(db, row.id, ack.reply);
+    else {
+      await markAcknowledged(db, row.id, ack.reply);
+      // The note is the trigger: the owner gets the proposal right after the thank-you, off the request path.
+      const propose = () => proposeToOwner(db, row.id).catch(() => undefined);
+      try {
+        after(propose);
+      } catch {
+        await propose();
+      }
+    }
     return { id: row.id, channel: replyVia ?? "none", kind: ack.kind, reply: ack.reply };
   });
 }

@@ -4,16 +4,33 @@ What the daily session does each morning besides feedback and errors, and the fe
 an outside job must post because the app cannot know them. Everything here uses the
 operator endpoints with the deployment credential; no secret travels.
 
-## Every morning
+## When a note arrives
 
-1. `GET /api/admin/services`: the service board. Any row with `state: "alert"` is work now,
-   in this order: `pg_cron` (jobs not running), `uptime` (site down), `backup` (nightly export
-   missing), `anthropic` (near the cap), `resend_*`, `vercel_analytics`, `supabase_db`. A row
-   at `warn` is a line in the summary, not a task.
+The note is the trigger. The person gets the instant thank-you; the owner gets one Telegram
+message per real note with the verdict the rules give, what would change, the size, a timeline
+estimate (made without reading the code, and saying so), what it needs and a recommendation
+(`src/lib/feedback/propose.ts`, kept in the note's `assessment` under a `proposed <date>:` prefix).
+The owner answers in a Claude session: "build <id8>" or "skip <id8>". The session then reads the
+note (`GET /api/admin/feedback?status=acknowledged`), builds it through the pipeline below, and
+records the outcome with `POST /api/admin/feedback` (`shipped` with a thank-you that names the
+change, or `declined` with the rule, kindly). Nothing is built from a note without the owner's word.
+
+## When an error appears
+
+A production error the store has never seen is one line to the owner at once (`recordAndAlert` in
+`src/lib/alerts.ts`); repeats, client errors and storms stay quiet. The owner says "fix errors" in a
+session; the session reads `GET /api/admin/errors`, fixes through the pipeline, and records
+`POST /api/admin/errors { fingerprint, note }`. Outages reach the owner from the uptime probe
+directly. There is no daily loop and no three-hourly wake-up since 11 September.
+
+## The service board
+
+1. `GET /api/admin/services`: any row with `state: "alert"` is work now, in this order: `pg_cron`
+   (jobs not running), `uptime` (site down), `backup` (nightly export missing), `anthropic` (near
+   the cap), `resend_*`, `vercel_analytics`, `supabase_db`. A row at `warn` is a line in a report.
 2. The owner is told once per service per month by the hourly job when a row crosses 85% or
-   turns red; the session does not repeat the message. It fixes what it can and says so in
-   the pull request.
-3. `GET /api/admin/errors` and `GET /api/admin/feedback` as before (see `docs/DECIDING.md`).
+   turns red; a session does not repeat the message. It fixes what it can and says so in the
+   pull request.
 
 ## Once a week (Monday)
 
@@ -52,3 +69,54 @@ The free plan gives a thousand search credits a month. The hourly job spends the
 ## The Sunday digest, one line to watch
 
 `Funnel: visitors → matches → seats → scores → card views` is the week in five numbers: page renders (bots excluded), matches created, joins, matches with a result, result-card renders. A step that does not move for four weeks gets a design change, not a marketing push. The score nudge (every player, once, on their channel) and "same time next week?" exist to move the last three.
+
+## Handover for a fresh session
+
+Everything a session needs to continue the work is in the repository and in the plan; a fresh
+session reads this file, `AGENTS.md`, `docs/DECIDING.md` and the plan, and knows what the owner
+and the previous session knew.
+
+**The plan** is the artifact "Kicksmash Open Court Plan" at
+https://claude.ai/code/artifact/00649e1d-fa25-4831-9411-e31c98d1b7d2 (revision 28 on 11 September).
+It is the record of every decision. Publish a new revision once per batch, never per pull request,
+and always call the Artifact tool's `read` action on that URL before publishing (the gate refuses a
+publish that was not built on the live version).
+
+**Standing rules from the owner** (in force since 8 to 11 September): the owner is non-technical
+and only creates accounts, taps approvals and pays; times to the owner in Thailand time; never
+post anywhere public, never email anyone, never spend money, never commit a secret; anything
+outward-facing (press, founding-club emails, Reddit, Hacker News) waits for the owner's tap in
+Telegram; free tiers until fifty emails a day; Porkbun keys stay out of Vercel; personal tokens
+and manage links never in public data; never interpolate a `Date` into a raw `sql` template;
+`pnpm db:push` is disabled (it would drop the RLS policies), migrations go through
+`pnpm db:generate` and are applied to the Supabase project with `SET LOCAL lock_timeout = '5s'`
+plus a row in `drizzle.__drizzle_migrations`; no model identifiers in commits, pull requests or
+code; commits end with the `Co-Authored-By` and `Claude-Session` trailers; three languages with
+identical message keys; a unit test with every change; a browser suite where pages or bots change.
+
+**The pipeline** (owner's word, 10 September): one pull request per feature or area with its
+adversarial review run while CI runs and fixed on the same branch before merging; locally only
+typecheck, lint, the touched unit files and the one browser suite that covers the change
+(`pnpm build && E2E_ONLY=<suite> pnpm e2e`); CI runs everything; squash-merge; reset the working
+branch `claude/kicksma-sh-domain-pvqrkb` onto main; a health check after each deploy and the full
+production check once per batch; side branches `claude/kicksma-sh-domain-pvqrkb-<topic>` for
+disjoint parallel work; never stop with work in the queue, book a return when waiting; end every
+batch with three lines: what shipped, what is next, what needs the owner.
+
+**Operator endpoints** (bearer `CRON_SECRET`, also accepted: the Vercel token):
+`/api/admin/errors`, `/api/admin/services`, `/api/admin/feedback`, `/api/admin/research`,
+`/api/admin/answers` (answer pages, IndexNow on publish), `/api/admin/outreach` (the press desk:
+drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
+Telegram), `/api/admin/metrics`.
+
+**Checks and scripts** in `scripts/ops/`: `prodcheck.sh` (health, errors, services, open notes,
+research desk, main CI, deploy), `wait_ci.sh <branch> <sha>`, `deploy-poll.sh <sha> <log>`. They
+read `CRON_SECRET` (or `OPERATOR_TOKEN`) and `VERCEL_TOKEN` from the environment.
+
+**State of play on 11 September:** the product through round eleven is live and reviewed
+(pull requests #1 to #93); the launch calendar runs (press emails on 15 September with the owner's
+tap, Show HN in week three, builders' articles live as answer pages, founding-club drafts queued
+for 6 October, directory texts in `docs/launch/directories.md`); the Russian answer series adds
+three pages a week; the research desk spends Tavily's credits evenly. Open items that need the
+owner: introduce the two pilot coaches, the ten-minute coach setup test, the Phuket field test,
+the taps above.

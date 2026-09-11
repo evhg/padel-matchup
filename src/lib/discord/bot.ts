@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
 import { composeAck } from "@/lib/feedback/ack";
+import { proposeToOwner } from "@/lib/feedback/propose";
 import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { formatEventTime } from "@/lib/dates";
@@ -321,7 +322,10 @@ async function handleCommand(db: Db, i: DcInteraction, user: DcUser, ctx: OpCont
         const ack = await composeAck(db, { text, name: who, locale, source: "discord" });
         const res = await editOriginalResponse(token, { content: ack.reply });
         if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
-        else if (res.ok) await markAcknowledged(db, row.id, ack.reply);
+        else if (res.ok) {
+          await markAcknowledged(db, row.id, ack.reply);
+          await proposeToOwner(db, row.id).catch(() => undefined);
+        }
       },
     };
   }

@@ -1,6 +1,6 @@
 # How Kicksmash decides what to build
 
-The daily checklist that goes with this yardstick is in `docs/OPERATING.md` (the service board, the weekly domain check). This is the yardstick for every idea, bug report and wish that reaches us, whoever brings it: a player on Telegram, a club by email, a developer in Discussions, or the daily session reading `/api/admin/feedback`. It is short on purpose. If a request fails a rule here, we say so kindly and honestly; if it passes, we ship it and tell the person what changed because of them.
+The daily checklist that goes with this yardstick is in `docs/OPERATING.md` (the service board, the weekly domain check). This is the yardstick for every idea, bug report and wish that reaches us, whoever brings it: a player on Telegram, a club by email, a developer in Discussions, or the proposal the app sends the owner the moment a note arrives. It is short on purpose. If a request fails a rule here, we say so kindly and honestly; if it passes, we ship it and tell the person what changed because of them.
 
 ## What we are
 
@@ -20,6 +20,9 @@ The first global padel match-up layer: one link that works in any chat, a card t
 10. **Honest answers.** We tell people what we did, what we did not do, and why, in their language, in one message. We never promise a date. We say thank you when their note changed the product, and we name the change. We owe nobody an answer: the thank-you says the note was read and that the person hears if something gets built, never "within a day". A shipped message is one plain sentence in the first person, what changed and nothing else: no desk, no dates, no process.
 
 ## Verdicts
+
+Since 11 September the owner decides what gets built. The moment a real note is acknowledged, the app sends the owner the verdict below together with what would change, a size, a timeline estimate and a recommendation (`src/lib/feedback/propose.ts`); nothing is built from a note without the owner's word, and the person hears only what shipped. The verdicts are the yardstick's answer, not an automatic action.
+
 
 - **adopt**: passes the rules, fits in a day, has a test. Ship, verify in production, then tell the person exactly what changed and thank them.
 - **later**: valid, but bigger than a day or blocked by rule 8 or 9. Record it as planned, tell the person it is on the list and why it waits. When it ships, tell them again.
