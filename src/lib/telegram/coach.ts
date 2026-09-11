@@ -216,19 +216,29 @@ async function studentFlow(db: Db, player: Player, coaches: Pick<StudentCoach, "
   const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
   const tapped = menuWord(rawText);
   const text = tapped === "lessons" || tapped === "left" ? tapped : rawText;
-  if (mine.length === 0) {
-    // Every coach has this student paused: a button or a booking line gets the pause and the way to the coach; ordinary text stays ordinary.
-    const paused = coaches.filter((c) => c.status === "paused");
-    if (paused.length === 0 || (!tapped && parseStudentLine(text, { now, tz: paused[0].coach.tz }).kind === "help")) return null;
-    await say(paused.map((c) => s.paused(c.coach.displayName)).join("\n"));
-    return "student:paused";
-  }
-  const tz = mine[0].coach.tz;
+  const paused = mine.length === 0 ? coaches.filter((c) => c.status === "paused") : [];
+  if (mine.length === 0 && paused.length === 0) return null;
+  const tz = (mine[0] ?? paused[0]).coach.tz;
+  const pausedLine = () => paused.map((c) => s.paused(c.coach.displayName)).join("\n");
   if (tapped === "book") {
-    await say(s.menuBookHowStudent);
-    return "student:book_how";
+    await say(mine.length ? s.menuBookHowStudent : pausedLine());
+    return mine.length ? "student:book_how" : "student:paused";
   }
   const intent = parseStudentLine(text, { now, tz });
+  if (mine.length === 0) {
+    // Every coach has this student paused: the lessons already booked can still be seen and cancelled; a booking line or the other buttons get the pause and the way to the coach; ordinary text stays ordinary.
+    if (intent.kind === "help" && !tapped) return null;
+    if (intent.kind === "lessons") {
+      const rows = (await listStudentLessons(db, player.id, now)).filter((l) => l.status === "booked").slice(0, 6);
+      const list = rows.map((l) => `🎾 ${whenLabel(l.startsAt, l.coach.tz, locale)} ${s.withCoach(l.coach.displayName)}`).join("\n");
+      await say(`${list ? `${list}\n` : ""}${pausedLine()}`, rows.length ? kb(rows.map((l) => [{ text: `✕ ${whenLabel(l.startsAt, l.coach.tz, locale)}`, callback_data: `lc:${l.id}` }])) : undefined);
+      return "student:paused";
+    }
+    if (intent.kind !== "cancel") {
+      await say(pausedLine());
+      return "student:paused";
+    }
+  }
 
   if (intent.kind === "help") return null;
   if (intent.kind === "left") {

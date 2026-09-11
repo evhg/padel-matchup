@@ -1075,10 +1075,10 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
 }
 
 /** A role's button or command from someone who has no role (any more): the message, and the role's keyboard and chat commands go with it; both calls are no-ops where nothing was set. */
-async function roleEnded(chatId: number, text: string): Promise<string> {
+async function roleEnded(chatId: number, text: string, outcome = "private_role_ended"): Promise<string> {
   await sendMessage(chatId, esc(text), { keyboard: { remove_keyboard: true }, silent: true });
   await deleteChatCommands(chatId).catch(() => undefined);
-  return "private_role_ended";
+  return outcome;
 }
 
 async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<string> {
@@ -1132,7 +1132,8 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       // The role's commands: /lessons is the student's list, the others are the same words the assistant reads.
       const player = await findOrCreateTelegramPlayer(db, from);
       const resolved = await resolveRole(db, player);
-      // From someone without the role (any more): the general help, and the role's keyboard and commands go with it.
+      // From someone without the role (any more): /lessons sits in everyone's menu, so it gets the student's line about being accepted first; the coach's commands get the general help. Either way the role's keyboard and commands go with it.
+      if (!resolved && cmd.command === "lessons") return roleEnded(chat.chatId, coachStrings(coachBotLocale(player.locale)).notStudent, "student:none");
       if (!resolved) return roleEnded(chat.chatId, s.privateHelp);
       if (cmd.command === "lessons" && (resolved.kind === "coach" || resolved.coaches.some((c) => c.status === "accepted"))) return lessonsFor(db, player, chat.chatId);
       const assisted = await coachAssistantMessage(db, { ...msg, text: cmd.command }, from, player, resolved);
@@ -1220,13 +1221,22 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   const bare = isPrivate && codes.length === 0 && msg.text && isValidShareCode(msg.text.trim()) ? msg.text.trim() : null;
   const player = isPrivate && codes.length === 0 ? await findOrCreateTelegramPlayer(db, from) : null;
   const resolved = player ? await resolveRole(db, player) : null;
+  let bareMissed = false;
   if (player && resolved) {
-    // A coach or a student is answered by their assistant first: "Week" is a button before it is a code, even when a match answers to it. A code-shaped word the book cannot read is looked up as a match before the book's help.
+    // A menu word ("Week", "Book") is the assistant's before it is a code, even when a match answers to it. Any other code-shaped word is a match first (a code that spells "busy" or "9h45" must not block a day or book a lesson), and the book reads it only when no match answers.
+    if (bare && !menuWord(bare)) {
+      const detail = await getEventByCode(db, bare);
+      if (detail) {
+        await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });
+        return "card";
+      }
+      bareMissed = true;
+    }
     const assisted = await coachAssistantMessage(db, msg, from, player, resolved, { deferHelp: Boolean(bare) });
     if (assisted) return assisted;
   }
   let posted = 0;
-  for (const code of [...codes, ...(bare ? [bare] : [])].slice(0, 2)) {
+  for (const code of [...codes, ...(bare && !bareMissed ? [bare] : [])].slice(0, 2)) {
     const detail = await getEventByCode(db, code);
     if (!detail) continue;
     await postCard(db, detail, chat, { replyTo: msg.message_id, threadId });

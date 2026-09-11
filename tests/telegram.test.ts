@@ -8,7 +8,7 @@ import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { autoCreateGroupMatches, createGroup, updateGroup } from "@/lib/domain/groups";
 import { setTournamentLock } from "@/lib/domain/tournament";
-import { createCoach, presetHours, setStudentStatus } from "@/lib/domain/coaching";
+import { bookLesson, createCoach, presetHours, setStudentStatus } from "@/lib/domain/coaching";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
 import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
@@ -587,6 +587,11 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     const [me] = await db.select().from(players).where(eq(players.telegramId, 95));
     const olga = await makePlayer(db, "Olga");
     const coach = await createCoach(db, { playerId: olga.id, displayName: "Olga", clubNames: "Warehaus", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok" });
+    // Asked but not yet accepted: /lessons, which sits in everyone's menu, says so instead of the general help.
+    await setStudentStatus(db, coach.id, me.id, "requested");
+    calls = [];
+    expect(await send(729, "/lessons")).toBe("student:none");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/accept/i);
     await setStudentStatus(db, coach.id, me.id, "accepted");
     calls = [];
     expect(await send(731, "/start")).toBe("student_menu");
@@ -603,15 +608,21 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(732, "🎾 My lessons")).toBe("student:lessons");
     expect(sent("deleteMyCommands")).toHaveLength(0);
-    // Paused by the coach: the role and its menu stay, the buttons and /lessons answer with the pause, ordinary text stays ordinary and nothing is taken away.
+    // A lesson booked while accepted, then paused by the coach: the role and its menu stay, the buttons and /lessons answer with the pause and still show the booked lesson with its cancel button, ordinary text stays ordinary and nothing is taken away.
+    const inThreeDays = new Date(Math.floor((Date.now() + 3 * 86400000) / 3600000) * 3600000);
+    await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: inThreeDays, byCoach: true, source: "telegram", createdByPlayerId: olga.id });
     await setStudentStatus(db, coach.id, me.id, "paused");
     calls = [];
     expect(await send(740, "/start")).toBe("student_menu");
     calls = [];
     expect(await send(741, "🎾 My lessons")).toBe("student:paused");
     expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("paused");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("lc:");
     expect(await send(742, "/lessons")).toBe("student:paused");
     expect(sent("deleteMyCommands")).toHaveLength(0);
+    // The booked lesson can still be cancelled from the bot while paused.
+    calls = [];
+    expect(await send(746, "cancel")).toMatch(/^student:cancel/);
     calls = [];
     expect(await send(743, "hello?")).toBe("private_other");
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup ?? {})).not.toContain("remove_keyboard");
@@ -621,9 +632,10 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await send(733, "🎾 My lessons")).toBe("private_role_ended");
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
     expect(sent("deleteMyCommands")).toHaveLength(1);
-    // So does the role's command from the stale "/" menu.
+    // So does the role's command from the stale "/" menu; /lessons, which everyone has, says what a student would need to hear.
     calls = [];
-    expect(await send(744, "/lessons")).toBe("private_role_ended");
+    expect(await send(744, "/lessons")).toBe("student:none");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/accept/i);
     expect(sent("deleteMyCommands")).toHaveLength(1);
     // Ordinary text after that is the ordinary help; nothing left to take away.
     calls = [];
