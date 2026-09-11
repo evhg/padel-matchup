@@ -1042,7 +1042,7 @@ export function codesInText(text: string | undefined, base = baseUrl()): string[
   return [...new Set(out)];
 }
 
-/** /feedback and your words: stored, thanked at once; the daily session reads it and tells the person here if something gets built. */
+/** /feedback and your words: stored, thanked at once; the owner gets the proposal, and the person hears here if something gets built. */
 async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, locale: BotLocale, ctx: OpContext): Promise<string> {
   const fs = feedbackStrings(locale);
   const text = args.trim();

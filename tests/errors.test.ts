@@ -76,8 +76,17 @@ describe("production error store", () => {
       await recordAndAlert(db, "client", new Error("ResizeObserver loop limit exceeded"), {}, new Date(t.getTime() + 1500));
       expect(tg).toHaveLength(1);
       for (const [i, w] of ["alpha", "beta", "gamma", "delta", "epsilon"].entries()) await recordAndAlert(db, "server", new Error(`storm ${w} failed`), {}, new Date(t.getTime() + 2000 + i));
-      expect(tg.length).toBeLessThanOrEqual(1 + ERROR_ALERTS.perHour);
+      expect(tg.length).toBeLessThanOrEqual(ERROR_ALERTS.perHour);
       expect(tg.length).toBeGreaterThan(1);
+      // Marked fixed, then back: one more line, saying so; a repeat after that stays quiet.
+      const later = new Date(t.getTime() + 2 * 60 * 60_000);
+      await markErrorFixed(db, first.fingerprint, "PR 99", new Date(t.getTime() + 60 * 60_000));
+      const n = tg.length;
+      await recordAndAlert(db, "cron", new Error("Tavily timed out"), {}, later);
+      expect(tg).toHaveLength(n + 1);
+      expect(String(tg.at(-1)!.text)).toContain("came back after the fix");
+      await recordAndAlert(db, "cron", new Error("Tavily timed out"), {}, new Date(later.getTime() + 1000));
+      expect(tg).toHaveLength(n + 1);
     } finally {
       vi.unstubAllGlobals();
       delete process.env.TELEGRAM_OWNER_ID;
