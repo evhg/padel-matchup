@@ -67,13 +67,10 @@ try {
       check("opening the bot from the setup binds that Telegram account to the coach", linked.outcome === "coach_linked", JSON.stringify(linked));
       const agenda = await hook({ update_id: 900002, message: { message_id: 900002, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: "tomorrow" } });
       check("the bound account runs the coach's book from the chat", agenda.outcome === "coach:agenda", JSON.stringify(agenda));
-      // The ticket is salted with the binding: the moment Olga is bound, the ticket that bound her is dead, so a second account replaying it gets nothing; a ticket with one character changed is dead too.
+      // The ticket is salted with the binding: the moment Olga is bound, the ticket that bound her is dead, so a second account replaying it gets nothing.
       const rawTicket = decodeURIComponent(ticket ?? "");
       const replayed = await hook({ update_id: 900003, message: { message_id: 900003, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${rawTicket}` } });
       check("the ticket that bound the coach is dead once she is bound: replayed from a second Telegram account it is refused as expired", replayed.outcome === "coach_link_expired", JSON.stringify(replayed));
-      const tampered = rawTicket.slice(0, -1) + (rawTicket.endsWith("0") ? "1" : "0");
-      const dead = await hook({ update_id: 900004, message: { message_id: 900004, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${tampered}` } });
-      check("a tampered ticket is refused as expired", dead.outcome === "coach_link_expired", JSON.stringify(dead));
       await done.click();
     } else if (await later.count()) await later.first().click();
     else break;
@@ -108,8 +105,12 @@ try {
   }
   const freshHref = await olga.getByTestId("open-bot").getAttribute("href");
   const freshTicket = decodeURIComponent(freshHref?.match(/start=coach_([^&]+)/)?.[1] ?? "");
+  // First with its last character changed: dead. Then intact: refused, because the assistant is bound to Olga's account already.
+  const tampered = freshTicket.slice(0, -1) + (freshTicket.endsWith("0") ? "1" : "0");
+  const dead = await hook({ update_id: 900004, message: { message_id: 900004, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${tampered}` } });
+  check("a live ticket with one character changed is refused as expired", Boolean(freshTicket) && dead.outcome === "coach_link_expired", JSON.stringify(dead));
   const other = await hook({ update_id: 900005, message: { message_id: 900005, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${freshTicket}` } });
-  check("a live ticket opened from a second Telegram account is refused: the assistant stays with the first", Boolean(freshTicket) && other.outcome === "coach_link_other", JSON.stringify(other));
+  check("the intact live ticket from a second Telegram account is refused: the assistant stays with the first", other.outcome === "coach_link_other", JSON.stringify(other));
   const still = await hook({ update_id: 900006, message: { message_id: 900006, date: 0, chat: { id: 616161, type: "private" }, from: { id: 616161, is_bot: false, first_name: "Olga", username: "olga_coach_e2e" }, text: "tomorrow" } });
   check("and the first account still runs the book", still.outcome === "coach:agenda", JSON.stringify(still));
 
@@ -213,15 +214,19 @@ try {
   check("My matches lists the lesson among the upcoming things, with the package line", (await ivan.getByText("Lesson with Olga").count()) === 1 && (await ivan.getByText(/9 of 10 left/).count()) === 1 && (await ivan.getByTestId("book-more").count()) === 1);
   check("the lesson row leads to the coach's page", ((await ivan.getByTestId("lesson-row").first().locator("a").getAttribute("href")) ?? "").startsWith("/c/"));
 
-  // The chain: Olga books Pavel tomorrow; Ivan waits for that exact time; Olga cancels; Ivan is offered it and takes it.
+  // The chain: Olga books Pavel on the next day with a free time (a weekend day is off in her hours); Ivan waits for that exact time; Olga cancels; Ivan is offered it and takes it.
   await olga.goto(BASE + "/coach");
   await olga.getByRole("button", { name: "Book a lesson" }).click();
   await olga.locator("#book-student").waitFor({ timeout: 10000 });
   await olga.locator("#book-student").selectOption({ label: "Pavel" });
   const olgaForm = olga.locator("form");
-  const tomorrowChip = olgaForm.locator('button[data-kind="day"]').nth(1);
-  const dayText = (await tomorrowChip.textContent())?.trim() ?? "";
-  await tomorrowChip.click();
+  const olgaDays = olgaForm.locator('button[data-kind="day"]');
+  let dayText = "";
+  for (let i = 1, n = await olgaDays.count(); i < Math.min(n, 15) && !dayText; i++) {
+    await olgaDays.nth(i).click();
+    if ((await olgaForm.locator('button[data-kind="time"]').count()) > 0) dayText = (await olgaDays.nth(i).textContent())?.trim() ?? "";
+  }
+  check("the coach's book has a free day after today for the chain", dayText !== "", dayText);
   const lastTime = olgaForm.locator('button[data-kind="time"]').last();
   const timeText = (await lastTime.textContent())?.trim() ?? "";
   await lastTime.click();

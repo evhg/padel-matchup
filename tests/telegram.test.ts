@@ -563,6 +563,20 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(723, "Week")).toMatch(/^coach:/);
     expect(await send(724, "Week")).not.toBe("card");
+    // A real match code typed bare is still the card; a four-letter word nobody answers to is the book's help.
+    const { ev } = await match();
+    calls = [];
+    expect(await send(725, ev.code)).toBe("card");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("Rawai Padel Club");
+    calls = [];
+    expect(await send(726, "Zzq9")).toBe("coach:help");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("anna fri 15");
+    // The book archived: the role's command from the stale "/" menu gets the general help, and the keyboard and the commands go.
+    await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.playerId, me.id));
+    calls = [];
+    expect(await send(727, "/today")).toBe("private_role_ended");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
+    expect(sent("deleteMyCommands")).toHaveLength(1);
   });
 
   it("a student's private chat: /start gives the student's menu and the personal link; once the coach is gone, a tapped button takes the keyboard and the commands away", async () => {
@@ -589,11 +603,27 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(732, "🎾 My lessons")).toBe("student:lessons");
     expect(sent("deleteMyCommands")).toHaveLength(0);
+    // Paused by the coach: the role and its menu stay, the buttons and /lessons answer with the pause, ordinary text stays ordinary and nothing is taken away.
+    await setStudentStatus(db, coach.id, me.id, "paused");
+    calls = [];
+    expect(await send(740, "/start")).toBe("student_menu");
+    calls = [];
+    expect(await send(741, "🎾 My lessons")).toBe("student:paused");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("paused");
+    expect(await send(742, "/lessons")).toBe("student:paused");
+    expect(sent("deleteMyCommands")).toHaveLength(0);
+    calls = [];
+    expect(await send(743, "hello?")).toBe("private_other");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup ?? {})).not.toContain("remove_keyboard");
     // The coach archives the book: the next tap on the old keyboard gets the general help, and the keyboard and the role's commands go with it.
     await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.id, coach.id));
     calls = [];
     expect(await send(733, "🎾 My lessons")).toBe("private_role_ended");
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
+    expect(sent("deleteMyCommands")).toHaveLength(1);
+    // So does the role's command from the stale "/" menu.
+    calls = [];
+    expect(await send(744, "/lessons")).toBe("private_role_ended");
     expect(sent("deleteMyCommands")).toHaveLength(1);
     // Ordinary text after that is the ordinary help; nothing left to take away.
     calls = [];
