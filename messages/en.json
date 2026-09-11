@@ -1069,6 +1069,7 @@
     "tooMany": "That is plenty for today. Thank you.",
     "footerLink": "Feedback",
     "viaTelegram": "You signed in with Telegram; if I build anything from this, that is where you hear it.",
+    "viaEmail": "If I build anything from this, the note comes to the address you gave.",
     "notFeedback": "That one I cannot act on.",
     "tryAgain": "Write it differently"
   },

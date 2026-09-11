@@ -17,6 +17,7 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
         <h2 className="text-xl font-extrabold">{state.feedback ? "✅" : "💬"} {state.feedback ? t("sent") : t("notFeedback")}</h2>
         <p className="mt-2 text-sm text-ink-soft">{state.reply}</p>
         {state.feedback && state.channel === "telegram" && <p className="mt-2 text-sm text-muted">{t("viaTelegram")}</p>}
+        {state.feedback && state.channel === "email" && <p className="mt-2 text-sm text-muted">{t("viaEmail")}</p>}
         {!state.feedback && (
           <button type="button" className="btn-secondary btn-sm mt-3" onClick={() => setState({ kind: "idle" })}>
             {t("tryAgain")}

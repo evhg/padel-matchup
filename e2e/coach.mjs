@@ -220,11 +220,16 @@ try {
   await olga.locator("#book-student").waitFor({ timeout: 10000 });
   await olga.locator("#book-student").selectOption({ label: "Pavel" });
   const olgaForm = olga.locator("form");
+  // The next day with a free time, not "tomorrow": Saturday and Sunday are off in this suite, so a run on a Friday or a Saturday finds none tomorrow.
   const olgaDays = olgaForm.locator('button[data-kind="day"]');
   let dayText = "";
+  let dayOffset = 1;
   for (let i = 1, n = await olgaDays.count(); i < Math.min(n, 15) && !dayText; i++) {
     await olgaDays.nth(i).click();
-    if ((await olgaForm.locator('button[data-kind="time"]').count()) > 0) dayText = (await olgaDays.nth(i).textContent())?.trim() ?? "";
+    if ((await olgaForm.locator('button[data-kind="time"]').count()) > 0) {
+      dayText = (await olgaDays.nth(i).textContent())?.trim() ?? "";
+      dayOffset = i;
+    }
   }
   check("the coach's book has a free day after today for the chain", dayText !== "", dayText);
   const lastTime = olgaForm.locator('button[data-kind="time"]').last();
@@ -259,7 +264,7 @@ try {
 
   // A special request outside the hours: Ivan asks for tomorrow 23:30; Olga says yes from her book.
   await ivan.getByTestId("other-time").click();
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + dayOffset * 86400000).toISOString().slice(0, 10);
   await ivan.locator('input[type="datetime-local"]').fill(`${tomorrow}T23:30`);
   await ivan.getByPlaceholder("A word for the coach, optional").fill("after work?");
   await ivan.getByRole("button", { name: "Ask Olga" }).click();
