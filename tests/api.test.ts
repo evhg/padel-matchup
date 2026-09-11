@@ -60,13 +60,15 @@ describe("public shapes", () => {
 
 describe("operations", () => {
   it("createMatch: validates, creates the organizer, returns links; joinMatch handles levels and tokens", async () => {
-    const r = await createMatch(db, { startsAt: "2026-09-11T19:00", tz: "Asia/Singapore", venue: "Club Nine", organizer: { name: "Ana", level: 3.5 }, levelMin: 3, levelMax: 4.5, listOnVenueBoard: true }, NO_SIDE_EFFECTS);
+    // A week ahead, so the match is never in the past when the suite runs; 19:00 Singapore is 11:00Z whatever the date.
+    const day = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const r = await createMatch(db, { startsAt: `${day}T19:00`, tz: "Asia/Singapore", venue: "Club Nine", organizer: { name: "Ana", level: 3.5 }, levelMin: 3, levelMax: 4.5, listOnVenueBoard: true }, NO_SIDE_EFFECTS);
     expect(r.match.players).toHaveLength(1);
     expect(r.match.listed).toBe(true);
     expect(r.organizer.personalToken).toHaveLength(12);
     expect(r.organizer.manageUrl).toContain("/manage/");
     // startsAt without offset is read in tz: 19:00 Singapore = 11:00Z
-    expect(r.match.startsAt).toBe("2026-09-11T11:00:00.000Z");
+    expect(r.match.startsAt).toBe(`${day}T11:00:00.000Z`);
 
     await expect(createMatch(db, { startsAt: soon(), tz: "Mars/Olympus", organizer: { name: "X" } }, NO_SIDE_EFFECTS)).rejects.toMatchObject({ status: 422 });
     await expect(createMatch(db, { startsAt: "not a date", tz: "UTC", organizer: { name: "X" } }, NO_SIDE_EFFECTS)).rejects.toMatchObject({ code: "invalid_request" });

@@ -33,7 +33,11 @@ describe("same time next week", () => {
   it("turns the match's crew into a group with the match's own weekly slot, once", async () => {
     const org = await makePlayer(db, "Org");
     const p2 = await makePlayer(db, "Two");
-    const startsAt = new Date("2026-09-10T12:00:00.000Z"); // Thursday 19:00 in Bangkok
+    // The next Thursday 19:00 in Bangkok (12:00Z, no DST there), always ahead of now: a fixed date made the suite fail from the afternoon of 10 September.
+    const startsAt = new Date();
+    startsAt.setUTCHours(12, 0, 0, 0);
+    do startsAt.setUTCDate(startsAt.getUTCDate() + 1);
+    while (startsAt.getUTCDay() !== 4);
     const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt, tz: "Asia/Bangkok", venueName: "Rawai", whenFull: "closed" });
     await joinEvent(db, { eventId: ev.id, playerId: p2.id });
     const first = await weeklyGroupFromEvent(db, { eventId: ev.id, actorPlayerId: p2.id, fallbackName: "Thursday crew" });
