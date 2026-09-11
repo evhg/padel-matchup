@@ -30,6 +30,7 @@ import { ticketPlayerId, verifyPlayerTicket } from "@/lib/coach/link";
 import { menuWord } from "@/lib/coach/menu";
 import { coachBotLocale, coachStrings } from "@/lib/coach/strings";
 import { isValidShareCode } from "@/lib/codes";
+import { proposeToOwner } from "@/lib/feedback/propose";
 import { answerCallbackQuery, answerInlineQuery, deleteChatCommands, deleteMessage, editInlineMessageText, editMessageText, editOk, esc, messageGone, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
 import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse";
@@ -1041,8 +1042,8 @@ export function codesInText(text: string | undefined, base = baseUrl()): string[
   return [...new Set(out)];
 }
 
-/** /feedback and your words: stored, thanked at once; the daily session reads it and tells the person here if something gets built. */
-async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, locale: BotLocale): Promise<string> {
+/** /feedback and your words: stored, thanked at once; the owner gets the proposal, and the person hears here if something gets built. */
+async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, locale: BotLocale, ctx: OpContext): Promise<string> {
   const fs = feedbackStrings(locale);
   const text = args.trim();
   const isPrivate = msg.chat.type === "private";
@@ -1070,7 +1071,13 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
     await markNotFeedback(db, row.id, ack.reply);
     return `feedback_not:${row.id}`;
   }
-  if (res.ok) await markAcknowledged(db, row.id, ack.reply);
+  if (res.ok) {
+    await markAcknowledged(db, row.id, ack.reply);
+    // The note is the trigger: the owner's proposal follows the thank-you, after the webhook has answered.
+    ctx.afterwards(async () => {
+      await proposeToOwner(db, row.id).catch(() => undefined);
+    });
+  }
   return `feedback:${row.id}`;
 }
 
@@ -1127,7 +1134,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       await sendMessage(chat.chatId, strings(next).langSet, { silent: true });
       return "lang";
     }
-    if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale);
+    if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale, ctx);
     if (["lessons", "today", "tomorrow", "week", "low"].includes(cmd.command) && isPrivate) {
       // The role's commands: /lessons is the student's list, the others are the same words the assistant reads.
       const player = await findOrCreateTelegramPlayer(db, from);

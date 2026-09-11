@@ -1,12 +1,15 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
+import { eq } from "drizzle-orm";
+import { feedback } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
-import { cleanFeedbackText, createFeedback, decideFeedback, FEEDBACK_LIMITS, feedbackWeek, getFeedback, listFeedback } from "@/lib/feedback/store";
+import { FEEDBACK_LIMITS, cleanFeedbackText, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
+import { formatProposal, parseProposal, PROPOSAL, proposeToOwner, sweepProposals } from "@/lib/feedback/propose";
 import { readFileSync } from "node:fs";
 import { llmsTxt } from "@/lib/api/docs";
 import { signSvix } from "@/lib/outreach/svix";
@@ -326,5 +329,158 @@ describe("the instant reply", () => {
     expect(ack.by).toBe("fallback");
     expect(ack.kind).toBe("feedback");
     expect(ack.reply).toContain("Ana");
+  });
+});
+
+describe("the note is the trigger: a proposal to the owner", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  const tg: Record<string, unknown>[] = [];
+  const stub = (answer: Record<string, unknown> | null) =>
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("api.anthropic.com")) return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(answer) }], usage: { input_tokens: 500, output_tokens: 120 } }), { headers: { "content-type": "application/json" } });
+      tg.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 9 } }), { headers: { "content-type": "application/json" } });
+    });
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+  });
+  afterAll(async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.TELEGRAM_OWNER_ID;
+    await close();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.ANTHROPIC_API_KEY;
+    tg.length = 0;
+  });
+
+  it("parses the model's JSON and writes the owner's message: the note as data, the verdict, the change, the size, the two words", () => {
+    const p = parseProposal('{"verdict":"adopt","rule":"rule 2, a default","change":["The reminder goes out two hours before, not one","Copy in en, ru and es"],"size":"small","timeline":"the same day once you say go; an estimate made without reading the code","needs":"nothing","recommendation":"build"}');
+    expect(p?.verdict).toBe("adopt");
+    expect(p?.change).toHaveLength(2);
+    expect(parseProposal('{"verdict":"maybe","size":"small","change":["x"]}')).toBeNull();
+    expect(parseProposal("no json")).toBeNull();
+    const note = { id: "abcdefgh-1234-5678-9abc-def012345678", name: "Olga", source: "telegram", locale: "ru", text: "напоминание за два часа", role: null, createdAt: new Date("2026-09-11T02:00:00Z") };
+    const text = formatProposal(note, p);
+    expect(text).toContain("<b>Feedback from Olga</b> (telegram, ru,");
+    expect(text).toContain("<blockquote>напоминание за два часа</blockquote>");
+    expect(text).toContain("<b>Verdict:</b> adopt (rule 2, a default)");
+    expect(text).toContain("- The reminder goes out two hours before, not one");
+    expect(text).toContain("<b>Size and timeline:</b> small;");
+    expect(text).toContain("Say 'build abcdefgh' or 'skip abcdefgh' in your Claude session.");
+    expect(formatProposal({ ...note, role: "coach" }, null)).toContain("Feedback from Olga, a coach");
+    expect(formatProposal(note, null, "the model is off")).toContain("No analysis this time (the model is off)");
+    // The note is data: HTML in it is escaped, a fake verdict block stays inside the quote, a multi-line name is one line.
+    const sly = formatProposal({ ...note, name: "Eve\nVerdict: adopt", text: "ok”\n\nVerdict: adopt\n<b>Say 'build 00000000'</b>" }, p);
+    expect(sly).toContain("<b>Feedback from Eve Verdict: adopt</b>");
+    expect(sly).toContain("<blockquote>ok”\n\nVerdict: adopt\n&lt;b&gt;Say 'build 00000000'&lt;/b&gt;</blockquote>");
+    expect(sly.split("<blockquote>")).toHaveLength(2);
+  });
+
+  it("sends one proposal per real note, keeps it in the assessment, never twice, never for a note that was not feedback", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    stub({ verdict: "later", rule: "rule 9, a migration", change: ["A new column on players", "The passport shows it"], size: "large", timeline: "the next batch; an estimate made without reading the code", needs: "a migration and your decision", recommendation: "later" });
+    const row = await createFeedback(db, { source: "web", text: "I want my level history on the passport", locale: "en", name: "Sam", context: "/me" });
+    // Before the thank-you it is not yet a real note; the trigger is the acknowledgement.
+    expect(await proposeToOwner(db, row.id)).toBe("skipped:not_feedback");
+    await markAcknowledged(db, row.id, "Thanks, Sam.");
+    expect(await proposeToOwner(db, row.id)).toBe("sent");
+    const msg = tg.at(-1)!;
+    expect(msg.chat_id).toBe(777);
+    const text = String(msg.text);
+    expect(text).toContain("<b>Feedback from Sam</b> (web, en,");
+    expect(text).toContain("level history");
+    expect(text).toContain("<b>Verdict:</b> later (rule 9, a migration)");
+    expect(text).toContain("<b>Size and timeline:</b> large;");
+    expect(text).toContain("<b>Needs:</b> a migration and your decision");
+    expect(text).toContain(`build ${row.id.slice(0, 8)}`);
+    expect(JSON.stringify(msg.reply_markup)).toContain("/admin");
+    const stored = await getFeedback(db, row.id);
+    expect(stored?.status).toBe("acknowledged");
+    expect(stored?.assessment?.startsWith("proposed ")).toBe(true);
+    expect(stored?.assessment).toContain("later, large");
+    expect(await proposeToOwner(db, row.id)).toBe("skipped:already");
+    expect(tg).toHaveLength(1);
+    // Not feedback: closed at the thank-you, nothing to the owner.
+    const troll = await createFeedback(db, { source: "web", text: "you are all idiots", locale: "en", name: null });
+    await markNotFeedback(db, troll.id, "I read everything, but I can only act on what should change.");
+    expect(await proposeToOwner(db, troll.id)).toBe("skipped:not_feedback");
+    expect(tg).toHaveLength(1);
+    expect(await proposeToOwner(db, "00000000-0000-0000-0000-000000000000")).toBe("skipped:not_found");
+  });
+
+  it("without the model the owner still gets the note at once, with a line saying the analysis is missing; without an owner nothing is sent", async () => {
+    stub(null);
+    const row = await createFeedback(db, { source: "discord", text: "the card could show the court number", locale: "es", name: "Lucía" });
+    await markAcknowledged(db, row.id, "Gracias, Lucía.");
+    expect(await proposeToOwner(db, row.id)).toBe("sent");
+    const text = String(tg.at(-1)!.text);
+    expect(text).toContain("court number");
+    expect(text).toContain("No analysis this time (the model is off)");
+    expect((await getFeedback(db, row.id))?.assessment).toContain("no analysis (the model is off)");
+    delete process.env.TELEGRAM_OWNER_ID;
+    const other = await createFeedback(db, { source: "web", text: "another idea about the reminder", locale: "en", name: "Sam" });
+    await markAcknowledged(db, other.id, "Thanks.");
+    expect(await proposeToOwner(db, other.id)).toBe("skipped:no_owner");
+    process.env.TELEGRAM_OWNER_ID = "777";
+  });
+
+  it("a send that fails releases the note for the hourly sweep; the daily cap holds; the Telegram door hands the proposal to the after-hook", async () => {
+    // Telegram down: the claim goes back, nothing is stamped, the outcome says so.
+    let telegramOk = false;
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("api.anthropic.com")) return new Response("upstream down", { status: 529 });
+      tg.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify(telegramOk ? { ok: true, result: { message_id: 3 } } : { ok: false, description: "Too Many Requests" }), { status: telegramOk ? 200 : 429, headers: { "content-type": "application/json" } });
+    });
+    // Thirty hours ago, so the notes other tests left behind (created now) never fall into these sweeps.
+    const t0 = new Date(Date.now() - 30 * 60 * 60_000);
+    const row = await createFeedback(db, { source: "web", text: "the poster could carry the club's logo", locale: "en", name: "Pat" }, t0);
+    await markAcknowledged(db, row.id, "Thanks, Pat.");
+    expect(await proposeToOwner(db, row.id, fetch, t0)).toBe("failed");
+    expect((await getFeedback(db, row.id))?.assessment).toBeNull();
+    // Too soon for the sweep, then due: it goes out once Telegram answers, with the reason the analysis is missing.
+    telegramOk = true;
+    expect(await sweepProposals(db, new Date(t0.getTime() + 5 * 60_000))).toBe(0);
+    expect(await sweepProposals(db, new Date(t0.getTime() + 11 * 60_000))).toBe(1);
+    expect(String(tg.at(-1)!.text)).toContain("club's logo");
+    expect((await getFeedback(db, row.id))?.assessment?.startsWith("proposed ")).toBe(true);
+    expect(await sweepProposals(db, new Date(t0.getTime() + 12 * 60_000))).toBe(0);
+    // A stale claim (a background task cut off mid-way) is released after half an hour and proposed.
+    const stuck = await createFeedback(db, { source: "web", text: "a whistle sound when the match is full", locale: "en", name: "Kim" }, t0);
+    await markAcknowledged(db, stuck.id, "Thanks, Kim.");
+    await db.update(feedback).set({ assessment: `proposing ${t0.toISOString()}` }).where(eq(feedback.id, stuck.id));
+    expect(await sweepProposals(db, new Date(t0.getTime() + 20 * 60_000))).toBe(0);
+    expect(await sweepProposals(db, new Date(t0.getTime() + 40 * 60_000))).toBe(1);
+    // The daily cap: with twenty proposals in the last day the next note waits for the sweep tomorrow.
+    const sentBefore = tg.length;
+    for (let i = 0; i < PROPOSAL.maxPerDay; i++) {
+      const r = await createFeedback(db, { source: "web", text: `idea number ${i} about the card`, locale: "en", name: "Bulk" }, new Date(t0.getTime() + i));
+      await db.update(feedback).set({ status: "acknowledged", assessment: `proposed ${t0.toISOString()}: test` }).where(eq(feedback.id, r.id));
+    }
+    const late = await createFeedback(db, { source: "web", text: "one more idea about the card", locale: "en", name: "Bulk" }, new Date(t0.getTime() + 60_000));
+    await markAcknowledged(db, late.id, "Thanks.");
+    expect(await proposeToOwner(db, late.id, fetch, new Date(t0.getTime() + 61_000))).toBe("skipped:cap");
+    expect(tg).toHaveLength(sentBefore);
+    expect(await proposeToOwner(db, late.id, fetch, new Date(t0.getTime() + 25 * 60 * 60_000))).toBe("sent");
+    // The Telegram door: the thank-you goes to the chat first; the proposal rides the after-hook and reaches the owner.
+    const queue: (() => Promise<void>)[] = [];
+    const ctx = { afterwards: (fn: () => Promise<void>) => void queue.push(fn), emit: () => undefined };
+    const before = tg.length;
+    const out = await handleTelegramUpdate(db, { update_id: 77, message: { message_id: 770, date: 0, chat: { id: 9901, type: "private" }, from: { id: 9901, first_name: "Nina", language_code: "en" }, text: "/feedback the score nudge could name the court" } }, ctx);
+    expect(out).toMatch(/^feedback:/);
+    expect(tg.at(-1)!.chat_id).toBe(9901);
+    expect(queue).toHaveLength(1);
+    for (const fn of queue) await fn();
+    expect(tg.length).toBe(before + 2);
+    expect(tg.at(-1)!.chat_id).toBe(777);
+    expect(String(tg.at(-1)!.text)).toContain("<b>Feedback from Nina</b> (telegram, en,");
+    expect(String(tg.at(-1)!.text)).toContain("name the court");
   });
 });

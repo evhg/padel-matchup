@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
-import { describeError, fingerprintOf, listErrors, markErrorFixed, normalizeMessage, pruneErrors, recordError, topFrame } from "@/lib/alerts";
+import { describeError, ERROR_ALERTS, fingerprintOf, listErrors, markErrorFixed, normalizeMessage, pruneErrors, recordAndAlert, recordError, topFrame } from "@/lib/alerts";
 import { createTestDb } from "./helpers/db";
 
 describe("production error store", () => {
@@ -52,6 +52,45 @@ describe("production error store", () => {
     expect(reopened?.open).toBe(true);
     expect(reopened?.fixNote).toBe("renamed the column in #99");
     expect(await markErrorFixed(db, "0000000000000000", null)).toBeNull();
+  });
+
+  it("an error the store has never seen is one line to the owner at once; repeats, client errors and a storm stay quiet", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+    const tg: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
+      tg.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { headers: { "content-type": "application/json" } });
+    });
+    try {
+      const t = new Date("2026-09-11T02:00:00Z");
+      const first = await recordAndAlert(db, "cron", new Error("Tavily timed out"), { path: "/api/cron/hourly" }, t);
+      expect(first.count).toBe(1);
+      expect(tg).toHaveLength(1);
+      expect(tg[0].chat_id).toBe(777);
+      expect(String(tg[0].text)).toContain("New production error (cron): Tavily timed out on /api/cron/hourly");
+      expect(String(tg[0].text)).toContain("fix errors");
+      const again = await recordAndAlert(db, "cron", new Error("Tavily timed out"), {}, new Date(t.getTime() + 1000));
+      expect(again.count).toBe(2);
+      expect(tg).toHaveLength(1);
+      await recordAndAlert(db, "client", new Error("ResizeObserver loop limit exceeded"), {}, new Date(t.getTime() + 1500));
+      expect(tg).toHaveLength(1);
+      for (const [i, w] of ["alpha", "beta", "gamma", "delta", "epsilon"].entries()) await recordAndAlert(db, "server", new Error(`storm ${w} failed`), {}, new Date(t.getTime() + 2000 + i));
+      expect(tg.length).toBeLessThanOrEqual(ERROR_ALERTS.perHour);
+      expect(tg.length).toBeGreaterThan(1);
+      // Marked fixed, then back: one more line, saying so; a repeat after that stays quiet.
+      const later = new Date(t.getTime() + 2 * 60 * 60_000);
+      await markErrorFixed(db, first.fingerprint, "PR 99", new Date(t.getTime() + 60 * 60_000));
+      const n = tg.length;
+      await recordAndAlert(db, "cron", new Error("Tavily timed out"), {}, later);
+      expect(tg).toHaveLength(n + 1);
+      expect(String(tg.at(-1)!.text)).toContain("came back after the fix");
+      await recordAndAlert(db, "cron", new Error("Tavily timed out"), {}, new Date(later.getTime() + 1000));
+      expect(tg).toHaveLength(n + 1);
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.TELEGRAM_OWNER_ID;
+    }
   });
 
   it("rows unseen for 90 days are pruned", async () => {

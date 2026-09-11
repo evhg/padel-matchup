@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { reportError } from "@/lib/alerts";
 import { composeAck } from "@/lib/feedback/ack";
+import { proposeToOwner } from "@/lib/feedback/propose";
 import { appendFeedbackReply, createFeedback, findNoteForReply, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { guessLanguage } from "@/lib/listen/parse";
@@ -85,7 +86,10 @@ async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: Inbo
       const body = `${ack.reply}\n\nClaude, for Kicksmash\nhttps://kicksma.sh`;
       const res = await sendPlainEmail({ to: from.email, subject: `Re: ${mail.subject ?? fs.emailSubject}`, text: body, inReplyTo: mail.messageId });
       if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
-      else if (res.ok) await markAcknowledged(db, row.id, ack.reply);
+      else if (res.ok) {
+        await markAcknowledged(db, row.id, ack.reply);
+        await proposeToOwner(db, row.id).catch(() => undefined);
+      }
     } catch (e) {
       void reportError("server", e, { path: "/api/inbound/resend" });
     }

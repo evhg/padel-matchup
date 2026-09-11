@@ -1,6 +1,6 @@
 # How Kicksmash decides what to build
 
-The daily checklist that goes with this yardstick is in `docs/OPERATING.md` (the service board, the weekly domain check). This is the yardstick for every idea, bug report and wish that reaches us, whoever brings it: a player on Telegram, a club by email, a developer in Discussions, or the daily session reading `/api/admin/feedback`. It is short on purpose. If a request fails a rule here, we say so kindly and honestly; if it passes, we ship it and tell the person what changed because of them.
+The daily checklist that goes with this yardstick is in `docs/OPERATING.md` (the service board, the weekly domain check). This is the yardstick for every idea, bug report and wish that reaches us, whoever brings it: a player on Telegram, a club by email, a developer in Discussions, or the proposal the app sends the owner the moment a note arrives. It is short on purpose. If a request fails a rule here, we say so kindly and honestly; if it passes, we ship it and tell the person what changed because of them.
 
 ## What we are
 
@@ -16,10 +16,13 @@ The first global padel match-up layer: one link that works in any chat, a card t
 6. **Open and agent-native.** Everything public stays readable and CC BY 4.0; the API and MCP server are one key away for anyone; every crawler is welcome. A request that closes something is declined.
 7. **Privacy by default.** First names only, no phone numbers or emails shown, public profiles off until switched on, nothing personal in Telegram cards beyond what the person typed there. Personal tokens and manage links never appear in public data.
 8. **Free tiers first.** No feature may require a paid plan (Vercel, Supabase, Resend, Telegram, Discord) below fifty emails a day. A request that needs one is "later", not "no".
-9. **Small and finished.** A change ships with a unit test, passes typecheck, lint, the browser suites and a production check. Anything that needs a migration, touches sessions, authentication or personal data, or changes behaviour people rely on, is a design decision: it is recorded as planned and reviewed by a person, not shipped by the daily session.
+9. **Small and finished.** A change ships with a unit test, passes typecheck, lint, the browser suites and a production check. Anything that needs a migration, touches sessions, authentication or personal data, or changes behaviour people rely on, is a design decision: it is a decision for the owner, never built from a note without their word.
 10. **Honest answers.** We tell people what we did, what we did not do, and why, in their language, in one message. We never promise a date. We say thank you when their note changed the product, and we name the change. We owe nobody an answer: the thank-you says the note was read and that the person hears if something gets built, never "within a day". A shipped message is one plain sentence in the first person, what changed and nothing else: no desk, no dates, no process.
 
 ## Verdicts
+
+Since 11 September the owner decides what gets built. The moment a real note is acknowledged, the app sends the owner the verdict below together with what would change, a size, a timeline estimate and a recommendation (`src/lib/feedback/propose.ts`); nothing is built from a note without the owner's word, and the person hears only what shipped. The verdicts are the yardstick's answer, not an automatic action.
+
 
 - **adopt**: passes the rules, fits in a day, has a test. Ship, verify in production, then tell the person exactly what changed and thank them.
 - **later**: valid, but bigger than a day or blocked by rule 8 or 9. Record it as planned, tell the person it is on the list and why it waits. When it ships, tell them again.
@@ -34,7 +37,7 @@ Warm, brief, European. First person singular is fine ("I read every note"). No h
 
 A coach's book is the first thing a coach uses that is not their own memory, so a coach's note weighs more than a cosmetic one. The rules above still apply; these add to them.
 
-11. **Coach notes first.** A note whose author runs a book (the row carries `role: coach`) is read before the others and answered the same day. A "how does this work" question is answered in the product's words, and if the answer was not obvious on the screen, the copy on that screen changes too. Nobody is ever told to talk to a person.
+11. **Coach notes first.** A note whose author runs a book (the row carries `role: coach`) is read before the others and proposed to the owner first. A "how does this work" question is answered in the product's words, and if the answer was not obvious on the screen, the copy on that screen changes too. Nobody is ever told to talk to a person.
 12. **A preference becomes a setting when three coaches ask.** Until then it is a default. Coach screens keep the budget: today's lessons and one action; a student sees the next lesson, the package line and one action; everything else behind "More". A request that adds a visible control for one coach's habit is "later" with that sentence.
 13. **Their calendar, their sheet, their money.** We read and write the coach's own Google Calendar and package sheet where they share them; we never ask them to move. No payment passes through Kicksmash: the coach's PromptPay QR or payment link is shown, "paid" is a note the coach makes. A request for payments, commissions or a marketplace is declined with rule 6 and this one.
 14. **Students are answered while the coach teaches.** Booking, cancelling, "how many lessons do I have left" and questions about the rules are answered at once, inside the coach's settings, in the student's language. The coach receives decisions only: a new student to accept, a time outside the hours. A request that makes the coach the bottleneck again is declined.

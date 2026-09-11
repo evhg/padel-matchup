@@ -17,7 +17,7 @@ export async function reportError(kind: ErrorKind, e?: unknown, ctx: ErrorContex
     const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
     const db = await getDb();
     await bumpMetric(db, `errors_${kind}`);
-    if (e) await recordError(db, kind, e, ctx);
+    if (e) await recordAndAlert(db, kind, e, ctx, new Date(), true);
   } catch {
     /* metrics are optional */
   }
@@ -61,6 +61,49 @@ export function fingerprintOf(kind: ErrorKind, message: string, stack: string | 
   const h = createHash("sha1");
   h.update(`${kind}\n${normalizeMessage(message)}\n${topFrame(stack)}`);
   return h.digest("hex").slice(0, 16);
+}
+
+export const ERROR_ALERTS = { perHour: 3 } as const;
+
+/**
+ * A production error the store has never seen, or one that comes back after it was marked
+ * fixed, is worth one line to the owner at once: the error is the trigger, not a morning loop.
+ * Repeats stay quiet (the row counts them), client errors stay quiet (browser noise), and never
+ * more than a few lines an hour. With `defer` the line is sent after the response where a
+ * request scope exists, so the send never delays or outlives the request unnoticed.
+ */
+export async function recordAndAlert(db: Db, kind: ErrorKind, e: unknown, ctx: ErrorContext = {}, now = new Date(), defer = false): Promise<ErrorEvent> {
+  const { message, stack } = describeError(e);
+  const [prev] = await db.select({ lastAt: errorEvents.lastAt, fixedAt: errorEvents.fixedAt }).from(errorEvents).where(eq(errorEvents.fingerprint, fingerprintOf(kind, message, stack))).limit(1);
+  const row = await recordError(db, kind, e, ctx, now);
+  const cameBack = prev?.fixedAt && prev.lastAt.getTime() <= prev.fixedAt.getTime() ? prev.fixedAt : null;
+  if (kind === "client" || (prev && !cameBack)) return row;
+  const send = () => alertNewError(db, row, now, cameBack).catch(() => undefined);
+  if (defer) {
+    try {
+      const { after } = await import("next/server");
+      after(send);
+      return row;
+    } catch {
+      /* no request scope: send now */
+    }
+  }
+  await send();
+  return row;
+}
+
+export async function alertNewError(db: Db, row: ErrorEvent, now = new Date(), cameBack: Date | null = null): Promise<boolean> {
+  const [{ ownerTelegramId }, { esc, sendMessage, telegramEnabled }, { baseUrl }] = await Promise.all([import("@/lib/listen/tick"), import("@/lib/telegram/api"), import("@/lib/config")]);
+  const owner = ownerTelegramId();
+  if (!owner || !telegramEnabled()) return false;
+  // The hour's budget counts the fingerprints that could have alerted (never the client rows), before this one.
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(errorEvents).where(and(gt(errorEvents.firstAt, hourAgo), lt(errorEvents.firstAt, now), sql`${errorEvents.kind} <> 'client'`));
+  if (Number(n) >= ERROR_ALERTS.perHour) return false;
+  const what = `${row.message.slice(0, 200)}${row.path ? ` on ${row.path}` : ""}`;
+  const text = cameBack ? `A production error came back after the fix of ${cameBack.toISOString().slice(0, 10)} (${row.kind}): ${what}. Say 'fix errors' in your Claude session.` : `New production error (${row.kind}): ${what}. Say 'fix errors' in your Claude session.`;
+  const res = await sendMessage(owner, esc(text), { keyboard: { inline_keyboard: [[{ text: "Errors", url: `${baseUrl()}/admin` }]] } });
+  return res.ok;
 }
 
 /** One row per fingerprint; a repeat bumps the count and refreshes the sample. */

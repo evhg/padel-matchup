@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/reminders";
 import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
 import { listenTick, type ListenSummary } from "@/lib/listen/tick";
+import { sweepProposals } from "@/lib/feedback/propose";
 import { researchTick, type ResearchSummary } from "@/lib/research/desk";
 import { autoCreateClubEvents } from "@/lib/domain/clubWeek";
 import { refreshAllAvailability } from "@/lib/booking/availability";
@@ -59,7 +60,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -229,5 +230,12 @@ export async function GET(req: Request) {
   }
 
   if (summary.errors.length) await reportError("cron", summary.errors.join(" | "));
+  try {
+    // The safety net for the proposals: a real note the owner never heard about (a failed send, a cut-off background task) goes out now.
+    summary.proposals = await sweepProposals(db, now);
+  } catch (e) {
+    summary.errors.push(`proposals: ${String(e)}`);
+  }
+
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), ...summary });
 }

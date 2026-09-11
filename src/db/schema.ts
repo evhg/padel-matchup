@@ -877,8 +877,8 @@ export type Outreach = typeof outreach.$inferSelect;
 
 /**
  * What players tell us, where they told us, and what we did about it. The
- * daily session reads it, decides against docs/DECIDING.md, ships, and thanks
- * the person on the same channel. The owner is not in this loop.
+ * owner gets a proposal (the verdict against docs/DECIDING.md, the change, a size and a
+ * timeline estimate) the moment it is acknowledged, and decides what gets built.
  */
 export const feedback = pgTable(
   "feedback",
@@ -903,7 +903,7 @@ export const feedback = pgTable(
     context: text("context"),
     /** new → acknowledged → asked | planned | shipped | declined */
     status: text("status").notNull().default("new"),
-    /** adopt | decline | later | ask, set by the daily session */
+    /** adopt | decline | later | ask, set by the session the owner decides in */
     verdict: text("verdict"),
     /** Internal reasoning against the criteria; never shown to the person. */
     assessment: text("assessment"),
@@ -912,7 +912,7 @@ export const feedback = pgTable(
     shippedAt: timestamp("shipped_at", { withTimezone: true }),
     prUrl: text("pr_url"),
     messagesSent: integer("messages_sent").notNull().default(0),
-    /** "coach" when the author runs a lessons book; the daily session ranks those notes first. */
+    /** "coach" when the author runs a lessons book; a coach's note is read first. */
     role: text("role"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
