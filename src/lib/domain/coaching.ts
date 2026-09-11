@@ -600,16 +600,21 @@ export async function listStudentLessons(db: Db, playerId: string, from: Date, l
   return rows.map((r) => ({ ...r.lesson, coach: r.coach, package: r.pkg }));
 }
 
-/** The coaches a player is attached to, with the package that is open with each. */
-export async function studentCoaches(db: Db, playerId: string, now = new Date()): Promise<StudentCoach[]> {
+/** The coaches a player is attached to (asked, accepted or paused), newest first; no package lookups. */
+export async function listStudentCoaches(db: Db, playerId: string): Promise<Pick<StudentCoach, "coach" | "status">[]> {
   const rows = await db
     .select({ status: coachStudents.status, coach: coaches })
     .from(coachStudents)
     .innerJoin(coaches, eq(coaches.id, coachStudents.coachId))
     .where(and(eq(coachStudents.playerId, playerId), isNull(coaches.archivedAt)))
     .orderBy(desc(coachStudents.createdAt));
+  return rows.map((r) => ({ coach: r.coach, status: r.status as StudentStatus }));
+}
+
+/** The coaches a player is attached to, with the package that is open with each. */
+export async function studentCoaches(db: Db, playerId: string, now = new Date()): Promise<StudentCoach[]> {
   const out: StudentCoach[] = [];
-  for (const r of rows) out.push({ coach: r.coach, status: r.status as StudentStatus, activePackage: await activePackage(db, r.coach.id, playerId, now) });
+  for (const r of await listStudentCoaches(db, playerId)) out.push({ ...r, activePackage: await activePackage(db, r.coach.id, playerId, now) });
   return out;
 }
 

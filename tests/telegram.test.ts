@@ -2,13 +2,13 @@ import { createHash, createHmac } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, telegramCards, telegramChats, telegramInlineCards } from "@/db/schema";
+import { coaches, events, players, telegramCards, telegramChats, telegramInlineCards } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { autoCreateGroupMatches, createGroup, updateGroup } from "@/lib/domain/groups";
 import { setTournamentLock } from "@/lib/domain/tournament";
-import { createCoach, presetHours } from "@/lib/domain/coaching";
+import { bookLesson, createCoach, presetHours, setStudentStatus } from "@/lib/domain/coaching";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
 import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
@@ -563,6 +563,84 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(723, "Week")).toMatch(/^coach:/);
     expect(await send(724, "Week")).not.toBe("card");
+    // A real match code typed bare is still the card; a four-letter word nobody answers to is the book's help.
+    const { ev } = await match();
+    calls = [];
+    expect(await send(725, ev.code)).toBe("card");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("Rawai Padel Club");
+    calls = [];
+    expect(await send(726, "Zzq9")).toBe("coach:help");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("anna fri 15");
+    // The book archived: the role's command from the stale "/" menu gets the general help, and the keyboard and the commands go.
+    await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.playerId, me.id));
+    calls = [];
+    expect(await send(727, "/today")).toBe("private_role_ended");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
+    expect(sent("deleteMyCommands")).toHaveLength(1);
+  });
+
+  it("a student's private chat: /start gives the student's menu and the personal link; once the coach is gone, a tapped button takes the keyboard and the commands away", async () => {
+    const vera = user(95, "Vera");
+    const dm = { id: 95, type: "private" as const };
+    const send = (id: number, text: string) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat: dm, from: vera, text } }, NO_SIDE_EFFECTS);
+    expect(await send(730, "/start")).toBe("private_start");
+    const [me] = await db.select().from(players).where(eq(players.telegramId, 95));
+    const olga = await makePlayer(db, "Olga");
+    const coach = await createCoach(db, { playerId: olga.id, displayName: "Olga", clubNames: "Warehaus", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok" });
+    // Asked but not yet accepted: /lessons, which sits in everyone's menu, says so instead of the general help.
+    await setStudentStatus(db, coach.id, me.id, "requested");
+    calls = [];
+    expect(await send(729, "/lessons")).toBe("student:none");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/accept/i);
+    await setStudentStatus(db, coach.id, me.id, "accepted");
+    calls = [];
+    expect(await send(731, "/start")).toBe("student_menu");
+    // The menu with the student's buttons, pinned once, then the link that signs a browser in for My matches.
+    const menu = sent("sendMessage").find((c) => JSON.stringify(c.body.reply_markup).includes("My lessons"));
+    expect(menu).toBeDefined();
+    expect(JSON.stringify(menu!.body.reply_markup)).toContain("Package left");
+    expect(sent("pinChatMessage")).toHaveLength(1);
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/\/p\/[A-Za-z0-9_-]+/);
+    const commands = sent("setMyCommands").at(-1)!.body.commands as { command: string }[];
+    expect(commands.map((c) => c.command).slice(0, 2)).toEqual(["lessons", "help"]);
+    expect(commands.map((c) => c.command)).toContain("new");
+    // A tapped button while the role stands: the student's lessons, not a match card and not the general help.
+    calls = [];
+    expect(await send(732, "🎾 My lessons")).toBe("student:lessons");
+    expect(sent("deleteMyCommands")).toHaveLength(0);
+    // A lesson booked while accepted, then paused by the coach: the role and its menu stay, the buttons and /lessons answer with the pause and still show the booked lesson with its cancel button, ordinary text stays ordinary and nothing is taken away.
+    const inThreeDays = new Date(Math.floor((Date.now() + 3 * 86400000) / 3600000) * 3600000);
+    await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: inThreeDays, byCoach: true, source: "telegram", createdByPlayerId: olga.id });
+    await setStudentStatus(db, coach.id, me.id, "paused");
+    calls = [];
+    expect(await send(740, "/start")).toBe("student_menu");
+    calls = [];
+    expect(await send(741, "🎾 My lessons")).toBe("student:paused");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("paused");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("lc:");
+    expect(await send(742, "/lessons")).toBe("student:paused");
+    expect(sent("deleteMyCommands")).toHaveLength(0);
+    // The booked lesson can still be cancelled from the bot while paused.
+    calls = [];
+    expect(await send(746, "cancel")).toMatch(/^student:cancel/);
+    calls = [];
+    expect(await send(743, "hello?")).toBe("private_other");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup ?? {})).not.toContain("remove_keyboard");
+    // The coach archives the book: the next tap on the old keyboard gets the general help, and the keyboard and the role's commands go with it.
+    await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.id, coach.id));
+    calls = [];
+    expect(await send(733, "🎾 My lessons")).toBe("private_role_ended");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
+    expect(sent("deleteMyCommands")).toHaveLength(1);
+    // So does the role's command from the stale "/" menu; /lessons, which everyone has, says what a student would need to hear.
+    calls = [];
+    expect(await send(744, "/lessons")).toBe("student:none");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/accept/i);
+    expect(sent("deleteMyCommands")).toHaveLength(1);
+    // Ordinary text after that is the ordinary help; nothing left to take away.
+    calls = [];
+    expect(await send(734, "hello?")).toBe("private_other");
+    expect(sent("deleteMyCommands")).toHaveLength(0);
   });
 
   it("inline mode: @bot lists the city's open matches, an exact code gives that card, a chosen result stays live, taps under it join and edit it in place", async () => {

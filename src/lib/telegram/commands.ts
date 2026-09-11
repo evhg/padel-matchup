@@ -24,4 +24,16 @@ export const BOT_COMMANDS = {
     { command: "coach", description: "Книга занятий, если вы тренер (напишите мне в личку)" },
     { command: "help", description: "Что я умею (нарочно немного)" },
   ],
+  es: [
+    { command: "new", description: "Crear un partido: /new mañana 19:00 Rawai" },
+    { command: "match", description: "Mostrar la tarjeta de un partido: /match CÓDIGO" },
+    { command: "games", description: "Partidos abiertos cerca: /games phuket" },
+    { command: "score", description: "Sets tras el partido: /score CÓDIGO 6-3 6-4" },
+    { command: "tz", description: "Zona horaria de este chat, una vez: /tz phuket" },
+    { command: "lang", description: "Idioma del bot: /lang en o /lang ru" },
+    { command: "feedback", description: "Dime qué debería cambiar" },
+    { command: "lessons", description: "Tus clases y tu bono con tu entrenador (chat privado)" },
+    { command: "coach", description: "Tu agenda de clases, si entrenas (escríbeme en privado)" },
+    { command: "help", description: "Qué hago (muy poco, a propósito)" },
+  ],
 };

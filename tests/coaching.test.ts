@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { activePackage, addStudentByName, bookLesson, cancelLesson, completePastLessons, createCoach, createPackage, foundingPlaces, getCoachByHandle, getCoachForActor, handleFromName, insertCoach, isCoachActor, isFoundingCoach, listCoachLessons, listStudentLessons, listStudents, lowPackages, openSlots, packageLine, parseHoursLine, presetHours, requestStudent, setStudentStatus, studentCoaches, studentStatus, updateCoach, withinHours } from "@/lib/domain/coaching";
+import { mergeTimeline } from "@/lib/domain/queries";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -14,6 +15,18 @@ const TZ = "Asia/Bangkok";
 // A Monday 07:00 in Bangkok, as UTC.
 const monday07 = new Date("2026-09-14T00:00:00.000Z");
 const at = (hoursFrom07: number) => new Date(monday07.getTime() + hoursFrom07 * HOUR);
+
+describe("the /me timeline", () => {
+  it("puts a lesson between the matches around it, soonest first, whatever order they came in", () => {
+    const match = (code: string, h: number) => ({ event: { code, startsAt: at(h) } });
+    const lesson = (id: string, h: number) => ({ id, startsAt: at(h) });
+    const merged = mergeTimeline([match("late", 30), match("soon", 2)], [lesson("mid", 10)]);
+    expect(merged.map((x) => (x.kind === "match" ? x.match.event.code : x.lesson.id))).toEqual(["soon", "mid", "late"]);
+    expect(merged.map((x) => x.at)).toEqual([at(2).getTime(), at(10).getTime(), at(30).getTime()]);
+    expect(mergeTimeline([], [lesson("only", 1)])).toEqual([{ kind: "lesson", at: at(1).getTime(), lesson: lesson("only", 1) }]);
+    expect(mergeTimeline([], [])).toEqual([]);
+  });
+});
 
 describe("coach handles and hours", () => {
   it("makes a handle from any name, transliterating Cyrillic", () => {

@@ -21,6 +21,7 @@ import {
   getLesson,
   getPlayerById,
   listCoachLessons,
+  listStudentCoaches,
   listStudentLessons,
   listStudents,
   lowPackages,
@@ -30,6 +31,7 @@ import {
   studentCoaches,
   studentStatus,
   type LessonWithPeople,
+  type StudentCoach,
 } from "@/lib/domain/coaching";
 import { isDomainError } from "@/lib/domain/errors";
 import { coachCommands, coachKeyboard, menuWord, studentCommands, studentKeyboard } from "@/lib/coach/menu";
@@ -86,7 +88,7 @@ async function bookForCoach(db: Db, coach: Coach, coachPlayer: Player, student: 
   }
 }
 
-async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: string, chatId: number): Promise<string> {
+async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: string, chatId: number, o: { deferHelp?: boolean } = {}): Promise<string | null> {
   const locale: CoachBotLocale = coachBotLocale(coachPlayer.locale);
   const s = coachStrings(locale);
   const now = new Date();
@@ -118,6 +120,8 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
 
   switch (intent.kind) {
     case "help": {
+      // A code-shaped word the book cannot read may be a match: with deferHelp the caller looks it up first and comes back to coachHelp if nothing answers.
+      if (o.deferHelp) return null;
       await say(s.help);
       return "coach:help";
     }
@@ -204,25 +208,42 @@ async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBot
 
 // ------------------------------------------------------------------ student flow
 
-async function studentFlow(db: Db, player: Player, rawText: string, chatId: number): Promise<string | null> {
-  const mine = await acceptedCoaches(db, player.id);
-  if (mine.length === 0) return null;
+async function studentFlow(db: Db, player: Player, coaches: Pick<StudentCoach, "coach" | "status">[], rawText: string, chatId: number): Promise<string | null> {
+  const mine = coaches.filter((c) => c.status === "accepted");
   const locale: CoachBotLocale = coachBotLocale(player.locale);
   const s = coachStrings(locale);
   const now = new Date();
-  const tz = mine[0].coach.tz;
   const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
   const tapped = menuWord(rawText);
-  if (tapped === "book") {
-    await say(s.menuBookHowStudent);
-    return "student:book_how";
-  }
   const text = tapped === "lessons" || tapped === "left" ? tapped : rawText;
+  const paused = mine.length === 0 ? coaches.filter((c) => c.status === "paused") : [];
+  if (mine.length === 0 && paused.length === 0) return null;
+  const tz = (mine[0] ?? paused[0]).coach.tz;
+  const pausedLine = () => paused.map((c) => s.paused(c.coach.displayName)).join("\n");
+  if (tapped === "book") {
+    await say(mine.length ? s.menuBookHowStudent : pausedLine());
+    return mine.length ? "student:book_how" : "student:paused";
+  }
   const intent = parseStudentLine(text, { now, tz });
+  if (mine.length === 0) {
+    // Every coach has this student paused: the lessons already booked can still be seen and cancelled; a booking line or the other buttons get the pause and the way to the coach; ordinary text stays ordinary.
+    if (intent.kind === "help" && !tapped) return null;
+    if (intent.kind === "lessons") {
+      const rows = (await listStudentLessons(db, player.id, now)).filter((l) => l.status === "booked").slice(0, 6);
+      const list = rows.map((l) => `🎾 ${whenLabel(l.startsAt, l.coach.tz, locale)} ${s.withCoach(l.coach.displayName)}`).join("\n");
+      await say(`${list ? `${list}\n` : ""}${pausedLine()}`, rows.length ? kb(rows.map((l) => [{ text: `✕ ${whenLabel(l.startsAt, l.coach.tz, locale)}`, callback_data: `lc:${l.id}` }])) : undefined);
+      return "student:paused";
+    }
+    if (intent.kind !== "cancel") {
+      await say(pausedLine());
+      return "student:paused";
+    }
+  }
 
   if (intent.kind === "help") return null;
   if (intent.kind === "left") {
-    await say(mine.map((m) => s.left(m.coach.displayName, pkgText(s, m.activePackage))).join("\n"));
+    const lines = await Promise.all(mine.map(async (m) => s.left(m.coach.displayName, pkgText(s, await activePackage(db, m.coach.id, player.id, now)))));
+    await say(lines.join("\n"));
     return "student:left";
   }
   if (intent.kind === "lessons") return lessonsFor(db, player, chatId);
@@ -320,14 +341,23 @@ export async function lessonsFor(db: Db, player: Player, chatId: number): Promis
 // ------------------------------------------------------------------ entry points
 
 export type BotRole = "coach" | "student" | null;
+/** Who the bot talks to in a private chat, resolved once per message: the book this person runs, the coaches who have them (accepted or paused), or nobody. */
+export type ResolvedRole = { kind: "coach"; coach: Coach; role: "coach" | "manager" } | { kind: "student"; coaches: Pick<StudentCoach, "coach" | "status">[] } | null;
 
-/** The coaches who have this player on their list: the one place that decides who is a student. */
+/** The coaches who have this player on their list, with their packages: for the lessons list. */
 export const acceptedCoaches = async (db: Db, playerId: string) => (await studentCoaches(db, playerId)).filter((m) => m.status === "accepted");
 
-/** Coach (or their manager), student of an accepting coach, or neither. */
+/** Status only, no package fetched. A paused student keeps the role: the buttons answer with the pause, not with the general help. */
+export async function resolveRole(db: Db, player: Player): Promise<ResolvedRole> {
+  const found = await getCoachForActor(db, player.id);
+  if (found) return { kind: "coach", ...found };
+  const coaches = (await listStudentCoaches(db, player.id)).filter((c) => c.status === "accepted" || c.status === "paused");
+  return coaches.length > 0 ? { kind: "student", coaches } : null;
+}
+
+/** Coach (or their manager), student of a coach (accepted or paused), or neither. */
 export async function botRole(db: Db, player: Player): Promise<BotRole> {
-  if (await getCoachForActor(db, player.id)) return "coach";
-  return (await acceptedCoaches(db, player.id)).length > 0 ? "student" : null;
+  return (await resolveRole(db, player))?.kind ?? null;
 }
 
 /**
@@ -346,20 +376,31 @@ export async function sendRoleMenu(db: Db, player: Player, chatId: number, o: { 
     await pinChatMessage(chatId, sent.result.message_id).catch(() => undefined);
   }
   const own = role === "coach" ? coachCommands(locale) : studentCommands(locale);
-  const general = BOT_COMMANDS[locale === "ru" ? "ru" : "en"].filter((c) => !own.some((mine) => mine.command === c.command));
+  const general = BOT_COMMANDS[locale].filter((c) => !own.some((mine) => mine.command === c.command));
   await setChatCommands(chatId, [...own, ...general]).catch(() => undefined);
   return role === "coach" ? "coach_menu" : "student_menu";
 }
 
-/** A private message that is not a command: the coach's book or the student's lessons answer it. Null when neither applies. */
-export async function coachAssistantMessage(db: Db, msg: TgMessage, from: TgUser, player: Player): Promise<string | null> {
+/**
+ * A private message that is not a command: the coach's book or the student's lessons answer it.
+ * Null when neither applies and, with deferHelp, when the book cannot read the line: the caller
+ * looks the word up as a match code first and comes back to coachHelp if nothing answers.
+ */
+export async function coachAssistantMessage(db: Db, msg: TgMessage, from: TgUser, player: Player, resolved?: ResolvedRole, o: { deferHelp?: boolean } = {}): Promise<string | null> {
   if (msg.chat.type !== "private" || !msg.text) return null;
-  const found = await getCoachForActor(db, player.id);
-  if (found) {
-    const coachPlayer = found.role === "coach" ? player : ((await getPlayerById(db, found.coach.playerId)) ?? player);
-    return coachFlow(db, found.coach, { ...coachPlayer, locale: player.locale, telegramId: from.id }, msg.text, msg.chat.id);
+  const who = resolved === undefined ? await resolveRole(db, player) : resolved;
+  if (!who) return null;
+  if (who.kind === "coach") {
+    const coachPlayer = who.role === "coach" ? player : ((await getPlayerById(db, who.coach.playerId)) ?? player);
+    return coachFlow(db, who.coach, { ...coachPlayer, locale: player.locale, telegramId: from.id }, msg.text, msg.chat.id, o);
   }
-  return studentFlow(db, player, msg.text, msg.chat.id);
+  return studentFlow(db, player, who.coaches, msg.text, msg.chat.id);
+}
+
+/** The book's help in the coach's language: for a line the book could not read once no match answered to it either. */
+export async function coachHelp(player: Player, chatId: number): Promise<string> {
+  await sendMessage(chatId, esc(coachStrings(coachBotLocale(player.locale)).help), { silent: true });
+  return "coach:help";
 }
 
 /** Buttons under the assistant's messages. Null when the data is not ours. */
