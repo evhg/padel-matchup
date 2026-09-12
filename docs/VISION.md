@@ -8,7 +8,7 @@ When two needs conflict, the earlier one wins.
 
 1. **Coaches.** The pain is the messages: cancelling, rescheduling, "how many lessons do I have left". The promise is a book that answers students while the coach teaches and moves lessons without anyone typing. A coach is won when a student books, moves or cancels a lesson and the coach typed nothing.
 2. **Players.** The pain is organising: who is in, when, where, at what level, who fills the spot that opened. The promise is a match organised in under ten seconds, inside the group chat, with the app complementing the messenger and never replacing it. A player is won when the match is played.
-3. **Tournament organisers.** The promise is a free, world-class tool that looks great and runs an americano, a mexicano or a King of the Court from a phone, smoothly for the organiser and for every player. An organiser is won when the standings are live and nobody asked for a spreadsheet.
+3. **Tournament organisers.** Two organisers, one tool. The informal one runs the club social, the coach's americano, the crew's mexicano or King of the Court: individuals in rotation, live standings, done from a phone. The serious one runs what Thailand's top organisers run: the Thai Padel Series in Bangkok and Phuket, the Tatler Padel Series, the Asia Pacific Padel Tour, and FIP events. That means pairs registered per category (Pro, Amateur, Mixed, Senior, or level bands such as Bronze 0.5 to 2.5, Silver 2.5 to 4.0, Gold 4.0 and up), a group stage of four or five pairs with the top two through, then a knockout, a consolation draw for the pairs that go out, and, as FIP does, a qualifying draw feeding a main draw of 16 or 32 pairs with seeds by ranking and wild cards. Scoring is set per phase: one set to six with a tie-break in the groups, a super set to nine in the quarters and semis, two sets with a super tie-break in the final, golden or silver point. The draw is published before play, courts are scheduled, scores go live per court, and a player may enter at most two categories. The promise is a free, world-class tool that looks great and runs both kinds smoothly for the organiser and every player. An organiser is won when a weekend of two hundred players runs from a phone and nobody asked for a spreadsheet.
 4. **Club operators.** The pains are quiet courts at off-peak hours, no view of the coaches teaching on their courts, a community that lives in other people's chats, newcomers with nobody at their level, last-minute drop-outs, and booking systems and channels that do not talk to each other. The promise is a page and a programme that fill the quiet hours, a view of the coaches, level-matched newcomers, drop-outs absorbed, and one place that links to whatever booking system the club has. A club is won when an off-peak court hour is filled by a match or a lesson from Kicksmash.
 
 ## The bet
@@ -54,7 +54,7 @@ Thailand, then Singapore. Thai joins English, Russian and Spanish; LINE is the f
 - A fact log is added before the channel work, so every channel records what it did from day one.
 - The channel adapter is shaped for LINE: a card that cannot be edited is re-sent only when the roster changes, replies are free and pushes are budgeted, LINE sign-in joins Telegram sign-in.
 - A coach's clubs become venue slugs instead of free text, so a club can see its coaches without guessing.
-- The schema leaves room for court capacity, court holds and sensor sessions; none is built until the owner says so.
+- The schema leaves room for court capacity, court holds and sensor sessions, and for the serious tournament: pairs, categories, and draw phases (pool, knockout, consolation, qualifying) of which an americano is one kind; none is built until the owner says so.
 - Thai becomes the fourth locale when the LINE channel ships.
 
 ## After the restructure
@@ -64,7 +64,8 @@ Candidates, each a decision for the owner, in the order the stakeholders above s
 1. LINE channel with LINE sign-in, and Thai copy.
 2. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts.
 3. Drop-out refill: a spot that opens goes by push to level-matched players who play with that crew or at that club.
-4. The club's view of its coaches.
-5. Courts as capacity, then a court a person can take.
-6. Performance analytics by integration, with consent.
-7. WhatsApp, when it allows more than links and previews.
+4. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores.
+5. The club's view of its coaches.
+6. Courts as capacity, then a court a person can take.
+7. Performance analytics by integration, with consent.
+8. WhatsApp, when it allows more than links and previews.

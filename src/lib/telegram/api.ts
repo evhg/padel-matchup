@@ -232,3 +232,9 @@ export function initDataUser(fields: Record<string, string>): TgUser | null {
     return null;
   }
 }
+
+/** The t.me link to the bot, with a start payload where one is given; null until the bot has a username. */
+export const botDeepLink = (payload?: string) => {
+  const u = telegramBotUsername();
+  return u ? `https://t.me/${u}${payload ? `?start=${encodeURIComponent(payload)}` : ""}` : null;
+};

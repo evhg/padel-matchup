@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { mintTicket, readTicket } from "@/lib/ticket";
-import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { discordCards, discordChannels, events, players, type DiscordChannel, type Player } from "@/db/schema";
+import { discordCards, discordChannels, players, type DiscordChannel, type Player } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
@@ -10,16 +10,14 @@ import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
 import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
-import { formatEventTime } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
-import { isOccupied } from "@/lib/domain/events";
 import { createPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
-import { matchResult } from "@/lib/domain/result";
-import { praiseLine } from "@/lib/domain/praise";
 import { isValidShareCode } from "@/lib/codes";
-import { botLocale, cardTitle, strings, whereLine, type BotLocale } from "@/lib/telegram/card";
-import { EPHEMERAL, INTERACTION, RESPONSE, createMessage, discordEnabled, editMessage, editOriginalResponse, messageUrl, type CommandSpec, type DcInteraction, type DcUser, type InteractionResponse } from "./api";
+import { botLocale, strings, type BotLocale } from "@/lib/telegram/card";
+import { EPHEMERAL, INTERACTION, RESPONSE, discordEnabled, editOriginalResponse, messageUrl, type CommandSpec, type DcInteraction, type DcUser, type InteractionResponse } from "./api";
+import { postCard as postCardIn, postCardsForGroup as postCardsForGroupIn, postResult, sendReminders, syncCards } from "@/lib/channels/cards";
+import { channelLocale, discordChannel, discordRoom } from "@/lib/channels/discord";
 import { renderDiscordCard } from "./card";
 
 /**
@@ -96,85 +94,21 @@ export async function upsertChannel(db: Db, ref: ChannelRef, localeHint?: string
   return { channel: c, created: true };
 }
 
-const channelLocale = (c: DiscordChannel | null, fallback?: string | null): BotLocale => (c ? (c.locale === "ru" ? "ru" : "en") : botLocale(fallback));
 
-/** A 403 / missing access means the bot cannot see the channel any more; a 404 message means the card was deleted. */
-async function noteFailure(db: Db, channel: DiscordChannel, cardId: string | null, res: { ok: false; status: number; error: string }): Promise<void> {
-  if (res.status === 403 || /Missing Access|Missing Permissions/i.test(res.error)) await db.update(discordChannels).set({ leftAt: new Date() }).where(eq(discordChannels.channelId, channel.channelId));
-  else if (res.status === 404 && cardId) await db.delete(discordCards).where(eq(discordCards.id, cardId));
-}
 
 // ---------------------------------------------------------------------------
 // Cards
 // ---------------------------------------------------------------------------
-/** Posts the card of a match into a channel, or refreshes the one already there. */
+/** Posts the card of a match into a channel, or refreshes the one already there. The algorithm lives in src/lib/channels. */
 export async function postCard(db: Db, detail: EventDetail, channel: DiscordChannel, o: { replyTo?: string | null } = {}): Promise<"posted" | "refreshed" | "failed"> {
-  const ev = detail.event;
-  const [existing] = await db.select().from(discordCards).where(and(eq(discordCards.eventId, ev.id), eq(discordCards.channelId, channel.channelId), eq(discordCards.kind, "card"))).limit(1);
-  if (existing) {
-    await syncDiscord(db, ev.code);
-    return "refreshed";
-  }
-  const card = renderDiscordCard(detail, baseUrl(), channelLocale(channel));
-  const sent = await createMessage(channel.channelId, { embeds: card.embeds, components: card.components, replyTo: o.replyTo ?? null });
-  if (!sent.ok) {
-    await noteFailure(db, channel, null, sent);
-    return "failed";
-  }
-  await db.insert(discordCards).values({ eventId: ev.id, channelId: channel.channelId, messageId: sent.result.id, kind: "card", rendered: card.hash }).onConflictDoNothing();
-  // The first group match carded here ties the channel to the group: its later matches arrive by themselves.
-  if (ev.groupId && !channel.groupId) await db.update(discordChannels).set({ groupId: ev.groupId }).where(and(eq(discordChannels.channelId, channel.channelId), isNull(discordChannels.groupId)));
-  return "posted";
+  return postCardIn(discordChannel, db, detail, discordRoom(channel), { replyTo: o.replyTo ?? null });
 }
 
 /** A match of a group: its card goes into every channel tied to that group. */
-export async function postCardsForGroup(db: Db, code: string): Promise<number> {
-  if (!discordEnabled()) return 0;
-  const detail = await getEventByCode(db, code);
-  if (!detail?.event.groupId || detail.event.status === "cancelled") return 0;
-  const channels = await db.select().from(discordChannels).where(and(eq(discordChannels.groupId, detail.event.groupId), isNull(discordChannels.leftAt))).limit(50);
-  let posted = 0;
-  for (const channel of channels) if ((await postCard(db, detail, channel)) === "posted") posted++;
-  return posted;
-}
+export const postCardsForGroup = (db: Db, code: string): Promise<number> => postCardsForGroupIn(discordChannel, db, code);
 
 /** Called after anything changed on a match: edits every card silently, notes a complete line-up once. Never throws. */
-export async function syncDiscord(db: Db, code: string): Promise<number> {
-  if (!discordEnabled()) return 0;
-  try {
-    const detail = await getEventByCode(db, code);
-    if (!detail) return 0;
-    const cards = await db
-      .select({ card: discordCards, channel: discordChannels })
-      .from(discordCards)
-      .innerJoin(discordChannels, eq(discordChannels.channelId, discordCards.channelId))
-      .where(and(eq(discordCards.eventId, detail.event.id), eq(discordCards.kind, "card"), isNull(discordChannels.leftAt)));
-    let edits = 0;
-    for (const { card, channel } of cards) {
-      const locale = channelLocale(channel);
-      const rendered = renderDiscordCard(detail, baseUrl(), locale);
-      if (rendered.hash !== card.rendered) {
-        const res = await editMessage(channel.channelId, card.messageId, { embeds: rendered.embeds, components: rendered.components });
-        if (res.ok) {
-          await db.update(discordCards).set({ rendered: rendered.hash, updatedAt: new Date() }).where(eq(discordCards.id, card.id));
-          edits++;
-        } else {
-          await noteFailure(db, channel, card.id, res);
-          continue;
-        }
-      }
-      if (rendered.complete && !card.completeNotedAt && detail.event.status !== "cancelled") {
-        const s = strings(locale);
-        const occupied = detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x)).length;
-        const note = await createMessage(channel.channelId, { content: s.completeNote(occupied, formatEventTime(detail.event.startsAt, detail.event.tz, locale)), replyTo: card.messageId, suppressNotifications: true });
-        if (note.ok) await db.update(discordCards).set({ completeNotedAt: new Date() }).where(eq(discordCards.id, card.id));
-      }
-    }
-    return edits;
-  } catch {
-    return 0;
-  }
-}
+export const syncDiscord = (db: Db, code: string): Promise<number> => syncCards(discordChannel, db, code);
 
 /** Posts the card into the channel behind a /new ticket, once the match exists. */
 export async function postCardForDiscordTicket(db: Db, code: string, ticket: string | null | undefined): Promise<boolean> {
@@ -186,87 +120,10 @@ export async function postCardForDiscordTicket(db: Db, code: string, ticket: str
 }
 
 /** About an hour before: one reminder per match into each channel that carries its card. */
-export async function sendDiscordReminders(db: Db, now = new Date()): Promise<number> {
-  if (!discordEnabled()) return 0;
-  const soon = new Date(now.getTime() + 90 * 60 * 1000);
-  const due = await db
-    .select({ id: events.id, code: events.code })
-    .from(events)
-    .where(and(gt(events.startsAt, now), lte(events.startsAt, soon), isNull(events.discordReminderSentAt), inArray(events.status, ["open", "full"]), sql`exists (select 1 from ${discordCards} c where c.event_id = ${events.id} and c.kind = 'card')`))
-    .limit(50);
-  let sent = 0;
-  for (const row of due) {
-    await db.update(events).set({ discordReminderSentAt: now }).where(eq(events.id, row.id));
-    const detail = await getEventByCode(db, row.code);
-    if (!detail) continue;
-    const cards = await db
-      .select({ card: discordCards, channel: discordChannels })
-      .from(discordCards)
-      .innerJoin(discordChannels, eq(discordChannels.channelId, discordCards.channelId))
-      .where(and(eq(discordCards.eventId, row.id), eq(discordCards.kind, "card"), isNull(discordChannels.leftAt)));
-    for (const { card, channel } of cards) {
-      const locale = channelLocale(channel);
-      const s = strings(locale);
-      const occupied = detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x)).length;
-      const res = await createMessage(channel.channelId, { content: s.reminder(cardTitle(detail, locale), whereLine(detail, locale), occupied, detail.event.capacity), replyTo: card.messageId });
-      if (res.ok) sent++;
-    }
-  }
-  return sent;
-}
+export const sendDiscordReminders = (db: Db, now = new Date()): Promise<number> => sendReminders(discordChannel, db, now);
 
 /** The first result a player records: the card, once per channel, with a line for the winners. Never throws. */
-export async function postDiscordResult(db: Db, code: string): Promise<number> {
-  if (!discordEnabled()) return 0;
-  try {
-    const detail = await getEventByCode(db, code);
-    if (!detail) return 0;
-    if (detail.event.type === "match" ? detail.scores.length === 0 : !detail.event.standings?.length) return 0;
-    const ev = detail.event;
-    const cards = await db
-      .select({ card: discordCards, channel: discordChannels })
-      .from(discordCards)
-      .innerJoin(discordChannels, eq(discordChannels.channelId, discordCards.channelId))
-      .where(and(eq(discordCards.eventId, ev.id), isNull(discordChannels.leftAt)));
-    const done = new Set(cards.filter((c) => c.card.kind === "result").map((c) => c.channel.channelId));
-    let posted = 0;
-    for (const { card, channel } of cards.filter((c) => c.card.kind === "card" && !done.has(c.channel.channelId))) {
-      const locale = channelLocale(channel);
-      const s = strings(locale);
-      const lines: string[] = [];
-      if (ev.type === "match") {
-        const r = matchResult(
-          detail.scores,
-          detail.roster.map((x) => ({ team: x.team, status: x.status, name: x.player?.displayName ?? x.invitedName ?? "?" })),
-        );
-        if (r) {
-          if (r.score) lines.push(`**${r.score}**`);
-          if (r.hasTeams && r.winner !== "draw") {
-            const winners = (r.winner === "a" ? r.a : r.b).join(" & ");
-            lines.push(s.winner(winners));
-            lines.push(praiseLine(locale, ev.code, winners));
-          }
-        }
-      } else if (ev.standings?.length) {
-        const names = new Map(detail.roster.filter((x) => x.playerId).map((x) => [x.playerId!, x.player?.displayName ?? "?"]));
-        lines.push(s.winner(ev.standings.slice(0, 3).map((id, i) => `${i + 1}. ${names.get(id) ?? "?"}`).join("  ")));
-      }
-      const url = `${baseUrl()}/${ev.code}/card`;
-      const res = await createMessage(channel.channelId, {
-        embeds: [{ title: `${s.result} · ${cardTitle(detail, locale)}`, url, description: lines.join("\n") || undefined, image: { url: `${baseUrl()}/${ev.code}/card/opengraph-image` }, color: 0x0ea5e9 }],
-        components: [{ type: 1, components: [{ type: 2, style: 5, label: s.open, url }] }],
-        replyTo: card.messageId,
-      });
-      if (res.ok) {
-        await db.insert(discordCards).values({ eventId: ev.id, channelId: channel.channelId, messageId: res.result.id, kind: "result" }).onConflictDoNothing();
-        posted++;
-      }
-    }
-    return posted;
-  } catch {
-    return 0;
-  }
-}
+export const postDiscordResult = (db: Db, code: string): Promise<number> => postResult(discordChannel, db, code);
 
 // ---------------------------------------------------------------------------
 // Interactions
