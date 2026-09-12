@@ -77,10 +77,11 @@ session reads this file, `AGENTS.md`, `docs/DECIDING.md` and the plan, and knows
 and the previous session knew.
 
 **The plan** is the artifact "Kicksmash Open Court Plan" at
-https://claude.ai/code/artifact/00649e1d-fa25-4831-9411-e31c98d1b7d2 (revision 28 on 11 September).
-It is the record of every decision. Publish a new revision once per batch, never per pull request,
-and always call the Artifact tool's `read` action on that URL before publishing (the gate refuses a
-publish that was not built on the live version).
+https://claude.ai/code/artifact/00649e1d-fa25-4831-9411-e31c98d1b7d2, and `docs/VISION.md` is the
+same decisions in the repository. The artifact is the record of every decision. Publish a new revision
+once per batch, never per pull request, and always call the Artifact tool's `read` action on that URL
+before publishing, both to learn the current revision number and because a publish that was not built
+on the live version is refused.
 
 **Standing rules from the owner** (in force since 8 to 11 September): the owner is non-technical
 and only creates accounts, taps approvals and pays; times to the owner in Thailand time; never
@@ -94,14 +95,16 @@ plus a row in `drizzle.__drizzle_migrations`; no model identifiers in commits, p
 code; commits end with the `Co-Authored-By` and `Claude-Session` trailers; three languages with
 identical message keys; a unit test with every change; a browser suite where pages or bots change.
 
-**The pipeline** (owner's word, 10 September): one pull request per feature or area with its
-adversarial review run while CI runs and fixed on the same branch before merging; locally only
-typecheck, lint, the touched unit files and the one browser suite that covers the change
-(`pnpm build && E2E_ONLY=<suite> pnpm e2e`); CI runs everything; squash-merge; reset the working
-branch `claude/kicksma-sh-domain-pvqrkb` onto main; a health check after each deploy and the full
-production check once per batch; side branches `claude/kicksma-sh-domain-pvqrkb-<topic>` for
-disjoint parallel work; never stop with work in the queue, book a return when waiting; end every
-batch with three lines: what shipped, what is next, what needs the owner.
+**The pipeline** (owner's word, 10 September, with the gate added on 12 September): one pull request
+per feature or area with its adversarial review run while CI runs and fixed on the same branch before
+merging. Before any push, `bash scripts/gate.sh` (typecheck, lint, schema versus migrations, the unit
+suite), which a Claude Code hook in `.claude/settings.json` runs by itself and which blocks the push
+when it fails; `GATE_E2E=<suite> bash scripts/gate.sh` adds a production build and the one browser
+suite that covers the change. CI runs everything, including the unit suite a second time on a real
+Postgres. Squash-merge, then reset the working branch (the one the owner names for the session) onto
+main; a health check after each deploy and the full production check once per batch; a side branch
+`<working-branch>-<topic>` for disjoint parallel work; never stop with work in the queue, book a return
+when waiting; end every batch with three lines: what shipped, what is next, what needs the owner.
 
 **Operator endpoints** (bearer `CRON_SECRET`, also accepted: the Vercel token):
 `/api/admin/errors`, `/api/admin/services`, `/api/admin/feedback`, `/api/admin/research`,
@@ -113,8 +116,12 @@ Telegram), `/api/admin/metrics`.
 research desk, main CI, deploy), `wait_ci.sh <branch> <sha>`, `deploy-poll.sh <sha> <log>`. They
 read `CRON_SECRET` (or `OPERATOR_TOKEN`) and `VERCEL_TOKEN` from the environment.
 
-**State of play on 11 September:** the product through round eleven is live and reviewed
-(pull requests #1 to #93); the launch calendar runs (press emails on 15 September with the owner's
+**State of play on 12 September:** the product through round eleven is live and reviewed
+(pull requests #1 to #99). The restructure the owner approved on 12 September is four phases in: tests
+that cannot rot with the calendar and rules a machine checks (#95, #96), one append-only fact log (#97),
+one card algorithm with Telegram and Discord as adapters plus the Telegram module split into a router
+and its handlers (#98), and the schema split by domain behind a check that it still agrees with the
+migrations (#99). What remains is the documents and the shipping pipeline. Besides that: the launch calendar runs (press emails on 15 September with the owner's
 tap, Show HN in week three, builders' articles live as answer pages, founding-club drafts queued
 for 6 October, directory texts in `docs/launch/directories.md`); the Russian answer series adds
 three pages a week; the research desk spends Tavily's credits evenly. Open items that need the

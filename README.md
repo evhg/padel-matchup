@@ -56,144 +56,45 @@ TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/padel_test pnpm te
 
 Only **one** variable is required in production: the database URL. Everything else has a safe default.
 
+<!-- env:start -->
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | ✅ | Supabase **Transaction pooler** string (port 6543), exactly as Supabase's Connect dialog shows it. `POSTGRES_URL` (Vercel ⇄ Supabase integration) works too. Empty → embedded PGlite (local dev only). |
-| `DATABASE_PASSWORD` | if the URL still says `[YOUR-PASSWORD]` | The app substitutes and percent-encodes it for you. |
-| `APP_BASE_URL` | no | Defaults to the Vercel production domain. Set it locally or on other hosts. |
+| `DATABASE_URL` | ✅ | Supabase **Transaction pooler** string (port 6543), exactly as Supabase's Connect dialog shows it. `POSTGRES_URL` (the Vercel ⇄ Supabase integration) and `SUPABASE_DB_URL` work too. Empty → the embedded PGlite database, for local development only. |
+| `DATABASE_PASSWORD` | if the URL still says `[YOUR-PASSWORD]` | Substituted into the URL and percent-encoded for you. |
+| `DIRECT_DATABASE_URL` | no | Direct (port 5432) URL for `pnpm db:migrate` and `pnpm db:generate`. `POSTGRES_URL_NON_POOLING` works too. |
+| `AUTO_MIGRATE` | no | `false` stops the app applying migrations on its first connection. That safety net is for a fresh database only: production gets each migration by hand (AGENTS.md rule 7). |
+| `APP_BASE_URL` | no | Defaults to the Vercel production domain. Set it locally and on other hosts. `NEXT_PUBLIC_APP_BASE_URL` is the browser's copy of the same value. |
 | `SESSION_SECRET` | recommended | Signs the identity cookie. Without it a stable secret is derived from the database URL. |
-| `CRON_SECRET` | recommended | Protects `/api/cron/hourly` and `/api/cron/push`. Vercel sends it automatically when set. |
-| `DIRECT_DATABASE_URL` | no | Direct (5432) URL for `pnpm db:migrate`. Not needed: the app migrates itself on first connection (`AUTO_MIGRATE=false` disables). |
-| `RESEND_API_KEY` | no | Enables all email (calendar invites, notifications, reminders). |
+| `CRON_SECRET` | recommended | Protects `/api/cron/*` and the one-off setup routes. Vercel sends it automatically when set. |
+| `RESEND_API_KEY` | no | Enables every email: calendar invitations, notifications, reminders. |
+| `EMAIL_FROM` | no | Defaults to `Kicksmash <matches@<your domain>>`; the domain must be verified in Resend. |
+| `RESEND_WEBHOOK_SECRET` | no | Verifies Resend's inbound webhook, so a reply to `feedback@` or `claude@` becomes a note. |
+| `OUTREACH_FROM` | no | The From line on outreach mail. Defaults to `Claude at Kicksmash <claude@<your domain>>`. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | no | Enables push reminders (`npx web-push generate-vapid-keys`). |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` / `TELEGRAM_BOT_USERNAME` | no | Enables the Telegram bot and Telegram sign-in. Register the webhook once with `GET /api/telegram/setup` (Bearer `CRON_SECRET`). |
-| `ANTHROPIC_API_KEY` | no | Drafts replies for the listening desk (use a key with a monthly spend cap). `LISTEN_MODEL` overrides the model. |
-| `TELEGRAM_OWNER_ID` | no | The owner's Telegram id: drafts are sent there for one-tap approval and `/admin/listen` opens for that account only. |
-| `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` | no | Ed25519 key pair (raw 32-byte hex each) that signs player passports. Without them passports carry `alg: "none"`. Generate with `node -e "const {generateKeyPairSync}=require('crypto');const k=generateKeyPairSync('ed25519');console.log(k.publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('hex'), k.privateKey.export({type:'pkcs8',format:'der'}).subarray(-32).toString('hex'))"`. |
-| `DISCORD_BOT_TOKEN` / `DISCORD_PUBLIC_KEY` | no | Enables the Discord bot (slash commands, cards, the in-server helper). Register commands and the interactions URL once with `GET /api/discord/setup` (Bearer `CRON_SECRET`); it returns the install link. `DISCORD_INVITE_URL` shows the server on the community pages. |
+| `TELEGRAM_MINIAPP_SLUG` | no | The Mini App's short name, so cards can carry a direct link into it. |
+| `TELEGRAM_OWNER_ID` | no | The owner's Telegram id: proposals, club claims and drafts go there for a one-tap answer, and the admin desks open for that account only. |
+| `DISCORD_BOT_TOKEN` / `DISCORD_PUBLIC_KEY` | no | Enables the Discord bot. Register the commands and the interactions URL once with `GET /api/discord/setup` (Bearer `CRON_SECRET`); it returns the install link. `DISCORD_APPLICATION_ID` is read from the token unless set; `DISCORD_INVITE_URL` shows the server on the community pages. |
+| `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` | no | Ed25519 pair (raw 32-byte hex each) that signs player passports. Without them a passport carries `alg: "none"`. |
+| `ANTHROPIC_API_KEY` | no | Drafts the replies on the listening desk and the proposal the owner receives for a note. `LISTEN_MODEL` overrides the model; `ANTHROPIC_MONTHLY_CAP_USD` (default 20) is the ceiling the app keeps itself under; `ANTHROPIC_ADMIN_KEY` lets the service board read the real spend. |
+| `TAVILY_API_KEY` | no | The research desk: clubs and coaches per city, and grounding for answer pages. |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USERNAME` / `REDDIT_PASSWORD` | no | Lets an approved reply be posted on Reddit as the project's account. Without them, Approve means copy and paste. |
-| `EMAIL_FROM` | no | Defaults to `Kicksmash <matches@<your domain>>`; the domain must be verified in Resend. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | no | A service account with Search Console access, so the service board can read impressions and clicks. |
+| `INDEXNOW_KEY` | no | Tells Bing and Yandex a page changed, the moment it changes. |
+| `BACKUP_GITHUB_TOKEN` / `BACKUP_GITHUB_REPO` | no | The nightly database snapshot is committed to that repository. |
+| `UPTIME_REPO` | no | `owner/repo` of the GitHub Actions uptime probe, so the service board can read its open incidents. |
+| `OPERATOR_VERCEL_TEAM` / `OPERATOR_VERCEL_PROJECT` | no | Names the Vercel project, so a missing key can be reported with the link that sets it. |
+<!-- env:end -->
 
-Generate secrets: `openssl rand -base64 32`. Check a deployment any time at `/api/health` (no secrets returned).
+Generate secrets: `openssl rand -base64 32`. The table above and `.env.example` are written by `node scripts/gen-docs.mjs` from the `process.env` reads in the code, and `tests/docs.test.ts` fails when either falls behind, so a variable the code reads cannot go undocumented. Check a deployment any time at `/api/health` (no secrets returned).
 
 ---
 
 ## Production setup
 
-Two ways. **Option A** needs no terminal at all. **Option B** scripts everything that can be scripted.
+The walkthrough lives in [docs/DEPLOY.md](docs/DEPLOY.md): Supabase, Vercel, a domain, Resend and the cron
+jobs, in a browser-only version and a CLI version. Nothing in it is needed to run the app locally.
 
-### Option A — browser only (≈ 20 min + DNS)
-
-1. **Supabase** (5 min): https://supabase.com/dashboard/new → create a project, save the database password. Click **Connect** → copy the **Transaction pooler** string (port 6543). Leave `[YOUR-PASSWORD]` in it.
-2. **Vercel** (5 min): https://vercel.com/new → **Import** `evhg/padel-matchup` (the code must be on the repo's default branch). Under **Environment Variables** add:
-   - `DATABASE_URL` = the string from step 1, unchanged
-   - `DATABASE_PASSWORD` = your database password
-   Click **Deploy**. The first request creates the tables automatically.
-3. **Check**: open `https://<your-project>.vercel.app/api/health` → `"database":"connected"`.
-4. **Domain** (5 min + waiting): Vercel → Project → **Settings → Domains → Add** `kicksma.sh` (and `www.kicksma.sh`). Vercel shows the records. At Porkbun → **Domain Management → kicksma.sh → DNS**: delete the parking `ALIAS`/`CNAME` records, then add the `A` record (Host empty) and the `www` `CNAME` with the values Vercel shows. Wait until Vercel says **Valid Configuration**.
-5. Later, optionally: `SESSION_SECRET`, `CRON_SECRET`, `RESEND_API_KEY` + `EMAIL_FROM` in **Settings → Environment Variables**, then **Deployments → ⋯ → Redeploy**.
-
-Cron runs daily at 07:00 UTC out of the box, which is what Vercel's Hobby plan allows. On Pro, change the schedule in `vercel.json` to `0 * * * *` for hourly reminders.
-
-### Option B — CLI
-
-#### 1. Supabase (≈ 10 min)
-
-1. Create a project at https://supabase.com/dashboard/new (or `npx supabase projects create kicksmash --org-id <id> --db-password <pw> --region eu-central-1`). Pick the region closest to your players. Save the DB password.
-2. Project → **Connect** (top bar) → copy two URLs:
-   - **Transaction pooler** (`...pooler.supabase.com:6543/postgres`) → `DATABASE_URL`
-   - **Direct connection** (`db.<ref>.supabase.co:5432/postgres`) → `DIRECT_DATABASE_URL`
-   Append `?sslmode=require` to both if it isn't there.
-3. Put them in `.env`. The schema is applied automatically on first connection; to do it explicitly:
-   ```bash
-   pnpm db:migrate     # runs ./drizzle/*.sql against DIRECT_DATABASE_URL
-   pnpm db:seed        # optional: example matches PLAY + PAST
-   ```
-4. Sanity check: `pnpm dev` now says nothing about PGlite and `/api/health` reports `"database":"connected"`.
-
-No Supabase Auth, RLS or storage is used — only Postgres.
-
-#### 2. Resend (≈ 15 min incl. DNS)
-
-Skip this entirely if you don't want email yet; deploy never blocks on it.
-
-1. https://resend.com → **API Keys** → create key (Sending access) → `RESEND_API_KEY`.
-2. **Domains → Add domain** → `kicksma.sh` (region: same continent as Vercel). Resend shows 3–4 DNS records.
-3. Add them at Porkbun (see §4 for the editor quirks). Names below are what Porkbun expects in the **Host** field (it appends `.kicksma.sh` itself) — **copy the exact values from Resend's screen**:
-
-   | Type | Host | Value |
-   | --- | --- | --- |
-   | TXT | `resend._domainkey` | `p=MIGf…` (DKIM, from Resend) |
-   | MX | `send` | `feedback-smtp.<region>.amazonses.com`, priority 10 |
-   | TXT | `send` | `v=spf1 include:amazonses.com ~all` |
-   | TXT | `_dmarc` | `v=DMARC1; p=none;` |
-
-4. Back in Resend click **Verify**. Usually green within minutes (up to an hour).
-5. Set `EMAIL_FROM="Kicksmash <matches@kicksma.sh>"`.
-
-Emails sent: calendar invite (.ics, `METHOD:REQUEST`, stable UID) on join/confirm/promotion · updated/cancelled .ics · organizer notices (joined / left / confirmed / declined / promoted) · 24h invitee reminders · one post-match score reminder · welcome mail with the personal link · restore codes. All EN + RU + ES by recipient language. Invites and invite reminders skip addresses on the opt-out list and carry the unsubscribe link; the activity notices respect the player's "email me" switch.
-
-#### 3. Deploy to Vercel via CLI (≈ 10 min)
-
-```bash
-pnpm dlx vercel@latest login          # opens the browser; or: vercel login --github
-pnpm dlx vercel link                  # create a new project "kicksmash" (framework auto-detected: Next.js)
-
-# Production env vars (paste values when prompted; repeat for each)
-for v in DATABASE_URL DIRECT_DATABASE_URL SESSION_SECRET CRON_SECRET APP_BASE_URL RESEND_API_KEY EMAIL_FROM; do
-  pnpm dlx vercel env add $v production
-done
-# APP_BASE_URL = https://kicksma.sh
-
-pnpm dlx vercel --prod                # first production deploy
-```
-
-Token flow for CI / headless machines: create a token at https://vercel.com/account/tokens and use `vercel --token $VERCEL_TOKEN --prod --yes`.
-
-Build settings need no changes (`pnpm build`, Node 20+). The migration is **not** run at build time — run `pnpm db:migrate` locally whenever `drizzle/` changes.
-
-#### 4. Custom domain `kicksma.sh` at Porkbun (≈ 10 min + DNS propagation)
-
-Production goes straight to the custom domain; no `*.vercel.app` staging step.
-
-1. Add the domain to the project:
-   ```bash
-   pnpm dlx vercel domains add kicksma.sh
-   pnpm dlx vercel domains add www.kicksma.sh   # optional; Vercel redirects www → apex
-   ```
-   The CLI (and **Project → Settings → Domains**) prints the exact records to create.
-2. Porkbun → **Domain Management → kicksma.sh → DNS**.
-   - **Delete Porkbun's default records first** (the parking `ALIAS`/`CNAME` on `@` and `www`). Vercel's A record can't coexist with an ALIAS on the apex.
-   - The **Host** field is relative: leave it **blank** for the apex, type `www` for www.
-3. Create — **copy the exact values from Vercel's domain screen** (typical values shown):
-
-   | Type | Host | Answer |
-   | --- | --- | --- |
-   | A | *(blank)* | `76.76.21.21` |
-   | CNAME | `www` | `cname.vercel-dns.com` |
-
-4. Wait for Vercel to show **Valid Configuration** (`vercel domains inspect kicksma.sh`). SSL is issued automatically. Porkbun's TTL is 600s; worst case a couple of hours.
-5. Redeploy once so `APP_BASE_URL` links are baked correctly: `pnpm dlx vercel --prod`.
-6. Test the link preview: paste `https://kicksma.sh/PLAY` into a WhatsApp/Telegram chat — title, date/time, venue and "2/4 players — tap to join" should render. Debug with https://www.opengraph.xyz/ or `curl -I https://kicksma.sh/PLAY/opengraph-image`.
-
-Also add the Resend records from §2 in the same DNS editor if you skipped them.
-
-#### 5. Cron (already configured, ≈ 2 min to verify)
-
-`vercel.json` schedules `GET /api/cron/hourly` daily at 07:00 UTC (Hobby-plan safe; on Pro set `0 * * * *` for hourly). Vercel automatically sends `Authorization: Bearer $CRON_SECRET` when that variable is set; without it the endpoint is open but every step is idempotent.
-
-The job does: `open/full → past` transitions · waitlist hygiene · 24h invite reminders (email only, stops on response or start) · the single organizer score reminder (2h after start) · automatic group matches for weekly slots (with member notifications) · daily metric snapshots.
-
-Verify: **Project → Settings → Cron Jobs** shows the job, or trigger by hand:
-
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" https://kicksma.sh/api/cron/hourly
-# → {"ok":true,"transitionedToPast":0,"promotions":0,"inviteReminders":0,"scoreReminders":0,...}
-```
-
-Hobby plan crons run once a day at best-effort times; Pro runs them on the minute.
-
----
 
 ## npm packages
 
@@ -210,18 +111,10 @@ Questions, ideas and "I built a thing on the API" go to [GitHub Discussions](htt
 
 ## Deploy your own
 
-Kicksmash is one Next.js project and one Postgres database, Apache-2.0. Run it for your club, your city or your country; the environment table above is the whole configuration.
+Kicksmash is one Next.js project and one Postgres database, Apache-2.0. Run it for your club, your city or
+your country: [docs/DEPLOY.md](docs/DEPLOY.md) has the Vercel button, the Docker build and the walkthrough.
+The environment table above is the whole configuration, and a test keeps that true.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fevhg%2Fpadel-matchup&project-name=kicksmash&repository-name=kicksmash&env=DATABASE_URL,DIRECT_DATABASE_URL,SESSION_SECRET,APP_BASE_URL&envDescription=Postgres%20connection%20strings%2C%20a%20random%20session%20secret%20and%20your%20public%20URL&envLink=https%3A%2F%2Fgithub.com%2Fevhg%2Fpadel-matchup%23environment-variables)
-
-Or with Docker (standalone Next.js build, about 200 MB):
-
-```bash
-docker build -t kicksmash .
-docker run -p 3000:3000 --env-file .env kicksmash   # then: pnpm db:migrate against the same DATABASE_URL
-```
-
-Everything optional stays optional: without a Resend key no emails go out, without a bot token there is no Telegram or Discord, without an Anthropic key the listening desk only collects. Keep the `/agents` charter and the CC BY 4.0 notice if you keep the public API.
 
 ## Product rules baked in
 
@@ -243,7 +136,7 @@ Everything optional stays optional: without a Resend key no emails go out, witho
 - **Listening desk (helpful replies, never on their own):** every hour the app reads public feeds where people ask about organising padel (Hacker News via Algolia, r/padel and Reddit searches via RSS), keeps the last week of items, gates them cheaply (padel + an organising intent), and asks the model for a reply in the thread's language under strict tone rules: answer first, no hype, mention kicksma.sh at most once and only when it solves the question, disclose that we build it. Drafts go to the owner on Telegram with **Approve / Skip / Edit** buttons, at most six a day; Approve posts on Reddit as the project's account (or, without Reddit keys, marks it for a manual copy). `/admin/listen` is the desk (owner only, via Telegram sign-in). Daily ceilings on drafts and tokens keep a capped API key safe. Approved replies grow into evergreen **answer pages** at `/answers/{slug}` (question rewritten generically, QAPage JSON-LD, in the sitemap), published at once; a Sunday digest on Telegram lists the week and offers one-tap Unpublish for each new page. Module: `src/lib/listen/`.
 - **Feedback, and who decides:** `/feedback` in Telegram or Discord, the web form at `/feedback`, or an email to `feedback@` becomes a note. The person gets an honest thank-you at once (the note was read; they hear if something gets built; nothing else is promised). The owner gets a proposal on Telegram the moment a real note arrives: the verdict the rules in `docs/DECIDING.md` give, what would change and where, the size (small, medium, large), a timeline estimate made without reading the code, what it needs, and a recommendation, ending with "build" or "skip". Nothing is built from a note until the owner says so, and the person hears only what shipped. A production error the store has never seen is one line to the owner too, at first sight, a few an hour at most. The note and the error are the triggers; there is no daily loop.
 - **Embeds and oEmbed:** `/embed/board/{slug}` and `/embed/match/{code}` are iframe-safe views (no header, opens on kicksma.sh in a new tab, "Live from kicksma.sh" footer); the venue board shows the snippet under "Embed this board". `/api/oembed?url=…&format=json` is an oEmbed provider and match and board pages advertise it with `<link rel="alternate" type="application/json+oembed">`, so WordPress, Discourse, Ghost and Notion unfurl a pasted link into the live card. Helper: `src/lib/embed.ts`.
-- **Deploy your own:** the app is one Next.js project with a Postgres database. `Dockerfile` builds a standalone image; the README's environment table is the whole configuration. Everything is Apache-2.0; run it for your club, your city or your country.
+- **Deploy your own:** the app is one Next.js project with a Postgres database. `Dockerfile` builds a standalone image; the README's environment table is the whole configuration, and a test keeps that true. Everything is Apache-2.0; run it for your club, your city or your country.
 - **Tournament formats:** besides the americano rotation a tournament can run as a **mexicano** (round 1 random, then the courts follow the standings, 1st+4th against 2nd+3rd on each court; the next round waits for all scores) or as **King of the Court** (winners move up a court, losers move down, the top court's winners and the bottom court's losers stay, partners split every round, standings follow the court you finish on). Chosen with one chip when creating a tournament, changeable until round 1. Engine: `src/lib/domain/formats.ts`.
 - **Organizer-verified levels:** after a finalized result the organizer sees a folded "Confirm levels" row and confirms, one tap each or all at once, the levels of the people they played with. A confirmed level shows a ✓ next to the chip and stays confirmed while it moves less than half a step.
 - **Rankings (opt-in, off by default):** `/v/{slug}/ranking` ranks a club's finalized results from the last 90 days (3 points per win, 1 per draw, 3/2/1 for tournament podiums); `/phuket` and `/singapore` do the same across a city's clubs and list the open matches there. Only players who switched on "Show me in rankings" (My matches, or one tap on a ranking page) appear. Cities: `src/lib/domain/cities.ts`.
@@ -267,7 +160,7 @@ Everything public on the site is available to programs and assistants, and every
 | REST writes (key optional, rate-limited per address without one) | `POST /api/v1/matches`, `POST /api/v1/matches/{code}/join` |
 | Keys | `POST /api/v1/keys` → instant, shown once; `Authorization: Bearer ks_live_…` |
 | Webhooks (key required) | `POST /api/v1/webhooks` with `url`, `events`, optional `filter`; signed `X-Kicksmash-Signature: t=…,v1=…`; retried with backoff by the hourly cron |
-| MCP | `POST /mcp` (streamable HTTP, stateless JSON): `about_kicksmash`, `get_match`, `find_matches`, `get_group`, `generate_schedule`, `create_match`, `join_match`, `create_api_key`; resources with the model reference and the OpenAPI document |
+| MCP | `POST /mcp` (streamable HTTP, stateless JSON). Matches and groups: `about_kicksmash`, `get_match`, `find_matches`, `get_group`, `generate_schedule`, `create_match`, `join_match`, `create_api_key`. Clubs and series: `find_clubs`, `find_series`. Coaching: `find_coaches`, `coach_slots`, `request_coach`, `book_lesson`, `cancel_lesson`. Plus resources with the model reference and the OpenAPI document. `tests/docs.test.ts` fails when this row falls behind `src/lib/api/mcp.ts`. |
 | Discovery | `/llms.txt`, `/llms-full.txt`, `/.well-known/mcp.json`, `/api/openapi.json`, `/developers`, `/agents`, `robots.txt` explicitly allows AI crawlers |
 | Feeds | `/g/{code}/calendar.ics`, `/v/{slug}/calendar.ics` |
 
@@ -296,15 +189,20 @@ src/lib/domain/{levels,requests,rating}.ts   level maths (ranges, presets, balan
 src/lib/domain/groups.ts   groups, membership, weekly slots (recurrenceDue / autoCreateGroupMatches)
 src/lib/domain/venueBoard.ts   venue slugs, the public board query, listing toggle
 src/lib/api/               public REST (operations, serialize, keys, webhooks, openapi), MCP server (mcp.ts), model-facing docs (docs.ts)
+src/lib/channels/          one card algorithm (cards.ts) with Telegram and Discord as adapters over it
+src/lib/domain/facts.ts    the append-only fact log every view is a query over
 skills/kicksmash/SKILL.md  installable skill for coding agents; AGENTS.md at the root for agents working on this repo
 src/lib/domain/{levels,rating,requests}.ts       level scale, presets, fit, balanced teams, Elo-style deltas; join requests
 src/lib/alerts.ts        error counters for the admin health row
-src/db/                  Drizzle schema, driver factory (postgres-js | PGlite), seed
+src/db/schema/           the tables, one file per domain (enums, players, events, groups, clubs, coaching, channels, api, ops)
+src/db/                  driver factory (postgres-js | PGlite), seed
 drizzle/                 generated SQL migrations
 messages/{en,ru,es}.json all UI, share and email copy (identical key sets, typed in global.d.ts)
 tests/                   vitest against PGlite (or TEST_DATABASE_URL)
 e2e/                     Playwright journeys + runner (pnpm e2e)
-.github/workflows/ci.yml typecheck · lint · vitest (PGlite + Postgres) · build · e2e
+.github/workflows/ci.yml typecheck · lint · schema vs migrations · vitest (PGlite + Postgres) · build · e2e (2 shards)
+scripts/                 gate.sh (the pre-push gate), check-migrations.sh, gen-docs.mjs (this README's env table)
 ```
 
-Schema changes: edit `src/db/schema.ts` → `pnpm db:generate` → commit `drizzle/` → `pnpm db:migrate`.
+Schema changes: edit the file for that domain under `src/db/schema/` → `pnpm db:generate` → commit `drizzle/` → apply
+the SQL to production by hand (AGENTS.md rule 7). `bash scripts/check-migrations.sh` fails when the two disagree.

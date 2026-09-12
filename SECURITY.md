@@ -27,6 +27,7 @@ You will get a reply within a few days. Fixes ship as soon as they are ready; th
 
 ## Built-in protections
 
+- Every table has Row Level Security on with a single policy for the app's own database role, so Supabase's Data API exposes nothing with the project's publishable key. A new table gets both statements in the same migration, and `pnpm db:push` is disabled because it would drop the policies.
 - Per-IP and per-player rate limits on identity creation, match creation, joins, invitations, email changes and code requests.
 - HMAC-signed unsubscribe links; a one-tap opt-out list that organizer-initiated email respects.
 - httpOnly, signed session cookie; personal tokens are 12 random characters with the previous token honored after rotation.
