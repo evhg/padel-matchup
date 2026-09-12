@@ -12,12 +12,11 @@ import { translatorFor } from "@/lib/email/templates";
 import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
-import { refreshStartedCards, sendTelegramReminders } from "@/lib/telegram/bot";
 import { expireRequests, lessonRemindersDue, tickWaitlist } from "@/lib/coach/chains";
 import { notifyLessonReminder, notifyOffer, notifyOfferLapsed } from "@/lib/coach/notify";
 import { lessonPackages } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { sendDiscordReminders } from "@/lib/discord/bot";
+import { channels, sendReminders } from "@/lib/channels";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,17 +32,17 @@ export async function GET(req: Request) {
   if (secret && auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const now = new Date();
   const db = await getDb();
-  // Telegram "about an hour before" reminders share this 5-minute tick.
-  const telegram = await sendTelegramReminders(db, now).catch((e) => {
-    void reportError("cron", e);
-    return 0;
-  });
-  const discord = await sendDiscordReminders(db, now).catch((e) => {
-    void reportError("cron", e);
-    return 0;
-  });
-  // Cards of matches that just started grow their Result button.
-  await refreshStartedCards(db, now).catch((e) => reportError("cron", e));
+  // "About an hour before" reminders on every card channel share this 5-minute tick; cards of matches that just started grow their Result button.
+  const reminded: Record<string, number> = { telegram: 0, discord: 0 };
+  for (const ch of channels()) {
+    reminded[ch.name] = await sendReminders(ch, db, now).catch((e) => {
+      void reportError("cron", e);
+      return 0;
+    });
+    if (ch.refreshStarted) await ch.refreshStarted(db, now).catch((e) => reportError("cron", e));
+  }
+  const telegram = reminded.telegram;
+  const discord = reminded.discord;
   // The coach's book: lapsed offers move down the line, tomorrow's lessons get their one reminder.
   const coachTick = { lapsed: 0, offered: 0, reminded: 0, requestsExpired: 0 };
   try {

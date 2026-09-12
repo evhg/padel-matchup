@@ -161,24 +161,28 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
       console.warn("[moments] award failed", code, e);
     }
   }
-  // Every change also reaches the Telegram cards (edited in place; the result is posted once). Loaded lazily: the bot imports the operations.
+  // Every change also reaches the cards on every configured channel (edited in place; the result is posted once). Loaded lazily: the bots import the operations.
+  try {
+    const { channels, postCardsForGroup, postResult, syncCards } = await import("@/lib/channels");
+    for (const ch of channels()) {
+      try {
+        if (event === "match.created") await postCardsForGroup(ch, db, code);
+        if (event === "match.result") await postResult(ch, db, code);
+        await syncCards(ch, db, code);
+      } catch (e) {
+        console.warn(`[${ch.name}] sync failed`, event, code, e);
+      }
+    }
+  } catch (e) {
+    console.warn("[channels] load failed", event, code, e);
+  }
+  // Telegram alone sends private notes for a time change or a cancellation.
   try {
     const bot = await import("@/lib/telegram/bot");
-    if (event === "match.created") await bot.postCardsForGroup(db, code);
-    if (event === "match.result") await bot.postTelegramResult(db, code);
-    await bot.syncTelegram(db, code);
     if (event === "match.cancelled") await bot.postTelegramNotice(db, code, "cancelled");
     else if (event === "match.updated" && extra.calendarChanged === true) await bot.postTelegramNotice(db, code, "updated");
   } catch (e) {
-    console.warn("[telegram] sync failed", event, code, e);
-  }
-  try {
-    const bot = await import("@/lib/discord/bot");
-    if (event === "match.created") await bot.postCardsForGroup(db, code);
-    if (event === "match.result") await bot.postDiscordResult(db, code);
-    await bot.syncDiscord(db, code);
-  } catch (e) {
-    console.warn("[discord] sync failed", event, code, e);
+    console.warn("[telegram] notice failed", event, code, e);
   }
 }
 

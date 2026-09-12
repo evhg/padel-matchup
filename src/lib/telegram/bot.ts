@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { sendCalendarInvite, type CreatorKind } from "@/lib/notify";
 import { events, players, telegramCards, telegramChats, telegramInlineCards, type Event, type Player, type TelegramChat } from "@/db/schema";
@@ -31,8 +31,10 @@ import { menuWord } from "@/lib/coach/menu";
 import { coachBotLocale, coachStrings } from "@/lib/coach/strings";
 import { isValidShareCode } from "@/lib/codes";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { answerCallbackQuery, answerInlineQuery, deleteChatCommands, deleteMessage, editInlineMessageText, editMessageText, editOk, esc, messageGone, sendMessage, sendPhoto, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
+import { answerCallbackQuery, answerInlineQuery, deleteChatCommands, deleteMessage, editMessageText, editOk, esc, messageGone, sendMessage, telegramBotId, telegramBotUsername, telegramEnabled, telegramWebhookSecret, type InlineArticle, type InlineKeyboard, type TgChat, type TgMessage, type TgUpdate, type TgUser } from "./api";
 import { botLocale, cardTitle, renderCard, strings, whenLine, whereLine, type BotLocale, type BotStrings } from "./card";
+import { postCard as postCardIn, postCardsForGroup as postCardsForGroupIn, postResult, sendReminders, syncCards } from "@/lib/channels/cards";
+import { chatLocale, renderHash, telegramChannel, telegramRoom } from "@/lib/channels/telegram";
 import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "./parse";
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
@@ -133,92 +135,21 @@ export async function upsertChat(db: Db, chat: TgChat, from?: TgUser | null): Pr
   return { chat: c, created: true };
 }
 
-const chatLocale = (chat: TelegramChat | null, fallback?: string | null): BotLocale => (chat ? (chat.locale === "ru" ? "ru" : "en") : botLocale(fallback));
 
 // ---------------------------------------------------------------------------
 // Cards
 // ---------------------------------------------------------------------------
-const renderHash = (text: string, keyboard: unknown) => createHash("sha256").update(text).update(JSON.stringify(keyboard)).digest("hex");
 
-/** Posts the card of a match into a chat, or refreshes the one already there. */
+/** Posts the card of a match into a chat, or refreshes the one already there. The algorithm lives in src/lib/channels. */
 export async function postCard(db: Db, detail: EventDetail, chat: TelegramChat, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<"posted" | "refreshed" | "failed"> {
-  const ev = detail.event;
-  const [existing] = await db.select().from(telegramCards).where(and(eq(telegramCards.eventId, ev.id), eq(telegramCards.chatId, chat.chatId), eq(telegramCards.kind, "card"))).limit(1);
-  const locale = chatLocale(chat);
-  const { text, keyboard } = renderCard(detail, baseUrl(), locale);
-  if (existing) {
-    await syncTelegram(db, ev.code);
-    return "refreshed";
-  }
-  const sent = await sendMessage(chat.chatId, text, { keyboard, replyTo: o.replyTo ?? null, threadId: o.threadId ?? null });
-  if (!sent.ok) return "failed";
-  await db
-    .insert(telegramCards)
-    .values({ eventId: ev.id, chatId: chat.chatId, messageId: sent.result.message_id, kind: "card", rendered: renderHash(text, keyboard) })
-    .onConflictDoNothing();
-  // The first group match carded here ties the chat to the group: from now on the group's matches arrive by themselves.
-  if (ev.groupId && !chat.groupId && GROUP_TYPES.has(chat.type)) await db.update(telegramChats).set({ groupId: ev.groupId }).where(and(eq(telegramChats.chatId, chat.chatId), isNull(telegramChats.groupId)));
-  return "posted";
+  return postCardIn(telegramChannel, db, detail, telegramRoom(chat), { replyTo: o.replyTo ?? null, threadId: o.threadId ?? null });
 }
 
-/** A match of a group: its card goes into every chat tied to that group (the weekly slot, a match made on the site, one made from another chat). */
-export async function postCardsForGroup(db: Db, code: string): Promise<number> {
-  if (!telegramEnabled()) return 0;
-  const detail = await getEventByCode(db, code);
-  if (!detail?.event.groupId || detail.event.status === "cancelled") return 0;
-  const chats = await db.select().from(telegramChats).where(and(eq(telegramChats.groupId, detail.event.groupId), isNull(telegramChats.leftAt))).limit(50);
-  let posted = 0;
-  for (const chat of chats) if ((await postCard(db, detail, chat)) === "posted") posted++;
-  return posted;
-}
+/** A match of a group: its card goes into every chat tied to that group. */
+export const postCardsForGroup = (db: Db, code: string): Promise<number> => postCardsForGroupIn(telegramChannel, db, code);
 
 /** Called after anything changed on a match: edits every card silently, notes a complete line-up once. Never throws. */
-export async function syncTelegram(db: Db, code: string, now = new Date()): Promise<number> {
-  if (!telegramEnabled()) return 0;
-  try {
-    const detail = await getEventByCode(db, code);
-    if (!detail) return 0;
-    const cards = await db
-      .select({ card: telegramCards, chat: telegramChats })
-      .from(telegramCards)
-      .innerJoin(telegramChats, eq(telegramChats.chatId, telegramCards.chatId))
-      .where(and(eq(telegramCards.eventId, detail.event.id), eq(telegramCards.kind, "card"), isNull(telegramChats.leftAt)));
-    let edits = 0;
-    for (const { card, chat } of cards) {
-      const locale = chatLocale(chat);
-      const { text, keyboard, complete } = renderCard(detail, baseUrl(), locale, now);
-      const hash = renderHash(text, keyboard);
-      if (hash !== card.rendered) {
-        const res = await editMessageText(chat.chatId, card.messageId, text, keyboard);
-        if (editOk(res)) {
-          await db.update(telegramCards).set({ rendered: hash, updatedAt: new Date() }).where(eq(telegramCards.id, card.id));
-          edits++;
-        }
-      }
-      if (complete && !card.completeNotedAt && detail.event.status !== "cancelled") {
-        const s = strings(locale);
-        const occupied = detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x)).length;
-        const note = await sendMessage(chat.chatId, s.completeNote(occupied, formatEventTime(detail.event.startsAt, detail.event.tz, locale)), { replyTo: card.messageId, silent: true });
-        if (note.ok) await db.update(telegramCards).set({ completeNotedAt: new Date() }).where(eq(telegramCards.id, card.id));
-      }
-    }
-    // Cards shared through inline mode: same render, edited by their inline message id.
-    const inline = await db.select().from(telegramInlineCards).where(eq(telegramInlineCards.eventId, detail.event.id)).limit(200);
-    for (const c of inline) {
-      const { text, keyboard } = renderCard(detail, baseUrl(), c.locale === "ru" ? "ru" : "en", now);
-      const hash = renderHash(text, keyboard);
-      if (hash === c.rendered) continue;
-      const res = await editInlineMessageText(c.inlineMessageId, text, keyboard);
-      if (editOk(res)) {
-        await db.update(telegramInlineCards).set({ rendered: hash, updatedAt: new Date() }).where(eq(telegramInlineCards.inlineMessageId, c.inlineMessageId));
-        edits++;
-      }
-    }
-    return edits;
-  } catch {
-    return 0;
-  }
-}
+export const syncTelegram = (db: Db, code: string, now = new Date()): Promise<number> => syncCards(telegramChannel, db, code, now);
 
 /** Posts the card into the chat behind a /new ticket, once the match exists. */
 export async function postCardForTicket(db: Db, code: string, ticket: string | null | undefined): Promise<boolean> {
@@ -230,107 +161,14 @@ export async function postCardForTicket(db: Db, code: string, ticket: string | n
   return (await postCard(db, detail, chat)) !== "failed";
 }
 
-/** Every few minutes: cards of matches that started in the last day and have no confirmed result are re-rendered, so the Result button shows up. The hash keeps it to one edit per card. */
-export async function refreshStartedCards(db: Db, now = new Date()): Promise<number> {
-  if (!telegramEnabled()) return 0;
-  const rows = await db
-    .selectDistinct({ code: events.code })
-    .from(events)
-    .where(
-      and(
-        eq(events.type, "match"),
-        lte(events.startsAt, now),
-        gt(events.startsAt, new Date(now.getTime() - DAY_MS)),
-        eq(events.scoreLockedByCreator, false),
-        inArray(events.status, ["open", "full", "past"]),
-        sql`(exists (select 1 from ${telegramCards} c where c.event_id = ${events.id} and c.kind = 'card') or exists (select 1 from ${telegramInlineCards} i where i.event_id = ${events.id}))`,
-      ),
-    )
-    .limit(100);
-  let edits = 0;
-  for (const r of rows) edits += await syncTelegram(db, r.code, now);
-  return edits;
-}
+/** Every few minutes: cards of matches that just started grow their Result button. */
+export const refreshStartedCards = (db: Db, now = new Date()): Promise<number> => telegramChannel.refreshStarted!(db, now);
 
 /** About an hour before: one reminder per match into each chat that carries its card. */
-export async function sendTelegramReminders(db: Db, now = new Date()): Promise<number> {
-  if (!telegramEnabled()) return 0;
-  const soon = new Date(now.getTime() + 90 * 60 * 1000);
-  const due = await db
-    .select({ id: events.id, code: events.code })
-    .from(events)
-    .where(and(gt(events.startsAt, now), lte(events.startsAt, soon), isNull(events.telegramReminderSentAt), inArray(events.status, ["open", "full"]), sql`exists (select 1 from ${telegramCards} c where c.event_id = ${events.id} and c.kind = 'card')`))
-    .limit(50);
-  let sent = 0;
-  for (const row of due) {
-    await db.update(events).set({ telegramReminderSentAt: now }).where(eq(events.id, row.id));
-    const detail = await getEventByCode(db, row.code);
-    if (!detail) continue;
-    const cards = await db
-      .select({ card: telegramCards, chat: telegramChats })
-      .from(telegramCards)
-      .innerJoin(telegramChats, eq(telegramChats.chatId, telegramCards.chatId))
-      .where(and(eq(telegramCards.eventId, row.id), eq(telegramCards.kind, "card"), isNull(telegramChats.leftAt)));
-    for (const { card, chat } of cards) {
-      const locale = chatLocale(chat);
-      const s = strings(locale);
-      const occupied = detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x)).length;
-      const res = await sendMessage(chat.chatId, s.reminder(cardTitle(detail, locale), whereLine(detail, locale), occupied, detail.event.capacity), { replyTo: card.messageId });
-      if (res.ok) sent++;
-    }
-  }
-  return sent;
-}
+export const sendTelegramReminders = (db: Db, now = new Date()): Promise<number> => sendReminders(telegramChannel, db, now);
 
 /** The first result anyone records: the picture, once per chat, with a line for the winners and "same time next week?". Never throws. */
-export async function postTelegramResult(db: Db, code: string): Promise<number> {
-  if (!telegramEnabled()) return 0;
-  try {
-    const detail = await getEventByCode(db, code);
-    if (!detail) return 0;
-    if (detail.event.type === "match" ? detail.scores.length === 0 : !detail.event.standings?.length) return 0;
-    const ev = detail.event;
-    const cards = await db
-      .select({ card: telegramCards, chat: telegramChats })
-      .from(telegramCards)
-      .innerJoin(telegramChats, eq(telegramChats.chatId, telegramCards.chatId))
-      .where(and(eq(telegramCards.eventId, ev.id), isNull(telegramChats.leftAt)));
-    const done = new Set(cards.filter((c) => c.card.kind === "result").map((c) => c.chat.chatId));
-    let posted = 0;
-    for (const { card, chat } of cards.filter((c) => c.card.kind === "card" && !done.has(c.chat.chatId))) {
-      const locale = chatLocale(chat);
-      const s = strings(locale);
-      let caption = `${s.result} · ${cardTitle(detail, locale)}`;
-      if (ev.type === "match") {
-        const r = matchResult(
-          detail.scores,
-          detail.roster.map((x) => ({ team: x.team, status: x.status, name: x.player?.displayName ?? x.invitedName ?? "?" })),
-        );
-        if (r) {
-          caption += `\n${r.score}`;
-          if (r.hasTeams && r.winner !== "draw") {
-            const winners = (r.winner === "a" ? r.a : r.b).join(" & ");
-            caption += `\n${s.winner(winners)}\n${praiseLine(locale, ev.code, winners)}`;
-          }
-        }
-      } else if (ev.standings?.length) {
-        const names = new Map(detail.roster.filter((x) => x.playerId).map((x) => [x.playerId!, x.player?.displayName ?? "?"]));
-        caption += `\n${s.winner(ev.standings.slice(0, 3).map((id, i) => `${i + 1}. ${names.get(id) ?? "?"}`).join("  "))}`;
-      }
-      const url = `${baseUrl()}/${ev.code}/card`;
-      const keyboard: InlineKeyboard = { inline_keyboard: [[{ text: s.open, url }], ...(ev.type === "match" && !ev.groupId ? [[{ text: s.sameTime, callback_data: `g:${ev.code}` }]] : [])] };
-      const photo = await sendPhoto(chat.chatId, `${baseUrl()}/${ev.code}/card/opengraph-image`, caption, { replyTo: card.messageId, keyboard });
-      const res = photo.ok ? photo : await sendMessage(chat.chatId, caption, { replyTo: card.messageId, keyboard });
-      if (res.ok) {
-        await db.insert(telegramCards).values({ eventId: ev.id, chatId: chat.chatId, messageId: res.result.message_id, kind: "result" }).onConflictDoNothing();
-        posted++;
-      }
-    }
-    return posted;
-  } catch {
-    return 0;
-  }
-}
+export const postTelegramResult = (db: Db, code: string): Promise<number> => postResult(telegramChannel, db, code);
 
 // ---------------------------------------------------------------------------
 // Creating from the chat, and the result from the card.

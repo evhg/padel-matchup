@@ -20,6 +20,7 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 
 - `src/lib/domain/`: pure business rules, unit-tested, framework-free. New rules start here.
 - `src/lib/domain/facts.ts`: the fact log, one append-only row per thing that happened (kind, channel, actor, subject, code, city, venue, numbers). `emitMatchEvent` records every match event with the channel the `OpContext` names; `bookLesson` and `cancelLesson` record lessons. `recordFact` never throws and never stores a name, an email or a token; every view of the data is a query over `factsSince`.
+- `src/lib/channels/`: the card channels. `cards.ts` is the one algorithm (post a card once, edit it in place, note a complete line-up once, remind once an hour before, post the result once); `telegram.ts` and `discord.ts` are adapters over it, `index.ts` the registry. `emitMatchEvent` and the push cron loop over `channels()`. A new channel (LINE) is one adapter implementing `CardChannel` in `types.ts` (with `canEdit: false` where messages cannot be edited), one line in the registry and one browser suite; `tests/channels.test.ts` proves the algorithm on a channel that exists only there.
 - `src/actions/`: server actions (validate → domain → revalidate → side effects in `after()`).
 - `src/lib/api/`: the public REST API, MCP server, webhooks, OpenAPI and model-facing docs (`docs.ts`).
 - `src/app/`: routes. `[code]` is a match, `g/[code]` a group, `v/[slug]` a venue board, `mcp` the MCP endpoint, `api/v1/*` the REST API.
