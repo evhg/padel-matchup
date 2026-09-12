@@ -54,7 +54,7 @@ export default async function CoachesInCityPage({ params }: Props) {
           </section>
         ) : (
           <ul className="flex flex-col gap-3" data-testid="coach-list">
-            {coaches.map((c, i) => (
+            {coaches.map((c) => (
               <li key={c.id} className="card flex flex-col gap-2">
                 {isFoundingCoach(c) && <span className="chip-muted self-start">🏅 {tCoach("page.founding", { city: city.name })}</span>}
                 <div className="flex items-baseline justify-between gap-3">

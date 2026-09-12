@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems } from "@/db/schema";
@@ -8,6 +9,7 @@ import type { FeedSpec } from "@/lib/listen/sources";
 import { createTestDb } from "./helpers/db";
 
 const NOW = new Date("2026-09-07T09:00:00Z");
+freezeClock(NOW);
 const iso = (hoursAgo: number) => new Date(NOW.getTime() - hoursAgo * 3600 * 1000).toISOString();
 
 const atom = (entries: { id: string; title: string; body: string; when: string }[]) =>
