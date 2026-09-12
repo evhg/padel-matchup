@@ -21,11 +21,14 @@ import { manageUrl } from "@/lib/share";
 import { ApiError } from "./http";
 import { matchToPublic, type PublicMatch } from "./serialize";
 import type { WebhookEvent } from "./webhooks";
+import type { Channel } from "@/lib/domain/facts";
 
 /** Side effects (emails, webhooks) run after the response when a request context exists; tests pass a no-op. */
 export type OpContext = {
   afterwards: (fn: () => Promise<void>) => void;
   emit: (event: WebhookEvent, code: string, extra?: Record<string, unknown>) => void;
+  /** Where the request came from, for the fact log. Unset means the web. */
+  channel?: Channel;
 };
 export const NO_SIDE_EFFECTS: OpContext = { afterwards: () => undefined, emit: () => undefined };
 

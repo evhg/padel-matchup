@@ -20,7 +20,8 @@ export async function POST(req: Request) {
     void bumpMetric(db, "mcp_calls").catch(() => undefined);
     const ctx: OpContext = {
       afterwards: (fn) => after(fn),
-      emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra)),
+      emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "mcp" })),
+      channel: "mcp",
     };
     const out = await handleMcpPost(db, await readJson(req), ctx);
     const version = req.headers.get("mcp-protocol-version") ?? MCP_PROTOCOL_VERSIONS[0];

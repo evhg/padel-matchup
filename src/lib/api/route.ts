@@ -18,7 +18,8 @@ export async function withApi(req: Request, scope: "read" | "write" | "keys" | n
     if (isAssistantCaller(req, c)) void bumpMetric(db, "api_calls_agent").catch(() => undefined);
     const ops: OpContext = {
       afterwards: (fn) => after(fn),
-      emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra)),
+      emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "api" })),
+      channel: "api",
     };
     return await handler({ db, caller: c, ops });
   } catch (e) {

@@ -8,6 +8,8 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { ApiError } from "./http";
 import { matchToPublic, type PublicMatch } from "./serialize";
+import { cityOf } from "@/lib/domain/cities";
+import { recordFact, type Channel } from "@/lib/domain/facts";
 
 export const WEBHOOK_EVENTS = ["match.created", "match.updated", "match.joined", "match.left", "match.full", "match.cancelled", "match.result"] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
@@ -116,11 +118,30 @@ export async function dispatch(db: Db, event: WebhookEvent, match: PublicMatch, 
   return sent;
 }
 
+/** What a fact keeps from an event's extra: outcomes and flags, and a level, never a name. */
+function factData(extra: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of ["outcome", "confirmed", "automatic", "calendarChanged", "playAgainOf", "series"]) if (extra[k] !== undefined) out[k] = extra[k];
+  const player = extra.player as { level?: unknown } | undefined;
+  if (player && typeof player === "object" && typeof player.level === "number") out.level = player.level;
+  return out;
+}
+
 /** Load a match by code and dispatch. Safe to call from after(): never throws. */
-export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, extra: Record<string, unknown> = {}): Promise<void> {
+export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, extra: Record<string, unknown> = {}, origin: { channel?: Channel | null; actorPlayerId?: string | null } = {}): Promise<void> {
   try {
     const detail = await getEventByCode(db, code);
     if (!detail) return;
+    await recordFact(db, {
+      kind: event,
+      channel: origin.channel ?? (extra.automatic === true ? "cron" : "web"),
+      actorPlayerId: origin.actorPlayerId ?? null,
+      subject: { type: "match", id: detail.event.id },
+      code,
+      city: cityOf(detail.event.tz, detail.event.venueSlug)?.slug ?? null,
+      venueSlug: detail.event.venueSlug ?? null,
+      data: factData(extra),
+    });
     const group = detail.event.groupId ? await getGroupById(db, detail.event.groupId) : null;
     await dispatch(db, event, matchToPublic(detail, baseUrl(), group ? { code: group.code, name: group.name } : null), extra);
   } catch (e) {

@@ -19,6 +19,7 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 ## Where things live
 
 - `src/lib/domain/`: pure business rules, unit-tested, framework-free. New rules start here.
+- `src/lib/domain/facts.ts`: the fact log, one append-only row per thing that happened (kind, channel, actor, subject, code, city, venue, numbers). `emitMatchEvent` records every match event with the channel the `OpContext` names; `bookLesson` and `cancelLesson` record lessons. `recordFact` never throws and never stores a name, an email or a token; every view of the data is a query over `factsSince`.
 - `src/actions/`: server actions (validate → domain → revalidate → side effects in `after()`).
 - `src/lib/api/`: the public REST API, MCP server, webhooks, OpenAPI and model-facing docs (`docs.ts`).
 - `src/app/`: routes. `[code]` is a match, `g/[code]` a group, `v/[slug]` a venue board, `mcp` the MCP endpoint, `api/v1/*` the REST API.
