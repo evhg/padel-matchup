@@ -46,3 +46,23 @@ export function finish(results) {
   if (failed.length) console.log("failed: " + failed.map((r) => r.name).join(" | "));
   process.exit(failed.length ? 1 : 0);
 }
+
+/**
+ * A lesson day that exists whatever day the suite runs on: the first Monday to Friday at least two days
+ * out (so a day-boundary skew between this process and the coach's zone can never make it "today"),
+ * with the word the assistant understands for it in each language. Coaches' hours are off at weekends
+ * by default, so "tomorrow" from a Friday or a Saturday finds nothing.
+ */
+export function lessonDay(now = new Date()) {
+  const words = {
+    en: ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
+    ru: ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"],
+    es: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+  };
+  for (let offset = 2; offset <= 6; offset++) {
+    const d = new Date(now.getTime() + offset * 86400000);
+    const dow = d.getUTCDay();
+    if (dow >= 1 && dow <= 5) return { offset, date: d.toISOString().slice(0, 10), en: words.en[dow], ru: words.ru[dow], es: words.es[dow] };
+  }
+  throw new Error("unreachable: five weekdays in any six days");
+}
