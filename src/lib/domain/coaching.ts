@@ -5,6 +5,8 @@ import { newCoachCode } from "@/lib/codes";
 import { coachAssets, coachBlocks, coachManagers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { cityOf } from "./cities";
+import { channelOf, recordFact } from "./facts";
 import { createPlayer } from "./players";
 
 /**
@@ -512,6 +514,15 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
     fresh = p;
   }
   if (input.byCoach) await setStudentStatus(db, coach.id, input.studentPlayerId, "accepted");
+  await recordFact(db, {
+    kind: "lesson.booked",
+    channel: channelOf(input.source),
+    actorPlayerId: input.createdByPlayerId ?? input.studentPlayerId,
+    subject: { type: "lesson", id: lesson.id },
+    code: coach.handle,
+    city: cityOf(coach.tz, null)?.slug ?? null,
+    data: { byCoach: input.byCoach, minutes, packaged: Boolean(pkg) },
+  });
   return { lesson, package: fresh };
 }
 
@@ -527,7 +538,7 @@ async function refund(db: Db, lesson: Lesson): Promise<void> {
  * The cancellation policy. By the coach: never counts. By the student before the cutoff:
  * refunded. After the cutoff: a free pass if the package has one left, otherwise it counts.
  */
-export async function cancelLesson(db: Db, input: { lessonId: string; by: "coach" | "student"; coach: Coach; actorPlayerId?: string | null }, now = new Date()): Promise<{ lesson: Lesson; outcome: CancelOutcome }> {
+export async function cancelLesson(db: Db, input: { lessonId: string; by: "coach" | "student"; coach: Coach; actorPlayerId?: string | null; source?: string | null }, now = new Date()): Promise<{ lesson: Lesson; outcome: CancelOutcome }> {
   const [lesson] = await db.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.coachId, input.coach.id))).limit(1);
   if (!lesson) throw new DomainError("not_found");
   if (lesson.status !== "booked") throw new DomainError("cancelled");
@@ -555,6 +566,15 @@ export async function cancelLesson(db: Db, input: { lessonId: string; by: "coach
     .set({ status, freePass, cancelledAt: now, consumed: outcome === "counted" })
     .where(eq(lessons.id, lesson.id))
     .returning();
+  await recordFact(db, {
+    kind: "lesson.cancelled",
+    channel: channelOf(input.source),
+    actorPlayerId: input.actorPlayerId ?? null,
+    subject: { type: "lesson", id: lesson.id },
+    code: input.coach.handle,
+    city: cityOf(input.coach.tz, null)?.slug ?? null,
+    data: { by: input.by, outcome, status },
+  });
   return { lesson: updated, outcome };
 }
 

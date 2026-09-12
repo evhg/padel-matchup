@@ -27,7 +27,8 @@ export async function POST(req: Request) {
   const db = await getDb();
   const ctx: OpContext = {
     afterwards: (fn) => after(fn),
-    emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra)),
+    emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "discord" })),
+    channel: "discord",
   };
   const handled = await handleInteraction(db, interaction, ctx);
   if (handled.outcome.startsWith("error:")) void reportError("server", new Error(`discord interaction ${interaction.id}: ${handled.outcome}`));

@@ -25,7 +25,8 @@ export async function POST(req: Request) {
   const db = await getDb();
   const ctx: OpContext = {
     afterwards: (fn) => after(fn),
-    emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra)),
+    emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "telegram" })),
+    channel: "telegram",
   };
   const outcome = await handleTelegramUpdate(db, update, ctx);
   if (outcome.startsWith("error:")) void reportError("server", new Error(`telegram update ${update.update_id}: ${outcome}`));

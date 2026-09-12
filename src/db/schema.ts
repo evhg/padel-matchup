@@ -1370,6 +1370,33 @@ export const series = pgTable(
 );
 export type Series = typeof series.$inferSelect;
 
+/**
+ * The fact log: one append-only row per thing that happened, whoever did it and through whichever channel.
+ * Every view of the data (the padel graph, demand by hour, coach retention, the funnel) is a query over it.
+ * Subjects by id and code, actors by player id, the rest numbers and outcomes: never a name, an email or a token.
+ */
+export const facts = pgTable(
+  "facts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    /** Dotted, subject first: match.joined, lesson.cancelled. */
+    kind: text("kind").notNull(),
+    /** web, telegram, discord, line, api, mcp, cron, email, calendar. */
+    channel: text("channel").notNull().default("web"),
+    actorPlayerId: uuid("actor_player_id"),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    /** The subject's public handle: a match code, a coach handle, a club or series slug. */
+    code: text("code"),
+    city: text("city"),
+    venueSlug: text("venue_slug"),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [index("facts_at_idx").on(t.at), index("facts_kind_at_idx").on(t.kind, t.at), index("facts_subject_idx").on(t.subjectType, t.subjectId), index("facts_actor_idx").on(t.actorPlayerId, t.at)],
+);
+export type Fact = typeof facts.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // Level checks: a player asks a coach or a club to confirm their level; one tap confirms it
 // ---------------------------------------------------------------------------
