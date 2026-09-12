@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { matchStudent, parseCoachLine, parseStudentLine } from "@/lib/coach/assistant";
 
 const TZ = "Asia/Bangkok";
 // Tuesday 8 September 2026, 10:00 in Bangkok.
 const now = new Date("2026-09-08T03:00:00.000Z");
+freezeClock(now);
 const students = [
   { id: "a", name: "Anna" },
   { id: "b", name: "Anton" },

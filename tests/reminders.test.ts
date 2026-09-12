@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events } from "@/db/schema";
@@ -24,6 +25,7 @@ beforeAll(async () => {
 afterAll(async () => close());
 
 const now = new Date("2026-05-10T12:00:00Z");
+freezeClock(now);
 const ev = { status: "open" as const, startsAt: new Date(now.getTime() + 3 * DAY) };
 
 describe("invite reminder eligibility (pure)", () => {

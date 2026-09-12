@@ -34,6 +34,7 @@ pnpm db:generate                  # after editing src/db/schema.ts; commit drizz
 8. **Sequential DB queries in server components** (the Supabase pooler stalls on pipelined bursts).
 9. **Write copy from the user's side.** Active voice, short sentences, no jargon. Three languages.
 10. **Every table is locked.** Supabase serves `public` through its Data API; Kicksmash never uses it and connects as the role `kicksmash`. Every table has Row Level Security on and one policy (`app`) for that role; a new table adds the same two statements to its migration (see `drizzle/0029_rls_everywhere.sql`) or `tests/rls.test.ts` fails. Production migrations run as `postgres` through the Supabase MCP before the merge, with `GRANT ALL ON TABLE … TO kicksmash`; the API roles (`anon`, `authenticated`) hold no privileges on `public`.
+11. **Tests never depend on the calendar.** A unit test that pins `NOW` to a date calls `freezeClock(NOW)` from `tests/helpers/clock.ts`, so the domain's `new Date()` agrees with the test on any day of the year. A browser suite computes every date from the moment it runs; where opening hours matter it books on `lessonDay()` from `e2e/lib.mjs`, the first weekday at least two days out, never on "tomorrow". Two tests pinned to real dates turned every CI run red for a day in September 2026; `tests/messages.test.ts` and the frozen clock are the gates that keep rules 2 and 11 mechanical.
 
 ## Agent-native surfaces (keep them in sync when the API changes)
 

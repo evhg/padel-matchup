@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import type { Db } from "@/db";
 import { claimClub, decideClub } from "@/lib/domain/clubs";
 import { createCoach, presetHours } from "@/lib/domain/coaching";
@@ -17,6 +18,7 @@ import { createTestDb, DAY, makePlayer } from "./helpers/db";
 
 /** Tuesday 8 September 2026, 16:00 in Phuket. */
 const NOW = new Date("2026-09-08T09:00:00Z");
+freezeClock(NOW);
 
 describe("verified levels", () => {
   let db: Db;

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { coachBlocks, coaches, lessonPackages } from "@/db/schema";
@@ -15,6 +16,7 @@ beforeAll(async () => {
 afterAll(async () => close());
 
 const now = new Date("2026-09-08T05:00:00.000Z");
+freezeClock(now);
 
 describe("sheet parsing", () => {
   it("splits tabs, commas with quotes, and semicolons", () => {

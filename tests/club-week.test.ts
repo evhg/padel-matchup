@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events } from "@/db/schema";
@@ -10,6 +11,7 @@ import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 
 /** Tuesday 8 September 2026, 16:00 in Phuket. */
 const NOW = new Date("2026-09-08T09:00:00Z");
+freezeClock(NOW);
 
 describe("the club programme", () => {
   let db: Db;

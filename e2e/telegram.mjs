@@ -2,7 +2,7 @@
 // login callback rejects forged data, My matches shows the Telegram sign-in, and the way back from
 // Telegram (signed fields in the hash) signs the player in, in the same tab.
 import { createHash, createHmac } from "node:crypto";
-import { BASE, finish, iphone, launch, makeCheck } from "./lib.mjs";
+import { BASE, finish, iphone, launch, makeCheck, lessonDay } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -203,7 +203,8 @@ try {
   await page.goto(`${BASE}/coach/students`);
   await page.getByRole("button", { name: "Accept" }).first().click();
   await page.getByRole("button", { name: /New package/ }).first().waitFor({ timeout: 20000 });
-  const studentBooked = await ivanSays(2, "завтра 16");
+  const day = lessonDay();
+  const studentBooked = await ivanSays(2, `${day.ru} 16`);
   check("an accepted student books by writing a day and a time", studentBooked.json?.outcome === "student:booked", JSON.stringify(studentBooked.json));
   const leftLine = await ivanSays(3, "осталось");
   check("'left' answers with the package line", leftLine.json?.outcome === "student:left", JSON.stringify(leftLine.json));
@@ -211,7 +212,7 @@ try {
   check("/lessons lists the student's lessons", lessonsCmd.json?.outcome === "student:lessons", JSON.stringify(lessonsCmd.json));
   const slots = await ivanSays(5, "завтра");
   check("a day alone offers the free times as buttons", slots.json?.outcome === "student:slots" || slots.json?.outcome === "student:no_free", JSON.stringify(slots.json));
-  const studentCancel = await ivanSays(6, "отмена завтра");
+  const studentCancel = await ivanSays(6, `отмена ${day.ru}`);
   check("the student cancels in one line", studentCancel.json?.outcome === "student:cancelled" || studentCancel.json?.outcome === "student:cancel:confirm", JSON.stringify(studentCancel.json));
   await ivanCtx.close();
 

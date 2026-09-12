@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, researchFinds, researchRuns } from "@/db/schema";
@@ -11,6 +12,7 @@ import { createTestDb } from "./helpers/db";
 
 /** 16 September 00:00 UTC: exactly half of a thirty-day month has passed. */
 const NOW = new Date("2026-09-16T00:00:00Z");
+freezeClock(NOW);
 const hours = (n: number, from = NOW) => new Date(from.getTime() + n * 3_600_000);
 
 type Call = { url: string; body: Record<string, unknown> | null };

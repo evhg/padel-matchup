@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { parseNewCommand, resolveZone, tzHintFor } from "@/lib/telegram/parse";
 
 // Saturday 2026-09-05 12:00 in Bangkok (05:00Z).
 const now = new Date("2026-09-05T05:00:00Z");
+freezeClock(now);
 const tz = "Asia/Bangkok";
 const at = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 

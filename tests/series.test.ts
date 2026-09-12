@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, type Series } from "@/db/schema";
@@ -11,6 +12,7 @@ import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 const TZ = "Asia/Bangkok";
 /** Tuesday 8 September 2026, 16:00 in Phuket. */
 const NOW = new Date("2026-09-08T09:00:00Z");
+freezeClock(NOW);
 /** Saturday 5 September 2026, 09:00 in Phuket. */
 const SAT_5 = new Date("2026-09-05T02:00:00Z");
 const week = { dow: 6, time: "09:00", every: "week" as const, nth: null, tz: TZ, anchorAt: SAT_5 };

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { freezeClock } from "./helpers/clock";
 import { LEVEL_LOG_CAP } from "@/lib/domain/levels";
 import { levelSeries, lineGeometry } from "@/lib/domain/levelSeries";
 
 const NOW = new Date("2026-09-09T10:00:00Z");
+freezeClock(NOW);
 const log = [
   { at: "2026-08-01T10:00:00Z", from: 3, to: 3.04, code: "AAAA", type: "match" as const },
   { at: "2026-08-15T10:00:00Z", from: 3.04, to: 3.12, code: "BBBB", type: "tournament" as const },
