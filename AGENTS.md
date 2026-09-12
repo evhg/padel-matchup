@@ -60,6 +60,18 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 
 `src/lib/discord/`: `api.ts` (REST calls, the Ed25519 interaction check, markdown escape), `card.ts` (the embed and buttons; copy shared with the Telegram card), `bot.ts` (slash commands, buttons, channel tickets for `/new`; card sync, reminders and the result come from `src/lib/channels`), `listen.ts` (the hourly read of new messages in the servers the bot is in, the in-server prompt, replies without a tap because it is our own community). HTTP interactions only, no gateway. Routes: `/api/discord/interactions` (signature or 401) and `/api/discord/setup` (commands, interactions URL, message-content flag, install link). Env: `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY`, optional `DISCORD_INVITE_URL`; tests stub `fetch`.
 
+## Adding a feature
+
+The path that keeps a change small and a pull request green, in order:
+
+1. **The rule first.** Whatever the feature decides goes in `src/lib/domain/` as a pure function with a unit test: no database handle it did not receive, no clock of its own, no framework. A rule proven here is a rule every channel gets for free.
+2. **The rows.** A new table goes in the file for its domain under `src/db/schema/`, with `pnpm db:generate` for the migration and the two Row Level Security statements in the same SQL (rules 7 and 10). Apply it to production by hand before the merge.
+3. **The seam.** Writes go through `src/actions/` (validate, call the domain, revalidate, side effects in `after()`) or `src/lib/api/operations.ts` where a bot and the API share them. Every write carries an `OpContext` with its channel, so the fact log names it.
+4. **The surfaces.** One screen, one primary action, everything else behind "More options" (rule 3). Copy in en, ru and es in the same change (rule 2). If the API or the product changed, the agent-native surfaces above change with it.
+5. **The proof.** A unit test for the rule, a line in an existing browser suite for the journey. Then `bash scripts/gate.sh`, and `GATE_E2E=<suite> bash scripts/gate.sh` for the suite you touched.
+
+What makes a change a decision for the owner rather than a build: a migration, anything touching sessions, identity or personal data, and anything that changes behaviour people already rely on (`docs/DECIDING.md`, rule 9).
+
 ## Adding a channel (LINE is next)
 
 A channel is a place where one card per match lives and is kept true. The algorithm is written once in `src/lib/channels/cards.ts` and proven in `tests/channels.test.ts`; a new channel adds four things, in this order:
