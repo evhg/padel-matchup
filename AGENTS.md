@@ -12,6 +12,9 @@ TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/kicksmash_test pnp
 pnpm build && pnpm e2e            # Playwright journeys against a production build (E2E_ONLY=<suite> for one; CI runs two shards, E2E_SHARD=1/2 and 2/2)
 pnpm db:generate                  # after editing src/db/schema/*.ts; commit drizzle/
 bash scripts/check-migrations.sh   # do the schema and the migrations still agree? (in the gate and in CI)
+node scripts/suites.mjs --why      # which browser suites can this change break?
+node scripts/gen-docs.mjs          # rewrite the README's env table and .env.example from the code
+GATE_E2E=auto bash scripts/gate.sh # the gate, plus a build and the suites this change can break
 bash scripts/gate.sh              # the gate: typecheck, lint, unit suite; GATE_E2E=<suite> adds a build and one browser suite
 ```
 
@@ -59,6 +62,21 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 ## Discord bot
 
 `src/lib/discord/`: `api.ts` (REST calls, the Ed25519 interaction check, markdown escape), `card.ts` (the embed and buttons; copy shared with the Telegram card), `bot.ts` (slash commands, buttons, channel tickets for `/new`; card sync, reminders and the result come from `src/lib/channels`), `listen.ts` (the hourly read of new messages in the servers the bot is in, the in-server prompt, replies without a tap because it is our own community). HTTP interactions only, no gateway. Routes: `/api/discord/interactions` (signature or 401) and `/api/discord/setup` (commands, interactions URL, message-content flag, install link). Env: `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY`, optional `DISCORD_INVITE_URL`; tests stub `fetch`.
+
+## Shipping a change
+
+`.claude/skills/ship/SKILL.md` is the sequence from branch to merged, and the place to start any change:
+begin from a fresh `main`, build by the recipe below, `GATE_E2E=auto bash scripts/gate.sh` before pushing,
+one pull request with auto-merge on, red CI is work now, reset onto main after the merge. Two pieces of
+tooling it leans on:
+
+- `scripts/suites.mjs` maps changed files to the browser suites that can break, so a Telegram change runs
+  two suites instead of sixteen. A path no rule claims runs all of them, which is the safe default and
+  not a gap to close. CI uses the same map, inside the job, so the check still reports on every pull
+  request; a push to main always runs everything.
+- `scripts/gate.sh` is the gate, and a Claude Code hook runs it before any push. It also says when
+  `origin/main` has moved ahead, because a branch built on a stale main is how a green pull request lands
+  on a red main.
 
 ## Adding a feature
 

@@ -1,6 +1,7 @@
 // Boots a production build on a throwaway PGlite database and runs every e2e/*.mjs suite.
 // Usage: pnpm build && pnpm e2e            (SHOTS=./shots keeps screenshots, PW_CHROMIUM=/path uses a preinstalled browser,
-//                                            E2E_ONLY=levels runs a single suite, E2E_SHARD=1/2 runs every second suite starting at the first)
+//                                            E2E_ONLY=levels or E2E_ONLY=telegram,coach runs those suites ("all" or unset runs every one),
+//                                            E2E_SHARD=1/2 runs every second suite starting at the first)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -72,7 +73,12 @@ if (!up) {
 
 const suites = readdirSync(path.dirname(new URL(import.meta.url).pathname))
   .filter((f) => f.endsWith(".mjs") && !["run.mjs", "lib.mjs"].includes(f))
-  .filter((f) => !process.env.E2E_ONLY || f === `${process.env.E2E_ONLY}.mjs`)
+  .filter((f) => {
+    // E2E_ONLY: one suite, a comma-separated list, or "all" (the same as unset).
+    const only = (process.env.E2E_ONLY ?? "").trim();
+    if (!only || only === "all") return true;
+    return only.split(",").map((x) => x.trim()).filter(Boolean).includes(f.replace(/\.mjs$/, ""));
+  })
   .sort()
   .filter((f, i) => {
     // E2E_SHARD=k/n: CI runs the suites in n jobs; the k-th job takes every n-th suite starting at the k-th.

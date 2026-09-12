@@ -1,12 +1,22 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
 export const BASE = process.env.BASE ?? "http://localhost:3001";
 const SHOTS = process.env.SHOTS;
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
-/** Uses the Playwright-managed Chromium, or PW_CHROMIUM when a preinstalled binary should be used. */
-export const launch = () => chromium.launch({ executablePath: process.env.PW_CHROMIUM || undefined, headless: true });
+/**
+ * Playwright's own Chromium, unless PW_CHROMIUM names one. A container that ships a browser where
+ * Playwright does not look for it (PLAYWRIGHT_BROWSERS_PATH, as the Claude Code web sessions do) is
+ * found by itself, so nobody has to remember the variable.
+ */
+function chromiumPath() {
+  if (process.env.PW_CHROMIUM) return process.env.PW_CHROMIUM;
+  const preinstalled = process.env.PLAYWRIGHT_BROWSERS_PATH ? `${process.env.PLAYWRIGHT_BROWSERS_PATH.replace(/\/$/, "")}/chromium` : null;
+  return preinstalled && existsSync(preinstalled) ? preinstalled : undefined;
+}
+
+export const launch = () => chromium.launch({ executablePath: chromiumPath(), headless: true });
 
 export const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Europe/Madrid", reducedMotion: "reduce" };
 
