@@ -47,9 +47,14 @@ jobs:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/kicksmash_test
 
   e2e:
-    name: Build and browser journeys
+    name: Build and browser journeys (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two jobs, each with its own build and server, each running every second suite (E2E_SHARD in e2e/run.mjs).
+        shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -69,10 +74,11 @@ jobs:
         run: pnpm e2e
         env:
           SHOTS: e2e-shots
+          E2E_SHARD: ${{ matrix.shard }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ strategy.job-index }}
           path: e2e-shots
           if-no-files-found: ignore
           retention-days: 7

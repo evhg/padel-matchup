@@ -7,11 +7,14 @@ Kicksmash (kicksma.sh) is an open-source, agent-native padel match-up: create a 
 ```bash
 pnpm install && pnpm dev          # http://localhost:3000, embedded PGlite, seeded PLAY and PAST matches
 pnpm typecheck && pnpm lint       # must be clean
-pnpm test                         # vitest on PGlite
-TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/kicksmash_test pnpm test   # the same on real Postgres; run it before pushing query changes
-pnpm build && pnpm e2e            # Playwright journeys against a production build (E2E_ONLY=<suite> for one)
+pnpm test                         # vitest on PGlite, files in parallel (~75 s); tests/rules.test.ts checks the rules below that a machine can check
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/kicksmash_test pnpm test   # the same on real Postgres, one file at a time; run it before pushing query changes
+pnpm build && pnpm e2e            # Playwright journeys against a production build (E2E_ONLY=<suite> for one; CI runs two shards, E2E_SHARD=1/2 and 2/2)
 pnpm db:generate                  # after editing src/db/schema.ts; commit drizzle/
+bash scripts/gate.sh              # the gate: typecheck, lint, unit suite; GATE_E2E=<suite> adds a build and one browser suite
 ```
+
+The gate runs by itself before every `git push` from a Claude Code session (`.claude/settings.json` → `scripts/hooks/pre-push.sh`) and blocks the push when it fails. A push that reaches GitHub has therefore passed typecheck, lint and the unit suite on the machine that made it; CI then adds the real-Postgres run, the build and the browser suites.
 
 ## Where things live
 

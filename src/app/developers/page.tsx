@@ -48,7 +48,7 @@ export default function DevelopersPage() {
 
         <section className="card flex flex-col gap-3">
           <h2 className="text-lg font-extrabold">For assistants: add the MCP server</h2>
-          <p className="text-sm text-muted">One URL. Reads need nothing; creating and joining works without a key within a daily allowance. Tools: about_kicksmash, get_match, find_matches, get_group, generate_schedule, create_match, join_match, create_api_key; for lessons find_coaches, coach_slots, request_coach, book_lesson, cancel_lesson.</p>
+          <p className="text-sm text-muted">One URL. Reads need nothing; creating and joining works without a key within a daily allowance. Tools: about_kicksmash, get_match, find_matches, get_group, generate_schedule, create_match, join_match, create_api_key; for clubs and recurring Opens find_clubs and find_series; for lessons find_coaches, coach_slots, request_coach, book_lesson, cancel_lesson.</p>
           <Code>{`${base}/mcp`}</Code>
           <div className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
