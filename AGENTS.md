@@ -10,7 +10,8 @@ pnpm typecheck && pnpm lint       # must be clean
 pnpm test                         # vitest on PGlite, files in parallel (~75 s); tests/rules.test.ts checks the rules below that a machine can check
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/kicksmash_test pnpm test   # the same on real Postgres, one file at a time; run it before pushing query changes
 pnpm build && pnpm e2e            # Playwright journeys against a production build (E2E_ONLY=<suite> for one; CI runs two shards, E2E_SHARD=1/2 and 2/2)
-pnpm db:generate                  # after editing src/db/schema.ts; commit drizzle/
+pnpm db:generate                  # after editing src/db/schema/*.ts; commit drizzle/
+bash scripts/check-migrations.sh   # do the schema and the migrations still agree? (in the gate and in CI)
 bash scripts/gate.sh              # the gate: typecheck, lint, unit suite; GATE_E2E=<suite> adds a build and one browser suite
 ```
 
@@ -18,6 +19,7 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 
 ## Where things live
 
+- `src/db/schema/`: the tables, split by domain (`enums`, `players`, `events`, `groups`, `clubs`, `coaching`, `channels`, `api`, `ops`) and re-exported from `index.ts`, so `@/db/schema` means what it always did. A new table goes in the file for its domain, or a new file named after it and one line in the index. `scripts/check-migrations.sh` fails when a table changed here without the migration that carries it to production.
 - `src/lib/domain/`: pure business rules, unit-tested, framework-free. New rules start here.
 - `src/lib/domain/facts.ts`: the fact log, one append-only row per thing that happened (kind, channel, actor, subject, code, city, venue, numbers). `emitMatchEvent` records every match event with the channel the `OpContext` names; `bookLesson` and `cancelLesson` record lessons. `recordFact` never throws and never stores a name, an email or a token; every view of the data is a query over `factsSince`.
 - `src/lib/channels/`: the card channels. `cards.ts` is the one algorithm (post a card once, edit it in place, note a complete line-up once, remind once an hour before, post the result once); `telegram.ts` and `discord.ts` are adapters over it, `index.ts` the registry. `emitMatchEvent` and the push cron loop over `channels()`. A new channel (LINE) is one adapter implementing `CardChannel` in `types.ts` (with `canEdit: false` where messages cannot be edited), one line in the registry and one browser suite; `tests/channels.test.ts` proves the algorithm on a channel that exists only there.
@@ -36,7 +38,7 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 4. **Email, push, Telegram are optional.** Everything must work with their environment variables unset.
 5. **No accounts, no passwords.** Identity stays cookie + personal link (+ Telegram sign-in). Personal tokens and manage links are credentials: never log, never expose in public data. A personal link with `?next=` is handed on server-side: the page redirects a device without the cookie to `/p/[token]/go`, which sets the cookie and redirects on (`safeNext` decides what counts as a destination). No client-side navigation belongs in that path.
 6. **Public API shapes contain first names and levels only.** See `src/lib/api/serialize.ts`.
-7. **Additive migrations.** No drops without discussion. Production gets each migration by hand, as `postgres` through the Supabase MCP, before the merge (rule 10); the app's own auto-migrate is a safety net for a fresh database only, since it runs as `kicksmash` and cannot own the RLS statements. `pnpm db:push` is disabled on purpose: drizzle-kit would drop the policies it does not know about.
+7. **Additive migrations.** No drops without discussion. Production gets each migration by hand, as `postgres` through the Supabase MCP, before the merge (rule 10); the app's own auto-migrate is a safety net for a fresh database only, since it runs as `kicksmash` and cannot own the RLS statements. `pnpm db:push` is disabled on purpose: drizzle-kit would drop the policies it does not know about. `scripts/check-migrations.sh`, in the gate and in CI, asks drizzle-kit for a migration into a throwaway copy of `drizzle/` and fails when it writes one, so a table edited here without its migration never reaches a review.
 8. **Sequential DB queries in server components** (the Supabase pooler stalls on pipelined bursts).
 9. **Write copy from the user's side.** Active voice, short sentences, no jargon. Three languages.
 10. **Every table is locked.** Supabase serves `public` through its Data API; Kicksmash never uses it and connects as the role `kicksmash`. Every table has Row Level Security on and one policy (`app`) for that role; a new table adds the same two statements to its migration (see `drizzle/0029_rls_everywhere.sql`) or `tests/rls.test.ts` fails. Production migrations run as `postgres` through the Supabase MCP before the merge, with `GRANT ALL ON TABLE … TO kicksmash`; the API roles (`anon`, `authenticated`) hold no privileges on `public`.

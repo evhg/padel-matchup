@@ -20,6 +20,7 @@ step() {
 }
 step typecheck pnpm typecheck
 step lint pnpm lint
+step "schema vs migrations" bash scripts/check-migrations.sh
 step "unit tests" pnpm test
 if [ -n "${GATE_E2E:-}" ]; then
   step "production build" env APP_BASE_URL=http://localhost:3001 NEXT_TELEMETRY_DISABLED=1 pnpm build
