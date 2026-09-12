@@ -34,3 +34,4 @@ e2e-shots
 packages/*/src
 packages/*/dist
 packages/*/LICENSE
+.drift-check/

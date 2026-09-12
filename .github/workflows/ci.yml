@@ -39,6 +39,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - name: Schema and migrations agree
+        run: bash scripts/check-migrations.sh
       - name: Unit tests (embedded PGlite)
         run: pnpm test
       - name: Unit tests (real Postgres, true concurrency)
