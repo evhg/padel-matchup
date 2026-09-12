@@ -19,6 +19,8 @@ Add `https://kicksma.sh/mcp` (streamable HTTP, no auth). Tools:
 - `create_match {startsAt, tz, venue?, organizer:{name, token?, email?, level?}, levelMin?, levelMax?, …}` — returns `shareUrl` for the players and the organizer's `personalUrl` and `manageUrl` (private).
 - `join_match {code, name | token, level?, email?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range).
 - `create_api_key {name, agent?}` — optional, for roomier limits and webhooks.
+- `find_clubs {city?}` — live club pages by city: booking link, platform, website, free courts today where the club shares a feed.
+- `find_series {city?}` — recurring Opens by city, with the next edition to sign up for and the past podiums.
 
 Coaches (lessons, under each coach's own rules):
 

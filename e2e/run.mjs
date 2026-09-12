@@ -1,6 +1,6 @@
 // Boots a production build on a throwaway PGlite database and runs every e2e/*.mjs suite.
 // Usage: pnpm build && pnpm e2e            (SHOTS=./shots keeps screenshots, PW_CHROMIUM=/path uses a preinstalled browser,
-//                                            E2E_ONLY=levels runs a single suite)
+//                                            E2E_ONLY=levels runs a single suite, E2E_SHARD=1/2 runs every second suite starting at the first)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -73,15 +73,21 @@ if (!up) {
 const suites = readdirSync(path.dirname(new URL(import.meta.url).pathname))
   .filter((f) => f.endsWith(".mjs") && !["run.mjs", "lib.mjs"].includes(f))
   .filter((f) => !process.env.E2E_ONLY || f === `${process.env.E2E_ONLY}.mjs`)
-  .sort();
-let failed = 0;
+  .sort()
+  .filter((f, i) => {
+    // E2E_SHARD=k/n: CI runs the suites in n jobs; the k-th job takes every n-th suite starting at the k-th.
+    const m = /^(\d+)\/(\d+)$/.exec(process.env.E2E_SHARD ?? "");
+    return !m || i % Number(m[2]) === Number(m[1]) - 1;
+  });
+const failed = [];
 for (const f of suites) {
   console.log(`\n=== ${f} ===`);
   const code = await new Promise((resolve) => {
     const p = spawn(process.execPath, [path.join("e2e", f)], { env: { ...env, BASE }, stdio: "inherit" });
     p.on("exit", (c) => resolve(c ?? 1));
   });
-  if (code !== 0) failed++;
+  if (code !== 0) failed.push(f);
 }
-console.log(`\n${suites.length - failed}/${suites.length} suites passed`);
-process.exit(failed ? 1 : 0);
+console.log(`\n${suites.length - failed.length}/${suites.length} suites passed`);
+if (failed.length) console.log(`failed suites: ${failed.join(", ")} (each suite's own "failed:" line above names the checks)`);
+process.exit(failed.length ? 1 : 0);
