@@ -1,7 +1,7 @@
-import { and, eq, gt, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, lte, or, sql, isNull} from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player, type Slot } from "@/db/schema";
-import { EVENT_DURATION_MS, INVITE_REMINDER_INTERVAL_MS, SCORE_REMINDER_DELAY_MS } from "@/lib/config";
+import { EVENT_DURATION_MS, INVITE_REMINDER_INTERVAL_MS, SCORE_REMINDER_DELAY_MS, SECOND_SCORE_REMINDER_DELAY_MS } from "@/lib/config";
 
 /**
  * Decision 12: unconfirmed invitees with an email are reminded every 24h,
@@ -75,6 +75,45 @@ export async function findScoreRemindersDue(db: Db, now = new Date()): Promise<{
     .innerJoin(players, eq(players.id, events.creatorPlayerId))
     .where(and(eq(events.scoreReminderSent, false), inArray(events.status, ["open", "full", "past"]), lte(events.startsAt, cutoff)));
   return rows.filter((r) => isScoreReminderDue(r.event, Number(r.scoreCount) > 0, now)).map(({ event, creator }) => ({ event, creator }));
+}
+
+/**
+ * The second and last ask, the morning after.
+ *
+ * One nudge at two hours is a single roll of the dice: it lands while people are still at the club
+ * or it does not land at all, and a match with no score moves nobody's level, enters no ranking and
+ * records no podium. The level is the number the whole product is built on, so it is worth asking
+ * twice and not worth asking a third time.
+ */
+export function isSecondScoreReminderDue(
+  event: Pick<Event, "status" | "startsAt" | "scoreReminderSent" | "scoreReminder2At" | "standings" | "type">,
+  hasScores: boolean,
+  now: Date,
+): boolean {
+  if (!event.scoreReminderSent) return false;
+  if (event.scoreReminder2At) return false;
+  if (event.status === "cancelled") return false;
+  if (hasScores) return false;
+  if (event.type === "tournament" && event.standings && event.standings.length > 0) return false;
+  return event.startsAt.getTime() + SECOND_SCORE_REMINDER_DELAY_MS <= now.getTime();
+}
+
+export async function findSecondScoreRemindersDue(db: Db, now = new Date()): Promise<{ event: Event; creator: Player }[]> {
+  const cutoff = new Date(now.getTime() - SECOND_SCORE_REMINDER_DELAY_MS);
+  const rows = await db
+    .select({
+      event: events,
+      creator: players,
+      scoreCount: sql<number>`(select count(*) from ${scores} sc where sc.event_id = ${events.id}) + (select count(*) from ${tournamentMatches} tm join ${tournamentRounds} tr on tr.id = tm.round_id where tr.event_id = ${events.id} and tm.side_a is not null)`,
+    })
+    .from(events)
+    .innerJoin(players, eq(players.id, events.creatorPlayerId))
+    .where(and(eq(events.scoreReminderSent, true), isNull(events.scoreReminder2At), inArray(events.status, ["open", "full", "past"]), lte(events.startsAt, cutoff)));
+  return rows.filter((r) => isSecondScoreReminderDue(r.event, Number(r.scoreCount) > 0, now)).map(({ event, creator }) => ({ event, creator }));
+}
+
+export async function markSecondScoreReminderSent(db: Db, eventId: string, now = new Date()) {
+  await db.update(events).set({ scoreReminder2At: now }).where(eq(events.id, eventId));
 }
 
 export async function markScoreReminderSent(db: Db, eventId: string) {

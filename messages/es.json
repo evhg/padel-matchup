@@ -403,6 +403,7 @@
     "rejectedByYou": "Rechazaste la solicitud de {name}"
   },
   "email": {
+    "clubMatch": {"subject": "{club}: partido el {day}", "heading": "Nuevo en {club}", "body": "{club} ha puesto un partido el {day} a las {time}. {spots} Toca para coger sitio."},
     "openMatch": "Abrir el partido",
     "footer": "Enviado por {app} porque añadiste tu email. Gestiona todo desde la página del partido.",
     "when": "Cuándo",
@@ -627,6 +628,8 @@
     "resent": "Enviada otra vez. Abre el email y toca Sí en la invitación."
   },
   "push": {
+    "clubMatchTitle": "{club}: {day} {time}",
+    "clubMatchBody": "{spots} Toca para coger sitio.",
     "enable": "Recordármelo 1 hora antes",
     "enableHelp": "Una notificación una hora antes de cada partido. Llegar tarde es imperdonable, recuerda.",
     "on": "Recordatorios activados · 1 hora antes de cada partido",

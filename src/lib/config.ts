@@ -45,5 +45,7 @@ export const MAX_TOURNAMENT_CAPACITY = 64;
 export const EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
 /** Single organizer score reminder fires this long after start. */
 export const SCORE_REMINDER_DELAY_MS = 2 * 60 * 60 * 1000;
+/** The second and last ask: the morning after, when the first one was missed in the evening. */
+export const SECOND_SCORE_REMINDER_DELAY_MS = 18 * 60 * 60 * 1000;
 /** Unconfirmed invitees with an email are reminded at this interval. */
 export const INVITE_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
