@@ -59,24 +59,60 @@ jobs:
         shard: ["1/2", "2/2"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # scripts/suites.mjs reads the diff against the base, which needs more than one commit.
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Which suites can this change break? Empty means none, and then neither the build nor the browsers
+      # are needed. The job itself always runs and always reports, so a required check never waits forever.
+      - name: Suites for this change
+        id: suites
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # --why prints the reason per suite on stderr, which lands in this log; the list itself is stdout.
+            list=$(node scripts/suites.mjs "${{ github.event.pull_request.base.sha }}...HEAD" --why)
+          else
+            list=all   # a push to main re-runs everything, whatever the diff says
+          fi
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Suites: ${list:-none}"
       # The runner image carries Google's Chrome apt source, which has served mismatched indexes and broke apt-get update
       # inside --with-deps twice in one evening. Playwright's system packages come from Ubuntu's own repositories.
       - run: sudo rm -f /etc/apt/sources.list.d/google-chrome* /etc/apt/sources.list.d/google.list
+        if: steps.suites.outputs.list != ''
+      - name: Cache the browser
+        if: steps.suites.outputs.list != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm exec playwright install --with-deps chromium
+        if: steps.suites.outputs.list != ''
+      - name: Cache the build
+        if: steps.suites.outputs.list != ''
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            next-${{ runner.os }}-
       - run: pnpm build
+        if: steps.suites.outputs.list != ''
         env:
           APP_BASE_URL: http://localhost:3001
       - name: End-to-end (fresh PGlite, dummy email key, generated VAPID keys)
+        if: steps.suites.outputs.list != ''
         run: pnpm e2e
         env:
           SHOTS: e2e-shots
           E2E_SHARD: ${{ matrix.shard }}
+          E2E_ONLY: ${{ steps.suites.outputs.list }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
