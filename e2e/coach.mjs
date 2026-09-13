@@ -122,11 +122,10 @@ try {
   check("the coach's own student link shows the owner's note instead of the join form", (await olga.getByTestId("owner-note").count()) === 1 && (await olga.getByTestId("invited-join").count()) === 0 && (await olga.getByTestId("ask-to-join").count()) === 0 && (await olga.getByRole("link", { name: "Open my assistant" }).getAttribute("href")) === "/coach");
   // A ticket minted after the bind (the setup walk reopened) is live; opened from a second Telegram account it is refused and the assistant stays with Olga.
   await olga.goto(BASE + "/coach?setup=1");
-  await olga.getByTestId(/setup-(calendar|pay|bot)/).waitFor({ timeout: 20000 });
-  for (let i = 0; i < 4 && !(await olga.getByTestId("setup-finish").count()); i++) {
-    await olga.getByRole("button", { name: "Later" }).first().click();
-    await olga.waitForTimeout(300);
-  }
+  // A reopened walk resumes at the price, because the book already exists.
+  await olga.getByTestId("setup-price").waitFor({ timeout: 20000 });
+  await olga.getByRole("button", { name: "Later" }).first().click();
+  await olga.getByTestId("setup-notify").waitFor({ timeout: 20000 });
   const freshHref = await olga.getByTestId("open-bot").getAttribute("href");
   const freshTicket = decodeURIComponent(freshHref?.match(/start=coach_([^&]+)/)?.[1] ?? "");
   // First with its last character changed: dead. Then intact: refused, because the assistant is bound to Olga's account already.
