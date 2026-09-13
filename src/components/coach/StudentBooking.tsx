@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { acceptOfferAction, joinWaitlistAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentBookAction, studentCancelAction } from "@/actions/coach";
+import { acceptOfferAction, joinWaitlistAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction } from "@/actions/coach";
 import type { StudentStatus } from "@/lib/domain/coaching";
 import { HowThisWorks } from "./HowThisWorks";
 
@@ -27,6 +27,10 @@ type Props = {
   lessons: StudentLessonDTO[];
   pkg: { left: number; size: number; days: number | null } | null;
   cutoffHours: number;
+  /** What this student owes and whether they have already said they sent it. Null when nothing is open. */
+  owed?: { total: number; currency: string; lessons: { id: string; label: string; amount: number; claimed: boolean }[] } | null;
+  /** The ways this coach takes money. Nothing passes through Kicksmash; these are instructions. */
+  pay?: { promptpay: boolean; link: string | null; atClub: boolean };
   whatsappUrl: string | null;
   waits?: WaitDTO[];
   offers?: OfferDTO[];
@@ -39,7 +43,7 @@ type Props = {
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -51,11 +55,14 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const [error, setError] = useState<string | null>(null);
   const daySlots = slots.filter((s) => s.day === day);
   const dayTaken = taken.filter((s) => s.day === day);
+  // Which lesson's move picker is open, and which day it is showing.
+  const [moving, setMoving] = useState<string | null>(null);
+  const [moveDay, setMoveDay] = useState(days[0] ?? "");
   const [asking, setAsking] = useState(false);
   const [askLocal, setAskLocal] = useState("");
   const [askNote, setAskNote] = useState("");
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
-  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "no_coach", "past"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "too_late", "no_coach", "past"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
 
   const request = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +92,31 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
       router.refresh();
     });
   };
+
+  const move = (l: StudentLessonDTO, iso: string) =>
+    start(async () => {
+      setError(null);
+      const r = await studentMoveAction(l.id, iso);
+      if (!r.ok) {
+        setError(errorText(r.error));
+        return;
+      }
+      setMoving(null);
+      setNote(t("page.moved"));
+      router.refresh();
+    });
+
+  const claimPaid = (lessonId: string) =>
+    start(async () => {
+      setError(null);
+      const r = await studentClaimPaidAction(lessonId);
+      if (!r.ok) {
+        setError(errorText(r.error));
+        return;
+      }
+      setNote(t("page.paidThanks"));
+      router.refresh();
+    });
 
   const cancel = (l: StudentLessonDTO) => {
     const late = l.hoursUntil < cutoffHours;
@@ -293,16 +325,85 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
           )}
           <ul className="mt-3 flex flex-col gap-2">
             {lessons.map((l) => (
-              <li key={l.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+              <li key={l.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-white px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
                 <div className="font-bold">{l.label}</div>
                 {l.status === "booked" && (
-                  <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => cancel(l)}>
-                    {t("page.cancel")}
+                  <div className="flex shrink-0 gap-1">
+                    {/* Moving comes first: it is what a student actually wants when something clashes,
+                        and until now the only way to ask was a message to the coach. */}
+                    {l.hoursUntil >= cutoffHours && (
+                      <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => setMoving(moving === l.id ? null : l.id)} data-testid="move-lesson">
+                        {t("page.move")}
+                      </button>
+                    )}
+                    <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => cancel(l)}>
+                      {t("page.cancel")}
+                    </button>
+                  </div>
+                )}
+                </div>
+                {moving === l.id && (
+                  <div className="flex flex-col gap-2 border-t border-line pt-2" data-testid="move-picker">
+                    <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("page.moveTo")}</div>
+                    <div className="flex gap-1 overflow-x-auto pb-1">
+                      {days.map((d) => (
+                        <button key={d} type="button" data-kind="move-day" className={`${chip(moveDay === d)} shrink-0`} onClick={() => setMoveDay(d)}>
+                          {dayLabels[d] ?? d}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {slots.filter((s2) => s2.day === moveDay).map((s2) => (
+                        <button key={s2.iso} type="button" data-kind="move-time" className={chip(false)} disabled={pending} onClick={() => move(l, s2.iso)}>
+                          {s2.time}
+                        </button>
+                      ))}
+                      {slots.filter((s2) => s2.day === moveDay).length === 0 && <p className="text-xs text-muted">{t("page.noFree")}</p>}
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {owed && owed.total > 0 && (
+        <section className="card flex flex-col gap-3" data-testid="owed">
+          <div>
+            <h2 className="text-lg font-extrabold tracking-tight">{t("page.owedTitle")}</h2>
+            <p className="mt-1 text-2xl font-extrabold">
+              {owed.total} {owed.currency}
+            </p>
+          </div>
+          <ul className="flex flex-col gap-1 text-sm text-muted">
+            {owed.lessons.map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-3">
+                <span>
+                  {l.label} · {l.amount} {owed.currency}
+                </span>
+                {l.claimed ? (
+                  <span className="text-xs font-bold text-ok">{t("page.paidSaid")}</span>
+                ) : (
+                  <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => claimPaid(l.id)} data-testid="claim-paid">
+                    {t("page.paidClaim")}
                   </button>
                 )}
               </li>
             ))}
           </ul>
+          {/* Nothing is charged here. These are the ways this coach asked to be paid. */}
+          <div className="flex flex-col gap-1 text-sm">
+            {pay.atClub && <p>{t("page.payAtClub")}</p>}
+            {pay.promptpay && <p>{t("page.payPromptpay")}</p>}
+            {pay.link && (
+              <a href={pay.link} target="_blank" rel="noopener noreferrer" className="link font-bold">
+                {t("page.payLink")}
+              </a>
+            )}
+            {!pay.atClub && !pay.promptpay && !pay.link && <p className="text-muted">{t("page.payAsk", { name: coachName })}</p>}
+          </div>
+          <p className="text-xs text-faint">{t("page.payNothingThrough")}</p>
         </section>
       )}
       <HowThisWorks text={t("page.how", { hours: cutoffHours })} />

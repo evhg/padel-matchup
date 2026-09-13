@@ -469,12 +469,13 @@ export async function blockTime(db: Db, input: { coachId: string; startsAt: Date
   const minutes = Math.min(24 * 60, Math.max(15, Math.round(input.minutes)));
   const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
   if (endsAt.getTime() <= now.getTime()) throw new DomainError("past");
-  const [clash] = await db
-    .select({ id: lessons.id })
+  // A lesson that ends exactly when the block starts does not clash, so the lesson's own length has
+  // to come into it: comparing start times alone refused blocks that were perfectly free.
+  const near = await db
+    .select({ startsAt: lessons.startsAt, minutes: lessons.minutes })
     .from(lessons)
-    .where(and(eq(lessons.coachId, input.coachId), eq(lessons.status, "booked"), lt(lessons.startsAt, endsAt), gte(lessons.startsAt, new Date(startsAt.getTime() - 4 * HOUR_MS))))
-    .limit(1);
-  if (clash) throw new DomainError("slot_taken");
+    .where(and(eq(lessons.coachId, input.coachId), eq(lessons.status, "booked"), lt(lessons.startsAt, endsAt), gte(lessons.startsAt, new Date(startsAt.getTime() - 4 * HOUR_MS))));
+  if (near.some((l) => overlaps(startsAt.getTime(), endsAt.getTime(), { startsAt: l.startsAt, endsAt: new Date(l.startsAt.getTime() + l.minutes * 60_000) }))) throw new DomainError("slot_taken");
   const [block] = await db
     .insert(coachBlocks)
     .values({ coachId: input.coachId, startsAt, endsAt, reason: input.reason?.trim().slice(0, 120) || null, source: "web" })
@@ -486,6 +487,58 @@ export async function blockTime(db: Db, input: { coachId: string; startsAt: Date
 export async function unblockTime(db: Db, coachId: string, blockId: string): Promise<boolean> {
   const done = await db.delete(coachBlocks).where(and(eq(coachBlocks.id, blockId), eq(coachBlocks.coachId, coachId), eq(coachBlocks.source, "web"))).returning({ id: coachBlocks.id });
   return done.length > 0;
+}
+
+export type Owed = { lessons: { id: string; startsAt: Date; amount: number; claimedAt: Date | null }[]; packages: { id: string; size: number; amount: number; claimedAt: Date | null }[]; total: number; currency: string };
+
+/**
+ * What this student owes this coach, and whether they have already said they paid.
+ *
+ * No money moves through Kicksmash and none is meant to. This exists so the student can see a number
+ * and a way to pay it, instead of asking on WhatsApp — which was the second of the three messages a
+ * coach still got. The coach confirms; a student's claim asks, it does not answer.
+ */
+export async function owedBy(db: Db, coach: Pick<Coach, "id" | "currency">, studentPlayerId: string): Promise<Owed> {
+  const ls = await db
+    .select({ id: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt })
+    .from(lessons)
+    .where(and(eq(lessons.coachId, coach.id), eq(lessons.studentPlayerId, studentPlayerId), isNull(lessons.paidAt), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
+    .orderBy(asc(lessons.startsAt))
+    .limit(50);
+  const ps = await db
+    .select({ id: lessonPackages.id, size: lessonPackages.size, amount: lessonPackages.amount, claimedAt: lessonPackages.paidAt })
+    .from(lessonPackages)
+    .where(and(eq(lessonPackages.coachId, coach.id), eq(lessonPackages.studentPlayerId, studentPlayerId), isNull(lessonPackages.paidAt), isNull(lessonPackages.closedAt)))
+    .orderBy(asc(lessonPackages.createdAt))
+    .limit(20);
+  const openLessons = ls.filter((l) => (l.amount ?? 0) > 0).map((l) => ({ id: l.id, startsAt: l.startsAt, amount: l.amount as number, claimedAt: l.claimedAt }));
+  const openPackages = ps.filter((p) => (p.amount ?? 0) > 0).map((p) => ({ id: p.id, size: p.size, amount: p.amount as number, claimedAt: null }));
+  return {
+    lessons: openLessons,
+    packages: openPackages,
+    total: openLessons.reduce((n, l) => n + l.amount, 0) + openPackages.reduce((n, p) => n + p.amount, 0),
+    currency: coach.currency,
+  };
+}
+
+/** The student says the money is sent. It asks the coach; only the coach's tap marks it paid. */
+export async function claimLessonPaid(db: Db, lessonId: string, studentPlayerId: string, now = new Date()): Promise<Lesson | null> {
+  const [row] = await db
+    .update(lessons)
+    .set({ paidClaimedAt: now })
+    .where(and(eq(lessons.id, lessonId), eq(lessons.studentPlayerId, studentPlayerId), isNull(lessons.paidAt)))
+    .returning();
+  return row ?? null;
+}
+
+/** The coach confirms it landed. This is the only thing that marks a lesson paid. */
+export async function setLessonPaid(db: Db, coachId: string, lessonId: string, paid: boolean, now = new Date()): Promise<Lesson | null> {
+  const [row] = await db
+    .update(lessons)
+    .set({ paidAt: paid ? now : null })
+    .where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId)))
+    .returning();
+  return row ?? null;
 }
 
 export async function availableSlots(db: Db, coach: Coach, from: Date, to: Date, now = new Date()): Promise<Date[]> {
@@ -535,6 +588,9 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
       status: "booked",
       source: input.source ?? "web",
       consumed: Boolean(pkg),
+      // No package paying for it: the lesson carries the coach's price as it stood when it was booked,
+      // so raising the price next month never rewrites what last month's lessons cost.
+      amount: pkg ? null : (coach.priceSingle ?? null),
       note: input.note?.trim().slice(0, 200) || null,
       createdByPlayerId: input.createdByPlayerId ?? null,
       createdAt: now,
@@ -574,6 +630,55 @@ async function refund(db: Db, lesson: Lesson): Promise<void> {
  * The cancellation policy. By the coach: never counts. By the student before the cutoff:
  * refunded. After the cutoff: a free pass if the package has one left, otherwise it counts.
  */
+export type MoveLessonInput = { lessonId: string; coach: Coach; startsAt: Date; by: "coach" | "student"; actorPlayerId?: string | null; source?: string | null };
+
+/**
+ * Move a lesson. "Can we do Friday instead?" is the most common message a coach gets, and until now
+ * the only answer was cancel and book again — which burned the student's free late pass, and handed
+ * their slot to the waitlist before they had chosen a new one, so they could end up with neither.
+ *
+ * This moves the row. The package is not touched at all, because a move is not a cancellation
+ * followed by a purchase: the same lesson happens at a different hour. That also removes the window
+ * a book-then-cancel would have left, where the old slot is gone and the new one is not yet taken.
+ *
+ * A student may move while the lesson is still outside the cutoff. Inside it they cancel under the
+ * usual policy, which is not meanness: without that line a student could move an hour beforehand to
+ * next month for free and cancel that for free, and the late-cancel rule would mean nothing.
+ */
+export async function moveLesson(db: Db, input: MoveLessonInput, now = new Date()): Promise<{ from: Lesson; to: Lesson }> {
+  const { coach } = input;
+  const [lesson] = await db.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.coachId, coach.id))).limit(1);
+  if (!lesson) throw new DomainError("not_found");
+  if (lesson.status !== "booked") throw new DomainError("cancelled");
+  if (input.by === "student" && input.actorPlayerId && lesson.studentPlayerId !== input.actorPlayerId) throw new DomainError("forbidden");
+
+  const startsAt = new Date(Math.floor(input.startsAt.getTime() / 60_000) * 60_000);
+  if (startsAt.getTime() === lesson.startsAt.getTime()) return { from: lesson, to: lesson };
+  if (startsAt.getTime() <= now.getTime()) throw new DomainError("past");
+  if (input.by === "student") {
+    if (lesson.startsAt.getTime() - now.getTime() < coach.cutoffHours * HOUR_MS) throw new DomainError("too_late");
+    if (startsAt.getTime() < now.getTime() + coach.minNoticeHours * HOUR_MS) throw new DomainError("too_soon");
+    if (!withinHours(coach, startsAt, lesson.minutes)) throw new DomainError("outside_hours");
+  }
+
+  const end = new Date(startsAt.getTime() + lesson.minutes * 60_000);
+  // Everything busy at the new hour except this lesson, which is about to stop being there.
+  const busy = (await busyBetween(db, coach.id, startsAt, end)).filter((b) => !(b.startsAt.getTime() === lesson.startsAt.getTime() && b.endsAt.getTime() === lesson.startsAt.getTime() + lesson.minutes * 60_000));
+  if (busy.some((b) => overlaps(startsAt.getTime(), end.getTime(), b))) throw new DomainError("slot_taken");
+
+  const [moved] = await db.update(lessons).set({ startsAt }).where(eq(lessons.id, lesson.id)).returning();
+  await recordFact(db, {
+    kind: "lesson.moved",
+    channel: channelOf(input.source),
+    actorPlayerId: input.actorPlayerId ?? null,
+    subject: { type: "lesson", id: lesson.id },
+    code: coach.handle,
+    city: cityOf(coach.tz, null)?.slug ?? null,
+    data: { by: input.by, from: lesson.startsAt.toISOString(), to: startsAt.toISOString() },
+  });
+  return { from: lesson, to: moved };
+}
+
 export async function cancelLesson(db: Db, input: { lessonId: string; by: "coach" | "student"; coach: Coach; actorPlayerId?: string | null; source?: string | null }, now = new Date()): Promise<{ lesson: Lesson; outcome: CancelOutcome }> {
   const [lesson] = await db.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.coachId, input.coach.id))).limit(1);
   if (!lesson) throw new DomainError("not_found");

@@ -15,6 +15,9 @@ export type DomainErrorCode =
   | "not_student"
   | "outside_hours"
   | "too_soon"
+  // A student moving a lesson that is already inside the coach's cutoff: at that point it is a
+  // cancellation under the usual policy, or the late-cancel rule would mean nothing.
+  | "too_late"
   | "no_coach";
 
 export class DomainError extends Error {

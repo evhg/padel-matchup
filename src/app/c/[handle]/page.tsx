@@ -9,7 +9,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus } from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
@@ -86,6 +86,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const asked = requests.map((r) => ({ id: r.id, label: label(r.startsAt) }));
   const minLocal = `${utcToZonedParts(now, coach.tz).date}T${utcToZonedParts(now, coach.tz).time}`;
   const line = pkg ? packageLine(pkg, now) : null;
+  // What this student owes, and the ways this coach takes it. Sequential, after the rest (rule 8).
+  const owed = accepted && me ? await owedBy(db, coach, me.id) : null;
+  const pay = { promptpay: Boolean(coach.promptpayId), link: coach.payLink || null, atClub: coach.payAtClub };
   const url = `${baseUrl()}/c/${coach.handle}`;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -141,6 +144,8 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             lessons={mine.map((l) => studentLessonDTO(l, locale, labels, now))}
             pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft } : null}
             cutoffHours={coach.cutoffHours}
+            owed={owed && owed.total > 0 ? { total: owed.total, currency: owed.currency, lessons: owed.lessons.map((l) => ({ id: l.id, label: label(l.startsAt), amount: l.amount, claimed: Boolean(l.claimedAt) })) } : null}
+            pay={pay}
             whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
           />
         )}

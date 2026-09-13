@@ -10,11 +10,11 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
-import { notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
+import { notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
@@ -432,6 +432,78 @@ export async function studentBookAction(handle: string, startsAt: string): Promi
     await notifyLessonBooked(db, { lesson, coach, student: me, pkg, by: "student" }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() };
+  });
+}
+
+/**
+ * "Can we do Friday instead?" — answered without a message. The lesson keeps its package and its
+ * place in the book; only the hour changes, so there is no moment where the student holds neither
+ * the old slot nor the new one, and no free pass is spent on a lesson that is still happening.
+ */
+export async function studentMoveAction(lessonId: string, startsAt: string): Promise<ActionResult<{ startsAt: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const [row] = await db
+      .select({ coach: coaches })
+      .from(lessons)
+      .innerJoin(coaches, eq(coaches.id, lessons.coachId))
+      .where(and(eq(lessons.id, lessonId), eq(lessons.studentPlayerId, me.id)))
+      .limit(1);
+    if (!row) throw new ActionFailure("not_found");
+    const when = new Date(startsAt);
+    if (Number.isNaN(when.getTime())) throw new DomainError("invalid", "time");
+    const { from, to } = await moveLesson(db, { lessonId, coach: row.coach, startsAt: when, by: "student", actorPlayerId: me.id, source: "web" });
+    await notifyLessonMoved(db, { from, to, coach: row.coach, student: me, by: "student" }).catch(() => undefined);
+    revalidateCoach(row.coach.handle);
+    return { startsAt: to.startsAt.toISOString() };
+  });
+}
+
+/** The coach moves one from their own book; their students hear about it rather than discover it. */
+export async function coachMoveAction(lessonId: string, input: { startsAt?: string | null; day?: string | null; time?: string | null }): Promise<ActionResult<{ startsAt: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    let when: Date;
+    if (input.startsAt) when = new Date(input.startsAt);
+    else if (input.day && input.time && /^\d{4}-\d{2}-\d{2}$/.test(input.day) && /^\d{2}:\d{2}$/.test(input.time)) when = zonedTimeToUtc(input.day, input.time, coach.tz);
+    else throw new DomainError("invalid", "time");
+    if (Number.isNaN(when.getTime())) throw new DomainError("invalid", "time");
+    const { from, to } = await moveLesson(db, { lessonId, coach, startsAt: when, by: "coach", source: "web" });
+    const student = to.studentPlayerId ? await getPlayerById(db, to.studentPlayerId) : null;
+    if (student) await notifyLessonMoved(db, { from, to, coach, student, by: "coach" }).catch(() => undefined);
+    revalidateCoach(coach.handle);
+    return { startsAt: to.startsAt.toISOString() };
+  });
+}
+
+/** "I've sent it." A claim, not a status: it asks the coach, and only their tap answers. */
+export async function studentClaimPaidAction(lessonId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const lesson = await claimLessonPaid(db, lessonId, me.id);
+    if (!lesson) throw new ActionFailure("not_found");
+    const [coach] = await db.select().from(coaches).where(eq(coaches.id, lesson.coachId)).limit(1);
+    if (coach) {
+      await notifyPaidClaimed(db, { coach, student: me, lesson }).catch(() => undefined);
+      revalidateCoach(coach.handle);
+    }
+    return null;
+  });
+}
+
+/** The coach's tap is the only thing that marks a lesson paid. */
+export async function coachSetLessonPaidAction(lessonId: string, paid: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    if (!(await setLessonPaid(db, coach.id, lessonId, paid))) throw new ActionFailure("not_found");
+    revalidateCoach(coach.handle);
+    return null;
   });
 }
 

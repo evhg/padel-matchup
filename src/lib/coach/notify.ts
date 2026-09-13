@@ -60,6 +60,60 @@ export async function notifyLessonCancelled(db: Db, n: LessonNotice & { outcome:
   await emailLesson(n, "CANCEL").catch(() => undefined);
 }
 
+/**
+ * One line for a move, not a cancellation followed by an unrelated booking. Before this, the coach's
+ * side of a reschedule looked like two events with nothing joining them, which is most of why it felt
+ * like something had gone wrong.
+ *
+ * And this is the first coach notice with an email behind it. Every student-initiated event reached a
+ * coach on Telegram or nowhere, so a coach who never opened the bot ran a silent book.
+ */
+export async function notifyLessonMoved(db: Db, n: { from: Lesson; to: Lesson; coach: Coach; student: Player; by: "coach" | "student" }): Promise<void> {
+  const coachPlayer = await getPlayerById(db, n.coach.playerId);
+  const told = n.by === "student" ? coachPlayer : n.student;
+  if (!told) return;
+  const fromWhen = whenLabel(n.from.startsAt, n.coach.tz, told.locale);
+  const toWhen = whenLabel(n.to.startsAt, n.coach.tz, told.locale);
+  if (told.telegramId) {
+    const s = coachStrings(coachBotLocale(told.locale));
+    await dm(told.telegramId, n.by === "student" ? s.studentMoved(n.student.displayName, fromWhen, toWhen) : s.coachMoved(n.coach.displayName, fromWhen, toWhen));
+  } else if (emailEnabled() && told.email) {
+    const { t } = await translatorFor(told.locale);
+    const url = n.by === "student" ? `${baseUrl()}/coach` : `${baseUrl()}/c/${n.coach.handle}`;
+    const vars = { who: n.by === "student" ? n.student.displayName : n.coach.displayName, from: fromWhen, to: toWhen };
+    const { html, text } = layout({
+      heading: t("coach.email.movedHeading", vars),
+      body: t("coach.email.movedBody", vars),
+      cta: { label: t("coach.email.open"), url },
+      footer: t("email.footer", { app: APP_NAME }),
+      eventUrl: url,
+      openLabel: t("coach.email.open"),
+    });
+    await sendEmail({ to: told.email, subject: t("coach.email.movedSubject", vars), html, text }).catch(() => undefined);
+  }
+  // The student's calendar entry moves with it: one REQUEST at the new hour replaces the old.
+  await emailLesson({ lesson: n.to, coach: n.coach, student: n.student, pkg: null, by: n.by }, "REQUEST").catch(() => undefined);
+}
+
+/** A student says the money is sent. The coach hears it and taps once; nothing else changes state. */
+export async function notifyPaidClaimed(db: Db, n: { coach: Coach; student: Player; lesson: Lesson }): Promise<void> {
+  const coachPlayer = await getPlayerById(db, n.coach.playerId);
+  if (!coachPlayer) return;
+  const when = whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale);
+  const amount = n.lesson.amount ? `${n.lesson.amount} ${n.coach.currency}` : "";
+  if (coachPlayer.telegramId) {
+    const s = coachStrings(coachBotLocale(coachPlayer.locale));
+    await dm(coachPlayer.telegramId, s.paidClaimed(n.student.displayName, when, amount));
+    return;
+  }
+  if (!emailEnabled() || !coachPlayer.email) return;
+  const { t } = await translatorFor(coachPlayer.locale);
+  const url = `${baseUrl()}/coach/students`;
+  const vars = { student: n.student.displayName, when, amount };
+  const { html, text } = layout({ heading: t("coach.email.paidHeading", vars), body: t("coach.email.paidBody", vars), cta: { label: t("coach.email.open"), url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("coach.email.open") });
+  await sendEmail({ to: coachPlayer.email, subject: t("coach.email.paidSubject", vars), html, text }).catch(() => undefined);
+}
+
 /** A student came in through the coach's own link: one quiet line, no button, nothing to decide. */
 export async function notifyStudentJoined(db: Db, coach: Coach, student: Player): Promise<void> {
   const coachPlayer = await getPlayerById(db, coach.playerId);
