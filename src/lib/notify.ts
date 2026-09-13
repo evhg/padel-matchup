@@ -15,7 +15,7 @@ import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
-import { isOccupied, isSeated } from "@/lib/domain/events";
+import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
@@ -52,7 +52,10 @@ async function ctx(db: Db, ev: Event, localeLike: string | null | undefined, rec
   const title = withCompleteSuffix(eventTitleLine(ev, { fallback: t(ev.type === "match" ? "event.match" : "event.tournament"), courtNumber }), complete, t("calendar.completeSuffix"));
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
-  const vars = { day, time, venue, names: names.join(", "), count: names.length, capacity: ev.capacity };
+  // Every message may use every one of these. Kept in one bag on purpose: a sender that has to remember
+  // to pass an extra variable eventually forgets, and next-intl answers a missing one with the key itself.
+  const spots = t("event.spotsLeft", { count: d.roster.filter(isClaimable).length });
+  const vars = { day, time, venue, names: names.join(", "), count: names.length, capacity: ev.capacity, spots };
   const meta = [
     { label: t("email.when"), value: `${day} · ${time}` },
     { label: t("email.where"), value: venue },
