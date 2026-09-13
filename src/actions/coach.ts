@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach } from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -42,7 +42,7 @@ const revalidateCoach = (handle: string) => {
 };
 
 /** The first three steps of the setup: where, how long, when. Seven hour lines (index 0 = Sunday); an empty list means the usual hours. */
-export async function setupCoachAction(input: { name?: string | null; clubs: string; minutes: number; hoursLines?: string[]; preset?: HoursPreset | "custom"; tz?: string | null }): Promise<ActionResult<{ handle: string }>> {
+export async function setupCoachAction(input: { name?: string | null; clubs: string; clubSlugs?: string[]; minutes: number; hoursLines?: string[]; preset?: HoursPreset | "custom"; tz?: string | null }): Promise<ActionResult<{ handle: string; studentUrl: string }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
@@ -62,8 +62,11 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
       if (source) await bumpMetric(db, `coach_src_${source}`).catch(() => undefined);
     }
     // Neither a revalidation nor a cookie here, on purpose: either would refresh /coach and swap the setup walk for the book
-    // mid-way. The walk moves itself to /coach?setup=1 and ends through /coach/done, which sets the browser hint on the way.
-    return { handle: coach.handle };
+    // mid-way. The walk moves itself to /coach?setup=1 and ends through /coach/done.
+    if (input.clubSlugs?.length) await updateCoach(db, coach.id, { clubSlugs: input.clubSlugs }).catch(() => undefined);
+    // The walk ends on this link, so it is minted here rather than left on a screen the coach has not seen.
+    const studentUrl = studentLink(baseUrl(), coach.handle, await inviteCode(db, coach));
+    return { handle: coach.handle, studentUrl };
   });
 }
 
@@ -158,6 +161,37 @@ export async function coachBookAction(input: { studentPlayerId?: string | null; 
     if (student) await notifyLessonBooked(db, { lesson, coach, student, pkg, by: "coach" }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { lessonId: lesson.id, studentPlayerId, startsAt: lesson.startsAt.toISOString() };
+  });
+}
+
+/**
+ * The coach takes an hour back: lunch, a match, the school run. This is what connecting Google
+ * Calendar was standing in for, and it needs no connection — one tap on the grid they are already
+ * looking at, which is the only surface a coach on a phone actually reaches.
+ */
+export async function coachBlockAction(input: { startsAt?: string | null; day?: string | null; time?: string | null; minutes?: number | null; reason?: string | null }): Promise<ActionResult<{ blockId: string }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    let startsAt: Date;
+    if (input.startsAt) startsAt = new Date(input.startsAt);
+    else if (input.day && input.time && /^\d{4}-\d{2}-\d{2}$/.test(input.day) && /^\d{2}:\d{2}$/.test(input.time)) startsAt = zonedTimeToUtc(input.day, input.time, coach.tz);
+    else throw new DomainError("invalid", "time");
+    if (Number.isNaN(startsAt.getTime())) throw new DomainError("invalid", "time");
+    const block = await blockTime(db, { coachId: coach.id, startsAt, minutes: input.minutes ?? coach.lessonMinutes, reason: input.reason ?? null });
+    revalidateCoach(coach.handle);
+    return { blockId: block.id };
+  });
+}
+
+/** Undo one. Only a block made here comes back this way; a calendar's blocks belong to the calendar. */
+export async function coachUnblockAction(blockId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    if (!(await unblockTime(db, coach.id, blockId))) throw new DomainError("not_found");
+    revalidateCoach(coach.handle);
+    return null;
   });
 }
 
@@ -358,19 +392,25 @@ export async function requestCoachAction(handle: string, name?: string | null, i
   });
 }
 
-/** Setup step: how students pay. Both optional; the same fields as in settings. */
-/** Setup step: how students pay. A field left out stays as it is; an empty one clears; a link that is not a link is refused, not dropped. */
-export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null }): Promise<ActionResult<null>> {
+/**
+ * Setup step: what a lesson costs and how students pay for it. A field left out stays as it is; an
+ * empty one clears; a link that is not a link is refused, not dropped. Nothing is charged here and
+ * nothing passes through Kicksmash — this is what the student is shown so they can pay the coach.
+ */
+export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null; priceSingle?: number | null; currency?: string | null; payAtClub?: boolean }): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    const patch: { promptpayId?: string; payLink?: string } = {};
+    const patch: CoachPatch = {};
     if (typeof input.promptpayId === "string") patch.promptpayId = input.promptpayId.trim();
     if (typeof input.payLink === "string") {
       const link = input.payLink.trim();
       if (link && !isPayLink(link)) throw new DomainError("invalid", "payLink");
       patch.payLink = link;
     }
+    if (input.priceSingle !== undefined) patch.priceSingle = input.priceSingle;
+    if (typeof input.currency === "string") patch.currency = input.currency;
+    if (typeof input.payAtClub === "boolean") patch.payAtClub = input.payAtClub;
     if (Object.keys(patch).length) await updateCoach(db, coach.id, patch);
     revalidateCoach(coach.handle);
     return null;

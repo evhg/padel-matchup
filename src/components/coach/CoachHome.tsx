@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { coachBookAction, coachCancelAction, coachNoShowAction, decideRequestAction } from "@/actions/coach";
+import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, decideRequestAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
@@ -276,6 +276,18 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
     });
   };
 
+  const block = () =>
+    start(async () => {
+      setError(null);
+      const r = await coachBlockAction({ startsAt: slot, day: slot ? null : day, time: slot ? null : customTime || null });
+      if (!r.ok) {
+        setError(["slot_taken", "past", "no_coach"].includes(r.error) ? t(`errors.${r.error}` as "errors.slot_taken") : t("errors.slot_taken"));
+        return;
+      }
+      const chosen = slot ? daySlots.find((s) => s.iso === slot) : null;
+      onDone(t("book.blocked", { when: `${dayLabels[day] ?? day} ${chosen?.time ?? customTime}` }));
+    });
+
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
 
   return (
@@ -358,6 +370,11 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
           ✕
         </button>
       </div>
+      {/* The same picker takes an hour back for the coach. This is what connecting Google Calendar was
+          standing in for, and unlike that it can be done on a phone, on the screen they are already on. */}
+      <button type="button" className="btn-ghost w-full text-sm" disabled={pending || (!slot && !customTime)} onClick={block} data-testid="block-time">
+        {t("book.blockIt")}
+      </button>
       <HowThisWorks text={t("book.how")} />
     </form>
   );

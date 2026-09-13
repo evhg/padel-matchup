@@ -7,6 +7,7 @@ import { NameGate } from "@/components/NameGate";
 import { SourceTag } from "@/components/SourceTag";
 import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 import { getDb } from "@/db";
+import { listLiveClubs } from "@/lib/domain/clubs";
 import { baseUrl } from "@/lib/config";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
@@ -16,7 +17,6 @@ import { busyBetween, DAY_MS, earnedInvite, getCoachForActor, inviteCode, listCo
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
-import { serviceAccountEmail } from "@/lib/coach/gcal";
 import { playerTicket } from "@/lib/coach/link";
 import { botDeepLink } from "@/lib/telegram/bot";
 import { telegramBotUsername } from "@/lib/telegram/api";
@@ -51,14 +51,19 @@ export default async function CoachPage({ searchParams }: Props) {
       </>,
     );
   const found = await getCoachForActor(db, me.id);
-  // The setup walk stays on screen after the third step makes the assistant (?setup=1), so the calendar, payment and bot steps can follow.
-  if (!found || sp.setup === "1")
+  // The setup walk stays on screen after the third step makes the assistant (?setup=1), so the price,
+  // the notification channel and the student link can follow without a reload losing the walk.
+  if (!found || sp.setup === "1") {
+    // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). Both are bounded and indexed.
+    const clubOptions = (await listLiveClubs(db)).map((c) => ({ slug: c.slug, name: c.name, city: c.city }));
+    const resumedLink = found ? studentLink(baseUrl(), found.coach.handle, await inviteCode(db, found.coach)) : null;
     return shell(
       <>
         {tag}
-        <CoachSetup initialClubs={((Array.isArray(sp.club) ? sp.club[0] : sp.club) ?? "").slice(0, 80)} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
+        <CoachSetup initialClubs={((Array.isArray(sp.club) ? sp.club[0] : sp.club) ?? "").slice(0, 80)} clubOptions={clubOptions} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} existing={Boolean(found)} studentUrl={resumedLink} />
       </>,
     );
+  }
 
   const { coach } = found;
   const now = new Date();
