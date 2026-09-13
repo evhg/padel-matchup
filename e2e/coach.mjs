@@ -37,45 +37,58 @@ try {
   await olga.getByPlaceholder("e.g. Alex").fill("Olga");
   await olga.locator("form button[type=submit]").click();
   await olga.getByText("Your assistant").first().waitFor({ timeout: 20000 });
-  // The setup is a short walk: where, how long, when (that makes the assistant), then calendar, payment and the bot, each skippable.
+  // The walk: where, how long, when (that makes the assistant), what a lesson costs, where to be told,
+  // and the link for students. No Google Calendar step — it cannot be done in the phone apps at all.
   check("setup starts with where you coach, one question per screen", (await olga.getByTestId("setup-where").count()) === 1 && (await olga.locator("#coach-clubs").count()) === 1 && (await olga.getByText("Step 1 of").count()) === 1);
   await olga.locator("#coach-clubs").fill("Warehaus");
   await olga.getByRole("button", { name: "Next" }).click();
   await olga.getByTestId("setup-length").waitFor({ timeout: 10000 });
   await olga.getByRole("button", { name: "Next" }).click();
   await olga.getByTestId("setup-hours").waitFor({ timeout: 10000 });
+
+  // The hours used to be a grid pre-filled eight to eight, six days a week, so a coach who tapped
+  // through sold their whole waking week. Presets come first; the grid is behind one more tap.
+  const presets = olga.getByTestId("hours-presets");
+  check("hours offer three presets before any grid, and none of them is the whole day", (await presets.locator('button[data-kind="preset"]').count()) === 3 && (await olga.getByTestId("hours-grid").count()) === 0);
+  await olga.getByTestId("hours-custom").click();
   const grid = olga.getByTestId("hours-grid");
-  check("hours are set per day with a start and an end, Sunday off by default", (await grid.getByRole("button", { pressed: true }).count()) === 6 && (await grid.getByRole("button", { pressed: false }).count()) === 1 && (await grid.locator('input[type="time"]').count()) === 14);
-  await grid.getByRole("button", { name: "Saturday" }).click();
+  check("the per-day grid is still there for a coach who wants it", (await grid.locator('input[type="time"]').count()) === 14);
+  await olga.getByTestId("hours-custom").click();
+  await presets.locator('button[data-preset="both"]').click();
   await olga.getByRole("button", { name: "Set up my assistant" }).click();
-  await olga.getByTestId(/setup-(calendar|pay)/).waitFor({ timeout: 30000 });
+
+  await olga.getByTestId("setup-price").waitFor({ timeout: 30000 });
   check("the assistant exists after the third step; the rest can wait", (await olga.getByText(/Your assistant exists/).count()) === 1);
-  // A second Telegram account that gets hold of Olga's bot links.
+  check("the walk asks what a lesson costs and how students pay, which nothing did before", (await olga.getByTestId("price-single").count()) === 1 && (await olga.getByTestId("pay-at-club").count()) === 1);
+  await olga.getByTestId("price-single").fill("800");
+  await olga.getByTestId("pay-at-club").check();
+  await olga.getByTestId("price-save").click();
+
+  // The bot step: the button carries a signed ticket; opening it binds that Telegram account to Olga.
+  await olga.getByTestId("setup-notify").waitFor({ timeout: 20000 });
   const stranger = { id: 616162, is_bot: false, first_name: "Someone", username: "someone_e2e" };
-  for (let i = 0; i < 4 && !/welcome=1/.test(olga.url()); i++) {
-    const later = olga.getByRole("button", { name: "Later" });
-    const done = olga.getByTestId("setup-finish");
-    if (await done.count()) {
-      // The bot step: the button carries a signed ticket; opening it binds that Telegram account to Olga, who then runs her book from the chat.
-      const href = await olga.getByTestId("open-bot").getAttribute("href");
-      const ticket = href?.match(/start=coach_([^&]+)/)?.[1];
-      const param = `coach_${decodeURIComponent(ticket ?? "")}`;
-      check("the bot link's start parameter is one Telegram accepts (at most 64 of [A-Za-z0-9_-])", param.length <= 64 && /^[A-Za-z0-9_-]+$/.test(param), param);
-      check("the bot step opens @kicksmash_bot with a signed ticket", Boolean(ticket), href ?? "");
-      const tgOlga = { id: 616161, is_bot: false, first_name: "Olga", username: "olga_coach_e2e" };
-      const linked = await hook({ update_id: 900001, message: { message_id: 900001, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: `/start coach_${decodeURIComponent(ticket ?? "")}` } });
-      check("opening the bot from the setup binds that Telegram account to the coach", linked.outcome === "coach_linked", JSON.stringify(linked));
-      const agenda = await hook({ update_id: 900002, message: { message_id: 900002, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: "tomorrow" } });
-      check("the bound account runs the coach's book from the chat", agenda.outcome === "coach:agenda", JSON.stringify(agenda));
-      // The ticket is salted with the binding: the moment Olga is bound, the ticket that bound her is dead, so a second account replaying it gets nothing.
-      const rawTicket = decodeURIComponent(ticket ?? "");
-      const replayed = await hook({ update_id: 900003, message: { message_id: 900003, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${rawTicket}` } });
-      check("the ticket that bound the coach is dead once she is bound: replayed from a second Telegram account it is refused as expired", replayed.outcome === "coach_link_expired", JSON.stringify(replayed));
-      await done.click();
-    } else if (await later.count()) await later.first().click();
-    else break;
-    await olga.waitForTimeout(300);
-  }
+  const href = await olga.getByTestId("open-bot").getAttribute("href");
+  const ticket = href?.match(/start=coach_([^&]+)/)?.[1];
+  const param = `coach_${decodeURIComponent(ticket ?? "")}`;
+  check("the bot link's start parameter is one Telegram accepts (at most 64 of [A-Za-z0-9_-])", param.length <= 64 && /^[A-Za-z0-9_-]+$/.test(param), param);
+  check("the bot step opens @kicksmash_bot with a signed ticket", Boolean(ticket), href ?? "");
+  const tgOlga = { id: 616161, is_bot: false, first_name: "Olga", username: "olga_coach_e2e" };
+  const linked = await hook({ update_id: 900001, message: { message_id: 900001, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: `/start coach_${decodeURIComponent(ticket ?? "")}` } });
+  check("opening the bot from the setup binds that Telegram account to the coach", linked.outcome === "coach_linked", JSON.stringify(linked));
+  const agenda = await hook({ update_id: 900002, message: { message_id: 900002, date: 0, chat: { id: 616161, type: "private" }, from: tgOlga, text: "tomorrow" } });
+  check("the bound account runs the coach's book from the chat", agenda.outcome === "coach:agenda", JSON.stringify(agenda));
+  // The ticket is salted with the binding: once Olga is bound, the ticket that bound her is dead.
+  const rawTicket = decodeURIComponent(ticket ?? "");
+  const replayed = await hook({ update_id: 900003, message: { message_id: 900003, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${rawTicket}` } });
+  check("the ticket that bound the coach is dead once she is bound: replayed from a second Telegram account it is refused as expired", replayed.outcome === "coach_link_expired", JSON.stringify(replayed));
+  await olga.getByRole("button", { name: "Email me instead" }).click();
+
+  // The walk ends on the link, not on a Done button with the link two screens away.
+  await olga.getByTestId("setup-link").waitFor({ timeout: 20000 });
+  const walkLink = await olga.getByTestId("student-link").innerText();
+  check("the walk ends on the student link, carrying the invite code", /\/c\/[a-z0-9-]+\?i=/.test(walkLink), walkLink);
+  check("a coach who already has students is offered the sheet right there", (await olga.getByTestId("setup-import").count()) === 1);
+  await olga.getByTestId("setup-finish").click();
   await olga.waitForURL(/\/coach\?welcome=1$/, { timeout: 30000 });
   await olga.getByText("Your assistant is ready").waitFor({ timeout: 20000 });
   const body = await olga.locator("main").innerText();
@@ -109,11 +122,10 @@ try {
   check("the coach's own student link shows the owner's note instead of the join form", (await olga.getByTestId("owner-note").count()) === 1 && (await olga.getByTestId("invited-join").count()) === 0 && (await olga.getByTestId("ask-to-join").count()) === 0 && (await olga.getByRole("link", { name: "Open my assistant" }).getAttribute("href")) === "/coach");
   // A ticket minted after the bind (the setup walk reopened) is live; opened from a second Telegram account it is refused and the assistant stays with Olga.
   await olga.goto(BASE + "/coach?setup=1");
-  await olga.getByTestId(/setup-(calendar|pay|bot)/).waitFor({ timeout: 20000 });
-  for (let i = 0; i < 4 && !(await olga.getByTestId("setup-finish").count()); i++) {
-    await olga.getByRole("button", { name: "Later" }).first().click();
-    await olga.waitForTimeout(300);
-  }
+  // A reopened walk resumes at the price, because the book already exists.
+  await olga.getByTestId("setup-price").waitFor({ timeout: 20000 });
+  await olga.getByRole("button", { name: "Later" }).first().click();
+  await olga.getByTestId("setup-notify").waitFor({ timeout: 20000 });
   const freshHref = await olga.getByTestId("open-bot").getAttribute("href");
   const freshTicket = decodeURIComponent(freshHref?.match(/start=coach_([^&]+)/)?.[1] ?? "");
   // First with its last character changed: dead. Then intact: refused, because the assistant is bound to Olga's account already.

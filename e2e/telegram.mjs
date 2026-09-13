@@ -149,12 +149,17 @@ try {
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Set up my assistant" }).click();
-  await page.getByTestId(/setup-(calendar|pay)/).waitFor({ timeout: 30000 });
-  for (let i = 0; i < 4 && !/welcome=1/.test(page.url()); i++) {
-    const later = page.getByRole("button", { name: "Later" });
+  // The walk after the book exists: price, where to be told, the student link. Each one skippable,
+  // and this suite is about the bot, so it skips all three.
+  await page.getByTestId("setup-price").waitFor({ timeout: 30000 });
+  for (let i = 0; i < 5 && !/welcome=1/.test(page.url()); i++) {
     const done = page.getByTestId("setup-finish");
-    if (await done.count()) await done.click();
-    else if (await later.count()) await later.first().click();
+    if (await done.count()) {
+      await done.click();
+      break;
+    }
+    const skip = page.getByRole("button", { name: /Later|Email me instead/ });
+    if (await skip.count()) await skip.first().click();
     else break;
     await page.waitForTimeout(300);
   }

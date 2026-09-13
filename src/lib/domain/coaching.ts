@@ -190,7 +190,7 @@ export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> =
 /** A payment link a student can open: http(s), at least a few characters, no spaces. */
 export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
 
-export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
+export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
   const clean: CoachPatch = { ...patch };
@@ -201,6 +201,10 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   if (clean.minNoticeHours !== undefined) clean.minNoticeHours = Math.min(48, Math.max(0, Math.round(clean.minNoticeHours)));
   if (clean.displayName !== undefined) clean.displayName = clean.displayName.replace(/\s+/g, " ").trim().slice(0, 40) || undefined;
   if (clean.whatsapp !== undefined) clean.whatsapp = (clean.whatsapp ?? "").replace(/\D/g, "").slice(0, 15) || null;
+  // A price is whole currency units and never negative; zero or blank means this coach sells packages only.
+  if (clean.priceSingle !== undefined) clean.priceSingle = clean.priceSingle === null ? null : Math.min(1_000_000, Math.max(0, Math.round(clean.priceSingle))) || null;
+  if (clean.currency !== undefined) clean.currency = (clean.currency || "THB").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3) || "THB";
+  if (clean.clubSlugs !== undefined) clean.clubSlugs = [...new Set(clean.clubSlugs)].filter(Boolean).slice(0, 8);
   // Founding places: listing the book for the first time takes one while the city has any; moving city takes one there when
   // that city has any (a Bangkok founder does not walk into a full Singapore with a badge) and gives the old one back.
   const extra: Partial<typeof coaches.$inferInsert> = {};
@@ -450,6 +454,38 @@ export async function busyBetween(db: Db, coachId: string, from: Date, to: Date)
       .where(and(eq(coachBlocks.coachId, coachId), lt(coachBlocks.startsAt, to), gt(coachBlocks.endsAt, from))),
   ]);
   return [...ls.map((l) => ({ startsAt: l.startsAt, endsAt: new Date(l.startsAt.getTime() + l.minutes * 60_000) })), ...bs];
+}
+
+/**
+ * The coach takes an hour back for themselves: lunch, a match, the school run. This is what the
+ * Google Calendar connection was standing in for, and it needs no connection at all — a coach on a
+ * phone can do it from their own grid, which is where they already are.
+ *
+ * A slot a student has booked is not blockable: cancelling that lesson is a different act, with a
+ * notice attached, and quietly burying it under a block would leave the student expecting a lesson.
+ */
+export async function blockTime(db: Db, input: { coachId: string; startsAt: Date; minutes: number; reason?: string | null }, now = new Date()): Promise<CoachBlock> {
+  const startsAt = new Date(Math.floor(input.startsAt.getTime() / 60_000) * 60_000);
+  const minutes = Math.min(24 * 60, Math.max(15, Math.round(input.minutes)));
+  const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
+  if (endsAt.getTime() <= now.getTime()) throw new DomainError("past");
+  const [clash] = await db
+    .select({ id: lessons.id })
+    .from(lessons)
+    .where(and(eq(lessons.coachId, input.coachId), eq(lessons.status, "booked"), lt(lessons.startsAt, endsAt), gte(lessons.startsAt, new Date(startsAt.getTime() - 4 * HOUR_MS))))
+    .limit(1);
+  if (clash) throw new DomainError("slot_taken");
+  const [block] = await db
+    .insert(coachBlocks)
+    .values({ coachId: input.coachId, startsAt, endsAt, reason: input.reason?.trim().slice(0, 120) || null, source: "web" })
+    .returning();
+  return block;
+}
+
+/** Only a block the coach made here comes back this way; a calendar's blocks belong to the calendar. */
+export async function unblockTime(db: Db, coachId: string, blockId: string): Promise<boolean> {
+  const done = await db.delete(coachBlocks).where(and(eq(coachBlocks.id, blockId), eq(coachBlocks.coachId, coachId), eq(coachBlocks.source, "web"))).returning({ id: coachBlocks.id });
+  return done.length > 0;
 }
 
 export async function availableSlots(db: Db, coach: Coach, from: Date, to: Date, now = new Date()): Promise<Date[]> {

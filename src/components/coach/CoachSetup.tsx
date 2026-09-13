@@ -3,53 +3,81 @@
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { saveCalendarAction, savePaymentAction, setupCoachAction, type CalendarState } from "@/actions/coach";
+import { savePaymentAction, setupCoachAction } from "@/actions/coach";
+import { ShareButtons } from "@/components/ShareSheet";
 import { HowThisWorks } from "./HowThisWorks";
+import { ImportSheet } from "./ImportSheet";
 
-type Step = "where" | "length" | "hours" | "calendar" | "pay" | "bot";
+type Step = "where" | "length" | "hours" | "price" | "notify" | "link";
 type Day = { on: boolean; from: string; to: string };
-const DEFAULT_DAYS: Day[] = Array.from({ length: 7 }, (_, d) => ({ on: d !== 0, from: "08:00", to: "20:00" }));
+type Preset = "mornings" | "afternoons" | "both";
+export type ClubOption = { slug: string; name: string; city: string | null };
+
+/** The same ranges the domain's presets use, so what the chips promise is what gets saved. */
+const PRESET_HOURS: Record<Preset, string> = { mornings: "07:00-12:00", afternoons: "15:00-20:00", both: "07:00-12:00, 15:00-20:00" };
+const DEFAULT_DAYS: Day[] = Array.from({ length: 7 }, (_, d) => ({ on: d !== 0, from: "07:00", to: "12:00" }));
 const ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 /**
- * The assistant, set up as a short walk: where, how long, when (that makes it),
- * then the calendar, the payment and the Telegram bot, each one tap or "Later".
- * One question per screen; the coach is never asked to come back and finish.
+ * The assistant, set up as a short walk: where, how long, when (that makes it), what a lesson costs,
+ * where to hear about bookings, and the link to hand a student.
+ *
+ * Three things changed from the first version, all of them because a coach who does not read
+ * instructions has to end up with something that works:
+ *
+ * The hours were a grid pre-filled Monday to Saturday, eight in the morning to eight at night. A
+ * coach who tapped through published seventy-two bookable hours a week and met the product by having
+ * a student book their dinner. Presets come first now; the grid is behind "different each day".
+ *
+ * Google Calendar was the fourth screen, asking the coach to leave, walk a five-level menu and share
+ * a calendar with a service account. That cannot be done in the Google Calendar phone apps at all, so
+ * for most coaches it was not a hard step, it was an impossible one. It moved to the book, where it
+ * can wait for a desk, and blocking an hour by tapping the grid does the job it was standing in for.
+ *
+ * And the walk used to end on a Done button while the link that makes any of this matter sat on a
+ * screen the coach had not seen. It ends on the link now.
  */
-export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = null, serviceEmail = null, existing = false }: { initialClubs?: string; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; serviceEmail?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the calendar. */ existing?: boolean }) {
+export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = null, botUrl = null, existing = false, studentUrl = null }: { initialClubs?: string; /** Live clubs, for picking a real one instead of typing a name a club can never match. */ clubOptions?: ClubOption[]; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the price. */ existing?: boolean; /** The invite link to hand students, once the book exists. */ studentUrl?: string | null }) {
   const t = useTranslations("coach");
-  const tCal = useTranslations("coach.calendar");
   const locale = useLocale();
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [step, setStep] = useState<Step>(existing ? "calendar" : "where");
+  const [step, setStep] = useState<Step>(existing ? "price" : "where");
   const [clubs, setClubs] = useState(initialClubs);
+  const [clubSlugs, setClubSlugs] = useState<string[]>([]);
   const [minutes, setMinutes] = useState<60 | 90>(60);
+  const [preset, setPreset] = useState<Preset>("both");
+  const [custom, setCustom] = useState(false);
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [badDay, setBadDay] = useState<number | null>(null);
-  const [gcalId, setGcalId] = useState("");
-  const [icalUrl, setIcalUrl] = useState("");
-  const [showIcal, setShowIcal] = useState(!serviceEmail);
-  const [calState, setCalState] = useState<CalendarState | null>(null);
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("THB");
+  const [payAtClub, setPayAtClub] = useState(false);
   const [promptpay, setPromptpay] = useState("");
   const [payLink, setPayLink] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [link, setLink] = useState<string | null>(studentUrl);
   const [error, setError] = useState<string | null>(null);
 
-  // The calendar step stays without a Google service account: Apple and Outlook coaches attach an iCal address, which needs none.
-  const steps: Step[] = ["where", "length", "hours", "calendar", "pay", ...(botUsername ? (["bot"] as Step[]) : [])];
+  const steps: Step[] = ["where", "length", "hours", "price", ...(botUsername ? (["notify"] as Step[]) : []), "link"];
   const index = steps.indexOf(step);
   const total = steps.length;
   const goNext = () => setStep(steps[Math.min(total - 1, index + 1)]);
-  // A full navigation through /coach/done: the response sets the header's coach hint and opens the welcome.
   const finish = () => {
     window.location.assign("/coach/done");
   };
-  const after = (s: Step) => (steps.indexOf(s) === total - 1 ? finish : goNext);
 
   const dayName = (d: number, style: "short" | "long" = "short") => new Intl.DateTimeFormat(locale, { weekday: style, timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + d, 12)));
   const chip = (active: boolean) => `rounded-full border px-4 py-2 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
-  const hoursLines = days.map((d) => (d.on ? `${d.from}-${d.to}` : "off"));
+  // Custom: seven lines from the grid. Preset: the same range every day, which is what the chips say.
+  const hoursLines = custom ? days.map((d) => (d.on ? `${d.from}-${d.to}` : "off")) : Array.from({ length: 7 }, () => PRESET_HOURS[preset]);
+
+  const typed = clubs.trim().toLowerCase();
+  const suggestions = typed.length < 2 ? [] : clubOptions.filter((c) => c.name.toLowerCase().includes(typed) && !clubSlugs.includes(c.slug)).slice(0, 6);
+  const pickClub = (c: ClubOption) => {
+    setClubs(c.name);
+    setClubSlugs((s) => (s.includes(c.slug) ? s : [...s, c.slug]));
+  };
 
   const create = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,58 +85,36 @@ export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = nul
     setBadDay(null);
     start(async () => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const r = await setupCoachAction({ clubs, minutes, hoursLines, tz });
+      const r = await setupCoachAction({ clubs, clubSlugs, minutes, hoursLines, tz });
       if (!r.ok) {
         if (r.error === "invalid" && r.detail && /^\d$/.test(r.detail)) setBadDay(Number(r.detail));
         else setError(t("errors.no_coach"));
         return;
       }
-      // From here the assistant exists: the page keeps this walk on screen under ?setup=1 while the next steps save.
-      after("hours")();
+      setLink(r.data.studentUrl);
+      goNext();
+      // The book exists from here; the page keeps this walk on screen under ?setup=1 while the rest saves.
       router.replace("/coach?setup=1", { scroll: false });
     });
   };
 
-  const attach = () =>
-    start(async () => {
-      setError(null);
-      const r = await saveCalendarAction({ gcalId, icalUrl });
-      if (!r.ok) {
-        setError(r.error === "invalid" && r.detail === "ical" ? tCal("badLink") : tCal("badAddress"));
-        return;
-      }
-      setCalState(r.data);
-    });
-
   const savePay = () =>
     start(async () => {
       setError(null);
-      // Only what was typed is sent: a blank field here leaves a saved value alone.
-      const r = await savePaymentAction({ promptpayId: promptpay.trim() || undefined, payLink: payLink.trim() || undefined });
+      const n = Number(price.replace(/[^\d]/g, ""));
+      const r = await savePaymentAction({
+        priceSingle: price.trim() === "" ? null : Number.isFinite(n) ? n : null,
+        currency,
+        payAtClub,
+        promptpayId: promptpay.trim() || undefined,
+        payLink: payLink.trim() || undefined,
+      });
       if (!r.ok) {
         setError(r.error === "invalid" && r.detail === "payLink" ? t("setup.badPayLink") : t("errors.no_coach"));
         return;
       }
-      after("pay")();
+      goNext();
     });
-
-  const copy = async () => {
-    if (!serviceEmail) return;
-    try {
-      await navigator.clipboard.writeText(serviceEmail);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* the address is on screen either way */
-    }
-  };
-  const calLine = (() => {
-    const g = calState?.gcal;
-    const i = calState?.ical;
-    if (g) return g.ok ? { ok: true, text: tCal("linked", { name: g.summary }) } : { ok: false, text: g.reason === "no_service_account" ? tCal("unavailable") : g.reason === "error" ? tCal("failed") : tCal("noAccess") };
-    if (i) return i.ok ? { ok: true, text: tCal("icalOk", { n: i.busy }) } : { ok: false, text: tCal("icalFailed") };
-    return null;
-  })();
 
   return (
     <section className="card flex flex-col gap-5" data-testid={`setup-${step}`}>
@@ -119,19 +125,23 @@ export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = nul
       </div>
 
       {step === "where" && (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            goNext();
-          }}
-        >
+        <form className="flex flex-col gap-4" onSubmit={(e) => (e.preventDefault(), goNext())}>
           <div>
             <label className="text-sm font-bold" htmlFor="coach-clubs">
               {t("setup.club")}
             </label>
-            <input id="coach-clubs" className="input mt-2" value={clubs} onChange={(e) => setClubs(e.target.value)} placeholder={t("setup.clubPlaceholder")} maxLength={120} autoFocus enterKeyHint="next" />
-            <p className="mt-1 text-xs text-faint">{t("setup.clubHelp")}</p>
+            <input id="coach-clubs" className="input mt-2" value={clubs} onChange={(e) => setClubs(e.target.value)} placeholder={t("setup.clubPlaceholder")} maxLength={120} autoFocus enterKeyHint="next" autoComplete="off" />
+            {suggestions.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1" data-testid="club-suggestions">
+                {suggestions.map((c) => (
+                  <button key={c.slug} type="button" className="rounded-lg border border-line px-3 py-2 text-left text-sm hover:border-ink/40" onClick={() => pickClub(c)}>
+                    <span className="font-bold">{c.name}</span>
+                    {c.city && <span className="text-faint"> · {c.city}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="mt-1 text-xs text-faint">{clubSlugs.length ? t("setup.clubPicked") : t("setup.clubHelp")}</p>
           </div>
           <button type="submit" className="btn-primary w-full">
             {t("setup.next")}
@@ -163,25 +173,34 @@ export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = nul
           <div>
             <div className="text-sm font-bold">{t("setup.hours")}</div>
             <p className="mt-1 text-xs text-faint">{t("setup.hoursHelp")}</p>
-            <div className="mt-3 grid grid-cols-[4.5rem_1fr_auto_1fr] items-center gap-x-2 gap-y-2" data-testid="hours-grid">
-              {ORDER.map((d) => {
-                const day = days[d];
-                const bad = badDay === d;
-                return (
-                  <div key={d} className="contents">
-                    <button type="button" aria-pressed={day.on} aria-label={dayName(d, "long")} className={`${chip(day.on)} px-0 text-center`} onClick={() => setDays((ds) => ds.map((x, i) => (i === d ? { ...x, on: !x.on } : x)))}>
-                      {dayName(d)}
-                    </button>
-                    <input type="time" className={`input px-2 ${bad ? "ring-2 ring-danger" : ""}`} value={day.from} disabled={!day.on} onChange={(e) => setDays((ds) => ds.map((x, i) => (i === d ? { ...x, from: e.target.value } : x)))} aria-label={`${dayName(d, "long")} ${t("setup.hours")}`} />
-                    <span className="text-xs text-faint">–</span>
-                    <input type="time" className={`input px-2 ${bad ? "ring-2 ring-danger" : ""}`} value={day.to} disabled={!day.on} onChange={(e) => setDays((ds) => ds.map((x, i) => (i === d ? { ...x, to: e.target.value } : x)))} />
-                  </div>
-                );
-              })}
+            <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label={t("setup.hours")} data-testid="hours-presets">
+              {(["mornings", "afternoons", "both"] as const).map((p) => (
+                <button key={p} type="button" role="radio" aria-checked={!custom && preset === p} className={chip(!custom && preset === p)} onClick={() => (setCustom(false), setPreset(p))} data-kind="preset" data-preset={p}>
+                  {t(`setup.preset.${p}`)}
+                </button>
+              ))}
             </div>
-            <button type="button" className="mt-2 text-xs font-bold text-muted underline underline-offset-4 hover:text-ink" onClick={() => setDays((ds) => ds.map((x, i) => (i === 1 ? x : { ...ds[1] })))}>
-              {t("setup.sameAll")}
+            <button type="button" className="mt-3 text-xs font-bold text-muted underline underline-offset-4 hover:text-ink" onClick={() => setCustom((c) => !c)} data-testid="hours-custom">
+              {custom ? t("setup.presetBack") : t("setup.custom")}
             </button>
+            {custom && (
+              <div className="mt-3 grid grid-cols-[4.5rem_1fr_auto_1fr] items-center gap-x-2 gap-y-2" data-testid="hours-grid">
+                {ORDER.map((d) => {
+                  const day = days[d];
+                  const bad = badDay === d;
+                  return (
+                    <div key={d} className="contents">
+                      <button type="button" aria-pressed={day.on} aria-label={dayName(d, "long")} className={`${chip(day.on)} px-0 text-center`} onClick={() => setDays((ds) => ds.map((x, i) => (i === d ? { ...x, on: !x.on } : x)))}>
+                        {dayName(d)}
+                      </button>
+                      <input type="time" className={`input px-2 ${bad ? "ring-2 ring-danger" : ""}`} value={day.from} disabled={!day.on} onChange={(e) => setDays((ds) => ds.map((x, i) => (i === d ? { ...x, from: e.target.value } : x)))} aria-label={`${dayName(d, "long")} ${t("setup.hours")}`} />
+                      <span className="text-xs text-faint">–</span>
+                      <input type="time" className={`input px-2 ${bad ? "ring-2 ring-danger" : ""}`} value={day.to} disabled={!day.on} onChange={(e) => setDays((ds) => ds.map((x, i) => (i === d ? { ...x, to: e.target.value } : x)))} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           {badDay !== null && <p className="text-sm font-semibold text-danger">{t("settings.invalidHours", { day: dayName(badDay, "long") })}</p>}
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
@@ -191,97 +210,86 @@ export function CoachSetup({ initialClubs = "", botUsername = null, botUrl = nul
         </form>
       )}
 
-      {step === "calendar" && (
+      {step === "price" && (
         <div className="flex flex-col gap-4">
           <p className="text-sm font-semibold text-ok">✓ {t("setup.created")}</p>
           <div>
-            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.calendarTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("setup.calendarHelp")}</p>
+            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.priceTitle")}</h2>
+            <p className="mt-1 text-sm text-muted">{t("setup.priceHelp")}</p>
           </div>
-          {serviceEmail && (
-          <ol className="flex flex-col gap-3 text-sm">
-            <li>
-              <div className="font-bold">{tCal("step1")}</div>
-              <p className="text-xs text-muted">{tCal("step1Help")}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <code className="truncate rounded bg-panel px-2 py-1 text-xs" data-testid="service-email">
-                  {serviceEmail}
-                </code>
-                <button type="button" className="text-xs font-bold text-ink underline underline-offset-4" onClick={copy}>
-                  {copied ? tCal("copied") : tCal("copy")}
-                </button>
-              </div>
-            </li>
-            <li>
-              <label className="block font-bold" htmlFor="setup-gcal">
-                {tCal("step2")}
-              </label>
-              <p className="text-xs text-muted">{tCal("step2Help")}</p>
-              <input id="setup-gcal" className="input mt-1" value={gcalId} onChange={(e) => setGcalId(e.target.value)} inputMode="email" autoComplete="off" placeholder="name@gmail.com" maxLength={120} />
-            </li>
-          </ol>
-          )}
-          {showIcal ? (
-            <label className="block text-sm font-bold" htmlFor="setup-ical">
-              {tCal("ical")}
-              <input id="setup-ical" className="input mt-1" value={icalUrl} onChange={(e) => setIcalUrl(e.target.value)} inputMode="url" autoComplete="off" placeholder="https://…/basic.ics" maxLength={500} />
+          <div className="flex gap-2">
+            <label className="block flex-1 text-sm font-bold">
+              {t("setup.priceLabel")}
+              <input className="input mt-1" value={price} onChange={(e) => setPrice(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="800" data-testid="price-single" />
             </label>
-          ) : (
-            <button type="button" className="self-start text-xs text-faint hover:text-muted" onClick={() => setShowIcal(true)}>
-              {tCal("icalToggle")}
-            </button>
-          )}
-          {calLine && <p className={`text-sm font-semibold ${calLine.ok ? "text-ok" : "text-danger"}`}>{calLine.text}</p>}
-          {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-          {calLine?.ok ? (
-            <button type="button" className="btn-primary w-full" onClick={after("calendar")}>
-              {t("setup.next")}
-            </button>
-          ) : (
-            <button type="button" className="btn-primary w-full" disabled={pending || (!gcalId.trim() && !icalUrl.trim())} onClick={attach}>
-              {pending ? "…" : tCal("attach")}
-            </button>
-          )}
-          <button type="button" className="btn-ghost w-full" onClick={after("calendar")}>
-            {t("setup.later")}
-          </button>
-        </div>
-      )}
-
-      {step === "pay" && (
-        <div className="flex flex-col gap-4">
-          <div>
-            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.payTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("setup.payHelp")}</p>
+            <label className="block w-28 text-sm font-bold">
+              {t("setup.currency")}
+              <input className="input mt-1" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} autoComplete="off" maxLength={3} />
+            </label>
           </div>
-          <label className="block text-sm font-bold">
-            {t("settings.promptpay")}
-            <input className="input mt-1" value={promptpay} onChange={(e) => setPromptpay(e.target.value)} placeholder="08x xxx xxxx" inputMode="tel" autoComplete="off" maxLength={20} />
-          </label>
-          <label className="block text-sm font-bold">
-            {t("settings.payLink")}
-            <input className="input mt-1" value={payLink} onChange={(e) => setPayLink(e.target.value)} placeholder="https://" inputMode="url" autoComplete="off" maxLength={200} />
-          </label>
+          <div className="flex flex-col gap-2">
+            <div className="text-sm font-bold">{t("setup.payHow")}</div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={payAtClub} onChange={(e) => setPayAtClub(e.target.checked)} data-testid="pay-at-club" />
+              {t("setup.payAtClub")}
+            </label>
+            <label className="block text-sm font-bold">
+              {t("settings.promptpay")}
+              <input className="input mt-1" value={promptpay} onChange={(e) => setPromptpay(e.target.value)} placeholder="08x xxx xxxx" inputMode="tel" autoComplete="off" maxLength={20} />
+            </label>
+            <label className="block text-sm font-bold">
+              {t("settings.payLink")}
+              <input className="input mt-1" value={payLink} onChange={(e) => setPayLink(e.target.value)} placeholder="https://" inputMode="url" autoComplete="off" maxLength={200} />
+            </label>
+          </div>
+          <p className="text-xs text-faint">{t("setup.payNothingThrough")}</p>
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-          <button type="button" className="btn-primary w-full" disabled={pending || (!promptpay.trim() && !payLink.trim())} onClick={savePay}>
+          <button type="button" className="btn-primary w-full" disabled={pending} onClick={savePay} data-testid="price-save">
             {pending ? "…" : t("setup.next")}
           </button>
-          <button type="button" className="btn-ghost w-full" onClick={after("pay")}>
+          <button type="button" className="btn-ghost w-full" onClick={goNext}>
             {t("setup.later")}
           </button>
         </div>
       )}
 
-      {step === "bot" && botUsername && (
+      {step === "notify" && botUsername && (
         <div className="flex flex-col gap-4">
           <div>
-            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.botTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("setup.botHelp")}</p>
+            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.notifyTitle")}</h2>
+            <p className="mt-1 text-sm text-muted">{t("setup.notifyHelp")}</p>
           </div>
           <a href={botUrl ?? `https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="btn-primary w-full" data-testid="open-bot">
             {t("setup.botOpen", { bot: botUsername })}
           </a>
           <p className="text-xs text-faint">{t("setup.botAfter")}</p>
+          <button type="button" className="btn-ghost w-full" onClick={goNext}>
+            {t("setup.notifyEmail")}
+          </button>
+        </div>
+      )}
+
+      {step === "link" && (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.linkTitle")}</h2>
+            <p className="mt-1 text-sm text-muted">{t("setup.linkHelp")}</p>
+          </div>
+          {link && (
+            <>
+              <code className="truncate rounded-lg bg-panel px-3 py-2 text-xs" data-testid="student-link">
+                {link}
+              </code>
+              <ShareButtons url={link} text={t("invite.text", { url: link })} />
+            </>
+          )}
+          {showImport ? (
+            <ImportSheet />
+          ) : (
+            <button type="button" className="btn-ghost w-full" onClick={() => setShowImport(true)} data-testid="setup-import">
+              {t("setup.importOffer")}
+            </button>
+          )}
           <button type="button" className="btn-secondary w-full" onClick={finish} data-testid="setup-finish">
             {t("setup.finish")}
           </button>
