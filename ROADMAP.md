@@ -21,9 +21,12 @@ Everything in this list is live. The README describes each in detail.
 - **Levels.** 0 to 7 in quarter steps, nudged by results, confirmed by whoever saw you play, drawn over
   time on a public passport and signed so it travels.
 - **The coach's book.** A courtside assistant that answers students while the coach teaches: booking,
-  cancelling under the coach's own cutoff and late-pass rules, packages that count themselves,
-  waitlists that refill a freed slot, the coach's own calendar and sheet, their own payment link.
-  Moving a lesson is **not** built: the only path today is cancel and book again. It is next.
+  moving and cancelling under the coach's own cutoff and late-pass rules, packages that count themselves,
+  waitlists that refill a freed slot, the coach's own calendar and sheet. Setup is six taps — where they
+  teach, how long a lesson runs, mornings or afternoons, the price and which of PromptPay and pay-at-the-club
+  they accept, how they want to hear about it — and ends on the link they hand their students. Money is
+  tracked, never processed: the student says they have paid, the coach confirms it, and unpaid warns
+  rather than blocks.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
   quiet hours from a weekly programme.
@@ -38,45 +41,34 @@ Everything in this list is live. The README describes each in detail.
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
 A new way to reach the same screens is worth less than making the screens right, and the stakeholder
-whose experience is measurably broken is the first one in the vision. So the coach's book comes before
-everything that was on this list, and LINE moves behind it.
+whose experience was measurably broken is the first one in the vision. The coach's three pieces — a
+setup that leaves a working assistant, the messages still reaching the coach's phone, and the events
+that told nobody — landed the same day and are listed under Built above. What follows is the rest,
+in order.
 
-1. **The coach's first week.** Setup that leaves a working assistant: hour presets instead of a grid
-   pre-filled eight to eight six days a week, a price and the payment methods the coach accepts, the
-   sheet import inside the walk, blocking time from the coach's own grid, and a walk that ends on the
-   link they hand their students. The Google Calendar step leaves setup: it cannot be completed in the
-   Google Calendar phone apps at all, so most coaches were never going to finish it.
-2. **The three messages still reaching the coach's phone.** Moving a lesson, which does not exist today;
-   what a student owes and how to pay it, with the coach confirming; and one door instead of two for a
-   new student. Plus a notice that reaches a coach who never bound the Telegram bot, since today every
-   student-initiated event reaches them there or nowhere.
-3. **Nobody is told.** A club's programme match is created and announced to no one, unlike the group
-   matches made in the same cron tick. A missing score gets exactly one nudge, ever, and a match without
-   one moves no level, enters no ranking and records no podium.
-4. **Drop-out refill.** A spot that opens goes by push to level-matched players who play with that crew or
+1. **Drop-out refill.** A spot that opens goes by push to level-matched players who play with that crew or
    at that club. The highest-value item on this list — it answers a player pain and two club pains with
-   one mechanism, and every ingredient already exists unjoined. It waits only because it needs players
-   with push enabled, which the coach work helps build.
-5. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
+   one mechanism, and every ingredient already exists unjoined.
+2. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
    The card algorithm is already shaped for it: a platform that cannot edit a sent message re-sends only
    when the roster changes, and a reply is free where a push is metered. See "Adding a channel" in
    [AGENTS.md](AGENTS.md).
-6. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
+3. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
    open matches and quiet courts. Demand has to be recorded, not only supply. Behind the refill above,
    because a signal with nobody to match it against records nothing.
-7. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
+4. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
    and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
    text, and needs a lesson to carry a venue at all, which it does not today.
-8. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
+5. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
    a group stage then a knockout, a consolation draw, a qualifying draw into a main draw with seeds,
    scoring set per phase, the draw published, courts scheduled, scores live per court. This is a second
    engine beside the rotation engine, not a feature on top of it, and deserves its own decision.
-9. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
+6. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
    matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
    passes through Kicksmash.
-10. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
-    integrations, with the player's consent. A match will carry sensor sessions.
-11. **WhatsApp**, when WhatsApp allows more than links and previews.
+7. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
+   integrations, with the player's consent. A match will carry sensor sessions.
+8. **WhatsApp**, when WhatsApp allows more than links and previews.
 
 ## Deliberately not
 
