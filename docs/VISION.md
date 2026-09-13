@@ -63,14 +63,16 @@ Each a decision for the owner. The order was set on 13 September 2026: every sta
 made world class before a sixth channel, starting with the first stakeholder above. `ROADMAP.md` carries
 the same order with the reasoning.
 
-1. The coach's first week: setup that leaves a working assistant, a price and the payment methods the coach takes, blocking time, and a walk that ends on the student link.
-2. The three messages still reaching the coach's phone: moving a lesson, what is owed and how to pay it, and one door instead of two for a new student.
-3. Nobody is told: a club's programme match announced like any other, and a second nudge for a missing score.
-4. Drop-out refill: a spot that opens goes by push to level-matched players who play with that crew or at that club.
-5. LINE channel with LINE sign-in, and Thai copy.
-6. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts.
-7. The club's view of its coaches, which needs a lesson to carry a venue at all.
-8. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores.
-9. Courts as capacity, then a court a person can take.
-10. Performance analytics by integration, with consent.
-11. WhatsApp, when it allows more than links and previews.
+The first four landed that day and are built: the coach's first week (setup that leaves a working
+assistant, a price and the payment methods they take, blocking time, a walk that ends on the student
+link); the three messages still reaching the coach's phone (moving a lesson, what is owed and how to pay
+it, one door instead of two for a new student); the events that told nobody (a club's programme match
+announced like any other, a second nudge for a missing score); and drop-out refill. What is left:
+
+1. LINE channel with LINE sign-in, and Thai copy.
+2. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts.
+3. The club's view of its coaches, which needs a lesson to carry a venue at all.
+4. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores.
+5. Courts as capacity, then a court a person can take.
+6. Performance analytics by integration, with consent.
+7. WhatsApp, when it allows more than links and previews.
