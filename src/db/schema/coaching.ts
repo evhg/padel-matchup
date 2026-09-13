@@ -16,6 +16,8 @@ export const coaches = pgTable(
     bio: text("bio"),
     /** Club names, free text; an exclusive coach lists one. */
     clubNames: jsonb("club_names").$type<string[]>().notNull().default([]),
+    /** The same clubs as venue slugs, when the coach picked them from the list rather than typing. */
+    clubSlugs: jsonb("club_slugs").$type<string[]>().notNull().default([]),
     languages: jsonb("languages").$type<string[]>().notNull().default(["en"]),
     lessonMinutes: integer("lesson_minutes").notNull().default(60),
     /** Weekly template in the coach's zone: { "1": [["07:00","12:00"],["15:00","20:00"]], … } (0 = Sunday). */
@@ -27,6 +29,12 @@ export const coaches = pgTable(
     latePasses: integer("late_passes").notNull().default(1),
     /** Shortest notice for a self-booked lesson, in hours. */
     minNoticeHours: integer("min_notice_hours").notNull().default(2),
+    /** What one lesson costs when it is not drawn from a package, in whole currency units. Null: this coach sells packages only. */
+    priceSingle: integer("price_single"),
+    /** The currency every price and package amount of this coach is in. */
+    currency: text("currency").notNull().default("THB"),
+    /** The coach takes cash or a card at the club: a payment method with nothing to show but a sentence. */
+    payAtClub: boolean("pay_at_club").notNull().default(false),
     /** PromptPay phone or national id; a QR with the amount is rendered from it. */
     promptpayId: text("promptpay_id"),
     /** A payment link for coaches outside Thailand (Swish, Revolut, …). */
@@ -150,6 +158,12 @@ export const lessons = pgTable(
     consumed: boolean("consumed").notNull().default(false),
     /** A late cancellation forgiven by a free pass. */
     freePass: boolean("free_pass").notNull().default(false),
+    /** What this lesson costs, taken from the coach's price when it was booked so a later price change never rewrites it. Only for lessons no package paid for. */
+    amount: integer("amount"),
+    /** The student says they have paid. A claim, not a status: it asks the coach, it does not answer. */
+    paidClaimedAt: timestamp("paid_claimed_at", { withTimezone: true }),
+    /** The coach confirmed the money arrived. Nothing but a coach's tap sets this. */
+    paidAt: timestamp("paid_at", { withTimezone: true }),
     note: text("note"),
     /** Event id in the coach's calendar, once attached. */
     externalId: text("external_id"),
