@@ -15,7 +15,7 @@ import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest } from "@/lib/domain/requests";
 import { joinEvent, leaveEvent } from "@/lib/domain/slots";
 import { lineupComplete } from "@/lib/lineup";
-import { notifyCreator, notifyLineupChange, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
 import { manageUrl } from "@/lib/share";
 import { ApiError } from "./http";
@@ -254,6 +254,7 @@ export async function leaveAsPlayer(db: Db, detail: EventDetail, player: Player,
     if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", player.displayName, player.id);
     const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
     await notifyPromotion(db, fresh ?? res.event, res.promotion);
+    await notifyRefill(db, res.event.id);
   });
   ctx.emit("match.left", ev.code, { player: { name: player.displayName } });
   const fresh = (await getEventByCode(db, ev.code))!;

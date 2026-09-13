@@ -630,6 +630,8 @@
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",
     "clubMatchBody": "{spots} Tap to take a spot.",
+    "refillTitle": "A spot opened · {day} {time}",
+    "refillBody": "{venue} · {spots}. Tap to take it.",
     "enable": "Remind me 1 hour before",
     "enableHelp": "One notification an hour before each of your matches. Late is a no-no, remember.",
     "on": "Reminders on · 1 hour before each match",

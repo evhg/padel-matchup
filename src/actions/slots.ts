@@ -26,7 +26,7 @@ import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { lineupComplete } from "@/lib/lineup";
 import { emitMatchEvent } from "@/lib/api/webhooks";
-import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRemoved, notifyRequestDecided, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
+import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
@@ -128,6 +128,8 @@ export async function leaveAction(code: string): Promise<ActionResult<null>> {
       const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
       await notifyPromotion(db, fresh ?? res.event, res.promotion);
       await emitMatchEvent(db, "match.left", code, { player: { name: me.displayName } });
+      // Nobody was waiting, so the spot is still open: the crew and the club's regulars hear about it once.
+      await notifyRefill(db, res.event.id);
     });
     revalidatePath(`/${code}`);
     return null;
@@ -143,6 +145,7 @@ export async function removeAction(code: string, slotId: string): Promise<Action
       await notifyRemoved(db, res.event, res.removedPlayerId);
       const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
       await notifyPromotion(db, fresh ?? res.event, res.promotion);
+      await notifyRefill(db, res.event.id);
     });
     revalidatePath(`/${code}`);
     return null;

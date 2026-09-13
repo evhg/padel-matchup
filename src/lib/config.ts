@@ -49,3 +49,12 @@ export const SCORE_REMINDER_DELAY_MS = 2 * 60 * 60 * 1000;
 export const SECOND_SCORE_REMINDER_DELAY_MS = 18 * 60 * 60 * 1000;
 /** Unconfirmed invitees with an email are reminded at this interval. */
 export const INVITE_REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/**
+ * A spot that opens inside this window is worth telling people about. Further out the crew fills it
+ * themselves and a push is only noise; the pain this answers is the drop-out nobody has time to replace.
+ */
+export const REFILL_WINDOW_MS = 48 * 60 * 60 * 1000;
+/** …and not inside this, where nobody can reasonably get to the court in time. */
+export const REFILL_MIN_NOTICE_MS = 90 * 60 * 1000;
+/** How many people one freed spot may reach. Filling a court is not running a mailing list. */
+export const REFILL_FANOUT_MAX = 40;

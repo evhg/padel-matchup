@@ -302,6 +302,13 @@
       "when": 1789291521570,
       "tag": "0042_coach_managers_player_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789305626800,
+      "tag": "0043_events_refill_notice_at",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/con
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
+import { refillRecipients } from "@/lib/domain/refill";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
@@ -270,6 +271,33 @@ export async function notifyClubMatch(db: Db, club: { slug: string; name: string
     }
   }
   return { emails, pushes, told };
+}
+
+/**
+ * A spot opened, and nobody was waiting for it. The crew and the club's regulars are the people who
+ * would take it, and until now they were never told: the slot sat open until three players turned up
+ * or the match quietly died.
+ *
+ * Push only, and on purpose. This is a notice with a few hours of life in it, to people who chose to
+ * receive notifications — an email about a spot tonight arrives after the court has gone. Who hears
+ * it, and the once-ever rule, are decided in `refillRecipients`; this only carries the words.
+ */
+export async function notifyRefill(db: Db, eventId: string, now = new Date()): Promise<{ pushes: number; told: number }> {
+  if (!pushEnabled()) return { pushes: 0, told: 0 };
+  const found = await refillRecipients(db, eventId, now);
+  if (!found) return { pushes: 0, told: 0 };
+  const { event: ev, players: people } = found;
+  const detail = await getEventDetail(db, ev);
+  let pushes = 0;
+  for (const p of people) {
+    const c = await ctx(db, ev, p.locale, p, detail);
+    for (const sub of await subscriptionsFor(db, [p.id])) {
+      const r = await sendPush(sub, { title: c.t("push.refillTitle", c.vars), body: c.t("push.refillBody", c.vars), url: c.url, tag: `refill-${ev.code}` });
+      if (r === "sent") pushes++;
+      if (r === "gone") await removePushSubscription(db, sub.endpoint);
+    }
+  }
+  return { pushes, told: people.length };
 }
 
 /** Handles the fallout of a promotion: promoted player invite + creator notice. */

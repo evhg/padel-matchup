@@ -630,6 +630,8 @@
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",
     "clubMatchBody": "{spots} Toca para coger sitio.",
+    "refillTitle": "Se ha liberado un sitio · {day} {time}",
+    "refillBody": "{venue} · {spots}. Toca para cogerlo.",
     "enable": "Recordármelo 1 hora antes",
     "enableHelp": "Una notificación una hora antes de cada partido. Llegar tarde es imperdonable, recuerda.",
     "on": "Recordatorios activados · 1 hora antes de cada partido",
