@@ -1091,7 +1091,7 @@
     "noPackage": "no package",
     "setup": {
       "title": "Your assistant",
-      "sub": "Students book available times themselves, packages count themselves, every reschedule happens while you coach. One minute.",
+      "sub": "Students book available times themselves, packages count themselves, cancellations follow your rules. One minute.",
       "nameTitle": "First, your name as students know it",
       "club": "Where do you coach?",
       "clubHelp": "One club or several, separated by commas. Students see it on your page.",
@@ -1392,10 +1392,10 @@
   },
   "coachFront": {
     "metaTitle": "Padel coach? Your students book themselves",
-    "metaDescription": "A free assistant for padel coaches: one link, students book available times themselves, packages count themselves, every reschedule happens while you coach. Your Google Calendar stays yours. Set up in a minute.",
+    "metaDescription": "A free assistant for padel coaches: one link, students book available times themselves, packages count themselves, cancellations follow your rules. Your Google Calendar stays yours. Set up in a minute.",
     "eyebrow": "For coaches",
     "title": "Your students book themselves. Your calendar stays yours.",
-    "lead": "One link for your students. They join once; from then on they book available times, cancel by your rules and see their package. Every reschedule happens while you coach: you look at your calendar and it is already up to date. Nobody to reply to.",
+    "lead": "One link for your students. They join once; from then on they book available times, cancel by your rules and see their package. You look at your calendar and it is already up to date. Nobody to reply to.",
     "cta": "Set up my assistant",
     "ctaHelp": "One minute. Free, no commission, no app.",
     "t1Title": "The questions stop",

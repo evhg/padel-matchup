@@ -54,18 +54,23 @@ Thailand, then Singapore. Thai joins English, Russian and Spanish; LINE is the f
 - A fact log is added before the channel work, so every channel records what it did from day one.
 - The channel adapter is shaped for LINE: a card that cannot be edited is re-sent only when the roster changes, replies are free and pushes are budgeted, LINE sign-in joins Telegram sign-in.
 - A coach's clubs become venue slugs instead of free text, so a club can see its coaches without guessing.
-- The schema leaves room for court capacity, court holds and sensor sessions, and for the serious tournament: pairs, categories, and draw phases (pool, knockout, consolation, qualifying) of which an americano is one kind; none is built until the owner says so.
+- The schema leaves room for court capacity, court holds and sensor sessions. It does **not** yet leave room for the serious tournament: there is no pairs table, no category column and no draw-phase column anywhere, and the rotation engine is built on the opposite assumption — partners split every round. Pairs, categories and draw phases (pool, knockout, consolation, qualifying) are a second engine beside the first, not a feature on top of it, and none is built until the owner says so.
 - Thai becomes the fourth locale when the LINE channel ships.
 
 ## After the restructure
 
-Candidates, each a decision for the owner, in the order the stakeholders above suggest:
+Each a decision for the owner. The order was set on 13 September 2026: every stakeholder's experience
+made world class before a sixth channel, starting with the first stakeholder above. `ROADMAP.md` carries
+the same order with the reasoning.
 
-1. LINE channel with LINE sign-in, and Thai copy.
-2. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts.
-3. Drop-out refill: a spot that opens goes by push to level-matched players who play with that crew or at that club.
-4. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores.
-5. The club's view of its coaches.
-6. Courts as capacity, then a court a person can take.
-7. Performance analytics by integration, with consent.
-8. WhatsApp, when it allows more than links and previews.
+1. The coach's first week: setup that leaves a working assistant, a price and the payment methods the coach takes, blocking time, and a walk that ends on the student link.
+2. The three messages still reaching the coach's phone: moving a lesson, what is owed and how to pay it, and one door instead of two for a new student.
+3. Nobody is told: a club's programme match announced like any other, and a second nudge for a missing score.
+4. Drop-out refill: a spot that opens goes by push to level-matched players who play with that crew or at that club.
+5. LINE channel with LINE sign-in, and Thai copy.
+6. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts.
+7. The club's view of its coaches, which needs a lesson to carry a venue at all.
+8. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores.
+9. Courts as capacity, then a court a person can take.
+10. Performance analytics by integration, with consent.
+11. WhatsApp, when it allows more than links and previews.

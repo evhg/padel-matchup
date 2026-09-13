@@ -1091,7 +1091,7 @@
     "noPackage": "sin bono",
     "setup": {
       "title": "Tu asistente",
-      "sub": "Los alumnos reservan horas disponibles ellos mismos, los bonos se cuentan solos, cada cambio ocurre mientras entrenas. Un minuto.",
+      "sub": "Los alumnos reservan horas disponibles ellos mismos, los bonos se cuentan solos, las cancelaciones siguen tus reglas. Un minuto.",
       "nameTitle": "Primero, tu nombre como te conocen tus alumnos",
       "club": "¿Dónde entrenas?",
       "clubHelp": "Un club o varios, separados por comas. Los alumnos lo ven en tu página.",
@@ -1392,10 +1392,10 @@
   },
   "coachFront": {
     "metaTitle": "¿Entrenas pádel? Tus alumnos reservan solos",
-    "metaDescription": "Un asistente gratis para entrenadores de pádel: un enlace, los alumnos reservan las horas disponibles ellos mismos, los bonos se cuentan solos, cada cambio de hora ocurre mientras entrenas. Tu Google Calendar sigue siendo tuyo. Listo en un minuto.",
+    "metaDescription": "Un asistente gratis para entrenadores de pádel: un enlace, los alumnos reservan las horas disponibles ellos mismos, los bonos se cuentan solos, las cancelaciones siguen tus reglas. Tu Google Calendar sigue siendo tuyo. Listo en un minuto.",
     "eyebrow": "Para entrenadores",
     "title": "Tus alumnos reservan solos. Tu calendario sigue siendo tuyo.",
-    "lead": "Un enlace para tus alumnos. Entran una vez; desde entonces reservan horas disponibles, cancelan según tus reglas y ven su bono. Cada cambio de hora ocurre mientras entrenas: miras tu calendario y ya está al día. Nadie a quien responder.",
+    "lead": "Un enlace para tus alumnos. Entran una vez; desde entonces reservan horas disponibles, cancelan según tus reglas y ven su bono. Miras tu calendario y ya está al día. Nadie a quien responder.",
     "cta": "Configurar mi asistente",
     "ctaHelp": "Un minuto. Gratis, sin comisión, sin app.",
     "t1Title": "Se acaban las preguntas",
