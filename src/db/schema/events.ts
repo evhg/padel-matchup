@@ -38,6 +38,8 @@ export const events = pgTable(
     scoreReminderSent: boolean("score_reminder_sent").notNull().default(false),
     /** The second and last ask for a missing score, the morning after. One nudge is one roll of the dice. */
     scoreReminder2At: timestamp("score_reminder_2_at", { withTimezone: true }),
+    /** The one "a spot opened" notice this match sends, ever. Set the moment it is claimed, before anything goes out. */
+    refillNoticeAt: timestamp("refill_notice_at", { withTimezone: true }),
     /** iCalendar SEQUENCE — bumped on every time/venue change or cancellation. */
     icsSequence: integer("ics_sequence").notNull().default(0),
     /** Web-push "one hour before" reminder went out (once per event). */

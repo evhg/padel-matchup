@@ -27,6 +27,9 @@ Everything in this list is live. The README describes each in detail.
   they accept, how they want to hear about it — and ends on the link they hand their students. Money is
   tracked, never processed: the student says they have paid, the coach confirms it, and unpaid warns
   rather than blocks.
+- **A spot that opens finds somebody.** A dropout nobody was waiting for goes by push, once, to the
+  crew's other members and to the players who play at that club — level-matched, capped, and only while
+  there is still time to get to the court. A private match with no crew tells nobody.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
   quiet hours from a weekly programme.
@@ -43,32 +46,29 @@ Decided 13 September 2026: **every stakeholder's experience made world class bef
 A new way to reach the same screens is worth less than making the screens right, and the stakeholder
 whose experience was measurably broken is the first one in the vision. The coach's three pieces — a
 setup that leaves a working assistant, the messages still reaching the coach's phone, and the events
-that told nobody — landed the same day and are listed under Built above. What follows is the rest,
-in order.
+that told nobody — landed that day, and drop-out refill the same afternoon. All four are under Built
+above. What follows is the rest, in order.
 
-1. **Drop-out refill.** A spot that opens goes by push to level-matched players who play with that crew or
-   at that club. The highest-value item on this list — it answers a player pain and two club pains with
-   one mechanism, and every ingredient already exists unjoined.
-2. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
+1. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
    The card algorithm is already shaped for it: a platform that cannot edit a sent message re-sends only
    when the roster changes, and a reply is free where a push is metered. See "Adding a channel" in
    [AGENTS.md](AGENTS.md).
-3. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
-   open matches and quiet courts. Demand has to be recorded, not only supply. Behind the refill above,
-   because a signal with nobody to match it against records nothing.
-4. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
+2. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
+   open matches and quiet courts. Demand has to be recorded, not only supply. It waited on the refill,
+   which is now built: a signal with nobody to match it against records nothing.
+3. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
    and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
    text, and needs a lesson to carry a venue at all, which it does not today.
-5. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
+4. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
    a group stage then a knockout, a consolation draw, a qualifying draw into a main draw with seeds,
    scoring set per phase, the draw published, courts scheduled, scores live per court. This is a second
    engine beside the rotation engine, not a feature on top of it, and deserves its own decision.
-6. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
+5. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
    matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
    passes through Kicksmash.
-7. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
+6. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-8. **WhatsApp**, when WhatsApp allows more than links and previews.
+7. **WhatsApp**, when WhatsApp allows more than links and previews.
 
 ## Deliberately not
 

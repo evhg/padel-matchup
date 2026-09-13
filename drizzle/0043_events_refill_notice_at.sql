@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "refill_notice_at" timestamp with time zone;
