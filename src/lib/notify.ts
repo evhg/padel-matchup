@@ -228,7 +228,7 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
  * unlike the group matches made in the very same cron tick. It sat on the club's page waiting to be
  * browsed to, which is not how a quiet Tuesday hour gets filled.
  *
- * Who hears it: people who have actually played at that club in the last three months, at a level
+ * Who hears it: people with a match at that club in the last three months or still to come, at a level
  * the match admits. Bounded on purpose (rule 12) — one indexed read on (venue_slug, starts_at), a
  * hard cap on recipients, and it runs in the cron tick, never in a path a person waits on.
  */

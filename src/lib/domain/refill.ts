@@ -75,7 +75,7 @@ function admits(ev: Pick<Event, "levelMin" | "levelMax">, p: Pick<Player, "level
 
 /** How many candidates are looked at before the level filter, so one freed spot reads a bounded number of rows. */
 const CANDIDATE_MAX = 200;
-/** How far back "plays at that club" reaches. */
+/** How far back "plays at that club" reaches. Matches still to come count too: they are the same people. */
 const REGULAR_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 
 /**
