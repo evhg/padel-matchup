@@ -30,6 +30,7 @@ const RULES = [
   [/^(README|ROADMAP|CONTRIBUTING|SECURITY|AGENTS)\.md$/, [], "a document"],
   [/^docs\//, [], "a document"],
   [/^\.github\//, [], "CI configuration, which CI itself re-reads"],
+  [/^\.claude\//, [], "Claude Code configuration and skills, which the running app never reads"],
   [/^scripts\//, [], "tooling outside the app"],
   [/^tests\//, [], "the unit suite, which the gate runs anyway"],
   [/^\.env\.example$/, [], "an example file"],
@@ -79,14 +80,22 @@ function suitesFor(file) {
 const args = process.argv.slice(2);
 const why = args.includes("--why");
 const at = args.indexOf("--files");
-const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8" }).split("\n").map((s) => s.trim()).filter(Boolean);
+// Lines as git printed them: `git status --porcelain` puts the path in a fixed column, so trimming
+// first would eat the leading "." of a path like ".claude/skills/ship/SKILL.md".
+const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8" }).split("\n").filter((l) => l.trim() !== "");
+/** `XY path`, or `R  old -> new` for a rename: the path is everything past the two status columns. */
+const statusPath = (line) => {
+  const p = line.slice(3).trim();
+  const renamed = p.split(" -> ").pop();
+  return renamed.replace(/^"|"$/g, "");
+};
 let files;
 if (at >= 0) {
   files = args.slice(at + 1).filter((a) => !a.startsWith("--"));
 } else {
   const range = args.find((a) => !a.startsWith("--"));
   // Committed changes against the base, plus whatever is still uncommitted or untracked here.
-  files = range ? git("diff", "--name-only", range) : [...git("diff", "--name-only", "origin/main...HEAD"), ...git("status", "--porcelain").map((l) => l.slice(3).trim())];
+  files = range ? git("diff", "--name-only", range).map((l) => l.trim()) : [...git("diff", "--name-only", "origin/main...HEAD").map((l) => l.trim()), ...git("status", "--porcelain").map(statusPath)];
 }
 files = files.filter(Boolean);
 
