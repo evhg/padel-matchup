@@ -4,8 +4,10 @@ import { getDb } from "@/db";
 import {
   findInviteRemindersDue,
   findScoreRemindersDue,
+  findSecondScoreRemindersDue,
   markInviteReminded,
   markScoreReminderSent,
+  markSecondScoreReminderSent,
   transitionPastEvents,
 } from "@/lib/domain/reminders";
 import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
@@ -34,7 +36,7 @@ import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getPlayer } from "@/lib/domain/players";
-import { notifyGroupMatch, notifyLineupChange, notifyPromotion, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
+import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
 import { nudgeForScore } from "@/lib/afterMatch";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
@@ -134,9 +136,17 @@ export async function GET(req: Request) {
   try {
     const due = await findScoreRemindersDue(db, now);
     for (const { event } of due) {
-      // Exactly one nudge per event, to every player on the channel they have; the in-app banner covers the rest.
+      // The first nudge, two hours after the start, to every player on the channel they have.
       await markScoreReminderSent(db, event.id);
       await nudgeForScore(db, event).catch((e) => summary.errors.push(`nudge ${event.code}: ${String(e)}`));
+      summary.scoreReminders++;
+    }
+    // The second and last, the morning after. One ask in the evening is a single roll of the dice,
+    // and a match with no score moves nobody's level, enters no ranking and records no podium.
+    const again = await findSecondScoreRemindersDue(db, now);
+    for (const { event } of again) {
+      await markSecondScoreReminderSent(db, event.id, now);
+      await nudgeForScore(db, event).catch((e) => summary.errors.push(`nudge2 ${event.code}: ${String(e)}`));
       summary.scoreReminders++;
     }
   } catch (e) {
@@ -163,7 +173,11 @@ export async function GET(req: Request) {
     const programme = await autoCreateClubEvents(db, now);
     summary.clubMatches = programme.created.length;
     for (const e of programme.errors) summary.errors.push(`programme: ${e}`);
-    for (const c of programme.created) await emitMatchEvent(db, "match.created", c.event.code, { automatic: true, club: c.club.slug }).catch((e) => summary.errors.push(`programme webhook ${c.event.code}: ${String(e)}`));
+    for (const c of programme.created) {
+      await emitMatchEvent(db, "match.created", c.event.code, { automatic: true, club: c.club.slug }).catch((e) => summary.errors.push(`programme webhook ${c.event.code}: ${String(e)}`));
+      // And tell somebody. A quiet-hour match announced to nobody is a page waiting to be browsed to.
+      await notifyClubMatch(db, c.club, c.event, now).catch((e) => summary.errors.push(`programme notice ${c.event.code}: ${String(e)}`));
+    }
   } catch (e) {
     summary.errors.push(`programme: ${String(e)}`);
   }

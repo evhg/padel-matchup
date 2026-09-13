@@ -403,6 +403,7 @@
     "rejectedByYou": "You declined {name}'s request"
   },
   "email": {
+    "clubMatch": {"subject": "{club}: a match on {day}", "heading": "New at {club}", "body": "{club} has put a match on the board for {day} at {time}. {spots} Tap to take a spot."},
     "openMatch": "Open the match",
     "footer": "Sent by {app} because you added your email. Manage everything on the match page.",
     "when": "When",
@@ -627,6 +628,8 @@
     "resent": "Sent again. Open the email and tap Yes on the invitation."
   },
   "push": {
+    "clubMatchTitle": "{club}: {day} {time}",
+    "clubMatchBody": "{spots} Tap to take a spot.",
     "enable": "Remind me 1 hour before",
     "enableHelp": "One notification an hour before each of your matches. Late is a no-no, remember.",
     "on": "Reminders on · 1 hour before each match",

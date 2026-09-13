@@ -1,8 +1,11 @@
 import "server-only";
 import { pushEnabled, sendPush } from "@/lib/push";
 import { removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
-import { groupMembers as groupMembersTable, players as playersTable, type Group } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { groupMembers as groupMembersTable, players as playersTable, slots as slotsTable, type Group } from "@/db/schema";
+
+/** How many people one quiet-hour match may reach. A club fills a court, it does not run a mailing list. */
+const CLUB_FANOUT_MAX = 40;
+import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, type Event, type Player, type Slot } from "@/db/schema";
 import { buildIcs } from "@/lib/calendar";
@@ -214,6 +217,56 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
     }
   }
   return { emails, pushes };
+}
+
+/**
+ * A club's weekly programme creates a match and, until now, told nobody: no push, no email, no card,
+ * unlike the group matches made in the very same cron tick. It sat on the club's page waiting to be
+ * browsed to, which is not how a quiet Tuesday hour gets filled.
+ *
+ * Who hears it: people who have actually played at that club in the last three months, at a level
+ * the match admits. Bounded on purpose (rule 12) — one indexed read on (venue_slug, starts_at), a
+ * hard cap on recipients, and it runs in the cron tick, never in a path a person waits on.
+ */
+export async function notifyClubMatch(db: Db, club: { slug: string; name: string }, ev: Event, now = new Date()): Promise<{ emails: number; pushes: number; told: number }> {
+  const since = new Date(now.getTime() - 90 * 24 * 3600_000);
+  const rows = await db
+    .select({ playerId: slotsTable.playerId })
+    .from(slotsTable)
+    .innerJoin(events, eq(events.id, slotsTable.eventId))
+    .where(and(eq(events.venueSlug, club.slug), gte(events.startsAt, since), isNotNull(slotsTable.playerId)))
+    .limit(400);
+  const ids = [...new Set(rows.map((r) => r.playerId).filter((id): id is string => Boolean(id)))].filter((id) => id !== ev.creatorPlayerId).slice(0, CLUB_FANOUT_MAX);
+  if (ids.length === 0) return { emails: 0, pushes: 0, told: 0 };
+  const people = await db.select().from(playersTable).where(inArray(playersTable.id, ids));
+  const detail = await getEventDetail(db, ev);
+  let emails = 0;
+  let pushes = 0;
+  let told = 0;
+  for (const p of people) {
+    // A match with a level range is for the people it admits; an unrated player is not chased.
+    if (ev.levelMin !== null || ev.levelMax !== null) {
+      if (p.level === null) continue;
+      if (ev.levelMin !== null && p.level < ev.levelMin) continue;
+      if (ev.levelMax !== null && p.level > ev.levelMax) continue;
+    }
+    told++;
+    const c = await ctx(db, ev, p.locale, p, detail);
+    const vars = { ...c.vars, club: club.name };
+    if (emailEnabled() && p.email && p.emailNotifications) {
+      const { html, text } = layout({ heading: c.t("email.clubMatch.heading", vars), body: c.t("email.clubMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      await sendEmail({ to: p.email, subject: c.t("email.clubMatch.subject", vars), html, text }).catch(() => undefined);
+      emails++;
+    }
+    if (pushEnabled()) {
+      for (const sub of await subscriptionsFor(db, [p.id])) {
+        const r = await sendPush(sub, { title: c.t("push.clubMatchTitle", vars), body: c.t("push.clubMatchBody", vars), url: c.url, tag: `club-${ev.code}` });
+        if (r === "sent") pushes++;
+        if (r === "gone") await removePushSubscription(db, sub.endpoint);
+      }
+    }
+  }
+  return { emails, pushes, told };
 }
 
 /** Handles the fallout of a promotion: promoted player invite + creator notice. */
