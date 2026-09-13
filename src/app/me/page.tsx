@@ -69,7 +69,8 @@ export default async function MePage({ searchParams }: Props) {
   const [token, myClubs, t, asCoach] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id)]);
   return (
     <>
-      <Header minimal />
+      {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
+      <Header current="play" />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
         {note === "linked" && <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">✓ {t("telegram.justLinked")}</p>}
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}

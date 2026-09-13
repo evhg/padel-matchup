@@ -21,7 +21,10 @@
     "newMatch": "Nuevo partido",
     "home": "Inicio",
     "working": "Un momento…",
-    "somethingWrong": "Algo ha fallado. Inténtalo de nuevo."
+    "somethingWrong": "Algo ha fallado. Inténtalo de nuevo.",
+    "club": "Club",
+    "series": "Serie",
+    "more": "Más"
   },
   "identity": {
     "whatsYourName": "¿Cómo te llamas?",

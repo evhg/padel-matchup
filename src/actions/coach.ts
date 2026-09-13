@@ -22,10 +22,6 @@ import { pingIndexNow } from "@/lib/indexnow";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
-import { COACH_COOKIE, coachCookieOptions } from "@/lib/coachCookie";
-async function rememberCoach(): Promise<void> {
-  (await cookies()).set(COACH_COOKIE, "1", coachCookieOptions());
-}
 
 /** The coach's book: every action here is one tap on a coach screen or a student screen. */
 
@@ -381,23 +377,6 @@ export async function savePaymentAction(input: { promptpayId?: string | null; pa
   });
 }
 
-/** The coach's own page marks this browser as a coach's (for the header link) when the setup happened elsewhere. */
-export async function rememberCoachAction(): Promise<ActionResult<null>> {
-  return runA(async () => {
-    const db = await getDb();
-    await requireCoach(db);
-    await rememberCoach();
-    return null;
-  });
-}
-
-/** The header's hint was left behind by another identity: take it away. */
-export async function forgetCoachAction(): Promise<ActionResult<null>> {
-  return runA(async () => {
-    (await cookies()).delete(COACH_COOKIE);
-    return null;
-  });
-}
 
 export async function studentBookAction(handle: string, startsAt: string): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
   return runA(async () => {

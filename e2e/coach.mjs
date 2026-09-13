@@ -90,9 +90,20 @@ try {
   check("the invite to other coaches waits until the assistant has earned it", (await olga.getByTestId("invite-coach").count()) === 0);
   await shot(olga, "60-coach-welcome");
   await olga.goto(BASE + "/");
-  check("the header shows the way back to the assistant in a coach's browser", (await olga.getByTestId("assistant-link").count()) === 1);
+  check("the header shows the way back to the assistant for a coach", (await olga.getByTestId("assistant-link").count()) === 1);
   await olga.goto(BASE + "/me");
   check("My matches puts the assistant first for a coach", (await olga.getByTestId("coach-card").count()) === 1 && (await olga.getByText("Nothing booked today").count()) === 1);
+  check("My matches keeps the doors, so a coach who lands there can get back", (await olga.getByTestId("assistant-link").count()) === 1);
+  // The bug this replaced: the header asked a browser cookie rather than the database, so someone
+  // who had opened the coach screen without finishing was told they were a coach ever after. Erik
+  // gets as far as naming himself on the setup walk and leaves; no book exists, so no door appears.
+  const erik = await newPage();
+  await erik.goto(BASE + "/coach");
+  await erik.getByPlaceholder("e.g. Alex").fill("Erik");
+  await erik.locator("form button[type=submit]").click();
+  await erik.getByText("Your assistant").first().waitFor({ timeout: 20000 });
+  await erik.goto(BASE + "/");
+  check("a player who opened the coach screen but made no book is still only a player", (await erik.getByTestId("assistant-link").count()) === 0 && (await erik.getByRole("link", { name: "My matches" }).count()) === 1);
   // The coach opens her own student link: the page as students see it, with the way to her book, and no form to join herself.
   await olga.goto(`${BASE}/c/${handle}?i=${inviteCode}`);
   check("the coach's own student link shows the owner's note instead of the join form", (await olga.getByTestId("owner-note").count()) === 1 && (await olga.getByTestId("invited-join").count()) === 0 && (await olga.getByTestId("ask-to-join").count()) === 0 && (await olga.getByRole("link", { name: "Open my assistant" }).getAttribute("href")) === "/coach");

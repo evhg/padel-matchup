@@ -99,7 +99,11 @@ describe("discord signatures, tickets, helpers", () => {
     expect(verifyInteraction(sig, ts, body, pub)).toBe(true);
     expect(verifyInteraction(sig, ts, body + " ", pub)).toBe(false);
     expect(verifyInteraction(sig, "1757130001", body, pub)).toBe(false);
-    expect(verifyInteraction(sig.replace(/^../, "00"), ts, body, pub)).toBe(false);
+    // Flip the first byte rather than setting it to "00": one signature in 256 already starts with
+    // 00, and for those this assertion used to hand a still-valid signature to a test expecting a
+    // rejection. A test may not depend on chance any more than it may depend on the calendar (rule 11).
+    const flipped = ((parseInt(sig.slice(0, 2), 16) ^ 0xff).toString(16).padStart(2, "0") + sig.slice(2)) as string;
+    expect(verifyInteraction(flipped, ts, body, pub)).toBe(false);
     expect(verifyInteraction("zz", ts, body, pub)).toBe(false);
     expect(verifyInteraction(sig, ts, body, "00".repeat(32))).toBe(false);
     expect(verifyInteraction(null, ts, body, pub)).toBe(false);
