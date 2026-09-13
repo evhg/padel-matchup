@@ -14,7 +14,17 @@ delete process.env.DATABASE_URL;
 delete process.env.POSTGRES_URL;
 delete process.env.SUPABASE_DB_URL;
 
+// Files share a worker (`isolate: false`), so one file's environment is the next one's. Whatever a
+// test sets, adds or deletes is undone when the file ends, and a file therefore starts from the same
+// environment whether it runs alone, first or last. Without this, a test that turns a feature on by
+// setting its key silently turns it on for every file after it — which is how a test asserting a
+// feature is off failed in CI and nowhere else.
+const envAtStart = { ...process.env };
+
 afterAll(async () => {
+  for (const k of Object.keys(process.env)) if (!(k in envAtStart)) delete process.env[k];
+  for (const [k, v] of Object.entries(envAtStart)) if (process.env[k] !== v) process.env[k] = v;
+
   // Close the app's database before its directory goes, or PGlite's last flush finds no files (ENOENT, errno 44).
   const g = globalThis as { __padelDb?: Promise<{ $client?: { close?: () => Promise<void> } }> };
   try {

@@ -29,7 +29,10 @@ fi
 step typecheck pnpm typecheck
 step lint pnpm lint
 step "schema vs migrations" bash scripts/check-migrations.sh
-step "unit tests" pnpm test
+# One worker, in CI's order. `pnpm test` on its own runs files in parallel and is faster, but files
+# then never share a process, so nothing one file leaves behind can reach the next — which is exactly
+# the failure CI sees and the gate would not. Twenty-odd seconds here buys that whole class of red.
+step "unit tests" pnpm vitest run --no-file-parallelism
 if [ -n "${GATE_E2E:-}" ]; then
   suites=$GATE_E2E
   if [ "$suites" = "auto" ]; then
