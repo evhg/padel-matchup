@@ -83,7 +83,7 @@ once per batch, never per pull request, and always call the Artifact tool's `rea
 before publishing, both to learn the current revision number and because a publish that was not built
 on the live version is refused.
 
-**Standing rules from the owner** (in force since 8 to 11 September): the owner is non-technical
+**Standing rules from the owner** (in force since 8 to 13 September): optimise for wall clock time first and for credits second, and let every change improve scalability or leave it where it was (13 September; the working version is in `.claude/skills/ship/SKILL.md` and AGENTS.md rule 12). The owner is non-technical
 and only creates accounts, taps approvals and pays; times to the owner in Thailand time; never
 post anywhere public, never email anyone, never spend money, never commit a secret; anything
 outward-facing (press, founding-club emails, Reddit, Hacker News) waits for the owner's tap in

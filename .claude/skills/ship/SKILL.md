@@ -8,6 +8,28 @@ description: The sequence for shipping a change to Kicksmash, from branch to mer
 The order below is why a pull request is green the first time. Each step exists because skipping it
 once cost a red run, a review round, or a production fix.
 
+## What to optimise for
+
+**Wall clock first, credits second** (the owner's standing order). They are usually the same thing:
+what wastes time is rework, and rework costs both. So the gate is not a tax on speed, it is how speed
+is bought: two minutes locally beats a four-minute CI round plus a review round plus a re-merge.
+
+What this means in practice:
+
+- Run independent things at once: batch tool calls that do not depend on each other, and put a build
+  or a browser run in the background while reading or writing something else.
+- Never re-verify what the gate already proved. Trust a green check instead of repeating it.
+- Run the suites the change can break (`GATE_E2E=auto`), not all sixteen out of habit.
+- Decide the routine things and say what you assumed. Only stop for what is genuinely the owner's
+  call: a migration, identity or personal data, behaviour people rely on, anything outward-facing.
+- One pull request per area, auto-merge on, then move to the next thing rather than watching CI.
+- Credits second means: do not spend them on speculative work, and never spend them twice. It never
+  means skipping a check, because a red run costs more wall clock than every check put together.
+
+**And every change improves scalability or leaves it alone** (AGENTS.md rule 12). Plan it in from the
+start: the cheap version of a query, a fan-out or a table is chosen while designing, not retrofitted
+after it is slow.
+
 ## Before writing code
 
 1. **Start from main.** `git fetch origin main && git checkout -B <working-branch> origin/main`.
