@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, groupMembers, players, pushSubscriptions, slots, type Event, type Player } from "@/db/schema";
 import { REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WINDOW_MS } from "@/lib/config";
@@ -183,6 +183,9 @@ export async function findRefillsDue(db: Db, now: Date): Promise<Event[]> {
       ),
     )
     .groupBy(events.id)
+    // Soonest first: if a tick ever hits the cap, the matches closest to starting are the ones that
+    // cannot wait an hour for the next one.
+    .orderBy(asc(events.startsAt))
     .limit(50);
   return rows.map((r) => r.event);
 }
