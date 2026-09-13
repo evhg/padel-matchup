@@ -1242,6 +1242,19 @@
       "how": "These are the rules your students see and the assistant applies. Change them any time; lessons already booked keep the rules they were booked under."
     },
     "page": {
+      "owedTitle": "To pay",
+      "paidClaim": "I've paid",
+      "paidSaid": "You said you paid",
+      "paidThanks": "Thanks — your coach will confirm it.",
+      "payAtClub": "Pay at the club, cash or card.",
+      "payPromptpay": "PromptPay: scan your coach's QR at the court.",
+      "payLink": "Pay with this link",
+      "payAsk": "Ask {name} how they'd like to be paid.",
+      "payNothingThrough": "Nothing is paid through Kicksmash. Your coach marks it once it lands.",
+      "move": "Move",
+      "moveTo": "Move it to",
+      "moved": "Moved. Your package is untouched.",
+      "noFree": "No free times that day.",
       "ownBook": "Coach? Your own assistant in a minute →",
       "founding": "Founding coach · {city}",
       "coach": "Padel coach",
@@ -1312,6 +1325,12 @@
       "past": "That time has passed."
     },
     "email": {
+      "paidSubject": "{student} says they paid",
+      "paidHeading": "{student} sent {amount}",
+      "paidBody": "{student} says they paid {amount} for the lesson on {when}. Mark it paid on your students screen when it lands — nothing is marked for you.",
+      "movedSubject": "{who} moved your lesson",
+      "movedHeading": "Moved to {to}",
+      "movedBody": "{who} moved the lesson from {from} to {to}. Nothing else changed: the package is untouched and the new time is already in your calendar.",
       "inviteSubject": "Lesson with {coach}: {when}",
       "inviteHeading": "Your lesson is booked",
       "inviteBody": "{when} with {coach}{where}. {package}",
