@@ -36,6 +36,8 @@ export const events = pgTable(
     status: eventStatusEnum("status").notNull().default("open"),
     scoreLockedByCreator: boolean("score_locked_by_creator").notNull().default(false),
     scoreReminderSent: boolean("score_reminder_sent").notNull().default(false),
+    /** The second and last ask for a missing score, the morning after. One nudge is one roll of the dice. */
+    scoreReminder2At: timestamp("score_reminder_2_at", { withTimezone: true }),
     /** iCalendar SEQUENCE — bumped on every time/venue change or cancellation. */
     icsSequence: integer("ics_sequence").notNull().default(0),
     /** Web-push "one hour before" reminder went out (once per event). */

@@ -47,6 +47,8 @@ const RULES = [
   // Areas with a suite of their own.
   [/^src\/(lib\/coach|app\/coach|app\/c)\//, ["coach"], "the coach's book"],
   [/^src\/lib\/domain\/coaching\.ts$/, ["coach"], "the coach's rules"],
+  [/^src\/components\/coach\//, ["coach"], "the coach's screens, which only the coach journey opens"],
+  [/^src\/actions\/coach\.ts$/, ["coach", "telegram"], "the coach's writes, which the bot shares"],
   [/^src\/lib\/domain\/(clubs|venueBoard)\.ts$/, ["clubs", "venues"], "clubs and their boards"],
   [/^src\/lib\/booking\//, ["clubs"], "booking platforms and availability"],
   [/^src\/lib\/domain\/series\.ts$/, ["series"], "series"],

@@ -14,7 +14,7 @@ No accounts or keys are needed. Copy `.env.example` to `.env` only when you want
 ## Before you open a pull request
 
 ```bash
-bash scripts/gate.sh              # typecheck, lint, schema vs migrations, the unit suite (about two minutes)
+bash scripts/gate.sh              # typecheck, lint, schema vs migrations, the unit suite (well under a minute)
 GATE_E2E=core bash scripts/gate.sh   # the same, then a production build and one browser suite
 ```
 

@@ -288,6 +288,13 @@
       "when": 1789208177485,
       "tag": "0040_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1789275798417,
+      "tag": "0041_coach_prices_and_lesson_payment",
+      "breakpoints": true
     }
   ]
 }
