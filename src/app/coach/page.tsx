@@ -13,7 +13,6 @@ import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/co
 import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
 import { busyBetween, DAY_MS, earnedInvite, getCoachForActor, inviteCode, listCoachLessons, listStudents, openSlots, studentLink } from "@/lib/domain/coaching";
-import { CoachHint } from "@/components/coach/CoachHint";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
@@ -37,7 +36,7 @@ export default async function CoachPage({ searchParams }: Props) {
   const [me, t, locale, sp] = await Promise.all([getSessionPlayer(db), getTranslations("coach"), getLocale(), searchParams]);
   const shell = (children: React.ReactNode) => (
     <>
-      <Header />
+      <Header current="coach" />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">{children}</main>
       <Footer />
     </>
@@ -57,7 +56,6 @@ export default async function CoachPage({ searchParams }: Props) {
     return shell(
       <>
         {tag}
-        {!found && <CoachHint present={false} />}
         <CoachSetup initialClubs={((Array.isArray(sp.club) ? sp.club[0] : sp.club) ?? "").slice(0, 80)} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} serviceEmail={serviceAccountEmail()} existing={Boolean(found)} />
       </>,
     );
@@ -78,7 +76,6 @@ export default async function CoachPage({ searchParams }: Props) {
   const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now });
   return shell(
     <>
-      <CoachHint present />
       <CoachHome
         handle={coach.handle}
         coachName={coach.displayName}

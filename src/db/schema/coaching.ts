@@ -235,7 +235,9 @@ export const coachManagers = pgTable(
       .references(() => players.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.coachId, t.playerId] })],
+  // The primary key leads with the coach, so "which book does this player run?" could not seek on it.
+  // The role set asks exactly that on every page render, so it gets an index of its own (rule 12).
+  (t) => [primaryKey({ columns: [t.coachId, t.playerId] }), index("coach_managers_player_idx").on(t.playerId)],
 );
 
 /** A student asks for a time outside the coach's hours; the coach answers with one tap. */

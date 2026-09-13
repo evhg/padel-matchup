@@ -21,7 +21,10 @@
     "newMatch": "New match",
     "home": "Home",
     "working": "One sec…",
-    "somethingWrong": "Something went wrong. Please try again."
+    "somethingWrong": "Something went wrong. Please try again.",
+    "club": "Club",
+    "series": "Series",
+    "more": "More"
   },
   "identity": {
     "whatsYourName": "What's your name?",
