@@ -14,9 +14,13 @@ pnpm db:generate                  # after editing src/db/schema/*.ts; commit dri
 bash scripts/check-migrations.sh   # do the schema and the migrations still agree? (in the gate and in CI)
 node scripts/suites.mjs --why      # which browser suites can this change break?
 node scripts/gen-docs.mjs          # rewrite the README's env table and .env.example from the code
+node scripts/check-bundle.mjs --why # what does each route actually ship? (in the gate, after a build)
+node scripts/i18n.mjs add <key> "<en>" "<ru>" "<es>"   # one message into all three locales, one line each
 GATE_E2E=auto bash scripts/gate.sh # the gate, plus a build and the suites this change can break
 bash scripts/gate.sh              # the gate: typecheck, lint, unit suite in CI's single-worker order; GATE_E2E=<suite> adds a build and one browser suite
 ```
+
+What this project has already paid to learn — the mistakes worth not repeating, and what actually cuts wall clock — is at the end of `.claude/skills/ship/SKILL.md`. Add to it the moment something finally comes out right, and prefer the enforceable form: a check that fails beats a paragraph nobody opens.
 
 The gate runs by itself before every `git push` from a Claude Code session (`.claude/settings.json` → `scripts/hooks/pre-push.sh`) and blocks the push when it fails. A push that reaches GitHub has therefore passed typecheck, lint and the unit suite on the machine that made it; CI then adds the real-Postgres run, the build and the browser suites.
 
