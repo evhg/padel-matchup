@@ -49,11 +49,11 @@ export async function GET(req: Request) {
     const { lapsed, offers } = await tickWaitlist(db, now);
     coachTick.lapsed = lapsed.length;
     coachTick.offered = offers.length;
-    for (const l of lapsed) if (l.player) await notifyOfferLapsed(l.coach, l.player, l.startsAt).catch(() => undefined);
+    for (const l of lapsed) if (l.player) await notifyOfferLapsed(db, l.coach, l.player, l.startsAt).catch(() => undefined);
     for (const o of offers) await notifyOffer(db, o.coach, o).catch(() => undefined);
     for (const r of await lessonRemindersDue(db, now)) {
       const pkg = r.lesson.packageId ? ((await db.select().from(lessonPackages).where(eq(lessonPackages.id, r.lesson.packageId)).limit(1))[0] ?? null) : null;
-      await notifyLessonReminder({ ...r, pkg }).catch(() => undefined);
+      await notifyLessonReminder(db, { ...r, pkg }).catch(() => undefined);
       coachTick.reminded++;
     }
     coachTick.requestsExpired = await expireRequests(db, now);

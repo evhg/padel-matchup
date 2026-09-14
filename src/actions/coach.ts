@@ -243,7 +243,7 @@ export async function setStudentStatusAction(playerId: string, status: "accepted
     await setStudentStatus(db, coach.id, playerId, status);
     if (status === "accepted" && before !== "accepted") {
       const student = await getPlayerById(db, playerId);
-      if (student) await notifyStudentAccepted(coach, student).catch(() => undefined);
+      if (student) await notifyStudentAccepted(db, coach, student).catch(() => undefined);
     }
     revalidateCoach(coach.handle);
     return null;
@@ -258,7 +258,7 @@ export async function addStudentAction(name: string, email?: string | null): Pro
     if (!clean) throw new ActionFailure("name_required");
     const address = (email ?? "").trim().toLowerCase();
     const player = await addStudentByName(db, coach.id, clean, await getLocale(), /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) ? address : null);
-    if (player.email) await notifyStudentInvited(coach, player).catch(() => undefined);
+    if (player.email) await notifyStudentInvited(db, coach, player).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { playerId: player.id };
   });
