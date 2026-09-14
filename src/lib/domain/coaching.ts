@@ -569,6 +569,25 @@ export async function owedBy(db: Db, coach: Pick<Coach, "id" | "currency">, stud
   };
 }
 
+export type OwedRow = { lessonId: string; startsAt: Date; amount: number; claimedAt: Date | null; studentPlayerId: string; name: string };
+
+/**
+ * Everyone who still owes this coach, newest lesson last. One query with a join rather than
+ * `owedBy` per student: the coach's assistant asks this from a chat message, so it has to stay one
+ * round trip however many students there are (rule 12). Bounded at 20 because a list longer than
+ * that is a spreadsheet, not a chat message.
+ */
+export async function owedToCoach(db: Db, coachId: string, limit = 20): Promise<OwedRow[]> {
+  const rows = await db
+    .select({ lessonId: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt, studentPlayerId: lessons.studentPlayerId, name: players.displayName })
+    .from(lessons)
+    .innerJoin(players, eq(players.id, lessons.studentPlayerId))
+    .where(and(eq(lessons.coachId, coachId), isNull(lessons.paidAt), gt(lessons.amount, 0), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
+    .orderBy(asc(lessons.startsAt))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, amount: r.amount as number, studentPlayerId: r.studentPlayerId as string }));
+}
+
 /** The student says the money is sent. It asks the coach; only the coach's tap marks it paid. */
 export async function claimLessonPaid(db: Db, lessonId: string, studentPlayerId: string, now = new Date()): Promise<Lesson | null> {
   const [row] = await db

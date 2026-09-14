@@ -13,13 +13,22 @@ export type Match = { kind: "one"; student: StudentRef } | { kind: "many"; candi
 export type CoachIntent =
   | { kind: "book"; student: Match; startsAt: Date; day: string; time: string }
   | { kind: "cancel"; student: Match | null; day: string | null; time: string | null }
+  | { kind: "move"; student: Match | null; day: string | null; time: string | null; startsAt: Date | null }
+  | { kind: "owed"; student: Match | null }
   | { kind: "block"; from: Date; to: Date; day: string }
   | { kind: "package"; student: Match; size: number; validDays: number | null; amount: number | null; expiresAt: Date | null }
   | { kind: "agenda"; day: string | "week" }
   | { kind: "low" }
   | { kind: "help" };
 
-export type StudentIntent = { kind: "book"; day: string; time: string | null; startsAt: Date | null } | { kind: "cancel"; day: string | null; time: string | null } | { kind: "left" } | { kind: "lessons" } | { kind: "help" };
+export type StudentIntent =
+  | { kind: "book"; day: string; time: string | null; startsAt: Date | null }
+  | { kind: "cancel"; day: string | null; time: string | null }
+  | { kind: "move"; day: string | null; time: string | null; startsAt: Date | null }
+  | { kind: "paid" }
+  | { kind: "left" }
+  | { kind: "lessons" }
+  | { kind: "help" };
 
 const DAY_MS = 86_400_000;
 
@@ -34,6 +43,11 @@ const WEEK = new Set(["week", "неделя", "неделю", "semana"]);
 const CANCEL = new Set(["cancel", "cancelled", "отмена", "отменить", "отмени", "cancelar", "cancela", "anular"]);
 const BLOCK = new Set(["block", "off", "blocked", "busy", "блок", "занят", "занята", "выходной", "bloquear", "bloquea", "libre", "ocupado"]);
 const LOW = new Set(["low", "мало", "bajo", "bajos"]);
+// "move" has to beat "book": "move anna fri 15" carries a name and a time, which is a booking line
+// in every other respect. The flag is read before the booking branch for exactly that reason.
+const MOVE = new Set(["move", "moved", "reschedule", "перенеси", "перенести", "перенос", "перенесите", "mover", "mueve", "cambiar", "cambia"]);
+const PAID = new Set(["paid", "оплатил", "оплатила", "оплачено", "pagado", "pagada", "pague", "pagué"]);
+const OWED = new Set(["owes", "owed", "unpaid", "долг", "долги", "должен", "должна", "deuda", "deudas", "debe"]);
 const LEFT = new Set(["left", "balance", "осталось", "остаток", "quedan", "saldo"]);
 const LESSONS = new Set(["lessons", "занятия", "clases", "agenda"]);
 const HELP = new Set(["help", "помощь", "ayuda", "?"]);
@@ -157,7 +171,10 @@ export function tokenize(text: string, todayStr: string): Parts {
       parts.time = time;
       continue;
     }
-    if (CANCEL.has(tok)) parts.flags.add("cancel");
+    if (MOVE.has(tok)) parts.flags.add("move");
+    else if (PAID.has(tok)) parts.flags.add("paid");
+    else if (OWED.has(tok)) parts.flags.add("owed");
+    else if (CANCEL.has(tok)) parts.flags.add("cancel");
     else if (BLOCK.has(tok)) parts.flags.add("block");
     else if (LOW.has(tok)) parts.flags.add("low");
     else if (LEFT.has(tok)) parts.flags.add("left");
@@ -166,6 +183,13 @@ export function tokenize(text: string, todayStr: string): Parts {
     else if (HELP.has(tok)) parts.flags.add("help");
     else if (BOOK.has(tok)) parts.flags.add("book");
     else if (/^\p{L}[\p{L}'’-]*$/u.test(raw.replace(/^@/, ""))) parts.words.push(raw.replace(/^@/, ""));
+  }
+  // "to" means an expiry date only in a package line, which always carries "+N". Everywhere else it
+  // is ordinary English — "move to fri 15" — and swallowing the day there moved the lesson to today.
+  if (parts.day === null && parts.until !== null && parts.plus === null) {
+    parts.day = parts.until;
+    parts.dayExplicit = true;
+    parts.until = null;
   }
   return parts;
 }
@@ -191,6 +215,15 @@ export function parseCoachLine(text: string, ctx: ParseContext): CoachIntent {
     if (p.time) return { kind: "block", from: zonedTimeToUtc(day, p.time, ctx.tz), to: new Date(zonedTimeToUtc(day, p.time, ctx.tz).getTime() + 3_600_000), day };
     return { kind: "block", from: zonedTimeToUtc(day, "00:00", ctx.tz), to: zonedTimeToUtc(day, "23:59", ctx.tz), day };
   }
+  if (p.flags.has("owed")) return { kind: "owed", student };
+  if (p.flags.has("move")) {
+    // The time typed is where the lesson is going, not where it is. Which lesson moves is decided
+    // by the flow from the student and the day, because a coach who says "move anna to friday"
+    // means the lesson anna already has, and there is usually only one.
+    if (!p.time) return { kind: "move", student, day: p.day, time: null, startsAt: null };
+    const day = p.day ?? todayStr;
+    return { kind: "move", student, day, time: p.time, startsAt: zonedTimeToUtc(day, p.time, ctx.tz) };
+  }
   if (p.flags.has("cancel")) return { kind: "cancel", student, day: p.day, time: p.time };
   if (p.time && student) {
     let day = p.day ?? todayStr;
@@ -211,7 +244,13 @@ export function parseStudentLine(text: string, ctx: { now: Date; tz: string }): 
   const todayStr = utcToZonedParts(ctx.now, ctx.tz).date;
   const p = tokenize(text, todayStr);
   if (p.flags.has("help")) return { kind: "help" };
+  if (p.flags.has("paid")) return { kind: "paid" };
   if (p.flags.has("left")) return { kind: "left" };
+  if (p.flags.has("move")) {
+    if (!p.time) return { kind: "move", day: p.day, time: null, startsAt: null };
+    const day = p.day ?? todayStr;
+    return { kind: "move", day, time: p.time, startsAt: zonedTimeToUtc(day, p.time, ctx.tz) };
+  }
   if (p.flags.has("cancel")) return { kind: "cancel", day: p.day, time: p.time };
   if (p.flags.has("lessons") && !p.day && !p.time) return { kind: "lessons" };
   if (p.day || p.time) {

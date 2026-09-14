@@ -132,6 +132,17 @@ export async function notifyPaidClaimed(db: Db, n: { coach: Coach; student: Play
   await tell(db, coachPlayer, s.paidClaimed(n.student.displayName, when, amount));
 }
 
+/**
+ * The other half of a claim. A student said the money was sent and heard nothing back until they
+ * next opened the page, which is the kind of silence people read as "it did not work" and ask about
+ * in a message — the thing the payment status exists to stop.
+ */
+export async function notifyPaidConfirmed(db: Db, n: { coach: Coach; student: Player; lesson: Lesson }): Promise<void> {
+  const when = whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale);
+  const s = coachStrings(coachBotLocale(n.student.locale));
+  await tell(db, n.student, s.paidConfirmed(n.coach.displayName, when));
+}
+
 /** A student came in through the coach's own link: one quiet line, no button, nothing to decide. */
 export async function notifyStudentJoined(db: Db, coach: Coach, student: Player): Promise<void> {
   const coachPlayer = await getPlayerById(db, coach.playerId);
