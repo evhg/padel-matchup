@@ -40,7 +40,7 @@ export default async function CoachPage({ searchParams }: Props) {
       <Header current="coach" />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
         {children}
-        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
+        <FeedbackInline variant="card" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
     </>

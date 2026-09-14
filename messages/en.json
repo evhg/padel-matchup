@@ -123,7 +123,7 @@
     "capacityHelp": "Spots still open when round 1 starts are dropped: the tournament becomes the players present.",
     "more": "More options",
     "bookingUrl": "Court booking link",
-    "bookingUrlHelp": "Paste the club's booking page or confirmation. Players get one tap to it.",
+    "bookingUrlHelp": "Already booked the court? Paste the club's link or your confirmation. Players get a button that opens it. This is not where you say how to pay.",
     "bookingSet": "Booking link added",
     "titleSet": "Title or note added",
     "format": "Format",
@@ -139,7 +139,8 @@
     "payNote": "How to pay",
     "payNotePlaceholder": "PromptPay 081 234 5678",
     "costHelp": "Shown on the match page and on the bot's cards, so nobody has to ask.",
-    "costSet": "{cost} per player"
+    "costSet": "{cost} per player",
+    "payNoteHelp": "Shown to players next to the cost — a PromptPay number, a bank line, or \"cash at the club\". No money passes through Kicksmash."
   },
   "share": {
     "title": "Your match is live",
@@ -161,10 +162,10 @@
     "subtitleTournament": "Send the link. Players tap, enter a name, they're in.",
     "openMatch": "Go to match",
     "openTournament": "Go to tournament",
-    "story": "Story image for Instagram",
-    "storyHint": "9:16, ready for a story. Add the link sticker with {link} so people tap straight into the match.",
+    "story": "Find a fourth in your close friends",
+    "storyHint": "A 9:16 image for your story. Add the link sticker with {link} — whoever taps it lands straight on the match, and joins that came from Instagram are counted.",
     "storyOpen": "Open image",
-    "storyCopy": "Copy Instagram link",
+    "storyCopy": "Copy the link for the sticker",
     "nativeShareImage": "Share the picture…"
   },
   "event": {
@@ -320,7 +321,8 @@
     "returningHelp": "Enter the email you used before. A 6-digit code brings your matches to this device.",
     "returningTelegramOnly": "Sign in with Telegram and your matches come to this device.",
     "returningTelegram": "Or, if you used the Telegram bot:",
-    "firstTimeTitle": "First time here? Just your name, that's it."
+    "firstTimeTitle": "First time here? Just your name, that's it.",
+    "pastMore": "Show {n} more"
   },
   "notFound": {
     "title": "Link not found",
@@ -1263,7 +1265,7 @@
       "payNothingThrough": "Nothing is paid through Kicksmash. Your coach marks it once it lands.",
       "move": "Move",
       "moveTo": "Move it to",
-      "moved": "Moved. Your package is untouched.",
+      "moved": "Moved. Nothing else changed.",
       "noFree": "No free times that day.",
       "ownBook": "Coach? Your own assistant in a minute →",
       "founding": "Founding coach · {city}",
@@ -1290,13 +1292,13 @@
       "cancel": "Cancel",
       "cancelConfirm": "Cancel {when}?",
       "cancelFree": "Free until {hours} hours before.",
-      "cancelLate": "Less than {hours} hours before: this uses your free pass or counts as a lesson.",
+      "cancelLate": "Less than {hours} hours before: this uses one of your free late cancellations. When those run out, cancelling this late counts as a lesson taken.",
       "cancelled": "Cancelled. The lesson is back on your package.",
-      "cancelledPass": "Cancelled late; your free pass covered it.",
+      "cancelledPass": "Cancelled late. It used one of your free late cancellations, so no lesson was taken.",
       "cancelledCounted": "Cancelled late; this one counts.",
       "whatsapp": "Message on WhatsApp",
       "private": "This page is private.",
-      "how": "Tap a free time and it is yours at once. Cancel freely until {hours} hours before; later than that uses a free pass, then counts. Your package, when you have one, counts down under each lesson.",
+      "how": "Tap a free time and it is yours at once. Cancel up to {hours} hours before and nothing is charged. After that it uses one of your free late cancellations, and when those run out a late cancellation counts as a lesson taken. A package, if you have one, counts down under each lesson.",
       "taken": "Taken. Tap to be told if it frees up.",
       "waitlisted": "On the list for {when}. The first free spot is yours for 30 minutes.",
       "weekWait": "Nothing suits? Tell me when anything frees up that week",
@@ -1313,7 +1315,8 @@
       "ask": "Ask {name}",
       "asked": "Asked {name} for {when}. The answer comes here and by message.",
       "askedList": "Asked for",
-      "requestBooked": "Booked {when}."
+      "requestBooked": "Booked {when}.",
+      "movedPackage": "Moved. Your package is untouched."
     },
     "me": {
       "title": "Your lessons",
@@ -1340,7 +1343,7 @@
       "paidBody": "{student} says they paid {amount} for the lesson on {when}. Mark it paid on your students screen when it lands — nothing is marked for you.",
       "movedSubject": "{who} moved your lesson",
       "movedHeading": "Moved to {to}",
-      "movedBody": "{who} moved the lesson from {from} to {to}. Nothing else changed: the package is untouched and the new time is already in your calendar.",
+      "movedBody": "{who} moved the lesson from {from} to {to}. Nothing else changed, and the new time is already in your calendar.",
       "inviteSubject": "Lesson with {coach}: {when}",
       "inviteHeading": "Your lesson is booked",
       "inviteBody": "{when} with {coach}{where}. {package}",

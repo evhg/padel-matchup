@@ -102,7 +102,8 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
         return;
       }
       setMoving(null);
-      setNote(t("page.moved"));
+      // A student with no package was told "your package is untouched", which named something they never had.
+      setNote(t(pkg ? "page.movedPackage" : "page.moved"));
       router.refresh();
     });
 
@@ -264,14 +265,14 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                   {pending ? "…" : slot ? t("page.confirm", { when: `${dayLabels[day] ?? day} ${daySlots.find((s) => s.iso === slot)?.time ?? ""}` }) : t("page.book")}
                 </button>
                 {weekOf[day] && (
-                  <button type="button" className="self-start text-xs text-faint hover:text-muted" disabled={pending} onClick={() => waitFor(null, weekOf[day], weekOf[day])} data-testid="week-wait">
+                  <button type="button" className="btn-secondary btn-sm self-start" disabled={pending} onClick={() => waitFor(null, weekOf[day], weekOf[day])} data-testid="week-wait">
                     {t("page.weekWait")}
                   </button>
                 )}
               </>
             )}
             {!asking ? (
-              <button type="button" className="self-start text-xs text-faint hover:text-muted" onClick={() => setAsking(true)} data-testid="other-time">
+              <button type="button" className="btn-secondary btn-sm self-start" onClick={() => setAsking(true)} data-testid="other-time">
                 {t("page.otherTime")} →
               </button>
             ) : (

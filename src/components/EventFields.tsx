@@ -346,6 +346,7 @@ export function EventFields({
                 <div>
                   <label className="label">{t("create.payNote")}</label>
                   <input className="input" value={values.payNote} maxLength={120} autoComplete="off" placeholder={t("create.payNotePlaceholder")} onChange={(e) => onChange({ payNote: e.target.value })} />
+                  <p className="mt-1.5 text-sm text-muted">{t("create.payNoteHelp")}</p>
                 </div>
               </div>
               <p className="mt-1.5 text-sm text-muted">{t("create.costHelp")}</p>

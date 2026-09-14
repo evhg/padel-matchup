@@ -123,7 +123,7 @@
     "capacityHelp": "Las plazas libres al empezar la ronda 1 se eliminan: el torneo lo juegan los presentes.",
     "more": "Más opciones",
     "bookingUrl": "Enlace de reserva de pista",
-    "bookingUrlHelp": "Pega la página de reservas del club o la confirmación. Los jugadores la abren con un toque.",
+    "bookingUrlHelp": "¿Ya has reservado la pista? Pega el enlace del club o tu confirmación. Los jugadores verán un botón que lo abre. Aquí no se indica cómo pagar.",
     "bookingSet": "Enlace de reserva añadido",
     "titleSet": "Título o nota añadidos",
     "format": "Formato",
@@ -139,7 +139,8 @@
     "payNote": "Cómo pagar",
     "payNotePlaceholder": "Bizum 612 345 678",
     "costHelp": "Se ve en la página del partido y en las tarjetas del bot, así nadie tiene que preguntar.",
-    "costSet": "{cost} por jugador"
+    "costSet": "{cost} por jugador",
+    "payNoteHelp": "Se muestra a los jugadores junto al coste — un número de PromptPay, una línea bancaria o «efectivo en el club». Por Kicksmash no pasa dinero."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -161,10 +162,10 @@
     "subtitleTournament": "Envía el enlace. Los jugadores tocan, ponen su nombre y dentro.",
     "openMatch": "Ir al partido",
     "openTournament": "Ir al torneo",
-    "story": "Imagen para historias de Instagram",
-    "storyHint": "9:16, lista para una historia. Añade el sticker de enlace con {link} para que la gente entre directa al partido.",
+    "story": "Encuentra al cuarto entre tus amigos cercanos",
+    "storyHint": "Una imagen 9:16 para tu historia. Añade el sticker de enlace con {link} — quien lo toque entra directo al partido, y las entradas desde Instagram se cuentan.",
     "storyOpen": "Abrir imagen",
-    "storyCopy": "Copiar enlace para Instagram",
+    "storyCopy": "Copiar el enlace para el sticker",
     "nativeShareImage": "Compartir la imagen…"
   },
   "event": {
@@ -320,7 +321,8 @@
     "returningHelp": "Escribe el email que usaste antes. Un código de 6 cifras trae tus partidos a este dispositivo.",
     "returningTelegramOnly": "Entra con Telegram y tus partidos llegan a este dispositivo.",
     "returningTelegram": "O, si usaste el bot de Telegram:",
-    "firstTimeTitle": "¿Primera vez? Solo tu nombre, nada más."
+    "firstTimeTitle": "¿Primera vez? Solo tu nombre, nada más.",
+    "pastMore": "Ver {n} más"
   },
   "notFound": {
     "title": "Enlace no encontrado",
@@ -1263,7 +1265,7 @@
       "payNothingThrough": "Nada se paga por Kicksmash. Tu entrenador lo marca cuando llega.",
       "move": "Cambiar",
       "moveTo": "Cambiar a",
-      "moved": "Cambiada. Tu bono sigue igual.",
+      "moved": "Cambiada. Nada más ha cambiado.",
       "noFree": "No hay horas libres ese día.",
       "ownBook": "¿Entrenas? Tu propio asistente en un minuto →",
       "founding": "Entrenador fundador · {city}",
@@ -1290,13 +1292,13 @@
       "cancel": "Cancelar",
       "cancelConfirm": "¿Cancelar {when}?",
       "cancelFree": "Gratis hasta {hours} horas antes.",
-      "cancelLate": "Menos de {hours} horas antes: usa tu pase gratis o cuenta como clase.",
+      "cancelLate": "Menos de {hours} horas antes: usa una de tus cancelaciones tardías gratuitas. Cuando se acaben, cancelar así cuenta como clase dada.",
       "cancelled": "Cancelada. La clase vuelve a tu bono.",
-      "cancelledPass": "Cancelada tarde; tu pase gratis la cubrió.",
+      "cancelledPass": "Cancelada tarde. Usó una de tus cancelaciones tardías gratuitas, así que no se descontó ninguna clase.",
       "cancelledCounted": "Cancelada tarde; esta cuenta.",
       "whatsapp": "Escribir por WhatsApp",
       "private": "Esta página es privada.",
-      "how": "Toca una hora libre y es tuya al instante. Cancela gratis hasta {hours} horas antes; después usa un pase gratis y luego cuenta. Tu bono, cuando lo tengas, se descuenta bajo cada clase.",
+      "how": "Toca una hora libre y es tuya al instante. Cancela hasta {hours} horas antes y no se cobra nada. Después se usa una de tus cancelaciones tardías gratuitas, y cuando se acaben, cancelar tan tarde cuenta como clase dada. El bono, si lo tienes, se descuenta bajo cada clase.",
       "taken": "Ocupado. Toca para que te avise si se libera.",
       "waitlisted": "En la lista para {when}. El primer hueco libre es tuyo durante 30 minutos.",
       "weekWait": "¿Nada te cuadra? Avísame cuando se libere algo esa semana",
@@ -1313,7 +1315,8 @@
       "ask": "Preguntar a {name}",
       "asked": "Pedido a {name}: {when}. La respuesta llega aquí y por mensaje.",
       "askedList": "Pedido",
-      "requestBooked": "Reservado: {when}."
+      "requestBooked": "Reservado: {when}.",
+      "movedPackage": "Cambiada. Tu bono sigue igual."
     },
     "me": {
       "title": "Tus clases",
@@ -1340,7 +1343,7 @@
       "paidBody": "{student} dice que pagó {amount} por la clase del {when}. Márcalo como pagado en tu pantalla de alumnos cuando llegue — nada se marca solo.",
       "movedSubject": "{who} cambió tu clase",
       "movedHeading": "Cambiada a {to}",
-      "movedBody": "{who} cambió la clase de {from} a {to}. Nada más cambia: el bono sigue igual y la nueva hora ya está en tu calendario.",
+      "movedBody": "{who} cambió la clase de {from} a {to}. Nada más cambia, y la nueva hora ya está en tu calendario.",
       "inviteSubject": "Clase con {coach}: {when}",
       "inviteHeading": "Tu clase está reservada",
       "inviteBody": "{when} con {coach}{where}. {package}",
