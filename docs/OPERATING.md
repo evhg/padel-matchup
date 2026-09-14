@@ -59,7 +59,12 @@ it only ever goes up until deployments are deleted. It reached 75% on 14 Septemb
 dozen deployments, because each one carried 18 MB of PGlite it could never run. Two levers, in this
 order: what a function weighs (`outputFileTracingExcludes`/`Includes` in `next.config.ts` -- check
 the numbers, not the config: `.next/server/**/*.nft.json` lists what each route really traces), and
-how many deployments exist (every push to every branch builds one; old ones can be deleted).
+how many deployments exist. 356 were built in the first eleven days, 234 of them previews of an
+agent's branch that nobody opened, so `vercel.json` now sets `git.deploymentEnabled` to false for
+`claude/**`. `main` still deploys to production on merge, and the three required checks are GitHub
+Actions and never depended on Vercel. Deployments already built stay until they are deleted:
+`DELETE /v13/deployments/{id}` with `VERCEL_TOKEN`, keeping the live production one and a couple of
+rollback targets.
 Vercel Web Analytics: 2,500 events a month (we count page renders ourselves).
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
