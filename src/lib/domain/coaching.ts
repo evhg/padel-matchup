@@ -161,6 +161,47 @@ export async function insertCoach(db: Db, input: CreateCoachInput): Promise<{ co
   return { coach: raced, created: false };
 }
 
+/** What closing a book would take with it. Shown before the confirm, and counted again inside it. */
+export type CoachBookContents = { students: number; lessons: number; packages: number; upcoming: number };
+
+export async function coachBookContents(db: Db, coachId: string, now = new Date()): Promise<CoachBookContents> {
+  const [row] = await db
+    .select({
+      students: sql<number>`(select count(*)::int from ${coachStudents} where ${coachStudents.coachId} = ${coachId})`,
+      lessons: sql<number>`(select count(*)::int from ${lessons} where ${lessons.coachId} = ${coachId})`,
+      packages: sql<number>`(select count(*)::int from ${lessonPackages} where ${lessonPackages.coachId} = ${coachId})`,
+      upcoming: sql<number>`(select count(*)::int from ${lessons} where ${lessons.coachId} = ${coachId} and ${lessons.status} = 'booked' and ${lessons.startsAt} > ${now})`,
+    })
+    .from(coaches)
+    .where(eq(coaches.id, coachId));
+  return row ?? { students: 0, lessons: 0, packages: 0, upcoming: 0 };
+}
+
+/**
+ * The coach closes their own book, and it is gone: the row, and by cascade the students, lessons,
+ * packages, blocks, waitlist, requests, managers and any uploaded QR. The public page at /c/{handle}
+ * stops existing and the handle is free again.
+ *
+ * Why delete rather than archive. `coaches.archived_at` exists and every lookup already filters on it,
+ * but `coaches_player_idx` is unique on `player_id` with no partial clause, so an archived row still
+ * holds that player's one slot: `insertCoach` would then find nothing (archived), hit the conflict,
+ * and throw not_found. Archiving a book would quietly end that person's ability to ever coach again.
+ * Until that index is partial, archiving is not a way back and this is.
+ *
+ * A lesson somebody is waiting for is not deleted from under them: a booked lesson still to come
+ * refuses the whole thing, and the coach cancels it through the path that tells the student.
+ * Only the coach may do this, never a manager — a manager runs a book, they do not own it.
+ */
+export async function deleteCoachBook(db: Db, input: { coachId: string; actorPlayerId: string }, now = new Date()): Promise<CoachBookContents> {
+  const [coach] = await db.select().from(coaches).where(eq(coaches.id, input.coachId));
+  if (!coach) throw new DomainError("not_found");
+  if (coach.playerId !== input.actorPlayerId) throw new DomainError("forbidden");
+  const contents = await coachBookContents(db, coach.id, now);
+  if (contents.upcoming > 0) throw new DomainError("has_lessons");
+  await db.delete(coaches).where(eq(coaches.id, coach.id));
+  return contents;
+}
+
 export async function getCoachByHandle(db: Db, handle: string): Promise<Coach | null> {
   if (!HANDLE_RE.test(handle)) return null;
   const [row] = await db.select().from(coaches).where(and(eq(coaches.handle, handle), isNull(coaches.archivedAt))).limit(1);

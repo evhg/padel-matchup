@@ -18,6 +18,9 @@ export type DomainErrorCode =
   // A student moving a lesson that is already inside the coach's cutoff: at that point it is a
   // cancellation under the usual policy, or the late-cancel rule would mean nothing.
   | "too_late"
+  // Closing a coach's book while a lesson is still to come: the student is waiting for that hour, so
+  // it is cancelled through the path that tells them, and only then is the book closed.
+  | "has_lessons"
   | "no_coach";
 
 export class DomainError extends Error {

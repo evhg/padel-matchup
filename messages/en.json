@@ -1244,7 +1244,12 @@
       "tz": "Time zone",
       "save": "Save",
       "saved": "Saved.",
-      "how": "These are the rules your students see and the assistant applies. Change them any time; lessons already booked keep the rules they were booked under."
+      "how": "These are the rules your students see and the assistant applies. Change them any time; lessons already booked keep the rules they were booked under.",
+      "delete": "Delete this book",
+      "deleting": "Deleting…",
+      "deleteConfirm": "Delete your coach book? {students} student(s) and {lessons} lesson(s) go with it, your public page stops existing, and the setup starts again from its first question. This cannot be undone.",
+      "deleteHasLessons": "You have a lesson still to come. Cancel it first, so your student is told.",
+      "deleteFailed": "That did not work. Try again."
     },
     "page": {
       "owedTitle": "To pay",

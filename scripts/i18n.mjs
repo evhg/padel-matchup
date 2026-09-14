@@ -53,28 +53,55 @@ try {
     const siblings = Object.keys(node);
     if (siblings.length === 0) throw new Error(`${locale}.json: "${parentPath.join(".")}" is empty; add the first key by hand`);
 
-    // The last sibling is the anchor: one line, one key, and the new line goes after it.
-    const anchor = siblings.at(-1);
     const lines = text.split("\n");
-    const hits = lines.map((l, n) => [l, n]).filter(([l]) => new RegExp(`^\\s*${JSON.stringify(anchor)}\\s*:`).test(l));
-    if (hits.length !== 1) {
-      throw new Error(`${locale}.json: "${anchor}" appears ${hits.length} times as a key — anchor is ambiguous, add ${key} by hand`);
-    }
-    const [line, n] = hits[0];
-    if (!line.trimEnd().endsWith(",") && !line.trimEnd().endsWith("}") && !line.includes("}")) {
-      throw new Error(`${locale}.json: the line for "${anchor}" is not a whole entry; add ${key} by hand`);
-    }
-    if (/\{.*:.*\}/.test(line) && !line.trimStart().startsWith(JSON.stringify(anchor))) {
-      throw new Error(`${locale}.json: "${parentPath.join(".")}" is written inline; add ${key} by hand`);
-    }
+    // Braces inside a message ("{count} left") are not structure: blank every string literal before
+    // counting. Getting this wrong is how a helper meant to stop corruption starts causing it.
+    const structural = (l) => l.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+    const keyLine = (name) => new RegExp(`^\\s*${JSON.stringify(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`);
 
-    const indent = line.slice(0, line.length - line.trimStart().length);
-    const needsComma = !line.trimEnd().endsWith(",");
-    const before = needsComma ? lines[n].replace(/\s*$/, "") + "," : lines[n];
+    // Walk down to the parent's brace range. Two things make this fiddly and both have bitten: a
+    // segment name can appear earlier as an ordinary string ("settings": "Settings" sits well above
+    // the real coach.settings section), so a segment only counts when its line opens an object; and
+    // each segment is searched only inside the range of the one above it.
+    const rangeOf = (name, lo, hi) => {
+      for (let n = lo; n < hi; n++) {
+        if (!keyLine(name).test(lines[n]) || !structural(lines[n]).trimEnd().endsWith("{")) continue;
+        let depth = 0;
+        for (let m = n; m < hi; m++) {
+          for (const ch of structural(lines[m])) {
+            if (ch === "{") depth++;
+            else if (ch === "}") depth--;
+          }
+          if (m > n && depth <= 0) return [n, m];
+        }
+        throw new Error(`${locale}.json: "${name}" never closes`);
+      }
+      return null;
+    };
+
+    let lo = 0;
+    let hi = lines.length;
+    for (const seg of parentPath) {
+      const r = rangeOf(seg, lo, hi);
+      if (!r) throw new Error(`${locale}.json: found no section "${seg}" of ${parentPath.join(".")} written over several lines — if it sits on one line, add ${key} by hand`);
+      [lo, hi] = [r[0] + 1, r[1]];
+    }
+    const open = lo - 1;
+    const close = hi;
+
+    // The last key inside that range is the anchor, and the new line goes after it.
+    let anchorLine = -1;
+    for (let n = open + 1; n < close; n++) if (/^\s*"[^"]+"\s*:/.test(lines[n])) anchorLine = n;
+    if (anchorLine === -1) throw new Error(`${locale}.json: found no key inside "${parentPath.join(".")}"; add ${key} by hand`);
+
+    const anchor = lines[anchorLine].trim().split('"')[1];
+    const indent = lines[anchorLine].slice(0, lines[anchorLine].length - lines[anchorLine].trimStart().length);
+    const needsComma = !lines[anchorLine].trimEnd().endsWith(",");
+    const before = needsComma ? lines[anchorLine].replace(/\s*$/, "") + "," : lines[anchorLine];
     const added = `${indent}${JSON.stringify(leaf)}: ${JSON.stringify(values[i])}`;
-    const next = [...lines.slice(0, n), before, added, ...lines.slice(n + 1)].join("\n");
+    const next = [...lines.slice(0, anchorLine), before, added, ...lines.slice(anchorLine + 1)].join("\n");
 
-      JSON.parse(next); // Never write a file that stopped being JSON.
+    JSON.parse(next); // Never write a file that stopped being JSON.
       return { p, locale, next, anchor };
   });
 } catch (e) {
