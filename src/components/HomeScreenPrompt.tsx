@@ -54,6 +54,11 @@ export function HomeScreenPrompt({ personalPath, installed = false }: { personal
     let cancelled = false;
     const onPrompt = (e: Event) => {
       e.preventDefault();
+      // Desktop Chrome and Edge fire beforeinstallprompt too, and this handler used to show the card
+      // on the strength of that alone — walking straight past the phone check below it. A shortcut on
+      // a laptop is not a shortcut to anything: the point of it is a phone's home screen, and on
+      // iPhone it is the only way web push works at all.
+      if (p !== "ios" && p !== "android") return;
       setDeferred(e as BeforeInstallPromptEvent);
       setMode((m) => (m === "hidden" && !cancelled ? "prompt" : m));
     };
