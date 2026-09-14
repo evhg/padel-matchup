@@ -1,5 +1,5 @@
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
-import { handleFromName } from "@/lib/domain/coaching";
+import { handleFromName, type HoursPreset } from "@/lib/domain/coaching";
 
 /**
  * The courtside assistant's ear: one line typed on a phone becomes an intent.
@@ -259,4 +259,80 @@ export function parseStudentLine(text: string, ctx: { now: Date; tz: string }): 
     return { kind: "book", day, time: p.time, startsAt };
   }
   return { kind: "help" };
+}
+
+// ---------------------------------------------------------------------------
+// Settings, as lines rather than a screen.
+//
+// A coach's hours, price, cutoff and clubs were the last things that forced them onto the web, and a
+// settings form is the one shape a chat cannot borrow. So each setting is its own line, in the same
+// idiom as the rest of the assistant: "price 800", "hours mornings", "cutoff 12".
+//
+// The keyword has to be the first word. That is what keeps this parser from stealing a booking line:
+// a student called Priya and a line "priya 800" are untouched, because "price" is not "priya" and the
+// booking parser never sees a line that starts with a setting word.
+// ---------------------------------------------------------------------------
+
+export type CoachSetting =
+  | { kind: "show" }
+  | { kind: "price"; amount: number }
+  | { kind: "lesson"; minutes: number }
+  | { kind: "hours"; preset: HoursPreset }
+  | { kind: "cutoff"; hours: number }
+  | { kind: "passes"; count: number }
+  | { kind: "club"; name: string }
+  | { kind: "promptpay"; id: string };
+
+
+const SHOW = new Set(["settings", "настройки", "ajustes"]);
+const PRICE = new Set(["price", "цена", "precio"]);
+const LESSON = new Set(["lesson", "занятие", "clase"]);
+const HOURS_W = new Set(["hours", "часы", "horas"]);
+const CUTOFF = new Set(["cutoff", "порог", "margen"]);
+const PASSES = new Set(["passes", "pass", "пропуски", "пропуск", "pases", "pase"]);
+const CLUB = new Set(["club", "клуб"]);
+const PROMPTPAY = new Set(["promptpay", "промптпей"]);
+
+const PRESETS: Record<string, HoursPreset> = {
+  mornings: "mornings", morning: "mornings", утро: "mornings", утром: "mornings", mañanas: "mornings", mananas: "mornings", mañana: "mornings",
+  afternoons: "afternoons", afternoon: "afternoons", вечер: "afternoons", вечером: "afternoons", tardes: "afternoons", tarde: "afternoons",
+  both: "both", оба: "both", всё: "both", все: "both", ambos: "both", todo: "both",
+};
+
+/** A settings line, or null when this is not one and the booking parser should read it instead. */
+export function parseCoachSetting(text: string): CoachSetting | null {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const head = tokens[0].toLowerCase().replace(/[:.!?]+$/u, "");
+  const rest = tokens.slice(1).join(" ").trim();
+  const num = () => {
+    const n = Number(rest.replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  if (SHOW.has(head) && !rest) return { kind: "show" };
+  if (PRICE.has(head)) {
+    const n = num();
+    return n === null ? { kind: "show" } : { kind: "price", amount: Math.round(n) };
+  }
+  if (LESSON.has(head)) {
+    const n = num();
+    // Only the four the book offers; anything else is a typo, and a 7-minute lesson helps nobody.
+    return n !== null && [45, 60, 90, 120].includes(Math.round(n)) ? { kind: "lesson", minutes: Math.round(n) } : null;
+  }
+  if (HOURS_W.has(head)) {
+    const preset = PRESETS[rest.toLowerCase()];
+    return preset ? { kind: "hours", preset } : { kind: "show" };
+  }
+  if (CUTOFF.has(head)) {
+    const n = num();
+    return n === null ? { kind: "show" } : { kind: "cutoff", hours: Math.min(72, Math.round(n)) };
+  }
+  if (PASSES.has(head)) {
+    const n = Number(rest.replace(/[^\d]/g, ""));
+    return rest !== "" && Number.isFinite(n) ? { kind: "passes", count: Math.min(9, Math.round(n)) } : { kind: "show" };
+  }
+  if (CLUB.has(head)) return rest ? { kind: "club", name: rest.slice(0, 80) } : { kind: "show" };
+  if (PROMPTPAY.has(head)) return rest ? { kind: "promptpay", id: rest.replace(/\s+/g, "").slice(0, 40) } : { kind: "show" };
+  return null;
 }

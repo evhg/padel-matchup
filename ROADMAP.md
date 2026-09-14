@@ -26,7 +26,9 @@ Everything in this list is live. The README describes each in detail.
   teach, how long a lesson runs, mornings or afternoons, the price and which of PromptPay and pay-at-the-club
   they accept, how they want to hear about it — and ends on the link they hand their students. Money is
   tracked, never processed: the student says they have paid, the coach confirms it, and unpaid warns
-  rather than blocks.
+  rather than blocks. All of it works in Telegram as well as on the web: three taps set a book up —
+  city, lesson length, when you teach — and after that it is one line at a time (`price 800`,
+  `hours mornings`, `move anna fri 15`, `unpaid`, `settings`).
 - **A spot that opens finds somebody.** A dropout nobody was waiting for goes by push, once, to the
   crew's other members and to the players who play at that club — level-matched, capped, and only while
   there is still time to get to the court. A private match with no crew tells nobody.
@@ -56,17 +58,10 @@ moved ahead of both remaining channels: finding a fourth is the thing a player c
 today, and the counts say the channels are ahead of their audience — of 26 players, one has Telegram
 linked and four have an email address.
 
-1. **Finish Telegram: the coach's setup and settings.** Where they teach, how long a lesson runs, the
-   hours, the price, the cutoff and late passes, who manages the page. These are the last things that
-   force a coach out of the chat and onto the web, and a new coach meets them before anything else.
-   Two of this item's original four parts are done: moving a lesson and payment status both work in
-   the chat now. The third was never true — `/new tomorrow 19:00 Rawai` has always created the match
-   outright, and a bare `/new` is three taps; the web form is an escape hatch beside them, not the
-   path. Checked against the handler, not against this file.
-2. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
+1. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
    open matches and quiet courts. Demand has to be recorded, not only supply. It waited on the refill,
    which is now built: a signal with nobody to match it against records nothing.
-3. **WhatsApp, one-to-one, for players and coaches.** A private thread carries the whole of a player's
+2. **WhatsApp, one-to-one, for players and coaches.** A private thread carries the whole of a player's
    loop: reply buttons to take or give up a spot, a list message to pick a time, Flows for a form the
    Mini App cannot match, the court as a map pin, a template for a reminder outside the window. The
    group part is carried by a person rather than a bot — the organiser pastes a link into the crew's
@@ -77,23 +72,23 @@ linked and four have an email address.
    groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
    and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
    A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
-4. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
+3. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
    The card algorithm is already shaped for it: a platform that cannot edit a sent message re-sends only
    when the roster changes, and a reply is free where a push is metered. See "Adding a channel" in
    [AGENTS.md](AGENTS.md).
-5. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
+4. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
    and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
    text, and needs a lesson to carry a venue at all, which it does not today.
-6. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
+5. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
    a group stage then a knockout, a consolation draw, a qualifying draw into a main draw with seeds,
    scoring set per phase, the draw published, courts scheduled, scores live per court. This is a second
    engine beside the rotation engine, not a feature on top of it, and deserves its own decision.
-7. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
+6. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
    matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
    passes through Kicksmash.
-8. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
+7. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-9. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
+8. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
 
 ## Deliberately not
 
