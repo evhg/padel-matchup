@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { StudentBooking } from "@/components/coach/StudentBooking";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
@@ -149,13 +150,15 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
           />
         )}
-        {!owner && (
+        {/* Only to a visitor who is nobody here. A student mid-reschedule is not a lead. */}
+        {!owner && status === "none" && (
           <p className="text-center text-xs text-faint">
             <Link href="/coaches?s=coachpage" prefetch={false} className="hover:text-muted" data-testid="own-book">
               {t("page.ownBook")}
             </Link>
           </p>
         )}
+        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
     </>

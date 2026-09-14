@@ -167,7 +167,19 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
           </section>
           <section>
             <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-muted">{t("me.past")}</h2>
-            {past.length ? <ul className="flex flex-col gap-2">{past.map(row)}</ul> : <p className="text-sm text-faint">—</p>}
+            {past.length ? (
+              <>
+                <ul className="flex flex-col gap-2">{past.slice(0, 3).map(row)}</ul>
+                {past.length > 3 && (
+                  <details className="mt-2 group">
+                    <summary className="btn-secondary btn-sm w-full cursor-pointer list-none text-center group-open:hidden">{t("me.pastMore", { n: past.length - 3 })}</summary>
+                    <ul className="mt-2 flex flex-col gap-2">{past.slice(3).map(row)}</ul>
+                  </details>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-faint">—</p>
+            )}
           </section>
           <Link href="/" prefetch={false} className="btn-primary w-full">
             {t("common.newMatch")}

@@ -72,7 +72,7 @@ export default async function SharePage({ params }: Props) {
         <section className="card">
           <QrPanel url={url} hint={t("share.qrHint")} />
         </section>
-        <section className="card">
+        <section className="card md:hidden">
           <h2 className="font-extrabold">📸 {t("share.story")}</h2>
           <p className="mt-0.5 text-sm text-muted">{t("share.storyHint", { link: `${shortHost()}/${code}` })}</p>
           <div className="mt-2 flex flex-wrap gap-2">

@@ -217,7 +217,7 @@ try {
   await ivan.getByText(/^Cancelled/).waitFor({ timeout: 20000 });
   const cancelNote = await ivan.getByText(/^Cancelled/).textContent();
   await ivan.getByText(/10 of 10 left/).waitFor({ timeout: 20000 });
-  check("a cancellation before the cutoff, or covered by the free pass, refunds the lesson", /back on your package|free pass covered/.test(cancelNote ?? ""), cancelNote?.trim());
+  check("a cancellation before the cutoff, or covered by a free late cancellation, refunds the lesson", /back on your package|no lesson was taken/.test(cancelNote ?? ""), cancelNote?.trim());
 
   // Olga books Ivan from her book in two taps.
   await olga.goto(BASE + "/coach");
@@ -360,8 +360,12 @@ try {
   check("the front door for coaches renders with one button to the book", (await ivan.getByText("Your students book themselves. Your calendar stays yours.").count()) === 1 && (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach");
   await ivan.goto(`${BASE}/coaches?s=invite`);
   check("a tagged front door passes the door on to the setup link", (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach?s=invite");
+  // The door is for a visitor who is nobody here. Ivan is a student by now, and offering him his own
+  // assistant mid-booking was the thing that made the page feel silly, so both halves are checked.
+  await wrong.goto(`${BASE}/c/${handle}`);
+  check("the coach page carries the quiet door for a visitor who is nobody here", (await wrong.getByTestId("own-book").getAttribute("href")) === "/coaches?s=coachpage");
   await ivan.goto(`${BASE}/c/${handle}`);
-  check("the coach page carries the quiet door for other coaches", (await ivan.getByTestId("own-book").getAttribute("href")) === "/coaches?s=coachpage");
+  check("and never offers it to the coach's own student", (await ivan.getByTestId("own-book").count()) === 0);
   await ivan.goto(`${BASE}/coaches/phuket`);
   check("the first coach in the city carries the founding badge", (await ivan.getByText("Founding coach · Phuket").count()) >= 1);
   await ivan.goto(`${BASE}/`);

@@ -60,7 +60,7 @@ export default async function CoachSettingsPage() {
           initial={{ gcalId: coach.gcalId ?? "", icalUrl: coach.icalUrl ?? "", status: coach.gcalStatus, syncedAt: coach.calendarSyncedAt?.toISOString() ?? null, error: coach.calendarError }}
         />
         <CoachManagers managers={managers.map((m) => ({ id: m.id, name: m.displayName }))} isOwner={role === "coach"} />
-        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
+        <FeedbackInline variant="card" signedInVia={me?.telegramId ? "telegram" : "none"} />
         {contents && <DeleteCoachBook students={contents.students} lessons={contents.lessons} />}
       </main>
       <Footer />
