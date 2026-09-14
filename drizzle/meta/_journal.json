@@ -309,6 +309,13 @@
       "when": 1789305626800,
       "tag": "0043_events_refill_notice_at",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789392222437,
+      "tag": "0044_slots_payment_status",
+      "breakpoints": true
     }
   ]
 }

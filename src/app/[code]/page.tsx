@@ -15,6 +15,8 @@ import { SourceTag } from "@/components/SourceTag";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
 import { FeedbackInline } from "@/components/FeedbackInline";
+import { MatchPayments } from "@/components/MatchPayments";
+import { paymentsFor } from "@/lib/domain/slots";
 import { CreateGroupButton } from "@/components/GroupPanel";
 import { JoinRequests } from "@/components/JoinRequests";
 import { ConfirmLevels } from "@/components/ConfirmLevels";
@@ -101,6 +103,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const requests = ranged ? await getJoinRequests(db, ev.id) : [];
   const myRequest = me ? requests.find((r) => r.playerId === me.id) : undefined;
   const pendingRequests = viewer.isCreator ? requests.filter((r) => r.status === "pending") : [];
+  // Sequential, like everything else on this page: the pooler stalls on pipelined bursts (rule 8).
+  const payments = ev.cost ? (await paymentsFor(db, ev.id)).map((r) => ({ slotId: r.slotId, playerId: r.playerId, name: r.name, claimed: Boolean(r.claimedAt), paid: Boolean(r.paidAt) })) : [];
   // Confirmed levels only: who can confirm the viewer's, and whom they already asked.
   const verifiers = ranged && ev.levelVerifiedOnly && !cancelled && !over ? await verifiersFor(db, ev) : [];
   const myChecks = me && verifiers.length > 0 ? await myLevelChecks(db, me.id) : [];
@@ -473,6 +477,10 @@ export default async function EventPage({ params, searchParams }: Props) {
           <Link href="/" className="btn-primary w-full">
             {t("event.createYourOwn")}
           </Link>
+        )}
+        {/* A cost named means somebody has to chase it. Everyone sees the same list instead. */}
+        {ev.cost && (isMember || viewer.isCreator) && payments.length > 0 && (
+          <MatchPayments code={ev.code} cost={ev.cost} rows={payments} isOrganiser={viewer.isCreator} mePlayerId={me?.id ?? null} />
         )}
         {/* The quiet door for what should change, where players actually are: opens in place, never a popup. */}
         <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />

@@ -234,7 +234,15 @@
     "inviteSent": "Invite sent",
     "notifyMe": "Email me when the line-up changes",
     "openBooking": "Booking",
-    "costPerPlayer": "{cost} per player"
+    "costPerPlayer": "{cost} per player",
+    "paidTitle": "Who has paid",
+    "paidAll": "Everyone has paid.",
+    "paidOwing": "{n} still to pay · {cost} each",
+    "paidYes": "Paid",
+    "paidClaimed": "Says they paid",
+    "paidNot": "Not yet",
+    "paidClaim": "I have paid",
+    "paidNothingThrough": "Kicksmash only remembers what you both say. No money passes through it."
   },
   "creator": {
     "tools": "Organizer tools",

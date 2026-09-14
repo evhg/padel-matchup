@@ -234,7 +234,15 @@
     "inviteSent": "Приглашение отправлено",
     "notifyMe": "Писать мне на почту, когда меняется состав",
     "openBooking": "Бронь",
-    "costPerPlayer": "{cost} с игрока"
+    "costPerPlayer": "{cost} с игрока",
+    "paidTitle": "Кто оплатил",
+    "paidAll": "Все оплатили.",
+    "paidOwing": "Ещё не оплатили: {n} · по {cost}",
+    "paidYes": "Оплачено",
+    "paidClaimed": "Говорит, что оплатил(а)",
+    "paidNot": "Ещё нет",
+    "paidClaim": "Я оплатил(а)",
+    "paidNothingThrough": "Kicksmash только запоминает, что вы оба сказали. Деньги через него не проходят."
   },
   "creator": {
     "tools": "Инструменты организатора",
