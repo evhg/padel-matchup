@@ -39,7 +39,7 @@ The gate runs by itself before every `git push` from a Claude Code session (`.cl
 
 ## Rules that reviews enforce
 
-1. **Never interpolate a `Date` into a raw `sql` template.** Use `gt(events.startsAt, now)` and friends. PGlite accepts a raw Date, postgres-js (production) does not.
+1. **Never interpolate a `Date` into a raw `sql` template.** Use `gt(events.startsAt, now)` and friends. PGlite accepts a raw Date, postgres-js (production) does not. `tests/rules.test.ts` fails on a time-shaped interpolation inside a `sql` template, so the gate catches this rather than CI.
 2. **Every string in every locale.** Add keys to en, ru and es in the same change.
 3. **Simplicity budget.** One job per screen; one primary action; anything optional goes behind the single "More options" section with a one-line summary. Nothing is offered before it can be useful.
 4. **Email, push, Telegram are optional.** Everything must work with their environment variables unset.

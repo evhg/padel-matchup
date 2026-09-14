@@ -165,16 +165,23 @@ export async function insertCoach(db: Db, input: CreateCoachInput): Promise<{ co
 export type CoachBookContents = { students: number; lessons: number; packages: number; upcoming: number };
 
 export async function coachBookContents(db: Db, coachId: string, now = new Date()): Promise<CoachBookContents> {
-  const [row] = await db
+  const [totals] = await db
     .select({
       students: sql<number>`(select count(*)::int from ${coachStudents} where ${coachStudents.coachId} = ${coachId})`,
       lessons: sql<number>`(select count(*)::int from ${lessons} where ${lessons.coachId} = ${coachId})`,
       packages: sql<number>`(select count(*)::int from ${lessonPackages} where ${lessonPackages.coachId} = ${coachId})`,
-      upcoming: sql<number>`(select count(*)::int from ${lessons} where ${lessons.coachId} = ${coachId} and ${lessons.status} = 'booked' and ${lessons.startsAt} > ${now})`,
     })
     .from(coaches)
     .where(eq(coaches.id, coachId));
-  return row ?? { students: 0, lessons: 0, packages: 0, upcoming: 0 };
+  if (!totals) return { students: 0, lessons: 0, packages: 0, upcoming: 0 };
+  // The time goes through gt(), not into the template above. A Date interpolated into raw sql is
+  // rule 1: PGlite takes it and production does not, so the local gate passes and CI goes red.
+  // Its own query, on lessons_coach_time_idx.
+  const [ahead] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(lessons)
+    .where(and(eq(lessons.coachId, coachId), eq(lessons.status, "booked"), gt(lessons.startsAt, now)));
+  return { ...totals, upcoming: ahead?.n ?? 0 };
 }
 
 /**
