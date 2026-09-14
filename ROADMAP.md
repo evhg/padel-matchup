@@ -47,26 +47,38 @@ A new way to reach the same screens is worth less than making the screens right,
 whose experience was measurably broken is the first one in the vision. The coach's three pieces — a
 setup that leaves a working assistant, the messages still reaching the coach's phone, and the events
 that told nobody — landed that day, and drop-out refill the same afternoon. All four are under Built
-above. What follows is the rest, in order.
+above.
+
+Reordered 14 September 2026, after two corrections. WhatsApp was written down as a coach's assistant
+and nothing more; that conclusion came from proving the bot cannot sit in a group somebody else made,
+which is true and says nothing about reaching a player one-to-one, which works. And demand signals
+moved ahead of both remaining channels: finding a fourth is the thing a player cannot do in the app
+today, and the counts say the channels are ahead of their audience — of 26 players, one has Telegram
+linked and four have an email address.
 
 1. **Finish Telegram.** Moving a lesson, payment status, creating a match, and the coach's setup and
    settings — in the chat, with no link out. The vision says a stakeholder never has to leave Telegram
    and that is not true today: the assistant has no `move` intent at all, `/new` hands out a web link,
    and setup and settings are web-only. A fifth channel that is also incomplete is worth less than
    making the one we have whole.
-2. **WhatsApp, as a coach's private assistant only.** One-to-one with a student: book, move, cancel,
-   what is owed. Flows carries a booking form better than Telegram's Mini App does. Unverified tier,
-   250 conversations a day, free inside the 24-hour window. Explicitly **never** a card channel: Meta's
-   Groups API only makes its own groups, invite-only, capped at eight, and needs an Official Business
-   Account, which needs press coverage. A separate adapter — the `CardChannel` interface does not fit
-   and must not be bent to it.
-3. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
+2. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
+   open matches and quiet courts. Demand has to be recorded, not only supply. It waited on the refill,
+   which is now built: a signal with nobody to match it against records nothing.
+3. **WhatsApp, one-to-one, for players and coaches.** A private thread carries the whole of a player's
+   loop: reply buttons to take or give up a spot, a list message to pick a time, Flows for a form the
+   Mini App cannot match, the court as a map pin, a template for a reminder outside the window. The
+   group part is carried by a person rather than a bot — the organiser pastes a link into the crew's
+   chat, and each tap opens a conversation the player started, which is free, opens a 24-hour window,
+   and is not counted against the 250-a-day limit, because that limit rations only the messages we
+   start. That first message also hands over the phone number with permission, so nothing has to be
+   collected in advance. Explicitly **never** a card channel: Meta's Groups API only makes its own
+   groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
+   and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
+   A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
+4. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
    The card algorithm is already shaped for it: a platform that cannot edit a sent message re-sends only
    when the roster changes, and a reply is free where a push is metered. See "Adding a channel" in
    [AGENTS.md](AGENTS.md).
-4. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
-   open matches and quiet courts. Demand has to be recorded, not only supply. It waited on the refill,
-   which is now built: a signal with nobody to match it against records nothing.
 5. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
    and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
    text, and needs a lesson to carry a venue at all, which it does not today.
