@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -42,6 +42,22 @@ const revalidateCoach = (handle: string) => {
 };
 
 /** The first three steps of the setup: where, how long, when. Seven hour lines (index 0 = Sunday); an empty list means the usual hours. */
+/**
+ * Close the book for good. The confirm the coach saw named what goes; this counts it again rather
+ * than trusting a number that travelled through a browser, and refuses while a lesson is still to come.
+ */
+export async function deleteCoachBookAction(): Promise<ActionResult<CoachBookContents>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { me, coach, role } = await requireCoach(db);
+    if (role !== "coach") throw new ActionFailure("forbidden");
+    const gone = await deleteCoachBook(db, { coachId: coach.id, actorPlayerId: me.id });
+    revalidateCoach(coach.handle);
+    revalidatePath("/coaches");
+    return gone;
+  });
+}
+
 export async function setupCoachAction(input: { name?: string | null; clubs: string; clubSlugs?: string[]; minutes: number; hoursLines?: string[]; preset?: HoursPreset | "custom"; tz?: string | null }): Promise<ActionResult<{ handle: string; studentUrl: string }>> {
   return runA(async () => {
     const db = await getDb();

@@ -125,6 +125,11 @@ learning can be a test, a gate step or a script, make it one and put the story i
   rather than with the feature that introduced it.
 - **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
   the bug back, watch it catch it, then restore.
+- **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one
+  and postgres-js throws `Received an instance of Date`, so the gate goes green and CI's real-Postgres
+  run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use
+  `gt(lessons.startsAt, now)`; `tests/rules.test.ts` now fails on a bare `${now}`-shaped interpolation
+  inside a `sql` template, so the gate catches it on the machine that wrote it.
 
 ### Wall clock
 

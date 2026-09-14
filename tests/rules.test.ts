@@ -131,3 +131,41 @@ describe("public shapes", () => {
     }
   });
 });
+
+/**
+ * Rule 1, checked by a machine instead of by CI twenty minutes later.
+ *
+ * PGlite takes a JS Date interpolated into a raw `sql` template and does the right thing.
+ * postgres-js — production, and the second unit run in CI — throws "The 'string' argument must be of
+ * type string... Received an instance of Date", and the query fails at runtime. So the local gate goes
+ * green, the pull request goes red, and the fix costs a CI round.
+ *
+ * Column references (`${lessons.startsAt}`) are how a template names a column and are fine. What is
+ * not fine is a bare value that holds a time: `${now}`, `${since}`, `${cutoff}`.
+ */
+describe("no Date reaches a raw sql template", () => {
+  const TIMEY = /^(now|today|since|until|from|to|cutoff|deadline|.*[Aa]t|.*Date|.*Time|.*Stamp)$/;
+
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? sourceFiles(path.join(dir, e.name)) : e.name.endsWith(".ts") || e.name.endsWith(".tsx") ? [path.join(dir, e.name)] : [],
+    );
+  }
+
+  it("every interpolation inside sql`…` is a column or a plain value, never a time", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(root("src"))) {
+      const text = readFileSync(file, "utf8");
+      // Every sql`…` template in the file, non-greedy to the first unescaped backtick.
+      for (const m of text.matchAll(/\bsql(?:<[^>]*>)?`([^`]*)`/g)) {
+        for (const [, expr] of m[1].matchAll(/\$\{([^}]*)\}/g)) {
+          const name = expr.trim();
+          // A column reference carries a dot; a call or an expression is somebody else's problem.
+          if (name.includes(".") || name.includes("(")) continue;
+          if (TIMEY.test(name)) offenders.push(`${path.relative(root("."), file)}: \${${name}}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
