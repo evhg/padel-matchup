@@ -494,7 +494,7 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
         return "coach:accept:none";
       }
       await setStudentStatus(db, coach.id, student.id, "accepted");
-      await notifyStudentAccepted(coach, student);
+      await notifyStudentAccepted(db, coach, student);
       await editMessageText(chatId, messageId, esc(s.accepted(student.displayName)), null).catch(() => undefined);
       await answerCallbackQuery(cb.id);
       return "coach:accept";

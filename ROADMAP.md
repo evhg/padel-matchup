@@ -49,26 +49,37 @@ setup that leaves a working assistant, the messages still reaching the coach's p
 that told nobody — landed that day, and drop-out refill the same afternoon. All four are under Built
 above. What follows is the rest, in order.
 
-1. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
+1. **Finish Telegram.** Moving a lesson, payment status, creating a match, and the coach's setup and
+   settings — in the chat, with no link out. The vision says a stakeholder never has to leave Telegram
+   and that is not true today: the assistant has no `move` intent at all, `/new` hands out a web link,
+   and setup and settings are web-only. A fifth channel that is also incomplete is worth less than
+   making the one we have whole.
+2. **WhatsApp, as a coach's private assistant only.** One-to-one with a student: book, move, cancel,
+   what is owed. Flows carries a booking form better than Telegram's Mini App does. Unverified tier,
+   250 conversations a day, free inside the 24-hour window. Explicitly **never** a card channel: Meta's
+   Groups API only makes its own groups, invite-only, capped at eight, and needs an Official Business
+   Account, which needs press coverage. A separate adapter — the `CardChannel` interface does not fit
+   and must not be bent to it.
+3. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
    The card algorithm is already shaped for it: a platform that cannot edit a sent message re-sends only
    when the roster changes, and a reply is free where a push is metered. See "Adding a channel" in
    [AGENTS.md](AGENTS.md).
-2. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
+4. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
    open matches and quiet courts. Demand has to be recorded, not only supply. It waited on the refill,
    which is now built: a signal with nobody to match it against records nothing.
-3. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
+5. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
    and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
    text, and needs a lesson to carry a venue at all, which it does not today.
-4. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
+6. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
    a group stage then a knockout, a consolation draw, a qualifying draw into a main draw with seeds,
    scoring set per phase, the draw published, courts scheduled, scores live per court. This is a second
    engine beside the rotation engine, not a feature on top of it, and deserves its own decision.
-5. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
+7. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
    matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
    passes through Kicksmash.
-6. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
+8. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-7. **WhatsApp**, when WhatsApp allows more than links and previews.
+9. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
 
 ## Deliberately not
 

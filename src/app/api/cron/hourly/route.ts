@@ -81,7 +81,7 @@ export async function GET(req: Request) {
   try {
     summary.lessonsDone = await completePastLessons(db, now);
     for (const n of await lowPackageNoticesDue(db, now)) {
-      await notifyLowPackage(n).catch(() => undefined);
+      await notifyLowPackage(db, n).catch(() => undefined);
       summary.lowPackages++;
     }
   } catch (e) {
