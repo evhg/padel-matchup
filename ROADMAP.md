@@ -56,11 +56,13 @@ moved ahead of both remaining channels: finding a fourth is the thing a player c
 today, and the counts say the channels are ahead of their audience — of 26 players, one has Telegram
 linked and four have an email address.
 
-1. **Finish Telegram.** Moving a lesson, payment status, creating a match, and the coach's setup and
-   settings — in the chat, with no link out. The vision says a stakeholder never has to leave Telegram
-   and that is not true today: the assistant has no `move` intent at all, `/new` hands out a web link,
-   and setup and settings are web-only. A fifth channel that is also incomplete is worth less than
-   making the one we have whole.
+1. **Finish Telegram: the coach's setup and settings.** Where they teach, how long a lesson runs, the
+   hours, the price, the cutoff and late passes, who manages the page. These are the last things that
+   force a coach out of the chat and onto the web, and a new coach meets them before anything else.
+   Two of this item's original four parts are done: moving a lesson and payment status both work in
+   the chat now. The third was never true — `/new tomorrow 19:00 Rawai` has always created the match
+   outright, and a bare `/new` is three taps; the web form is an escape hatch beside them, not the
+   path. Checked against the handler, not against this file.
 2. **Demand signals.** "I want to play Tuesday at 14:00 near Rawai", recorded as a fact and matched to
    open matches and quiet courts. Demand has to be recorded, not only supply. It waited on the refill,
    which is now built: a signal with nobody to match it against records nothing.

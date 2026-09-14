@@ -81,3 +81,57 @@ describe("the courtside assistant understands one line", () => {
     expect(parseStudentLine("lessons", { now, tz: TZ })).toEqual({ kind: "lessons" });
   });
 });
+
+describe("moving a lesson and settling up, from one line", () => {
+  it("reads a move as the new time, not a second booking", () => {
+    // "move anna fri 15" carries a name and a time, which is a booking line in every other respect.
+    // The move flag has to win, or the assistant quietly books a second lesson beside the first.
+    const a = parseCoachLine("move anna fri 15", ctx);
+    expect(a.kind).toBe("move");
+    if (a.kind === "move") {
+      expect(a.student).toEqual({ kind: "one", student: students[0] });
+      expect(a.day).toBe("2026-09-11");
+      expect(a.startsAt?.toISOString()).toBe(bkk("2026-09-11", "15:00"));
+    }
+    const b = parseCoachLine("перенеси игорь пт 15:30", ctx);
+    expect(b.kind === "move" && b.student?.kind === "one" && b.student.student.id).toBe("i");
+    const c = parseCoachLine("mover maria vie 9:00", ctx);
+    expect(c.kind === "move" && c.student?.kind === "one" && c.student.student.id).toBe("m");
+  });
+
+  it("asks when, rather than guessing, if the move has no time in it", () => {
+    const a = parseCoachLine("move anna", ctx);
+    expect(a.kind).toBe("move");
+    expect(a.kind === "move" && a.startsAt).toBe(null);
+    const s = parseStudentLine("move", { now, tz: TZ });
+    expect(s.kind).toBe("move");
+    expect(s.kind === "move" && s.startsAt).toBe(null);
+  });
+
+  it("hears a student move their own lesson", () => {
+    const a = parseStudentLine("move to fri 15", { now, tz: TZ });
+    expect(a.kind).toBe("move");
+    expect(a.kind === "move" && a.startsAt?.toISOString()).toBe(bkk("2026-09-11", "15:00"));
+    const b = parseStudentLine("cambiar vie 9:00", { now, tz: TZ });
+    expect(b.kind === "move" && b.startsAt?.toISOString()).toBe(bkk("2026-09-11", "09:00"));
+  });
+
+  it("hears a student say they paid, in three languages", () => {
+    for (const line of ["paid", "оплатил", "pagado"]) expect(parseStudentLine(line, { now, tz: TZ }).kind).toBe("paid");
+  });
+
+  it("hears a coach ask who still owes", () => {
+    for (const line of ["unpaid", "долги", "deudas"]) expect(parseCoachLine(line, ctx).kind).toBe("owed");
+    const one = parseCoachLine("anna owes", ctx);
+    expect(one.kind).toBe("owed");
+    expect(one.kind === "owed" && one.student?.kind === "one" && one.student.student.id).toBe("a");
+  });
+
+  it("still books, cancels and reads the agenda exactly as before", () => {
+    expect(parseCoachLine("anna fri 15", ctx).kind).toBe("book");
+    expect(parseCoachLine("cancel anna fri", ctx).kind).toBe("cancel");
+    expect(parseCoachLine("week", ctx).kind).toBe("agenda");
+    expect(parseStudentLine("fri 15", { now, tz: TZ }).kind).toBe("book");
+    expect(parseStudentLine("cancel", { now, tz: TZ }).kind).toBe("cancel");
+  });
+});

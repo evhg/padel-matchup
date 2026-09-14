@@ -14,7 +14,7 @@ import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPacka
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
-import { notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
+import { notifyPaidConfirmed, notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
@@ -517,7 +517,14 @@ export async function coachSetLessonPaidAction(lessonId: string, paid: boolean):
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    if (!(await setLessonPaid(db, coach.id, lessonId, paid))) throw new ActionFailure("not_found");
+    const lesson = await setLessonPaid(db, coach.id, lessonId, paid);
+    if (!lesson) throw new ActionFailure("not_found");
+    // Only the confirmation is worth a message. Un-marking is a correction the coach makes to their
+    // own book, and telling a student their payment was un-confirmed would read as an accusation.
+    if (paid && lesson.studentPlayerId) {
+      const student = await getPlayerById(db, lesson.studentPlayerId);
+      if (student) await notifyPaidConfirmed(db, { coach, student, lesson }).catch(() => undefined);
+    }
     revalidateCoach(coach.handle);
     return null;
   });

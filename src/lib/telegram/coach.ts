@@ -3,7 +3,7 @@ import type { Db } from "@/db";
 import { lessonPackages, type Coach, type Player } from "@/db/schema";
 import { parseCoachLine, parseStudentLine, type CoachIntent, type Match, type StudentRef } from "@/lib/coach/assistant";
 import { acceptOffer, afterLessonFreed, decideRequest, epochMin, fromEpochMin, getWaitlistEntry, withdrawWaitlist } from "@/lib/coach/chains";
-import { notifyLessonBooked, notifyLessonCancelled, notifyOffer, notifyRequestDecided, notifyStudentAccepted } from "@/lib/coach/notify";
+import { notifyLessonBooked, notifyLessonCancelled, notifyLessonMoved, notifyOffer, notifyPaidClaimed, notifyPaidConfirmed, notifyRequestDecided, notifyStudentAccepted } from "@/lib/coach/notify";
 import { coachBotLocale, coachStrings, dayOnlyLabel, whenLabel, type CoachBotLocale, type CoachBotStrings } from "@/lib/coach/strings";
 import { BOT_COMMANDS } from "./commands";
 import { baseUrl } from "@/lib/config";
@@ -15,6 +15,7 @@ import {
   availableSlots,
   bookLesson,
   cancelLesson,
+  claimLessonPaid,
   createPackage,
   DAY_MS,
   getCoachForActor,
@@ -25,7 +26,11 @@ import {
   listStudentLessons,
   listStudents,
   lowPackages,
+  moveLesson,
+  owedBy,
+  owedToCoach,
   packageLine,
+  setLessonPaid,
   setPackagePaid,
   setStudentStatus,
   studentCoaches,
@@ -185,11 +190,97 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
       }
       return cancelByCoach(db, coach, rows[0].id, s, locale, chatId);
     }
+    case "move": {
+      if (!intent.startsAt) {
+        await say(s.moveWhen);
+        return "coach:move:when";
+      }
+      // Which lesson moves is the one the student already has, not the hour that was typed — that
+      // hour is the destination. Same 14-day horizon the cancel branch uses.
+      let rows = (await listCoachLessons(db, coach.id, now, new Date(now.getTime() + 14 * DAY_MS))).filter((l) => l.status === "booked");
+      if (intent.student?.kind === "one") {
+        const sid = intent.student.student.id;
+        rows = rows.filter((l) => l.studentPlayerId === sid);
+      } else if (intent.student?.kind === "many") {
+        await say(s.which(intent.student.candidates.map((c) => c.name).join(", ")));
+        return "coach:move:which_student";
+      }
+      if (rows.length === 0) {
+        await say(s.nothingToMove);
+        return "coach:move:none";
+      }
+      if (rows.length > 1) {
+        const at = epochMin(intent.startsAt);
+        await say(s.whichOne, kb(rows.slice(0, 6).map((l) => [{ text: `→ ${l.student?.displayName ?? "?"} ${whenLabel(l.startsAt, coach.tz, locale)}`, callback_data: `cm:${l.id}:${at}` }])));
+        return "coach:move:which";
+      }
+      return moveOne(db, coach, { lessonId: rows[0].id, startsAt: intent.startsAt, by: "coach" }, s, locale, chatId);
+    }
+    case "owed": {
+      if (intent.student?.kind === "many") {
+        await say(s.which(intent.student.candidates.map((c) => c.name).join(", ")));
+        return "coach:owed:which";
+      }
+      const only = intent.student?.kind === "one" ? intent.student.student.id : null;
+      const rows = (await owedToCoach(db, coach.id)).filter((r) => !only || r.studentPlayerId === only);
+      if (rows.length === 0) {
+        await say(s.owesNone);
+        return "coach:owed:none";
+      }
+      const list = rows.map((r) => s.owesLine(r.name, `${r.amount} ${coach.currency}`, whenLabel(r.startsAt, coach.tz, locale), r.claimedAt !== null)).join("\n");
+      await say(s.owes(list), kb(rows.slice(0, 6).map((r) => [{ text: `${s.paid}: ${r.name} ${whenLabel(r.startsAt, coach.tz, locale)}`, callback_data: `cq:${r.lessonId}` }])));
+      return "coach:owed";
+    }
     case "book": {
       const student = await resolve(intent.student, true);
       if (!student) return "coach:book:ask";
       return bookForCoach(db, coach, coachPlayer, student, intent.startsAt, s, locale, chatId);
     }
+  }
+}
+
+/**
+ * Both sides of a move end here. The domain refuses for five different reasons and each one needs a
+ * different sentence, because "that did not work" sends the person back to the web page this whole
+ * change exists to remove.
+ */
+function moveRefusal(code: string, s: CoachBotStrings, cutoffHours: number): string | null {
+  if (code === "slot_taken") return s.moveTaken;
+  if (code === "outside_hours") return s.moveOutside;
+  if (code === "too_late") return s.moveTooLate(cutoffHours);
+  if (code === "too_soon") return s.moveTooSoon;
+  if (code === "past") return s.past;
+  if (code === "not_found" || code === "cancelled" || code === "forbidden") return s.nothingToMove;
+  return null;
+}
+
+async function moveOne(
+  db: Db,
+  coach: Coach,
+  input: { lessonId: string; startsAt: Date; by: "coach" | "student"; actorPlayerId?: string | null },
+  s: CoachBotStrings,
+  locale: string,
+  chatId: number,
+  editMessageId?: number,
+): Promise<string> {
+  const say = async (text: string) => {
+    if (editMessageId) await editMessageText(chatId, editMessageId, esc(text), null).catch(() => undefined);
+    else await sendMessage(chatId, esc(text), { silent: true });
+  };
+  try {
+    const { from, to } = await moveLesson(db, { ...input, coach, source: "telegram" });
+    const student = to.studentPlayerId ? await getPlayerById(db, to.studentPlayerId) : null;
+    if (student) await notifyLessonMoved(db, { from, to, coach, student, by: input.by }).catch(() => undefined);
+    const fromWhen = whenLabel(from.startsAt, coach.tz, locale);
+    const toWhen = whenLabel(to.startsAt, coach.tz, locale);
+    await say(input.by === "coach" ? s.moved(student?.displayName ?? "?", fromWhen, toWhen) : s.youMoved(fromWhen, toWhen));
+    return `${input.by === "coach" ? "coach" : "student"}:moved`;
+  } catch (e) {
+    if (!isDomainError(e)) throw e;
+    const refusal = moveRefusal(e.code, s, coach.cutoffHours);
+    if (!refusal) throw e;
+    await say(refusal);
+    return `${input.by === "coach" ? "coach" : "student"}:move:refused`;
   }
 }
 
@@ -245,6 +336,44 @@ async function studentFlow(db: Db, player: Player, coaches: Pick<StudentCoach, "
     const lines = await Promise.all(mine.map(async (m) => s.left(m.coach.displayName, pkgText(s, await activePackage(db, m.coach.id, player.id, now)))));
     await say(lines.join("\n"));
     return "student:left";
+  }
+  if (intent.kind === "paid") {
+    // One query per coach, and a student has one or two. Sequential on purpose (rule 8).
+    const bills: { coach: Coach; lessonId: string; startsAt: Date; amount: number; claimed: boolean }[] = [];
+    for (const m of mine) {
+      const owed = await owedBy(db, m.coach, player.id);
+      for (const l of owed.lessons) bills.push({ coach: m.coach, lessonId: l.id, startsAt: l.startsAt, amount: l.amount, claimed: l.claimedAt !== null });
+    }
+    if (bills.length === 0) {
+      await say(s.youOweNone);
+      return "student:paid:none";
+    }
+    // Two coaches can charge in two currencies, so the total is one figure per currency, never a sum
+    // of unlike numbers.
+    const byCurrency = new Map<string, number>();
+    for (const b of bills) byCurrency.set(b.coach.currency, (byCurrency.get(b.coach.currency) ?? 0) + b.amount);
+    const total = [...byCurrency].map(([c, n]) => `${n} ${c}`).join(", ");
+    const list = bills.map((b) => s.youOweLine(`${b.amount} ${b.coach.currency}`, whenLabel(b.startsAt, b.coach.tz, locale), b.claimed)).join("\n");
+    const open = bills.filter((b) => !b.claimed).slice(0, 6);
+    await say(s.youOwe(total, list), open.length ? kb(open.map((b) => [{ text: `${s.iPaid} · ${whenLabel(b.startsAt, b.coach.tz, locale)}`, callback_data: `lp:${b.lessonId}` }])) : undefined);
+    return "student:paid";
+  }
+  if (intent.kind === "move") {
+    if (!intent.startsAt) {
+      await say(s.moveWhenStudent);
+      return "student:move:when";
+    }
+    const rows = (await listStudentLessons(db, player.id, now)).filter((l) => l.status === "booked");
+    if (rows.length === 0) {
+      await say(s.nothingToMove);
+      return "student:move:none";
+    }
+    if (rows.length > 1) {
+      const at = epochMin(intent.startsAt);
+      await say(s.whichOne, kb(rows.slice(0, 6).map((l) => [{ text: `→ ${whenLabel(l.startsAt, l.coach.tz, locale)} ${s.withCoach(l.coach.displayName)}`, callback_data: `lm:${l.id}:${at}` }])));
+      return "student:move:which";
+    }
+    return moveOne(db, rows[0].coach, { lessonId: rows[0].id, startsAt: intent.startsAt, by: "student", actorPlayerId: player.id }, s, locale, chatId);
   }
   if (intent.kind === "lessons") return lessonsFor(db, player, chatId);
   if (intent.kind === "cancel") {
@@ -406,7 +535,7 @@ export async function coachHelp(player: Player, chatId: number): Promise<string>
 /** Buttons under the assistant's messages. Null when the data is not ours. */
 export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promise<string | null> {
   const data = cb.data ?? "";
-  const m = /^(cu|cp|cs|lc|lx|lb|ld|cb|lo|lw|rq):([0-9a-z-]{1,36})(?::([0-9a-z-]{1,10}))?$/i.exec(data);
+  const m = /^(cu|cp|cq|cm|cs|lc|lx|lb|ld|lm|lp|cb|lo|lw|rq):([0-9a-z-]{1,36})(?::([0-9a-z-]{1,10}))?$/i.exec(data);
   if (!m || !cb.message) return null;
   const [, action, id, extra] = m;
   const chatId = cb.message.chat.id;
@@ -456,7 +585,7 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
       return "student:offer:gone";
     }
   }
-  if (action === "cu" || action === "cp" || action === "cs" || action === "cb") {
+  if (action === "cu" || action === "cp" || action === "cq" || action === "cm" || action === "cs" || action === "cb") {
     const found = await getCoachForActor(db, player.id);
     if (!found) {
       await answerCallbackQuery(cb.id);
@@ -487,6 +616,26 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
       if (!isPhoto) await editMessageText(chatId, messageId, esc(cb.message.text ?? ""), kb([[{ text: label, callback_data: `cp:${pkg.id}` }]])).catch(() => undefined);
       return "coach:paid";
     }
+    if (action === "cm") {
+      if (!extra) {
+        await answerCallbackQuery(cb.id);
+        return "coach:move:none";
+      }
+      await answerCallbackQuery(cb.id);
+      return moveOne(db, coach, { lessonId: id, startsAt: fromEpochMin(extra), by: "coach" }, s, locale, chatId, messageId);
+    }
+    if (action === "cq") {
+      const lesson = await setLessonPaid(db, coach.id, id, true);
+      if (!lesson) {
+        await answerCallbackQuery(cb.id);
+        return "coach:lesson_paid:none";
+      }
+      const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
+      if (student) await notifyPaidConfirmed(db, { coach, student, lesson }).catch(() => undefined);
+      await answerCallbackQuery(cb.id, s.markedPaid);
+      await editMessageText(chatId, messageId, esc(cb.message.text ?? s.markedPaid), null).catch(() => undefined);
+      return "coach:lesson_paid";
+    }
     if (action === "cs") {
       const student = await getPlayerById(db, id);
       if (!student) {
@@ -513,6 +662,29 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
   if (action === "lc" || action === "lx") {
     await answerCallbackQuery(cb.id);
     return studentCancel(db, player, id, s, locale, chatId, action === "lx", messageId);
+  }
+  // lm and lp carry a lesson id, not a coach id, so they are answered before the lookup below.
+  if (action === "lm") {
+    const lesson = await getLesson(db, id);
+    const owner = lesson ? (await studentCoaches(db, player.id)).find((x) => x.coach.id === lesson.coachId)?.coach : null;
+    if (!lesson || !owner || lesson.studentPlayerId !== player.id || !extra) {
+      await answerCallbackQuery(cb.id, s.nothingToMove);
+      return "student:move:none";
+    }
+    await answerCallbackQuery(cb.id);
+    return moveOne(db, owner, { lessonId: id, startsAt: fromEpochMin(extra), by: "student", actorPlayerId: player.id }, s, locale, chatId, messageId);
+  }
+  if (action === "lp") {
+    const lesson = await claimLessonPaid(db, id, player.id);
+    const owner = lesson ? (await studentCoaches(db, player.id)).find((x) => x.coach.id === lesson.coachId)?.coach : null;
+    if (!lesson || !owner) {
+      await answerCallbackQuery(cb.id);
+      return "student:claim:none";
+    }
+    await notifyPaidClaimed(db, { coach: owner, student: player, lesson }).catch(() => undefined);
+    await answerCallbackQuery(cb.id, s.claimSent);
+    await editMessageText(chatId, messageId, esc(s.claimSent), null).catch(() => undefined);
+    return "student:claim";
   }
   const mine = (await studentCoaches(db, player.id)).filter((x) => x.status === "accepted");
   const coach = mine.find((x) => x.coach.id === id)?.coach;
