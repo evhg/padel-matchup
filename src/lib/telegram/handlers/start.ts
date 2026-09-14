@@ -6,12 +6,13 @@ import { coachBotLocale, coachStrings } from "@/lib/coach/strings";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
+import { getCoachForActor } from "@/lib/domain/coaching";
 import { getPlayer } from "@/lib/domain/players";
 import { getEventByCode } from "@/lib/domain/queries";
 import { personalUrl } from "@/lib/personal";
 import { deleteChatCommands, esc, sendMessage, type TgMessage, type TgUser } from "../api";
 import { cardTitle, strings } from "../card";
-import { coachAssistantMessage, lessonsFor, resolveRole, sendRoleMenu } from "../coach";
+import { coachAssistantMessage, lessonsFor, resolveRole, sendRoleMenu, startCoachSetup } from "../coach";
 import { findOrCreateTelegramPlayer, linkTelegram } from "../identity";
 import { postCard } from "../post";
 import { playingSeats, resultPromptKeyboard } from "./result";
@@ -49,6 +50,9 @@ export async function coachCommand(db: Db, chat: TelegramChat, from: TgUser): Pr
   const base = baseUrl();
   // The coach's assistant: the menu here, and the book on the web with this device signed in.
   const player = await findOrCreateTelegramPlayer(db, from);
+  // Nobody yet: set the book up here rather than handing out a link to a form. Setup was the last
+  // thing that made a coach leave the chat, and it is the first thing a new coach meets.
+  if (!(await getCoachForActor(db, player.id))) return startCoachSetup(db, player, chat.chatId);
   await sendRoleMenu(db, player, chat.chatId, { pin: false });
   const token = await getOrCreatePersonalToken(db, player.id);
   await sendMessage(chat.chatId, esc(s.coachLink), { keyboard: { inline_keyboard: [[{ text: s.coachOpen, url: `${personalUrl(base, token)}?next=/coach` }]] }, silent: true });

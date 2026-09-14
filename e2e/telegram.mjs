@@ -192,6 +192,34 @@ try {
   const coachCmd = await say(12, "/coach");
   check("/coach sends the menu and the link to the book", coachCmd.json?.outcome === "coach_link", JSON.stringify(coachCmd.json));
 
+  // A Telegram user who does not coach yet. Setup used to be a link to a web form; it is three taps here.
+  const rookieChat = { id: 818181, type: "private" };
+  const rookie = { id: 818181, is_bot: false, first_name: "Somchai", language_code: "en" };
+  const rookieSays = (id, text) => hook({ update_id: 520 + id, message: { message_id: 520 + id, date: 0, chat: rookieChat, from: rookie, text } });
+  const rookieTaps = (id, data) => hook({ update_id: 540 + id, callback_query: { id: `cs${id}`, from: rookie, message: { message_id: 521, date: 0, chat: rookieChat }, data } });
+  const starts = await rookieSays(1, "/coach");
+  check("a new coach's /coach starts the setup in the chat, not a link to a form", starts.json?.outcome === "coach:setup:where", JSON.stringify(starts.json));
+  const zone = await rookieTaps(1, "cn:z-phuket");
+  check("the city tap asks how long a lesson runs", zone.json?.outcome === "coach:setup:lesson", JSON.stringify(zone.json));
+  const minutes = await rookieTaps(2, "cn:m-phuket:60");
+  check("the length tap asks when they teach", minutes.json?.outcome === "coach:setup:hours", JSON.stringify(minutes.json));
+  const done = await rookieTaps(3, "cn:h-phuket-60:mornings");
+  check("the third tap leaves a working assistant and the student link", done.json?.outcome === "coach:setup:done", JSON.stringify(done.json));
+  const reTap = await rookieTaps(4, "cn:z-phuket");
+  check("tapping the old setup buttons again does not make a second book", reTap.json?.outcome === "coach:setup:already", JSON.stringify(reTap.json));
+
+  // Settings, as lines. The form was the last thing that made a coach leave the chat.
+  const price = await rookieSays(2, "price 800");
+  check("a settings line lands with no form", price.json?.outcome === "coach:set:price", JSON.stringify(price.json));
+  const shown = await rookieSays(3, "settings");
+  check("settings lists what the book is running on", shown.json?.outcome === "coach:settings", JSON.stringify(shown.json));
+  const booking = await rookieSays(4, "priya tomorrow 9");
+  check("a booking line is still a booking line beside the settings words", booking.json?.outcome === "coach:booked", JSON.stringify(booking.json));
+  const moved = await rookieSays(5, "move priya tomorrow 10");
+  check("the coach moves that lesson from the chat", moved.json?.outcome === "coach:moved", JSON.stringify(moved.json));
+  const owed = await rookieSays(6, "unpaid");
+  check("and asks who still owes", ["coach:owed", "coach:owed:none"].includes(owed.json?.outcome), JSON.stringify(owed.json));
+
   // Ivan, a Telegram user, asks to join through the page; Оля accepts on the web; from then on his private chat answers him.
   const ivanPrivate = { id: 424242, type: "private" };
   const ivanSays = (id, text) => hook({ update_id: 300 + id, message: { message_id: 300 + id, date: 0, chat: ivanPrivate, from: ivan, text } });

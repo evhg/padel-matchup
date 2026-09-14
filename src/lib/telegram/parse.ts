@@ -245,3 +245,16 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date }):
   }
   return out;
 }
+
+
+/** The cities offered as taps when a chat or a coach has no time zone yet. One list, two flows. */
+export const GUIDED_ZONES: [string, string][] = [
+  ["phuket", "Phuket"],
+  ["singapore", "Singapore"],
+  ["bali", "Bali"],
+  ["dubai", "Dubai"],
+  ["moscow", "Moscow"],
+  ["madrid", "Madrid"],
+  ["cyprus", "Cyprus"],
+  ["tbilisi", "Tbilisi"],
+];

@@ -15,7 +15,7 @@ import { answerCallbackQuery, deleteMessage, editMessageText, esc, sendMessage, 
 import { strings, type BotLocale, type BotStrings } from "../card";
 import { chatZone, getChat, rememberChatDefaults } from "../chats";
 import { chatTicket, findOrCreateTelegramPlayer } from "../identity";
-import { parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "../parse";
+import { GUIDED_ZONES, parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "../parse";
 import { postCard } from "../post";
 
 /** Creating from the chat: "/new tomorrow 19:00 Rawai" in one line, the three taps of a bare /new, and a reply to one of its prompts. */
@@ -100,16 +100,6 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
 // and a prompt ends with the one-line command it stands for, so a reply to it (another time, another place)
 // can be read back with the same parser. That trailer also teaches the one-line form.
 // ---------------------------------------------------------------------------
-const GUIDED_ZONES: [string, string][] = [
-  ["phuket", "Phuket"],
-  ["singapore", "Singapore"],
-  ["bali", "Bali"],
-  ["dubai", "Dubai"],
-  ["moscow", "Moscow"],
-  ["madrid", "Madrid"],
-  ["cyprus", "Cyprus"],
-  ["tbilisi", "Tbilisi"],
-];
 const GUIDED_TIMES = ["07:00", "08:00", "09:00", "10:00", "17:00", "18:00", "19:00", "20:00", "21:00"];
 const zoneKeyboard = (): InlineKeyboard => ({ inline_keyboard: chunk(GUIDED_ZONES.map(([key, label]) => ({ text: label, callback_data: `n:z:${key}` })), 4) });
 const chunk = <T,>(xs: T[], n: number): T[][] => xs.reduce<T[][]>((rows, x, i) => ((i % n ? rows[rows.length - 1].push(x) : rows.push([x])), rows), []);

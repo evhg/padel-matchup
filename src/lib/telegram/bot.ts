@@ -12,7 +12,7 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { answerCallbackQuery, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
 import { botLocale, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
-import { coachAssistantMessage, coachHelp, handleCoachCallback, resolveRole } from "./coach";
+import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
 import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
 import { continueGuidedNew, createFromChat, handleGuidedNew, startGuidedNew } from "./handlers/new";
@@ -135,7 +135,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
 
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
-  if (/^(cu|cp|cs|lc|lx|lb|ld|cb):/.test(data)) {
+  if (COACH_CALLBACK.test(data)) {
     const handled = await handleCoachCallback(db, cb, await findOrCreateTelegramPlayer(db, cb.from));
     if (handled) return handled;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { freezeClock } from "./helpers/clock";
-import { matchStudent, parseCoachLine, parseStudentLine } from "@/lib/coach/assistant";
+import { matchStudent, parseCoachLine, parseCoachSetting, parseStudentLine } from "@/lib/coach/assistant";
 
 const TZ = "Asia/Bangkok";
 // Tuesday 8 September 2026, 10:00 in Bangkok.
@@ -133,5 +133,45 @@ describe("moving a lesson and settling up, from one line", () => {
     expect(parseCoachLine("week", ctx).kind).toBe("agenda");
     expect(parseStudentLine("fri 15", { now, tz: TZ }).kind).toBe("book");
     expect(parseStudentLine("cancel", { now, tz: TZ }).kind).toBe("cancel");
+  });
+});
+
+describe("settings as lines, not a screen", () => {
+  it("reads each setting the coach can change, in three languages", () => {
+    expect(parseCoachSetting("price 800")).toEqual({ kind: "price", amount: 800 });
+    expect(parseCoachSetting("цена 800฿")).toEqual({ kind: "price", amount: 800 });
+    expect(parseCoachSetting("precio 1,200")).toEqual({ kind: "price", amount: 1200 });
+    expect(parseCoachSetting("lesson 90")).toEqual({ kind: "lesson", minutes: 90 });
+    expect(parseCoachSetting("hours mornings")).toEqual({ kind: "hours", preset: "mornings" });
+    expect(parseCoachSetting("часы вечером")).toEqual({ kind: "hours", preset: "afternoons" });
+    expect(parseCoachSetting("horas ambos")).toEqual({ kind: "hours", preset: "both" });
+    expect(parseCoachSetting("cutoff 12")).toEqual({ kind: "cutoff", hours: 12 });
+    expect(parseCoachSetting("passes 1")).toEqual({ kind: "passes", count: 1 });
+    expect(parseCoachSetting("passes 0")).toEqual({ kind: "passes", count: 0 });
+    expect(parseCoachSetting("club Rawai Padel Club")).toEqual({ kind: "club", name: "Rawai Padel Club" });
+    expect(parseCoachSetting("promptpay 081 234 5678")).toEqual({ kind: "promptpay", id: "0812345678" });
+    expect(parseCoachSetting("settings")).toEqual({ kind: "show" });
+  });
+
+  it("shows the settings rather than guessing when the value is missing or wrong", () => {
+    for (const line of ["price", "hours", "cutoff", "club", "promptpay", "hours whenever"]) {
+      expect(parseCoachSetting(line)).toEqual({ kind: "show" });
+    }
+    // A lesson length outside the four the book offers is a typo, not an instruction.
+    expect(parseCoachSetting("lesson 7")).toBe(null);
+  });
+
+  it("keeps its hands off a booking line, which is the whole reason the keyword must come first", () => {
+    for (const line of ["anna fri 15", "priya 800", "anna +10 90d 6000", "cancel anna fri", "week", "low"]) {
+      expect(parseCoachSetting(line)).toBe(null);
+    }
+    // And a booking line that merely contains a setting word later is still a booking line.
+    expect(parseCoachSetting("anna price fri 15")).toBe(null);
+    expect(parseCoachLine("anna fri 15", ctx).kind).toBe("book");
+  });
+
+  it("clamps values that would break the book rather than refusing them", () => {
+    expect(parseCoachSetting("cutoff 999")).toEqual({ kind: "cutoff", hours: 72 });
+    expect(parseCoachSetting("passes 99")).toEqual({ kind: "passes", count: 9 });
   });
 });

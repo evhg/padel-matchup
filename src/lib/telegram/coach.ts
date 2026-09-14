@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { lessonPackages, type Coach, type Player } from "@/db/schema";
-import { parseCoachLine, parseStudentLine, type CoachIntent, type Match, type StudentRef } from "@/lib/coach/assistant";
+import { parseCoachLine, parseCoachSetting, parseStudentLine, type CoachIntent, type CoachSetting, type Match, type StudentRef } from "@/lib/coach/assistant";
 import { acceptOffer, afterLessonFreed, decideRequest, epochMin, fromEpochMin, getWaitlistEntry, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyLessonBooked, notifyLessonCancelled, notifyLessonMoved, notifyOffer, notifyPaidClaimed, notifyPaidConfirmed, notifyRequestDecided, notifyStudentAccepted } from "@/lib/coach/notify";
 import { coachBotLocale, coachStrings, dayOnlyLabel, whenLabel, type CoachBotLocale, type CoachBotStrings } from "@/lib/coach/strings";
 import { BOT_COMMANDS } from "./commands";
+import { GUIDED_ZONES, resolveZone } from "./parse";
 import { baseUrl } from "@/lib/config";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import {
@@ -21,6 +22,8 @@ import {
   getCoachForActor,
   getLesson,
   getPlayerById,
+  insertCoach,
+  inviteCode,
   listCoachLessons,
   listStudentCoaches,
   listStudentLessons,
@@ -30,8 +33,12 @@ import {
   owedBy,
   owedToCoach,
   packageLine,
+  presetHours,
+  studentLink,
   setLessonPaid,
   setPackagePaid,
+  updateCoach,
+  type Hours,
   setStudentStatus,
   studentCoaches,
   studentStatus,
@@ -93,6 +100,85 @@ async function bookForCoach(db: Db, coach: Coach, coachPlayer: Player, student: 
   }
 }
 
+/** 2024-01-07 was a Sunday, so day 0 of the weekly template lines up with `Hours`'s own keys. */
+const weekdayName = (d: number, locale: string) => new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + d)));
+
+/**
+ * The weekly template as one readable line. A preset gets its own name; anything else is grouped by
+ * the hours themselves, so a coach who teaches the same five mornings reads one line and not seven.
+ */
+function hoursSummary(hours: Hours, s: CoachBotStrings, locale: string): string {
+  const same = (a: Hours, b: Hours) => JSON.stringify(a) === JSON.stringify(b);
+  if (same(hours, presetHours("mornings"))) return s.hoursMornings;
+  if (same(hours, presetHours("afternoons"))) return s.hoursAfternoons;
+  if (same(hours, presetHours("both"))) return s.hoursBoth;
+  const groups = new Map<string, number[]>();
+  for (let d = 0; d < 7; d++) {
+    const ranges = (hours[String(d)] ?? []).map((r) => `${r[0]}-${r[1]}`).join(", ");
+    if (!ranges) continue;
+    groups.set(ranges, [...(groups.get(ranges) ?? []), d]);
+  }
+  if (groups.size === 0) return s.labNotSet;
+  return [...groups].map(([ranges, days]) => `${days.map((d) => weekdayName(d, locale)).join(" ")} ${ranges}`).join(" · ");
+}
+
+/**
+ * A settings line, applied. Each one is its own message because that is the shape a chat can carry;
+ * a form is the one thing it cannot, and the form on the web was the last thing making a coach leave.
+ */
+async function applySetting(db: Db, coach: Coach, set: CoachSetting, s: CoachBotStrings, locale: string, chatId: number): Promise<string> {
+  const say = (text: string) => sendMessage(chatId, esc(text), { silent: true });
+  if (set.kind === "show") {
+    const lines = [
+      `${s.labLesson}: ${s.minutesLabel(coach.lessonMinutes)}`,
+      `${s.labHours}: ${hoursSummary(coach.hours as Hours, s, locale)}`,
+      `${s.labPrice}: ${coach.priceSingle ? `${coach.priceSingle} ${coach.currency}` : s.labNotSet}`,
+      `${s.labCutoff}: ${coach.cutoffHours} h`,
+      `${s.labPasses}: ${coach.latePasses}`,
+      `${s.labClubs}: ${coach.clubNames?.length ? coach.clubNames.join(", ") : s.labNotSet}`,
+      `${s.labPromptpay}: ${coach.promptpayId || s.labNotSet}`,
+      `${s.labZone}: ${coach.tz}`,
+    ];
+    await say(s.settings(lines.join("\n")));
+    return "coach:settings";
+  }
+  if (set.kind === "price") {
+    await updateCoach(db, coach.id, { priceSingle: set.amount });
+    await say(s.saved(s.labPrice, `${set.amount} ${coach.currency}`));
+    return "coach:set:price";
+  }
+  if (set.kind === "lesson") {
+    await updateCoach(db, coach.id, { lessonMinutes: set.minutes });
+    await say(s.saved(s.labLesson, s.minutesLabel(set.minutes)));
+    return "coach:set:lesson";
+  }
+  if (set.kind === "hours") {
+    const hours = presetHours(set.preset);
+    await updateCoach(db, coach.id, { hours });
+    await say(s.saved(s.labHours, hoursSummary(hours, s, locale)));
+    return "coach:set:hours";
+  }
+  if (set.kind === "cutoff") {
+    await updateCoach(db, coach.id, { cutoffHours: set.hours });
+    await say(s.saved(s.labCutoff, `${set.hours} h`));
+    return "coach:set:cutoff";
+  }
+  if (set.kind === "passes") {
+    await updateCoach(db, coach.id, { latePasses: set.count });
+    await say(s.saved(s.labPasses, String(set.count)));
+    return "coach:set:passes";
+  }
+  if (set.kind === "club") {
+    const names = set.name.split(",").map((n) => n.trim()).filter(Boolean).slice(0, 4);
+    await updateCoach(db, coach.id, { clubNames: names });
+    await say(s.saved(s.labClubs, names.join(", ")));
+    return "coach:set:club";
+  }
+  await updateCoach(db, coach.id, { promptpayId: set.id });
+  await say(s.saved(s.labPromptpay, set.id));
+  return "coach:set:promptpay";
+}
+
 async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: string, chatId: number, o: { deferHelp?: boolean } = {}): Promise<string | null> {
   const locale: CoachBotLocale = coachBotLocale(coachPlayer.locale);
   const s = coachStrings(locale);
@@ -105,6 +191,9 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
     return "coach:book_how";
   }
   const text = tapped && tapped !== "lessons" && tapped !== "left" ? tapped : rawText;
+  // Settings first, and only when the line starts with a setting word, so a booking line is untouched.
+  const setting = parseCoachSetting(text);
+  if (setting) return applySetting(db, coach, setting, s, locale, chatId);
   const students = await studentRefs(db, coach.id);
   const intent: CoachIntent = parseCoachLine(text, { now, tz: coach.tz, students });
 
@@ -533,9 +622,73 @@ export async function coachHelp(player: Player, chatId: number): Promise<string>
 }
 
 /** Buttons under the assistant's messages. Null when the data is not ours. */
+/**
+ * Setting up a book without leaving the chat. Three taps — where, how long, when — and the assistant
+ * is running; everything else is a settings line afterwards. Stateless like the guided /new: each
+ * button carries what has been chosen so far, so nothing has to be remembered between messages.
+ *
+ * The time zone is asked first and not defaulted. The web form reads it from the browser and has no
+ * such luxury here, and a coach in Madrid whose book quietly runs on Bangkok time would find out
+ * when a student booked breakfast.
+ */
+export async function startCoachSetup(db: Db, player: Player, chatId: number): Promise<string> {
+  const s = coachStrings(coachBotLocale(player.locale));
+  await sendMessage(chatId, esc(s.setupWhere), {
+    silent: true,
+    keyboard: kb(chunk(GUIDED_ZONES.map(([key, label]) => ({ text: label, callback_data: `cn:z-${key}` })), 4)),
+  });
+  return "coach:setup:where";
+}
+
+const chunk = <T,>(xs: T[], n: number): T[][] => xs.reduce<T[][]>((rows, x, i) => ((i % n ? rows[rows.length - 1].push(x) : rows.push([x])), rows), []);
+const SETUP_MINUTES = [45, 60, 90, 120];
+
+async function setupStep(db: Db, player: Player, id: string, extra: string | undefined, chatId: number, messageId: number): Promise<string> {
+  const locale = coachBotLocale(player.locale);
+  const s = coachStrings(locale);
+  const [step, zoneKey, minutes] = id.split("-");
+  const tz = resolveZone(zoneKey ?? "");
+  if (!tz) return "coach:setup:zone_unknown";
+  const edit = (text: string, keyboard: InlineKeyboard | null) => editMessageText(chatId, messageId, esc(text), keyboard).catch(() => undefined);
+
+  if (step === "z") {
+    await edit(s.setupLesson, kb(chunk(SETUP_MINUTES.map((m) => ({ text: s.minutesLabel(m), callback_data: `cn:m-${zoneKey}:${m}` })), 4)));
+    return "coach:setup:lesson";
+  }
+  if (step === "m") {
+    await edit(s.setupHours, kb([
+      [{ text: s.hoursMornings, callback_data: `cn:h-${zoneKey}-${extra}:mornings` }],
+      [{ text: s.hoursAfternoons, callback_data: `cn:h-${zoneKey}-${extra}:afternoons` }],
+      [{ text: s.hoursBoth, callback_data: `cn:h-${zoneKey}-${extra}:both` }],
+    ]));
+    return "coach:setup:hours";
+  }
+  const preset = extra === "mornings" || extra === "afternoons" ? extra : "both";
+  const { coach } = await insertCoach(db, {
+    playerId: player.id,
+    displayName: player.displayName,
+    lessonMinutes: SETUP_MINUTES.includes(Number(minutes)) ? Number(minutes) : 60,
+    hours: presetHours(preset),
+    tz,
+    languages: [locale],
+  });
+  const link = studentLink(baseUrl(), coach.handle, await inviteCode(db, coach));
+  await edit(s.setupDone(link), null);
+  await sendRoleMenu(db, player, chatId, { pin: false });
+  return "coach:setup:done";
+}
+
+/**
+ * Every callback this module answers, in one place. It used to be two: this regex, and a shorter copy
+ * in the webhook's dispatcher that decided whether to call here at all. The copy was missing `lo`,
+ * `lw` and `rq`, so the "Take it" button on a freed hour and the coach's yes/no on an out-of-hours
+ * request were sent to people and then did nothing at all when tapped. One list, imported twice.
+ */
+export const COACH_CALLBACK = /^(cu|cp|cq|cm|cs|cn|lc|lx|lb|ld|lm|lp|cb|lo|lw|rq):([0-9a-z-]{1,36})(?::([0-9a-z-]{1,10}))?$/i;
+
 export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promise<string | null> {
   const data = cb.data ?? "";
-  const m = /^(cu|cp|cq|cm|cs|lc|lx|lb|ld|lm|lp|cb|lo|lw|rq):([0-9a-z-]{1,36})(?::([0-9a-z-]{1,10}))?$/i.exec(data);
+  const m = COACH_CALLBACK.exec(data);
   if (!m || !cb.message) return null;
   const [, action, id, extra] = m;
   const chatId = cb.message.chat.id;
@@ -543,6 +696,15 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
   const locale = coachBotLocale(player.locale);
   const s = coachStrings(locale);
 
+  // Setting up a book: the only coach callback whose sender is not a coach yet.
+  if (action === "cn") {
+    if (await getCoachForActor(db, player.id)) {
+      await answerCallbackQuery(cb.id, s.setupAlready);
+      return "coach:setup:already";
+    }
+    await answerCallbackQuery(cb.id);
+    return setupStep(db, player, id, extra, chatId, messageId);
+  }
   if (action === "rq") {
     const found = await getCoachForActor(db, player.id);
     if (!found) {
