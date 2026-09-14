@@ -190,7 +190,7 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     const { anonymizePlayer } = await import("@/lib/domain/anonymize");
-    const { cancelledEvents, leftEvents } = await anonymizePlayer(db, me.id);
+    const { cancelledEvents, leftEvents, coachClosure } = await anonymizePlayer(db, me.id);
     after(async () => {
       const { notifyEventCancelled, notifyCreator, notifyPromotion } = await import("@/lib/notify");
       const { emitMatchEvent } = await import("@/lib/api/webhooks");
@@ -201,6 +201,15 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
       for (const { event, promotion } of leftEvents) {
         await notifyCreator(db, event, "left", me.displayName, me.id);
         await notifyPromotion(db, event, promotion);
+      }
+      if (coachClosure) {
+        // The coach's name is the one the student knows, so it is the one the notice carries — taken
+        // before the page went, not from the row that now reads "Deleted player".
+        const { notifyLessonCancelled } = await import("@/lib/coach/notify");
+        for (const c of coachClosure.cancelled) {
+          if (!c.student) continue;
+          await notifyLessonCancelled(db, { lesson: c.lesson, coach: coachClosure.coach, student: c.student, pkg: null, by: "coach", outcome: c.outcome }).catch(() => undefined);
+        }
       }
     });
     await clearSessionPlayer();

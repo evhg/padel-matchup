@@ -862,7 +862,7 @@
     "notListedShort": "Not on the venue board",
     "coaches": "Coaches here",
     "coachesHelp": "Coaches who named this club and chose to be listed.",
-    "coachHere": "Coach at {venue}? Set up your book →"
+    "coachHere": "Coach at {venue}? Set up your lessons →"
   },
   "ranking": {
     "title": "Ranking",
@@ -1245,9 +1245,9 @@
       "save": "Save",
       "saved": "Saved.",
       "how": "These are the rules your students see and the assistant applies. Change them any time; lessons already booked keep the rules they were booked under.",
-      "delete": "Delete this book",
+      "delete": "Delete my coach page",
       "deleting": "Deleting…",
-      "deleteConfirm": "Delete your coach book? {students} student(s) and {lessons} lesson(s) go with it, your public page stops existing, and the setup starts again from its first question. This cannot be undone.",
+      "deleteConfirm": "Delete your coach page? {students} student(s) and {lessons} lesson(s) go with it, students can no longer find you, and setup starts again from its first question. This cannot be undone.",
       "deleteHasLessons": "You have a lesson still to come. Cancel it first, so your student is told.",
       "deleteFailed": "That did not work. Try again."
     },
@@ -1331,7 +1331,7 @@
       "not_student": "Ask to join first; the coach confirms.",
       "outside_hours": "That time is outside the coach's hours.",
       "too_soon": "Too short notice for that time.",
-      "no_coach": "No book here yet.",
+      "no_coach": "No coach page here yet.",
       "past": "That time has passed."
     },
     "email": {
@@ -1360,8 +1360,8 @@
       "offerCta": "Take the spot",
       "requestSubject": "{student} asks for {when}",
       "requestHeading": "A time outside your hours",
-      "requestBody": "{student} asks for {when}. Say yes or no from your book.",
-      "requestCta": "Open your book",
+      "requestBody": "{student} asks for {when}. Say yes or no from your schedule.",
+      "requestCta": "Open my schedule",
       "declinedSubject": "{coach} can't do {when}",
       "declinedHeading": "Not that time",
       "declinedBody": "{coach} can't do {when}. Pick another time on their page.",
@@ -1426,14 +1426,14 @@
       "done": "{created, plural, one {# package} other {# packages}} added: {students, plural, =0 {no new students} one {# new student} other {# new students}}, {matched} already here."
     },
     "managers": {
-      "title": "Who runs your book with you",
+      "title": "Who runs your lessons with you",
       "lead": "A partner or an assistant can book, cancel and note payments. Students still see one name: yours.",
       "makeLink": "Make a link for them",
-      "shareText": "Run my lesson book with me: {url}",
+      "shareText": "Help me run my lessons: {url}",
       "remove": "Remove",
-      "joinTitle": "Run a coach's book",
+      "joinTitle": "Help run a coach's lessons",
       "joinLead": "{name} asked you to help run their lessons. Your name, and you are in.",
-      "joinButton": "Join {name}'s book",
+      "joinButton": "Help {name} run their lessons",
       "joinGone": "That link is not valid any more. Ask the coach for a new one.",
       "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section."
     }
@@ -1469,11 +1469,11 @@
     "metaDescription": "Padel coaches in {city} who list their lessons book on Kicksmash: clubs, lesson length, languages, and free times you can book yourself.",
     "lead": "Listed by the coaches themselves. Prices and levels are theirs to tell you; booking and cancelling follow each coach's own rules, shown on their page.",
     "empty": "No coach has listed their page in {city} yet.",
-    "open": "Open {name}'s book",
+    "open": "See {name}'s free times",
     "coachQuestion": "Do you coach in {city}?",
-    "coachHelp": "Set up your book in four taps: students book free times themselves, packages count themselves, your calendar stays yours. Listing is optional.",
+    "coachHelp": "Set up your lessons in six steps: students book free times themselves, packages count themselves, your calendar stays yours. Listing is optional.",
     "coachMore": "What coaches get →",
-    "coachCta": "Set up your book"
+    "coachCta": "Set up your lessons"
   },
   "moments": {
     "title": "Your moments",

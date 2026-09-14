@@ -12,6 +12,9 @@ import {
   presetHours,
   setStudentStatus,
 } from "@/lib/domain/coaching";
+import { anonymizePlayer } from "@/lib/domain/anonymize";
+import { coachManagers } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 /**
@@ -74,6 +77,33 @@ describe("closing a coach's book", () => {
     await expect(deleteCoachBook(db, { coachId: coach.id, actorPlayerId: owner.id }, DAY_BEFORE)).rejects.toThrow(/has_lessons/);
     // And the book is still there: a refusal changes nothing.
     expect(await getCoachByPlayerId(db, owner.id)).not.toBeNull();
+  });
+
+  it("goes when the account goes, and the student hears about the hour they were expecting", async () => {
+    const { owner, coach, student } = await aBook("Dee");
+    await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at(2), byCoach: false }, DAY_BEFORE);
+
+    // Deleting an account wiped the name, the email and the phone and left the coach page standing:
+    // public, under the same name, with the clubs and the PromptPay id still on it.
+    const r = await anonymizePlayer(db, owner.id, DAY_BEFORE);
+    expect(await getCoachByHandle(db, coach.handle)).toBeNull();
+    expect(await getCoachByPlayerId(db, owner.id)).toBeNull();
+    // Unlike the coach closing it themselves, this cannot refuse — so the lesson is cancelled and
+    // handed back for the student to be told, with the name they know rather than "Deleted player".
+    expect(r.coachClosure?.coach.displayName).toBe("Dee");
+    expect(r.coachClosure?.cancelled).toHaveLength(1);
+    expect(r.coachClosure?.cancelled[0].student?.id).toBe(student.id);
+  });
+
+  it("stops running anyone else's lessons", async () => {
+    const { coach } = await aBook("Eve");
+    const helper = await makePlayer(db, "Helper");
+    await db.insert(coachManagers).values({ coachId: coach.id, playerId: helper.id });
+
+    await anonymizePlayer(db, helper.id, DAY_BEFORE);
+    // An access grant is not history: the helper's own book is untouched, their key to Eve's is not.
+    expect(await db.select().from(coachManagers).where(eq(coachManagers.playerId, helper.id))).toHaveLength(0);
+    expect(await getCoachByHandle(db, coach.handle)).not.toBeNull();
   });
 
   it("belongs to the coach alone: nobody else may close it", async () => {

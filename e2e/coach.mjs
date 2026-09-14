@@ -1,4 +1,4 @@
-// The coach's book: Olga sets up in four taps, Ivan asks to join through her page, Olga accepts and
+// The coach's book: Olga walks the six setup steps, Ivan asks to join through her page, Olga accepts and
 // starts a package, Ivan books and cancels a lesson himself, Olga books one for him from her book.
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
@@ -310,7 +310,7 @@ try {
   const nina = await newPage();
   await nina.goto(managerLink);
   await nina.getByPlaceholder("e.g. Alex").fill("Nina");
-  await nina.getByRole("button", { name: /Join Olga/ }).click();
+  await nina.getByTestId("manager-join").click();
   await nina.getByRole("heading", { name: "Today" }).waitFor({ timeout: 20000 });
   check("the manager lands in the coach's book after one name", (await nina.getByText("Pavel").count()) >= 1 || (await nina.getByText("Ivan").count()) >= 1);
   await olga.reload();

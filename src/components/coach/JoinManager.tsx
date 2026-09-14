@@ -33,7 +33,7 @@ export function JoinManager({ code, coachName }: { code: string; coachName: stri
         }}
       >
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={tRoot("identity.namePlaceholder")} maxLength={40} autoComplete="given-name" autoFocus />
-        <button type="submit" className="btn-primary w-full" disabled={pending || !name.trim()}>
+        <button type="submit" className="btn-primary w-full" data-testid="manager-join" disabled={pending || !name.trim()}>
           {pending ? "…" : t("managers.joinButton", { name: coachName })}
         </button>
       </form>
