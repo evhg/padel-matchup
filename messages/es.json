@@ -234,7 +234,15 @@
     "inviteSent": "Invitación enviada",
     "notifyMe": "Avisarme por email cuando cambie la alineación",
     "openBooking": "Reserva",
-    "costPerPlayer": "{cost} por jugador"
+    "costPerPlayer": "{cost} por jugador",
+    "paidTitle": "Quién ha pagado",
+    "paidAll": "Todos han pagado.",
+    "paidOwing": "Faltan {n} por pagar · {cost} cada uno",
+    "paidYes": "Pagado",
+    "paidClaimed": "Dice que ha pagado",
+    "paidNot": "Todavía no",
+    "paidClaim": "Ya he pagado",
+    "paidNothingThrough": "Kicksmash solo recuerda lo que decís los dos. Por él no pasa dinero."
   },
   "creator": {
     "tools": "Herramientas de organizador",

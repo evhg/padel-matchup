@@ -10,12 +10,14 @@ import { baseUrl, emailEnabled } from "@/lib/config";
 import { getPlayer } from "@/lib/domain/players";
 import { getEventDetail, getSlotByInviteCode } from "@/lib/domain/queries";
 import {
+  claimSlotPaid,
   confirmInvite,
   declineInvite,
   joinEvent,
   leaveEvent,
   removeFromSlot,
   reserveSlot,
+  setSlotPaid,
   type ConfirmOutcome,
   type DeclineOutcome,
   type JoinOutcome,
@@ -222,5 +224,27 @@ export async function declineInviteAction(code: string, inviteCode: string): Pro
     revalidatePath(`/${code}`);
     revalidatePath(`/${code}/i/${inviteCode}`);
     return { outcome: res.outcome };
+  });
+}
+
+/** The player says the money is sent. Nothing is settled by this — it puts the question to the organiser. */
+export async function claimPaidAction(code: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail } = await loadEvent(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("not_member");
+    await claimSlotPaid(db, { eventId: detail.event.id, playerId: me.id });
+    revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
+/** The organiser says it arrived, or takes it back. The domain refuses anyone else. */
+export async function setPaidAction(code: string, slotId: string, paid: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    await setSlotPaid(db, { eventId: detail.event.id, slotId, actorPlayerId: viewer.player?.id ?? "", paid });
+    revalidatePath(`/${code}`);
+    return null;
   });
 }

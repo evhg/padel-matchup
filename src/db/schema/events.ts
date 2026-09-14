@@ -119,6 +119,10 @@ export const slots = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true }),
     invitedAt: timestamp("invited_at", { withTimezone: true }),
     lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),
+    /** The player says the money is sent. A claim, not a status: it asks the organiser, it does not answer. */
+    paidClaimedAt: timestamp("paid_claimed_at", { withTimezone: true }),
+    /** The organiser says it landed. Only they can set this; no money passes through Kicksmash. */
+    paidAt: timestamp("paid_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("slots_event_position_idx").on(t.eventId, t.position),

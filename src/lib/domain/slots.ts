@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, slots, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
@@ -345,4 +345,47 @@ export async function promoteWaitlists(db: Db, now = new Date()): Promise<Promot
     });
   }
   return promotions;
+}
+
+// ---------------------------------------------------------------------------
+// Who has paid. No money passes through Kicksmash: the player says it is sent,
+// the organiser says it landed, and the app only remembers which of those happened.
+// Deliberately two fields and not one flag — "I paid" and "it arrived" are different
+// claims by different people, and collapsing them would let either side write the other's.
+// ---------------------------------------------------------------------------
+
+export type SlotPayment = { slotId: string; playerId: string; name: string; claimedAt: Date | null; paidAt: Date | null };
+
+/** The player says the money is sent. A claim, not a status: it asks the organiser, it does not answer. */
+export async function claimSlotPaid(db: Db, input: { eventId: string; playerId: string }, now = new Date()): Promise<boolean> {
+  const rows = await db
+    .update(slots)
+    .set({ paidClaimedAt: now })
+    .where(and(eq(slots.eventId, input.eventId), eq(slots.playerId, input.playerId), isNull(slots.paidAt)))
+    .returning({ id: slots.id });
+  return rows.length === 1;
+}
+
+/** The organiser says it landed, or takes it back. Nobody else may, on anybody's row. */
+export async function setSlotPaid(db: Db, input: { eventId: string; slotId: string; actorPlayerId: string; paid: boolean }, now = new Date()): Promise<boolean> {
+  const [ev] = await db.select({ creator: events.creatorPlayerId }).from(events).where(eq(events.id, input.eventId));
+  if (!ev) throw new DomainError("not_found");
+  if (ev.creator !== input.actorPlayerId) throw new DomainError("forbidden");
+  const rows = await db
+    .update(slots)
+    .set({ paidAt: input.paid ? now : null })
+    .where(and(eq(slots.id, input.slotId), eq(slots.eventId, input.eventId), isNotNull(slots.playerId)))
+    .returning({ id: slots.id });
+  return rows.length === 1;
+}
+
+/** The organiser's row of names, in roster order. Only ever for a match that names a cost. */
+export async function paymentsFor(db: Db, eventId: string): Promise<SlotPayment[]> {
+  const rows = await db
+    .select({ slotId: slots.id, playerId: slots.playerId, name: players.displayName, claimedAt: slots.paidClaimedAt, paidAt: slots.paidAt, position: slots.position })
+    .from(slots)
+    .innerJoin(players, eq(players.id, slots.playerId))
+    .where(and(eq(slots.eventId, eventId), isNotNull(slots.playerId)))
+    .orderBy(asc(slots.position));
+  return rows.map((r) => ({ slotId: r.slotId, playerId: r.playerId as string, name: r.name, claimedAt: r.claimedAt, paidAt: r.paidAt }));
 }
