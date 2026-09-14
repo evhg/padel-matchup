@@ -6,6 +6,7 @@ import { CoachCalendar } from "@/components/coach/CoachCalendar";
 import { CoachManagers } from "@/components/coach/CoachManagers";
 import { CoachSettings } from "@/components/coach/CoachSettings";
 import { DeleteCoachBook } from "@/components/coach/DeleteCoachBook";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { listManagers } from "@/lib/coach/chains";
@@ -59,6 +60,7 @@ export default async function CoachSettingsPage() {
           initial={{ gcalId: coach.gcalId ?? "", icalUrl: coach.icalUrl ?? "", status: coach.gcalStatus, syncedAt: coach.calendarSyncedAt?.toISOString() ?? null, error: coach.calendarError }}
         />
         <CoachManagers managers={managers.map((m) => ({ id: m.id, name: m.displayName }))} isOwner={role === "coach"} />
+        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
         {contents && <DeleteCoachBook students={contents.students} lessons={contents.lessons} />}
       </main>
       <Footer />
