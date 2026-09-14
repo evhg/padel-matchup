@@ -52,7 +52,14 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
 
 ## Ceilings we live under (free plans)
 
-Vercel Hobby: 100 GB bandwidth, 1M invocations, one cron a day (pg_cron runs the rest).
+Vercel Hobby: 100 GB bandwidth, 1M invocations, one cron a day (pg_cron runs the rest), and
+**10 GB of function storage** — the one that is not per month. Every deployment keeps its own copy
+of every function it built, so the meter is (what one deployment weighs) x (how many are kept), and
+it only ever goes up until deployments are deleted. It reached 75% on 14 September 2026 with a few
+dozen deployments, because each one carried 18 MB of PGlite it could never run. Two levers, in this
+order: what a function weighs (`outputFileTracingExcludes`/`Includes` in `next.config.ts` -- check
+the numbers, not the config: `.next/server/**/*.nft.json` lists what each route really traces), and
+how many deployments exist (every push to every branch builds one; old ones can be deleted).
 Vercel Web Analytics: 2,500 events a month (we count page renders ourselves).
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
