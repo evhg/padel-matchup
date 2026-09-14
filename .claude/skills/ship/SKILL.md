@@ -92,3 +92,82 @@ what shipped, what is next, what needs the owner.
 Merging (nobody else may approve or merge), repository settings, creating accounts, paying for
 anything, and any outward-facing message. The branch protection ruleset on `main` requiring the CI
 checks is theirs to set, and it is what makes auto-merge work at all.
+
+## What this project has already paid to learn
+
+Every line below is here because breaking it cost a red run, a wrong claim to the owner, or money.
+**Add to this list the moment something finally comes out right** — while you still remember what the
+wrong version looked like. A rule written a day later is a rule written vaguely.
+
+Prefer the enforceable form. A check that fails is worth more than a paragraph nobody opens: if a
+learning can be a test, a gate step or a script, make it one and put the story in its comment.
+
+### Check the thing, not the description of the thing
+
+- **Read the build output, never the build config.** 18 MB of `@electric-sql/pglite` — the test
+  database, which `createPgliteDb()` throws before importing when `onVercel()` — shipped inside every
+  route while `next.config.ts` looked correct. It went unnoticed until Vercel's function storage hit
+  75% of 10 GB. `.next/server/**/*.nft.json` is what a route really carries. `scripts/check-bundle.mjs`
+  reads it, the gate runs it after every build, and it fails on dev-only packages and fat routes.
+- **`"/**/*"` does not match `"/"`.** The first fix for the above left the landing page — the busiest
+  route there is — carrying all 18 MB while every other route shed them. The numbers caught it; the
+  config still looked right. Give the root its own key.
+- **Open the picture before theorising.** A click timing out on `/coach/students` got two rounds of
+  guesswork about selectors; the screenshot showed a header overflowing 390px, three screens away from
+  the failing click. `SHOTS=./shots pnpm e2e`. For anything visual, look first.
+- **Quote the gate's own `EXIT=` line.** A backgrounded gate can exit 0 while the run inside it printed
+  `EXIT=1`. Never call a check green from the wrapper's exit code.
+- **Ask the database before describing blast radius.** A broken notification string was reported to the
+  owner as having reached people's phones. There were zero clubs, so it had reached nobody. One query
+  before the sentence.
+- **Write the regression test with the fix, in the same pull request.** The test that catches a
+  notification rendering as its own message key took twenty minutes, and was written after the bug
+  rather than with the feature that introduced it.
+- **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
+  the bug back, watch it catch it, then restore.
+
+### Wall clock
+
+Wall clock first, credits second. What actually moved it, measured:
+
+- **One test database per worker, not per file.** Standing up PGlite is the whole cost; emptying it is
+  nearly free. 175s → 33s. It needs `isolate: false`, which needs tests to leak no global state — hence
+  the env restore in `tests/helpers/setup.ts` (rule 11). One file leaving `GOOGLE_SERVICE_ACCOUNT_JSON`
+  behind turned another file red in CI only.
+- **Run the suites a change can break**, not all sixteen: `node scripts/suites.mjs --why`. Add a rule
+  only when a path proves narrow, never to shorten a run — a wrong "nothing to run" costs a red `main`,
+  which costs far more than two minutes.
+- **Auto-merge is minutes, not days.** Measured repeatedly: 2.5 to 8 minutes from opening to merged.
+  Never plan around "merge rounds", and never ask the owner to merge.
+- **Put the long thing in the background and keep working.** A build is ~70s, a full browser run ~110s.
+  Write the next file while they run; batch independent tool calls into one message.
+- **Never sleep-poll for something external.** Wait on the signal itself (a condition loop on the thing
+  that actually changes) and let the notification wake you.
+- **One validated push beats three speculative ones.** Each push costs a CI cycle, and until the
+  `claude/**` rule in `vercel.json`, a stored deployment as well.
+- **Kill what you start.** A forgotten probe script held 599 MB for six hours. `pkill -f "next start"`
+  matched the backgrounding shell's own command line and killed the caller.
+- **Do the cheap true thing before the expensive one.** Counting rows in production took one query and
+  changed what was worth building next more than an hour of reasoning would have.
+
+### Editing that keeps going wrong
+
+- **Never round-trip `messages/*.json`.** Loading and re-serialising reformats the compact single-line
+  blocks and turns a three-key change into fifty-seven changed lines; a hand-rolled comma fix corrupted
+  `en.json` once. Use `node scripts/i18n.mjs add <dotted.key> "<en>" "<ru>" "<es>"` — one line per file,
+  refuses to overwrite, and proves the three locales still carry the same keys.
+- **Anchor on the name, never the line number.** Keys have landed in `coach.home` when they were meant
+  for `coach.page` because the insertion point was found by counting.
+- **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that
+  correctly refused a student's reschedule, because the fixture's "now" sat inside the twelve-hour
+  cutoff; and on lesson times that landed in the 12:00–15:00 gap between the morning and afternoon
+  presets. Write the hour mapping as a comment in the test.
+- **A screen with names in it is an interface.** Renaming the coach setup steps turned three browser
+  suites red — two of them not the coach suite. Grep the step names before renaming one.
+
+### Documents rot within hours
+
+Ship the document change in the same pull request as the code. Twice in one day `ROADMAP.md` and
+`AGENTS.md` described screens that had changed that morning, and the roadmap listed shipped work as
+upcoming. If a change makes a sentence in `ROADMAP.md`, `docs/VISION.md`, `README.md`, `AGENTS.md` or
+`docs/OPERATING.md` untrue, fixing that sentence is part of the change, not follow-up.

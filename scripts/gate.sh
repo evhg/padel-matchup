@@ -41,6 +41,9 @@ if [ -n "${GATE_E2E:-}" ]; then
   fi
   if [ -n "$suites" ]; then
     step "production build" env APP_BASE_URL=http://localhost:3001 NEXT_TELEMETRY_DISABLED=1 pnpm build
+    # What the build actually produced, not what the config says it should have. 18 MB of the test
+    # database shipped inside every route for as long as no check read the build output.
+    step "function weight" node scripts/check-bundle.mjs
     step "browser suites: $suites" env E2E_ONLY="$suites" pnpm e2e
   fi
 fi
