@@ -70,7 +70,9 @@ try {
   await page.getByLabel("Your number").fill("10");
   check("the mapping is shown before anything is saved", (await page.getByText(/→ 7\.0/).count()) === 1);
   await page.getByRole("button", { name: "Use 7.0" }).click();
-  await page.getByRole("button", { name: "Save" }).click();
+  // Exact: this screen has more than one button whose name starts with "Save" — the level importer's
+  // and the one that saves when you want to play — and a loose name matches both.
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("7.0").first().waitFor({ timeout: 15000 });
   const afterImport = await page.request.get(`${BASE}/api/me/export`).then((r) => r.json());
   check("the imported level is saved as the player's level", afterImport.player.level === 7);

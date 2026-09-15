@@ -1,7 +1,7 @@
 import type { Db } from "@/db";
 import type { TelegramChat } from "@/db/schema";
 import { chatLocale } from "@/lib/channels/telegram";
-import { utcToZonedParts, WEEKDAY_WORDS } from "@/lib/dates";
+import { utcToZonedParts } from "@/lib/dates";
 import { dropWant, listWants, parseWantLine, recordWant, resolvePlace, type DemandSignalView } from "@/lib/domain/demand";
 import { isDomainError } from "@/lib/domain/errors";
 import { answerCallbackQuery, editMessageText, esc, sendMessage, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
