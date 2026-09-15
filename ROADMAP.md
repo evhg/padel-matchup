@@ -63,7 +63,11 @@ moved ahead of both remaining channels: finding a fourth is the thing a player c
 today, and the counts say the channels are ahead of their audience — of 26 players, one has Telegram
 linked and four have an email address.
 
-1. **WhatsApp, one-to-one, for players and coaches.** A private thread carries the whole of a player's
+1. **WhatsApp, one-to-one — built, waiting on an account.** The code is in `src/lib/whatsapp/`: the
+   Cloud API client, the signed webhook, the hand-off link and the conversation, all off unless the
+   environment is set. What is left is not code: a Meta business portfolio, a phone number that is not
+   already on WhatsApp, and the webhook pointed at `/api/whatsapp/webhook`. That is the owner's to
+   create, and nothing reaches a real person until they do. A private thread carries the whole of a player's
    loop: reply buttons to take or give up a spot, a list message to pick a time, Flows for a form the
    Mini App cannot match, the court as a map pin, a template for a reminder outside the window. The
    group part is carried by a person rather than a bot — the organiser pastes a link into the crew's

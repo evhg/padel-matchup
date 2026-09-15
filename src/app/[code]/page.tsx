@@ -25,7 +25,7 @@ import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SeriesDoor } from "@/components/SeriesBits";
-import { QrPanel, ShareButtons } from "@/components/ShareSheet";
+import { CopyButton, QrPanel, ShareButtons } from "@/components/ShareSheet";
 import { SlotActions } from "@/components/SlotActions";
 import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
@@ -47,6 +47,7 @@ import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
+import { joinLink } from "@/lib/whatsapp/link";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
 
@@ -128,6 +129,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
   const courtNumber = (n: string) => t("event.courtNumber", { n });
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
+  // Null unless a WhatsApp number is configured, so the block simply is not there (rule 4).
+  const waJoin = joinLink(code);
   const shareText =
     spotsLeft === 0 && ev.whenFull === "waitlist"
       ? t("shareText.eventFull", { day, time, venue, url })
@@ -425,6 +428,16 @@ export default async function EventPage({ params, searchParams }: Props) {
               {shortHost()}/{code}
             </div>
             <ShareButtons url={url} text={shareText} />
+            {/* The hand-off. A bot cannot be in the crew's WhatsApp group, so a person carries the
+                message across: this link opens a thread with us and takes the spot from there. */}
+            {waJoin && (
+              <div className="mt-3 rounded-2xl border border-line px-4 py-3">
+                <div className="text-sm font-bold">{t("wa.handoff")}</div>
+                <p className="mt-1 text-xs text-muted">{t("wa.handoffHelp")}</p>
+                <div className="mt-2 truncate text-xs text-faint">{waJoin}</div>
+                <CopyButton value={waJoin} label={t("wa.copy")} className="btn-ghost btn-sm mt-2" />
+              </div>
+            )}
             <details className="mt-3 group">
               <summary className="cursor-pointer list-none text-sm link">QR · {t("share.qrHint")}</summary>
               <div className="mt-3">

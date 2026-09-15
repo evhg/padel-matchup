@@ -1,4 +1,5 @@
 {
+  "wa": {"handoff": "Coger sitio dentro de WhatsApp", "handoffHelp": "Pega esto en tu grupo en lugar del enlace de arriba. Al tocarlo se abre un chat con nosotros y pueden coger sitio sin salir de WhatsApp.", "copy": "Copiar la línea de WhatsApp"},
   "want": {"title": "¿Cuándo quieres jugar?", "sub": "Dilo una vez. Cuando aparezca un partido que encaje, te avisamos — y una plaza que se libere te llega primero.", "anyDay": "Cualquier día", "anyTime": "Cualquier hora", "place": "Pista o ciudad", "placeHelp": "Una pista donde alguien juega, o una ciudad: Rawai Padel, Phuket, Singapur.", "add": "Guardar", "remove": "Quitar", "none": "Todavía no has dicho cuándo quieres jugar.", "unknownPlace": "Esa pista aún no nos suena. Prueba con la ciudad.", "tooMany": "Diez es el máximo a la vez. Quita una primero.", "at": "en"},
   "common": {
     "appName": "Kicksmash",
