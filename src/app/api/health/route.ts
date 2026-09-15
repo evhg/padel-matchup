@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
+import { players } from "@/db/schema";
 import { ALL_CHANNELS } from "@/lib/channels";
 import { baseUrl, emailEnabled, emailFrom, ownerTelegramId } from "@/lib/config";
 import { pushEnabled } from "@/lib/push";
@@ -49,13 +50,25 @@ export async function GET() {
 
   // Feedback, the listening desk, uptime and production errors all reach one person down one route.
   // If either half of it is missing, a note a player writes is stored and nobody is told.
-  const ownerRoute = telegramEnabled() && ownerTelegramId() !== null;
+  const ownerId = ownerTelegramId();
+  const ownerRoute = telegramEnabled() && ownerId !== null;
   if (!ownerRoute) {
     hints.push(
       telegramEnabled()
         ? "Nothing reaches the owner: TELEGRAM_OWNER_ID is not set, so feedback, uptime and error alerts are written down and never delivered."
         : "Nothing reaches the owner: the Telegram bot is off, so feedback, uptime and error alerts are written down and never delivered.",
     );
+  }
+  // Whose account, not whether one is set. "It reaches the owner: true" was true and useless on the
+  // morning a player received an internal verdict on his own note, meant for the owner alone and
+  // ending "say build or skip in your Claude session" — TELEGRAM_OWNER_ID named him. A first name is
+  // what the public shapes already carry (rule 6), and it is the thing that would have been noticed.
+  let owner: string | null = null;
+  // Either kind of working database, not just the hosted one: an embedded deployment has an owner too.
+  if (ownerRoute && (database === "connected" || database === "embedded")) {
+    const [row] = await (await getDb()).select({ name: players.displayName }).from(players).where(eq(players.telegramId, ownerId)).limit(1).catch(() => [] as { name: string }[]);
+    owner = row?.name ?? null;
+    if (owner) hints.push(`Everything meant for the owner goes to the Telegram account of ${owner}. If that is not you, change TELEGRAM_OWNER_ID.`);
   }
 
   const ok = database === "connected" || (database === "embedded" && !onVercel());
@@ -71,6 +84,7 @@ export async function GET() {
       push: pushEnabled() ? "enabled" : "disabled",
       channels,
       feedbackReachesOwner: ownerRoute,
+      owner,
       emailFrom: emailEnabled() ? emailFrom() : null,
       baseUrl: baseUrl(),
       hints,
