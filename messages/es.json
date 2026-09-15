@@ -1339,7 +1339,6 @@
       "lesson": "Clase con {name}",
       "with": "con {name}",
       "book": "Reservar más",
-      "coachLine": "¿Entrenas? Configura tu asistente",
       "requested": "pedido enviado; esperando el sí",
       "assistant": "Tu asistente",
       "assistantToday": "{count, plural, =0 {Nada reservado hoy} one {# clase hoy} other {# clases hoy}}",

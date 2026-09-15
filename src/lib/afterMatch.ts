@@ -1,5 +1,5 @@
 import type { Db } from "@/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { telegramCards, telegramChats, type Event, type Player } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";

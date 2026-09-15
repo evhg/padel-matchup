@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AdoptToken } from "@/components/AdoptToken";
 import { Footer, Header } from "@/components/Header";
+import { DeleteAccount } from "@/components/DeleteAccount";
+import { playerHasEvents } from "@/lib/domain/queries";
 import { MyMatches } from "@/components/MyMatches";
+import { MySettings } from "@/components/MySettings";
 import { getDb } from "@/db";
 import { findPlayerByPersonalToken } from "@/lib/domain/identity";
 import { markHomescreen } from "@/lib/domain/push";
@@ -38,7 +41,12 @@ export default async function PersonalPage({ params, searchParams }: { params: P
       <Header minimal />
       <AdoptToken token={token} needsCookie={sessionId !== player.id} />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-5 px-4 pt-2">
-        <MyMatches player={player} personalToken={token} />
+        <MyMatches player={player} />
+        {/* Settings and the delete button came with MyMatches until they were lifted out of it. They
+            belong on the page somebody reaches by their own link, so they are here, in the order the
+            rest of the app uses: what you read, then what you set, then the one thing you cannot undo. */}
+        <MySettings player={player} personalToken={token} hasMatches={await playerHasEvents(db, player.id)} />
+        <DeleteAccount />
       </main>
       <Footer />
     </>
