@@ -104,6 +104,8 @@ const STRINGS = {
     groupExists: (name: string) => `This crew is already a group: “${name}”.`,
     onlyPlayersGroup: "Only players in this match can start the group.",
     scoreNudge: (title: string) => `${title}: how did it go? Reply with the score, like 6-4 6-3, or tap 🏁.`,
+    /** Somebody else answered first. Said to a tap that raced the edit, and as the edit itself. */
+    scoreAlready: (who: string | null, score: string) => (who ? `${who} already added the score: ${score}` : `The score is already in: ${score}`),
     feedbackAdded: "Added to your note, thank you.",
     toastSaved: "Saved ✅",
     share: "📤 Share",
@@ -215,6 +217,7 @@ const STRINGS = {
     groupExists: (name: string) => `Эта компания уже группа: «${name}».`,
     onlyPlayersGroup: "Создать группу могут только игроки этого матча.",
     scoreNudge: (title: string) => `${title}: как сыграли? Ответьте счётом, например 6-4 6-3, или нажмите 🏁.`,
+    scoreAlready: (who: string | null, score: string) => (who ? `${who} уже внёс(ла) счёт: ${score}` : `Счёт уже внесён: ${score}`),
     feedbackAdded: "Добавил к вашей заметке, спасибо.",
     toastSaved: "Сохранено ✅",
     share: "📤 Поделиться",

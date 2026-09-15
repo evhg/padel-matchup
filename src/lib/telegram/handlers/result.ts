@@ -17,6 +17,7 @@ import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
 import { saveMatchScore, type SetScore } from "@/lib/domain/scores";
 import { answerCallbackQuery, botDeepLink, editMessageText, esc, sendMessage, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
 import { cardTitle, strings, type BotLocale, type BotStrings } from "../card";
+import { scoreLine } from "@/lib/afterMatch";
 import { findOrCreateTelegramPlayer } from "../identity";
 import { CODE_RE, codesInText, parseSets } from "../text";
 
@@ -86,6 +87,15 @@ async function handleResultPrompt(cb: NonNullable<TgUpdate["callback_query"]>, d
   if (ev.scoreLockedByCreator) {
     await answerCallbackQuery(cb.id, s.resultLocked);
     return "result:locked";
+  }
+  // Somebody already answered, on this screen or another. Asked before the line-up, because a tap on
+  // a nudge that has been answered is about the answer, not about the seats — and the seat check is
+  // what told a player "the result needs four players in the line-up" when the real story was that
+  // his partner had entered the score on the web an hour earlier.
+  const already = scoreLine(detail);
+  if (already) {
+    await answerCallbackQuery(cb.id, s.scoreAlready(already.who, already.score), { alert: true });
+    return "result:already";
   }
   const seats = playingSeats(detail);
   if (seats.length !== 4) {

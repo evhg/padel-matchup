@@ -176,6 +176,17 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
   } catch (e) {
     console.warn("[channels] load failed", event, code, e);
   }
+  // A score answers the "how did it go?" nudge sitting in every player's private chat, whichever
+  // screen it came from. Those are edited in place here, not by a channel adapter: the nudge is not
+  // a room's card, it is one message per player.
+  if (event === "match.result") {
+    try {
+      const { closeScoreNudges } = await import("@/lib/afterMatch");
+      await closeScoreNudges(db, code);
+    } catch (e) {
+      console.warn("[telegram] closing the score nudges failed", code, e);
+    }
+  }
   // Telegram alone sends private notes for a time change or a cancellation.
   try {
     const bot = await import("@/lib/telegram/bot");
