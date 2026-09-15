@@ -109,6 +109,33 @@ Two policies for a platform whose messages cannot be edited once sent (LINE):
 - **Sync.** Declare `canEdit: false`. The algorithm then keys the card on `materialKey(detail)` (status, start time, venue, capacity, seats taken, result) instead of the render hash: a fresh card goes out only when something a player cares about changed, never for a cosmetic re-render or a language switch. Joins, leaves, the complete note, the reminder and the result work as on every channel.
 - **Reply before push.** Where an answer to an incoming event is free but a push is metered (LINE's reply token: single use, short-lived), the adapter's `post` answers with the reply when `PostOptions.replyTo` carries the token and pushes otherwise. The router passes the event's token for anything sent in answer to a message; syncs, reminders and results that start on the web or in the cron are pushes and count against the monthly budget, so the adapter keeps them to the material changes above and never pushes what a reply already said.
 
+## A channel that is not a card channel (WhatsApp)
+
+WhatsApp is not the recipe above, and the reason is fixed rather than temporary. Meta's Groups API
+creates only the business's own groups — invite link only, eight participants, one business per
+group, an Official Business Account required, and no endpoint that adds a participant — so a bot can
+never sit in the crew's existing chat, which is the one thing every card channel is built on.
+Re-checked against Meta's own page on 14 September 2026.
+
+So `src/lib/whatsapp/` implements **no** part of `CardChannel`, and `CardChannel` must not be bent to
+fit it. It is one person and one thread:
+
+1. **No rows.** The player's phone number is the address, on the `players.phone` column that already
+   existed. There is no room table and no card table, because there is no room and no card.
+2. **`api.ts`** — the Cloud API, and a signature check that refuses anything unsigned. Everything is
+   off unless `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` are set (rule 4).
+3. **`link.ts`** — the hand-off. A person, not a bot, pastes `wa.me/<number>?text=JOIN-<code>` into
+   their own group; each tap opens a conversation the player started, which is free, opens a 24-hour
+   window and does not spend the daily limit (Meta counts unique numbers messaged *outside* an open
+   window). Their number and their consent arrive together, so nothing is collected in advance.
+4. **`bot.ts`** — the conversation, through the same rules as every other door: `joinWithPolicy` in
+   `src/lib/domain/joining.ts` for who may take a spot, and `src/lib/aftermath.ts` for what follows.
+   A second copy of either here would be a way around the first.
+
+What it cannot do belongs in the code as well as in a document: nobody learns the roster filled by
+scrolling past, and the group cannot settle a score. Both are the shared card, and the shared card is
+the part WhatsApp does not sell.
+
 ## Clubs and booking
 
 `src/lib/domain/clubs.ts` (claim, approve, edit by manage token, founding badge per city, listing) and `src/lib/booking/` (`platforms.ts`: recognise a booking platform from a link; `availability.ts`: free courts from a club's own `.ics` bookings feed or JSON free-slot list, hourly refresh). Rows in `clubs` exist only for claimed clubs; unclaimed venues render from their matches as before. The owner approves each claim from Telegram (`ca:`/`cr:` callbacks in `src/lib/telegram/bot.ts`); public pages and the API show a club only while `approvedAt` is set and `rejectedAt` is not. Adding a booking platform is one entry in `PLATFORMS`; adding an availability adapter is one branch in `refreshClubAvailability` plus a pure parser with tests. Never store club credentials; feeds are public URLs the club chose to share.

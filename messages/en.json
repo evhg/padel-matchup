@@ -1,4 +1,5 @@
 {
+  "wa": {"handoff": "Take a spot inside WhatsApp", "handoffHelp": "Paste this in your group instead of the link above. Tapping it opens a chat with us, and they can take a spot without leaving WhatsApp.", "copy": "Copy the WhatsApp line"},
   "want": {"title": "When do you want to play?", "sub": "Say it once. When a match appears that fits, you hear about it — and a spot that opens comes to you first.", "anyDay": "Any day", "anyTime": "Any time", "place": "Court or city", "placeHelp": "A court somebody plays at, or a city: Rawai Padel, Phuket, Singapore.", "add": "Save this", "remove": "Remove", "none": "You have not said when you want to play.", "unknownPlace": "We do not know that court yet. Try the city instead.", "tooMany": "Ten is the most you can have at once. Remove one first.", "at": "at"},
   "common": {
     "appName": "Kicksmash",

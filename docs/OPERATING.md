@@ -68,7 +68,11 @@ rollback targets.
 Vercel Web Analytics: 2,500 events a month (we count page renders ourselves).
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
-20 a minute per group. Discord: 50 requests a second. GitHub Actions: free on a public repository.
+20 a minute per group. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
+unverified tier — and the definition is the whole of it, because Meta counts only numbers messaged
+*outside* an open 24-hour window. A player who writes to us first costs nothing, and neither does
+anything we reply for the next day; only templates to people who have gone quiet are rationed.
+GitHub Actions: free on a public repository.
 
 ## The research desk (Tavily)
 

@@ -13,7 +13,6 @@ import {
   claimSlotPaid,
   confirmInvite,
   declineInvite,
-  joinEvent,
   leaveEvent,
   removeFromSlot,
   reserveSlot,
@@ -23,10 +22,11 @@ import {
   type JoinOutcome,
 } from "@/lib/domain/slots";
 import { joinGroup } from "@/lib/domain/groups";
-import { admission, formatLevel, hasRange } from "@/lib/domain/levels";
+import { formatLevel } from "@/lib/domain/levels";
+import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
+import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { setPlayerLevel } from "@/lib/domain/rating";
-import { createJoinRequest, decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
-import { lineupComplete } from "@/lib/lineup";
+import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
@@ -35,8 +35,6 @@ import { ActionFailure, assertRate, loadEvent, requireCreator, requirePlayer, ru
 import { LIMITS } from "@/lib/domain/ratelimit";
 
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
-const wasComplete = (detail: { roster: { status: string; position: number }[]; event: { capacity: number } }) =>
-  lineupComplete(detail.roster as Parameters<typeof lineupComplete>[0], detail.event.capacity);
 
 export async function joinAction(code: string, name?: string, level?: number | null): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested" }>> {
   return runA(async () => {
@@ -47,35 +45,24 @@ export async function joinAction(code: string, name?: string, level?: number | n
     // A level given while joining is the player's declaration (ranged events ask for it once).
     const myLevel = level != null ? await setPlayerLevel(db, me.id, level) : me.level;
     const ev = detail.event;
-    const range = { min: ev.levelMin, max: ev.levelMax };
-    if (hasRange(range) && me.id !== ev.creatorPlayerId) {
-      // Inside the range and confirmed (or the event takes declared levels): in. Otherwise the organizer's list.
-      const fit = admission(ev, { level: myLevel, levelVerifiedLevel: me.levelVerifiedLevel });
-      if (fit === "unknown") throw new ActionFailure("level_required");
-      if (fit !== "ok") {
-        const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
-        if (already) return { outcome: "already_in" as const };
-        await createJoinRequest(db, { eventId: ev.id, playerId: me.id, level: myLevel });
-        after(async () => {
-          await notifyCreator(db, ev, "requested", myLevel != null ? `${me.displayName} (${formatLevel(myLevel)})` : me.displayName, me.id);
-        });
-        revalidatePath(`/${code}`);
-        return { outcome: "requested" as const };
-      }
+    // The rules themselves live in the domain, because the web form is no longer the only door in.
+    const decision = await joinWithPolicy(db, detail, me, myLevel);
+    if (decision.kind === "level_required") throw new ActionFailure("level_required");
+    if (decision.kind === "requested") {
+      after(async () => {
+        await notifyCreator(db, ev, "requested", myLevel != null ? `${me.displayName} (${formatLevel(myLevel)})` : me.displayName, me.id);
+      });
+      revalidatePath(`/${code}`);
+      return { outcome: "requested" as const };
     }
-    const res = await joinEvent(db, { eventId: detail.event.id, playerId: me.id });
+    const res = decision.result;
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
-      // Joining a group's match makes you part of the group (so the next match pings you too).
-      if (ev.groupId) await joinGroup(db, ev.groupId, me.id).catch(() => undefined);
       // A join that started from a tagged link (an Instagram story, a poster) is counted per source.
+      // This one stays here: it is the web's own cookie and means nothing on another channel.
       const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
       if (source) await bumpMetric(db, `join_src_${source}`).catch(() => undefined);
       after(async () => {
-        await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", me.displayName, me.id);
-        const fresh = await notifyLineupChange(db, res.event, before, me.id);
-        if (res.outcome === "joined") await sendCalendarInvite(db, fresh ?? res.event, me);
-        await emitMatchEvent(db, "match.joined", code, { player: { name: me.displayName, level: myLevel }, outcome: res.outcome });
-        if (res.event.status === "full") await emitMatchEvent(db, "match.full", code);
+        await afterJoin(db, res, me, { wasComplete: before, code, level: myLevel });
       });
     }
     revalidatePath(`/${code}`);
@@ -126,12 +113,7 @@ export async function leaveAction(code: string): Promise<ActionResult<null>> {
     if (!me) throw new ActionFailure("not_member");
     const res = await leaveEvent(db, { eventId: detail.event.id, playerId: me.id });
     after(async () => {
-      if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", me.displayName, me.id);
-      const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
-      await notifyPromotion(db, fresh ?? res.event, res.promotion);
-      await emitMatchEvent(db, "match.left", code, { player: { name: me.displayName } });
-      // Nobody was waiting, so the spot is still open: the crew and the club's regulars hear about it once.
-      await notifyRefill(db, res.event.id);
+      await afterLeave(db, res, me, { wasComplete: before, code });
     });
     revalidatePath(`/${code}`);
     return null;
