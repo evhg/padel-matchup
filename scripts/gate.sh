@@ -47,4 +47,7 @@ if [ -n "${GATE_E2E:-}" ]; then
     step "browser suites: $suites" env E2E_ONLY="$suites" pnpm e2e
   fi
 fi
+# Last, because the browser suites only tear their server down as they finish: anything alive now was
+# left behind, and a wait loop with no sleep is never anything but a mistake.
+step "nothing left running" node scripts/check-strays.mjs
 echo "gate passed"
