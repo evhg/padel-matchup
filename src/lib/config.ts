@@ -22,6 +22,13 @@ export function shortHost(): string {
 
 export const emailEnabled = () => Boolean(process.env.RESEND_API_KEY);
 
+/**
+ * The owner's Telegram id: the single route everything the owner has to see travels down —
+ * feedback, the listening desk, uptime, production errors. It lives here rather than in the
+ * listening desk because the health check has to be able to ask without pulling that desk in.
+ */
+export const ownerTelegramId = () => (process.env.TELEGRAM_OWNER_ID ? Number(process.env.TELEGRAM_OWNER_ID) : null);
+
 /** Apex host without a leading www (kicksma.sh). */
 export function apexHost(): string {
   return shortHost().replace(/^www\./, "");
