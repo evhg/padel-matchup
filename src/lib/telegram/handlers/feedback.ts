@@ -3,7 +3,8 @@ import type { TelegramChat } from "@/db/schema";
 import type { OpContext } from "@/lib/api/operations";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { appendFeedbackReply, createFeedback, FEEDBACK_LIMITS, feedbackCountToday, findNoteForReply, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
+import { appendFeedbackReply, createFeedback, FEEDBACK_LIMITS, feedbackCountToday, findNoteForReply, markAcknowledged, markNotFeedback, markOwnNote, saidBefore } from "@/lib/feedback/store";
+import { ownerTelegramId } from "@/lib/config";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { esc, sendMessage, telegramBotId, type TgMessage, type TgUser } from "../api";
 import { strings, type BotLocale } from "../card";
@@ -39,6 +40,15 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
     telegramThreadId: msg.message_thread_id ?? null,
     telegramMessageId: msg.message_id,
   });
+  // The owner writing as a player: the proposal is already on its way to this same chat, and it is
+  // the useful one. Nothing is said back and nothing is counted as sent, because nothing was.
+  if (ownerTelegramId() !== null && from.id === ownerTelegramId()) {
+    await markOwnNote(db, row.id);
+    ctx.afterwards(async () => {
+      await proposeToOwner(db, row.id).catch(() => undefined);
+    });
+    return `feedback:own:${row.id}`;
+  }
   const ack = await composeAck(db, { text, name: from.first_name, locale, source: "telegram", said });
   const res = await sendMessage(chat.chatId, esc(ack.reply), { silent: !isPrivate, replyTo: msg.message_id });
   if (ack.kind === "not_feedback") {

@@ -582,3 +582,62 @@ describe("nobody is sent the same sentence twice", () => {
     expect(prompts.at(-1)).not.toContain("last reply this person was sent");
   });
 });
+
+/**
+ * Erik owns Kicksmash and plays on its courts. On 15 September he used the feedback door twice as a
+ * player, and both times it answered him as a stranger — "Noted, Eriik. I read every note myself" —
+ * and then sent the internal verdict on his own note into the same chat, ending "say build or skip
+ * in your Claude session". Two messages, and the first one addressed to somebody who needed
+ * reassuring that a person reads these, when that person is him.
+ */
+describe("the owner writing as a player", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+  beforeEach(async () => {
+    await db.delete(feedback);
+  });
+
+  it("is not thanked like a stranger, and gets the proposal instead", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123456:TESTTOKEN";
+    process.env.TELEGRAM_OWNER_ID = "1248577943";
+    delete process.env.ANTHROPIC_API_KEY;
+    const out: { method: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      const method = String(url).split("/").pop()!;
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      out.push({ method, body });
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 11, chat: { id: body.chat_id } } }), { headers: { "content-type": "application/json" } });
+    });
+    const chat = { id: 1248577943, type: "private" as const };
+    const erik = { id: 1248577943, first_name: "Eriik", username: "erik_tg", language_code: "en" };
+    const res = await handleTelegramUpdate(db, { update_id: 40, message: { message_id: 400, date: 0, chat, from: erik, text: "/feedback the result button is stale after somebody else scores" } }, NO_SIDE_EFFECTS);
+    expect(res).toMatch(/^feedback:own:/);
+
+    const row = await getFeedback(db, res.slice("feedback:own:".length));
+    // Filed and on the desk, but nothing was said, so nothing is counted as said.
+    expect(row).toMatchObject({ status: "acknowledged", messagesSent: 0, replyText: null });
+    const said = out.filter((c) => c.method === "sendMessage").map((c) => String(c.body.text));
+    expect(said.some((t) => /I read every note myself|Noted|Thanks/.test(t))).toBe(false);
+  });
+
+  it("still answers a player who is not the owner", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "123456:TESTTOKEN";
+    process.env.TELEGRAM_OWNER_ID = "1248577943";
+    delete process.env.ANTHROPIC_API_KEY;
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 12, chat: { id: body.chat_id } } }), { headers: { "content-type": "application/json" } });
+    });
+    const chat = { id: 5550001, type: "private" as const };
+    const res = await handleTelegramUpdate(db, { update_id: 41, message: { message_id: 401, date: 0, chat, from: { id: 5550001, first_name: "Mia", language_code: "en" }, text: "/feedback the court name could be bigger" } }, NO_SIDE_EFFECTS);
+    expect(res).toMatch(/^feedback:/);
+    expect(res).not.toMatch(/^feedback:own:/);
+    const row = await getFeedback(db, res.slice("feedback:".length));
+    expect(row?.messagesSent).toBe(1);
+    expect(row?.replyText).toContain("Mia");
+  });
+});
