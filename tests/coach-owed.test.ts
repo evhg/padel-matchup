@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { bookLesson, claimLessonPaid, createCoach, owedToCoach, presetHours, setLessonPaid, setStudentStatus } from "@/lib/domain/coaching";
+import { bookLesson, claimLessonPaid, createCoach, owedPerStudent, owedToCoach, presetHours, setLessonPaid, setStudentStatus } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 /**
@@ -81,5 +81,35 @@ describe("who still owes the coach", () => {
     expect((await owedToCoach(db, mine.id)).map((r) => r.lessonId)).toEqual([a.lesson.id]);
     expect((await owedToCoach(db, theirs.id)).map((r) => r.lessonId)).toEqual([b.lesson.id]);
     expect(await owedToCoach(db, mine.id, 0)).toEqual([]);
+  });
+});
+
+/**
+ * The same question on the students screen, where the coach reads it rather than asks it: one figure
+ * per student, and one total. Pure, because the screen already has both lists in hand.
+ */
+describe("what each student owes, as one figure", () => {
+  it("adds a student's unpaid lessons to the package they have not paid for", () => {
+    const owed = owedPerStudent(
+      [
+        { studentPlayerId: "anna", amount: 800 },
+        { studentPlayerId: "anna", amount: 800 },
+        { studentPlayerId: "bo", amount: 600 },
+      ],
+      [{ studentPlayerId: "anna", amount: 4800 }],
+    );
+    expect(owed.get("anna")).toBe(6400);
+    expect(owed.get("bo")).toBe(600);
+  });
+
+  it("leaves out a student who owes nothing, so the screen shows no zero", () => {
+    const owed = owedPerStudent([{ studentPlayerId: "cara", amount: 0 }], [{ studentPlayerId: "dee", amount: null }]);
+    expect(owed.size).toBe(0);
+    expect(owed.get("cara")).toBeUndefined();
+  });
+
+  it("counts a package with no price as nothing owed rather than as a blank", () => {
+    const owed = owedPerStudent([{ studentPlayerId: "eve", amount: 500 }], [{ studentPlayerId: "eve", amount: null }]);
+    expect(owed.get("eve")).toBe(500);
   });
 });
