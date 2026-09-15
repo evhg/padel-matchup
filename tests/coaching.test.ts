@@ -228,3 +228,30 @@ describe("a coach's book", () => {
     expect(second.coach.id).toBe(first.coach.id);
   });
 });
+
+describe("a student's name, as the coach typed it", () => {
+  /**
+   * A coach types "pat +10" into the assistant on a phone, and that made a student called "pat" —
+   * lower case in their list, in every notice that person ever got, and on the person's own profile.
+   * A name arrives here as a token and has to leave as a name.
+   */
+  it("capitalises a name typed in lower case, in any alphabet", async () => {
+    const coach = await createCoach(db, { playerId: (await makePlayer(db, "Naming coach")).id, displayName: "Naming coach", tz: TZ, hours: presetHours("both") });
+    const pat = await addStudentByName(db, coach.id, "pat", "en");
+    expect(pat.displayName).toBe("Pat");
+    const two = await addStudentByName(db, coach.id, "maria jose", "en");
+    expect(two.displayName).toBe("Maria Jose");
+    const hyphen = await addStudentByName(db, coach.id, "anne-marie", "en");
+    expect(hyphen.displayName).toBe("Anne-Marie");
+    const ru = await addStudentByName(db, coach.id, "игорь", "ru");
+    expect(ru.displayName).toBe("Игорь");
+  });
+
+  it("leaves a name that already carries a capital exactly as it was typed", async () => {
+    const coach = await createCoach(db, { playerId: (await makePlayer(db, "Careful coach")).id, displayName: "Careful coach", tz: TZ, hours: presetHours("both") });
+    // These know better than any rule this function could carry.
+    for (const name of ["María José", "McDonald", "van der Berg", "OLGA"]) {
+      expect((await addStudentByName(db, coach.id, name, "en")).displayName).toBe(name);
+    }
+  });
+});

@@ -114,6 +114,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
           <p className="mt-1 text-sm text-muted">
             {coach.clubNames.length ? `${t("page.at", { clubs: coach.clubNames.join(", ") })} · ` : ""}
             {t("page.lesson", { minutes: coach.lessonMinutes })}
+            {/* The setup asks what a lesson costs and then nothing showed it: a student learned the
+                price only once they owed it. It is the first thing anyone wants to know. */}
+            {coach.priceSingle ? ` · ${coach.priceSingle} ${coach.currency}` : ""}
           </p>
           {coach.bio && <p className="mt-2 text-sm">{coach.bio}</p>}
           {!coach.isPublic && status === "none" && !me && <p className="mt-2 text-xs text-faint">{t("page.private")}</p>}

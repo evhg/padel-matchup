@@ -36,18 +36,18 @@ const RULES = [
   [/^\.env\.example$/, [], "an example file"],
 
   // A channel and its bot.
-  [/^src\/lib\/telegram\//, ["telegram", "coach"], "the Telegram bot, which the coach's assistant lives in"],
+  [/^src\/lib\/telegram\//, ["telegram", "coach", "controls"], "the Telegram bot, which the coach's assistant lives in, and every control it sends"],
   [/^src\/lib\/channels\/telegram\.ts$/, ["telegram"], "the Telegram adapter"],
   [/^src\/lib\/discord\//, ["discord"], "the Discord bot"],
   [/^src\/lib\/channels\/discord\.ts$/, ["discord"], "the Discord adapter"],
-  [/^src\/lib\/channels\//, ["telegram", "discord"], "the shared card algorithm, so every channel"],
-  [/^src\/app\/api\/telegram\//, ["telegram", "coach"], "the Telegram routes"],
+  [/^src\/lib\/channels\//, ["telegram", "discord", "controls"], "the shared card algorithm, so every channel and every control on a card"],
+  [/^src\/app\/api\/telegram\//, ["telegram", "coach", "controls"], "the Telegram routes, including the one that decides which taps get read"],
   [/^src\/app\/api\/discord\//, ["discord"], "the Discord routes"],
 
   // Areas with a suite of their own.
-  [/^src\/(lib\/coach|app\/coach|app\/c)\//, ["coach"], "the coach's book"],
+  [/^src\/(lib\/coach|app\/coach|app\/c)\//, ["coach", "coach-states"], "the coach's book, and its screens in the states that make sentences false"],
   [/^src\/lib\/domain\/coaching\.ts$/, ["coach"], "the coach's rules"],
-  [/^src\/components\/coach\//, ["coach"], "the coach's screens, which only the coach journey opens"],
+  [/^src\/components\/coach\//, ["coach", "coach-states"], "the coach's screens, which only the coach journeys open"],
   [/^src\/actions\/coach\.ts$/, ["coach", "telegram"], "the coach's writes, which the bot shares"],
   [/^src\/lib\/domain\/(clubs|venueBoard)\.ts$/, ["clubs", "venues"], "clubs and their boards"],
   [/^src\/lib\/booking\//, ["clubs"], "booking platforms and availability"],
