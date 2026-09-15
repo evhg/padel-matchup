@@ -1,21 +1,23 @@
 import type { Db } from "@/db";
-import { telegramCards, type Event, type Player } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { telegramCards, telegramChats, type Event, type Player } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isOccupied } from "@/lib/domain/events";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { subscriptionsFor, removePushSubscription } from "@/lib/domain/push";
-import { getEventDetail, type EventDetail } from "@/lib/domain/queries";
+import { getEventByCode, getEventDetail, type EventDetail } from "@/lib/domain/queries";
 import { emailEnabled } from "@/lib/config";
 import { sendEmail } from "@/lib/email/send";
 import { layout, translatorFor } from "@/lib/email/templates";
 import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
-import { esc, sendMessage, sendPhoto, telegramEnabled } from "@/lib/telegram/api";
+import { editMessageText, esc, sendMessage, sendPhoto, telegramEnabled } from "@/lib/telegram/api";
 import type { Awarded } from "@/lib/domain/milestones";
 import { momentLine } from "@/lib/moments";
-import { strings, botLocale } from "@/lib/telegram/card";
+import { strings, botLocale, type BotLocale } from "@/lib/telegram/card";
+import { matchResult } from "@/lib/domain/result";
 import { cardTitle } from "@/lib/telegram/card";
 
 /**
@@ -70,6 +72,55 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
     }
   }
   return out;
+}
+
+/**
+ * The nudge, closed once somebody answers it.
+ *
+ * "How did it go?" went to every player privately, with a 🏁 button, and then sat there live after
+ * one of them entered the score on another screen. A player tapped the stale button and was told
+ * "The result needs four players in the line-up" — neither true nor the point. The nudge is a card
+ * like any other, so it is edited in place and its button goes (rule 5), and what it says is what
+ * actually happened: who answered, and with what.
+ *
+ * Best effort per message: a chat that blocked the bot, or a message too old to edit, must not stop
+ * the rest. Returns how many were closed.
+ */
+export async function closeScoreNudges(db: Db, code: string): Promise<number> {
+  if (!telegramEnabled()) return 0;
+  const detail = await getEventByCode(db, code);
+  if (!detail || detail.scores.length === 0) return 0;
+  const rows = await db
+    .select({ chatId: telegramCards.chatId, messageId: telegramCards.messageId, locale: telegramChats.locale })
+    .from(telegramCards)
+    .innerJoin(telegramChats, eq(telegramChats.chatId, telegramCards.chatId))
+    .where(and(eq(telegramCards.eventId, detail.event.id), eq(telegramCards.kind, "nudge")));
+  if (rows.length === 0) return 0;
+  const line = scoreLine(detail);
+  if (!line) return 0;
+  let closed = 0;
+  for (const row of rows) {
+    const locale: BotLocale = botLocale(row.locale);
+    const s = strings(locale);
+    const res = await editMessageText(row.chatId, row.messageId, esc(`${cardTitle(detail, locale)} — ${s.scoreAlready(line.who, line.score)}`), null).catch(() => ({ ok: false as const }));
+    if (res.ok) closed++;
+  }
+  // The rows stay: a reply to this message still finds the match, which is how a correction arrives.
+  return closed;
+}
+
+/** The score as a person would say it, and who put it there — from rows the caller already has. */
+export function scoreLine(detail: EventDetail): { who: string | null; score: string } | null {
+  if (detail.scores.length === 0) return null;
+  const r = matchResult(
+    detail.scores,
+    detail.roster.map((x) => ({ team: x.team, status: x.status, name: x.player?.displayName ?? x.invitedName ?? "?" })),
+  );
+  const score = r?.score?.trim();
+  if (!score) return null;
+  const by = detail.scores.find((x) => x.enteredByPlayerId)?.enteredByPlayerId ?? null;
+  const who = by ? (detail.roster.find((x) => x.playerId === by)?.player?.displayName ?? null) : null;
+  return { who, score };
 }
 
 /** A moment, once, to the player who earned it: the picture and one button, silent. Web and email players find it on My matches. */
