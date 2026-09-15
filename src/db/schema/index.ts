@@ -7,6 +7,7 @@
 export * from "./enums";
 export * from "./players";
 export * from "./events";
+export * from "./demand";
 export * from "./groups";
 export * from "./clubs";
 export * from "./coaching";

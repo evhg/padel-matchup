@@ -316,6 +316,13 @@
       "when": 1789392222437,
       "tag": "0044_slots_payment_status",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789403059894,
+      "tag": "0045_demand_signals",
+      "breakpoints": true
     }
   ]
 }

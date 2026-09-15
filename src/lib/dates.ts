@@ -174,3 +174,14 @@ export function nextOccurrence(dow: number, time: string, tz: string, now = new 
   const d = new Date(Date.UTC(w.year, w.month - 1, w.day + off));
   return { date: `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`, time };
 }
+
+/**
+ * Weekday words in the three languages, 0 = Sunday. One list: the coach's assistant reads "fri" off a
+ * booking line and a player reads it off "want tue 14", and two copies would drift the moment either
+ * gained a word.
+ */
+export const WEEKDAY_WORDS: Record<string, number> = {
+  sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6,
+  вс: 0, воскресенье: 0, пн: 1, понедельник: 1, вт: 2, вторник: 2, ср: 3, среда: 3, среду: 3, чт: 4, четверг: 4, пт: 5, пятница: 5, пятницу: 5, сб: 6, суббота: 6, субботу: 6,
+  dom: 0, domingo: 0, lun: 1, lunes: 1, mar: 2, martes: 2, mié: 3, mie: 3, miércoles: 3, miercoles: 3, jue: 4, jueves: 4, vie: 5, viernes: 5, sáb: 6, sab: 6, sábado: 6, sabado: 6,
+};

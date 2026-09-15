@@ -10,7 +10,7 @@ import { facts, type Fact } from "@/db/schema";
  */
 export const CHANNELS = ["web", "telegram", "discord", "line", "api", "mcp", "cron", "email", "calendar"] as const;
 export type Channel = (typeof CHANNELS)[number];
-export type FactSubject = "match" | "lesson" | "club" | "coach" | "group" | "series" | "player";
+export type FactSubject = "match" | "lesson" | "club" | "coach" | "group" | "series" | "player" | "want";
 
 export type FactInput = {
   /** Dotted, subject first: match.joined, lesson.cancelled. */

@@ -2,6 +2,7 @@ import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "dri
 import type { Db } from "@/db";
 import { activity, events, groupMembers, players, pushSubscriptions, slots, type Event, type Player } from "@/db/schema";
 import { REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WINDOW_MS } from "@/lib/config";
+import { markWantsNotified, matchingWants } from "./demand";
 
 /**
  * A spot that opens, and the people who would take it.
@@ -113,6 +114,12 @@ export async function refillAudience(db: Db, ev: Event, now: Date): Promise<Play
     if (id && !excluded.has(id) && !ordered.includes(id) && ordered.length < CANDIDATE_MAX) ordered.push(id);
   };
 
+  // Whoever asked for this hour at this place comes first. A standing want is the strongest signal
+  // there is that somebody will take the seat — stronger than belonging to the crew, and far stronger
+  // than having played at the club once in three months — and the fan-out is capped, so order decides
+  // who actually hears.
+  const wanted = await matchingWants(db, ev, now);
+  for (const w of wanted) add(w.playerId);
   if (ev.groupId) {
     const crew = await db.select({ playerId: groupMembers.playerId }).from(groupMembers).where(eq(groupMembers.groupId, ev.groupId));
     for (const m of crew) add(m.playerId);
@@ -159,6 +166,10 @@ export async function refillRecipients(db: Db, eventId: string, now: Date): Prom
   if (people.length === 0) return null;
   // Claimed last: a match nobody can be told about keeps its notice for a tick when somebody can be.
   if (!(await claimRefillNotice(db, ev.id, now))) return null;
+  // A want answered by this push has had its answer. Without this the hourly sweep would find the
+  // same people again and tell them about the same match a second time.
+  const told = new Set(people.map((p) => p.id));
+  await markWantsNotified(db, (await matchingWants(db, ev, now)).filter((w) => told.has(w.playerId)).map((w) => w.id), now);
   return { event: ev, players: people };
 }
 

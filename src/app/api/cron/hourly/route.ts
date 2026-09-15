@@ -36,8 +36,9 @@ import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getPlayer } from "@/lib/domain/players";
-import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
+import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, notifyWanted, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
 import { findRefillsDue } from "@/lib/domain/refill";
+import { claimWantsNotice, findWantsDue, pruneWants } from "@/lib/domain/demand";
 import { nudgeForScore } from "@/lib/afterMatch";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
@@ -63,7 +64,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, refills: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -130,6 +131,20 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(`refill: ${String(e)}`);
+  }
+
+  try {
+    // Somebody asked to play around a time and a place; these are the matches that answer them. One
+    // sweep instead of a call in each of the five places a match can be created, and the claim makes
+    // sure two ticks never answer the same match twice.
+    for (const ev of await findWantsDue(db, now)) {
+      if (!(await claimWantsNotice(db, ev.id, now))) continue;
+      const { told } = await notifyWanted(db, ev, now);
+      if (told > 0) summary.wantsAnswered++;
+    }
+    summary.wantsPruned = await pruneWants(db, now);
+  } catch (e) {
+    summary.errors.push(`wants: ${String(e)}`);
   }
 
   try {

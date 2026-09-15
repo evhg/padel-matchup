@@ -1,4 +1,5 @@
 {
+  "want": {"title": "When do you want to play?", "sub": "Say it once. When a match appears that fits, you hear about it — and a spot that opens comes to you first.", "anyDay": "Any day", "anyTime": "Any time", "place": "Court or city", "placeHelp": "A court somebody plays at, or a city: Rawai Padel, Phuket, Singapore.", "add": "Save this", "remove": "Remove", "none": "You have not said when you want to play.", "unknownPlace": "We do not know that court yet. Try the city instead.", "tooMany": "Ten is the most you can have at once. Remove one first.", "at": "at"},
   "common": {
     "appName": "Kicksmash",
     "tagline": "Padel in one link. No app, no account.",
@@ -414,6 +415,7 @@
   },
   "email": {
     "clubMatch": {"subject": "{club}: a match on {day}", "heading": "New at {club}", "body": "{club} has put a match on the board for {day} at {time}. {spots} Tap to take a spot."},
+    "wanted": {"subject": "A match on {day}, where you asked to play", "heading": "The match you asked for", "body": "You said you wanted to play around this time at {venue}. There is a match on {day} at {time}. {spots} Tap to take a spot. To stop these, remove the request on your own page."},
     "openMatch": "Open the match",
     "footer": "Sent by {app} because you added your email. Manage everything on the match page.",
     "when": "When",
@@ -652,7 +654,9 @@
     "groupMatchTitle": "{group}: new match",
     "groupMatchBody": "{day} at {time} · {venue}. Tap to join.",
     "scoreTitle": "🏁 How did it go?",
-    "scoreBody": "{venue}. Enter the score; one tap."
+    "scoreBody": "{venue}. Enter the score; one tap.",
+    "wantedTitle": "You asked for this one · {day} {time}",
+    "wantedBody": "{venue} · {spots}. Tap to take a spot."
   },
   "about": {
     "footerLink": "Privacy & terms (short, promise)",
