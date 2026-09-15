@@ -124,3 +124,58 @@ export const discordCards = pgTable(
 export type DiscordChannel = typeof discordChannels.$inferSelect;
 
 export type DiscordCard = typeof discordCards.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// line_rooms / line_cards — the same quiet bot for LINE, with one difference
+// that shapes everything: LINE cannot edit a message once it is sent.
+//
+// So `rendered` here holds `materialKey(detail)` rather than a render hash. A
+// fresh card goes out only when something a player cares about changed — the
+// time, the venue, a seat taken, the result — never for a cosmetic re-render
+// or a language switch, because on this channel every "edit" is a new message
+// in everyone's chat and a push against a metered monthly budget.
+//
+// A source id is a string and says which of the three kinds of place it is:
+// a group (C…), a multi-person room (R…) or one person (U…).
+// ---------------------------------------------------------------------------
+export const lineRooms = pgTable("line_rooms", {
+  /** LINE source id: C… a group, R… a room, U… one person. */
+  roomId: text("room_id").primaryKey(),
+  /** "group", "room" or "user" — the three shapes a LINE source comes in. */
+  type: text("type").notNull(),
+  /** Locale the bot speaks here. */
+  locale: text("locale").notNull().default("en"),
+  tz: text("tz"),
+  venueName: text("venue_name"),
+  /** The group behind this room, learned from the first group match carded here. */
+  groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
+  /** Bot removed, or the room left: keep the row, stop pushing. */
+  leftAt: timestamp("left_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const lineCards = pgTable(
+  "line_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => lineRooms.roomId, { onDelete: "cascade" }),
+    messageId: text("message_id").notNull(),
+    /** card = the live match card; result = the result posted once. */
+    kind: text("kind").notNull().default("card"),
+    /** The material key of the last card sent here, not a render hash: see the note above. */
+    rendered: text("rendered"),
+    completeNotedAt: timestamp("complete_noted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("line_cards_event_room_kind_idx").on(t.eventId, t.roomId, t.kind), index("line_cards_event_idx").on(t.eventId)],
+);
+
+export type LineRoom = typeof lineRooms.$inferSelect;
+
+export type LineCard = typeof lineCards.$inferSelect;

@@ -37,10 +37,11 @@ const RULES = [
 
   // A channel and its bot.
   [/^src\/lib\/telegram\//, ["telegram", "coach", "controls"], "the Telegram bot, which the coach's assistant lives in, and every control it sends"],
+  [/^src\/(lib\/line|app\/api\/line)\//, ["line", "controls"], "the LINE bot and its webhook"],
   [/^src\/lib\/channels\/telegram\.ts$/, ["telegram"], "the Telegram adapter"],
   [/^src\/lib\/discord\//, ["discord"], "the Discord bot"],
   [/^src\/lib\/channels\/discord\.ts$/, ["discord"], "the Discord adapter"],
-  [/^src\/lib\/channels\//, ["telegram", "discord", "controls"], "the shared card algorithm, so every channel and every control on a card"],
+  [/^src\/lib\/channels\//, ["telegram", "discord", "line", "controls"], "the shared card algorithm, so every channel and every control on a card"],
   [/^src\/app\/api\/telegram\//, ["telegram", "coach", "controls"], "the Telegram routes, including the one that decides which taps get read"],
   [/^src\/app\/api\/discord\//, ["discord"], "the Discord routes"],
 

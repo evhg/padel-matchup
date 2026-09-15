@@ -83,6 +83,9 @@ export const events = pgTable(
     telegramReminderSentAt: timestamp("telegram_reminder_sent_at", { withTimezone: true }),
     /** Same for the Discord channels that carry this match. */
     discordReminderSentAt: timestamp("discord_reminder_sent_at", { withTimezone: true }),
+    /** The hour-before card was pushed to this match's LINE rooms. Its own column, like Discord's:
+        a channel that cannot edit must not re-push what another channel already said. */
+    lineReminderSentAt: timestamp("line_reminder_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
