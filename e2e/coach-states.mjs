@@ -67,7 +67,7 @@ try {
   const handle = (await nadia.getByTestId("student-link").innerText()).match(/\/c\/([a-z0-9-]+)/)?.[1] ?? "";
   await nadia.getByTestId("setup-finish").click();
   await nadia.waitForURL(/\/coach/, { timeout: 30000 });
-  check("a coach exists, with no price set — a state the setup allows", Boolean(handle), handle);
+  check("a coach exists with a handle the walk can visit", /^[a-z0-9-]+$/.test(handle), handle);
 
   // ---------------------------------------------------------------- the awkward states
   // Pat has a package. Sam does not. That difference is what made "your package is untouched" wrong.
@@ -117,12 +117,16 @@ try {
   const strangerText = await sam.locator("body").innerText();
   check("the walk is actually on the coach's page and not a 404", /Nadia/.test(strangerText) && !/not found/i.test(strangerText), strangerText.slice(0, 80));
 
-  // A price that was never set must not print as an empty or broken amount anywhere a student reads.
-  check(
-    "a coach with no price set shows no half-written amount to a student",
-    !/(^|\s)(฿|THB|undefined|NaN|null)\s*(\d|$)/m.test(strangerText) && !/\b0\s*(฿|THB)\b/.test(strangerText),
-    (strangerText.match(/.{0,30}(undefined|NaN|null|฿\s*$).{0,30}/) ?? [""])[0],
-  );
+  // The setup asks what a lesson costs; for a long time nothing showed it, and a student found out
+  // only once they owed it. This is that fix, held in place.
+  check("a student can see what a lesson costs before booking", /\b800\s*THB\b/.test(strangerText), strangerText.slice(0, 120));
+
+  // And an amount must never reach a screen without a number beside it. The first version of this
+  // check used one regex for both jobs and could not tell "800 THB" from a bare "THB" — it went red
+  // on the very fix above. Two questions, two checks.
+  const amounts = strangerText.match(/.{0,14}(฿|THB)/g) ?? [];
+  const broken = amounts.filter((a) => !/\d\s*(฿|THB)$/.test(a)).concat(strangerText.match(/.{0,20}(undefined|NaN|null).{0,20}/g) ?? []);
+  check("no amount reaches a student without a number beside it", broken.length === 0, broken.join(" | "));
 
   // The coach's own page at desktop width: the "add to home screen" class of prompt is written for a
   // phone, and item four of the review was exactly this.
