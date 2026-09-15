@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
+import { DeleteAccount } from "@/components/DeleteAccount";
 import { MyMatches } from "@/components/MyMatches";
 import { NameGate } from "@/components/NameGate";
 import { RestoreWithEmail } from "@/components/RestoreWithEmail";
@@ -116,6 +117,10 @@ export default async function MePage({ searchParams }: Props) {
           </p>
         )}
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
+        {/* Last on the page, which is what DeleteAccount has always said of itself. It was the last
+            thing in MyMatches, and MyMatches stopped being the last thing on this screen — so the one
+            irreversible button in the product came to sit above "When do you want to play?". */}
+        <DeleteAccount />
       </main>
       <Footer />
     </>
