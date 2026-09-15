@@ -5,6 +5,7 @@ import { newCoachCode } from "@/lib/codes";
 import { coachAssets, coachBlocks, coachManagers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { venueSlug } from "./venueBoard";
 import { cityOf } from "./cities";
 import { channelOf, recordFact } from "./facts";
 import { createPlayer } from "./players";
@@ -110,6 +111,26 @@ export async function uniqueHandle(db: Db, base: string): Promise<string> {
   throw new DomainError("invalid", "handle");
 }
 
+/**
+ * The slugs a coach's clubs answer to. Two coaches typed "warehaus" and "Warehaus" for the same
+ * courts, and to a database those were two different places — which is why no club could be shown
+ * who teaches there. The slug is the same one a match carries (`events.venue_slug`) and a club is
+ * keyed by (`clubs.slug`), so free text and a picked club land on the same key.
+ *
+ * A picked slug is kept as well as derived, and first: a club whose page is "warehaus" may be named
+ * "Warehaus Padel Phuket", and deriving from that name alone would miss it.
+ */
+export function coachClubSlugs(names: string[] | string | null | undefined, picked: string[] = []): string[] {
+  const out: string[] = [];
+  for (const s of [...picked, ...cleanClubNames(names).map((n) => venueSlug(n) ?? "")]) {
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out.slice(0, CLUBS_MAX);
+}
+
+/** How many clubs one coach can name. Both the names and their slugs stop here, from one constant, so the two lists cannot drift apart. */
+export const CLUBS_MAX = 5;
+
 export const cleanClubNames = (names: string[] | string | null | undefined): string[] => {
   const list = Array.isArray(names) ? names : (names ?? "").split(/[,;\n]+/);
   const seen = new Set<string>();
@@ -121,7 +142,7 @@ export const cleanClubNames = (names: string[] | string | null | undefined): str
       out.push(n);
     }
   }
-  return out.slice(0, 5);
+  return out.slice(0, CLUBS_MAX);
 };
 
 export type CreateCoachInput = { playerId: string; displayName: string; clubNames?: string[] | string | null; lessonMinutes?: number; hours?: Hours; tz: string; languages?: string[] };
@@ -148,6 +169,7 @@ export async function insertCoach(db: Db, input: CreateCoachInput): Promise<{ co
       handle: await uniqueHandle(db, displayName),
       displayName,
       clubNames: cleanClubNames(input.clubNames),
+      clubSlugs: coachClubSlugs(input.clubNames),
       languages: (input.languages ?? ["en"]).filter((l) => ["en", "ru", "es"].includes(l)).slice(0, 3),
       lessonMinutes: minutes,
       hours: input.hours ?? presetHours("both"),
@@ -252,7 +274,12 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   // A price is whole currency units and never negative; zero or blank means this coach sells packages only.
   if (clean.priceSingle !== undefined) clean.priceSingle = clean.priceSingle === null ? null : Math.min(1_000_000, Math.max(0, Math.round(clean.priceSingle))) || null;
   if (clean.currency !== undefined) clean.currency = (clean.currency || "THB").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3) || "THB";
-  if (clean.clubSlugs !== undefined) clean.clubSlugs = [...new Set(clean.clubSlugs)].filter(Boolean).slice(0, 8);
+  // Names and slugs move together: a coach who changes where they teach changes both, and a name
+  // typed with no club picked still produces the slug a club is found by.
+  if (clean.clubNames !== undefined || clean.clubSlugs !== undefined) {
+    const names = clean.clubNames ?? (await db.select({ clubNames: coaches.clubNames }).from(coaches).where(eq(coaches.id, coachId)).limit(1))[0]?.clubNames ?? [];
+    clean.clubSlugs = coachClubSlugs(names, clean.clubSlugs ?? []);
+  }
   // Founding places: listing the book for the first time takes one while the city has any; moving city takes one there when
   // that city has any (a Bangkok founder does not walk into a full Singapore with a badge) and gives the old one back.
   const extra: Partial<typeof coaches.$inferInsert> = {};
@@ -691,6 +718,10 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
       // so raising the price next month never rewrites what last month's lessons cost.
       amount: pkg ? null : (coach.priceSingle ?? null),
       note: input.note?.trim().slice(0, 200) || null,
+      // Where it happens, but only when there is one answer. A coach who teaches at two clubs gets
+      // null: guessing would put this lesson on the other club's page, and a club reading a wrong
+      // number about somebody else's business is worse than a club reading no number at all.
+      venueSlug: coach.clubSlugs.length === 1 ? coach.clubSlugs[0] : null,
       createdByPlayerId: input.createdByPlayerId ?? null,
       createdAt: now,
     })
@@ -990,14 +1021,48 @@ export async function listedCount(db: Db, tz: string): Promise<number> {
 /** The badge shows while the book is listed in the city the place was earned in; the place itself is never taken back. */
 export const isFoundingCoach = (coach: Pick<Coach, "foundingAt" | "foundingTz" | "tz" | "isPublic" | "archivedAt">): boolean => Boolean(coach.foundingAt) && coach.foundingTz === coach.tz && coach.isPublic && !coach.archivedAt;
 
-/** Listed coaches who named this club among theirs (case aside): the club page's "coaches here". */
-export async function coachesAtClub(db: Db, clubName: string): Promise<Coach[]> {
-  const name = clubName.trim().toLowerCase();
-  if (!name) return [];
+/**
+ * Listed coaches whose clubs include this one: the club page's "coaches here".
+ *
+ * Takes a name or a slug and answers on the slug either way, because that is the only key both
+ * sides can agree on — one coach typed "warehaus" and another "Warehaus" for the same courts, and
+ * matching on the text meant a club could be shown one of its coaches and not the other. Hits
+ * `coaches_club_slugs_idx`, where the old text scan hit nothing.
+ */
+export async function coachesAtClub(db: Db, clubNameOrSlug: string): Promise<Coach[]> {
+  const slug = venueSlug(clubNameOrSlug);
+  if (!slug) return [];
   return db
     .select()
     .from(coaches)
-    .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), sql`${name} in (select lower(x) from jsonb_array_elements_text(${coaches.clubNames}) as x)`))
+    .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), sql`${coaches.clubSlugs} @> ${JSON.stringify([slug])}::jsonb`))
     .orderBy(asc(coaches.createdAt))
     .limit(50);
+}
+
+/** A coach on a club's courts, and how much teaching they did there in the window asked for. */
+export type CoachAtClub = { coachId: string; handle: string; displayName: string; lessons: number; students: number };
+
+/**
+ * What a club can see of the coaching on its courts: who teaches here, and how many lessons each of
+ * them gave between two dates. Nothing about money, nobody's student named, and no control — the
+ * club watches.
+ *
+ * One query, keyed on `lessons_venue_idx`, so a busy club costs the same as a quiet one; the coaches
+ * with no lessons in the window come from the list above and are joined in memory rather than by a
+ * second trip.
+ */
+export async function coachingAtClub(db: Db, clubNameOrSlug: string, from: Date, to: Date): Promise<CoachAtClub[]> {
+  const listed = await coachesAtClub(db, clubNameOrSlug);
+  if (listed.length === 0) return [];
+  const slug = venueSlug(clubNameOrSlug) as string;
+  const rows = await db
+    .select({ coachId: lessons.coachId, n: sql<number>`count(*)`, students: sql<number>`count(distinct ${lessons.studentPlayerId})` })
+    .from(lessons)
+    .where(and(eq(lessons.venueSlug, slug), gte(lessons.startsAt, from), lt(lessons.startsAt, to), inArray(lessons.status, ["booked", "done"])))
+    .groupBy(lessons.coachId);
+  const byCoach = new Map(rows.map((r) => [r.coachId, r]));
+  return listed
+    .map((c) => ({ coachId: c.id, handle: c.handle, displayName: c.displayName, lessons: Number(byCoach.get(c.id)?.n ?? 0), students: Number(byCoach.get(c.id)?.students ?? 0) }))
+    .sort((a, b) => b.lessons - a.lessons || a.displayName.localeCompare(b.displayName));
 }
