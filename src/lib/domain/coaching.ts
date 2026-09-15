@@ -599,6 +599,27 @@ export async function owedToCoach(db: Db, coachId: string, limit = 20): Promise<
   return rows.map((r) => ({ ...r, amount: r.amount as number, studentPlayerId: r.studentPlayerId as string }));
 }
 
+/**
+ * What each student still owes, as one figure the coach can read at a glance: their unpaid lessons
+ * plus the package they have not paid for. The two are separate rows in the database and separate
+ * questions in the assistant, but a coach looking at a student wants one number, not two.
+ *
+ * Pure on purpose — the screen groups rows it already fetched, so showing money owed costs no
+ * extra query per student (rule 12).
+ */
+export function owedPerStudent(
+  unpaidLessons: { studentPlayerId: string; amount: number }[],
+  unpaidPackages: { studentPlayerId: string; amount: number | null }[],
+): Map<string, number> {
+  const owed = new Map<string, number>();
+  const add = (id: string, amount: number) => {
+    if (amount > 0) owed.set(id, (owed.get(id) ?? 0) + amount);
+  };
+  for (const l of unpaidLessons) add(l.studentPlayerId, l.amount);
+  for (const p of unpaidPackages) add(p.studentPlayerId, p.amount ?? 0);
+  return owed;
+}
+
 /** The student says the money is sent. It asks the coach; only the coach's tap marks it paid. */
 export async function claimLessonPaid(db: Db, lessonId: string, studentPlayerId: string, now = new Date()): Promise<Lesson | null> {
   const [row] = await db

@@ -7,7 +7,7 @@ import { ImportSheet } from "@/components/coach/ImportSheet";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { monthCounts, monthRange } from "@/lib/coach/chains";
-import { getCoachForActor, listStudents, packageLine } from "@/lib/domain/coaching";
+import { getCoachForActor, listStudents, owedPerStudent, owedToCoach, packageLine } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +25,18 @@ export default async function CoachStudentsPage() {
   const { coach } = found;
   const now = new Date();
   const month = monthRange(coach.tz, now);
-  const [students, t, counts] = await Promise.all([listStudents(db, coach.id, now), getTranslations("coach"), monthCounts(db, coach.id, month.from, month.to)]);
+  const t = await getTranslations("coach");
+  // One at a time, not Promise.all: the pooler stalls on pipelined bursts (rule 8).
+  const students = await listStudents(db, coach.id, now);
+  const counts = await monthCounts(db, coach.id, month.from, month.to);
+  // One join for every unpaid lesson on the book, bounded; the packages are already in `students`,
+  // so what each student owes costs no query of its own (rule 12).
+  const unpaidLessons = await owedToCoach(db, coach.id, 200);
   const thisMonth = new Map(counts.perStudent.map((p) => [p.playerId, p.done]));
+  const owed = owedPerStudent(
+    unpaidLessons,
+    students.flatMap((s) => (s.activePackage && !s.activePackage.paidAt ? [{ studentPlayerId: s.player.id, amount: s.activePackage.amount }] : [])),
+  );
   return (
     <>
       <Header />
@@ -36,7 +46,8 @@ export default async function CoachStudentsPage() {
         </Link>
         <CoachStudents
           coachName={coach.displayName}
-          currency="THB"
+          currency={coach.currency}
+          owed={Object.fromEntries(owed)}
           promptpayId={coach.promptpayId}
           payLink={coach.payLink}
           qrUrl={coach.qrAssetId ? `/c/${coach.handle}/qr` : null}

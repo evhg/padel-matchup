@@ -51,6 +51,10 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // A book with nobody in it: the one thing that can move it forward is the link, so the link is the
+  // primary action there and booking steps back. "No lessons booked yet. Share your link" used to
+  // point at a link that was two taps away behind "More".
+  const emptyBook = !welcome && students.length === 0 && lessons.length === 0;
   const todayLessons = lessons.filter((l) => l.day === today);
   const later = lessons.filter((l) => l.day > today);
   const byDay = useMemo(() => {
@@ -162,8 +166,17 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         {todayLessons.length > 0 ? <ul className="mt-3 flex flex-col gap-2">{todayLessons.map(row)}</ul> : <p className="mt-3 text-sm text-muted">{lessons.length === 0 ? t("home.none") : "—"}</p>}
         {note && <p className="mt-3 rounded-2xl bg-ok-soft px-4 py-2 text-sm font-semibold text-ok">{note}</p>}
         {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
+        {emptyBook && (
+          <div className="mt-4" data-testid="coach-empty-share">
+            <div className="text-sm font-bold">{t("done.forward")}</div>
+            <p className="mt-1 break-all font-mono text-xs text-muted">{studentUrl}</p>
+            <div className="mt-2">
+              <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
+            </div>
+          </div>
+        )}
         {!booking ? (
-          <button type="button" className="btn-primary mt-4 w-full" onClick={() => setBooking(true)}>
+          <button type="button" className={`mt-4 w-full ${emptyBook ? "btn-secondary" : "btn-primary"}`} onClick={() => setBooking(true)}>
             {t("home.book")}
           </button>
         ) : (

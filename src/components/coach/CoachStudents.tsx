@@ -10,10 +10,12 @@ import { PromptPayQr } from "./PromptPayQr";
 export type PackageDTO = { id: string; left: number; size: number; days: number | null; amount: number | null; currency: string; paid: boolean };
 export type StudentDTO = { playerId: string; name: string; status: string; lessonsDone: number; thisMonth?: number; pkg: PackageDTO | null };
 
-type Props = { coachName: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string };
+type Props = { coachName: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string;
+  /** What each student still owes, by player id: unpaid lessons plus an unpaid package. */
+  owed: Record<string, number> };
 
 /** Students: requests to accept, packages to start, "paid" to note. One list, one action per row. */
-export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink, currency }: Props) {
+export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink, currency, owed }: Props) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -33,11 +35,23 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
 
   const pkgLine = (p: PackageDTO) => (p.days === null ? t("packageLineNoExpiry", { left: p.left, size: p.size }) : t("packageLine", { left: p.left, size: p.size, days: p.days }));
   const canShowQr = Boolean(promptpayId || qrUrl || payLink);
+  // Plain digits and the code, as everywhere else money is shown here; `toLocaleString` would
+  // format one way on the server and another in the browser, and hydration would tear.
+  const money = (amount: number) => `${amount} ${currency}`;
+  // "Not paid yet" without a figure is the coach's own question left unanswered, so the total goes
+  // beside the title and each student's share goes on their row.
+  const debtors = rest.filter((s) => (owed[s.playerId] ?? 0) > 0);
+  const owedTotal = debtors.reduce((n, s) => n + owed[s.playerId], 0);
 
   return (
     <div className="flex flex-col gap-4">
       <section className="card">
         <h1 className="text-3xl font-extrabold tracking-tight">{t("students.title")}</h1>
+        {owedTotal > 0 && (
+          <p className="mt-1 text-sm font-bold text-danger" data-testid="coach-owed">
+            {t("students.owedTotal", { count: debtors.length, amount: money(owedTotal) })}
+          </p>
+        )}
         {requests.length > 0 && (
           <div className="mt-4">
             <div className="text-xs font-bold uppercase text-faint">{t("students.requests")}</div>
@@ -65,6 +79,9 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
                     {s.pkg ? ` · ${s.pkg.paid ? t("students.paid") : t("students.unpaid")}` : ""}
                     {s.lessonsDone > 0 ? ` · ${t("students.lessonsDone", { count: s.lessonsDone })}` : ""}
                   </div>
+                  {(owed[s.playerId] ?? 0) > 0 && (
+                    <div className="mt-0.5 text-xs font-bold text-danger">{t("students.owes", { amount: money(owed[s.playerId]) })}</div>
+                  )}
                 </div>
                 <button type="button" className="btn-ghost btn-xs shrink-0" disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))}>
                   {s.status === "paused" ? t("students.resume") : t("students.pause")}

@@ -69,6 +69,18 @@ try {
   await nadia.waitForURL(/\/coach/, { timeout: 30000 });
   check("a coach exists with a handle the walk can visit", /^[a-z0-9-]+$/.test(handle), handle);
 
+  // ---------------------------------------------------------------- the book with nobody in it
+  // The first state every coach is in, and the one the happy path skips. "No lessons booked yet.
+  // Share your link" pointed at a link two taps away behind a collapsed "More", while "Book a
+  // lesson" — impossible with no students — took the primary button.
+  await nadia.goto(BASE + "/coach");
+  await nadia.waitForLoadState("networkidle").catch(() => {});
+  await shot(nadia, "state-coach-book-empty-phone");
+  const emptyText = await nadia.locator("body").innerText();
+  check("an empty book shows the link to hand out, without opening More", await nadia.getByTestId("coach-empty-share").isVisible(), emptyText.slice(0, 160));
+  const bookClass = (await nadia.getByRole("button", { name: "Book a lesson" }).getAttribute("class")) ?? "";
+  check("an empty book does not make booking the primary action", bookClass.includes("btn-secondary"), bookClass);
+
   // ---------------------------------------------------------------- the awkward states
   // Pat has a package. Sam does not. That difference is what made "your package is untouched" wrong.
   await say(`pat +10 90d 8000`);
@@ -79,6 +91,17 @@ try {
 
   // A day with nothing free: the state behind "Nothing suits?".
   await say(`block ${day.en}`);
+
+  // ---------------------------------------------------------------- money, in figures
+  // Pat's package costs 8000 and nobody has paid it. The screen used to say "Not paid yet" and stop
+  // there, so the one question a coach opens this screen with — how much am I owed — had no answer
+  // on it. And a bare "Pause" beside a student's name named no object.
+  await nadia.goto(BASE + "/coach/students");
+  await nadia.waitForLoadState("networkidle").catch(() => {});
+  const studentsText = await nadia.locator("body").innerText();
+  check("the students screen is the students screen and not a 404", /Students/.test(studentsText) && /Pat/i.test(studentsText), studentsText.slice(0, 120));
+  check("what a student owes is a figure, not just 'not paid yet'", /8000 THB/.test(studentsText), (studentsText.match(/.{0,40}(Owes|owe).{0,30}/) ?? [""])[0]);
+  check("pausing a student says what it pauses", /Pause bookings/.test(studentsText), (studentsText.match(/.{0,20}Pause.{0,20}/) ?? [""])[0]);
 
   // ---------------------------------------------------------------- the screens, twice each
   const screens = [
