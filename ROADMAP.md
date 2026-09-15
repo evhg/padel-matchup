@@ -78,10 +78,16 @@ linked and four have an email address.
    groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
    and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
    A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
-2. **LINE, with LINE sign-in and Thai copy.** Thailand first, so the channel Thai players actually use.
-   The card algorithm is already shaped for it: a platform that cannot edit a sent message re-sends only
-   when the roster changes, and a reply is free where a push is metered. See "Adding a channel" in
-   [AGENTS.md](AGENTS.md).
+2. **LINE — the channel is built; sign-in and Thai copy are not.** `src/lib/channels/line.ts` and
+   `src/lib/line/`: the card in a group chat, the two taps, a signed webhook, and the two policies a
+   platform that cannot edit a message forces — re-send only when something a player would notice
+   changed, and answer on the free reply token rather than a metered push. Off until
+   `LINE_CHANNEL_TOKEN` and `LINE_CHANNEL_SECRET` are set, which needs a LINE Official Account: the
+   owner's to create, like WhatsApp's. **Thai copy is a separate decision.** The app carries 1,456
+   strings in three languages; a fourth means translating all of them, and machine-translating an
+   entire product into a language nobody here reads before it ships is the kind of thing that only
+   looks finished. Thailand-first was the point of the channel, so this matters — it wants a Thai
+   speaker, or an explicit decision to ship a machine translation and fix it in public.
 3. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
    and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
    text, and needs a lesson to carry a venue at all, which it does not today.

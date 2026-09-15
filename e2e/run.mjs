@@ -34,6 +34,10 @@ const env = {
   // A fake Discord app: the token decodes to a plausible id, the key pair exists only for these tests (private half in e2e/discord.mjs).
   DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN || "MTU0NTk4ODEzODA1NTIzNzcyMw.e2e.fake-token",
   DISCORD_PUBLIC_KEY: process.env.DISCORD_PUBLIC_KEY || "7cb05c12c78f756c9e976f772d63dd58a6426129cc2d177f8314a2fce536bb96",
+  // A fake LINE channel, so the webhook is live and its signature can be checked for real. The bot
+  // token points at nothing: every outbound call fails, which is exactly what the suites assert on.
+  LINE_CHANNEL_TOKEN: process.env.LINE_CHANNEL_TOKEN || "e2e-line-token",
+  LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET || "e2e-line-secret",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {

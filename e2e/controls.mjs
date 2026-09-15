@@ -78,7 +78,7 @@ function emittedPrefixes() {
       if (statSync(full).isDirectory()) walk(full);
       else if (full.endsWith(".ts") || full.endsWith(".tsx")) {
         const src = readFileSync(full, "utf8");
-        for (const m of src.matchAll(/(?:callback_data|custom_id): `([a-z]{1,3}):/g)) out.add(m[1]);
+        for (const m of src.matchAll(/(?:callback_data|custom_id|data): `([a-z]{1,3}):/g)) out.add(m[1]);
       }
     }
   };

@@ -95,7 +95,7 @@ The path that keeps a change small and a pull request green, in order:
 
 What makes a change a decision for the owner rather than a build: a migration, anything touching sessions, identity or personal data, and anything that changes behaviour people already rely on (`docs/DECIDING.md`, rule 9).
 
-## Adding a channel (LINE is next)
+## Adding a channel
 
 A channel is a place where one card per match lives and is kept true. The algorithm is written once in `src/lib/channels/cards.ts` and proven in `tests/channels.test.ts`; a new channel adds four things, in this order:
 
@@ -104,10 +104,11 @@ A channel is a place where one card per match lives and is kept true. The algori
 3. **The bot.** `src/lib/<channel>/`: `api.ts` (the platform's calls and its webhook signature check), `card.ts` (the card in the room's language; the copy is `strings()` from `src/lib/telegram/card.ts`, shared by every channel), `bot.ts` (the router, as Telegram's) with handlers as the channel needs, and the route under `src/app/api/<channel>/`. Every write goes through an `OpContext` with `channel: "<channel>"`, so the fact log names it.
 4. **Proof.** A unit file with `fetch` stubbed (as `tests/discord.test.ts`) and one browser suite `e2e/<channel>.mjs` that posts a webhook and reads what the bot sent (as `e2e/telegram.mjs`).
 
-Two policies for a platform whose messages cannot be edited once sent (LINE):
+Three policies for a platform whose messages cannot be edited once sent. LINE is the built example — `src/lib/channels/line.ts` and `src/lib/line/` — and all three are load-bearing there:
 
 - **Sync.** Declare `canEdit: false`. The algorithm then keys the card on `materialKey(detail)` (status, start time, venue, capacity, seats taken, result) instead of the render hash: a fresh card goes out only when something a player cares about changed, never for a cosmetic re-render or a language switch. Joins, leaves, the complete note, the reminder and the result work as on every channel.
 - **Reply before push.** Where an answer to an incoming event is free but a push is metered (LINE's reply token: single use, short-lived), the adapter's `post` answers with the reply when `PostOptions.replyTo` carries the token and pushes otherwise. The router passes the event's token for anything sent in answer to a message; syncs, reminders and results that start on the web or in the cron are pushes and count against the monthly budget, so the adapter keeps them to the material changes above and never pushes what a reply already said.
+- **`saveCard` must upsert.** With `canEdit: false` the algorithm posts a *fresh* card on every material change and calls `saveCard` again for the same (event, room, kind). Discord's does nothing on conflict, which is right for a channel that edits in place; copied here it leaves the stored key stale, so the next tick decides the card is out of date and pushes another one — for ever, on a metered channel. `tests/line.test.ts` holds that down.
 
 ## A channel that is not a card channel (WhatsApp)
 
