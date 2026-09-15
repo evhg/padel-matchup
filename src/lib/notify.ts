@@ -17,6 +17,7 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { refillRecipients } from "@/lib/domain/refill";
+import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
@@ -271,6 +272,43 @@ export async function notifyClubMatch(db: Db, club: { slug: string; name: string
     }
   }
   return { emails, pushes, told };
+}
+
+/**
+ * Somebody asked to play around this time, at this place, and here is a match that answers it.
+ *
+ * The other notices here start from a room somebody is already in — a crew, a club's regulars. This
+ * one starts from the player: they said what they wanted, and the app is keeping its side of that.
+ * Which is why the email says so in as many words, and says how to stop it.
+ *
+ * Push and email both, unlike the refill. A refill has hours of life in it; a want is about next
+ * Tuesday, so an inbox is a perfectly good place for it.
+ */
+export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise<{ emails: number; pushes: number; told: number }> {
+  const { players: people, signalIds } = await wantAudience(db, ev, now);
+  if (people.length === 0) return { emails: 0, pushes: 0, told: 0 };
+  const detail = await getEventDetail(db, ev);
+  let emails = 0;
+  let pushes = 0;
+  for (const p of people) {
+    const c = await ctx(db, ev, p.locale, p, detail);
+    if (emailEnabled() && p.email && p.emailNotifications) {
+      const { html, text } = layout({ heading: c.t("email.wanted.heading", c.vars), body: c.t("email.wanted.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      await sendEmail({ to: p.email, subject: c.t("email.wanted.subject", c.vars), html, text }).catch(() => undefined);
+      emails++;
+    }
+    if (pushEnabled()) {
+      for (const sub of await subscriptionsFor(db, [p.id])) {
+        const r = await sendPush(sub, { title: c.t("push.wantedTitle", c.vars), body: c.t("push.wantedBody", c.vars), url: c.url, tag: `wanted-${ev.code}` });
+        if (r === "sent") pushes++;
+        if (r === "gone") await removePushSubscription(db, sub.endpoint);
+      }
+    }
+  }
+  // Only after they were actually told: a cooldown started by a notice that never went out would
+  // silence the next match for six hours for nothing.
+  await markWantsNotified(db, signalIds, now);
+  return { emails, pushes, told: people.length };
 }
 
 /**

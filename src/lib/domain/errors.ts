@@ -21,7 +21,10 @@ export type DomainErrorCode =
   // Closing a coach's book while a lesson is still to come: the student is waiting for that hour, so
   // it is cancelled through the path that tells them, and only then is the book closed.
   | "has_lessons"
-  | "no_coach";
+  | "no_coach"
+  // More standing wants than one player may hold: past ten it is not a want, it is a subscription
+  // to everything happening at that club.
+  | "too_many";
 
 export class DomainError extends Error {
   constructor(

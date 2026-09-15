@@ -16,6 +16,7 @@ import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, 
 import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
 import { continueGuidedNew, createFromChat, handleGuidedNew, startGuidedNew } from "./handlers/new";
+import { handleWantCallback, wantCommand } from "./handlers/want";
 import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
@@ -85,6 +86,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     }
     if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale, ctx);
     if (ROLE_COMMANDS.has(cmd.command) && isPrivate) return roleCommand(db, msg, chat, from, cmd.command);
+    if (cmd.command === "want") return wantCommand(db, msg, chat, from, cmd.args);
     if (cmd.command === "coach" && isPrivate) return coachCommand(db, chat, from);
     if (cmd.command === "help" || cmd.command === "start") return startCommand(db, chat, from, cmd, isPrivate);
     return "ignored";
@@ -139,6 +141,10 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     const handled = await handleCoachCallback(db, cb, await findOrCreateTelegramPlayer(db, cb.from));
     if (handled) return handled;
   }
+  // Removing a standing want from the list /want just printed. Two letters, so it cannot be mistaken
+  // for the single-letter match actions below, which carry a four-character code.
+  const dropped = /^wd:([0-9a-f-]{36})$/i.exec(data);
+  if (dropped) return handleWantCallback(db, cb, dropped[1]);
   // The owner's desk: a listening draft, an outreach mail or a club claim, approved or skipped with one tap.
   const owner = await handleOwnerCallback(db, cb, data);
   if (owner) return owner;

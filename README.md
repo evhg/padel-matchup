@@ -199,7 +199,7 @@ src/lib/domain/facts.ts    the append-only fact log every view is a query over
 skills/kicksmash/SKILL.md  installable skill for coding agents; AGENTS.md at the root for agents working on this repo
 src/lib/domain/{levels,rating,requests}.ts       level scale, presets, fit, balanced teams, Elo-style deltas; join requests
 src/lib/alerts.ts        error counters for the admin health row
-src/db/schema/           the tables, one file per domain (enums, players, events, groups, clubs, coaching, channels, api, ops)
+src/db/schema/           the tables, one file per domain (enums, players, events, demand, groups, clubs, coaching, channels, api, ops)
 src/db/                  driver factory (postgres-js | PGlite), seed
 drizzle/                 generated SQL migrations
 messages/{en,ru,es}.json all UI, share and email copy (identical key sets, typed in global.d.ts)

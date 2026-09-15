@@ -40,6 +40,8 @@ export const events = pgTable(
     scoreReminder2At: timestamp("score_reminder_2_at", { withTimezone: true }),
     /** The one "a spot opened" notice this match sends, ever. Set the moment it is claimed, before anything goes out. */
     refillNoticeAt: timestamp("refill_notice_at", { withTimezone: true }),
+    /** Set once the standing wants this match answers have been told. Null means the sweep has not reached it. */
+    wantsNoticeAt: timestamp("wants_notice_at", { withTimezone: true }),
     /** iCalendar SEQUENCE — bumped on every time/venue change or cancellation. */
     icsSequence: integer("ics_sequence").notNull().default(0),
     /** Web-push "one hour before" reminder went out (once per event). */

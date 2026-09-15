@@ -14,6 +14,9 @@ import { FeedbackInline } from "@/components/FeedbackInline";
 import { CoachCard } from "@/components/coach/CoachCard";
 import { getCoachForActor } from "@/lib/domain/coaching";
 import { MomentsStrip } from "@/components/MomentsStrip";
+import { WhenIPlay } from "@/components/WhenIPlay";
+import { listWants } from "@/lib/domain/demand";
+import { getVenues } from "@/lib/domain/queries";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
 import { telegramBotId } from "@/lib/telegram/api";
@@ -67,6 +70,10 @@ export default async function MePage({ searchParams }: Props) {
   }
 
   const [token, myClubs, t, asCoach] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id)]);
+  // Sequential, not folded into the batch above: the pooler stalls on pipelined bursts (rule 8).
+  const wants = (await listWants(db, me.id)).map((w) => ({ id: w.id, weekday: w.weekday, fromTime: w.fromTime, toTime: w.toTime, place: w.venueSlug ?? w.citySlug ?? "" }));
+  // Their usual court, offered as the starting value: most people want to play where they already play.
+  const lastVenue = (await getVenues(db, me.id))[0]?.name ?? null;
   return (
     <>
       {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
@@ -76,6 +83,7 @@ export default async function MePage({ searchParams }: Props) {
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
         {asCoach && <CoachCard db={db} coach={asCoach.coach} />}
         <MyMatches player={me} personalToken={token} />
+        <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
         {myClubs.length > 0 && (

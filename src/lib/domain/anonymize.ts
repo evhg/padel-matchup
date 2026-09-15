@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
 import { coachManagers, coaches, events, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
+import { dropWantsFor } from "./demand";
 import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching";
 import { getPlayer } from "./players";
 import { cancelEvent } from "./events";
@@ -68,6 +69,9 @@ export async function anonymizePlayer(
   await db.delete(coachManagers).where(eq(coachManagers.playerId, playerId));
 
   await db.delete(pushSubscriptions).where(eq(pushSubscriptions.playerId, playerId));
+  // What they said they wanted goes with them. It is a standing instruction to contact them, and the
+  // one thing an account deletion must not leave behind is a reason to send somebody a message.
+  await dropWantsFor(db, playerId);
   await db
     .update(players)
     .set({ displayName: "Deleted player", email: null, recoveryEmail: null, phone: null, personalToken: null, previousToken: null, emailVerifiedAt: null, emailNotifications: false, homescreenAt: null })

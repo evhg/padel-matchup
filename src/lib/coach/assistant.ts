@@ -1,4 +1,4 @@
-import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
+import { utcToZonedParts, WEEKDAY_WORDS as WEEKDAYS, zonedTimeToUtc } from "@/lib/dates";
 import { handleFromName, type HoursPreset } from "@/lib/domain/coaching";
 
 /**
@@ -32,11 +32,6 @@ export type StudentIntent =
 
 const DAY_MS = 86_400_000;
 
-const WEEKDAYS: Record<string, number> = {
-  sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6,
-  вс: 0, воскресенье: 0, пн: 1, понедельник: 1, вт: 2, вторник: 2, ср: 3, среда: 3, среду: 3, чт: 4, четверг: 4, пт: 5, пятница: 5, пятницу: 5, сб: 6, суббота: 6, субботу: 6,
-  dom: 0, domingo: 0, lun: 1, lunes: 1, mar: 2, martes: 2, mié: 3, mie: 3, miércoles: 3, miercoles: 3, jue: 4, jueves: 4, vie: 5, viernes: 5, sáb: 6, sab: 6, sábado: 6, sabado: 6,
-};
 const TODAY = new Set(["today", "сегодня", "hoy"]);
 const TOMORROW = new Set(["tomorrow", "tmr", "tmrw", "завтра", "mañana", "manana"]);
 const WEEK = new Set(["week", "неделя", "неделю", "semana"]);
