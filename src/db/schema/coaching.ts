@@ -172,8 +172,15 @@ export const lessons = pgTable(
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     /** The one "tomorrow at 15:00" reminder, once sent. */
     remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    /**
+     * Where the lesson happens, as the same slug a match carries (`events.venue_slug`) and a club is
+     * keyed by (`clubs.slug`). Null when the coach teaches at more than one place, because guessing
+     * would put a lesson on another club's page, and a club reading a wrong number about somebody
+     * else's business is worse than a club reading no number.
+     */
+    venueSlug: text("venue_slug"),
   },
-  (t) => [index("lessons_coach_time_idx").on(t.coachId, t.startsAt), index("lessons_student_idx").on(t.studentPlayerId, t.startsAt), index("lessons_external_idx").on(t.coachId, t.externalId)],
+  (t) => [index("lessons_coach_time_idx").on(t.coachId, t.startsAt), index("lessons_student_idx").on(t.studentPlayerId, t.startsAt), index("lessons_external_idx").on(t.coachId, t.externalId), index("lessons_venue_idx").on(t.venueSlug, t.startsAt)],
 );
 
 export type Lesson = typeof lessons.$inferSelect;

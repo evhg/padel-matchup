@@ -37,6 +37,11 @@ Everything in this list is live. The README describes each in detail.
 - **A spot that opens finds somebody.** A dropout nobody was waiting for goes by push, once, to the
   crew's other members and to the players who play at that club — level-matched, capped, and only while
   there is still time to get to the court. A private match with no crew tells nobody.
+- **What a club sees of the coaching on its courts.** Who teaches here and how many lessons they gave
+  in the last seven days, on the club's own page. The club watches: no approval, no terms, no money,
+  and nobody's student named. Two things had to be true first — a lesson now records where it happens,
+  and a coach's clubs answer to the same slug a match and a club page use, so "warehaus" and
+  "Warehaus" stopped being two different places.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
   quiet hours from a weekly programme.
@@ -80,29 +85,28 @@ linked and four have an email address.
    groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
    and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
    A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
-2. **LINE — the channel is built; sign-in and Thai copy are not.** `src/lib/channels/line.ts` and
+2. **LINE — built, waiting on an Official Account.** `src/lib/channels/line.ts` and
    `src/lib/line/`: the card in a group chat, the two taps, a signed webhook, and the two policies a
    platform that cannot edit a message forces — re-send only when something a player would notice
    changed, and answer on the free reply token rather than a metered push. Off until
    `LINE_CHANNEL_TOKEN` and `LINE_CHANNEL_SECRET` are set, which needs a LINE Official Account: the
-   owner's to create, like WhatsApp's. **Thai copy is a separate decision.** The app carries 1,456
-   strings in three languages; a fourth means translating all of them, and machine-translating an
-   entire product into a language nobody here reads before it ships is the kind of thing that only
-   looks finished. Thailand-first was the point of the channel, so this matters — it wants a Thai
-   speaker, or an explicit decision to ship a machine translation and fix it in public.
-3. **The club's view of its coaches.** Lessons per week on its courts and who teaches there. The club sees
-   and does not control: no approval, no terms. Needs a coach's clubs to be venue slugs rather than free
-   text, and needs a lesson to carry a venue at all, which it does not today.
-4. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
+   owner's to create, like WhatsApp's. **It ships in English** — decided 15 September. Thai waits
+   until somebody is using it, because there is nothing to translate *for* yet.
+
+   The numbers, since they were once given wrongly as one number. The card in a chat is its own set
+   of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
+   strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
+   website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
+3. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
    a group stage then a knockout, a consolation draw, a qualifying draw into a main draw with seeds,
    scoring set per phase, the draw published, courts scheduled, scores live per court. This is a second
    engine beside the rotation engine, not a feature on top of it, and deserves its own decision.
-5. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
+4. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
    matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
    passes through Kicksmash.
-6. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
+5. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-7. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
+6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
 
 ## Deliberately not
 

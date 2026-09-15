@@ -78,6 +78,43 @@ try {
   // ---- The club watches: one slot on the week, the hourly job makes the match, players see it ----
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the manage page shows today's view and the week editor", (await page.getByTestId("club-day").count()) === 1 && (await page.getByTestId("club-week-editor").count()) === 1);
+
+  // ---- and it watches the coaching too ----
+  // The real bug this replaces: a coach's clubs were free text, so the two coaches in production had
+  // typed "warehaus" and "Warehaus" and neither could be matched to a club. This coach types the
+  // club's name in lower case and must still be this club's coach.
+  const coaching = page.getByTestId("club-coaching");
+  check("a club with no coaches says so, rather than showing an empty box", (await coaching.count()) === 1 && (await coaching.getByText("No coach has named your club yet.").count()) === 1);
+
+  const coachCtx = await browser.newContext(iphone);
+  const nok = await coachCtx.newPage();
+  await nok.goto(`${BASE}/coach`);
+  await nok.getByPlaceholder("e.g. Alex").fill("Tida");
+  await nok.locator("form button[type=submit]").click();
+  await nok.getByTestId("setup-where").waitFor({ timeout: 20000 });
+  await nok.locator("#coach-clubs").fill(CLUB.toLowerCase());
+  await nok.getByRole("button", { name: "Next" }).click();
+  await nok.getByTestId("setup-length").waitFor({ timeout: 10000 });
+  await nok.getByRole("button", { name: "Next" }).click();
+  await nok.getByTestId("setup-hours").waitFor({ timeout: 10000 });
+  await nok.getByTestId("hours-presets").locator('button[data-preset="both"]').click();
+  await nok.getByRole("button", { name: "Set up my assistant" }).click();
+  await nok.getByTestId("setup-price").waitFor({ timeout: 30000 });
+  await nok.getByTestId("price-single").fill("900");
+  await nok.getByTestId("pay-at-club").check();
+  await nok.getByTestId("price-save").click();
+  await nok.getByTestId("setup-notify").waitFor({ timeout: 20000 });
+  await nok.getByRole("button", { name: "Email me instead" }).click();
+  await nok.getByTestId("setup-link").waitFor({ timeout: 20000 });
+  await nok.getByTestId("setup-finish").click();
+  await nok.waitForURL(/\/coach/, { timeout: 30000 });
+  await nok.close();
+
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  const listed = page.getByTestId("club-coaching");
+  check("a coach who typed the club's name in lower case is still this club's coach", (await listed.getByText("Tida").count()) === 1, (await listed.innerText()).slice(0, 160));
+  check("a coach who has taught nothing here yet says so, and shows no invented number", (await listed.getByText("No lessons in the last seven days").count()) === 1, (await listed.innerText()).slice(0, 160));
+  await shot(page, "c2-coaching");
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).getUTCDay();
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   await page.getByRole("radio", { name: dayNames[tomorrow] }).click();

@@ -330,6 +330,13 @@
       "when": 1789443660999,
       "tag": "0046_line_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789465481754,
+      "tag": "0047_lessons_have_a_place",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { clubStatus, getClubByToken } from "@/lib/domain/clubs";
+import { coachingAtClub } from "@/lib/domain/coaching";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string; token: string }> };
@@ -41,6 +42,9 @@ export default async function ClubManagePage({ params }: Props) {
   const slots = await listClubSlots(db, club.slug);
   const nextBySlot = await upcomingBySlot(db, club.slug, now);
   const checks = await listLevelChecks(db, { clubSlug: club.slug });
+  // Seven days back, not the calendar week: a club looking on a Tuesday wants the last seven days,
+  // not two days of a week that began yesterday.
+  const coaching = await coachingAtClub(db, club.slug, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), now);
   return (
     <>
       <Header />
@@ -117,6 +121,27 @@ export default async function ClubManagePage({ params }: Props) {
             return { id: s.id, dow: s.dow, time: s.time, type: s.type, format: s.format, capacity: s.capacity, levelMin: s.levelMin, levelMax: s.levelMax, verifiedOnly: s.verifiedOnly, title: s.title, active: s.active, leadDays: s.leadDays, next: next ? { code: next.code, startsAt: next.startsAt.toISOString() } : null };
           })}
         />
+        <section className="card" data-testid="club-coaching">
+          <h2 className="text-lg font-extrabold">{t("club.coaching.title")}</h2>
+          {coaching.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">{t("club.coaching.none")}</p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {coaching.map((c) => (
+                <li key={c.coachId} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/c/${c.handle}`} prefetch={false} className="truncate font-bold hover:underline">
+                      {c.displayName}
+                    </Link>
+                    <div className="text-xs text-muted">{c.lessons === 0 ? t("club.coaching.quiet") : t("club.coaching.week", { lessons: c.lessons, students: c.students })}</div>
+                  </div>
+                  <span className="shrink-0 text-xl font-extrabold tabular-nums">{c.lessons}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-xs text-faint">{t("club.coaching.help")}</p>
+        </section>
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("club.freeToday")}</h2>
           <div className="mt-2">
