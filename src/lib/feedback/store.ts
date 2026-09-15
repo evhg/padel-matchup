@@ -148,6 +148,25 @@ export async function markAcknowledged(db: Db, id: string, replyText: string, no
     .where(and(eq(feedback.id, id), eq(feedback.status, "new")));
 }
 
+/**
+ * A note from the owner themselves, filed with nothing said back.
+ *
+ * Erik owns Kicksmash and plays on its courts, and on 15 September he used the feedback door twice
+ * as a player. Both times the door answered him as a stranger — "Noted, Eriik. I read every note
+ * myself" — and then, seconds later, the internal verdict on his own note arrived in the same chat,
+ * ending "say build or skip in your Claude session". Two messages, one of them addressed to him as a
+ * person who has to be reassured that somebody reads these, when the somebody is him.
+ *
+ * So nothing is said back. The proposal is on its way to this same chat and it is the useful one.
+ * Nothing is counted as sent either, because nothing was (rule 5: the bots stay quiet).
+ */
+export async function markOwnNote(db: Db, id: string, now = new Date()): Promise<void> {
+  await db
+    .update(feedback)
+    .set({ status: "acknowledged", repliedAt: now })
+    .where(and(eq(feedback.id, id), eq(feedback.status, "new")));
+}
+
 /** Not feedback (an insult, a test, spam): closed at once with the one line that was sent, never on the loop's desk. */
 export async function markNotFeedback(db: Db, id: string, replyText: string, now = new Date()): Promise<void> {
   await db
