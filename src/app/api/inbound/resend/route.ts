@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { reportError } from "@/lib/alerts";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { appendFeedbackReply, createFeedback, findNoteForReply, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
+import { appendFeedbackReply, createFeedback, findNoteForReply, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { guessLanguage } from "@/lib/listen/parse";
 import { draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
@@ -82,7 +82,7 @@ async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: Inbo
   const fs = feedbackStrings(locale);
   const followUp = async () => {
     try {
-      const ack = await composeAck(db, { text, name: from.name, locale, source: "email" });
+      const ack = await composeAck(db, { text, name: from.name, locale, source: "email", said: await saidBefore(db, { email: from.email }) });
       const body = `${ack.reply}\n\nClaude, for Kicksmash\nhttps://kicksma.sh`;
       const res = await sendPlainEmail({ to: from.email, subject: `Re: ${mail.subject ?? fs.emailSubject}`, text: body, inReplyTo: mail.messageId });
       if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
