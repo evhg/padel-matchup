@@ -146,12 +146,28 @@ Wall clock first, credits second. What actually moved it, measured:
   Never plan around "merge rounds", and never ask the owner to merge.
 - **Put the long thing in the background and keep working.** A build is ~70s, a full browser run ~110s.
   Write the next file while they run; batch independent tool calls into one message.
-- **Never sleep-poll for something external.** Wait on the signal itself (a condition loop on the thing
-  that actually changes) and let the notification wake you.
+- **Do not hand-roll a wait on your own background job.** Backgrounding a command already buys a
+  notification when it exits; a loop watching its log is a second, worse copy of that. This rule used
+  to say "a condition loop on the thing that actually changes", and that sentence is how
+  `until grep -q "^EXIT=" gate.log; do :; done` got written. It went wrong three ways at once, and any
+  one of them would have been enough:
+  - **`do :; done` is a spin, not a wait.** No `sleep`, so it burned a whole core.
+  - **The thing it waited for died.** The container restarted and took the gate with it, so `EXIT=`
+    was never written and the loop had no way to end. A wait needs a bound and a line that says it
+    gave up — `for i in $(seq 1 60); do …; sleep 20; done; echo "gave up"`.
+  - **The harness moved it to the background and that read as "handled".** It is the opposite: a
+    foreground command that times out becomes a process nobody is watching, and it is yours from that
+    moment. Kill it or finish it before doing anything else.
+  It ran for hours while everything else got done, and the only reason it was found is that the owner
+  asked why a task was still running. Poll a remote (a branch moving, a check landing) with a bounded
+  `sleep` loop; never poll a local job the harness already reports on.
 - **One validated push beats three speculative ones.** Each push costs a CI cycle, and until the
   `claude/**` rule in `vercel.json`, a stored deployment as well.
-- **Kill what you start.** A forgotten probe script held 599 MB for six hours. `pkill -f "next start"`
-  matched the backgrounding shell's own command line and killed the caller.
+- **Kill what you start**, and check at the end of a batch that nothing is left. A forgotten probe
+  script held 599 MB for six hours; a spinning wait loop held a core for longer. `pgrep -af` for the
+  things this repo starts (`gate.sh`, `vitest`, `next build`, `next start`, `e2e/run.mjs`, and any
+  loop you wrote) before calling work finished. Kill by **PID**, never by pattern: `pkill -f
+  "next start"` once matched the backgrounding shell's own command line and killed the caller.
 - **Do the cheap true thing before the expensive one.** Counting rows in production took one query and
   changed what was worth building next more than an hour of reasoning would have.
 
