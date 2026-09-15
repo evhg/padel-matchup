@@ -84,6 +84,23 @@ export function mergeTimeline<M extends { event: { startsAt: Date } }, L extends
   return entries.sort((a, b) => a.at - b.at);
 }
 
+/**
+ * Whether this player has any match at all, by the same rule `getPlayerEvents` uses below: they
+ * created it, or they sit in one of its seats. Bounded at one row and asking for nothing else, so a
+ * screen that only needs the yes-or-no does not pay for the list.
+ *
+ * It lives against `getPlayerEvents` on purpose: the two answer the same question and must not drift.
+ */
+export async function playerHasEvents(db: Db, playerId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: events.id })
+    .from(events)
+    .leftJoin(slots, and(eq(slots.eventId, events.id), eq(slots.playerId, playerId)))
+    .where(or(eq(events.creatorPlayerId, playerId), eq(slots.playerId, playerId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function getPlayerEvents(db: Db, playerId: string, now = new Date()): Promise<{ upcoming: MyEvent[]; past: MyEvent[] }> {
   const rows = await db
     .select({ event: events, slot: slots })

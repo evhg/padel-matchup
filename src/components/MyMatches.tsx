@@ -3,37 +3,23 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { Player } from "@/db/schema";
 import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
-import { baseUrl, emailEnabled } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
-import { playerHasPush } from "@/lib/domain/push";
 import { getPlayerGroups } from "@/lib/domain/groups";
 import { getPlayerEvents, mergeTimeline, type MyEvent } from "@/lib/domain/queries";
 import { listStudentCoaches, listStudentLessons, packageLine, type StudentLesson } from "@/lib/domain/coaching";
-import { vapidPublicKey } from "@/lib/push";
 import { venueWithCourt } from "@/lib/labels";
-import { personalPath, personalUrl } from "@/lib/personal";
-import { HomeScreenPrompt } from "./HomeScreenPrompt";
-import { isLevelVerified } from "@/lib/domain/levels";
-import { LevelEditor } from "./LevelEditor";
-import { NameEditor } from "./NameEditor";
-import { PersonalLinkCard } from "./PersonalLinkCard";
-import { PushToggle } from "./PushToggle";
-import { TelegramLogin } from "./TelegramLogin";
-import { telegramBotId } from "@/lib/telegram/api";
-import { RestoreWithEmail } from "./RestoreWithEmail";
 
 /** "My matches": rendered on /me (cookie identity) and /p/{token} (personal link). */
-export async function MyMatches({ player, personalToken }: { player: Player; personalToken: string }) {
+export async function MyMatches({ player }: { player: Player }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
   const now = new Date();
-  const [{ upcoming, past }, hasPush, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), playerHasPush(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), listStudentCoaches(db, player.id)]);
+  const [{ upcoming, past }, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), listStudentCoaches(db, player.id)]);
   // A lesson is an appointment on the same calendar as a match: it takes its place in the list by time, not a section of its own.
   const booked = lessons.filter((l) => l.status === "booked");
   // The coach's door stays whatever the match history: to book with a coach who said yes, or to see that the ask still waits.
   const myCoaches = coaches.filter((c) => c.status === "accepted" || c.status === "requested");
-  // Matches only: what earns the ranking offer and lets the restore card go. Lessons count for the list, not for those.
-  const hasMatches = upcoming.length > 0 || past.length > 0;
-  const hasHistory = hasMatches || booked.length > 0;
+  // A lesson counts for the list: somebody with a lesson booked and no match has a screen with something on it.
+  const hasHistory = upcoming.length > 0 || past.length > 0 || booked.length > 0;
   // Stats strip: only matches the player was actually in (not organized-from-the-sidelines).
   const playedList = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
   const won = playedList.filter((m) => m.outcome === "won").length;
@@ -206,29 +192,6 @@ export async function MyMatches({ player, personalToken }: { player: Player; per
               </li>
             ))}
           </ul>
-        </section>
-      )}
-      <section className="card">
-        <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
-      </section>
-      <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />
-      <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
-      <section className="card">
-        <NameEditor name={player.displayName} />
-        <div className="mt-4 border-t border-line pt-4">
-          <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasMatches} />
-        </div>
-        {telegramBotId() && (
-          <div className="mt-4 border-t border-line pt-4">
-            <TelegramLogin botId={telegramBotId()!} linked={player.telegramId != null} linkedUsername={player.telegramUsername} lang={locale} authUrl={`${baseUrl()}/api/telegram/login`} />
-          </div>
-        )}
-        <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
-      </section>
-
-      {!hasMatches && emailEnabled() && (
-        <section className="card">
-          <RestoreWithEmail initialEmail={player.email ?? ""} />
         </section>
       )}
     </>

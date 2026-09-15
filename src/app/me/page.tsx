@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { MyMatches } from "@/components/MyMatches";
+import { MySettings } from "@/components/MySettings";
 import { NameGate } from "@/components/NameGate";
 import { RestoreWithEmail } from "@/components/RestoreWithEmail";
 import { TelegramLogin } from "@/components/TelegramLogin";
@@ -17,7 +18,7 @@ import { getCoachForActor } from "@/lib/domain/coaching";
 import { MomentsStrip } from "@/components/MomentsStrip";
 import { WhenIPlay } from "@/components/WhenIPlay";
 import { listWants } from "@/lib/domain/demand";
-import { getVenues } from "@/lib/domain/queries";
+import { getVenues, playerHasEvents } from "@/lib/domain/queries";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
 import { telegramBotId } from "@/lib/telegram/api";
@@ -75,6 +76,8 @@ export default async function MePage({ searchParams }: Props) {
   const wants = (await listWants(db, me.id)).map((w) => ({ id: w.id, weekday: w.weekday, fromTime: w.fromTime, toTime: w.toTime, place: w.venueSlug ?? w.citySlug ?? "" }));
   // Their usual court, offered as the starting value: most people want to play where they already play.
   const lastVenue = (await getVenues(db, me.id))[0]?.name ?? null;
+  // One bounded row: the settings block needs only the yes-or-no, not the list MyMatches fetches.
+  const hasMatches = await playerHasEvents(db, me.id);
   return (
     <>
       {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
@@ -83,7 +86,7 @@ export default async function MePage({ searchParams }: Props) {
         {note === "linked" && <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">✓ {t("telegram.justLinked")}</p>}
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
         {asCoach && <CoachCard db={db} coach={asCoach.coach} />}
-        <MyMatches player={me} personalToken={token} />
+        <MyMatches player={me} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
@@ -109,17 +112,12 @@ export default async function MePage({ searchParams }: Props) {
             </ul>
           </section>
         )}
-        {!asCoach && (
-          <p className="text-center text-xs text-faint">
-            <Link href="/coach" prefetch={false} className="hover:text-muted">
-              {t("coach.me.coachLine")} →
-            </Link>
-          </p>
-        )}
+        {/* No "do you coach?" here, and no door for a club or an organiser either. This screen is a
+            player's matches; the stakeholders have their own front doors on the landing page, and
+            asking a player to become something else is not what they came for. */}
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
-        {/* Last on the page, which is what DeleteAccount has always said of itself. It was the last
-            thing in MyMatches, and MyMatches stopped being the last thing on this screen — so the one
-            irreversible button in the product came to sit above "When do you want to play?". */}
+        <MySettings player={me} personalToken={token} hasMatches={hasMatches} />
+        {/* Last on the page, always: the one action that cannot be undone. */}
         <DeleteAccount />
       </main>
       <Footer />
