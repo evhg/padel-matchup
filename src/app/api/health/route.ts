@@ -1,9 +1,12 @@
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
-import { baseUrl, emailEnabled, emailFrom } from "@/lib/config";
+import { ALL_CHANNELS } from "@/lib/channels";
+import { baseUrl, emailEnabled, emailFrom, ownerTelegramId } from "@/lib/config";
 import { pushEnabled } from "@/lib/push";
 import { databaseSource, onVercel, sessionSecretSource } from "@/lib/env";
+import { telegramEnabled } from "@/lib/telegram/api";
+import { whatsappEnabled } from "@/lib/whatsapp/api";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,25 @@ export async function GET() {
   if (!emailEnabled()) hints.push("Email is off (no RESEND_API_KEY). Everything else works; add it later for calendar invites and notifications.");
   if (!process.env.CRON_SECRET) hints.push("CRON_SECRET is not set; the cron endpoint is unauthenticated but harmless. Set it when convenient.");
 
+  // Four chat channels shipped and this page could not say whether any of them was on. The card
+  // channels answer for themselves through the registry, so a fifth needs no line here; WhatsApp is
+  // not a card channel and is asked separately.
+  const channels: Record<string, "on" | "off"> = { whatsapp: whatsappEnabled() ? "on" : "off" };
+  for (const c of ALL_CHANNELS) channels[c.name] = c.enabled() ? "on" : "off";
+  const off = Object.entries(channels).filter(([, v]) => v === "off").map(([k]) => k);
+  if (off.length > 0) hints.push(`These chat channels are off because their keys are not set: ${off.join(", ")}. Everything else works without them.`);
+
+  // Feedback, the listening desk, uptime and production errors all reach one person down one route.
+  // If either half of it is missing, a note a player writes is stored and nobody is told.
+  const ownerRoute = telegramEnabled() && ownerTelegramId() !== null;
+  if (!ownerRoute) {
+    hints.push(
+      telegramEnabled()
+        ? "Nothing reaches the owner: TELEGRAM_OWNER_ID is not set, so feedback, uptime and error alerts are written down and never delivered."
+        : "Nothing reaches the owner: the Telegram bot is off, so feedback, uptime and error alerts are written down and never delivered.",
+    );
+  }
+
   const ok = database === "connected" || (database === "embedded" && !onVercel());
   return NextResponse.json(
     {
@@ -47,6 +69,8 @@ export async function GET() {
       cronSecret: process.env.CRON_SECRET ? "set" : "missing",
       email: emailEnabled() ? "enabled" : "disabled",
       push: pushEnabled() ? "enabled" : "disabled",
+      channels,
+      feedbackReachesOwner: ownerRoute,
       emailFrom: emailEnabled() ? emailFrom() : null,
       baseUrl: baseUrl(),
       hints,

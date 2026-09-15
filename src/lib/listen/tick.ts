@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, type ListenItem } from "@/db/schema";
-import { baseUrl } from "@/lib/config";
+import { baseUrl, ownerTelegramId } from "@/lib/config";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { draftReply, draftingEnabled, withinBudget } from "./draft";
 import { guessLanguage, looksRelevant, type Candidate } from "./parse";
@@ -20,7 +20,7 @@ export const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. */
 export const LIMITS = { draftsPerRun: 3, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
 
-export const ownerTelegramId = () => (process.env.TELEGRAM_OWNER_ID ? Number(process.env.TELEGRAM_OWNER_ID) : null);
+export { ownerTelegramId };
 
 export async function rememberCandidates(db: Db, items: Candidate[], now = new Date()): Promise<number> {
   const fresh = items.filter((c) => now.getTime() - c.postedAt.getTime() < WINDOW_MS);
