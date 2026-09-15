@@ -3,7 +3,7 @@ import type { TelegramChat } from "@/db/schema";
 import type { OpContext } from "@/lib/api/operations";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { appendFeedbackReply, createFeedback, FEEDBACK_LIMITS, feedbackCountToday, findNoteForReply, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
+import { appendFeedbackReply, createFeedback, FEEDBACK_LIMITS, feedbackCountToday, findNoteForReply, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { esc, sendMessage, telegramBotId, type TgMessage, type TgUser } from "../api";
 import { strings, type BotLocale } from "../card";
@@ -23,6 +23,10 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
   }
   if ((await feedbackCountToday(db, { telegramUserId: from.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return "feedback:too_many";
   const player = await findTelegramPlayer(db, from.id);
+  // Asked before the row exists, so the count is notes left *before* this one. By Telegram id alone
+  // and not also by player: that is the key `feedback_tg_user_idx` is on, and an OR across two
+  // columns would not use it (rule 12). It is the same key this channel counts the daily cap by.
+  const said = await saidBefore(db, { telegramUserId: from.id });
   const row = await createFeedback(db, {
     source: "telegram",
     text,
@@ -35,7 +39,7 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
     telegramThreadId: msg.message_thread_id ?? null,
     telegramMessageId: msg.message_id,
   });
-  const ack = await composeAck(db, { text, name: from.first_name, locale, source: "telegram" });
+  const ack = await composeAck(db, { text, name: from.first_name, locale, source: "telegram", said });
   const res = await sendMessage(chat.chatId, esc(ack.reply), { silent: !isPrivate, replyTo: msg.message_id });
   if (ack.kind === "not_feedback") {
     await markNotFeedback(db, row.id, ack.reply);

@@ -8,7 +8,7 @@ import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operation
 import { baseUrl } from "@/lib/config";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { createFeedback, FEEDBACK_LIMITS, feedbackCountToday, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
+import { FEEDBACK_LIMITS, createFeedback, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
 import { feedbackStrings } from "@/lib/feedback/strings";
 import { isDomainError } from "@/lib/domain/errors";
 import { createPlayer } from "@/lib/domain/players";
@@ -169,6 +169,8 @@ async function handleCommand(db: Db, i: DcInteraction, user: DcUser, ctx: OpCont
     const who = displayNameOf(user);
     if (text.length < 3) return { response: ephemeral(fs.how.replace("/feedback and the text", "/feedback text").replace("/feedback и текст", "/feedback text").replace("/feedback y el texto", "/feedback text")), outcome: "feedback_short" };
     if ((await feedbackCountToday(db, { discordUserId: user.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return { response: ephemeral(fs.tooMany), outcome: "feedback_too_many" };
+    // Asked before the row exists, so the count is notes left *before* this one.
+    const said = await saidBefore(db, { discordUserId: user.id });
     const row = await createFeedback(db, { source: "discord", text, locale, name: who, context: (channel as { name?: string | null }).name ?? null, discordChannelId: channel.channelId, discordUserId: user.id, discordGuildId: channel.guildId });
     const token = i.token;
     // The reply is written for this note; that takes longer than Discord's three seconds, so defer and edit.
@@ -176,7 +178,7 @@ async function handleCommand(db: Db, i: DcInteraction, user: DcUser, ctx: OpCont
       response: { type: RESPONSE.DEFERRED_MESSAGE, data: { flags: EPHEMERAL } },
       outcome: `feedback:${row.id}`,
       followUp: async () => {
-        const ack = await composeAck(db, { text, name: who, locale, source: "discord" });
+        const ack = await composeAck(db, { text, name: who, locale, source: "discord", said });
         const res = await editOriginalResponse(token, { content: ack.reply });
         if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
         else if (res.ok) {

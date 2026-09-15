@@ -99,6 +99,34 @@ export async function feedbackCountToday(db: Db, who: { telegramUserId?: number 
   return Number(n);
 }
 
+/** What this person has already been told, and how many notes they have already left. */
+export type SaidBefore = { lastReply: string | null; notesBefore: number };
+
+/**
+ * The instant reply had no memory, so the same person could be sent the same sentence again and
+ * again. Eriik said so on 9 September and again on 15 September, and both times the answer was
+ * another line of the same shape. This is what stops that: before anything is composed, what this
+ * person was last told and how many notes they have left.
+ *
+ * One query, bounded at twenty rows. Twenty is plenty: all that is needed is the last sentence and
+ * whether this is their first note or their fifth.
+ */
+export async function saidBefore(db: Db, who: { telegramUserId?: number | null; discordUserId?: string | null; email?: string | null; playerId?: string | null }): Promise<SaidBefore> {
+  const conds = [];
+  if (who.telegramUserId) conds.push(eq(feedback.telegramUserId, who.telegramUserId));
+  if (who.discordUserId) conds.push(eq(feedback.discordUserId, who.discordUserId));
+  if (who.email) conds.push(eq(feedback.email, who.email.toLowerCase()));
+  if (who.playerId) conds.push(eq(feedback.playerId, who.playerId));
+  if (conds.length === 0) return { lastReply: null, notesBefore: 0 };
+  const rows = await db
+    .select({ replyText: feedback.replyText })
+    .from(feedback)
+    .where(conds.length === 1 ? conds[0] : sql`(${sql.join(conds, sql` or `)})`)
+    .orderBy(desc(feedback.createdAt))
+    .limit(20);
+  return { lastReply: rows.find((r) => r.replyText)?.replyText ?? null, notesBefore: rows.length };
+}
+
 export async function getFeedback(db: Db, id: string): Promise<Feedback | null> {
   const [row] = await db.select().from(feedback).where(eq(feedback.id, id)).limit(1);
   return row ?? null;

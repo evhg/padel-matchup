@@ -6,7 +6,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
-import { FEEDBACK_LIMITS, cleanFeedbackText, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback } from "@/lib/feedback/store";
+import { FEEDBACK_LIMITS, cleanFeedbackText, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
 import { feedbackStrings, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
 import { formatProposal, parseProposal, PROPOSAL, proposeToOwner, sweepProposals } from "@/lib/feedback/propose";
@@ -482,5 +482,103 @@ describe("the note is the trigger: a proposal to the owner", () => {
     expect(tg.at(-1)!.chat_id).toBe(777);
     expect(String(tg.at(-1)!.text)).toContain("<b>Feedback from Nina</b> (telegram, en,");
     expect(String(tg.at(-1)!.text)).toContain("name the court");
+  });
+});
+
+/**
+ * Eriik told the feedback door on 9 September that it repeats itself, and again on 15 September.
+ * Both times the reply was another line of the same shape, because the door had no memory: it read
+ * the note and nothing else. These are the rules that give it one.
+ */
+describe("nobody is sent the same sentence twice", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+  beforeEach(async () => {
+    await db.delete(feedback);
+  });
+
+  it("remembers what this person was last told, and how many notes they have left", async () => {
+    expect(await saidBefore(db, { telegramUserId: 424242 })).toEqual({ lastReply: null, notesBefore: 0 });
+    const first = await createFeedback(db, { source: "telegram", text: "the reminder is too late", locale: "en", name: "Eriik", telegramUserId: 424242 });
+    await markAcknowledged(db, first.id, "Noted, Eriik. I read every note myself.");
+    const after = await saidBefore(db, { telegramUserId: 424242 });
+    expect(after).toEqual({ lastReply: "Noted, Eriik. I read every note myself.", notesBefore: 1 });
+
+    // A note still waiting for its reply does not erase the last thing this person heard.
+    await createFeedback(db, { source: "telegram", text: "and the card is too tall", locale: "en", name: "Eriik", telegramUserId: 424242 });
+    expect(await saidBefore(db, { telegramUserId: 424242 })).toEqual({ lastReply: "Noted, Eriik. I read every note myself.", notesBefore: 2 });
+
+    // Somebody else's notes are not this person's history.
+    expect(await saidBefore(db, { telegramUserId: 999111 })).toEqual({ lastReply: null, notesBefore: 0 });
+    // And a channel that cannot say who this is gets no memory rather than someone else's.
+    expect(await saidBefore(db, {})).toEqual({ lastReply: null, notesBefore: 0 });
+  });
+
+  it("drops the claim from the second note on, because they have already been told it", () => {
+    const note = { text: "the court name could be bigger", name: "Eriik", locale: "en", source: "telegram" as const, canReply: true };
+    const firstTime = fallbackAck(note);
+    // "I read every note myself" and the rest of the middle pool: said once, to somebody hearing it once.
+    expect(POOL.en.mid.some((m) => firstTime.includes(m))).toBe(true);
+    const secondTime = fallbackAck({ ...note, said: { lastReply: "Thanks, Eriik. This one is read. I'll let you know if I build anything from it.", notesBefore: 1 } });
+    expect(POOL.en.mid.some((m) => secondTime.includes(m))).toBe(false);
+    expect(secondTime.length).toBeLessThan(firstTime.length);
+    // Still their name, and still a closer that says what happens next.
+    expect(secondTime).toContain("Eriik");
+    expect(POOL.en.close.some((c) => secondTime.includes(c))).toBe(true);
+  });
+
+  it("never hands a person back the exact line they were just sent", () => {
+    const note = { text: "you are repeating yourself", name: "Eriik", locale: "en", source: "telegram" as const, canReply: true };
+    // Whatever the pool would have reached for, feed it back as the last thing they heard.
+    const would = fallbackAck({ ...note, said: { lastReply: null, notesBefore: 3 } });
+    const next = fallbackAck({ ...note, said: { lastReply: would, notesBefore: 3 } });
+    expect(next).not.toBe(would);
+    expect(next).toContain("Eriik");
+    // In all three languages, and for a note with no way back as well as one with.
+    for (const locale of ["en", "ru", "es"] as const) {
+      for (const canReply of [true, false]) {
+        const base = { text: "again", name: "Olga", locale, source: "web" as const, canReply };
+        const a = fallbackAck({ ...base, said: { lastReply: null, notesBefore: 2 } });
+        expect(fallbackAck({ ...base, said: { lastReply: a, notesBefore: 2 } })).not.toBe(a);
+      }
+    }
+  });
+
+  it("leaves a first note exactly as it was, so nothing already shipped changed shape", () => {
+    for (const text of ["the reminder should come two hours before", "let /new accept a court number", "algo", "anything"]) {
+      const bare = fallbackAck({ text, name: "Sam", locale: "en" });
+      expect(fallbackAck({ text, name: "Sam", locale: "en", said: { lastReply: null, notesBefore: 0 } })).toBe(bare);
+    }
+  });
+
+  it("tells the model what this person was last told, and to answer rather than acknowledge again", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const prompts: string[] = [];
+    let system = "";
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { system: string; messages: { content: string }[] };
+      prompts.push(body.messages[0].content);
+      system = body.system;
+      return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify({ kind: "feedback", reply: "Fair. No more thank-yous at you; the card's court name is what I'm changing." }) }] }), { headers: { "content-type": "application/json" } });
+    });
+    const ack = await composeAck(db, {
+      text: "you are repeating yourself. Analyze the above",
+      name: "Eriik",
+      locale: "en",
+      source: "telegram",
+      said: { lastReply: "Noted, Eriik. I read every note myself. If anything comes of it, I'll tell you here.", notesBefore: 2 },
+    });
+    expect(ack.by).toBe("model");
+    expect(prompts.at(-1)).toContain("last reply this person was sent: Noted, Eriik.");
+    expect(prompts.at(-1)).toContain("notes left before this one: 2");
+    expect(system).toMatch(/do not acknowledge it again/);
+
+    // With no memory the prompt carries no memory lines at all, rather than an empty one.
+    await composeAck(db, { text: "first note", name: "Ana", locale: "en", source: "web" });
+    expect(prompts.at(-1)).not.toContain("last reply this person was sent");
   });
 });
