@@ -336,7 +336,7 @@
   },
   "notFound": {
     "title": "Enlace no encontrado",
-    "body": "Ese enlace de partido no existe o está mal escrito. Los códigos tienen 4 caracteres y distinguen mayúsculas.",
+    "body": "Ese enlace no existe o está mal escrito. Si era un enlace de partido, los códigos tienen 4 caracteres y distinguen mayúsculas.",
     "cta": "Crear un partido"
   },
   "invitePage": {

@@ -344,8 +344,19 @@ export async function acceptByInvite(db: Db, coachId: string, playerId: string):
 export const earnedInvite = (students: Pick<StudentRow, "status" | "lessonsDone">[]): boolean => students.filter((s) => s.status !== "requested").length >= 3 || students.reduce((n, s) => n + s.lessonsDone, 0) >= 5;
 
 /** The coach adds a student by name (courtside, no phone needed): a player is created and accepted at once. */
+/**
+ * A name arrives here as the coach typed it into a chat — "pat +10" makes a student called "pat",
+ * lower case, in their list, in every notice they ever get, and on that person's own profile. It is
+ * a name, so it is capitalised; a name typed with any capital of its own is left exactly as typed,
+ * because "María José" and "McDonald" know better than this function does.
+ */
+const asName = (raw: string) =>
+  raw === raw.toLocaleLowerCase()
+    ? raw.replace(/(^|[\s'’-])(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toLocaleUpperCase())
+    : raw;
+
 export async function addStudentByName(db: Db, coachId: string, name: string, locale: string, email?: string | null): Promise<Player> {
-  const player = await createPlayer(db, { displayName: name, locale, email: email ?? null });
+  const player = await createPlayer(db, { displayName: asName(name), locale, email: email ?? null });
   await setStudentStatus(db, coachId, player.id, "accepted");
   return player;
 }

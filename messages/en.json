@@ -336,7 +336,7 @@
   },
   "notFound": {
     "title": "Link not found",
-    "body": "That match link doesn't exist or was mistyped. Codes are 4 characters and case-sensitive.",
+    "body": "That link doesn't exist, or it was mistyped. If it was a match link, codes are 4 characters and case-sensitive.",
     "cta": "Create a match"
   },
   "invitePage": {
