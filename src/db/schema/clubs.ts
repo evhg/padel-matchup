@@ -17,8 +17,15 @@ export const clubs = pgTable(
     /** Same as the venue slug of the club's matches. */
     slug: text("slug").primaryKey(),
     name: text("name").notNull(),
-    /** City slug (phuket, singapore) or null. */
+    /** City slug (phuket, singapore) or null. Only cities with a page of their own; most clubs have none. */
     city: text("city"),
+    /**
+     * Where the club is, for a picker that has to work outside the two cities that have pages.
+     * `country` is an ISO 3166-1 alpha-2 code ("TH", "SG"); `province` is what a person there would
+     * call it ("Phuket", "Bangkok", "Chiang Mai", "Singapore"), not a code.
+     */
+    country: text("country"),
+    province: text("province"),
     tz: text("tz"),
     mapUrl: text("map_url"),
     website: text("website"),
@@ -26,6 +33,9 @@ export const clubs = pgTable(
     /** Detected from booking_url: playtomic, matchi, playbypoint, … */
     bookingPlatform: text("booking_platform"),
     courts: integer("courts"),
+    /** The same total, split: an indoor court in Bangkok in April is a different thing from an outdoor one. Either may be null when no source said. */
+    courtsIndoor: integer("courts_indoor"),
+    courtsOutdoor: integer("courts_outdoor"),
     about: text("about"),
     opensAt: text("opens_at"),
     closesAt: text("closes_at"),
@@ -34,6 +44,14 @@ export const clubs = pgTable(
     availabilityKind: text("availability_kind"),
     availability: jsonb("availability").$type<ClubAvailability>(),
     availabilityAt: timestamp("availability_at", { withTimezone: true }),
+    /**
+     * "claim" — somebody claimed this page and it is theirs to manage.
+     * "directory" — Kicksmash listed the club from public sources so a player can pick it by name.
+     *
+     * A directory row is listed and never says it is managed by anybody: no `claimedBy`, no
+     * `approvedAt`. When its real owner claims it, the row becomes theirs and this becomes "claim".
+     */
+    source: text("source").notNull().default("claim"),
     /** The club's private manage link. */
     manageToken: text("manage_token").notNull(),
     claimedBy: uuid("claimed_by").references(() => players.id, { onDelete: "set null" }),
@@ -49,7 +67,7 @@ export const clubs = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("clubs_manage_token_idx").on(t.manageToken), index("clubs_city_idx").on(t.city), index("clubs_claimed_by_idx").on(t.claimedBy)],
+  (t) => [uniqueIndex("clubs_manage_token_idx").on(t.manageToken), index("clubs_city_idx").on(t.city), index("clubs_claimed_by_idx").on(t.claimedBy), index("clubs_place_idx").on(t.country, t.province, t.name)],
 );
 
 export type Club = typeof clubs.$inferSelect;

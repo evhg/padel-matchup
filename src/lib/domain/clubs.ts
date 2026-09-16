@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
@@ -84,12 +84,38 @@ export async function listLiveClubs(db: Db, city?: string | null, limit = 200): 
   return db.select().from(clubs).where(where).orderBy(desc(clubs.founding), asc(clubs.name)).limit(limit);
 }
 
+/**
+ * Every club a person can pick by name: the ones their owners run here, and the ones Kicksmash
+ * listed from public sources. Ordered the way a list is read when nothing better is known —
+ * country, then province, then the name — so the caller can group it without sorting again.
+ *
+ * A rejected claim is nobody's club and appears as neither.
+ */
+export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> {
+  return db
+    .select()
+    .from(clubs)
+    .where(and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), eq(clubs.source, "directory"))))
+    .orderBy(asc(clubs.country), asc(clubs.province), asc(clubs.name))
+    .limit(limit);
+}
+
 export async function listClubsClaimedBy(db: Db, playerId: string): Promise<Club[]> {
   return db.select().from(clubs).where(eq(clubs.claimedBy, playerId)).orderBy(asc(clubs.name));
 }
 
+/**
+ * Clubs whose owners claimed them since a date — the weekly digest's "clubs claimed" number.
+ * Kicksmash listing a club is not a club joining, so the directory's own rows never count.
+ */
+export async function countClubsClaimedSince(db: Db, since: Date): Promise<number> {
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(eq(clubs.source, "claim"), gte(clubs.createdAt, since)));
+  return Number(n);
+}
+
+/** Claims waiting on the owner's yes. A directory row is nobody's claim and never queues here. */
 export async function listPendingClubs(db: Db): Promise<Club[]> {
-  return db.select().from(clubs).where(and(isNull(clubs.approvedAt), isNull(clubs.rejectedAt))).orderBy(asc(clubs.claimedAt));
+  return db.select().from(clubs).where(and(eq(clubs.source, "claim"), isNull(clubs.approvedAt), isNull(clubs.rejectedAt))).orderBy(asc(clubs.claimedAt));
 }
 
 const newToken = () => randomBytes(18).toString("base64url");
@@ -102,21 +128,42 @@ export function guessCity(slug: string | null, tz: string | null | undefined): s
 
 export type ClaimInput = ClubInput & { name: string; playerId: string; tz?: string | null };
 
+/** The unclaimed listing for a name, whatever slug it was listed under. */
+async function listedClubByName(db: Db, name: string): Promise<Club | null> {
+  const [c] = await db
+    .select()
+    .from(clubs)
+    .where(and(eq(clubs.source, "directory"), isNull(clubs.claimedBy), sql`lower(${clubs.name}) = ${name.toLowerCase()}`))
+    .limit(1);
+  return c ?? null;
+}
+
 /**
  * Claims a club page. A live or pending claim by someone else blocks; a
  * rejected one can be claimed again (the owner sees it again).
  */
 export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   const name = input.name.trim().slice(0, 80);
-  const slug = venueSlug(name);
-  if (!slug || name.length < 2) throw new DomainError("invalid", "club_name");
-  const existing = await getClub(db, slug);
-  if (existing && !existing.rejectedAt && existing.claimedBy !== input.playerId) throw new DomainError("forbidden", "already_claimed");
+  const typed = venueSlug(name);
+  if (!typed || name.length < 2) throw new DomainError("invalid", "club_name");
+  // A club the directory listed keeps the slug its matches already carry ("warehaus"), which is not
+  // what venueSlug() makes of the name it is called by ("warehaus-club"). Find the listing by name
+  // first, or claiming it would open a second page for the same club with the history on the other one.
+  const listed = await listedClubByName(db, name);
+  const slug = listed?.slug ?? typed;
+  const existing = listed ?? (await getClub(db, slug));
+  // A directory row belongs to nobody until its owner turns up: `claimedBy` is null, and this is the
+  // claim it was waiting for. Only a row somebody else is already holding blocks — without the null
+  // check, listing a club in the directory would tell its real owner it was "already claimed".
+  if (existing && !existing.rejectedAt && existing.claimedBy !== null && existing.claimedBy !== input.playerId) throw new DomainError("forbidden", "already_claimed");
   const fields = cleanClubInput(input);
   const city = fields.city ?? guessCity(slug, input.tz ?? existing?.tz) ?? existing?.city ?? null;
   // No zone from the browser: the city's zone will do, and the week can make matches from the first hour.
   const tz = input.tz ?? existing?.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
-  const values = { ...fields, city, name, tz, claimedBy: input.playerId, claimedAt: new Date(), rejectedAt: null, approvedAt: existing?.claimedBy === input.playerId ? existing.approvedAt : null, updatedAt: new Date() };
+  // A claimed row is a claim, whatever it was before. The directory's own fields (country, province,
+  // the court counts) are left alone: they are still true, and the owner edits them through the
+  // manage link like everything else.
+  const values = { ...fields, city, name, tz, source: "claim", claimedBy: input.playerId, claimedAt: new Date(), rejectedAt: null, approvedAt: existing?.claimedBy === input.playerId ? existing.approvedAt : null, updatedAt: new Date() };
   if (existing) {
     const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning();
     return row;

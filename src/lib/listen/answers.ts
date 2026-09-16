@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { COACH_DOORS } from "@/lib/source";
 import type { Db } from "@/db";
-import { activity, answers, clubs, coaches, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
+import { activity, answers, coaches, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
 import { listErrors } from "@/lib/alerts";
 import { feedbackWeek } from "@/lib/feedback/store";
 import { outreachWeek } from "@/lib/outreach/desk";
@@ -9,6 +9,7 @@ import { searchConsoleEnabled, searchWeek } from "@/lib/search/console";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import { baseUrl } from "@/lib/config";
+import { countClubsClaimedSince } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { boardHighlights, serviceBoard } from "@/lib/ops/services";
 import { metricsDaily } from "@/db/schema";
@@ -173,11 +174,11 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const notes = await feedbackWeek(db, since);
   const search = searchConsoleEnabled() ? await searchWeek() : null;
   // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
-  const [[newPlayers], [joins], [results], [newClubs], [channels], [newCoaches]] = await Promise.all([
+  const [[newPlayers], [joins], [results], newClubs, [channels], [newCoaches]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(activity).where(and(eq(activity.verb, "joined"), gte(activity.createdAt, since))),
     db.select({ n: sql<number>`count(distinct ${activity.eventId})` }).from(activity).where(and(eq(activity.verb, "score_entered"), gte(activity.createdAt, since))),
-    db.select({ n: sql<number>`count(*)` }).from(clubs).where(gte(clubs.createdAt, since)),
+    countClubsClaimedSince(db, since),
     db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
     db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since)),
   ]);
@@ -193,7 +194,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,
     `Funnel: visitors ${funnel.pageviews ?? 0} → matches ${Number(matches.n)} → seats ${Number(joins.n)} → scores ${Number(results.n)} → card views ${funnel.card_views ?? 0}`,
     `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : "none this week (ig, poster, card, moment, podium are the tags)"}`,
-    `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${Number(newClubs.n)}`,
+    `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${newClubs}`,
     `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : `none tagged (${COACH_DOORS.join(", ")})`}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,

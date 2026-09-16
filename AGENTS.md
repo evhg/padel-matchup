@@ -16,6 +16,7 @@ node scripts/suites.mjs --why      # which browser suites can this change break?
 node scripts/gen-docs.mjs          # rewrite the README's env table and .env.example from the code
 node scripts/check-bundle.mjs --why # what does each route actually ship? (in the gate, after a build)
 node scripts/i18n.mjs add <key> "<en>" "<ru>" "<es>"   # one message into all three locales, one line each
+node scripts/import-clubs.mjs --sql # the club directory (data/clubs.json) as one upsert; apply it by hand like a migration
 GATE_E2E=auto bash scripts/gate.sh # the gate, plus a build and the suites this change can break
 bash scripts/gate.sh              # the gate: typecheck, lint, unit suite in CI's single-worker order; GATE_E2E=<suite> adds a build and one browser suite
 ```
