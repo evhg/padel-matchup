@@ -23,7 +23,10 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
   const me = await getSessionPlayer(db);
   // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8).
   // Anybody sees the clubs, signed in or not — the list is the point of it.
-  const venues = await venuesForPicking(db, me?.id ?? null, tzFromHeader ? headerTz : null);
+  // The time zone alone puts Phuket and Bangkok in the same bucket, and Bangkok has twice the clubs
+  // and sorts first, so the city the edge reports is what makes the list start where the person is.
+  const headerCity = hdrs.get("x-vercel-ip-city");
+  const venues = await venuesForPicking(db, me?.id ?? null, { tz: tzFromHeader ? headerTz : null, city: headerCity ? decodeURIComponent(headerCity) : null });
   const patterns = me ? await getPlayerTimePatterns(db, me.id) : [];
 
   // From a group page: the group's usual settings prefill the form and every member gets pinged on create.
@@ -67,7 +70,7 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
           <span className="text-muted">{t("group.memberOnly")} →</span>
         </Link>
       )}
-      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province }))} hasIdentity={Boolean(me)} returning={returning} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
+      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts }))} hasIdentity={Boolean(me)} returning={returning} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
     </>
   );
 }

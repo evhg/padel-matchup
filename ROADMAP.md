@@ -57,9 +57,10 @@ Everything in this list is live. The README describes each in detail.
   A club that opens next month will not be on the web for a while, but the first people to play there
   type its name into a match that week, so the owner's weekly digest names every court people used
   that Kicksmash does not list. That, and a club claiming its own page, are how the list grows.
-- **Picking where you play.** The list answers before it is read: the courts you have used, then the
-  clubs in your own time zone, then everywhere else under a heading per country and province. Six at
-  rest, the whole directory once a letter is typed. A club owner picks their club from the same list
+- **Picking where you play.** The list answers before it is read: the courts you have used and the
+  clubs you teach at, then the clubs in your own province, then the rest of your time zone, then
+  everywhere else, under a heading per country and province. Six at rest, the whole directory once a
+  letter is typed. Picking a club fills the map link and offers its courts as a list of numbers. A club owner picks their club from the same list
   rather than retyping its name, and a coach names where they teach from it. Whatever is picked lands
   on the club's own page — "WAREHAUS.club" is the club at `warehaus`, not a second page made from its
   name — and that holds wherever a venue is written, the chats and the API included.
