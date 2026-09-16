@@ -59,6 +59,13 @@ try {
   await page.goto(`${BASE}/clubs`);
   check("/clubs lists it under Phuket with nine founding places left", (await page.getByRole("link", { name: CLUB }).count()) === 1 && (await page.getByText("9 founding places left in Phuket").count()) === 1);
 
+  await page.goto(`${BASE}/new`);
+  await page.getByLabel(/Venue/).click();
+  // The list is the point of the directory: a club is picked under the place it is in, not typed.
+  check("the create form offers the club under its province", (await page.getByText("Phuket", { exact: true }).count()) >= 1 && (await page.getByRole("button", { name: CLUB }).count()) === 1);
+  await page.getByRole("button", { name: CLUB }).click();
+  check("picking it fills the venue", (await page.getByLabel(/Venue/).inputValue()) === CLUB);
+
   const api = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
   check("the API shows the club without anything private", api.booking?.platform === "matchi" && api.founding === true && api.courts === 4 && !JSON.stringify(api).includes(token));
   const list = await fetch(`${BASE}/api/v1/clubs?city=phuket`).then((r) => r.json());

@@ -18,7 +18,7 @@ try {
   const olga = await newPage();
   await olga.goto(BASE + "/");
   await olga.getByPlaceholder("e.g. Alex").fill("Olga");
-  await olga.getByPlaceholder("Court TBD · or type a club").fill("Club Nine");
+  await olga.getByPlaceholder("Court TBD · or pick a club").fill("Club Nine");
   await olga.getByRole("button", { name: "Create & get the link" }).click();
   await olga.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code = olga.url().split("/").slice(-2)[0];

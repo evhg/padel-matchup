@@ -6,15 +6,21 @@ import { claimClubAction } from "@/actions/clubs";
 import { CopyButton } from "@/components/ShareSheet";
 
 type City = { slug: string; name: string };
+/** A club Kicksmash already lists and nobody has claimed: the owner picks it rather than retyping it. */
+export type ListedClub = { name: string; country: string | null; province: string | null };
 
 /** The claim in one screen; success shows the manage link once (it is also on My matches). */
-export function ClubClaimForm({ initialName, hasIdentity, cities, base }: { initialName: string; hasIdentity: boolean; cities: City[]; base: string }) {
+export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed = [] }: { initialName: string; hasIdentity: boolean; cities: City[]; base: string; listed?: ListedClub[] }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ slug: string; token: string } | null>(null);
   const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", about: "", city: "" });
   const set = (patch: Partial<typeof v>) => setV((s) => ({ ...s, ...patch }));
+  // Picking the club Kicksmash already lists claims that page, with its matches and its court counts
+  // on it. Typing a near-miss opens an empty second one, so the list is offered from the first letter.
+  const typed = v.clubName.trim().toLowerCase();
+  const suggestions = typed.length < 1 || listed.some((c) => c.name.toLowerCase() === typed) ? [] : listed.filter((c) => c.name.toLowerCase().includes(typed)).slice(0, 6);
 
   if (done) {
     const manage = `${base}/v/${done.slug}/manage/${done.token}`;
@@ -69,7 +75,19 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base }: { init
       )}
       <label className="block">
         <span className="text-sm font-bold">{t("club.clubName")}</span>
-        <input className="input mt-1" value={v.clubName} maxLength={80} minLength={2} required onChange={(e) => set({ clubName: e.target.value })} />
+        <input className="input mt-1" value={v.clubName} maxLength={80} minLength={2} required autoComplete="off" onChange={(e) => set({ clubName: e.target.value })} />
+        {suggestions.length > 0 && (
+          <ul className="mt-1 overflow-hidden rounded-2xl border border-line">
+            {suggestions.map((c) => (
+              <li key={c.name}>
+                <button type="button" className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left hover:bg-bg" onClick={() => set({ clubName: c.name })}>
+                  <span className="font-semibold">{c.name}</span>
+                  <span className="text-xs text-muted">{[c.province, c.country].filter(Boolean).join(", ")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <span className="mt-1 block text-xs text-muted">{t("club.clubNameHelp")}</span>
       </label>
       <label className="block">

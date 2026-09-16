@@ -49,7 +49,7 @@ try {
   const g = (t) => parts.find((p) => p.type === t).value;
   await a.locator("input[type=date]").fill(`${g("year")}-${g("month")}-${g("day")}`);
   await a.locator("input[type=time]").fill(`${g("hour")}:${g("minute")}`);
-  await a.getByPlaceholder("Court TBD · or type a club").fill("Club Padel Test");
+  await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
   await a.getByPlaceholder("e.g. 3 or Centre court").fill("3");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
@@ -93,7 +93,7 @@ try {
   const sg = (t) => sp.find((p) => p.type === t).value;
   await a.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
   await a.locator("input[type=time]").fill("11:30");
-  await a.getByPlaceholder("Court TBD · or type a club").fill("Club Padel Test");
+  await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code2 = a.url().split("/").slice(-2)[0];

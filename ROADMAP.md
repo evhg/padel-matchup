@@ -53,6 +53,12 @@ Everything in this list is live. The README describes each in detail.
   about it. A club people already play at keeps the slug their matches carry, so claiming "WAREHAUS.club"
   takes over `warehaus` rather than opening a second page with none of the history on it. The file is
   `data/clubs.json`, re-imported by one statement that only ever touches rows nobody has claimed.
+- **Picking where you play.** The list answers before it is read: the courts you have used, then the
+  clubs in your own time zone, then everywhere else under a heading per country and province. Six at
+  rest, the whole directory once a letter is typed. A club owner picks their club from the same list
+  rather than retyping its name, and a coach names where they teach from it. Whatever is picked lands
+  on the club's own page — "WAREHAUS.club" is the club at `warehaus`, not a second page made from its
+  name — and that holds wherever a venue is written, the chats and the API included.
 
 - **Open by default.** A public REST API with OpenAPI, an MCP server any assistant adds by URL, instant
   keys, signed webhooks, `llms.txt`, calendar feeds, npm packages, embeds and oEmbed. Data CC BY 4.0.

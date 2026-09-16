@@ -29,7 +29,7 @@ try {
   const g = (t) => parts.find((p) => p.type === t).value;
   await a.locator("input[type=date]").fill(`${g("year")}-${g("month")}-${g("day")}`);
   await a.locator("input[type=time]").fill(`${g("hour")}:${g("minute")}`);
-  await a.getByPlaceholder("Court TBD · or type a club").fill("Rawai Padel");
+  await a.getByPlaceholder("Court TBD · or pick a club").fill("Rawai Padel");
   await a.getByLabel("Players").selectOption("8");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });

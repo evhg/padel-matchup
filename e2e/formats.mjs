@@ -71,7 +71,7 @@ try {
   await org.getByRole("button", { name: "Mexicano", exact: true }).click();
   check("mexicano explains itself and sets 24 points", (await org.getByText(/courts follow the standings/).count()) > 0 && (await org.locator("select").filter({ has: org.locator('option[value="21"]') }).inputValue()) === "24");
   await org.getByLabel("Players").selectOption("8");
-  await org.getByPlaceholder("Court TBD · or type a club").fill("Club Mex");
+  await org.getByPlaceholder("Court TBD · or pick a club").fill("Club Mex");
   await shot(org, "f1-create-mexicano");
   await org.getByRole("button", { name: "Create & get the link" }).click();
   await org.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });

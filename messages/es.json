@@ -90,7 +90,7 @@
     "time": "Hora",
     "timezone": "Zona horaria",
     "venue": "Lugar",
-    "venuePlaceholder": "Pista por confirmar · o escribe un club",
+    "venuePlaceholder": "Pista por confirmar · o elige un club",
     "venueNew": "Añadir \"{name}\"",
     "venueMapUrl": "Enlace del mapa",
     "venueMapUrlPlaceholder": "https://maps.app.goo.gl/…",
@@ -142,7 +142,9 @@
     "payNotePlaceholder": "Bizum 612 345 678",
     "costHelp": "Se ve en la página del partido y en las tarjetas del bot, así nadie tiene que preguntar.",
     "costSet": "{cost} por jugador",
-    "payNoteHelp": "Se muestra a los jugadores junto al coste — un número de PromptPay, una línea bancaria o «efectivo en el club». Por Kicksmash no pasa dinero."
+    "payNoteHelp": "Se muestra a los jugadores junto al coste — un número de PromptPay, una línea bancaria o «efectivo en el club». Por Kicksmash no pasa dinero.",
+    "venueYours": "Donde juegas",
+    "venueOther": "Otras canchas"
   },
   "share": {
     "title": "Tu partido está en marcha",

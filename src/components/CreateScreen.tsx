@@ -6,7 +6,8 @@ import Link from "next/link";
 import { isValidInviteCode } from "@/lib/codes";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { getGroupByCode, getGroupMember, nextGroupSlot } from "@/lib/domain/groups";
-import { getPlayerTimePatterns, getVenues } from "@/lib/domain/queries";
+import { venuesForPicking } from "@/lib/domain/clubs";
+import { getPlayerTimePatterns } from "@/lib/domain/queries";
 import { getSessionPlayer } from "@/lib/session";
 import type { EventFormValues } from "./EventFields";
 
@@ -19,7 +20,10 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
   const defaultTz = tzFromHeader ? headerTz! : "UTC";
   const db = await getDb();
   const me = await getSessionPlayer(db);
-  const [venues, patterns] = me ? await Promise.all([getVenues(db, me.id), getPlayerTimePatterns(db, me.id)]) : [[], []];
+  // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8).
+  // Anybody sees the clubs, signed in or not — the list is the point of it.
+  const venues = await venuesForPicking(db, me?.id ?? null, tzFromHeader ? headerTz : null);
+  const patterns = me ? await getPlayerTimePatterns(db, me.id) : [];
 
   // From a group page: the group's usual settings prefill the form and every member gets pinged on create.
   const group = prefill?.group && isValidInviteCode(prefill.group) ? await getGroupByCode(db, prefill.group) : null;
@@ -58,7 +62,7 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
           <span className="text-muted">{t("group.memberOnly")} →</span>
         </Link>
       )}
-      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))} hasIdentity={Boolean(me)} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
+      <CreateEventForm defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province }))} hasIdentity={Boolean(me)} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
     </>
   );
 }
