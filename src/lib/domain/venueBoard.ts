@@ -1,6 +1,6 @@
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, slots, type Event } from "@/db/schema";
+import { clubs, events, slots, type Event } from "@/db/schema";
 import { venueInCity, type City } from "./cities";
 
 /** "Padel Indoor BCN" → "padel-indoor-bcn". ASCII only on purpose: it is a URL and a QR target. */
@@ -12,6 +12,25 @@ export function venueSlug(name: string | null | undefined): string | null {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return s ? s.slice(0, 80) : null;
+}
+
+/**
+ * The slug a venue name answers to. A club Kicksmash knows keeps its own — the one its matches
+ * already carry — so picking "WAREHAUS.club" adds to `warehaus` instead of opening a second page
+ * beside it. Anything else is the name, slugified, exactly as before.
+ *
+ * It lives here rather than beside the other club queries because every path that writes an event
+ * needs it, and `domain/clubs.ts` pulls in the search-engine ping and everything behind it.
+ */
+export async function venueSlugFor(db: Db, name: string | null | undefined): Promise<string | null> {
+  const typed = (name ?? "").trim();
+  if (!typed) return null;
+  const [c] = await db
+    .select({ slug: clubs.slug })
+    .from(clubs)
+    .where(and(isNull(clubs.rejectedAt), sql`lower(${clubs.name}) = ${typed.toLowerCase()}`))
+    .limit(1);
+  return c?.slug ?? venueSlug(typed);
 }
 
 export const isValidVenueSlug = (s: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) && s.length <= 80;

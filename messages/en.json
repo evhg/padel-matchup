@@ -90,7 +90,7 @@
     "time": "Time",
     "timezone": "Time zone",
     "venue": "Venue",
-    "venuePlaceholder": "Court TBD · or type a club",
+    "venuePlaceholder": "Court TBD · or pick a club",
     "venueNew": "Add \"{name}\"",
     "venueMapUrl": "Map link",
     "venueMapUrlPlaceholder": "https://maps.app.goo.gl/…",
@@ -142,7 +142,9 @@
     "payNotePlaceholder": "PromptPay 081 234 5678",
     "costHelp": "Shown on the match page and on the bot's cards, so nobody has to ask.",
     "costSet": "{cost} per player",
-    "payNoteHelp": "Shown to players next to the cost — a PromptPay number, a bank line, or \"cash at the club\". No money passes through Kicksmash."
+    "payNoteHelp": "Shown to players next to the cost — a PromptPay number, a bank line, or \"cash at the club\". No money passes through Kicksmash.",
+    "venueYours": "Where you play",
+    "venueOther": "Other courts"
   },
   "share": {
     "title": "Your match is live",

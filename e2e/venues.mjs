@@ -18,7 +18,7 @@ try {
   await org.goto(BASE + "/");
   check("no venue → no listing switch", (await org.getByText("Show on the venue board").count()) === 0);
   await org.getByPlaceholder("e.g. Alex").fill("Vera");
-  await org.getByPlaceholder("Court TBD · or type a club").fill("Riverside Padel");
+  await org.getByPlaceholder("Court TBD · or pick a club").fill("Riverside Padel");
   check("More options summary says the match is not on the board yet", (await org.getByText(/Not on the venue board/).count()) === 1);
   await org.getByRole("button", { name: /More options/ }).click();
   await org.getByText("Show on the venue board").waitFor({ timeout: 5000 });
@@ -45,7 +45,7 @@ try {
   const other = await newPage();
   await other.goto(BASE + "/");
   await other.getByPlaceholder("e.g. Alex").fill("Walt");
-  await other.getByPlaceholder("Court TBD · or type a club").fill("Riverside Padel");
+  await other.getByPlaceholder("Court TBD · or pick a club").fill("Riverside Padel");
   await other.getByRole("button", { name: "Create & get the link" }).click();
   await other.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code2 = other.url().split("/").slice(-2)[0];
@@ -63,7 +63,7 @@ try {
   check("board shows the empty state with a prefilled create link", (await guest.getByText("Nothing listed at Riverside Padel right now.").count()) === 1 && (await guest.getByRole("link", { name: "Organize one here" }).getAttribute("href")) === "/?venue=Riverside%20Padel");
   await guest.getByRole("link", { name: "Organize one here" }).click();
   await guest.waitForURL(/\/\?venue=/, { timeout: 20000 });
-  check("create form prefilled with the venue and the listing on", (await guest.getByPlaceholder("Court TBD · or type a club").inputValue()) === "Riverside Padel" && (await guest.getByRole("checkbox").isChecked()));
+  check("create form prefilled with the venue and the listing on", (await guest.getByPlaceholder("Court TBD · or pick a club").inputValue()) === "Riverside Padel" && (await guest.getByRole("checkbox").isChecked()));
   await guest.goto(`${BASE}/v/no-such-venue`);
   check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
 } catch (e) {

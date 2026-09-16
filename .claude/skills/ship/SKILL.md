@@ -184,7 +184,9 @@ Wall clock first, credits second. What actually moved it, measured:
   cutoff; and on lesson times that landed in the 12:00–15:00 gap between the morning and afternoon
   presets. Write the hour mapping as a comment in the test.
 - **A screen with names in it is an interface.** Renaming the coach setup steps turned three browser
-  suites red — two of them not the coach suite. Grep the step names before renaming one.
+  suites red — two of them not the coach suite. Grep the step names before renaming one. Placeholders
+  count: "or type a club" → "or pick a club" is four words and five red suites, because
+  `getByPlaceholder` takes the whole string.
 
 ### A new kind of row in an old table
 
@@ -198,6 +200,19 @@ Wall clock first, credits second. What actually moved it, measured:
   in the weekly digest, because both queries were written when every row in `clubs` was a claim. When a
   table gains a second kind of row, grep every `from(<table>)` and decide, one by one, which kind each
   query meant.
+
+### Two ways a change hangs or bloats
+
+- **A query on the pool inside a transaction waits forever.** `updateEvent` opens a transaction with
+  `for update`; a lookup added inside it ran on `db`, asked for a second connection, and the whole call
+  sat there until vitest timed it out at 30 s. On PGlite there is one connection, so it deadlocks every
+  time. Resolve what the write needs *before* `db.transaction(...)` opens, and pass the value in.
+- **`domain/clubs.ts` is not a leaf.** It imports the search-engine ping, which reaches the sitemap, the
+  listening desk, the Discord bot and `notify`. Importing it from `domain/events.ts` pulled all of that
+  into every client component that touches a score, and the production build failed with a webpack
+  error whose only clue was the import trace. A helper that every write path needs belongs in a leaf
+  module (`domain/venueBoard.ts` holds `venueSlugFor` for exactly this reason). Read the import trace
+  from the bottom up: the last line is the innocent screen, the first is what dragged the world in.
 
 ### Documents rot within hours
 

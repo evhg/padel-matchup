@@ -7,7 +7,7 @@ import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { formatOf } from "./formats";
 import { hasRange, normalizeRange } from "./levels";
-import { venueSlug } from "./venueBoard";
+import { venueSlugFor } from "./venueBoard";
 
 export type CreateEventInput = {
   creatorPlayerId: string;
@@ -85,6 +85,9 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
   const capacity = resolveCapacity(input.type, input.capacity);
   const venueMapUrl = cleanUrl(input.venueMapUrl);
   const range = normalizeRange(input.levelMin, input.levelMax);
+  // "WAREHAUS.club" is the club at `warehaus`, whatever its name would make of itself. Asked before
+  // the transaction opens, so the write stays one statement.
+  const slug = await venueSlugFor(db, venueName);
 
   return db.transaction(async (tx) => {
     let event: Event | undefined;
@@ -118,7 +121,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           levelVerifiedOnly: Boolean(input.levelVerifiedOnly) && hasRange(range),
           groupId: input.groupId ?? null,
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
-          venueSlug: venueSlug(venueName),
+          venueSlug: slug,
           bookingUrl: cleanUrl(input.bookingUrl),
           cost: cleanText(input.cost, 40),
           payNote: cleanText(input.payNote, 120),
@@ -208,6 +211,10 @@ export type UpdateEventResult = {
 };
 
 export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput): Promise<UpdateEventResult> {
+  // Asked before the transaction opens. Inside one, this query waits on a connection the transaction
+  // is already holding, and the whole call hangs until it times out.
+  const venueName = patch.venueName === undefined ? undefined : cleanText(patch.venueName, 80);
+  const movedSlug = venueName === undefined ? null : await venueSlugFor(db, venueName);
   return db.transaction(async (tx) => {
     const [ev] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
     if (!ev) throw new DomainError("not_found");
@@ -242,12 +249,11 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         if (ev.status === "past") set.status = "open";
       }
     }
-    if (patch.venueName !== undefined) {
-      const v = cleanText(patch.venueName, 80);
-      if (v !== ev.venueName) {
-        set.venueName = v;
-        set.venueSlug = venueSlug(v);
-        if (!v) set.publicListing = false;
+    if (venueName !== undefined) {
+      if (venueName !== ev.venueName) {
+        set.venueName = venueName;
+        set.venueSlug = movedSlug;
+        if (!venueName) set.publicListing = false;
         calendarChanged = true;
       }
     }

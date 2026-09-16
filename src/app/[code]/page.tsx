@@ -39,7 +39,8 @@ import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
-import { getEventByCode, getRolodex, getVenues, type SlotWithPlayer } from "@/lib/domain/queries";
+import { venuesForPicking } from "@/lib/domain/clubs";
+import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
@@ -171,7 +172,9 @@ export default async function EventPage({ params, searchParams }: Props) {
           ? { cls: "chip-full", label: t("event.statusFull") }
           : { cls: "chip-open", label: t("event.statusOpen") };
 
-  const [venues, rolodexAll] = viewer.isCreator ? await Promise.all([getVenues(db, ev.creatorPlayerId), getRolodex(db, ev.creatorPlayerId)]) : [[], []];
+  // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8).
+  const venues = viewer.isCreator ? await venuesForPicking(db, ev.creatorPlayerId, ev.tz) : [];
+  const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
   const inEventNames = new Set([...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => (s.player?.displayName ?? s.invitedName ?? "").trim().toLowerCase()).filter(Boolean));
@@ -474,7 +477,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               cost: ev.cost ?? "",
               payNote: ev.payNote ?? "",
             }}
-            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl }))}
+            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province }))}
             creatorEmail={creator.email}
             creatorNotify={creator.emailNotifications}
             emailEnabled={emailEnabled()}

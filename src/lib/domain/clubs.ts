@@ -4,7 +4,7 @@ import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
-import { clubs, type Club } from "@/db/schema";
+import { clubs, venues, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, venueInCity } from "./cities";
@@ -98,6 +98,62 @@ export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> 
     .where(and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), eq(clubs.source, "directory"))))
     .orderBy(asc(clubs.country), asc(clubs.province), asc(clubs.name))
     .limit(limit);
+}
+
+/**
+ * A place somebody can pick, in the order a person reads a list when the app knows a little about
+ * them. `slug` is the club's own address when the pick is a listed club, so a match made here lands
+ * on that club's page rather than on a second one made from its name.
+ */
+export type PickableVenue = { name: string; slug: string | null; mapUrl: string | null; country: string | null; province: string | null; courts: number | null; where: "yours" | "here" | "elsewhere" };
+
+/** The slug a place answers to: a listed club's own, or what the typed name makes. */
+const placeKey = (name: string) => venueSlug(name);
+
+/**
+ * Every place this person could mean, most likely first:
+ *
+ * 1. the courts they have used before, most recent first;
+ * 2. the clubs in their own time zone — near enough to "the country they are in" to be worth putting
+ *    above the rest, and it costs no new question and no new column;
+ * 3. everywhere else, by country, then province, then name.
+ *
+ * A place appears once. "Warehaus" on their own list and "WAREHAUS.club" in the directory are one
+ * club, because both answer to the slug `warehaus`.
+ */
+export async function venuesForPicking(db: Db, playerId: string | null, tz?: string | null): Promise<PickableVenue[]> {
+  // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). Both are bounded.
+  const mine = playerId ? await db.select().from(venues).where(eq(venues.creatorPlayerId, playerId)).orderBy(desc(venues.lastUsedAt)).limit(50) : [];
+  const listed = await listClubsForPicking(db);
+  // A club answers to its own slug, and to whatever its name would make, so a person who typed the
+  // club's full name once is still recognised as having been there.
+  const byKey = new Map<string, Club>();
+  for (const c of listed) {
+    byKey.set(c.slug, c);
+    const fromName = placeKey(c.name);
+    if (fromName && !byKey.has(fromName)) byKey.set(fromName, c);
+  }
+  const seen = new Set<string>();
+  const out: PickableVenue[] = [];
+  for (const v of mine) {
+    const club = byKey.get(placeKey(v.name) ?? "") ?? null;
+    const key = club?.slug ?? placeKey(v.name) ?? v.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // Their own name for it, not the directory's: it is what their matches already say.
+    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? null, country: club?.country ?? null, province: club?.province ?? null, courts: club?.courts ?? null, where: "yours" });
+  }
+  const here: PickableVenue[] = [];
+  const elsewhere: PickableVenue[] = [];
+  for (const c of listed) {
+    if (seen.has(c.slug)) continue;
+    seen.add(c.slug);
+    // A club that claimed its page never said which province it is in; the city it picked will do,
+    // so the list has a heading to put it under rather than the one above it.
+    const province = c.province ?? (c.city ? (cityBySlug(c.city)?.name ?? null) : null);
+    (tz && c.tz === tz ? here : elsewhere).push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl, country: c.country, province, courts: c.courts, where: tz && c.tz === tz ? "here" : "elsewhere" });
+  }
+  return [...out, ...here, ...elsewhere];
 }
 
 export async function listClubsClaimedBy(db: Db, playerId: string): Promise<Club[]> {

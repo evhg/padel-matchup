@@ -8,7 +8,7 @@ import { NameGate } from "@/components/NameGate";
 import { SourceTag } from "@/components/SourceTag";
 import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 import { getDb } from "@/db";
-import { listLiveClubs } from "@/lib/domain/clubs";
+import { listClubsForPicking } from "@/lib/domain/clubs";
 import { baseUrl } from "@/lib/config";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
@@ -59,7 +59,9 @@ export default async function CoachPage({ searchParams }: Props) {
   // the notification channel and the student link can follow without a reload losing the walk.
   if (!found || sp.setup === "1") {
     // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). Both are bounded and indexed.
-    const clubOptions = (await listLiveClubs(db)).map((c) => ({ slug: c.slug, name: c.name, city: c.city }));
+    // Every club a person can pick, listed or claimed — a coach names where they teach, and the name
+    // has to be one a club page can match (rule: the slug is the address).
+    const clubOptions = (await listClubsForPicking(db)).map((c) => ({ slug: c.slug, name: c.name, city: c.city }));
     const resumedLink = found ? studentLink(baseUrl(), found.coach.handle, await inviteCode(db, found.coach)) : null;
     return shell(
       <>

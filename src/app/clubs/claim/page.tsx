@@ -5,6 +5,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
+import { listClubsForPicking } from "@/lib/domain/clubs";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ export default async function ClaimClubPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const db = await getDb();
   const [t, me] = await Promise.all([getTranslations(), getSessionPlayer(db)]);
+  // Only the clubs nobody runs yet: a club with an owner is not a claim anybody else can make, and
+  // the manage token never leaves the server.
+  const listed = (await listClubsForPicking(db)).filter((c) => !c.claimedBy).map((c) => ({ name: c.name, country: c.country, province: c.province }));
   return (
     <>
       <Header />
@@ -29,7 +33,7 @@ export default async function ClaimClubPage({ searchParams }: { searchParams: Pr
           <p className="mt-2 text-sm text-muted">{t("club.claimSub")}</p>
           <p className="mt-2 text-sm text-muted">{t("club.foundingBody")}</p>
         </section>
-        <ClubClaimForm initialName={(sp.name ?? "").slice(0, 80)} hasIdentity={Boolean(me)} cities={CITIES.map((c) => ({ slug: c.slug, name: c.name }))} base={baseUrl()} />
+        <ClubClaimForm initialName={(sp.name ?? "").slice(0, 80)} hasIdentity={Boolean(me)} cities={CITIES.map((c) => ({ slug: c.slug, name: c.name }))} base={baseUrl()} listed={listed} />
       </main>
       <Footer />
     </>

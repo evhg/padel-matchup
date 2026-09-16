@@ -90,7 +90,7 @@
     "time": "Время",
     "timezone": "Часовой пояс",
     "venue": "Место",
-    "venuePlaceholder": "Корт уточним · или введите клуб",
+    "venuePlaceholder": "Корт уточним · или выберите клуб",
     "venueNew": "Добавить «{name}»",
     "venueMapUrl": "Ссылка на карту",
     "venueMapUrlPlaceholder": "https://maps.app.goo.gl/…",
@@ -142,7 +142,9 @@
     "payNotePlaceholder": "PromptPay 081 234 5678",
     "costHelp": "Видно на странице матча и в карточках бота, чтобы никто не переспрашивал.",
     "costSet": "{cost} с игрока",
-    "payNoteHelp": "Показывается игрокам рядом со стоимостью — номер PromptPay, реквизиты или «наличными в клубе». Через Kicksmash деньги не проходят."
+    "payNoteHelp": "Показывается игрокам рядом со стоимостью — номер PromptPay, реквизиты или «наличными в клубе». Через Kicksmash деньги не проходят.",
+    "venueYours": "Где вы играете",
+    "venueOther": "Другие корты"
   },
   "share": {
     "title": "Матч создан",
