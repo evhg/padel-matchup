@@ -13,7 +13,21 @@
       "mcp__github__actions_get",
       "mcp__github__create_pull_request",
       "mcp__github__merge_pull_request"
-    ]
+    ],
+    "autoMode": {
+      "allow": [
+        "$defaults",
+        "Reading this project's own Supabase database through the Supabase MCP tools, and applying the additive migrations and data loads this repository already carries, is how work reaches production here: AGENTS.md rule 7 requires every migration to be applied by hand through that MCP, as postgres, before its pull request merges. Waiting on a person for each of these costs hours of wall clock and buys nothing, because the same statements are in the repository and in the pull request."
+      ],
+      "soft_deny": [
+        "$defaults",
+        "Dropping, truncating or renaming a table or a column in the Supabase database, or deleting rows that people created. AGENTS.md rule 7 is additive migrations only, and no drops without discussion, so these stay the owner's call however the request is phrased."
+      ],
+      "environment": [
+        "$defaults",
+        "Kicksmash is a live padel app with real players on it. Its production database is a Supabase project reached only through the Supabase MCP tools — there is no DATABASE_URL in this environment — and `GATE_E2E=auto bash scripts/gate.sh` is what proves a change is sound before it is pushed."
+      ]
+    }
   },
   "hooks": {
     "PreToolUse": [
