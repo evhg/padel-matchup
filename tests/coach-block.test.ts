@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { availableSlots, blockTime, bookLesson, cancelLesson, createCoach, leaveCoach, listStudentCoaches, listStudents, presetHours, requestStudent, setStudentStatus, studentStatus, unblockTime } from "@/lib/domain/coaching";
+import { matchStudent } from "@/lib/coach/assistant";
+import { studentRefs } from "@/lib/telegram/coach";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 /**
@@ -110,5 +112,15 @@ describe("a player takes a coach off their own list", () => {
     const students = await listStudents(db, coach.id);
     expect(students.map((s) => s.status)).toEqual(["left"]);
     expect(done.id).toBeTruthy();
+  });
+
+  it("stops the coach's bot booking over the decision, without inventing a second person of that name", async () => {
+    const { coach, student } = await pair("Dee");
+    expect((await studentRefs(db, coach.id)).map((r) => r.left)).toEqual([false]);
+    await leaveCoach(db, coach.id, student.id);
+    const refs = await studentRefs(db, coach.id);
+    // The name is still known — so typing it is answered, not turned into a brand-new "Dee".
+    expect(refs.map((r) => r.left)).toEqual([true]);
+    expect(matchStudent("Dee", refs)).toMatchObject({ kind: "one", student: { id: student.id, left: true } });
   });
 });
