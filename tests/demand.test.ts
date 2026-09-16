@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { demandSignals, pushSubscriptions, type Player } from "@/db/schema";
+import { clubs, demandSignals, pushSubscriptions, type Player } from "@/db/schema";
 import { createEvent, type CreateEventInput } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { dropWant, listWants, markWantsNotified, matchingWants, parseWantLine, pruneWants, recordWant, resolvePlace, wantAudience, WANT_COOLDOWN_MS, WANT_MAX_PER_PLAYER, weekdayOf } from "@/lib/domain/demand";
@@ -216,5 +216,17 @@ describe("where a want points", () => {
     expect(await resolvePlace(db, "Somewhere Nobody Plays")).toBe(null);
     // …while a city the app knows is a perfectly good answer on its own.
     expect(await resolvePlace(db, "phuket")).toEqual({ venueSlug: null, citySlug: "phuket" });
+  });
+
+  it("takes a club Kicksmash lists by name, before anybody has played there", async () => {
+    await db.insert(clubs).values({ slug: "warehaus", name: "WAREHAUS.club", source: "directory", manageToken: "tok-want", country: "TH", province: "Phuket", city: "phuket", tz: "Asia/Bangkok" });
+    // The club is named, not slugged: slugifying "WAREHAUS.club" makes "warehaus-club", which nothing
+    // answers to, and the want would have quietly lost its court.
+    expect(await resolvePlace(db, "WAREHAUS.club")).toEqual({ venueSlug: "warehaus", citySlug: "phuket" });
+    // And by what people actually type, which is not the club's own name: "Warehaus" slugs to
+    // `warehaus`, which is the club's address.
+    expect(await resolvePlace(db, "Warehaus")).toEqual({ venueSlug: "warehaus", citySlug: "phuket" });
+    // A court nobody lists and nobody has played at is still nothing.
+    expect(await resolvePlace(db, "Somewhere Nobody Plays")).toBe(null);
   });
 });
