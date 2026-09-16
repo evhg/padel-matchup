@@ -173,7 +173,7 @@ export default async function EventPage({ params, searchParams }: Props) {
           : { cls: "chip-open", label: t("event.statusOpen") };
 
   // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8).
-  const venues = viewer.isCreator ? await venuesForPicking(db, ev.creatorPlayerId, ev.tz) : [];
+  const venues = viewer.isCreator ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
   const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
@@ -477,7 +477,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               cost: ev.cost ?? "",
               payNote: ev.payNote ?? "",
             }}
-            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province }))}
+            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts }))}
             creatorEmail={creator.email}
             creatorNotify={creator.emailNotifications}
             emailEnabled={emailEnabled()}

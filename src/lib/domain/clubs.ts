@@ -4,7 +4,7 @@ import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
-import { clubs, events, venues, type Club } from "@/db/schema";
+import { clubs, coaches, events, venues, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, venueInCity } from "./cities";
@@ -105,25 +105,46 @@ export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> 
  * them. `slug` is the club's own address when the pick is a listed club, so a match made here lands
  * on that club's page rather than on a second one made from its name.
  */
-export type PickableVenue = { name: string; slug: string | null; mapUrl: string | null; country: string | null; province: string | null; courts: number | null; where: "yours" | "here" | "elsewhere" };
+export type PickableVenue = { name: string; slug: string | null; mapUrl: string | null; country: string | null; province: string | null; courts: number | null; where: "yours" | "here" | "nearby" | "elsewhere" };
+
+/**
+ * Where to find a club on a map when nobody has published a link for it: a search for the club by
+ * its own name and area. Not a claim about where it is — a way to look it up — so it is derived
+ * rather than stored, and a club that claims its page replaces it with its real place link.
+ */
+export function mapSearchUrl(c: { name: string; about?: string | null; province?: string | null }): string {
+  const q = (c.about ?? "").replace(/\.$/, "").trim() || [c.name, c.province].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
 
 /** The slug a place answers to: a listed club's own, or what the typed name makes. */
 const placeKey = (name: string) => venueSlug(name);
 
+/** Where the person is, as the edge reports it. A time zone alone cannot tell Phuket from Bangkok. */
+export type Whereabouts = { tz?: string | null; city?: string | null };
+
+const same = (a: string | null | undefined, b: string | null | undefined) => Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
+
 /**
  * Every place this person could mean, most likely first:
  *
- * 1. the courts they have used before, most recent first;
- * 2. the clubs in their own time zone — near enough to "the country they are in" to be worth putting
- *    above the rest, and it costs no new question and no new column;
- * 3. everywhere else, by country, then province, then name.
+ * 1. the courts they have used before, and the clubs they teach at, most recent first;
+ * 2. the clubs in their own province — Phuket has eight clubs and Bangkok sixteen, and Bangkok sorts
+ *    first alphabetically, so a Phuket player who sees six rows sees six Bangkok clubs and none of
+ *    their own. The city the edge reports is what tells the two apart;
+ * 3. the clubs in their own time zone, which is roughly the country they are in;
+ * 4. everywhere else, by country, then province, then name.
  *
  * A place appears once. "Warehaus" on their own list and "WAREHAUS.club" in the directory are one
  * club, because both answer to the slug `warehaus`.
  */
-export async function venuesForPicking(db: Db, playerId: string | null, tz?: string | null): Promise<PickableVenue[]> {
-  // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). Both are bounded.
+export async function venuesForPicking(db: Db, playerId: string | null, at: Whereabouts | string | null = null): Promise<PickableVenue[]> {
+  // A time zone on its own is still accepted, so a caller that only has one keeps working.
+  const { tz = null, city = null } = typeof at === "string" ? { tz: at, city: null } : (at ?? {});
+  // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). All are bounded.
   const mine = playerId ? await db.select().from(venues).where(eq(venues.creatorPlayerId, playerId)).orderBy(desc(venues.lastUsedAt)).limit(50) : [];
+  // Where a coach teaches is a place they have used, even if they have never made a match there.
+  const teaches = playerId ? await db.select({ slugs: coaches.clubSlugs, names: coaches.clubNames }).from(coaches).where(and(eq(coaches.playerId, playerId), isNull(coaches.archivedAt))).limit(1) : [];
   const listed = await listClubsForPicking(db);
   // A club answers to its own slug, and to whatever its name would make, so a person who typed the
   // club's full name once is still recognised as having been there.
@@ -133,27 +154,41 @@ export async function venuesForPicking(db: Db, playerId: string | null, tz?: str
     const fromName = placeKey(c.name);
     if (fromName && !byKey.has(fromName)) byKey.set(fromName, c);
   }
+  // A club that claimed its page never said which province it is in; the city it picked will do, so
+  // the list has a heading to put it under rather than the one above it.
+  const provinceOf = (c: Club) => c.province ?? (c.city ? (cityBySlug(c.city)?.name ?? null) : null);
   const seen = new Set<string>();
   const out: PickableVenue[] = [];
-  for (const v of mine) {
+  const own: { name: string; mapUrl: string | null }[] = [
+    ...mine.map((v) => ({ name: v.name, mapUrl: v.mapUrl })),
+    ...(teaches[0]?.names ?? []).map((n) => ({ name: n, mapUrl: null })),
+  ];
+  for (const slug of teaches[0]?.slugs ?? []) {
+    const c = byKey.get(slug);
+    if (c) own.push({ name: c.name, mapUrl: c.mapUrl });
+  }
+  for (const v of own) {
     const club = byKey.get(placeKey(v.name) ?? "") ?? null;
     const key = club?.slug ?? placeKey(v.name) ?? v.name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     // Their own name for it, not the directory's: it is what their matches already say.
-    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? null, country: club?.country ?? null, province: club?.province ?? null, courts: club?.courts ?? null, where: "yours" });
+    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, where: "yours" });
   }
   const here: PickableVenue[] = [];
+  const nearby: PickableVenue[] = [];
   const elsewhere: PickableVenue[] = [];
   for (const c of listed) {
     if (seen.has(c.slug)) continue;
     seen.add(c.slug);
-    // A club that claimed its page never said which province it is in; the city it picked will do,
-    // so the list has a heading to put it under rather than the one above it.
-    const province = c.province ?? (c.city ? (cityBySlug(c.city)?.name ?? null) : null);
-    (tz && c.tz === tz ? here : elsewhere).push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl, country: c.country, province, courts: c.courts, where: tz && c.tz === tz ? "here" : "elsewhere" });
+    const province = provinceOf(c);
+    // The city the edge reports names a province here ("Phuket", "Bangkok", "Singapore") or a city
+    // slug we already keep. Either is a far finer signal than the time zone, which cannot tell one
+    // Thai province from another.
+    const bucket = same(city, province) || same(city, c.city) ? here : tz && c.tz === tz ? nearby : elsewhere;
+    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere" });
   }
-  return [...out, ...here, ...elsewhere];
+  return [...out, ...here, ...nearby, ...elsewhere];
 }
 
 export async function listClubsClaimedBy(db: Db, playerId: string): Promise<Club[]> {

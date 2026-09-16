@@ -183,6 +183,10 @@ Wall clock first, credits second. What actually moved it, measured:
   correctly refused a student's reschedule, because the fixture's "now" sat inside the twelve-hour
   cutoff; and on lesson times that landed in the 12:00–15:00 gap between the morning and afternoon
   presets. Write the hour mapping as a comment in the test.
+- **A default that was yours stops being yours when the list grows.** The create form filled the venue
+  from `venues[0]`, which was the court you last used — until the picker started carrying all 67
+  clubs, and `venues[0]` became a club in another province, quietly filled in as your match's venue.
+  Whenever a list gains rows from somewhere new, grep for who reads its first element.
 - **A screen with names in it is an interface.** Renaming the coach setup steps turned three browser
   suites red — two of them not the coach suite. Grep the step names before renaming one. Placeholders
   count: "or type a club" → "or pick a club" is four words and five red suites, because

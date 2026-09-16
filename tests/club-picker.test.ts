@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { clubs, events, venues } from "@/db/schema";
+import { clubs, coaches, events, venues } from "@/db/schema";
 import { unlistedVenues, venuesForPicking } from "@/lib/domain/clubs";
 import { createEvent, updateEvent } from "@/lib/domain/events";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
@@ -20,6 +20,7 @@ describe("picking a club", () => {
   beforeEach(async () => {
     await db.delete(events);
     await db.delete(venues);
+    await db.delete(coaches);
     await db.delete(clubs);
   });
 
@@ -33,7 +34,7 @@ describe("picking a club", () => {
     await listed("pop-padel", "Pop Padel", { country: "SG", province: "Singapore", tz: "Asia/Singapore" });
     await db.insert(venues).values({ creatorPlayerId: me.id, name: "Warehaus", lastUsedAt: new Date() });
 
-    const list = await venuesForPicking(db, me.id, "Asia/Bangkok");
+    const list = await venuesForPicking(db, me.id, { tz: "Asia/Bangkok", city: "Bangkok" });
     expect(list.map((v) => `${v.where}:${v.name}`)).toEqual(["yours:Warehaus", "here:Kross Padel Asoke", "elsewhere:Pop Padel"]);
     // "Warehaus" on their own list and "WAREHAUS.club" in the directory are one club, and their own
     // name for it is the one their matches already say.
@@ -55,9 +56,43 @@ describe("picking a club", () => {
     await listed("a-bkk", "A Bangkok", { province: "Bangkok" });
     await listed("z-phuket", "Z Phuket");
     await listed("a-sing", "A Singapore", { country: "SG", province: "Singapore", tz: "Asia/Singapore" });
+    // A time zone alone is still the coarse fallback: everything in it comes before everything else.
     const list = await venuesForPicking(db, null, "Asia/Singapore");
     expect(list.map((v) => v.name)).toEqual(["A Singapore", "A Bangkok", "B Bangkok", "Z Phuket"]);
-    expect(list[0].where).toBe("here");
+    expect(list[0].where).toBe("nearby");
+  });
+
+  it("starts where the person actually is, not where the alphabet does", async () => {
+    // Bangkok has sixteen clubs to Phuket's eight and sorts first, and both are Asia/Bangkok — so a
+    // Phuket player looking at six rows saw six Bangkok clubs and none of their own. The time zone
+    // cannot tell one Thai province from another; the city the edge reports can.
+    await listed("a-bkk", "A Bangkok", { province: "Bangkok" });
+    await listed("b-bkk", "B Bangkok", { province: "Bangkok" });
+    await listed("z-phuket", "Z Phuket", { province: "Phuket" });
+    await listed("a-sing", "A Singapore", { country: "SG", province: "Singapore", tz: "Asia/Singapore" });
+    const list = await venuesForPicking(db, null, { tz: "Asia/Bangkok", city: "Phuket" });
+    expect(list.map((v) => `${v.where}:${v.name}`)).toEqual(["here:Z Phuket", "nearby:A Bangkok", "nearby:B Bangkok", "elsewhere:A Singapore"]);
+  });
+
+  it("counts the clubs a coach teaches at as their own", async () => {
+    const p = await makePlayer(db, "Bee");
+    await listed("warehaus", "WAREHAUS.club");
+    await listed("a-bkk", "A Bangkok", { province: "Bangkok" });
+    await db.insert(coaches).values({ playerId: p.id, handle: "bee", displayName: "Bee", tz: "Asia/Bangkok", clubNames: ["WAREHAUS.club"], clubSlugs: ["warehaus"], hours: {} });
+    const list = await venuesForPicking(db, p.id, { tz: "Asia/Bangkok", city: "Bangkok" });
+    // Where they teach comes first even though they have never made a match there.
+    expect(list[0]).toMatchObject({ name: "WAREHAUS.club", slug: "warehaus", where: "yours" });
+    expect(list.filter((v) => v.slug === "warehaus")).toHaveLength(1);
+  });
+
+  it("hands every club a map link, its own or a search for it", async () => {
+    await listed("rawai-padel", "Rawai Padel", { about: "Rawai Padel, 83/105 Rawai." });
+    await listed("mine-club", "Mine Club", { mapUrl: "https://maps.app.goo.gl/real" });
+    const byName = new Map((await venuesForPicking(db, null, null)).map((v) => [v.name, v.mapUrl]));
+    // A club that published a link keeps it; one that has not gets a search for itself, so picking it
+    // fills the map field rather than leaving it empty.
+    expect(byName.get("Mine Club")).toBe("https://maps.app.goo.gl/real");
+    expect(byName.get("Rawai Padel")).toBe(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("Rawai Padel, 83/105 Rawai")}`);
   });
 
   it("names the courts people played at that nobody lists, commonest first", async () => {

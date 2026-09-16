@@ -49,14 +49,17 @@ export function CreateEventForm({
   const defaultFor = (tz: string) => (patterns[0] ? nextOccurrence(patterns[0].dow, patterns[0].time, tz) : tomorrowAt(tz));
   const initial = defaultFor(defaultTz);
   const cap = initialCapacity && Number.isInteger(initialCapacity) && initialCapacity >= 4 && initialCapacity <= 64 && initialCapacity % 4 === 0 ? initialCapacity : 8;
+  const mine = venues[0]?.where === "yours" ? venues[0] : null;
   const [values, setValues] = useState<EventFormValues>({
     type: initialType,
     title: "",
     date: initial.date,
     time: initial.time,
     tz: defaultTz,
-    venueName: venues[0]?.name ?? "",
-    venueMapUrl: venues[0]?.mapUrl ?? "",
+    // The first row is a default only when it is theirs. Since the picker carries the whole directory,
+    // venues[0] is otherwise a club they have never been to, quietly filled in as the match's venue.
+    venueName: mine?.name ?? "",
+    venueMapUrl: mine?.mapUrl ?? "",
     court: "",
     note: "",
     capacity: cap,

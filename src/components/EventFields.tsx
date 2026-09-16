@@ -67,6 +67,9 @@ function timeZones(current: string): string[] {
   }
 }
 
+/** The option that swaps the dropdown back to a text box; never a court's real name. */
+const COURT_OTHER = "__other__";
+
 export function EventFields({
   values,
   onChange,
@@ -86,6 +89,19 @@ export function EventFields({
   const t = useTranslations();
   const locale = useLocale();
   const [tzOpen, setTzOpen] = useState(false);
+  // The picked club's court count, if it is one Kicksmash knows. Nothing is stored on the event but
+  // the court itself: the count is looked up from the list, so it follows whatever venue is showing.
+  const [typingCourt, setTypingCourt] = useState(false);
+  const courtNumbers = useMemo(() => {
+    if (typingCourt) return null;
+    const picked = venues.find((v) => v.name.trim().toLowerCase() === values.venueName.trim().toLowerCase());
+    const n = picked?.courts ?? null;
+    // A count nobody published, or one too large to read as a list, leaves the field as free text.
+    if (!n || n < 1 || n > 24) return null;
+    // A court already named something else (an older match, or "Centre court") keeps its text box.
+    if (values.court && !Array.from({ length: n }, (_, i) => String(i + 1)).includes(values.court)) return null;
+    return Array.from({ length: n }, (_, i) => i + 1);
+  }, [venues, values.venueName, values.court, typingCourt]);
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
   // "More" opens by itself only when something non-default is already set (editing a match).
@@ -186,7 +202,26 @@ export function EventFields({
         <label className="label">
           {t("create.court")} <span className="font-normal">({t("common.optional")})</span>
         </label>
-        <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
+        {courtNumbers ? (
+          <select
+            className="input"
+            value={values.court}
+            onChange={(e) => {
+              if (e.target.value === COURT_OTHER) return setTypingCourt(true);
+              onChange({ court: e.target.value });
+            }}
+          >
+            <option value="">{t("create.courtNone")}</option>
+            {courtNumbers.map((n) => (
+              <option key={n} value={String(n)}>
+                {n}
+              </option>
+            ))}
+            <option value={COURT_OTHER}>{t("create.courtOther")}</option>
+          </select>
+        ) : (
+          <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
+        )}
       </div>
 
 
