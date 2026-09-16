@@ -23,7 +23,7 @@ bash scripts/gate.sh              # the gate: typecheck, lint, unit suite in CI'
 
 What this project has already paid to learn — the mistakes worth not repeating, and what actually cuts wall clock — is at the end of `.claude/skills/ship/SKILL.md`. Add to it the moment something finally comes out right, and prefer the enforceable form: a check that fails beats a paragraph nobody opens.
 
-The gate runs by itself before every `git push` from a Claude Code session (`.claude/settings.json` → `scripts/hooks/pre-push.sh`) and blocks the push when it fails. A push that reaches GitHub has therefore passed typecheck, lint and the unit suite on the machine that made it; CI then adds the real-Postgres run, the build and the browser suites.
+`.claude/settings.json` asks Claude Code to run the gate before every `git push` (`scripts/hooks/pre-push.sh`) and to block the push when it fails. **Check that it actually runs, because it does not always.** In a Claude Code cloud session on 16 September 2026 it did not: a no-op `git push` returned in one second, where the gate takes about ninety, and printed none of its output. Project settings from the checkout are not applied there, so nothing in this file's hooks or permissions takes effect in that environment. Run `GATE_E2E=auto bash scripts/gate.sh` by hand before pushing, and treat a push that reaches GitHub as only as checked as whoever made it. CI is the part that always runs: the real-Postgres suite, the build and the browser suites.
 
 ## Where things live
 
