@@ -45,6 +45,15 @@ Everything in this list is live. The README describes each in detail.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
   quiet hours from a weekly programme.
+- **Every padel club in Thailand and Singapore, listed.** 63 clubs from public sources — 36 in Thailand
+  across eight provinces, 27 in Singapore — with the indoor and outdoor court split where a source said
+  it, which is also the first capacity number the app has. A listing says who a club is and nothing
+  about who runs it: it is nobody's claim, it never queues for approval, and it never counts as a club
+  joining. When the real owner claims it, the listing becomes theirs and the file stops being the truth
+  about it. A club people already play at keeps the slug their matches carry, so claiming "WAREHAUS.club"
+  takes over `warehaus` rather than opening a second page with none of the history on it. The file is
+  `data/clubs.json`, re-imported by one statement that only ever touches rows nobody has claimed.
+
 - **Open by default.** A public REST API with OpenAPI, an MCP server any assistant adds by URL, instant
   keys, signed webhooks, `llms.txt`, calendar feeds, npm packages, embeds and oEmbed. Data CC BY 4.0.
 - **Three languages** with their own URLs, and pages that rank.

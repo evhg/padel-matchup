@@ -186,6 +186,19 @@ Wall clock first, credits second. What actually moved it, measured:
 - **A screen with names in it is an interface.** Renaming the coach setup steps turned three browser
   suites red — two of them not the coach suite. Grep the step names before renaming one.
 
+### A new kind of row in an old table
+
+- **The key is whatever production already types, not what the name makes.** The club directory was
+  written with `venueSlug(name)` slugs — "warehaus-club" for WAREHAUS.club. Production's eight matches
+  and both coaches key on `warehaus`, so every one of those clubs would have got a second page with
+  none of its history on it. One query against the live table (`select venue_slug, count(*) from events
+  group by 1`) before generating the file would have shown it. Ask the database what the keys are.
+- **A new `source` value does not update the queries that predate it.** Sixty-three listed clubs
+  instantly became sixty-three claims waiting for the owner's approval, and sixty-three "clubs claimed"
+  in the weekly digest, because both queries were written when every row in `clubs` was a claim. When a
+  table gains a second kind of row, grep every `from(<table>)` and decide, one by one, which kind each
+  query meant.
+
 ### Documents rot within hours
 
 Ship the document change in the same pull request as the code. Twice in one day `ROADMAP.md` and
