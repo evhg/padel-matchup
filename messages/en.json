@@ -1240,7 +1240,8 @@
       "payLink": "Pay by link",
       "how": "Accept a request and the student can book free times alone. A package is a number of lessons with an expiry; every booking counts one down, and a timely cancellation puts it back. Payment is between you and them: show the QR, then tap paid.",
       "emailOptional": "Email, optional. They get your link once.",
-      "thisMonth": "{count, plural, one {# this month} other {# this month}}"
+      "thisMonth": "{count, plural, one {# this month} other {# this month}}",
+      "left": "Left"
     },
     "settings": {
       "title": "Settings",
@@ -1337,7 +1338,10 @@
       "asked": "Asked {name} for {when}. The answer comes here and by message.",
       "askedList": "Asked for",
       "requestBooked": "Booked {when}.",
-      "movedPackage": "Moved. Your package is untouched."
+      "movedPackage": "Moved. Your package is untouched.",
+      "leave": "Remove {name} from my coaches",
+      "leaveDone": "Removed. {name} is no longer on your list of coaches.",
+      "leaveHasLessons": "Cancel your booked lesson first, then you can remove {name}."
     },
     "me": {
       "title": "Your lessons",

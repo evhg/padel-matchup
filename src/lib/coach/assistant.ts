@@ -7,7 +7,8 @@ import { handleFromName, type HoursPreset } from "@/lib/domain/coaching";
  * time. English, Russian and Spanish words; free order; no model in the loop.
  */
 
-export type StudentRef = { id: string; name: string };
+/** `left` means they took this coach off their own list: the name still matches, but nothing can be booked for them. */
+export type StudentRef = { id: string; name: string; left?: boolean };
 export type Match = { kind: "one"; student: StudentRef } | { kind: "many"; candidates: StudentRef[] } | { kind: "new"; name: string } | { kind: "none" };
 
 export type CoachIntent =

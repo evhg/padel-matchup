@@ -65,6 +65,14 @@ Everything in this list is live. The README describes each in detail.
   on the club's own page — "WAREHAUS.club" is the club at `warehaus`, not a second page made from its
   name — and that holds wherever a venue is written, the chats and the API included.
 
+- **Leaving a coach.** A coach's door on My matches ("Book more · Ricardo") comes from their student
+  list, so until now only the coach could take it away: a player who took one lesson and moved on
+  carried that door for good. It is one line at the bottom of the coach's own page now. The row stays,
+  so the lessons taken and anything still owed stay on the coach's book — leaving does not take a debt
+  off their screen — and the coach sees "Left" rather than a student who quietly vanished. A lesson
+  still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
+  same two taps as joining was.
+
 - **Getting back to your own matches.** A browser that has never seen you shows a name field, and
   under it one line: "Have you used Kicksmash before?" It opens in place to the email you gave (a
   6-digit code) or the Telegram account you signed in with. Shut by default, so it takes nothing from

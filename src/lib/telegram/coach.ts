@@ -66,8 +66,15 @@ const pkgText = (s: CoachBotStrings, pkg: { size: number; used: number; expiresA
 
 const lessonLine = (l: LessonWithPeople, coach: Coach, locale: string, s: CoachBotStrings) => `${whenLabel(l.startsAt, coach.tz, locale).split(" ").slice(-1)[0]} ${l.student?.displayName ?? "?"} · ${pkgText(s, l.package)}`;
 
-async function studentRefs(db: Db, coachId: string): Promise<StudentRef[]> {
-  return (await listStudents(db, coachId)).filter((x) => x.status !== "requested").map((x) => ({ id: x.player.id, name: x.player.displayName }));
+/**
+ * Who the bot can recognise: everyone but somebody still waiting to be accepted. Those who left stay in
+ * the list, tagged, so their name is still known — typing it says so instead of quietly making a second
+ * person of the same name.
+ */
+export async function studentRefs(db: Db, coachId: string): Promise<StudentRef[]> {
+  return (await listStudents(db, coachId))
+    .filter((x) => x.status !== "requested")
+    .map((x) => ({ id: x.player.id, name: x.player.displayName, left: x.status === "left" }));
 }
 
 // ------------------------------------------------------------------ coach flow
@@ -198,7 +205,14 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
   const intent: CoachIntent = parseCoachLine(text, { now, tz: coach.tz, students });
 
   const resolve = async (m: Match, allowNew: boolean): Promise<StudentRef | null> => {
-    if (m.kind === "one") return m.student;
+    if (m.kind === "one") {
+      // They removed this coach themselves. The coach is told, rather than booking over that decision.
+      if (m.student.left) {
+        await say(s.studentLeft(m.student.name));
+        return null;
+      }
+      return m.student;
+    }
     if (m.kind === "many") {
       await say(s.which(m.candidates.map((c) => c.name).join(", ")));
       return null;

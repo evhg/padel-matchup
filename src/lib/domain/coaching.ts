@@ -25,7 +25,7 @@ export const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/;
 
 export type Hours = Record<string, [string, string][]>;
 export type HoursPreset = "mornings" | "afternoons" | "both";
-export type StudentStatus = "none" | "requested" | "accepted" | "paused";
+export type StudentStatus = "none" | "requested" | "accepted" | "paused" | "left";
 export type LessonStatus = "booked" | "done" | "cancelled" | "cancelled_by_student" | "late_cancelled" | "no_show";
 export type CancelOutcome = "refunded" | "free_pass" | "counted" | "none";
 export type Busy = { startsAt: Date; endsAt: Date };
@@ -336,7 +336,8 @@ export async function studentStatus(db: Db, coachId: string, playerId: string): 
 /** A player asks to become a student. Idempotent; a paused or accepted student keeps their status. */
 export async function requestStudent(db: Db, coachId: string, playerId: string): Promise<StudentStatus> {
   const current = await studentStatus(db, coachId, playerId);
-  if (current !== "none") return current;
+  // Somebody who left can ask again; leaving is not a door that locks behind them.
+  if (current !== "none" && current !== "left") return current;
   await db.insert(coachStudents).values({ coachId, playerId, status: "requested" }).onConflictDoNothing();
   return "requested";
 }
@@ -347,6 +348,28 @@ export async function setStudentStatus(db: Db, coachId: string, playerId: string
     .insert(coachStudents)
     .values({ coachId, playerId, status, acceptedAt: status === "accepted" ? now : null })
     .onConflictDoUpdate({ target: [coachStudents.coachId, coachStudents.playerId], set: { status, ...(status === "accepted" ? { acceptedAt: now } : {}) } });
+}
+
+/**
+ * A player takes a coach off their own list.
+ *
+ * Their own doing, not the coach's: `paused` is what a coach does to a student, and using it here
+ * would tell the coach they had done something they had not. The row stays, so the lessons already
+ * taken, the packages and anything still owed stay on the coach's book — a student who leaves owing
+ * money does not take the debt off the screen with them.
+ *
+ * A lesson still to come refuses it, the same way a coach cannot delete a book with one booked:
+ * cancel the lesson through the page that tells the coach, then leave.
+ */
+export async function leaveCoach(db: Db, coachId: string, playerId: string, now = new Date()): Promise<void> {
+  const current = await studentStatus(db, coachId, playerId);
+  if (current === "none" || current === "left") throw new DomainError("not_found");
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(lessons)
+    .where(and(eq(lessons.coachId, coachId), eq(lessons.studentPlayerId, playerId), eq(lessons.status, "booked"), gt(lessons.startsAt, now)));
+  if (Number(n) > 0) throw new DomainError("has_lessons");
+  await setStudentStatus(db, coachId, playerId, "left");
 }
 
 /** The code in the coach's student link, minted once. A student who opens the link is on the list without asking. */
