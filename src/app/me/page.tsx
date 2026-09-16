@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { MyMatches } from "@/components/MyMatches";
 import { MySettings } from "@/components/MySettings";
 import { NameGate } from "@/components/NameGate";
-import { RestoreWithEmail } from "@/components/RestoreWithEmail";
-import { TelegramLogin } from "@/components/TelegramLogin";
+import { canRestore, ReturningPlayer } from "@/components/ReturningPlayer";
 import { getDb } from "@/db";
-import { baseUrl, emailEnabled } from "@/lib/config";
+import { baseUrl } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
@@ -21,7 +20,6 @@ import { listWants } from "@/lib/domain/demand";
 import { getVenues, playerHasEvents } from "@/lib/domain/queries";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
-import { telegramBotId } from "@/lib/telegram/api";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
@@ -40,7 +38,7 @@ export default async function MePage({ searchParams }: Props) {
     const t = await getTranslations();
     // Most people arriving here signed out have played before (another phone, another browser):
     // the way back comes first, the first-time path second.
-    const returning = emailEnabled() || Boolean(telegramBotId());
+    const returning = canRestore();
     return (
       <>
         <Header minimal />
@@ -49,19 +47,7 @@ export default async function MePage({ searchParams }: Props) {
           {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
           {returning && (
             <section className="card">
-              <h2 className="text-xl font-extrabold tracking-tight">{t("me.returningTitle")}</h2>
-              <p className="mt-1 text-sm text-muted">{emailEnabled() ? t("me.returningHelp") : t("me.returningTelegramOnly")}</p>
-              {emailEnabled() && (
-                <div className="mt-3">
-                  <RestoreWithEmail compact />
-                </div>
-              )}
-              {telegramBotId() && (
-                <div className={emailEnabled() ? "mt-4 border-t border-line pt-3" : "mt-3"}>
-                  {emailEnabled() && <p className="mb-2 text-sm text-muted">{t("me.returningTelegram")}</p>}
-                  <TelegramLogin botId={telegramBotId()!} linked={false} linkedUsername={null} lang={await getLocale()} authUrl={`${baseUrl()}/api/telegram/login`} />
-                </div>
-              )}
+              <ReturningPlayer />
             </section>
           )}
           <NameGate title={t("me.firstTimeTitle")} autoFocus={!returning} />
