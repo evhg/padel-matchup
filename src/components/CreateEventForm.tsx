@@ -12,6 +12,7 @@ export function CreateEventForm({
   tzFromHeader,
   venues,
   hasIdentity,
+  returning,
   patterns = [],
   hasLevel = false,
   initialType = "match",
@@ -25,6 +26,8 @@ export function CreateEventForm({
   tzFromHeader: boolean;
   venues: VenueOption[];
   hasIdentity: boolean;
+  /** The way back in for somebody who has played before, rendered on the server. Null once they are known. */
+  returning?: React.ReactNode;
   /** The organizer's usual weekday/time slots (quick picks + default). */
   patterns?: TimePatternInput[];
   /** The organizer already has a level (a range then doesn't ask for theirs). */
@@ -141,6 +144,7 @@ export function CreateEventForm({
           <label className="label text-ink">{t("identity.whatsYourName")}</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} />
           <p className="mt-1.5 text-sm text-muted">{t("identity.nameHelp")}</p>
+          {returning}
         </div>
       )}
       <div className="card">

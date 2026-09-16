@@ -19,6 +19,12 @@ try {
   await a.goto(BASE + "/");
   await shot(a, "01-landing");
   check("no quick picks for a first-timer", (await a.getByText("Your usual times").count()) === 0);
+  // A new browser knows nobody. Somebody who has played before needs a door here, not a tour of the
+  // app to find My matches, and it stays shut so it takes nothing from the name field above it.
+  const backIn = a.getByText("Have you used Kicksmash before?");
+  check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
+  await backIn.click();
+  check("opening it asks for the email, in place", await a.getByPlaceholder("you@example.com").isVisible());
   check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
   await a.goto(BASE + "/PLAY");
   const story = await fetch(BASE + "/PLAY/story");

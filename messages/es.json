@@ -62,7 +62,8 @@
     "linkEmailed": "Enviado a {email}. Guarda ese email: es tu forma de volver a entrar.",
     "sendToEmail": "Enviar",
     "noEmailYet": "Aún no hay email. Añade uno y te enviamos el enlace para que siempre puedas volver a entrar.",
-    "emailKeepNote": "Puedes cambiar tu email pero no quitarlo: es tu forma de volver a entrar. La dirección anterior sigue sirviendo para recuperar la cuenta."
+    "emailKeepNote": "Puedes cambiar tu email pero no quitarlo: es tu forma de volver a entrar. La dirección anterior sigue sirviendo para recuperar la cuenta.",
+    "usedBefore": "¿Ya has usado {app}?"
   },
   "landing": {
     "headline": "Pádel en un enlace.",

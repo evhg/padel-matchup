@@ -8,6 +8,9 @@ import { addPhotoAction, removePhotoAction } from "@/actions/photos";
 /**
  * "Add the court photo": the browser shrinks it to a card-sized JPEG before it leaves the
  * phone, so a 12 MB photo becomes a few hundred kilobytes. Offered once; never nagged.
+ *
+ * Anybody in the match can add one — the organiser and everybody seated — and it becomes the card's
+ * background. Only the person who added it, or the organiser, can take it down.
  */
 export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPhoto: boolean; canRemove: boolean }) {
   const t = useTranslations("card");
@@ -70,7 +73,9 @@ export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPh
   }
   return (
     <div className="flex flex-col gap-1">
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => pick(e.target.files?.[0])} data-testid="photo-input" />
+      {/* No `capture`: the photo is almost always taken during the match and added after it, so the
+          phone must offer the album as well as the camera. `capture` forces the camera and hides it. */}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} data-testid="photo-input" />
       <button type="button" className="btn-secondary w-full" disabled={pending} onClick={() => inputRef.current?.click()} data-testid="photo-add">
         {pending ? "…" : `📷 ${t("addPhoto")}`}
       </button>
