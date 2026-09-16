@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { clubs, events, venues } from "@/db/schema";
-import { venuesForPicking } from "@/lib/domain/clubs";
+import { unlistedVenues, venuesForPicking } from "@/lib/domain/clubs";
 import { createEvent, updateEvent } from "@/lib/domain/events";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -58,6 +58,23 @@ describe("picking a club", () => {
     const list = await venuesForPicking(db, null, "Asia/Singapore");
     expect(list.map((v) => v.name)).toEqual(["A Singapore", "A Bangkok", "B Bangkok", "Z Phuket"]);
     expect(list[0].where).toBe("here");
+  });
+
+  it("names the courts people played at that nobody lists, commonest first", async () => {
+    const me = await makePlayer(db, "Cath");
+    await listed("warehaus", "WAREHAUS.club");
+    const since = new Date(Date.now() - 7 * 24 * HOUR);
+    const at = async (name: string) => createEvent(db, { creatorPlayerId: me.id, type: "match", startsAt: new Date(Date.now() + HOUR), tz: "Asia/Bangkok", venueName: name, whenFull: "closed" });
+    await at("WAREHAUS.club");
+    await at("Sigma Padel");
+    await at("Sigma Padel");
+    await at("Pista Padel");
+    // A club that opened last month is on nobody's list yet, and the first people to play there type
+    // its name on the day it opens. The club we do list is not news.
+    expect(await unlistedVenues(db, since)).toEqual([
+      { slug: "sigma-padel", name: "Sigma Padel", matches: 2 },
+      { slug: "pista-padel", name: "Pista Padel", matches: 1 },
+    ]);
   });
 
   it("lands a match on the club's own page, not on a second one made from its name", async () => {

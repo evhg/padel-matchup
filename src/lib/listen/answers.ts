@@ -9,7 +9,7 @@ import { searchConsoleEnabled, searchWeek } from "@/lib/search/console";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import { baseUrl } from "@/lib/config";
-import { countClubsClaimedSince } from "@/lib/domain/clubs";
+import { countClubsClaimedSince, unlistedVenues } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { boardHighlights, serviceBoard } from "@/lib/ops/services";
 import { metricsDaily } from "@/db/schema";
@@ -186,6 +186,9 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const funnel = Object.fromEntries(funnelRows.map((r) => [r.key, Number(r.total)]));
   const bySource = funnelRows.filter((r) => r.key.startsWith("join_src_")).map((r) => `${r.key.slice("join_src_".length)} ${Number(r.total)}`).sort();
   const coachDoors = funnelRows.filter((r) => r.key.startsWith("coach_src_")).map((r) => `${r.key.slice("coach_src_".length)} ${Number(r.total)}`).sort();
+  // A club that opened this month reaches the app before it reaches the web: somebody types its name
+  // into a match. One line so a real club can be listed the week it starts being played at.
+  const unlisted = await unlistedVenues(db, since);
   const board = await serviceBoard(db, now);
   const hot = boardHighlights(board);
   const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(`${r.name} ${r.pct !== null && r.key !== "tavily" ? `${r.pct.toFixed(0)}%` : r.usage}`)).join(" · ")}` : "Services: everything under 60% of its ceiling.";
@@ -195,6 +198,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     `Funnel: visitors ${funnel.pageviews ?? 0} → matches ${Number(matches.n)} → seats ${Number(joins.n)} → scores ${Number(results.n)} → card views ${funnel.card_views ?? 0}`,
     `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : "none this week (ig, poster, card, moment, podium are the tags)"}`,
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${newClubs}`,
+    unlisted.length ? `Played at, not listed: ${unlisted.map((v) => `${esc(v.name)} (${v.matches})`).join(" · ")} — add a club to data/clubs.json, or wait for it to claim its page` : "Played at, not listed: nothing this week; every court people used is a club we know.",
     `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : `none tagged (${COACH_DOORS.join(", ")})`}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
     `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
