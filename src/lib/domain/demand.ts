@@ -1,7 +1,7 @@
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import type { Db } from "@/db";
 import { demandSignals, events, players, pushSubscriptions, slots, type DemandSignal, type Event, type Player } from "@/db/schema";
-import { venueSlug as slugOf } from "./venueBoard";
+import { listedClub, venueSlug as slugOf } from "./venueBoard";
 import { cityInText } from "./cities";
 import { utcToZonedParts, WEEKDAY_WORDS } from "@/lib/dates";
 import { cityOf } from "./cities";
@@ -307,10 +307,19 @@ export function parseWantLine(text: string, todayStr: string): WantLine {
 }
 
 /**
- * The place, as a court or a city. A venue only counts when a match has actually been played there:
- * a want pointed at a slug nobody uses is a want that can never be answered.
+ * The place, as a court or a city.
+ *
+ * A club Kicksmash lists is a real place before anybody has played there, and it is named rather
+ * than slugged: somebody who says "WAREHAUS.club" means the club at `warehaus`, and slugifying what
+ * they typed would make `warehaus-club`, which nothing answers to. The first match at a listed club
+ * lands on its slug, so this want is waiting when it does.
+ *
+ * Otherwise a venue only counts when a match has actually been played there: a want pointed at a
+ * slug nobody uses is a want that can never be answered.
  */
 export async function resolvePlace(db: Db, text: string, fallbackVenue?: string | null): Promise<{ venueSlug: string | null; citySlug: string | null } | null> {
+  const club = (await listedClub(db, text)) ?? (await listedClub(db, fallbackVenue));
+  if (club) return { venueSlug: club.slug, citySlug: club.city ?? (club.tz ? (cityOf(club.tz, club.slug)?.slug ?? null) : null) };
   const slug = slugOf(text) ?? slugOf(fallbackVenue ?? "");
   if (slug) {
     const [hit] = await db.select({ slug: events.venueSlug, tz: events.tz }).from(events).where(eq(events.venueSlug, slug)).limit(1);

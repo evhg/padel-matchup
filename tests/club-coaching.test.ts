@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
+import { clubs } from "@/db/schema";
 import { bookLesson, cleanClubNames, coachClubSlugs, coachesAtClub, coachingAtClub, createCoach, CLUBS_MAX, presetHours, setStudentStatus, updateCoach } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -58,6 +59,19 @@ describe("what a club can see of the coaching on its courts", () => {
     // And the club page may ask by name or by slug; both answer the same.
     expect((await coachesAtClub(db, "Warehaus")).length).toBe(2);
     expect(await coachesAtClub(db, "")).toEqual([]);
+  });
+
+  it("a coach who types the club's full name is found where the club actually is", async () => {
+    // WAREHAUS.club lives at `warehaus`: that is the slug its matches carry. venueSlug() of its name
+    // is "warehaus-club", a page nobody plays on, so a coach saved under that slug would be invisible
+    // to their own club and to the players whose matches are there.
+    await db.insert(clubs).values({ slug: "warehaus", name: "WAREHAUS.club", source: "directory", manageToken: "tok-coach-name", country: "TH", province: "Phuket", tz: TZ });
+    const p = await makePlayer(db, "Bee");
+    const coach = await createCoach(db, { playerId: p.id, displayName: "Bee", tz: TZ, hours: presetHours("both"), clubNames: ["WAREHAUS.club"] });
+    expect(coach.clubSlugs).toEqual(["warehaus"]);
+    expect(coach.clubNames).toEqual(["WAREHAUS.club"]);
+    await updateCoach(db, coach.id, { isPublic: true });
+    expect((await coachesAtClub(db, "warehaus")).map((c) => c.id)).toContain(coach.id);
   });
 
   it("a lesson remembers its club, and a coach at two clubs records none", async () => {

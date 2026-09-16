@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, events, slots, type Event } from "@/db/schema";
 import { venueInCity, type City } from "./cities";
@@ -15,22 +15,35 @@ export function venueSlug(name: string | null | undefined): string | null {
 }
 
 /**
+ * The club Kicksmash knows by this name, with the little a caller needs to place it, or null.
+ *
+ * Two ways to name the same club, because people use both: its own name ("WAREHAUS.club") and
+ * whatever they actually type, slugified ("Warehaus" → `warehaus`, which is the club's address).
+ *
+ * It lives here rather than beside the other club queries because every path that writes a venue
+ * needs it, and `domain/clubs.ts` pulls in the search-engine ping and everything behind it.
+ */
+export async function listedClub(db: Db, name: string | null | undefined): Promise<{ slug: string; city: string | null; tz: string | null } | null> {
+  const typed = (name ?? "").trim();
+  if (!typed) return null;
+  const typedSlug = venueSlug(typed);
+  const [c] = await db
+    .select({ slug: clubs.slug, city: clubs.city, tz: clubs.tz })
+    .from(clubs)
+    .where(and(isNull(clubs.rejectedAt), or(sql`lower(${clubs.name}) = ${typed.toLowerCase()}`, typedSlug ? eq(clubs.slug, typedSlug) : sql`false`)))
+    .limit(1);
+  return c ?? null;
+}
+
+/**
  * The slug a venue name answers to. A club Kicksmash knows keeps its own — the one its matches
  * already carry — so picking "WAREHAUS.club" adds to `warehaus` instead of opening a second page
  * beside it. Anything else is the name, slugified, exactly as before.
- *
- * It lives here rather than beside the other club queries because every path that writes an event
- * needs it, and `domain/clubs.ts` pulls in the search-engine ping and everything behind it.
  */
 export async function venueSlugFor(db: Db, name: string | null | undefined): Promise<string | null> {
   const typed = (name ?? "").trim();
   if (!typed) return null;
-  const [c] = await db
-    .select({ slug: clubs.slug })
-    .from(clubs)
-    .where(and(isNull(clubs.rejectedAt), sql`lower(${clubs.name}) = ${typed.toLowerCase()}`))
-    .limit(1);
-  return c?.slug ?? venueSlug(typed);
+  return (await listedClub(db, typed))?.slug ?? venueSlug(typed);
 }
 
 export const isValidVenueSlug = (s: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) && s.length <= 80;

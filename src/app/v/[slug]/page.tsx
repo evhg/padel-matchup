@@ -45,7 +45,7 @@ export default async function VenueBoardPage({ params }: Props) {
   if (!boardRow && !club) notFound();
   const board = boardRow ?? { slug, name: club!.name, mapUrl: club!.mapUrl, events: [] };
   const mapUrl = club?.mapUrl ?? board.mapUrl;
-  const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, club?.name ?? board.name).catch(() => [])]);
+  const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, slug).catch(() => [])]);
   // A live club with a programme shows its week, day by day; matches beyond the week stay in the list below.
   const programme = club ? await listClubSlots(db, club.slug) : [];
   const week = club && programme.length > 0 ? await clubWeek(db, club) : null;

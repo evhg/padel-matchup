@@ -26,7 +26,9 @@ export type LevelCheckWithPlayer = LevelCheck & { player: Player };
 /** Who can confirm a level for this event: listed coaches who named the venue as their club, then the live club itself (when claimed). */
 export async function verifiersFor(db: Db, ev: Pick<Event, "venueName" | "venueSlug">): Promise<Verifier[]> {
   const out: Verifier[] = [];
-  if (ev.venueName) for (const c of await coachesAtClub(db, ev.venueName)) out.push({ kind: "coach", id: c.id, name: c.displayName });
+  // By the slug, never the name: a club Kicksmash lists is called "WAREHAUS.club" and lives at
+  // `warehaus`, and slugifying its name would look for coaches at a page nobody teaches on.
+  if (ev.venueSlug) for (const c of await coachesAtClub(db, ev.venueSlug)) out.push({ kind: "coach", id: c.id, name: c.displayName });
   if (ev.venueSlug) {
     const [club] = await db.select().from(clubs).where(eq(clubs.slug, ev.venueSlug)).limit(1);
     if (club && isClubLive(club) && club.claimedBy) out.push({ kind: "club", slug: club.slug, name: club.name });

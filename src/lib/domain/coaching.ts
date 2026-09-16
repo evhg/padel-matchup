@@ -5,7 +5,7 @@ import { newCoachCode } from "@/lib/codes";
 import { coachAssets, coachBlocks, coachManagers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
-import { venueSlug } from "./venueBoard";
+import { venueSlug, venueSlugFor } from "./venueBoard";
 import { cityOf } from "./cities";
 import { channelOf, recordFact } from "./facts";
 import { createPlayer } from "./players";
@@ -128,6 +128,23 @@ export function coachClubSlugs(names: string[] | string | null | undefined, pick
   return out.slice(0, CLUBS_MAX);
 }
 
+/**
+ * The same, asking the database what each name is. A club Kicksmash lists keeps its own slug, so a
+ * coach who types "WAREHAUS.club" is found at `warehaus` with that club's matches, rather than at
+ * `warehaus-club`, where nobody plays. Use this wherever a coach's clubs are written; the plain
+ * version above is for a name with no database to hand.
+ */
+export async function coachClubSlugsFor(db: Db, names: string[] | string | null | undefined, picked: string[] = []): Promise<string[]> {
+  const out: string[] = [];
+  for (const s of picked) if (s && !out.includes(s)) out.push(s);
+  // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8), and CLUBS_MAX bounds it.
+  for (const n of cleanClubNames(names)) {
+    const s = await venueSlugFor(db, n);
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out.slice(0, CLUBS_MAX);
+}
+
 /** How many clubs one coach can name. Both the names and their slugs stop here, from one constant, so the two lists cannot drift apart. */
 export const CLUBS_MAX = 5;
 
@@ -169,7 +186,7 @@ export async function insertCoach(db: Db, input: CreateCoachInput): Promise<{ co
       handle: await uniqueHandle(db, displayName),
       displayName,
       clubNames: cleanClubNames(input.clubNames),
-      clubSlugs: coachClubSlugs(input.clubNames),
+      clubSlugs: await coachClubSlugsFor(db, input.clubNames),
       languages: (input.languages ?? ["en"]).filter((l) => ["en", "ru", "es"].includes(l)).slice(0, 3),
       lessonMinutes: minutes,
       hours: input.hours ?? presetHours("both"),
@@ -278,7 +295,7 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   // typed with no club picked still produces the slug a club is found by.
   if (clean.clubNames !== undefined || clean.clubSlugs !== undefined) {
     const names = clean.clubNames ?? (await db.select({ clubNames: coaches.clubNames }).from(coaches).where(eq(coaches.id, coachId)).limit(1))[0]?.clubNames ?? [];
-    clean.clubSlugs = coachClubSlugs(names, clean.clubSlugs ?? []);
+    clean.clubSlugs = await coachClubSlugsFor(db, names, clean.clubSlugs ?? []);
   }
   // Founding places: listing the book for the first time takes one while the city has any; moving city takes one there when
   // that city has any (a Bangkok founder does not walk into a full Singapore with a badge) and gives the old one back.
