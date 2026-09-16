@@ -17,7 +17,13 @@
     "and covered count as indoor, because what a player wants to know is whether rain or midday sun",
     "stops the game. They do not have to add up to `courts` when a source only gave part of the picture.",
     "",
-    "Compiled 15-16 September 2026. Not a census and not claimed as one: it is every club with a web",
+    "Where two sources disagree, the club's own page wins, and where nothing settles it the count stays",
+    "null. An aggregator said No Drama Padel had five courts; the club's own site says four rooftop",
+    "courts, and four is what this file carries. Kross Padel Indoor is 3 in one place and 4 in another,",
+    "so it has no count at all.",
+    "",
+    "Compiled 15-16 September 2026; Thailand read again on the 16th, which found four more clubs and",
+    "corrected Mandala Racquet Club. Not a census and not claimed as one: it is every club with a web",
     "presence that public sources named, and the open questions are in the research notes."
   ],
   "clubs": [
@@ -43,9 +49,13 @@
     { "slug": "no-drama-padel", "name": "No Drama Padel", "country": "TH", "province": "Bangkok", "city": null, "tz": "Asia/Bangkok", "area": "14 Charoen Nakhon 19 Alley, Bang Lamphu Lang, Khlong San 10600", "courts": 4, "courtsIndoor": 4, "courtsOutdoor": 0, "website": "https://nodramapadel.com/", "sources": ["playtomic.com", "nodramapadel.com"] },
     { "slug": "padel-tennis-banthatthong", "name": "Padel Tennis Banthatthong", "country": "TH", "province": "Bangkok", "city": null, "tz": "Asia/Bangkok", "area": "Banthatthong Road", "courts": 4, "courtsIndoor": 0, "courtsOutdoor": 4, "website": null, "sources": ["padelfast.com"] },
     { "slug": "top-padel-bangkok", "name": "Top Padel", "country": "TH", "province": "Bangkok", "city": null, "tz": "Asia/Bangkok", "area": "Topkart Bangkok", "courts": null, "courtsIndoor": null, "courtsOutdoor": null, "website": "https://www.topkartbangkok.com/top-padel/", "sources": ["topkartbangkok.com"] },
+    { "slug": "sterling", "name": "Sterling Sport & Wellness", "country": "TH", "province": "Bangkok", "city": null, "tz": "Asia/Bangkok", "area": "109 Sukhumvit Soi 24", "courts": 5, "courtsIndoor": null, "courtsOutdoor": null, "website": "https://sterlingbkk.com/", "sources": ["sterlingbkk.com", "padellands.com", "media.tatlerasia.com/padel/bangkok"] },
+    { "slug": "kross-padel-indoor", "name": "Kross Padel Indoor Bangkok", "country": "TH", "province": "Bangkok", "city": null, "tz": "Asia/Bangkok", "area": "Rama IV, Khlong Toei", "courts": null, "courtsIndoor": null, "courtsOutdoor": 0, "website": "https://krosspadel.com/", "sources": ["instagram.com/krosspadelindoor", "racketthailand.com", "padellands.com"] },
+    { "slug": "beat-discovery", "name": "BEAT Discovery", "country": "TH", "province": "Bangkok", "city": null, "tz": "Asia/Bangkok", "area": "Sukhumvit 66/1, next to BTS Udom Suk", "courts": 4, "courtsIndoor": null, "courtsOutdoor": null, "website": "https://www.beatdiscoverythailand.com/en", "sources": ["beatdiscoverythailand.com", "padellands.com"] },
 
     { "slug": "padel-club-chiang-mai", "name": "Padel Club Chiang Mai", "country": "TH", "province": "Chiang Mai", "city": null, "tz": "Asia/Bangkok", "area": "Tha Wang Tan, Saraphi", "courts": 4, "courtsIndoor": 4, "courtsOutdoor": 0, "website": "https://padelclubchiangmai.com/", "sources": ["playtomic.com", "padelclubchiangmai.com", "chiangmaicitylife.com"] },
     { "slug": "padel-cnx", "name": "PADEL.CNX", "country": "TH", "province": "Chiang Mai", "city": null, "tz": "Asia/Bangkok", "area": null, "courts": 4, "courtsIndoor": null, "courtsOutdoor": null, "website": "https://playtomic.com/clubs/padel-cnx", "sources": ["playtomic.com", "globalpadelhub.com"] },
+    { "slug": "padel55-chiang-mai", "name": "Padel55 Chiangmai", "country": "TH", "province": "Chiang Mai", "city": null, "tz": "Asia/Bangkok", "area": "Ban Sao Hin Soi 11, Nong Hoi, Mueang", "courts": 3, "courtsIndoor": null, "courtsOutdoor": null, "website": null, "sources": ["thaicourts.com", "padellands.com", "instagram.com/padel55chiangmai"] },
 
     { "slug": "padel-of-thailand-hua-hin", "name": "Padel of Thailand Soi 94", "country": "TH", "province": "Prachuap Khiri Khan", "city": null, "tz": "Asia/Bangkok", "area": "Soi 94, Hua Hin", "courts": 4, "courtsIndoor": 2, "courtsOutdoor": 2, "website": "https://padelofthailand.com/", "sources": ["matchi.se", "padelofthailand.com"] },
     { "slug": "padel-sozial-hua-hin", "name": "Padel Sozial Hua Hin", "country": "TH", "province": "Prachuap Khiri Khan", "city": null, "tz": "Asia/Bangkok", "area": "Hua Hin city centre", "courts": 6, "courtsIndoor": 6, "courtsOutdoor": 0, "website": "https://padelsozial.com/", "sources": ["padelsozial.com"] },
@@ -70,7 +80,7 @@
     { "slug": "hollandse-club", "name": "Hollandse Club", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Holland Village", "courts": 3, "courtsIndoor": 0, "courtsOutdoor": 3, "website": null, "sources": ["padelsingapore.com"] },
     { "slug": "love-all-sports", "name": "Love All Sports", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "West Coast", "courts": 7, "courtsIndoor": 0, "courtsOutdoor": 7, "website": "https://playtomic.com/clubs/love-all-racquet-club", "sources": ["padelsingapore.com"] },
     { "slug": "madison-house-padel", "name": "Madison House", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Fort Canning", "courts": 2, "courtsIndoor": 0, "courtsOutdoor": 2, "website": "https://playtomic.com/clubs/madison-house", "sources": ["padelsingapore.com"] },
-    { "slug": "mandala-racquet-club", "name": "Mandala Racquet Club", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Sentosa", "courts": 4, "courtsIndoor": null, "courtsOutdoor": null, "website": null, "sources": ["padelsingapore.com", "timeout.com/singapore"] },
+    { "slug": "mandala-racquet-club", "name": "Mandala Racquet Club", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Sentosa", "courts": 5, "courtsIndoor": 4, "courtsOutdoor": 1, "website": "https://www.mandala.club/mandalaracquetclub", "sources": ["mandala.club", "padelsingapore.com", "timeout.com/singapore"] },
     { "slug": "mbp-sports", "name": "MBP Sports", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Marina Bay", "courts": 3, "courtsIndoor": 0, "courtsOutdoor": 3, "website": "https://mbpsports.web.app/", "sources": ["padelsingapore.com"] },
     { "slug": "padel-x-singapore", "name": "Padel X", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Singapore EXPO", "courts": 5, "courtsIndoor": 5, "courtsOutdoor": 0, "website": "https://playtomic.com/clubs/padel-x-singapore", "sources": ["padelsingapore.com", "timeout.com/singapore"] },
     { "slug": "padelstation-chevrons", "name": "PadelStation", "country": "SG", "province": "Singapore", "city": "singapore", "tz": "Asia/Singapore", "area": "Jurong", "courts": 2, "courtsIndoor": 2, "courtsOutdoor": 0, "website": "https://playtomic.com/clubs/padelstation-the-chevrons", "sources": ["padelsingapore.com"] },
