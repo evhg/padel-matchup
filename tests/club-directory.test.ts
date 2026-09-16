@@ -47,11 +47,13 @@ describe("the club directory as a file", () => {
 
   it("keeps the slug the live data already carries", () => {
     // Production keys on "warehaus": eight matches and both coaches' clubs. One match is at
-    // "blue-tree". A tidier "warehaus-club" here would be a second page for the same club, with all
-    // of the history on the other one. The name is what the club calls itself; the slug is its address.
+    // "blue-tree", one at "sterling". A tidier "warehaus-club" here would be a second page for the
+    // same club, with all of the history on the other one. The name is what the club calls itself;
+    // the slug is its address.
     const bySlug = new Map(file.clubs.map((c) => [c.slug, c]));
     expect(bySlug.get("warehaus")?.name).toBe("WAREHAUS.club");
     expect(bySlug.get("blue-tree")?.name).toBe("Padel Phuket @ Blue Tree");
+    expect(bySlug.get("sterling")?.name).toBe("Sterling Sport & Wellness");
   });
 
   it("turns into one statement that only ever touches the directory's own rows", () => {

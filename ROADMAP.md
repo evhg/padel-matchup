@@ -45,9 +45,10 @@ Everything in this list is live. The README describes each in detail.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
   quiet hours from a weekly programme.
-- **Every padel club in Thailand and Singapore, listed.** 63 clubs from public sources — 36 in Thailand
+- **Every padel club in Thailand and Singapore, listed.** 67 clubs from public sources — 40 in Thailand
   across eight provinces, 27 in Singapore — with the indoor and outdoor court split where a source said
-  it, which is also the first capacity number the app has. A listing says who a club is and nothing
+  it, which is also the first capacity number the app has. Where two sources disagree the club's own
+  page wins, and where nothing settles it the count stays null. A listing says who a club is and nothing
   about who runs it: it is nobody's claim, it never queues for approval, and it never counts as a club
   joining. When the real owner claims it, the listing becomes theirs and the file stops being the truth
   about it. A club people already play at keeps the slug their matches carry, so claiming "WAREHAUS.club"
