@@ -54,6 +54,9 @@ Everything in this list is live. The README describes each in detail.
   about it. A club people already play at keeps the slug their matches carry, so claiming "WAREHAUS.club"
   takes over `warehaus` rather than opening a second page with none of the history on it. The file is
   `data/clubs.json`, re-imported by one statement that only ever touches rows nobody has claimed.
+  A club that opens next month will not be on the web for a while, but the first people to play there
+  type its name into a match that week, so the owner's weekly digest names every court people used
+  that Kicksmash does not list. That, and a club claiming its own page, are how the list grows.
 - **Picking where you play.** The list answers before it is read: the courts you have used, then the
   clubs in your own time zone, then everywhere else under a heading per country and province. Six at
   rest, the whole directory once a letter is typed. A club owner picks their club from the same list

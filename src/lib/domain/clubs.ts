@@ -4,7 +4,7 @@ import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
-import { clubs, venues, type Club } from "@/db/schema";
+import { clubs, events, venues, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, venueInCity } from "./cities";
@@ -167,6 +167,24 @@ export async function listClubsClaimedBy(db: Db, playerId: string): Promise<Club
 export async function countClubsClaimedSince(db: Db, since: Date): Promise<number> {
   const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(eq(clubs.source, "claim"), gte(clubs.createdAt, since)));
   return Number(n);
+}
+
+/**
+ * Courts people played at that Kicksmash does not list, commonest first.
+ *
+ * A club that opened last month is not on the web yet — the aggregators find out months late — but
+ * the first people to play there type its name into a match on the day it opens. That is the signal
+ * the directory cannot get any other way, and it costs one query a week to read.
+ */
+export async function unlistedVenues(db: Db, since: Date, limit = 5): Promise<{ slug: string; name: string; matches: number }[]> {
+  const rows = await db
+    .select({ slug: events.venueSlug, name: sql<string>`max(${events.venueName})`, matches: sql<number>`count(*)` })
+    .from(events)
+    .where(and(isNotNull(events.venueSlug), gte(events.startsAt, since), sql`not exists (select 1 from ${clubs} where ${clubs.slug} = ${events.venueSlug})`))
+    .groupBy(events.venueSlug)
+    .orderBy(desc(sql`count(*)`))
+    .limit(limit);
+  return rows.map((r) => ({ slug: r.slug ?? "", name: r.name ?? r.slug ?? "", matches: Number(r.matches) }));
 }
 
 /** Claims waiting on the owner's yes. A directory row is nobody's claim and never queues here. */
