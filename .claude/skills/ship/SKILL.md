@@ -204,6 +204,17 @@ Wall clock first, credits second. What actually moved it, measured:
   in the weekly digest, because both queries were written when every row in `clubs` was a claim. When a
   table gains a second kind of row, grep every `from(<table>)` and decide, one by one, which kind each
   query meant.
+- **A new status value has two sides, and only one of them checks the status.** `left` closed the web
+  door for a player who removes a coach, but the coach's Telegram assistant still recognised the name,
+  and `bookLesson` with `byCoach: true` skips the student-status check on purpose — so the coach could
+  book a lesson straight back onto the calendar of somebody who had just walked away. When a status says
+  "this relationship is over", grep for every place the other side acts, and check each one for the
+  branch that trusts the actor instead of the status.
+- **Dropping a name from a list is not the same as refusing it.** The first fix filtered departed
+  students out of the assistant's list — and an unmatched name there makes `addStudentByName` create a
+  *new player of that name*, so the coach would have booked a ghost while the real player heard nothing.
+  Before filtering a name out of any matcher, read what the "no match" branch does. Keeping the row and
+  tagging it is usually the smaller, truer change.
 
 ### Two ways a change hangs or bloats
 
