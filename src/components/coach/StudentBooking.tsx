@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { acceptOfferAction, joinWaitlistAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction } from "@/actions/coach";
+import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction } from "@/actions/coach";
 import type { StudentStatus } from "@/lib/domain/coaching";
 import { HowThisWorks } from "./HowThisWorks";
 
@@ -118,6 +118,21 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
       setNote(t("page.paidThanks"));
       router.refresh();
     });
+
+  const leaveThisCoach = () => {
+    if (!confirm(t("page.leave", { name: coachName }))) return;
+    start(async () => {
+      setError(null);
+      const r = await leaveCoachAction(handle);
+      if (!r.ok) {
+        // A lesson still to come is the one refusal worth explaining: cancel it, then leave.
+        setError(r.error === "has_lessons" ? t("page.leaveHasLessons", { name: coachName }) : errorText(r.error));
+        return;
+      }
+      setNote(t("page.leaveDone", { name: coachName }));
+      router.refresh();
+    });
+  };
 
   const cancel = (l: StudentLessonDTO) => {
     const late = l.hoursUntil < cutoffHours;
@@ -408,6 +423,16 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
         </section>
       )}
       <HowThisWorks text={t("page.how", { hours: cutoffHours })} />
+
+      {/* Last on the page, the way the one thing you cannot undo is last on My matches. Only somebody
+          who is actually on this coach's list sees it. */}
+      {signedIn && (status === "accepted" || status === "requested" || status === "paused") && (
+        <div className="px-1 pb-2 text-center">
+          <button type="button" className="text-xs text-faint hover:text-danger" disabled={pending} onClick={leaveThisCoach} data-testid="leave-coach">
+            {t("page.leave", { name: coachName })}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

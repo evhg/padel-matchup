@@ -53,7 +53,10 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const owner = own?.coach.id === coach.id;
   // The coach's own link carries their invite code: whoever opens it is on the list, nobody asks and nobody approves.
   const invite = inviteMatches(coach, sp.i) ? coach.inviteCode : null;
+  // "left" is a row that says this player took themselves off the list. To this page that is the same
+  // as never having been on it: the door to ask again is what they should see.
   let status = me ? await studentStatus(db, coach.id, me.id) : "none";
+  if (status === "left") status = "none";
   let justJoined = false;
   if (invite && me && !owner && status !== "accepted" && status !== "paused") {
     status = await acceptByInvite(db, coach.id, me.id);

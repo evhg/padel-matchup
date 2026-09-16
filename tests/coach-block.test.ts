@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { availableSlots, blockTime, bookLesson, createCoach, presetHours, setStudentStatus, unblockTime } from "@/lib/domain/coaching";
+import { availableSlots, blockTime, bookLesson, cancelLesson, createCoach, leaveCoach, listStudentCoaches, listStudents, presetHours, requestStudent, setStudentStatus, studentStatus, unblockTime } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 /**
@@ -60,5 +60,55 @@ describe("the coach takes an hour back", () => {
     const mine = await blockTime(db, { coachId: coach.id, startsAt: at(2), minutes: 60 }, at(-1));
     expect(await unblockTime(db, other.id, mine.id)).toBe(false);
     expect(await unblockTime(db, coach.id, mine.id)).toBe(true);
+  });
+});
+
+describe("a player takes a coach off their own list", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const pair = async (name: string) => {
+    const coachPlayer = await makePlayer(db, `${name} coach`);
+    const student = await makePlayer(db, `${name} student`);
+    const coach = await createCoach(db, { playerId: coachPlayer.id, displayName: name, tz: "Asia/Bangkok", hours: presetHours("both") });
+    await setStudentStatus(db, coach.id, student.id, "accepted");
+    return { coach, student };
+  };
+
+  it("takes the coach's door off My matches, and lets them come back", async () => {
+    const { coach, student } = await pair("Ana");
+    expect((await listStudentCoaches(db, student.id)).map((c) => c.status)).toEqual(["accepted"]);
+    await leaveCoach(db, coach.id, student.id);
+    // My matches lists only accepted and requested, so the "Book more" door is gone.
+    expect((await listStudentCoaches(db, student.id)).map((c) => c.status)).toEqual(["left"]);
+    expect(await studentStatus(db, coach.id, student.id)).toBe("left");
+    // Leaving is not a door that locks behind them.
+    expect(await requestStudent(db, coach.id, student.id)).toBe("requested");
+  });
+
+  it("refuses while a lesson is still to come, and allows it once that lesson is gone", async () => {
+    const { coach, student } = await pair("Bo");
+    const when = new Date(Date.now() + 48 * HOUR);
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: when, byCoach: true });
+    // The same rule a coach meets when closing a book: nobody is left holding an appointment nobody watches.
+    await expect(leaveCoach(db, coach.id, student.id)).rejects.toMatchObject({ code: "has_lessons" });
+    await cancelLesson(db, { lessonId: lesson.id, by: "coach", coach });
+    await leaveCoach(db, coach.id, student.id);
+    expect(await studentStatus(db, coach.id, student.id)).toBe("left");
+  });
+
+  it("leaves the coach's book alone: the student, their lessons and anything owed stay", async () => {
+    const { coach, student } = await pair("Cy");
+    // A lesson already taken: booked ahead, then the clock moved past it.
+    const { lesson: done } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: new Date(Date.now() + HOUR), byCoach: true });
+    await leaveCoach(db, coach.id, student.id, new Date(Date.now() + 2 * HOUR));
+    // A student who leaves owing money does not take the debt off the coach's screen with them.
+    const students = await listStudents(db, coach.id);
+    expect(students.map((s) => s.status)).toEqual(["left"]);
+    expect(done.id).toBeTruthy();
   });
 });

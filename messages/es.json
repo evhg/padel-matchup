@@ -1240,7 +1240,8 @@
       "payLink": "Pagar por enlace",
       "how": "Acepta una solicitud y el alumno podrá reservar solo las horas libres. Un bono es un número de clases con caducidad; cada reserva descuenta una y una cancelación a tiempo la devuelve. El pago es entre vosotros: muestra el QR y luego toca pagado.",
       "emailOptional": "Email, opcional. Recibe tu enlace una vez.",
-      "thisMonth": "{count} este mes"
+      "thisMonth": "{count} este mes",
+      "left": "Se fue"
     },
     "settings": {
       "title": "Ajustes",
@@ -1337,7 +1338,10 @@
       "asked": "Pedido a {name}: {when}. La respuesta llega aquí y por mensaje.",
       "askedList": "Pedido",
       "requestBooked": "Reservado: {when}.",
-      "movedPackage": "Cambiada. Tu bono sigue igual."
+      "movedPackage": "Cambiada. Tu bono sigue igual.",
+      "leave": "Quitar a {name} de mis entrenadores",
+      "leaveDone": "Listo. {name} ya no está en tu lista de entrenadores.",
+      "leaveHasLessons": "Cancela primero tu clase reservada y luego podrás quitar a {name}."
     },
     "me": {
       "title": "Tus clases",

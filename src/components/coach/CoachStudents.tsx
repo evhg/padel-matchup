@@ -70,7 +70,7 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
         {rest.length === 0 && requests.length === 0 && <p className="mt-3 text-sm text-muted">{t("students.none")}</p>}
         <ul className="mt-3 flex flex-col gap-2">
           {rest.map((s) => (
-            <li key={s.playerId} className={`rounded-2xl border border-line bg-white px-4 py-3 ${s.status === "paused" ? "opacity-60" : ""}`}>
+            <li key={s.playerId} className={`rounded-2xl border border-line bg-white px-4 py-3 ${s.status === "paused" || s.status === "left" ? "opacity-60" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate font-bold">{s.name}</div>
@@ -83,9 +83,15 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
                     <div className="mt-0.5 text-xs font-bold text-danger">{t("students.owes", { amount: money(owed[s.playerId]) })}</div>
                   )}
                 </div>
-                <button type="button" className="btn-ghost btn-xs shrink-0" disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))}>
-                  {s.status === "paused" ? t("students.resume") : t("students.pause")}
-                </button>
+                {/* Somebody who took themselves off the list is not paused by the coach, and offering
+                    to pause them would say the coach had done it. Their lessons and anything owed stay. */}
+                {s.status === "left" ? (
+                  <span className="shrink-0 text-xs font-bold text-faint">{t("students.left")}</span>
+                ) : (
+                  <button type="button" className="btn-ghost btn-xs shrink-0" disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))}>
+                    {s.status === "paused" ? t("students.resume") : t("students.pause")}
+                  </button>
+                )}
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {s.pkg && !s.pkg.paid && (

@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -402,9 +402,28 @@ export async function requestCoachAction(handle: string, name?: string | null, i
     }
     const before = await studentStatus(db, coach.id, me.id);
     const status = await requestStudent(db, coach.id, me.id);
-    if (before === "none") await notifyStudentRequest(db, coach, me).catch(() => undefined);
+    // Somebody coming back after leaving is as much news to the coach as somebody new.
+    if (before === "none" || before === "left") await notifyStudentRequest(db, coach, me).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { status };
+  });
+}
+
+/**
+ * The student's own way off a coach's list. The coach's "Book more" door on My matches comes from
+ * that list, so until now only the coach could take it away — a player who took one lesson and moved
+ * on carried the door on their screen for good.
+ */
+export async function leaveCoachAction(handle: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const coach = await getCoachByHandle(db, handle);
+    if (!coach) throw new ActionFailure("no_coach");
+    const me = await requirePlayer(db);
+    await leaveCoach(db, coach.id, me.id);
+    revalidateCoach(coach.handle);
+    revalidatePath("/me");
+    return null;
   });
 }
 
