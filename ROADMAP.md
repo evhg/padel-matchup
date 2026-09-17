@@ -73,6 +73,13 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **A coach who goes quiet.** The other half of the same door. A coach rarely says "I quit": they
+  stop answering, and their page and their button stay live for every student they ever taught. So
+  a coach with no lesson in sixty days — none taught, none booked ahead — drops off the student's
+  screen on their own. The coach's page still opens and the student keeps every lesson in their
+  history: only the button that reaches nobody goes. Nothing is set and nothing is undone, so the
+  first lesson the coach books brings the door straight back.
+
 - **Getting back to your own matches.** A browser that has never seen you shows a name field, and
   under it one line: "Have you used Kicksmash before?" It opens in place to the email you gave (a
   6-digit code) or the Telegram account you signed in with. Shut by default, so it takes nothing from

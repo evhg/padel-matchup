@@ -13,7 +13,7 @@ import { venueWithCourt } from "@/lib/labels";
 export async function MyMatches({ player }: { player: Player }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
   const now = new Date();
-  const [{ upcoming, past }, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), listStudentCoaches(db, player.id)]);
+  const [{ upcoming, past }, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), listStudentCoaches(db, player.id, now)]);
   // A lesson is an appointment on the same calendar as a match: it takes its place in the list by time, not a section of its own.
   const booked = lessons.filter((l) => l.status === "booked");
   // The coach's door stays whatever the match history: to book with a coach who said yes, or to see that the ask still waits.

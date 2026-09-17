@@ -215,6 +215,11 @@ Wall clock first, credits second. What actually moved it, measured:
   *new player of that name*, so the coach would have booked a ghost while the real player heard nothing.
   Before filtering a name out of any matcher, read what the "no match" branch does. Keeping the row and
   tagging it is usually the smaller, truer change.
+- **Derive the state nobody will ever set.** A coach never taps "I have stopped coaching", so a column
+  for it would have stayed false forever. `max(lessons.starts_at)` against the coach's own index says
+  the same thing, needs no migration, and reverses itself the moment the coach books again. Before
+  adding a column for a state, ask which human tap would ever write it. When the honest answer is
+  "none", read it from the rows that already move.
 
 ### Two ways a change hangs or bloats
 
