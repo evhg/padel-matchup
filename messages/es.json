@@ -1168,7 +1168,14 @@
       "notifyDone": "Listo",
       "notifyHave": "El asistente puede avisarte.",
       "notifyGateTitle": "Una cosa antes de abrir tu agenda",
-      "notifyGateHelp": "Tu agenda no tiene forma de avisarte, así que una reserva o una cancelación no llegaría a ninguna parte. Elige un canal y la agenda se abre."
+      "notifyGateHelp": "Tu agenda no tiene forma de avisarte, así que una reserva o una cancelación no llegaría a ninguna parte. Elige un canal y la agenda se abre.",
+      "adhoc": "También doy clases sueltas, no solo paquetes",
+      "groupOpen": "También doy clases a parejas y grupos",
+      "groupHelp": "Lo que paga cada persona. Deja un tamaño vacío y se usa el precio del grupo menor.",
+      "priceTwo": "Cada uno, en pareja",
+      "priceThree": "Cada uno, en trío",
+      "priceFour": "Cada uno, en cuarteto",
+      "latePass": "La primera cancelación tardía de un paquete corre por tu cuenta"
     },
     "done": {
       "title": "Tu asistente está listo",
@@ -1218,7 +1225,10 @@
       "otherTime": "Otra hora",
       "confirm": "Reservar",
       "booked": "Reservado: {name}, {when}.",
-      "how": "Elige un alumno o escribe un nombre nuevo, luego un día y una hora libre. Las horas fuera de tu horario también puedes reservarlas tú."
+      "how": "Elige un alumno o escribe un nombre nuevo, luego un día y una hora libre. Las horas fuera de tu horario también puedes reservarlas tú.",
+      "heads": "Cuántos vinieron",
+      "comp": "Invita la casa",
+      "compWhy": "¿Por qué? Tu alumno lo verá."
     },
     "students": {
       "title": "Alumnos",
@@ -1354,7 +1364,8 @@
       "leaveHasLessons": "Cancela primero tu clase reservada y luego podrás quitar a {name}.",
       "allTaken": "Todas las horas del {day} están ocupadas",
       "takenTap": "Toca una hora y te avisamos si se libera.",
-      "teaches": "Da clase {hours}"
+      "teaches": "Da clase {hours}",
+      "comped": "Invita la casa"
     },
     "me": {
       "title": "Tus clases",

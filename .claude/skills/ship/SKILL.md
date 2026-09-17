@@ -241,6 +241,11 @@ Wall clock first, credits second. What actually moved it, measured:
   `max-w-full` does nothing on its own: the text has to be allowed to wrap first
   (`whitespace-normal py-2 text-left leading-snug`). Read any button whose label is a sentence at
   390px before shipping it.
+- **A test fixture goes through the same door the screens do.** `createCoach` takes no prices, so a
+  fixture that passed `priceSingle` made a coach with none and the assertions failed against perfectly
+  good code. When a factory silently drops a field, the test is lying about the state it set up: build
+  the row the way the app builds it (`createCoach` then `updateCoach`), or widen the factory.
+
 - **Take the screenshot, then take it again.** The overflow above was fixed twice: the first fix
   looked right in the code and still ran off the screen, and only the second picture proved it. For
   anything visual, the picture is the check — `SHOTS=<dir> E2E_ONLY=<suite> pnpm e2e`, and remember

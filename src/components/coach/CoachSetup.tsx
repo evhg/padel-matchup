@@ -52,6 +52,14 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [badDay, setBadDay] = useState<number | null>(null);
   const [price, setPrice] = useState("");
+  // A coach who sells packages only leaves the price empty, which is what "no one-off lessons" means.
+  // The switch is the same fact said out loud, so nobody has to work out what an empty field implies.
+  const [adhoc, setAdhoc] = useState(true);
+  const [groups, setGroups] = useState(false);
+  const [priceTwo, setPriceTwo] = useState("");
+  const [priceThree, setPriceThree] = useState("");
+  const [priceFour, setPriceFour] = useState("");
+  const [latePass, setLatePass] = useState(true);
   const [currency, setCurrency] = useState("THB");
   const [payAtClub, setPayAtClub] = useState(false);
   const [promptpay, setPromptpay] = useState("");
@@ -104,9 +112,17 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   const savePay = () =>
     start(async () => {
       setError(null);
-      const n = Number(price.replace(/[^\d]/g, ""));
+      const money = (v: string) => {
+        const n = Number(v.replace(/[^\d]/g, ""));
+        return v.trim() === "" || !Number.isFinite(n) ? null : n;
+      };
       const r = await savePaymentAction({
-        priceSingle: price.trim() === "" ? null : Number.isFinite(n) ? n : null,
+        // The switch off clears every price: one-off lessons are not sold at any size.
+        priceSingle: adhoc ? money(price) : null,
+        priceTwo: adhoc && groups ? money(priceTwo) : null,
+        priceThree: adhoc && groups ? money(priceThree) : null,
+        priceFour: adhoc && groups ? money(priceFour) : null,
+        latePasses: latePass ? 1 : 0,
         currency,
         payAtClub,
         promptpayId: promptpay.trim() || undefined,
@@ -220,16 +236,52 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
             <h2 className="text-xl font-extrabold tracking-tight">{t("setup.priceTitle")}</h2>
             <p className="mt-1 text-sm text-muted">{t("setup.priceHelp")}</p>
           </div>
-          <div className="flex gap-2">
-            <label className="block flex-1 text-sm font-bold">
-              {t("setup.priceLabel")}
-              <input className="input mt-1" value={price} onChange={(e) => setPrice(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="800" data-testid="price-single" />
-            </label>
-            <label className="block w-28 text-sm font-bold">
-              {t("setup.currency")}
-              <input className="input mt-1" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} autoComplete="off" maxLength={3} />
-            </label>
-          </div>
+          <label className="flex items-center gap-2 text-sm font-bold">
+            <input type="checkbox" checked={adhoc} onChange={(e) => setAdhoc(e.target.checked)} data-testid="adhoc" />
+            {t("setup.adhoc")}
+          </label>
+          {adhoc && (
+            <>
+              <div className="flex gap-2">
+                <label className="block flex-1 text-sm font-bold">
+                  {t("setup.priceLabel")}
+                  <input className="input mt-1" value={price} onChange={(e) => setPrice(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="800" data-testid="price-single" />
+                </label>
+                <label className="block w-28 text-sm font-bold">
+                  {t("setup.currency")}
+                  <input className="input mt-1" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} autoComplete="off" maxLength={3} />
+                </label>
+              </div>
+              {/* Behind one line, shut by default: the walk is six taps and the shortness was won the hard way. */}
+              {!groups ? (
+                <button type="button" className="text-xs font-bold text-muted underline underline-offset-4 hover:text-ink self-start" onClick={() => setGroups(true)} data-testid="group-prices">
+                  {t("setup.groupOpen")}
+                </button>
+              ) : (
+                <div>
+                  <p className="text-sm text-muted">{t("setup.groupHelp")}</p>
+                  <div className="mt-2 flex gap-2">
+                    <label className="block flex-1 text-sm font-bold">
+                      {t("setup.priceTwo")}
+                      <input className="input mt-1" value={priceTwo} onChange={(e) => setPriceTwo(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="500" data-testid="price-two" />
+                    </label>
+                    <label className="block flex-1 text-sm font-bold">
+                      {t("setup.priceThree")}
+                      <input className="input mt-1" value={priceThree} onChange={(e) => setPriceThree(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="400" data-testid="price-three" />
+                    </label>
+                    <label className="block flex-1 text-sm font-bold">
+                      {t("setup.priceFour")}
+                      <input className="input mt-1" value={priceFour} onChange={(e) => setPriceFour(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="350" data-testid="price-four" />
+                    </label>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={latePass} onChange={(e) => setLatePass(e.target.checked)} data-testid="late-pass" />
+            {t("setup.latePass")}
+          </label>
           <div className="flex flex-col gap-2">
             <div className="text-sm font-bold">{t("setup.payHow")}</div>
             <label className="flex items-center gap-2 text-sm">

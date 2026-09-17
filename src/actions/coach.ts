@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -171,7 +171,7 @@ export async function removeQrAction(): Promise<ActionResult<null>> {
 }
 
 /** Either an exact instant (a slot chip) or a day and a wall-clock time in the coach's zone (typed). */
-export async function coachBookAction(input: { studentPlayerId?: string | null; newName?: string | null; startsAt?: string | null; day?: string | null; time?: string | null }): Promise<ActionResult<{ lessonId: string; studentPlayerId: string; startsAt: string }>> {
+export async function coachBookAction(input: { studentPlayerId?: string | null; newName?: string | null; startsAt?: string | null; day?: string | null; time?: string | null; heads?: number }): Promise<ActionResult<{ lessonId: string; studentPlayerId: string; startsAt: string }>> {
   return runA(async () => {
     const db = await getDb();
     const { me, coach } = await requireCoach(db);
@@ -187,7 +187,7 @@ export async function coachBookAction(input: { studentPlayerId?: string | null; 
       if (!name) throw new ActionFailure("name_required");
       studentPlayerId = (await addStudentByName(db, coach.id, name, locale)).id;
     }
-    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: true, source: "web", createdByPlayerId: me.id });
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: true, source: "web", createdByPlayerId: me.id, heads: input.heads });
     const student = await getPlayerById(db, studentPlayerId);
     if (student) await notifyLessonBooked(db, { lesson, coach, student, pkg, by: "coach" }).catch(() => undefined);
     revalidateCoach(coach.handle);
@@ -447,7 +447,22 @@ export async function leaveCoachAction(handle: string): Promise<ActionResult<nul
  * empty one clears; a link that is not a link is refused, not dropped. Nothing is charged here and
  * nothing passes through Kicksmash — this is what the student is shown so they can pay the coach.
  */
-export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null; priceSingle?: number | null; currency?: string | null; payAtClub?: boolean }): Promise<ActionResult<null>> {
+/**
+ * "This one is on me." The coach's own tap: a package lesson goes back to the package, a priced one
+ * is zeroed, and the reason reaches the student, because a gift nobody is told about is just a number
+ * that changed.
+ */
+export async function compLessonAction(lessonId: string, reason?: string | null): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    await compLesson(db, { lessonId, coach, reason });
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null; priceSingle?: number | null; priceTwo?: number | null; priceThree?: number | null; priceFour?: number | null; latePasses?: number | null; currency?: string | null; payAtClub?: boolean }): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
@@ -458,7 +473,12 @@ export async function savePaymentAction(input: { promptpayId?: string | null; pa
       if (link && !isPayLink(link)) throw new DomainError("invalid", "payLink");
       patch.payLink = link;
     }
+    // Every price is per head, and an empty one means "I do not sell that", which updateCoach turns to null.
     if (input.priceSingle !== undefined) patch.priceSingle = input.priceSingle;
+    if (input.priceTwo !== undefined) patch.priceTwo = input.priceTwo;
+    if (input.priceThree !== undefined) patch.priceThree = input.priceThree;
+    if (input.priceFour !== undefined) patch.priceFour = input.priceFour;
+    if (input.latePasses != null && Number.isFinite(input.latePasses)) patch.latePasses = input.latePasses;
     if (typeof input.currency === "string") patch.currency = input.currency;
     if (typeof input.payAtClub === "boolean") patch.payAtClub = input.payAtClub;
     if (Object.keys(patch).length) await updateCoach(db, coach.id, patch);

@@ -277,13 +277,19 @@ export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> =
 /** A payment link a student can open: http(s), at least a few characters, no spaces. */
 export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
 
-export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
+export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
   const clean: CoachPatch = { ...patch };
   if (clean.tz !== undefined && !isValidTimeZone(clean.tz)) throw new DomainError("invalid", "tz");
   if (clean.lessonMinutes !== undefined && !LESSON_MINUTES.includes(clean.lessonMinutes as (typeof LESSON_MINUTES)[number])) throw new DomainError("invalid", "minutes");
   if (clean.cutoffHours !== undefined) clean.cutoffHours = Math.min(72, Math.max(0, Math.round(clean.cutoffHours)));
+  // A price is a whole number of currency units, or nothing. Zero is nothing: a coach who clears the
+  // field means "I do not sell this", not "this one is free" — that is what comping a lesson is for.
+  for (const k of ["priceSingle", "priceTwo", "priceThree", "priceFour"] as const) {
+    const v = clean[k];
+    if (v !== undefined) clean[k] = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.round(v);
+  }
   if (clean.latePasses !== undefined) clean.latePasses = Math.min(5, Math.max(0, Math.round(clean.latePasses)));
   if (clean.minNoticeHours !== undefined) clean.minNoticeHours = Math.min(48, Math.max(0, Math.round(clean.minNoticeHours)));
   if (clean.displayName !== undefined) clean.displayName = clean.displayName.replace(/\s+/g, " ").trim().slice(0, 40) || undefined;
@@ -628,7 +634,7 @@ export async function owedBy(db: Db, coach: Pick<Coach, "id" | "currency">, stud
   const ls = await db
     .select({ id: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt })
     .from(lessons)
-    .where(and(eq(lessons.coachId, coach.id), eq(lessons.studentPlayerId, studentPlayerId), isNull(lessons.paidAt), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
+    .where(and(eq(lessons.coachId, coach.id), eq(lessons.studentPlayerId, studentPlayerId), isNull(lessons.paidAt), isNull(lessons.compedAt), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
     .orderBy(asc(lessons.startsAt))
     .limit(50);
   const ps = await db
@@ -722,7 +728,24 @@ export function withinHours(coach: Pick<Coach, "hours" | "tz">, at: Date, minute
 
 // ---------------------------------------------------------------- lessons
 
-export type BookLessonInput = { coach: Coach; studentPlayerId: string; startsAt: Date; byCoach: boolean; source?: string; createdByPlayerId?: string | null; minutes?: number; note?: string | null };
+export type BookLessonInput = { coach: Coach; studentPlayerId: string; startsAt: Date; byCoach: boolean; source?: string; createdByPlayerId?: string | null; minutes?: number; note?: string | null; /** How many are on court. One unless the coach says otherwise. */ heads?: number };
+
+/** At most a full court: a padel court holds four, so a fifth head is somebody else's lesson. */
+export const MAX_HEADS = 4;
+
+/**
+ * What one person pays for a lesson with `heads` people on court.
+ *
+ * The number a coach sets is **what each person pays**, never the court total: the book shows one
+ * debt per student the way every other screen does, and nobody divides 1200 by three. An unset size
+ * falls back to the next smaller one and finally to the single price, so a coach who set one number
+ * keeps working and a coach who sets only a pair price does not accidentally charge a trio nothing.
+ */
+export function priceFor(coach: Pick<Coach, "priceSingle" | "priceTwo" | "priceThree" | "priceFour">, heads = 1): number | null {
+  const ladder = [coach.priceFour, coach.priceThree, coach.priceTwo, coach.priceSingle];
+  // heads 4 reads the whole ladder, 3 drops the four-price, and so on down to 1, which is the single price.
+  return ladder.slice(Math.max(0, MAX_HEADS - Math.min(Math.max(heads, 1), MAX_HEADS))).find((n) => n != null) ?? null;
+}
 
 /**
  * Books one lesson. A student needs to be accepted, inside the hours, after the notice.
@@ -754,9 +777,11 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
       status: "booked",
       source: input.source ?? "web",
       consumed: Boolean(pkg),
+      heads: Math.min(Math.max(input.heads ?? 1, 1), MAX_HEADS),
       // No package paying for it: the lesson carries the coach's price as it stood when it was booked,
-      // so raising the price next month never rewrites what last month's lessons cost.
-      amount: pkg ? null : (coach.priceSingle ?? null),
+      // so raising the price next month never rewrites what last month's lessons cost. Per head, so a
+      // pair is two lessons at the pair price rather than one lesson somebody has to divide.
+      amount: pkg ? null : priceFor(coach, input.heads ?? 1),
       note: input.note?.trim().slice(0, 200) || null,
       // Where it happens, but only when there is one answer. A coach who teaches at two clubs gets
       // null: guessing would put this lesson on the other club's page, and a club reading a wrong
@@ -847,6 +872,39 @@ export async function moveLesson(db: Db, input: MoveLessonInput, now = new Date(
     data: { by: input.by, from: lesson.startsAt.toISOString(), to: startsAt.toISOString() },
   });
   return { from: lesson, to: moved };
+}
+
+/**
+ * "This one is on me." A coach who ran late, or who simply wants to be warm.
+ *
+ * Whichever way the lesson was going to be paid for, the student ends up owing nothing: a lesson a
+ * package bought gets given back to the package, and a lesson with a price has that price zeroed. The
+ * reason travels with it, because a gift nobody is told about is just a number that changed.
+ *
+ * It is not a cancellation. The lesson happened, or will; it stays on both screens and in the month's
+ * count. Comping twice is a no-op rather than a second refund.
+ */
+export async function compLesson(db: Db, input: { lessonId: string; coach: Coach; reason?: string | null }, now = new Date()): Promise<Lesson> {
+  const [lesson] = await db.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.coachId, input.coach.id))).limit(1);
+  if (!lesson) throw new DomainError("not_found");
+  if (lesson.compedAt) return lesson;
+  // A package paid for it, so the gift is the lesson back in the package, not a zero nobody sees.
+  await refund(db, lesson);
+  const [updated] = await db
+    .update(lessons)
+    .set({ compedAt: now, compReason: input.reason?.trim().slice(0, 120) || null, amount: 0, consumed: false })
+    .where(eq(lessons.id, lesson.id))
+    .returning();
+  await recordFact(db, {
+    kind: "lesson.comped",
+    channel: channelOf(null),
+    actorPlayerId: input.coach.playerId,
+    subject: { type: "lesson", id: lesson.id },
+    code: input.coach.handle,
+    city: cityOf(input.coach.tz, null)?.slug ?? null,
+    data: { hadPackage: lesson.consumed, was: lesson.amount ?? 0 },
+  });
+  return updated;
 }
 
 export async function cancelLesson(db: Db, input: { lessonId: string; by: "coach" | "student"; coach: Coach; actorPlayerId?: string | null; source?: string | null }, now = new Date()): Promise<{ lesson: Lesson; outcome: CancelOutcome }> {

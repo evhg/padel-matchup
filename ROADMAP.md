@@ -79,6 +79,16 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **What a lesson costs, and giving one away.** A coach sells one-off lessons or only packages, and
+  says so with a switch rather than by leaving a field empty. Behind one line, "I also teach pairs and
+  groups" asks three more prices: **what each person pays** at two, three and four, never the court
+  total, so the book keeps one debt per student and nobody divides 1200 by three. An unset size falls
+  back to the next smaller one, so a coach who set a single number keeps working. The first late
+  cancellation on a package being on the house is a switch in the walk now, not a field in settings.
+  And a coach can put a lesson **on me** — late, or simply warm: a package lesson goes back to the
+  package, a priced one is zeroed, and the reason reaches the student, because a gift nobody is told
+  about is just a number that changed.
+
 - **The booking screen reads right.** Three faults that made correct data look like a broken page.
   Taken hours were appended after the free ones, so a booked 16:00 sat to the right of a free 19:00.
   The chosen day was stored once, and booking the last hour of a day took that day out of the list —
