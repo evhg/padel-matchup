@@ -184,6 +184,14 @@ Wall clock first, credits second. What actually moved it, measured:
   blocks and turns a three-key change into fifty-seven changed lines; a hand-rolled comma fix corrupted
   `en.json` once. Use `node scripts/i18n.mjs add <dotted.key> "<en>" "<ru>" "<es>"` — one line per file,
   refuses to overwrite, and proves the three locales still carry the same keys.
+- **A line that recurs in a file is not an anchor.** `const t = await getTranslations("coach")` appears
+  in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
+  and the page did not compile. Anchor on a neighbouring line unique to the function (the one after
+  `monthRange`), or on two lines together.
+- **A new `DomainErrorCode` has a second home.** `src/lib/api/http.ts` maps every code to a status and
+  is typed `Record<DomainErrorCode, number>`, so adding `already_paid` to the union broke the API until
+  the map learned it. Grep `Record<DomainErrorCode` when a code is added.
+
 - **Anchor on the name, never the line number.** Keys have landed in `coach.home` when they were meant
   for `coach.page` because the insertion point was found by counting.
 - **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that
@@ -268,6 +276,12 @@ Wall clock first, credits second. What actually moved it, measured:
   fixture that passed `priceSingle` made a coach with none and the assertions failed against perfectly
   good code. When a factory silently drops a field, the test is lying about the state it set up: build
   the row the way the app builds it (`createCoach` then `updateCoach`), or widen the factory.
+
+- **A "hidden" element in a Playwright timeout is often a crushed one.** `locator resolved to hidden
+  <div …>500 THB · not paid</div>` — the element was there and on screen, but a row built for one
+  button now carried three, the text column collapsed to zero width, and Playwright counts zero-size
+  as hidden. Read the call log's "resolved to hidden" line as "look at the layout", not "the data is
+  missing": the crash screenshot showed the fault at once.
 
 - **Take the screenshot, then take it again.** The overflow above was fixed twice: the first fix
   looked right in the code and still ran off the screen, and only the second picture proved it. For

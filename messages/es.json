@@ -1219,7 +1219,14 @@
       "yes": "Sí",
       "no": "No",
       "waiting": "{count, plural, one {# alumno espera} other {# alumnos esperan}} un hueco",
-      "month": "{month}: {done, plural, one {# clase} other {# clases}} dadas{noShows, plural, =0 {} one {, # ausencia} other {, # ausencias}}"
+      "month": "{month}: {done, plural, one {# clase} other {# clases}} dadas{noShows, plural, =0 {} one {, # ausencia} other {, # ausencias}}",
+      "unpaid": "{amount} · sin pagar",
+      "saysPaid": "{amount} · dice que pagó",
+      "paid": "{amount} · pagado",
+      "markPaid": "Marcar pagado",
+      "unmarkPaid": "No estaba pagado",
+      "compClaimed": "{name} dice que ya pagó {amount}. ¿Invitas igualmente? Su aviso se queda en la fila.",
+      "slip": "Ver el justificante"
     },
     "book": {
       "student": "Alumno",
@@ -1272,7 +1279,10 @@
       "how": "Acepta una solicitud y el alumno podrá reservar solo las horas libres. Un bono es un número de clases con caducidad; cada reserva descuenta una y una cancelación a tiempo la devuelve. El pago es entre vosotros: muestra el QR y luego toca pagado.",
       "emailOptional": "Email, opcional. Recibe tu enlace una vez.",
       "thisMonth": "{count} este mes",
-      "left": "Se fue"
+      "left": "Se fue",
+      "lessonsOwed": "Clases sin pagar",
+      "saysPaid": "dice que pagó",
+      "withSlip": "con justificante"
     },
     "settings": {
       "title": "Ajustes",
@@ -1379,7 +1389,13 @@
       "takenTap": "Toca una hora y te avisamos si se libera.",
       "teaches": "Da clase {hours}",
       "comped": "Invita la casa",
-      "atClub": "en {club}"
+      "atClub": "en {club}",
+      "heads": "¿Cuántos venís?",
+      "eachPays": "cada uno paga {amount}",
+      "slipAttach": "Adjuntar el justificante del banco",
+      "slipAttached": "Justificante adjunto",
+      "slipReplace": "Cambiar el justificante",
+      "slipTooBig": "Esa imagen es demasiado grande. Con una captura del justificante basta."
     },
     "me": {
       "title": "Tus clases",
@@ -1397,7 +1413,8 @@
       "outside_hours": "Esa hora está fuera del horario del entrenador.",
       "too_soon": "Demasiado poca antelación para esa hora.",
       "no_coach": "Aquí no hay agenda todavía.",
-      "past": "Esa hora ya pasó."
+      "past": "Esa hora ya pasó.",
+      "already_paid": "Esta clase ya está pagada. Una devolución se hace en el banco, no aquí."
     },
     "email": {
       "paidSubject": "{student} dice que pagó",

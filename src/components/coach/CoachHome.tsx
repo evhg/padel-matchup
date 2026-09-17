@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, coachOpenAction, compLessonAction, decideRequestAction } from "@/actions/coach";
+import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, coachOpenAction, coachSetLessonPaidAction, compLessonAction, decideRequestAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
 
-export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; heads?: number; comped?: string | null; pkg: { left: number; size: number; days: number | null } | null };
+export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; heads?: number; comped?: string | null; amount?: number | null; currency?: string; paid?: boolean; claimed?: boolean; hasSlip?: boolean; pkg: { left: number; size: number; days: number | null } | null };
 export type SlotDTO = { iso: string; day: string; time: string };
 export type StudentOption = { id: string; name: string };
 
@@ -63,7 +63,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
     return [...m.entries()];
   }, [later]);
 
-  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "no_coach", "past"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "no_coach", "past", "already_paid"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
 
   const cancel = (l: LessonDTO) => {
     if (!confirm(t("home.cancelConfirm", { name: l.studentName }))) return;
@@ -79,7 +79,17 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
       router.refresh();
     });
   /** "On me." The reason is asked for once and reaches the student, because a gift nobody reads is a number. */
+  /** The coach's tap is the only thing that marks a lesson paid; un-marking is a correction to their own book. */
+  const markPaid = (l: LessonDTO, paid: boolean) =>
+    start(async () => {
+      const r = await coachSetLessonPaidAction(l.id, paid);
+      if (!r.ok) setError(errorText(r.error));
+      router.refresh();
+    });
   const comp = (l: LessonDTO) => {
+    // "On me" over "I already paid" is the one collision that costs a friendship. The book refuses a
+    // lesson the coach marked paid; one the student merely claims is the coach's call, asked once.
+    if (l.claimed && !confirm(t("home.compClaimed", { name: l.studentName, amount: `${l.amount ?? 0} ${l.currency ?? ""}`.trim() }))) return;
     const why = prompt(t("book.compWhy"), "");
     if (why === null) return;
     start(async () => {
@@ -98,9 +108,11 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
   const pkgLine = (l: LessonDTO) => (l.pkg ? (l.pkg.days === null ? t("packageLineNoExpiry", { left: l.pkg.left, size: l.pkg.size }) : t("packageLine", { left: l.pkg.left, size: l.pkg.size, days: l.pkg.days })) : t("noPackage"));
 
   const row = (l: LessonDTO) => (
-    <li key={l.id} className={`flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>
+    // A row built for one button carries up to three now. It wraps: the time and the text claim the
+    // first line, and on a phone the buttons drop underneath rather than crushing the name to nothing.
+    <li key={l.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-white px-4 py-3 ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>
       <div className="w-14 shrink-0 text-xl font-extrabold leading-none tabular-nums">{l.time}</div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-40">
         <div className="truncate font-bold">{l.studentName}</div>
         <div className="truncate text-xs text-muted">
           {pkgLine(l)}
@@ -108,7 +120,33 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
           {l.status !== "booked" ? ` · ${t(`home.status.${l.status}` as "home.status.done")}` : ""}
           {l.comped != null ? ` · ${t("book.comp")}${l.comped ? ` — ${l.comped}` : ""}` : ""}
         </div>
+        {/* The money, on the row. Until now a coach saw "no package" and nothing else, and learned that a
+            student had paid from a notice that scrolled away. */}
+        {(l.amount ?? 0) > 0 && l.comped == null && (
+          <div className={`text-xs font-bold ${l.paid ? "text-ok" : l.claimed ? "text-accent" : "text-danger"}`} data-testid="lesson-money">
+            {t(l.paid ? "home.paid" : l.claimed ? "home.saysPaid" : "home.unpaid", { amount: `${l.amount} ${l.currency ?? ""}`.trim() })}
+            {l.hasSlip && (
+              <>
+                {" · "}
+                <a href={`/c/${handle}/slip/${l.id}`} target="_blank" rel="noopener noreferrer" className="link">
+                  {t("home.slip")}
+                </a>
+              </>
+            )}
+          </div>
+        )}
       </div>
+      <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
+      {(l.amount ?? 0) > 0 && l.comped == null && !l.paid && (
+        <button type="button" className="btn-secondary btn-xs" onClick={() => markPaid(l, true)} disabled={pending} data-testid="mark-paid">
+          {t("home.markPaid")}
+        </button>
+      )}
+      {(l.amount ?? 0) > 0 && l.paid && (
+        <button type="button" className="btn-ghost btn-xs" onClick={() => markPaid(l, false)} disabled={pending}>
+          {t("home.unmarkPaid")}
+        </button>
+      )}
       {l.comped == null && (l.status === "booked" || l.status === "done") && (
         <button type="button" className="btn-ghost btn-xs" onClick={() => comp(l)} disabled={pending} data-testid="comp-lesson">
           {t("book.comp")}
@@ -124,6 +162,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
           {t("home.noShow")}
         </button>
       )}
+      </div>
     </li>
   );
 

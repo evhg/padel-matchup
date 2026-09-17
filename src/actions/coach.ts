@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -519,7 +519,7 @@ export async function savePaymentAction(input: { promptpayId?: string | null; pa
 }
 
 
-export async function studentBookAction(handle: string, startsAt: string): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
+export async function studentBookAction(handle: string, startsAt: string, heads?: number): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
   return runA(async () => {
     const db = await getDb();
     const coach = await getCoachByHandle(db, handle);
@@ -529,7 +529,7 @@ export async function studentBookAction(handle: string, startsAt: string): Promi
     const at = new Date(startsAt);
     if (Number.isNaN(at.getTime())) throw new DomainError("invalid", "time");
     if ((await studentStatus(db, coach.id, me.id)) !== "accepted") throw new ActionFailure("not_student");
-    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id });
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id, heads });
     await notifyLessonBooked(db, { lesson, coach, student: me, pkg, by: "student" }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() };
@@ -587,6 +587,28 @@ export async function studentClaimPaidAction(lessonId: string): Promise<ActionRe
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     const lesson = await claimLessonPaid(db, lessonId, me.id);
+    if (!lesson) throw new ActionFailure("not_found");
+    const [coach] = await db.select().from(coaches).where(eq(coaches.id, lesson.coachId)).limit(1);
+    if (coach) {
+      await notifyPaidClaimed(db, { coach, student: me, lesson }).catch(() => undefined);
+      revalidateCoach(coach.handle);
+    }
+    return null;
+  });
+}
+
+/**
+ * The bank slip, attached by the student. Attaching one is saying "I've paid", so the coach hears it
+ * the same way, with the picture a tap away on their students screen.
+ */
+export async function studentAttachSlipAction(lessonId: string, dataUrl: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl ?? "");
+    if (!m) throw new DomainError("invalid", "mime");
+    const lesson = await attachSlip(db, lessonId, me.id, m[1], m[2]);
     if (!lesson) throw new ActionFailure("not_found");
     const [coach] = await db.select().from(coaches).where(eq(coaches.id, lesson.coachId)).limit(1);
     if (coach) {

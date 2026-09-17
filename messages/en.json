@@ -1219,7 +1219,14 @@
       "yes": "Yes",
       "no": "No",
       "waiting": "{count, plural, one {# student waiting} other {# students waiting}} for a spot",
-      "month": "{month}: {done, plural, one {# lesson} other {# lessons}} done{noShows, plural, =0 {} one {, # no-show} other {, # no-shows}}"
+      "month": "{month}: {done, plural, one {# lesson} other {# lessons}} done{noShows, plural, =0 {} one {, # no-show} other {, # no-shows}}",
+      "unpaid": "{amount} · not paid",
+      "saysPaid": "{amount} · says paid",
+      "paid": "{amount} · paid",
+      "markPaid": "Mark paid",
+      "unmarkPaid": "Not paid after all",
+      "compClaimed": "{name} says they already paid {amount}. Put it on you anyway? Their claim stays on the row.",
+      "slip": "See the slip"
     },
     "book": {
       "student": "Student",
@@ -1272,7 +1279,10 @@
       "how": "Accept a request and the student can book free times alone. A package is a number of lessons with an expiry; every booking counts one down, and a timely cancellation puts it back. Payment is between you and them: show the QR, then tap paid.",
       "emailOptional": "Email, optional. They get your link once.",
       "thisMonth": "{count, plural, one {# this month} other {# this month}}",
-      "left": "Left"
+      "left": "Left",
+      "lessonsOwed": "Unpaid lessons",
+      "saysPaid": "says paid",
+      "withSlip": "with slip"
     },
     "settings": {
       "title": "Settings",
@@ -1379,7 +1389,13 @@
       "takenTap": "Tap one to be told if it frees up.",
       "teaches": "Teaches {hours}",
       "comped": "On me",
-      "atClub": "at {club}"
+      "atClub": "at {club}",
+      "heads": "How many are coming?",
+      "eachPays": "each pays {amount}",
+      "slipAttach": "Attach the bank slip",
+      "slipAttached": "Slip attached",
+      "slipReplace": "Replace the slip",
+      "slipTooBig": "That picture is too big. A screenshot of the slip is enough."
     },
     "me": {
       "title": "Your lessons",
@@ -1397,7 +1413,8 @@
       "outside_hours": "That time is outside the coach's hours.",
       "too_soon": "Too short notice for that time.",
       "no_coach": "No coach page here yet.",
-      "past": "That time has passed."
+      "past": "That time has passed.",
+      "already_paid": "This lesson is already paid. A refund happens at the bank, not here."
     },
     "email": {
       "paidSubject": "{student} says they paid",

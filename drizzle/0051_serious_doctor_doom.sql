@@ -1,0 +1,2 @@
+ALTER TABLE "lessons" ADD COLUMN "slip_asset_id" uuid;--> statement-breakpoint
+ALTER TABLE "lessons" ADD CONSTRAINT "lessons_slip_asset_id_coach_assets_id_fk" FOREIGN KEY ("slip_asset_id") REFERENCES "public"."coach_assets"("id") ON DELETE set null ON UPDATE no action;

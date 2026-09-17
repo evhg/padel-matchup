@@ -211,6 +211,11 @@ export const lessons = pgTable(
     paidClaimedAt: timestamp("paid_claimed_at", { withTimezone: true }),
     /** The coach confirmed the money arrived. Nothing but a coach's tap sets this. */
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    /**
+     * The picture every Thai banking app makes when money leaves: the student's proof, attached to the
+     * claim. Kept in `coach_assets` beside the coach's QR, served only to the two people it concerns.
+     */
+    slipAssetId: uuid("slip_asset_id").references(() => coachAssets.id, { onDelete: "set null" }),
     note: text("note"),
     /** Event id in the coach's calendar, once attached. */
     externalId: text("external_id"),

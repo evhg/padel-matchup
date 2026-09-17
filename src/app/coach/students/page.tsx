@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 import { CoachStudents } from "@/components/coach/CoachStudents";
 import { ImportSheet } from "@/components/coach/ImportSheet";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
+import { whenLabel } from "@/lib/coach/strings";
 import { monthCounts, monthRange } from "@/lib/coach/chains";
 import { getCoachForActor, listStudents, owedPerStudent, owedToCoach, packageLine } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
@@ -26,6 +27,7 @@ export default async function CoachStudentsPage() {
   const now = new Date();
   const month = monthRange(coach.tz, now);
   const t = await getTranslations("coach");
+  const locale = await getLocale();
   // One at a time, not Promise.all: the pooler stalls on pipelined bursts (rule 8).
   const students = await listStudents(db, coach.id, now);
   const counts = await monthCounts(db, coach.id, month.from, month.to);
@@ -45,6 +47,8 @@ export default async function CoachStudentsPage() {
           ← {t("home.title")}
         </Link>
         <CoachStudents
+          handle={coach.handle}
+          unpaid={unpaidLessons.map((l) => ({ lessonId: l.lessonId, studentPlayerId: l.studentPlayerId, label: whenLabel(l.startsAt, coach.tz, locale), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip }))}
           coachName={coach.displayName}
           currency={coach.currency}
           owed={Object.fromEntries(owed)}

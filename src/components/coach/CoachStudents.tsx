@@ -3,19 +3,23 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { addPackageAction, addStudentAction, extendPackageAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
+import { addPackageAction, addStudentAction, coachSetLessonPaidAction, extendPackageAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
 import { HowThisWorks } from "./HowThisWorks";
 import { PromptPayQr } from "./PromptPayQr";
 
 export type PackageDTO = { id: string; left: number; size: number; days: number | null; amount: number | null; currency: string; paid: boolean };
 export type StudentDTO = { playerId: string; name: string; status: string; lessonsDone: number; thisMonth?: number; pkg: PackageDTO | null };
+/** One unpaid lesson with a price: the coach marks it paid here, sees the student's claim, opens the slip. */
+export type UnpaidLessonDTO = { lessonId: string; studentPlayerId: string; label: string; amount: number; claimed: boolean; hasSlip: boolean };
 
-type Props = { coachName: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string;
+type Props = { coachName: string; handle: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string;
   /** What each student still owes, by player id: unpaid lessons plus an unpaid package. */
-  owed: Record<string, number> };
+  owed: Record<string, number>;
+  /** The unpaid lessons behind that figure. "Owes 3000" used to be a number with no tap under it. */
+  unpaid: UnpaidLessonDTO[] };
 
 /** Students: requests to accept, packages to start, "paid" to note. One list, one action per row. */
-export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink, currency, owed }: Props) {
+export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid }: Props) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -93,6 +97,31 @@ export function CoachStudents({ coachName, students, promptpayId, qrUrl, payLink
                   </button>
                 )}
               </div>
+              {unpaid.some((u) => u.studentPlayerId === s.playerId) && (
+                <ul className="mt-2 flex flex-col gap-1 rounded-xl bg-bg px-3 py-2 text-xs" data-testid="unpaid-lessons">
+                  {unpaid
+                    .filter((u) => u.studentPlayerId === s.playerId)
+                    .map((u) => (
+                      <li key={u.lessonId} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">
+                          {u.label} · {money(u.amount)}
+                          {u.claimed && <span className="ml-1 font-bold text-accent">· {t("students.saysPaid")}</span>}
+                          {u.hasSlip && (
+                            <>
+                              {" "}
+                              <a href={`/c/${handle}/slip/${u.lessonId}`} target="_blank" rel="noopener noreferrer" className="link font-bold">
+                                {t("students.withSlip")}
+                              </a>
+                            </>
+                          )}
+                        </span>
+                        <button type="button" className="btn-secondary btn-xs shrink-0" disabled={pending} onClick={() => act(() => coachSetLessonPaidAction(u.lessonId, true))} data-testid="mark-lesson-paid">
+                          {t("students.markPaid")}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {s.pkg && !s.pkg.paid && (
                   <button type="button" className="btn-secondary btn-xs" disabled={pending} onClick={() => act(() => setPackagePaidAction(s.pkg!.id, true))}>
