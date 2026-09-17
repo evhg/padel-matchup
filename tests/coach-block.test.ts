@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { availableSlots, blockTime, bookLesson, cancelLesson, createCoach, leaveCoach, listStudentCoaches, listStudents, presetHours, requestStudent, setStudentStatus, studentStatus, unblockTime } from "@/lib/domain/coaching";
+import { availableSlots, blockTime, bookLesson, cancelLesson, createCoach, leaveCoach, listStudentCoaches, listStudents, presetHours, QUIET_COACH_DAYS, requestStudent, setStudentStatus, studentStatus, unblockTime } from "@/lib/domain/coaching";
 import { matchStudent } from "@/lib/coach/assistant";
 import { studentRefs } from "@/lib/telegram/coach";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
@@ -122,5 +122,39 @@ describe("a player takes a coach off their own list", () => {
     // The name is still known — so typing it is answered, not turned into a brand-new "Dee".
     expect(refs.map((r) => r.left)).toEqual([true]);
     expect(matchStudent("Dee", refs)).toMatchObject({ kind: "one", student: { id: student.id, left: true } });
+  });
+
+  describe("a coach who goes quiet", () => {
+    // Every clock below is counted from the moment the lesson was booked, never from today (rule 11).
+    const booked = Date.now() + HOUR;
+    const after = (days: number) => new Date(booked + days * DAY);
+
+    it("keeps the door open until the coach has taught nobody for the whole period, then closes it", async () => {
+      const { coach, student } = await pair("Eli");
+      await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: new Date(booked), byCoach: true });
+      const doors = async (days: number) => (await listStudentCoaches(db, student.id, after(days))).map((c) => c.coach.id);
+      expect(await doors(QUIET_COACH_DAYS - 10)).toEqual([coach.id]);
+      expect(await doors(QUIET_COACH_DAYS + 1)).toEqual([]);
+    });
+
+    it("counts a lesson the coach cancelled: somebody was still there that week", async () => {
+      const { coach, student } = await pair("Fay");
+      const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: new Date(booked), byCoach: true });
+      await cancelLesson(db, { lessonId: lesson.id, by: "coach", coach });
+      expect((await listStudentCoaches(db, student.id, after(QUIET_COACH_DAYS - 10))).map((c) => c.coach.id)).toEqual([coach.id]);
+    });
+
+    it("leaves a lesson still to come alone, however long since the last one", async () => {
+      const { coach, student } = await pair("Gus");
+      // One lesson a year out. The door must stay, or the student cannot reach the lesson they hold.
+      await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: after(365), byCoach: true });
+      expect((await listStudentCoaches(db, student.id, after(QUIET_COACH_DAYS + 1))).map((c) => c.coach.id)).toEqual([coach.id]);
+    });
+
+    it("judges a coach who has taught nobody yet on the day they signed up", async () => {
+      const { coach, student } = await pair("Hana");
+      expect((await listStudentCoaches(db, student.id, after(1))).map((c) => c.coach.id)).toEqual([coach.id]);
+      expect(await listStudentCoaches(db, student.id, after(QUIET_COACH_DAYS + 1))).toEqual([]);
+    });
   });
 });

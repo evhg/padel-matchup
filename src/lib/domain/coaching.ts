@@ -1,5 +1,5 @@
 import { transliterate } from "@/lib/translit";
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { newCoachCode } from "@/lib/codes";
 import { coachAssets, coachBlocks, coachManagers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
@@ -932,14 +932,46 @@ export async function listStudentLessons(db: Db, playerId: string, from: Date, l
 }
 
 /** The coaches a player is attached to (asked, accepted or paused), newest first; no package lookups. */
-export async function listStudentCoaches(db: Db, playerId: string): Promise<Pick<StudentCoach, "coach" | "status">[]> {
+/**
+ * A coach who has not taught for this long has stopped, as far as a student's screen is concerned.
+ * A coach never says "I quit": they simply stop answering. So the door closes on its own, and the
+ * first lesson they book opens it again — there is no state to set and nothing to undo.
+ */
+export const QUIET_COACH_DAYS = 60;
+
+/**
+ * When each of these coaches last had a lesson on the books, whatever became of it. A cancelled
+ * lesson still proves somebody was there that week. Asked only about the coaches in hand, so it
+ * rides `lessons_coach_time_idx` and never reads the whole table.
+ */
+async function lastLessonByCoach(db: Db, coachIds: string[]): Promise<Map<string, Date>> {
+  if (coachIds.length === 0) return new Map();
+  const rows = await db
+    .select({ coachId: lessons.coachId, at: max(lessons.startsAt) })
+    .from(lessons)
+    .where(inArray(lessons.coachId, coachIds))
+    .groupBy(lessons.coachId);
+  return new Map(rows.flatMap((r) => (r.at ? [[r.coachId, r.at] as [string, Date]] : [])));
+}
+
+/**
+ * The coaches whose door a student sees. A coach who went quiet is left out: their page still works
+ * and their lessons stay in the student's history, but the "Book more" button goes, because a button
+ * that reaches nobody is worse than no button.
+ */
+export async function listStudentCoaches(db: Db, playerId: string, now = new Date()): Promise<Pick<StudentCoach, "coach" | "status">[]> {
   const rows = await db
     .select({ status: coachStudents.status, coach: coaches })
     .from(coachStudents)
     .innerJoin(coaches, eq(coaches.id, coachStudents.coachId))
     .where(and(eq(coachStudents.playerId, playerId), isNull(coaches.archivedAt)))
     .orderBy(desc(coachStudents.createdAt));
-  return rows.map((r) => ({ coach: r.coach, status: r.status as StudentStatus }));
+  const lastBy = await lastLessonByCoach(db, rows.map((r) => r.coach.id));
+  const quietBefore = now.getTime() - QUIET_COACH_DAYS * DAY_MS;
+  // A lesson booked ahead sits in the future, so a coach with one is never quiet. A coach who has
+  // taught nobody yet is judged on the day they signed up, not treated as gone from the first hour.
+  const awake = (c: Coach) => Math.max(lastBy.get(c.id)?.getTime() ?? 0, c.createdAt.getTime()) >= quietBefore;
+  return rows.filter((r) => awake(r.coach)).map((r) => ({ coach: r.coach, status: r.status as StudentStatus }));
 }
 
 /** The coaches a player is attached to, with the package that is open with each. */
