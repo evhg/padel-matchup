@@ -18,6 +18,8 @@ export function EmailField({
   help,
   emailEnabled,
   notifyOn = true,
+  savedText,
+  showNotify = true,
 }: {
   initial: string | null;
   mode: "me" | "creator";
@@ -27,6 +29,10 @@ export function EmailField({
   emailEnabled: boolean;
   /** Activity emails switch (on by default once an email exists). */
   notifyOn?: boolean;
+  /** What "saved" says. The default promises a calendar invitation, which is true of a match and not of a coach's walk. */
+  savedText?: string;
+  /** The "email me when the line-up changes" switch is a match's; a coach's channel screen has no line-up. */
+  showNotify?: boolean;
 }) {
   const t = useTranslations();
   const [email, setEmail] = useState(initial ?? "");
@@ -89,12 +95,13 @@ export function EmailField({
           <div className="min-w-0">
             <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("event.yourEmail")}</div>
             <div className="truncate font-semibold">✉️ {email}</div>
-            {saved && <p className="text-sm font-semibold text-ok">{mode === "creator" ? t("share.emailSaved") : t("event.emailSaved")}</p>}
+            {saved && <p className="text-sm font-semibold text-ok">{savedText ?? (mode === "creator" ? t("share.emailSaved") : t("event.emailSaved"))}</p>}
           </div>
           <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => setEditing(true)}>
             {t("common.edit")}
           </button>
         </div>
+        {showNotify && (
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm text-muted">{mode === "creator" ? t("creator.notifications") : t("event.notifyMe")}</span>
           <button
@@ -108,6 +115,7 @@ export function EmailField({
             <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${notify ? "translate-x-6" : "translate-x-1"}`} />
           </button>
         </div>
+        )}
         {restoreBlock}
       </div>
     );

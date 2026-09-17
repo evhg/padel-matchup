@@ -25,7 +25,7 @@ async function registration(): Promise<ServiceWorkerRegistration> {
  * nothing is shown: the calendar invite above already carries the reminder,
  * and we never send anyone on a detour.
  */
-export function PushToggle({ vapidPublicKey, subscribed, compact = false }: { vapidPublicKey: string | null; subscribed: boolean; compact?: boolean }) {
+export function PushToggle({ vapidPublicKey, subscribed, compact = false, labels }: { vapidPublicKey: string | null; subscribed: boolean; compact?: boolean; /** The words for the button and the on-state. Default: the match reminder. A coach's channel screen says something else. */ labels?: { enable: string; on: string } }) {
   const t = useTranslations();
   const [status, setStatus] = useState<Status>("hidden");
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false }: { va
   if (status === "on") {
     return (
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-semibold text-ok">🔔 {t("push.on")}</span>
+        <span className="font-semibold text-ok">🔔 {labels?.on ?? t("push.on")}</span>
         <button type="button" className="shrink-0 text-xs link text-muted" onClick={disable}>
           {t("push.off")}
         </button>
@@ -109,7 +109,7 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false }: { va
   return (
     <div>
       <button type="button" className={`btn-secondary ${compact ? "btn-sm" : "w-full"}`} disabled={status === "working"} onClick={enable}>
-        {status === "working" ? t("common.working") : `🔔 ${t("push.enable")}`}
+        {status === "working" ? t("common.working") : `🔔 ${labels?.enable ?? t("push.enable")}`}
       </button>
       {!compact && <p className="mt-1 text-xs text-faint">{t("push.enableHelp")}</p>}
       {error && <p className="mt-1 text-sm font-semibold text-danger">{error}</p>}

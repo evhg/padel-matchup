@@ -76,15 +76,16 @@ export function CoachNotify({
 
       {emailEnabled && (
         <div className="rounded-xl border border-line p-3" data-testid="notify-email">
-          <EmailField initial={email} mode="me" code="" title={t("setup.notifyEmailTitle")} help={t("setup.notifyEmailHelp")} emailEnabled />
+          <EmailField initial={email} mode="me" code="" title={t("setup.notifyEmailTitle")} help={t("setup.notifyEmailHelp")} emailEnabled savedText={t("setup.emailSaved")} showNotify={false} />
         </div>
       )}
 
       {vapidPublicKey && (
         <div className="rounded-xl border border-line p-3">
-          <div className="text-sm font-bold">{t("setup.notifyPush")}</div>
+          {/* "This phone" read wrong on a desk, and the switch spoke of match reminders. A browser is a browser. */}
+          <div className="text-sm font-bold">{t("setup.notifyPushTitle")}</div>
           <div className="mt-2">
-            <PushToggle vapidPublicKey={vapidPublicKey} subscribed={pushSubscribed} compact />
+            <PushToggle vapidPublicKey={vapidPublicKey} subscribed={pushSubscribed} compact labels={{ enable: t("setup.pushEnable"), on: t("setup.pushOn") }} />
           </div>
         </div>
       )}

@@ -449,7 +449,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
           who is actually on this coach's list sees it. */}
       {signedIn && (status === "accepted" || status === "requested" || status === "paused") && (
         <div className="px-1 pb-2 text-center">
-          <button type="button" className="text-xs text-faint hover:text-danger" disabled={pending} onClick={leaveThisCoach} data-testid="leave-coach">
+          <button type="button" className="text-sm text-muted underline underline-offset-4 hover:text-danger" disabled={pending} onClick={leaveThisCoach} data-testid="leave-coach">
             {t("page.leave", { name: coachName })}
           </button>
         </div>

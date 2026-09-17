@@ -118,7 +118,19 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
           {foundingCity && <span className="chip-muted ml-2">🏅 {t("page.founding", { city: foundingCity })}</span>}
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{coach.displayName}</h1>
           <p className="mt-1 text-sm text-muted">
-            {coach.clubNames.length ? `${t("page.at", { clubs: coach.clubNames.join(", ") })} · ` : ""}
+            {/* "at Warehaus" was a word. The club's page lists its coaches and its open matches, and nothing led there. */}
+            {coach.clubNames.length > 0 && (
+              <>
+                {coach.clubSlugs.length === 1 ? (
+                  <Link href={`/v/${coach.clubSlugs[0]}`} prefetch={false} className="link" data-testid="coach-club-link">
+                    {t("page.at", { clubs: coach.clubNames.join(", ") })}
+                  </Link>
+                ) : (
+                  t("page.at", { clubs: coach.clubNames.join(", ") })
+                )}
+                {" · "}
+              </>
+            )}
             {t("page.lesson", { minutes: coach.lessonMinutes })}
             {/* The setup asks what a lesson costs and then nothing showed it: a student learned the
                 price only once they owed it. It is the first thing anyone wants to know. */}

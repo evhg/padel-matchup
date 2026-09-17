@@ -194,6 +194,15 @@ Wall clock first, credits second. What actually moved it, measured:
   from `venues[0]`, which was the court you last used — until the picker started carrying all 67
   clubs, and `venues[0]` became a club in another province, quietly filled in as your match's venue.
   Whenever a list gains rows from somewhere new, grep for who reads its first element.
+- **A shared component carries the promises of the screen it was built for.** `EmailField` said
+  "Saved — calendar invite on its way" and offered "Email me when the line-up changes"; `PushToggle`
+  said "Remind me 1 hour before each match". All three were true on a match page and false on the
+  coach's channel step, where they were reused. When a component moves to a new screen, read every
+  string it renders there as that screen's reader, and give it props for the ones that no longer hold.
+- **Lead with the thing that is already true.** The calendar section opened with five Google menus,
+  and a coach never learned that every lesson already reached their calendar by email. State the
+  benefit the reader already has first; fold the extra machinery under the benefit it adds.
+
 - **A screen with names in it is an interface.** Renaming the coach setup steps turned three browser
   suites red — two of them not the coach suite. Grep the step names before renaming one. Placeholders
   count: "or type a club" → "or pick a club" is four words and five red suites, because
