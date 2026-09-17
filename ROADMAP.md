@@ -79,6 +79,14 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **The booking screen reads right.** Three faults that made correct data look like a broken page.
+  Taken hours were appended after the free ones, so a booked 16:00 sat to the right of a free 19:00.
+  The chosen day was stored once, and booking the last hour of a day took that day out of the list —
+  leaving "Free times on" with no day after it and no hours under it. And the waiting-list button's
+  label is a sentence, which ran off both edges of a phone. The coach's week now sits under their
+  name as well ("Teaches 07:00–12:00, 15:00–20:00"), so a day that is not offered reads as a day that
+  is closed rather than a page that failed.
+
 - **A coach who goes quiet.** The other half of the same door. A coach rarely says "I quit": they
   stop answering, and their page and their button stay live for every student they ever taught. So
   a coach with no lesson in sixty days — none taught, none booked ahead — drops off the student's

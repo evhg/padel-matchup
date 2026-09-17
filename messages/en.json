@@ -1351,7 +1351,10 @@
       "movedPackage": "Moved. Your package is untouched.",
       "leave": "Remove {name} from my coaches",
       "leaveDone": "Removed. {name} is no longer on your list of coaches.",
-      "leaveHasLessons": "Cancel your booked lesson first, then you can remove {name}."
+      "leaveHasLessons": "Cancel your booked lesson first, then you can remove {name}.",
+      "allTaken": "Every hour on {day} is taken",
+      "takenTap": "Tap one to be told if it frees up.",
+      "teaches": "Teaches {hours}"
     },
     "me": {
       "title": "Your lessons",

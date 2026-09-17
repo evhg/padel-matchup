@@ -64,3 +64,20 @@ export function dayRange(todayStr: string, count: number): string[] {
   const start = new Date(`${todayStr}T00:00:00Z`).getTime();
   return Array.from({ length: count }, (_, i) => new Date(start + i * DAY_MS).toISOString().slice(0, 10));
 }
+
+/**
+ * The coach's week as one line, when every day they are open says the same thing.
+ *
+ * It answers the question an empty day otherwise raises. A student who opens the page after the last
+ * hour of the day is not shown today at all, and without this there is nothing on the screen to say
+ * why — "Teaches 08:00–16:00" turns a missing day into an understood one.
+ *
+ * Null when the days differ: a header is one line, and seven of them belong on the grid below it.
+ */
+export function sameHoursEveryDay(hours: Record<string, [string, string][]> | null | undefined): string | null {
+  const open = Object.values(hours ?? {})
+    .map((ranges) => (ranges ?? []).map(([from, to]) => `${from}–${to}`).join(", "))
+    .filter(Boolean);
+  if (open.length === 0) return null;
+  return open.every((line) => line === open[0]) ? open[0] : null;
+}

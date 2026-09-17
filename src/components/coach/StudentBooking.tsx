@@ -49,15 +49,26 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const router = useRouter();
   const [pending, start] = useTransition();
   const [name, setName] = useState("");
-  const [day, setDay] = useState(days[0] ?? "");
+  const [pickedDay, setDay] = useState(days[0] ?? "");
   const [slot, setSlot] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The picked day, or the first one still on offer. `days` is rebuilt on every refresh, and booking
+   * the last hour of a day takes that day out of it — leaving a chosen date that is no longer there,
+   * a heading reading "Free times on" with no day after it, and no chips at all. It read as a broken
+   * screen, which is exactly what it was.
+   */
+  const day = days.includes(pickedDay) ? pickedDay : (days[0] ?? "");
   const daySlots = slots.filter((s) => s.day === day);
   const dayTaken = taken.filter((s) => s.day === day);
+  // Free and taken in one row, in the order the hours come. Taken ones used to be appended after the
+  // free ones, so a booked 16:00 sat to the right of a free 19:00 and the row read as nonsense.
+  const dayHours = [...daySlots.map((s) => ({ ...s, free: true })), ...dayTaken.map((s) => ({ ...s, free: false }))].sort((a, b) => a.iso.localeCompare(b.iso));
   // Which lesson's move picker is open, and which day it is showing.
   const [moving, setMoving] = useState<string | null>(null);
-  const [moveDay, setMoveDay] = useState(days[0] ?? "");
+  const [movePicked, setMoveDay] = useState(days[0] ?? "");
+  const moveDay = days.includes(movePicked) ? movePicked : (days[0] ?? "");
   const [asking, setAsking] = useState(false);
   const [askLocal, setAskLocal] = useState("");
   const [askNote, setAskNote] = useState("");
@@ -260,34 +271,34 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-bold uppercase text-faint">{t("page.freeOn", { day: dayLabels[day] ?? day })}</div>
+                  <div className="text-xs font-bold uppercase text-faint">{daySlots.length > 0 ? t("page.freeOn", { day: dayLabels[day] ?? day }) : t("page.allTaken", { day: dayLabels[day] ?? day })}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {daySlots.map((s) => (
-                      <button key={s.iso} type="button" data-kind="time"
-                className={chip(slot === s.iso)} onClick={() => setSlot(s.iso)}>
-                        {s.time}
-                      </button>
-                    ))}
-                    {dayTaken.map((s) => (
-                      <button key={s.iso} type="button" data-kind="taken" title={t("page.taken")} className="rounded-full border border-dashed border-line px-3 py-1.5 text-sm font-bold text-faint line-through hover:border-ink/40 hover:text-muted" disabled={pending} onClick={() => waitFor(s.iso, null, `${dayLabels[day] ?? day} ${s.time}`)}>
-                        {s.time}
-                      </button>
-                    ))}
+                    {dayHours.map((s) =>
+                      s.free ? (
+                        <button key={s.iso} type="button" data-kind="time" className={chip(slot === s.iso)} onClick={() => setSlot(s.iso)}>
+                          {s.time}
+                        </button>
+                      ) : (
+                        <button key={s.iso} type="button" data-kind="taken" title={t("page.taken")} className="rounded-full border border-dashed border-line px-3 py-1.5 text-sm font-bold text-faint line-through hover:border-ink/40 hover:text-muted" disabled={pending} onClick={() => waitFor(s.iso, null, `${dayLabels[day] ?? day} ${s.time}`)}>
+                          {s.time}
+                        </button>
+                      ),
+                    )}
                   </div>
-                  {dayTaken.length > 0 && <p className="mt-1 text-xs text-faint">{t("page.taken")}</p>}
+                  {dayTaken.length > 0 && <p className="mt-1 text-xs text-faint">{t("page.takenTap")}</p>}
                 </div>
                 <button type="button" className="btn-primary w-full" disabled={!slot || pending} onClick={book}>
                   {pending ? "…" : slot ? t("page.confirm", { when: `${dayLabels[day] ?? day} ${daySlots.find((s) => s.iso === slot)?.time ?? ""}` }) : t("page.book")}
                 </button>
                 {weekOf[day] && (
-                  <button type="button" className="btn-secondary btn-sm self-start" disabled={pending} onClick={() => waitFor(null, weekOf[day], weekOf[day])} data-testid="week-wait">
+                  <button type="button" className="btn-secondary btn-sm max-w-full self-start whitespace-normal py-2 text-left leading-snug" disabled={pending} onClick={() => waitFor(null, weekOf[day], weekOf[day])} data-testid="week-wait">
                     {t("page.weekWait")}
                   </button>
                 )}
               </>
             )}
             {!asking ? (
-              <button type="button" className="btn-secondary btn-sm self-start" onClick={() => setAsking(true)} data-testid="other-time">
+              <button type="button" className="btn-secondary btn-sm max-w-full self-start whitespace-normal py-2 text-left leading-snug" onClick={() => setAsking(true)} data-testid="other-time">
                 {t("page.otherTime")} →
               </button>
             ) : (
