@@ -7,7 +7,7 @@ import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
-import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn } from "@/lib/coach/view";
+import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn, sameHoursEveryDay } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
 import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
@@ -121,6 +121,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
                 price only once they owed it. It is the first thing anyone wants to know. */}
             {coach.priceSingle ? ` · ${coach.priceSingle} ${coach.currency}` : ""}
           </p>
+          {/* The week in one line, when every open day says the same thing. A student who opens the page
+              after the last hour of the day is not offered today at all; this is what says why. */}
+          {sameHoursEveryDay(coach.hours) && <p className="mt-1 text-sm text-muted">{t("page.teaches", { hours: sameHoursEveryDay(coach.hours)! })}</p>}
           {coach.bio && <p className="mt-2 text-sm">{coach.bio}</p>}
           {!coach.isPublic && status === "none" && !me && <p className="mt-2 text-xs text-faint">{t("page.private")}</p>}
         </section>

@@ -1351,7 +1351,10 @@
       "movedPackage": "Cambiada. Tu bono sigue igual.",
       "leave": "Quitar a {name} de mis entrenadores",
       "leaveDone": "Listo. {name} ya no está en tu lista de entrenadores.",
-      "leaveHasLessons": "Cancela primero tu clase reservada y luego podrás quitar a {name}."
+      "leaveHasLessons": "Cancela primero tu clase reservada y luego podrás quitar a {name}.",
+      "allTaken": "Todas las horas del {day} están ocupadas",
+      "takenTap": "Toca una hora y te avisamos si se libera.",
+      "teaches": "Da clase {hours}"
     },
     "me": {
       "title": "Tus clases",

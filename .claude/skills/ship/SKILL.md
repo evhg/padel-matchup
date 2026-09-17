@@ -232,6 +232,19 @@ Wall clock first, credits second. What actually moved it, measured:
 - **A test that asserts on a wire format is testing the wire format.** An address past the 73-character
   iCalendar fold is split across two lines, so `toContain("mailto:…")` fails on a perfectly good
   invitation. Unfold (or parse) before asserting, the way every client does.
+- **A `useState` seeded from a prop is a stale value after the first refresh.** `useState(days[0])`
+  held a date that `router.refresh()` had since taken out of `days` — booking the last hour of a day
+  removes that day — so both filters came back empty and the screen showed "Free times on" with no day
+  after it and no chips at all. Derive on render (`days.includes(picked) ? picked : days[0]`) rather
+  than store, wherever the list can change under the choice.
+- **`.btn` carries `whitespace-nowrap`, so a long label runs off both edges.** Capping the box with
+  `max-w-full` does nothing on its own: the text has to be allowed to wrap first
+  (`whitespace-normal py-2 text-left leading-snug`). Read any button whose label is a sentence at
+  390px before shipping it.
+- **Take the screenshot, then take it again.** The overflow above was fixed twice: the first fix
+  looked right in the code and still ran off the screen, and only the second picture proved it. For
+  anything visual, the picture is the check — `SHOTS=<dir> E2E_ONLY=<suite> pnpm e2e`, and remember
+  `pnpm e2e` uses the build already on disk, so rebuild first.
 
 ### Two ways a change hangs or bloats
 
