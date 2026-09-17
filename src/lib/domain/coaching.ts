@@ -2,7 +2,7 @@ import { transliterate } from "@/lib/translit";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { newCoachCode } from "@/lib/codes";
-import { coachAssets, coachBlocks, coachManagers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
+import { coachAssets, coachBlocks, coachManagers, coachOpenings, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { venueSlug, venueSlugFor } from "./venueBoard";
@@ -542,7 +542,15 @@ export async function closePackage(db: Db, coachId: string, packageId: string): 
 const overlaps = (aStart: number, aEnd: number, b: Busy) => aStart < b.endsAt.getTime() && aEnd > b.startsAt.getTime();
 
 /** Pure: the slot starts (UTC) the template offers between `from` and `to`, minus busy time, minus anything sooner than the notice. */
-export function openSlots(opts: { coach: Pick<Coach, "hours" | "tz" | "lessonMinutes" | "minNoticeHours">; from: Date; to: Date; busy: Busy[]; now: Date; minutes?: number }): Date[] {
+/**
+ * Every hour a lesson could start, from the coach's weekly template and from any hour they opened on
+ * one date (`coach_openings`), minus everything they are busy with.
+ *
+ * An opening is stored as an absolute window, so its own slots are stepped straight off it: no second
+ * copy of the zone arithmetic, and an opening that overlaps the template simply lands on the same
+ * instant and is removed by the de-duplication below.
+ */
+export function openSlots(opts: { coach: Pick<Coach, "hours" | "tz" | "lessonMinutes" | "minNoticeHours">; from: Date; to: Date; busy: Busy[]; now: Date; minutes?: number; /** Hours opened on one date, on top of the week. */ openings?: Busy[] }): Date[] {
   const { coach, from, to, busy, now } = opts;
   const minutes = opts.minutes ?? coach.lessonMinutes;
   const earliest = Math.max(from.getTime(), now.getTime() + coach.minNoticeHours * HOUR_MS);
@@ -570,7 +578,14 @@ export function openSlots(opts: { coach: Pick<Coach, "hours" | "tz" | "lessonMin
     }
     cursor += DAY_MS;
   }
-  return out;
+  for (const window of opts.openings ?? []) {
+    for (let s = window.startsAt.getTime(); s + minutes * 60_000 <= window.endsAt.getTime(); s += minutes * 60_000) {
+      const e = s + minutes * 60_000;
+      if (s >= earliest && s <= to.getTime() && !busy.some((b) => overlaps(s, e, b))) out.push(new Date(s));
+    }
+  }
+  // One entry per instant, in order: an opening inside the template would otherwise show the hour twice.
+  return [...new Map(out.map((d) => [d.getTime(), d])).values()].sort((a, b) => a.getTime() - b.getTime());
 }
 
 /** Everything that occupies the coach between two instants: booked lessons and blocks. */
@@ -715,7 +730,36 @@ export async function setLessonPaid(db: Db, coachId: string, lessonId: string, p
 
 export async function availableSlots(db: Db, coach: Coach, from: Date, to: Date, now = new Date()): Promise<Date[]> {
   const busy = await busyBetween(db, coach.id, from, to);
-  return openSlots({ coach, from, to, busy, now });
+  const openings = await openingsBetween(db, coach.id, from, to);
+  return openSlots({ coach, from, to, busy, now, openings });
+}
+
+/** The hours this coach opened on single dates inside the window. One indexed read, bounded by the window. */
+export async function openingsBetween(db: Db, coachId: string, from: Date, to: Date): Promise<Busy[]> {
+  return db
+    .select({ startsAt: coachOpenings.startsAt, endsAt: coachOpenings.endsAt })
+    .from(coachOpenings)
+    .where(and(eq(coachOpenings.coachId, coachId), lt(coachOpenings.startsAt, to), gt(coachOpenings.endsAt, from)));
+}
+
+/**
+ * "I can also do this hour." One date only; the week is untouched, so nobody else's Tuesday moves.
+ * Opening an hour that is already open is a no-op rather than a second row.
+ */
+export async function openHour(db: Db, coachId: string, startsAt: Date, minutes: number, source = "web"): Promise<void> {
+  const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
+  const [existing] = await db
+    .select({ id: coachOpenings.id })
+    .from(coachOpenings)
+    .where(and(eq(coachOpenings.coachId, coachId), eq(coachOpenings.startsAt, startsAt)))
+    .limit(1);
+  if (existing) return;
+  await db.insert(coachOpenings).values({ coachId, startsAt, endsAt, source });
+}
+
+/** Undo: the hour goes back to whatever the weekly template says about it. */
+export async function closeHour(db: Db, coachId: string, startsAt: Date): Promise<void> {
+  await db.delete(coachOpenings).where(and(eq(coachOpenings.coachId, coachId), eq(coachOpenings.startsAt, startsAt)));
 }
 
 /** True when `at` starts inside the weekly template (used to tell a student's booking from a coach's exception). */

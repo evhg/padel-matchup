@@ -14,7 +14,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
 import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { busyBetween, DAY_MS, earnedInvite, getCoachForActor, inviteCode, listCoachLessons, listStudents, openSlots, studentLink } from "@/lib/domain/coaching";
+import { busyBetween, DAY_MS, earnedInvite, getCoachForActor, inviteCode, listCoachLessons, listStudents, openingsBetween, openSlots, studentLink } from "@/lib/domain/coaching";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
@@ -122,7 +122,9 @@ export default async function CoachPage({ searchParams }: Props) {
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", timeZone: coach.tz }).format(now);
   const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   // The coach may book at short notice: no minimum notice on their own grid.
-  const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now });
+  // Sequential, after the burst above: the pooler stalls on pipelined bursts (rule 8).
+  const openings = await openingsBetween(db, coach.id, now, to);
+  const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now, openings });
   return shell(
     <>
       <CoachHome

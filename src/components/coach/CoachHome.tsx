@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, compLessonAction, decideRequestAction } from "@/actions/coach";
+import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, coachOpenAction, compLessonAction, decideRequestAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
@@ -309,6 +309,22 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
     });
   };
 
+  /**
+   * The other direction: this hour is open on this date, whatever the week says. The typed time above
+   * is the only way in, because the grid can only draw hours the template already knows about.
+   */
+  const open = () =>
+    start(async () => {
+      setError(null);
+      const r = await coachOpenAction({ startsAt: slot, day: slot ? null : day, time: slot ? null : customTime || null });
+      if (!r.ok) {
+        setError(["slot_taken", "past", "no_coach"].includes(r.error) ? t(`errors.${r.error}` as "errors.slot_taken") : t("errors.slot_taken"));
+        return;
+      }
+      const chosen = slot ? daySlots.find((s) => s.iso === slot) : null;
+      onDone(t("book.opened", { when: `${dayLabels[day] ?? day} ${chosen?.time ?? customTime}` }));
+    });
+
   const block = () =>
     start(async () => {
       setError(null);
@@ -427,6 +443,13 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
       <button type="button" className="btn-ghost w-full text-sm" disabled={pending || (!slot && !customTime)} onClick={block} data-testid="block-time">
         {t("book.blockIt")}
       </button>
+      {/* And the other way: an hour outside the week, open on this date alone. Only for a typed time —
+          a time the grid already offers is open by definition. */}
+      {!slot && customTime && (
+        <button type="button" className="btn-ghost w-full text-sm" disabled={pending} onClick={open} data-testid="open-hour">
+          {t("book.openHour")}
+        </button>
+      )}
       <HowThisWorks text={t("book.how")} />
     </form>
   );

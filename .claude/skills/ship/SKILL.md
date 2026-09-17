@@ -161,6 +161,13 @@ Wall clock first, credits second. What actually moved it, measured:
   It ran for hours while everything else got done, and the only reason it was found is that the owner
   asked why a task was still running. Poll a remote (a branch moving, a check landing) with a bounded
   `sleep` loop; never poll a local job the harness already reports on.
+- **Run the fast half while you write; spend the browser suites once.** The gate is ~5m14s on a wide
+  change: 64s unit, 79s build, 142s browser. Four full runs in one pull request is four times the cost
+  of the one that matters — and the owner noticed before I did. `pnpm exec tsc --noEmit` and the one
+  suite you just touched answer in seconds and catch almost everything; run
+  `GATE_E2E=auto bash scripts/gate.sh` once, at the end, before the push. The gate is still never
+  skipped: a red CI round costs more than every check put together.
+
 - **One validated push beats three speculative ones.** Each push costs a CI cycle, and until the
   `claude/**` rule in `vercel.json`, a stored deployment as well.
 - **Kill what you start**, and check at the end of a batch that nothing is left. A forgotten probe
@@ -204,6 +211,13 @@ Wall clock first, credits second. What actually moved it, measured:
   in the weekly digest, because both queries were written when every row in `clubs` was a claim. When a
   table gains a second kind of row, grep every `from(<table>)` and decide, one by one, which kind each
   query meant.
+- **A second kind of row, or a second table? Count the queries that would have to learn.** An hour a
+  coach *opens* on one date is the mirror of `coach_blocks`, and a `kind` column there would have been
+  one migration smaller. But every query that reads that table means "busy", so each one would have to
+  exclude the new kind, correctly, for ever — and a query written next year would not know. A separate
+  `coach_openings` costs one more indexed read and cannot corrupt a query that predates it. Add the
+  column when the existing queries already want both kinds; add the table when they mean the opposite.
+
 - **A new status value has two sides, and only one of them checks the status.** `left` closed the web
   door for a player who removes a coach, but the coach's Telegram assistant still recognised the name,
   and `bookLesson` with `byCoach: true` skips the student-status check on purpose — so the coach could
