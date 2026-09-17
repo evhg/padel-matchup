@@ -84,6 +84,7 @@ export async function notifyLessonBooked(db: Db, n: LessonNotice): Promise<void>
     await tell(db, coachPlayer, s.studentBooked(n.student.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale), pkgText(s, n.pkg)));
   }
   await emailLesson(n, "REQUEST").catch(() => undefined);
+  await emailLessonToCoach(coachPlayer, n, "REQUEST").catch(() => undefined);
 }
 
 export async function notifyLessonCancelled(db: Db, n: LessonNotice & { outcome: CancelOutcome }): Promise<void> {
@@ -100,6 +101,7 @@ export async function notifyLessonCancelled(db: Db, n: LessonNotice & { outcome:
     await tell(db, coachPlayer, s.studentCancelled(n.student.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale), outcomeText(s, n.outcome)));
   }
   await emailLesson(n, "CANCEL").catch(() => undefined);
+  await emailLessonToCoach(coachPlayer, n, "CANCEL").catch(() => undefined);
 }
 
 /**
@@ -120,6 +122,8 @@ export async function notifyLessonMoved(db: Db, n: { from: Lesson; to: Lesson; c
   await tell(db, told, n.by === "student" ? s.studentMoved(n.student.displayName, fromWhen, toWhen) : s.coachMoved(n.coach.displayName, fromWhen, toWhen));
   // The student's calendar entry moves with it: one REQUEST at the new hour replaces the old.
   await emailLesson({ lesson: n.to, coach: n.coach, student: n.student, pkg: null, by: n.by }, "REQUEST").catch(() => undefined);
+  // The move lands in the coach's calendar too: same UID, new hour, so the old entry is replaced.
+  await emailLessonToCoach(coachPlayer, { lesson: n.to, coach: n.coach, student: n.student, pkg: null, by: n.by }, "REQUEST").catch(() => undefined);
 }
 
 /** A student says the money is sent. The coach hears it and taps once; nothing else changes state. */
@@ -205,12 +209,15 @@ export async function notifyRequest(db: Db, coach: Coach, student: Player, reque
 
 export async function notifyRequestDecided(db: Db, n: { coach: Coach; student: Player; request: LessonRequest; lesson: Lesson | null; pkg: LessonPackage | null }): Promise<void> {
   const { coach, student, request, lesson } = n;
+  const coachPlayer = await getPlayerById(db, coach.playerId);
   const when = whenLabel(request.startsAt, coach.tz, student.locale);
   const s = coachStrings(coachBotLocale(student.locale));
   if (lesson) await tell(db, student, s.requestAccepted(coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${lesson.id}` }]] });
   else await tell(db, student, s.requestDeclined(coach.displayName, when), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] });
   // The calendar entry only exists when the answer was yes; a no is carried by tell() like any notice.
   if (lesson) await emailLesson({ lesson, coach, student, pkg: n.pkg, by: "coach" }, "REQUEST").catch(() => undefined);
+  // The coach said yes to an hour outside their own template, so their calendar is exactly where it needs to land.
+  if (lesson) await emailLessonToCoach(coachPlayer, { lesson, coach, student, pkg: n.pkg, by: "coach" }, "REQUEST").catch(() => undefined);
 }
 
 /** The evening-before reminder: one line, a cancel button, nothing else. */
@@ -253,8 +260,8 @@ const organizerAddress = () => {
 };
 
 /** One lesson as a calendar object: a REQUEST that Google and Apple add at once, a CANCEL that removes it. */
-export function lessonIcs(input: { lesson: Lesson; coach: Coach; student: Player; title: string; method: "REQUEST" | "CANCEL" }): string {
-  const { lesson, coach, student, title, method } = input;
+export function lessonIcs(input: { lesson: Lesson; coach: Coach; student: Player; title: string; method: "REQUEST" | "CANCEL"; /** The coach's own address, on the copy that goes to them. */ coachEmail?: string | null }): string {
+  const { lesson, coach, student, title, method, coachEmail } = input;
   const url = `${baseUrl()}/c/${coach.handle}`;
   const end = new Date(lesson.startsAt.getTime() + lesson.minutes * 60_000);
   const lines = [
@@ -276,6 +283,7 @@ export function lessonIcs(input: { lesson: Lesson; coach: Coach; student: Player
     `STATUS:${method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
     `ORGANIZER;CN=${icsEscape(coach.displayName)}:mailto:${organizerAddress()}`,
     ...(student.email ? [`ATTENDEE;CN=${icsEscape(student.displayName)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${student.email}`] : []),
+    ...(coachEmail ? [`ATTENDEE;CN=${icsEscape(coach.displayName)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${coachEmail}`] : []),
     "BEGIN:VALARM",
     "TRIGGER:-PT2H",
     "ACTION:DISPLAY",
@@ -314,5 +322,49 @@ async function emailLesson(n: LessonNotice, method: "REQUEST" | "CANCEL"): Promi
     html,
     text,
     ics: { method, content: lessonIcs({ lesson: n.lesson, coach: n.coach, student: n.student, title, method }) },
+  });
+}
+
+/**
+ * The same lesson, in the coach's own calendar.
+ *
+ * The student has had a calendar invitation since the book existed. The coach never got one, so a
+ * lesson lived only on a screen they had to remember to open. The other way in is Google Calendar,
+ * and it needs the coach to share a calendar with a service account — which the Google Calendar phone
+ * apps cannot do at all. A calendar object in an email can, with one tap, on any phone and into any
+ * calendar; a CANCEL takes it out again.
+ *
+ * The activity-email switch is not consulted, the same way the student's copy does not consult it: a
+ * lesson somebody booked is not activity mail.
+ */
+async function emailLessonToCoach(coachPlayer: Player | null | undefined, n: LessonNotice, method: "REQUEST" | "CANCEL"): Promise<void> {
+  if (!emailEnabled() || !coachPlayer?.email) return;
+  const { t, locale } = await translatorFor(coachPlayer.locale);
+  const when = whenLabel(n.lesson.startsAt, n.coach.tz, locale);
+  const where = n.coach.clubNames.length ? ` \u00b7 ${n.coach.clubNames.join(", ")}` : "";
+  const pkg = n.pkg
+    ? (() => {
+        const line = packageLine(n.pkg, new Date());
+        return line.daysLeft === null ? t("coach.packageLineNoExpiry", { left: line.left, size: n.pkg.size }) : t("coach.packageLine", { left: line.left, size: n.pkg.size, days: line.daysLeft });
+      })()
+    : t("coach.email.packageNone");
+  const vars = { student: n.student.displayName, when, where, package: pkg };
+  const url = `${baseUrl()}/coach`;
+  const isCancel = method === "CANCEL";
+  const { html, text } = layout({
+    heading: t(isCancel ? "coach.email.coachCancelHeading" : "coach.email.coachInviteHeading"),
+    body: t(isCancel ? "coach.email.coachCancelBody" : "coach.email.coachInviteBody", vars),
+    cta: { label: t("coach.email.requestCta"), url },
+    footer: t("email.footer", { app: APP_NAME }),
+    eventUrl: url,
+    openLabel: t("coach.email.requestCta"),
+  });
+  const title = `${n.student.displayName}${where}`;
+  await sendEmail({
+    to: coachPlayer.email,
+    subject: t(isCancel ? "coach.email.coachCancelSubject" : "coach.email.coachInviteSubject", vars),
+    html,
+    text,
+    ics: { method, content: lessonIcs({ lesson: n.lesson, coach: n.coach, student: n.student, title, method, coachEmail: coachPlayer.email }) },
   });
 }

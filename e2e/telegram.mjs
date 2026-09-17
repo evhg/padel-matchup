@@ -158,7 +158,13 @@ try {
       await done.click();
       break;
     }
-    const skip = page.getByRole("button", { name: /Later|Email me instead/ });
+    const notify = page.getByTestId("notify-done");
+    if (await notify.count()) {
+      await notify.click();
+      await page.waitForTimeout(300);
+      continue;
+    }
+    const skip = page.getByRole("button", { name: /Later/ });
     if (await skip.count()) await skip.first().click();
     else break;
     await page.waitForTimeout(300);

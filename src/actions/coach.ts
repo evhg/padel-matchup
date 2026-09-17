@@ -16,6 +16,7 @@ import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
 import { notifyPaidConfirmed, notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
+import { reachFor, type Reach } from "@/lib/coach/reach";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
 import { pingIndexNow } from "@/lib/indexnow";
@@ -24,6 +25,20 @@ import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared"
 
 
 /** The coach's book: every action here is one tap on a coach screen or a student screen. */
+
+/**
+ * Has the assistant got a way to reach me yet? Asked by the "where should I tell you" screen when the
+ * coach taps Done, so the answer comes from the database rather than from what the screen believes.
+ * The email field and the push switch each save themselves; neither tells this screen that it did.
+ */
+export async function myReachAction(): Promise<ActionResult<Reach>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    return reachFor(db, me);
+  });
+}
 
 async function requireCoach(db: Awaited<ReturnType<typeof getDb>>) {
   const me = await getSessionPlayer(db);

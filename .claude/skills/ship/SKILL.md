@@ -220,6 +220,18 @@ Wall clock first, credits second. What actually moved it, measured:
   the same thing, needs no migration, and reverses itself the moment the coach books again. Before
   adding a column for a state, ask which human tap would ever write it. When the honest answer is
   "none", read it from the rows that already move.
+- **An escape hatch that names a thing has to collect that thing.** The channel step offered Telegram
+  and escaped through a button reading "Email me instead" — which collected no address and simply moved
+  on. A coach tapped it, finished setup with no channel of any kind, and two of his student's lessons
+  were never mentioned to him. Read every button that promises something, and check that the promise
+  is kept by code and not by the label.
+- **A gate reads the actor; the rule is usually about somebody else.** The first channel gate asked
+  whether the *signed-in person* could be reached, and blocked a manager who runs somebody else's
+  bookings and cannot set that coach's channel. Before gating a screen, name whose state the rule is
+  about, then check that one — `getCoachForActor` returns the role for exactly this reason.
+- **A test that asserts on a wire format is testing the wire format.** An address past the 73-character
+  iCalendar fold is split across two lines, so `toContain("mailto:…")` fails on a perfectly good
+  invitation. Unfold (or parse) before asserting, the way every client does.
 
 ### Two ways a change hangs or bloats
 

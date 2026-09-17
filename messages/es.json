@@ -1158,7 +1158,17 @@
       "botOpen": "Abrir @{bot}",
       "botAfter": "Luego vuelve aquí y toca Listo.",
       "create": "Configurar mi asistente",
-      "how": "Tienes una página en kicksma.sh/c/tu-nombre. Quien abre tu enlace ya está en tu lista; reserva horas disponibles por su cuenta y tú puedes reservar a cualquiera, cuando sea. Tu Google Calendar y tu hoja de bonos se conectan en ajustes; nada tiene que moverse."
+      "how": "Tienes una página en kicksma.sh/c/tu-nombre. Quien abre tu enlace ya está en tu lista; reserva horas disponibles por su cuenta y tú puedes reservar a cualquiera, cuando sea. Tu Google Calendar y tu hoja de bonos se conectan en ajustes; nada tiene que moverse.",
+      "notifyPick": "Las reservas, cancelaciones y preguntas de tus alumnos llegan aquí mientras das clase. Elige al menos uno. Puedes tener los tres.",
+      "notifyTelegram": "Telegram",
+      "notifyEmailTitle": "Correo",
+      "notifyPush": "Este teléfono",
+      "notifyEmailHelp": "Un correo por reserva, con la clase como invitación de calendario que añades con un toque.",
+      "notifyNone": "Elige uno primero. Ahora mismo el asistente no tiene forma de avisarte.",
+      "notifyDone": "Listo",
+      "notifyHave": "El asistente puede avisarte.",
+      "notifyGateTitle": "Una cosa antes de abrir tu agenda",
+      "notifyGateHelp": "Tu agenda no tiene forma de avisarte, así que una reserva o una cancelación no llegaría a ninguna parte. Elige un canal y la agenda se abre."
     },
     "done": {
       "title": "Tu asistente está listo",
@@ -1397,7 +1407,11 @@
       "reminderBody": "{when} con {coach}. Si tienes que cancelar, hazlo desde tu página; se aplica la regla habitual.",
       "lowSubject": "Tu bono con {coach}",
       "lowHeading": "Casi al final",
-      "lowBody": "{line} Es hora de pedir a {coach} el siguiente bono."
+      "lowBody": "{line} Es hora de pedir a {coach} el siguiente bono.",
+      "coachInviteSubject": "{student} ha reservado {when}",
+      "coachCancelSubject": "{student} ha cancelado {when}",
+      "coachCancelHeading": "Clase cancelada",
+      "coachCancelBody": "{student}, {when}{where}, está cancelada. {package}"
     },
     "calendar": {
       "title": "Tu calendario",

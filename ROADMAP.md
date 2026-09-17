@@ -24,7 +24,13 @@ Everything in this list is live. The README describes each in detail.
   moving and cancelling under the coach's own cutoff and late-pass rules, packages that count themselves,
   waitlists that refill a freed slot, the coach's own calendar and sheet. Setup is six taps — where they
   teach, how long a lesson runs, mornings or afternoons, the price and which of PromptPay and pay-at-the-club
-  they accept, how they want to hear about it — and ends on the link they hand their students. Money is
+  they accept, how they want to hear about it — and ends on the link they hand their students. That
+  channel step is the one step a coach cannot walk past: Telegram, an email or this phone, at least one
+  of whatever the deployment runs. It used to offer Telegram alone and escape through a button reading
+  "Email me instead" that collected no address, so a coach could finish with nothing and run a book
+  that never told them anything. Every lesson now reaches the coach's own calendar as well, as the
+  same invitation the student has always had — one tap on a phone, where sharing a Google calendar
+  with a service account cannot be done at all. Money is
   tracked, never processed: the student says they have paid, the coach confirms it, and unpaid warns
   rather than blocks. All of it works in Telegram as well as on the web: three taps set a book up —
   city, lesson length, when you teach — and after that it is one line at a time (`price 800`,

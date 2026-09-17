@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { savePaymentAction, setupCoachAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
+import { CoachNotify } from "./CoachNotify";
 import { HowThisWorks } from "./HowThisWorks";
 import { ImportSheet } from "./ImportSheet";
 
@@ -37,7 +38,7 @@ const ORDER = [1, 2, 3, 4, 5, 6, 0];
  * And the walk used to end on a Done button while the link that makes any of this matter sat on a
  * screen the coach had not seen. It ends on the link now.
  */
-export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = null, botUrl = null, existing = false, studentUrl = null }: { initialClubs?: string; /** Live clubs, for picking a real one instead of typing a name a club can never match. */ clubOptions?: ClubOption[]; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the price. */ existing?: boolean; /** The invite link to hand students, once the book exists. */ studentUrl?: string | null }) {
+export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = null, botUrl = null, existing = false, studentUrl = null, email = null, emailEnabled = false, vapidPublicKey = null, pushSubscribed = false }: { initialClubs?: string; /** Live clubs, for picking a real one instead of typing a name a club can never match. */ clubOptions?: ClubOption[]; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the price. */ existing?: boolean; /** The invite link to hand students, once the book exists. */ studentUrl?: string | null; /** The address already on file, for the channel step. */ email?: string | null; emailEnabled?: boolean; vapidPublicKey?: string | null; pushSubscribed?: boolean }) {
   const t = useTranslations("coach");
   const locale = useLocale();
   const router = useRouter();
@@ -59,7 +60,9 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   const [link, setLink] = useState<string | null>(studentUrl);
   const [error, setError] = useState<string | null>(null);
 
-  const steps: Step[] = ["where", "length", "hours", "price", ...(botUsername ? (["notify"] as Step[]) : []), "link"];
+  // The channel step is not conditional on the bot any more: turn Telegram off and a coach was never
+  // asked at all. Email and push are offered on the same screen.
+  const steps: Step[] = ["where", "length", "hours", "price", "notify", "link"];
   const index = steps.indexOf(step);
   const total = steps.length;
   const goNext = () => setStep(steps[Math.min(total - 1, index + 1)]);
@@ -253,20 +256,8 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
         </div>
       )}
 
-      {step === "notify" && botUsername && (
-        <div className="flex flex-col gap-4">
-          <div>
-            <h2 className="text-xl font-extrabold tracking-tight">{t("setup.notifyTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("setup.notifyHelp")}</p>
-          </div>
-          <a href={botUrl ?? `https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="btn-primary w-full" data-testid="open-bot">
-            {t("setup.botOpen", { bot: botUsername })}
-          </a>
-          <p className="text-xs text-faint">{t("setup.botAfter")}</p>
-          <button type="button" className="btn-ghost w-full" onClick={goNext}>
-            {t("setup.notifyEmail")}
-          </button>
-        </div>
+      {step === "notify" && (
+        <CoachNotify botUsername={botUsername} botUrl={botUrl} email={email} emailEnabled={emailEnabled} vapidPublicKey={vapidPublicKey} pushSubscribed={pushSubscribed} onReady={goNext} />
       )}
 
       {step === "link" && (
