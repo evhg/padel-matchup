@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, decideRequestAction } from "@/actions/coach";
+import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, compLessonAction, decideRequestAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
 
-export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; pkg: { left: number; size: number; days: number | null } | null };
+export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; heads?: number; comped?: string | null; pkg: { left: number; size: number; days: number | null } | null };
 export type SlotDTO = { iso: string; day: string; time: string };
 export type StudentOption = { id: string; name: string };
 
@@ -78,6 +78,16 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
       await coachNoShowAction(l.id);
       router.refresh();
     });
+  /** "On me." The reason is asked for once and reaches the student, because a gift nobody reads is a number. */
+  const comp = (l: LessonDTO) => {
+    const why = prompt(t("book.compWhy"), "");
+    if (why === null) return;
+    start(async () => {
+      const r = await compLessonAction(l.id, why);
+      if (!r.ok) setError(errorText(r.error));
+      router.refresh();
+    });
+  };
   const decide = (r: RequestDTO, accept: boolean) =>
     start(async () => {
       const res = await decideRequestAction(r.id, accept);
@@ -94,9 +104,16 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         <div className="truncate font-bold">{l.studentName}</div>
         <div className="truncate text-xs text-muted">
           {pkgLine(l)}
+          {(l.heads ?? 1) > 1 ? ` · ${l.heads}` : ""}
           {l.status !== "booked" ? ` · ${t(`home.status.${l.status}` as "home.status.done")}` : ""}
+          {l.comped != null ? ` · ${t("book.comp")}${l.comped ? ` — ${l.comped}` : ""}` : ""}
         </div>
       </div>
+      {l.comped == null && (l.status === "booked" || l.status === "done") && (
+        <button type="button" className="btn-ghost btn-xs" onClick={() => comp(l)} disabled={pending} data-testid="comp-lesson">
+          {t("book.comp")}
+        </button>
+      )}
       {l.status === "booked" && (
         <button type="button" className="btn-ghost btn-xs" onClick={() => cancel(l)} disabled={pending}>
           {t("home.cancel")}
@@ -271,6 +288,9 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
   const [day, setDay] = useState(days[0] ?? "");
   const [slot, setSlot] = useState<string | null>(null);
   const [customTime, setCustomTime] = useState("");
+  // How many are on court, which picks the price. One unless the coach says otherwise, so the common
+  // case costs no taps and nobody has to think about it.
+  const [heads, setHeads] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const daySlots = slots.filter((s) => s.day === day);
 
@@ -279,7 +299,7 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
     setError(null);
     start(async () => {
       const name = studentId === "new" ? newName : (students.find((s) => s.id === studentId)?.name ?? "");
-      const r = await coachBookAction({ studentPlayerId: studentId === "new" ? null : studentId, newName: studentId === "new" ? newName : null, startsAt: slot, day: slot ? null : day, time: slot ? null : customTime || null });
+      const r = await coachBookAction({ studentPlayerId: studentId === "new" ? null : studentId, newName: studentId === "new" ? newName : null, startsAt: slot, day: slot ? null : day, time: slot ? null : customTime || null, heads });
       if (!r.ok) {
         setError(["slot_taken", "not_student", "outside_hours", "too_soon", "no_coach", "past"].includes(r.error) ? t(`errors.${r.error}` as "errors.slot_taken") : t("errors.slot_taken"));
         return;
@@ -373,6 +393,25 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
             setSlot(null);
           }}
         />
+      </div>
+      <div>
+        <div className="text-sm font-bold">{t("book.heads")}</div>
+        {/* A padel court holds four. One is the common case, so it costs no taps. */}
+        <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t("book.heads")}>
+          {[1, 2, 3, 4].map((n) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={heads === n}
+              data-heads={n}
+              className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${heads === n ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`}
+              onClick={() => setHeads(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
       </div>
       {error && <p className="text-sm font-semibold text-danger">{error}</p>}
       <div className="flex gap-2">

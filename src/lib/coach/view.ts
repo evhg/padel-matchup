@@ -38,6 +38,9 @@ export function coachLessonDTO(l: LessonWithPeople, coach: Pick<Coach, "tz">, lo
     studentName: l.student?.displayName ?? "?",
     studentPlayerId: l.studentPlayerId,
     status: l.status,
+    heads: l.heads,
+    /** The coach gave it away; the reason is what the student reads. */
+    comped: l.compedAt ? (l.compReason ?? "") : null,
     pkg: pkgDTO(l, now),
   };
 }
@@ -49,6 +52,8 @@ export function studentLessonDTO(l: StudentLesson, locale: string, labels: DayLa
     iso: l.startsAt.toISOString(),
     label: `${labels[date] ?? date} · ${formatEventTime(l.startsAt, l.coach.tz, locale)}`,
     status: l.status,
+    /** The coach gave this one away, and why. Warmth only lands when the student reads it. */
+    comped: l.compedAt ? (l.compReason ?? "") : null,
     hoursUntil: (l.startsAt.getTime() - now.getTime()) / 3_600_000,
   };
 }

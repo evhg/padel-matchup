@@ -29,8 +29,20 @@ export const coaches = pgTable(
     latePasses: integer("late_passes").notNull().default(1),
     /** Shortest notice for a self-booked lesson, in hours. */
     minNoticeHours: integer("min_notice_hours").notNull().default(2),
-    /** What one lesson costs when it is not drawn from a package, in whole currency units. Null: this coach sells packages only. */
+    /**
+     * What one lesson costs when it is not drawn from a package, in whole currency units. Null: this
+     * coach sells packages only, which is also how "no ad-hoc lessons" is said.
+     */
     priceSingle: integer("price_single"),
+    /**
+     * The same, per head, when two, three or four come. **What each person pays, not the court total**
+     * — so the book shows one debt per student, the way every other screen already works, and nobody
+     * has to split 1200 by three. Null falls back to the next smaller price and finally to
+     * `priceSingle`, so a coach who set one number keeps working.
+     */
+    priceTwo: integer("price_two"),
+    priceThree: integer("price_three"),
+    priceFour: integer("price_four"),
     /** The currency every price and package amount of this coach is in. */
     currency: text("currency").notNull().default("THB"),
     /** The coach takes cash or a card at the club: a payment method with nothing to show but a sentence. */
@@ -158,6 +170,12 @@ export const lessons = pgTable(
     consumed: boolean("consumed").notNull().default(false),
     /** A late cancellation forgiven by a free pass. */
     freePass: boolean("free_pass").notNull().default(false),
+    /** How many people were on court, which picks the price. One unless the coach says otherwise. */
+    heads: integer("heads").notNull().default(1),
+    /** The coach gave this one away: late, or simply warm. Nothing is owed and the package keeps its lesson. */
+    compedAt: timestamp("comped_at", { withTimezone: true }),
+    /** Why, in the coach's own words. The student reads it — warmth only lands when somebody sees it. */
+    compReason: text("comp_reason"),
     /** What this lesson costs, taken from the coach's price when it was booked so a later price change never rewrites it. Only for lessons no package paid for. */
     amount: integer("amount"),
     /** The student says they have paid. A claim, not a status: it asks the coach, it does not answer. */

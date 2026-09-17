@@ -7,7 +7,7 @@ import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistA
 import type { StudentStatus } from "@/lib/domain/coaching";
 import { HowThisWorks } from "./HowThisWorks";
 
-export type StudentLessonDTO = { id: string; iso: string; label: string; status: string; hoursUntil: number };
+export type StudentLessonDTO = { id: string; iso: string; label: string; status: string; hoursUntil: number; /** The coach gave it away, and why. Empty string: given, no reason offered. */ comped?: string | null };
 type Slot = { iso: string; day: string; time: string };
 export type WaitDTO = { id: string; label: string; week: boolean };
 export type OfferDTO = { id: string; label: string; minutesLeft: number };
@@ -354,7 +354,17 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
             {lessons.map((l) => (
               <li key={l.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-white px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                <div className="font-bold">{l.label}</div>
+                <div className="min-w-0">
+                  <div className="font-bold">{l.label}</div>
+                  {/* The coach gave this one away. The reason is the whole point, so it is on the row
+                      and not behind a tap: warmth only lands when somebody reads it. */}
+                  {l.comped != null && (
+                    <div className="text-xs font-semibold text-ok" data-testid="lesson-comped">
+                      {t("page.comped")}
+                      {l.comped ? ` — ${l.comped}` : ""}
+                    </div>
+                  )}
+                </div>
                 {l.status === "booked" && (
                   <div className="flex shrink-0 gap-1">
                     {/* Moving comes first: it is what a student actually wants when something clashes,

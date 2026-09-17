@@ -344,6 +344,13 @@
       "when": 1789523668865,
       "tag": "0048_club_directory",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789646740743,
+      "tag": "0049_yellow_calypso",
+      "breakpoints": true
     }
   ]
 }

@@ -1168,7 +1168,14 @@
       "notifyDone": "Done",
       "notifyHave": "The assistant can reach you.",
       "notifyGateTitle": "One thing before your book opens",
-      "notifyGateHelp": "Your book has no way to reach you, so a booking or a cancellation would arrive nowhere. Pick a channel and the book opens."
+      "notifyGateHelp": "Your book has no way to reach you, so a booking or a cancellation would arrive nowhere. Pick a channel and the book opens.",
+      "adhoc": "I also teach one-off lessons, not just packages",
+      "groupOpen": "I also teach pairs and groups",
+      "groupHelp": "What each person pays. Leave a size empty and the next smaller price is used.",
+      "priceTwo": "Each, in a pair",
+      "priceThree": "Each, in a three",
+      "priceFour": "Each, in a four",
+      "latePass": "The first late cancellation on a package is on the house"
     },
     "done": {
       "title": "Your assistant is ready",
@@ -1218,7 +1225,10 @@
       "otherTime": "Another time",
       "confirm": "Book",
       "booked": "Booked {name}, {when}.",
-      "how": "Pick a student or type a new name, then a day and a free time. Times outside your hours are yours to book too."
+      "how": "Pick a student or type a new name, then a day and a free time. Times outside your hours are yours to book too.",
+      "heads": "How many came",
+      "comp": "On me",
+      "compWhy": "Why? Your student reads this."
     },
     "students": {
       "title": "Students",
@@ -1354,7 +1364,8 @@
       "leaveHasLessons": "Cancel your booked lesson first, then you can remove {name}.",
       "allTaken": "Every hour on {day} is taken",
       "takenTap": "Tap one to be told if it frees up.",
-      "teaches": "Teaches {hours}"
+      "teaches": "Teaches {hours}",
+      "comped": "On me"
     },
     "me": {
       "title": "Your lessons",
