@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction } from "@/actions/coach";
+import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentAttachSlipAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction } from "@/actions/coach";
 import type { StudentStatus } from "@/lib/domain/coaching";
 import { HowThisWorks } from "./HowThisWorks";
 
@@ -28,7 +28,9 @@ type Props = {
   pkg: { left: number; size: number; days: number | null } | null;
   cutoffHours: number;
   /** What this student owes and whether they have already said they sent it. Null when nothing is open. */
-  owed?: { total: number; currency: string; lessons: { id: string; label: string; amount: number; claimed: boolean }[] } | null;
+  owed?: { total: number; currency: string; lessons: { id: string; label: string; amount: number; claimed: boolean; hasSlip?: boolean }[] } | null;
+  /** What each person pays, by group size. Null sizes fall back to the next smaller one. The picker shows only when a group price exists. */
+  prices?: { single: number | null; two: number | null; three: number | null; four: number | null; currency: string } | null;
   /** The ways this coach takes money. Nothing passes through Kicksmash; these are instructions. */
   pay?: { promptpay: boolean; link: string | null; atClub: boolean };
   whatsappUrl: string | null;
@@ -43,7 +45,7 @@ type Props = {
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -51,6 +53,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const [name, setName] = useState("");
   const [pickedDay, setDay] = useState(days[0] ?? "");
   const [slot, setSlot] = useState<string | null>(null);
+  const [heads, setHeads] = useState(1);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -73,6 +76,14 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const [askLocal, setAskLocal] = useState("");
   const [askNote, setAskNote] = useState("");
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
+  // What one person pays at this size, falling down the ladder the way the book does. A local copy
+  // on purpose: the domain's `priceFor` lives beside the database and cannot come into a client bundle.
+  const eachPays = (n: number): number | null => {
+    if (!prices) return null;
+    const ladder = [prices.four, prices.three, prices.two, prices.single];
+    return ladder.slice(Math.max(0, 4 - Math.min(Math.max(n, 1), 4))).find((x) => x != null) ?? null;
+  };
+  const groupPrices = Boolean(prices && (prices.two || prices.three || prices.four));
   const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "too_late", "no_coach", "past"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
 
   const request = (e: React.FormEvent) => {
@@ -92,7 +103,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
     if (!slot) return;
     setError(null);
     start(async () => {
-      const r = await studentBookAction(handle, slot);
+      const r = await studentBookAction(handle, slot, heads);
       if (!r.ok) {
         setError(errorText(r.error));
         return;
@@ -118,6 +129,27 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
       router.refresh();
     });
 
+  /** The bank slip every Thai banking app makes: attaching it is the claim, with proof. */
+  const attachSlip = (lessonId: string, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > 600_000) {
+      setError(t("page.slipTooBig"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      start(async () => {
+        setError(null);
+        const r = await studentAttachSlipAction(lessonId, String(reader.result));
+        if (!r.ok) {
+          setError(r.error === "invalid" ? t("page.slipTooBig") : errorText(r.error));
+          return;
+        }
+        setNote(t("page.paidThanks"));
+        router.refresh();
+      });
+    reader.readAsDataURL(file);
+  };
   const claimPaid = (lessonId: string) =>
     start(async () => {
       setError(null);
@@ -287,6 +319,19 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                   </div>
                   {dayTaken.length > 0 && <p className="mt-1 text-xs text-faint">{t("page.takenTap")}</p>}
                 </div>
+                {groupPrices && (
+                  <div>
+                    <div className="text-xs font-bold uppercase text-faint">{t("page.heads")}</div>
+                    <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={t("page.heads")} data-testid="student-heads">
+                      {[1, 2, 3, 4].map((n) => (
+                        <button key={n} type="button" role="radio" aria-checked={heads === n} data-heads={n} className={chip(heads === n)} onClick={() => setHeads(n)}>
+                          {n}
+                          {eachPays(n) != null && <span className="ml-1 font-normal opacity-80">· {t("page.eachPays", { amount: `${eachPays(n)} ${prices!.currency}` })}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button type="button" className="btn-primary w-full" disabled={!slot || pending} onClick={book}>
                   {pending ? "…" : slot ? t("page.confirm", { when: `${dayLabels[day] ?? day} ${daySlots.find((s) => s.iso === slot)?.time ?? ""}` }) : t("page.book")}
                 </button>
@@ -419,13 +464,20 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                 <span>
                   {l.label} · {l.amount} {owed.currency}
                 </span>
-                {l.claimed ? (
-                  <span className="text-xs font-bold text-ok">{t("page.paidSaid")}</span>
-                ) : (
-                  <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => claimPaid(l.id)} data-testid="claim-paid">
-                    {t("page.paidClaim")}
-                  </button>
-                )}
+                <span className="flex shrink-0 items-center gap-2">
+                  {l.claimed ? (
+                    <span className="text-xs font-bold text-ok">{l.hasSlip ? t("page.slipAttached") : t("page.paidSaid")}</span>
+                  ) : (
+                    <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => claimPaid(l.id)} data-testid="claim-paid">
+                      {t("page.paidClaim")}
+                    </button>
+                  )}
+                  {/* The proof, optional: a picture from the banking app. Attaching it says "I've paid" as well. */}
+                  <label className="cursor-pointer text-xs font-bold text-muted underline underline-offset-4 hover:text-ink">
+                    {l.hasSlip ? t("page.slipReplace") : t("page.slipAttach")}
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={pending} onChange={(e) => attachSlip(l.id, e.target.files?.[0])} data-testid="attach-slip" />
+                  </label>
+                </span>
               </li>
             ))}
           </ul>

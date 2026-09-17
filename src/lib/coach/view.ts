@@ -27,7 +27,7 @@ export function pkgDTO(l: { package: { size: number; used: number; expiresAt: Da
   return { left: line.left, size: l.package.size, days: line.daysLeft };
 }
 
-export function coachLessonDTO(l: LessonWithPeople, coach: Pick<Coach, "tz">, locale: string, labels: DayLabels, now: Date) {
+export function coachLessonDTO(l: LessonWithPeople, coach: Pick<Coach, "tz" | "currency">, locale: string, labels: DayLabels, now: Date) {
   const { date } = utcToZonedParts(l.startsAt, coach.tz);
   return {
     id: l.id,
@@ -41,6 +41,12 @@ export function coachLessonDTO(l: LessonWithPeople, coach: Pick<Coach, "tz">, lo
     heads: l.heads,
     /** The coach gave it away; the reason is what the student reads. */
     comped: l.compedAt ? (l.compReason ?? "") : null,
+    /** Money: what it costs, whether the coach marked it paid, whether the student says so, and whether a slip came with that. */
+    amount: l.amount,
+    currency: coach.currency,
+    paid: Boolean(l.paidAt),
+    claimed: Boolean(l.paidClaimedAt),
+    hasSlip: Boolean(l.slipAssetId),
     pkg: pkgDTO(l, now),
   };
 }

@@ -142,9 +142,13 @@ try {
   // Settings: PromptPay and a cutoff, saved once.
   await olga.goto(BASE + "/coach/settings");
   await olga.getByPlaceholder("08x xxx xxxx").fill("0899999999");
+  // The walk asked one price; settings used to hide the rest. A pair price, saved here, is what makes
+  // the student's "how many are coming" picker appear.
+  await olga.getByTestId("settings-priceTwo").fill("500");
   await olga.getByRole("button", { name: "Save" }).click();
   await olga.getByText("Saved.").waitFor({ timeout: 20000 });
   check("settings save with a PromptPay number", true);
+  check("settings carry every price the walk asked", (await olga.getByTestId("settings-price-single").inputValue()) === "800" && (await olga.getByTestId("settings-priceTwo").inputValue()) === "500");
   check("the notice chosen in the walk is what settings show", (await olga.getByLabel("Shortest notice for a booking (hours)").inputValue()) === "12");
   const calendarCard = olga.getByTestId("coach-calendar");
   // The Google steps sit behind a fold now: the lesson already reaches the coach's calendar by email,
@@ -209,6 +213,10 @@ try {
   await olga.getByText("Pavel").first().waitFor({ timeout: 20000 });
   check("the imported student appears with lessons left and the expiry", (await olga.getByText(/6 of 10 left/).count()) === 1);
 
+  // Olga sells pairs now, so Ivan is asked how many are coming, and sees what each pays.
+  await ivan.reload();
+  await ivan.getByTestId("student-heads").waitFor({ timeout: 20000 });
+  check("a student is asked how many are coming once the coach has a group price, and sees what each pays", (await ivan.getByTestId("student-heads").locator('button[data-heads="2"]').innerText()).includes("500"));
   // Ivan books a free time himself, then cancels in time: the lesson goes back on the package.
   await ivan.reload();
   await ivan.getByRole("heading", { name: "Book a lesson" }).waitFor({ timeout: 20000 });
@@ -237,6 +245,31 @@ try {
   await olga.getByText(/^Booked Ivan/).waitFor({ timeout: 20000 });
   check("the coach books a student from the book", when !== "", when);
   await shot(olga, "63-coach-home");
+
+  // Dasha came through the link and holds no package, so a lesson booked for her carries a price — and
+  // the coach's row shows it, which is what Erik's test found missing. Booked as a pair: 500 each.
+  await olga.goto(BASE + "/coach");
+  await olga.getByRole("button", { name: "Book a lesson" }).click();
+  await olga.locator("#book-student").waitFor({ timeout: 10000 });
+  await olga.locator("#book-student").selectOption({ label: "Dasha" });
+  await olga.locator("form").locator('button[data-heads="2"]').click();
+  const dashaWhen = await pickFirstFreeTime(olga, olga.locator("form"));
+  await olga.locator("form").getByRole("button", { name: "Book", exact: true }).click();
+  await olga.getByText(/^Booked Dasha/).waitFor({ timeout: 20000 });
+  const dashaRow = olga.locator("li", { hasText: "Dasha" }).first();
+  await dashaRow.getByTestId("lesson-money").waitFor({ timeout: 20000 });
+  check("a priced lesson shows its price and that it is not paid, on the coach's row, at the pair price", /500 THB · not paid/.test(await dashaRow.getByTestId("lesson-money").innerText()), dashaWhen);
+  await shot(olga, "65-coach-home-money");
+  await olga.goto(BASE + "/coach/students");
+  const dashaStudent = olga.locator("li", { hasText: "Dasha" }).first();
+  await dashaStudent.getByTestId("unpaid-lessons").waitFor({ timeout: 20000 });
+  check("the students screen lists the unpaid lesson under the figure it adds up to", (await dashaStudent.getByTestId("mark-lesson-paid").count()) === 1 && /Owes 500/.test(await dashaStudent.innerText()));
+  await dashaStudent.getByTestId("mark-lesson-paid").click();
+  await olga.getByText(/Owes 500/).waitFor({ state: "detached", timeout: 20000 });
+  check("mark paid takes the lesson off what is owed", (await olga.getByText(/Owes 500/).count()) === 0);
+  await olga.goto(BASE + "/coach");
+  await olga.locator("li", { hasText: "Dasha" }).first().getByTestId("lesson-money").waitFor({ timeout: 20000 });
+  check("and the coach's row says paid", /500 THB · paid/.test(await olga.locator("li", { hasText: "Dasha" }).first().getByTestId("lesson-money").innerText()));
 
   // Ivan sees it on My matches with the package line.
   await ivan.goto(BASE + "/me");

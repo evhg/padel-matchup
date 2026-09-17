@@ -79,6 +79,16 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **The coach can see money.** Erik's test: Alicia booked, said she paid, and the coach's screens
+  showed none of it — "no package" on the lesson, "Owes 3000 THB" on the student with no tap under it,
+  and the "says paid" notice already scrolled away. Every lesson with a price now carries it on the
+  coach's row: not paid, says paid, or paid, with **Mark paid** beside it, and the students screen
+  lists each unpaid lesson under the figure it adds up to. A student can attach the bank slip every
+  Thai banking app produces; attaching it is the claim, and the coach opens it from the row. A
+  student picks how many are coming when the coach has group prices, and sees what each pays. And
+  "on me" over "I already paid" — the one collision that costs a friendship — is refused when the
+  coach marked it paid, and asked once when the student merely says so.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a

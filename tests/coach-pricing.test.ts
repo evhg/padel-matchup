@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { bookLesson, compLesson, createCoach, createPackage, MAX_HEADS, owedBy, presetHours, priceFor, setStudentStatus, updateCoach } from "@/lib/domain/coaching";
+import { attachSlip, bookLesson, compLesson, createCoach, createPackage, getSlip, MAX_HEADS, owedBy, presetHours, priceFor, setLessonPaid, setStudentStatus, updateCoach } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 /**
@@ -94,5 +94,76 @@ describe("a lesson's price, and the coach giving it away", () => {
     expect(second.compReason).toBe("On me");
     const [after] = await db.query.lessonPackages.findMany({ where: (p, { eq }) => eq(p.id, pkg!.id) });
     expect(after.used).toBe(0);
+  });
+
+  it("refuses to give away a lesson the coach already marked paid: that is a refund, and refunds happen at the bank", async () => {
+    const { coach, student } = await pair("Mia");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: new Date(Date.now() + HOUR), byCoach: true });
+    await setLessonPaid(db, coach.id, lesson.id, true);
+    await expect(compLesson(db, { lessonId: lesson.id, coach, reason: "late" })).rejects.toMatchObject({ code: "already_paid" });
+  });
+
+  it("keeps a student's claim on the row when the coach comps over it, rather than losing it", async () => {
+    const { coach, student } = await pair("Noa");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: new Date(Date.now() + HOUR), byCoach: true });
+    await attachSlip(db, lesson.id, student.id, "image/png", "iVBORw0KGgo=");
+    const comped = await compLesson(db, { lessonId: lesson.id, coach, reason: "On me" });
+    expect(comped.paidClaimedAt).not.toBeNull();
+    expect(comped.slipAssetId).not.toBeNull();
+  });
+});
+
+/** The bank slip: proof attached to the claim, seen by exactly the people it concerns. */
+describe("the slip", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+  const PNG = "iVBORw0KGgo=";
+
+  const booked = async (name: string) => {
+    const cp = await makePlayer(db, `${name}Coach`);
+    const made = await createCoach(db, { playerId: cp.id, displayName: `${name}Coach`, tz: "Asia/Bangkok", hours: presetHours("both") });
+    const coach = await updateCoach(db, made.id, { priceSingle: 800 });
+    const student = await makePlayer(db, name);
+    await setStudentStatus(db, coach.id, student.id, "accepted");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: new Date(Date.now() + HOUR), byCoach: true });
+    return { coach, coachPlayer: cp, student, lesson };
+  };
+
+  it("attaching one is the claim, and it shows on what is owed", async () => {
+    const { coach, student, lesson } = await booked("Ola");
+    const before = await owedBy(db, coach, student.id);
+    expect(before.lessons[0]).toMatchObject({ claimedAt: null, hasSlip: false });
+    const after = await attachSlip(db, lesson.id, student.id, "image/png", PNG);
+    expect(after?.paidClaimedAt).not.toBeNull();
+    expect((await owedBy(db, coach, student.id)).lessons[0]).toMatchObject({ hasSlip: true });
+  });
+
+  it("is read by the student who sent it and by the coach, and by nobody else", async () => {
+    const { coachPlayer, student, lesson } = await booked("Pim");
+    await attachSlip(db, lesson.id, student.id, "image/png", PNG);
+    expect((await getSlip(db, lesson.id, student.id))?.mime).toBe("image/png");
+    expect((await getSlip(db, lesson.id, coachPlayer.id))?.mime).toBe("image/png");
+    const stranger = await makePlayer(db, "Stranger");
+    expect(await getSlip(db, lesson.id, stranger.id)).toBeNull();
+  });
+
+  it("replaces an earlier slip rather than keeping two, and refuses one on a lesson already paid", async () => {
+    const { coach, student, lesson } = await booked("Rui");
+    const first = await attachSlip(db, lesson.id, student.id, "image/png", PNG);
+    const second = await attachSlip(db, lesson.id, student.id, "image/jpeg", PNG);
+    expect(second?.slipAssetId).not.toBe(first?.slipAssetId);
+    expect((await getSlip(db, lesson.id, student.id))?.mime).toBe("image/jpeg");
+    await setLessonPaid(db, coach.id, lesson.id, true);
+    expect(await attachSlip(db, lesson.id, student.id, "image/png", PNG)).toBeNull();
+  });
+
+  it("refuses a picture that is not a picture, or one too big to be a screenshot", async () => {
+    const { student, lesson } = await booked("Sol");
+    await expect(attachSlip(db, lesson.id, student.id, "application/pdf", PNG)).rejects.toMatchObject({ code: "invalid" });
+    await expect(attachSlip(db, lesson.id, student.id, "image/png", "A".repeat(900_000))).rejects.toMatchObject({ code: "invalid" });
   });
 });

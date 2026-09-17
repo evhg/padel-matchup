@@ -151,6 +151,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
           </section>
         ) : (
           <StudentBooking
+            prices={{ single: coach.priceSingle, two: coach.priceTwo, three: coach.priceThree, four: coach.priceFour, currency: coach.currency }}
             handle={coach.handle}
             coachName={coach.displayName}
             signedIn={Boolean(me)}
@@ -169,7 +170,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             lessons={mine.map((l) => studentLessonDTO(l, locale, labels, now))}
             pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft } : null}
             cutoffHours={coach.cutoffHours}
-            owed={owed && owed.total > 0 ? { total: owed.total, currency: owed.currency, lessons: owed.lessons.map((l) => ({ id: l.id, label: label(l.startsAt), amount: l.amount, claimed: Boolean(l.claimedAt) })) } : null}
+            owed={owed && owed.total > 0 ? { total: owed.total, currency: owed.currency, lessons: owed.lessons.map((l) => ({ id: l.id, label: label(l.startsAt), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip })) } : null}
             pay={pay}
             whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
           />

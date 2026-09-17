@@ -636,7 +636,7 @@ export async function unblockTime(db: Db, coachId: string, blockId: string): Pro
   return done.length > 0;
 }
 
-export type Owed = { lessons: { id: string; startsAt: Date; amount: number; claimedAt: Date | null }[]; packages: { id: string; size: number; amount: number; claimedAt: Date | null }[]; total: number; currency: string };
+export type Owed = { lessons: { id: string; startsAt: Date; amount: number; claimedAt: Date | null; hasSlip: boolean }[]; packages: { id: string; size: number; amount: number; claimedAt: Date | null }[]; total: number; currency: string };
 
 /**
  * What this student owes this coach, and whether they have already said they paid.
@@ -647,7 +647,7 @@ export type Owed = { lessons: { id: string; startsAt: Date; amount: number; clai
  */
 export async function owedBy(db: Db, coach: Pick<Coach, "id" | "currency">, studentPlayerId: string): Promise<Owed> {
   const ls = await db
-    .select({ id: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt })
+    .select({ id: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt, slipAssetId: lessons.slipAssetId })
     .from(lessons)
     .where(and(eq(lessons.coachId, coach.id), eq(lessons.studentPlayerId, studentPlayerId), isNull(lessons.paidAt), isNull(lessons.compedAt), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
     .orderBy(asc(lessons.startsAt))
@@ -658,7 +658,7 @@ export async function owedBy(db: Db, coach: Pick<Coach, "id" | "currency">, stud
     .where(and(eq(lessonPackages.coachId, coach.id), eq(lessonPackages.studentPlayerId, studentPlayerId), isNull(lessonPackages.paidAt), isNull(lessonPackages.closedAt)))
     .orderBy(asc(lessonPackages.createdAt))
     .limit(20);
-  const openLessons = ls.filter((l) => (l.amount ?? 0) > 0).map((l) => ({ id: l.id, startsAt: l.startsAt, amount: l.amount as number, claimedAt: l.claimedAt }));
+  const openLessons = ls.filter((l) => (l.amount ?? 0) > 0).map((l) => ({ id: l.id, startsAt: l.startsAt, amount: l.amount as number, claimedAt: l.claimedAt, hasSlip: Boolean(l.slipAssetId) }));
   const openPackages = ps.filter((p) => (p.amount ?? 0) > 0).map((p) => ({ id: p.id, size: p.size, amount: p.amount as number, claimedAt: null }));
   return {
     lessons: openLessons,
@@ -668,7 +668,7 @@ export async function owedBy(db: Db, coach: Pick<Coach, "id" | "currency">, stud
   };
 }
 
-export type OwedRow = { lessonId: string; startsAt: Date; amount: number; claimedAt: Date | null; studentPlayerId: string; name: string };
+export type OwedRow = { lessonId: string; startsAt: Date; amount: number; claimedAt: Date | null; hasSlip: boolean; studentPlayerId: string; name: string };
 
 /**
  * Everyone who still owes this coach, newest lesson last. One query with a join rather than
@@ -678,13 +678,13 @@ export type OwedRow = { lessonId: string; startsAt: Date; amount: number; claime
  */
 export async function owedToCoach(db: Db, coachId: string, limit = 20): Promise<OwedRow[]> {
   const rows = await db
-    .select({ lessonId: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt, studentPlayerId: lessons.studentPlayerId, name: players.displayName })
+    .select({ lessonId: lessons.id, startsAt: lessons.startsAt, amount: lessons.amount, claimedAt: lessons.paidClaimedAt, slipAssetId: lessons.slipAssetId, studentPlayerId: lessons.studentPlayerId, name: players.displayName })
     .from(lessons)
     .innerJoin(players, eq(players.id, lessons.studentPlayerId))
-    .where(and(eq(lessons.coachId, coachId), isNull(lessons.paidAt), gt(lessons.amount, 0), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
+    .where(and(eq(lessons.coachId, coachId), isNull(lessons.paidAt), isNull(lessons.compedAt), gt(lessons.amount, 0), inArray(lessons.status, ["booked", "done", "late_cancelled", "no_show"])))
     .orderBy(asc(lessons.startsAt))
     .limit(limit);
-  return rows.map((r) => ({ ...r, amount: r.amount as number, studentPlayerId: r.studentPlayerId as string }));
+  return rows.map(({ slipAssetId, ...r }) => ({ ...r, amount: r.amount as number, studentPlayerId: r.studentPlayerId as string, hasSlip: Boolean(slipAssetId) }));
 }
 
 /**
@@ -719,6 +719,47 @@ export async function claimLessonPaid(db: Db, lessonId: string, studentPlayerId:
 }
 
 /** The coach confirms it landed. This is the only thing that marks a lesson paid. */
+export const SLIP_UPLOAD_MAX_BYTES = 600_000;
+
+/**
+ * The student's proof of payment: the picture every Thai banking app makes when money leaves. It rides
+ * on the claim — attaching one *is* saying "I've paid" — and replaces an earlier one. Only a lesson
+ * this student holds and the coach has not yet marked paid can take one.
+ */
+export async function attachSlip(db: Db, lessonId: string, studentPlayerId: string, mime: string, dataBase64: string, now = new Date()): Promise<Lesson | null> {
+  if (!/^image\/(png|jpeg|webp)$/.test(mime)) throw new DomainError("invalid", "mime");
+  const clean = dataBase64.replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9+/=]+$/.test(clean) || Buffer.from(clean, "base64").length > SLIP_UPLOAD_MAX_BYTES) throw new DomainError("invalid", "size");
+  const [lesson] = await db.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.studentPlayerId, studentPlayerId), isNull(lessons.paidAt))).limit(1);
+  if (!lesson) return null;
+  const [asset] = await db.insert(coachAssets).values({ coachId: lesson.coachId, kind: "slip", mime, dataBase64: clean }).returning({ id: coachAssets.id });
+  const [row] = await db
+    .update(lessons)
+    .set({ slipAssetId: asset.id, paidClaimedAt: lesson.paidClaimedAt ?? now })
+    .where(eq(lessons.id, lesson.id))
+    .returning();
+  if (lesson.slipAssetId) await db.delete(coachAssets).where(eq(coachAssets.id, lesson.slipAssetId));
+  return row;
+}
+
+/** The slip, for the student who sent it, the coach, or somebody who runs the coach's book. Nobody else. */
+export async function getSlip(db: Db, lessonId: string, viewerPlayerId: string): Promise<{ mime: string; bytes: Buffer } | null> {
+  const [row] = await db
+    .select({ mime: coachAssets.mime, data: coachAssets.dataBase64, studentPlayerId: lessons.studentPlayerId, coachId: lessons.coachId, coachPlayerId: coaches.playerId })
+    .from(lessons)
+    .innerJoin(coachAssets, eq(coachAssets.id, lessons.slipAssetId))
+    .innerJoin(coaches, eq(coaches.id, lessons.coachId))
+    .where(eq(lessons.id, lessonId))
+    .limit(1);
+  if (!row) return null;
+  let allowed = row.studentPlayerId === viewerPlayerId || row.coachPlayerId === viewerPlayerId;
+  if (!allowed) {
+    const [m] = await db.select({ playerId: coachManagers.playerId }).from(coachManagers).where(and(eq(coachManagers.coachId, row.coachId), eq(coachManagers.playerId, viewerPlayerId))).limit(1);
+    allowed = Boolean(m);
+  }
+  return allowed ? { mime: row.mime, bytes: Buffer.from(row.data, "base64") } : null;
+}
+
 export async function setLessonPaid(db: Db, coachId: string, lessonId: string, paid: boolean, now = new Date()): Promise<Lesson | null> {
   const [row] = await db
     .update(lessons)
@@ -932,6 +973,10 @@ export async function compLesson(db: Db, input: { lessonId: string; coach: Coach
   const [lesson] = await db.select().from(lessons).where(and(eq(lessons.id, input.lessonId), eq(lessons.coachId, input.coach.id))).limit(1);
   if (!lesson) throw new DomainError("not_found");
   if (lesson.compedAt) return lesson;
+  // Money that already arrived is not something to give away with a tap: that is a refund, and a
+  // refund happens at the bank, not in the book. A student who only *says* they paid is the coach's
+  // call, and the screen asks before it lands here.
+  if (lesson.paidAt) throw new DomainError("already_paid");
   // A package paid for it, so the gift is the lesson back in the package, not a zero nobody sees.
   await refund(db, lesson);
   const [updated] = await db
