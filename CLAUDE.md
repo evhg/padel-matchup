@@ -17,7 +17,13 @@ rather than rediscovering it.
 3. **One shot means they are not involved until it is finished.** Decide the routine things, say what
    you assumed, and stop only for what is genuinely theirs: a migration, identity or personal data,
    behaviour people rely on, anything outward-facing or hard to undo.
-4. **Plain English.** No internal shorthand, no drifting pull request numbers, no codenames.
+4. **Write to the owner in Simplified Technical English (ASD-STE100).** Use the active voice. Use the
+   simple present, the simple past or the simple future. Keep an instruction to 20 words or fewer, and
+   a description to 25. Give one idea to each sentence, and six sentences or fewer to each paragraph.
+   Do not put a gerund or a participle where a noun or an adjective belongs. Do not drop an article.
+   Give one meaning to each word. File names, table names, column names and code identifiers are
+   technical names, so keep them as they are. No internal shorthand, no drifting pull request numbers,
+   no codenames.
 
 ## The one habit underneath all of it
 
