@@ -79,6 +79,17 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **The coach's screens say what they do.** Erik's first pass through the coach walk found match
+  wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
+  the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a
+  desk. Each was a shared component carrying another screen's promise. The walk now asks the notice
+  hours — how close to the hour a student may still book — because that is personal and used to be
+  found in settings weeks later. Settings now carry every price the walk asked, say what a second
+  club does to the club page, and the calendar section leads with the one thing already true: every
+  lesson reaches the coach's calendar by email. Sharing a Google calendar is a fold with its benefit
+  as the title. "at Warehaus" on a coach's page is the door to the club's page, which lists its
+  coaches and its open matches.
+
 - **An hour outside the week.** The weekly template says what a normal week looks like, and a block
   already took one hour of one date back. Now a coach can add one the same way: type a time on their
   book and open it, and that Sunday evening is bookable without anybody else's Sunday moving. It

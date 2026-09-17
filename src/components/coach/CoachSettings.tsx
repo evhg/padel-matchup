@@ -69,6 +69,7 @@ export function CoachSettings({ initial, hasQr, qrUrl }: Props) {
         <label className="block text-sm font-bold">
           {t("settings.clubs")}
           <input className="input mt-1" value={v.clubs} onChange={(e) => set("clubs", e.target.value)} placeholder={t("setup.clubPlaceholder")} maxLength={200} />
+          <span className="mt-1 block text-xs font-normal text-muted">{t("settings.clubsHelp")}</span>
         </label>
         <label className="block text-sm font-bold">
           {t("settings.length")}
@@ -106,6 +107,25 @@ export function CoachSettings({ initial, hasQr, qrUrl }: Props) {
       </section>
 
       <section className="card flex flex-col gap-4">
+        {/* The walk asked these; until now nothing let a coach change them afterwards. */}
+        <div className="flex gap-2">
+          <label className="block flex-1 text-sm font-bold">
+            {t("setup.priceLabel")}
+            <input className="input mt-1" inputMode="numeric" value={v.priceSingle ?? ""} onChange={(e) => set("priceSingle", e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")))} placeholder="800" data-testid="settings-price-single" />
+          </label>
+        </div>
+        <div>
+          <div className="text-sm font-bold">{t("settings.groupPrices")}</div>
+          <p className="text-xs text-muted">{t("setup.groupHelp")}</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {(["priceTwo", "priceThree", "priceFour"] as const).map((k) => (
+              <label key={k} className="block text-xs font-bold text-muted">
+                {t(`setup.${k}`)}
+                <input className="input mt-1" inputMode="numeric" value={v[k] ?? ""} onChange={(e) => set(k, e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")))} data-testid={`settings-${k}`} />
+              </label>
+            ))}
+          </div>
+        </div>
         <label className="block text-sm font-bold">
           {t("settings.promptpay")}
           <input className="input mt-1" value={v.promptpayId} onChange={(e) => set("promptpayId", e.target.value)} inputMode="tel" placeholder="08x xxx xxxx" maxLength={20} />

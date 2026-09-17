@@ -51,6 +51,9 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   const [custom, setCustom] = useState(false);
   const [days, setDays] = useState<Day[]>(DEFAULT_DAYS);
   const [badDay, setBadDay] = useState<number | null>(null);
+  // How close to the hour a student may still book. Personal, and asked here rather than found in
+  // settings weeks later, after a 07:00 lesson was booked at 06:40.
+  const [notice, setNotice] = useState<2 | 12 | 24>(2);
   const [price, setPrice] = useState("");
   // A coach who sells packages only leaves the price empty, which is what "no one-off lessons" means.
   // The switch is the same fact said out loud, so nobody has to work out what an empty field implies.
@@ -96,7 +99,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
     setBadDay(null);
     start(async () => {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const r = await setupCoachAction({ clubs, clubSlugs, minutes, hoursLines, tz });
+      const r = await setupCoachAction({ clubs, clubSlugs, minutes, hoursLines, tz, minNoticeHours: notice });
       if (!r.ok) {
         if (r.error === "invalid" && r.detail && /^\d$/.test(r.detail)) setBadDay(Number(r.detail));
         else setError(t("errors.no_coach"));
@@ -220,6 +223,17 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
                 })}
               </div>
             )}
+          </div>
+          <div>
+            <div className="text-sm font-bold">{t("setup.notice")}</div>
+            <p className="mt-1 text-xs text-faint">{t("setup.noticeHelp")}</p>
+            <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t("setup.notice")} data-testid="notice-presets">
+              {([2, 12, 24] as const).map((h) => (
+                <button key={h} type="button" role="radio" aria-checked={notice === h} className={chip(notice === h)} onClick={() => setNotice(h)} data-notice={h}>
+                  {t(`setup.notice${h}` as "setup.notice2")}
+                </button>
+              ))}
+            </div>
           </div>
           {badDay !== null && <p className="text-sm font-semibold text-danger">{t("settings.invalidHours", { day: dayName(badDay, "long") })}</p>}
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}

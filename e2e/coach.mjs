@@ -55,6 +55,8 @@ try {
   check("the per-day grid is still there for a coach who wants it", (await grid.locator('input[type="time"]').count()) === 14);
   await olga.getByTestId("hours-custom").click();
   await presets.locator('button[data-preset="both"]').click();
+  // The notice hours are personal, so the walk asks; settings used to be the only place, weeks later.
+  await olga.getByTestId("notice-presets").locator('button[data-notice="12"]').click();
   await olga.getByRole("button", { name: "Set up my assistant" }).click();
 
   await olga.getByTestId("setup-price").waitFor({ timeout: 30000 });
@@ -143,7 +145,12 @@ try {
   await olga.getByRole("button", { name: "Save" }).click();
   await olga.getByText("Saved.").waitFor({ timeout: 20000 });
   check("settings save with a PromptPay number", true);
+  check("the notice chosen in the walk is what settings show", (await olga.getByLabel("Shortest notice for a booking (hours)").inputValue()) === "12");
   const calendarCard = olga.getByTestId("coach-calendar");
+  // The Google steps sit behind a fold now: the lesson already reaches the coach's calendar by email,
+  // and sharing a calendar is only for reading busy time, which most coaches never need.
+  check("the calendar section leads with what is already true, and folds the Google steps", (await calendarCard.getByText(/already reaches your calendar/).count()) === 1 && (await calendarCard.getByTestId("calendar-fold").getAttribute("open")) === null);
+  await calendarCard.locator("summary").click();
   check("settings carry the calendar attachment with its two steps", (await calendarCard.count()) === 1 && (await calendarCard.getByText(/Share your Google Calendar/).count()) === 1 && (await calendarCard.locator("#gcal-id").count()) === 1);
   await calendarCard.locator("#gcal-id").fill("not an address");
   await calendarCard.getByRole("button", { name: "Attach and check" }).click();

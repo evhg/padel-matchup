@@ -73,7 +73,7 @@ export async function deleteCoachBookAction(): Promise<ActionResult<CoachBookCon
   });
 }
 
-export async function setupCoachAction(input: { name?: string | null; clubs: string; clubSlugs?: string[]; minutes: number; hoursLines?: string[]; preset?: HoursPreset | "custom"; tz?: string | null }): Promise<ActionResult<{ handle: string; studentUrl: string }>> {
+export async function setupCoachAction(input: { name?: string | null; clubs: string; clubSlugs?: string[]; minutes: number; hoursLines?: string[]; preset?: HoursPreset | "custom"; tz?: string | null; minNoticeHours?: number | null }): Promise<ActionResult<{ handle: string; studentUrl: string }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
@@ -94,7 +94,10 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
     }
     // Neither a revalidation nor a cookie here, on purpose: either would refresh /coach and swap the setup walk for the book
     // mid-way. The walk moves itself to /coach?setup=1 and ends through /coach/done.
-    if (input.clubSlugs?.length) await updateCoach(db, coach.id, { clubSlugs: input.clubSlugs }).catch(() => undefined);
+    const patch: CoachPatch = {};
+    if (input.clubSlugs?.length) patch.clubSlugs = input.clubSlugs;
+    if (created && input.minNoticeHours != null && Number.isFinite(input.minNoticeHours)) patch.minNoticeHours = input.minNoticeHours;
+    if (Object.keys(patch).length) await updateCoach(db, coach.id, patch).catch(() => undefined);
     // The walk ends on this link, so it is minted here rather than left on a screen the coach has not seen.
     const studentUrl = studentLink(baseUrl(), coach.handle, await inviteCode(db, coach));
     return { handle: coach.handle, studentUrl };
@@ -110,6 +113,10 @@ export type SettingsInput = {
   cutoffHours: number;
   latePasses: number;
   minNoticeHours: number;
+  priceSingle: number | null;
+  priceTwo: number | null;
+  priceThree: number | null;
+  priceFour: number | null;
   promptpayId: string;
   payLink: string;
   whatsapp: string;
@@ -134,6 +141,11 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       cutoffHours: input.cutoffHours,
       latePasses: input.latePasses,
       minNoticeHours: input.minNoticeHours,
+      // Per head, or nothing; updateCoach turns zero and blanks into null.
+      priceSingle: input.priceSingle,
+      priceTwo: input.priceTwo,
+      priceThree: input.priceThree,
+      priceFour: input.priceFour,
       promptpayId: input.promptpayId,
       payLink: input.payLink,
       whatsapp: input.whatsapp,

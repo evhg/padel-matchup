@@ -1175,7 +1175,16 @@
       "priceTwo": "Each, in a pair",
       "priceThree": "Each, in a three",
       "priceFour": "Each, in a four",
-      "latePass": "The first late cancellation on a package is on the house"
+      "latePass": "The first late cancellation on a package is on the house",
+      "notifyPushTitle": "Notifications in this browser",
+      "pushEnable": "Tell me here",
+      "pushOn": "On, in this browser",
+      "emailSaved": "Saved.",
+      "notice": "How much notice do you need for a booking?",
+      "noticeHelp": "A student cannot book closer to the hour than this. You can always book closer yourself.",
+      "notice2": "2 hours",
+      "notice12": "12 hours",
+      "notice24": "A day"
     },
     "done": {
       "title": "Your assistant is ready",
@@ -1295,7 +1304,9 @@
       "deleting": "Deleting…",
       "deleteConfirm": "Delete your coach page? {students} student(s) and {lessons} lesson(s) go with it, students can no longer find you, and setup starts again from its first question. This cannot be undone.",
       "deleteHasLessons": "You have a lesson still to come. Cancel it first, so your student is told.",
-      "deleteFailed": "That did not work. Try again."
+      "deleteFailed": "That did not work. Try again.",
+      "clubsHelp": "One club, or several separated by commas. With one club every lesson lands on that club's page; with several, none does, because nobody can tell which.",
+      "groupPrices": "In a group, each person pays"
     },
     "page": {
       "owedTitle": "To pay",
@@ -1367,7 +1378,8 @@
       "allTaken": "Every hour on {day} is taken",
       "takenTap": "Tap one to be told if it frees up.",
       "teaches": "Teaches {hours}",
-      "comped": "On me"
+      "comped": "On me",
+      "atClub": "at {club}"
     },
     "me": {
       "title": "Your lessons",
@@ -1431,7 +1443,7 @@
     },
     "calendar": {
       "title": "Your calendar",
-      "lead": "Lessons booked here land in your Google Calendar. What you write there becomes busy time here.",
+      "lead": "Every lesson already reaches your calendar. Each booking arrives in your email with an invitation, and a cancellation takes it out again. Tap it once and it is in Google, Apple or Outlook. Nothing below is needed for that.",
       "step1": "1. Share your Google Calendar with this address",
       "step1Help": "Google Calendar → your calendar → Settings and sharing → Share with specific people → “Make changes to events”.",
       "copy": "Copy",
@@ -1455,7 +1467,9 @@
       "icalFailed": "That link could not be read. It should be the secret address ending in .ics.",
       "badAddress": "That does not look like a calendar address.",
       "badLink": "That does not look like an iCal link.",
-      "how": "Nothing leaves your Google account: you share one calendar with our address the way you would with a colleague, and can unshare it any time. Lessons appear there with the student's name; delete one there and the lesson is cancelled here as your cancellation, and the student is told. Anything else you write there (a match, a dentist, a holiday) simply blocks that time from students."
+      "how": "Nothing leaves your Google account: you share one calendar with our address the way you would with a colleague, and can unshare it any time. Lessons appear there with the student's name; delete one there and the lesson is cancelled here as your cancellation, and the student is told. Anything else you write there (a match, a dentist, a holiday) simply blocks that time from students.",
+      "busyFold": "Want the assistant to see when you are busy elsewhere?",
+      "busyHelp": "Share a calendar and anything you write there — a match, a dentist, a holiday — blocks that time from students. Lessons booked here appear there too. This needs a desk: the Google Calendar phone app cannot share a calendar."
     },
     "import": {
       "title": "Bring your sheet",
@@ -1484,7 +1498,7 @@
     },
     "managers": {
       "title": "Who runs your lessons with you",
-      "lead": "A partner or an assistant can book, cancel and note payments. Students still see one name: yours.",
+      "lead": "Someone at the club desk, or a partner, who books, moves and cancels for you while you are on court. They see your book and never your settings. Students still see one name: yours.",
       "makeLink": "Make a link for them",
       "shareText": "Help me run my lessons: {url}",
       "remove": "Remove",

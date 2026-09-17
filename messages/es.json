@@ -1175,7 +1175,16 @@
       "priceTwo": "Cada uno, en pareja",
       "priceThree": "Cada uno, en trío",
       "priceFour": "Cada uno, en cuarteto",
-      "latePass": "La primera cancelación tardía de un paquete corre por tu cuenta"
+      "latePass": "La primera cancelación tardía de un paquete corre por tu cuenta",
+      "notifyPushTitle": "Notificaciones en este navegador",
+      "pushEnable": "Avísame aquí",
+      "pushOn": "Activado, en este navegador",
+      "emailSaved": "Guardado.",
+      "notice": "¿Con cuánta antelación pueden reservar?",
+      "noticeHelp": "Un alumno no puede reservar con menos margen. Tú siempre puedes reservar más cerca de la hora.",
+      "notice2": "2 horas",
+      "notice12": "12 horas",
+      "notice24": "Un día"
     },
     "done": {
       "title": "Tu asistente está listo",
@@ -1295,7 +1304,9 @@
       "deleting": "Eliminando…",
       "deleteConfirm": "¿Eliminar tu página de entrenador? Se irán {students} alumno(s) y {lessons} clase(s), tus alumnos ya no podrán encontrarte y la configuración empezará desde la primera pregunta. Esto no se puede deshacer.",
       "deleteHasLessons": "Tienes una clase pendiente. Cancélala primero, para que tu alumno se entere.",
-      "deleteFailed": "No ha funcionado. Inténtalo de nuevo."
+      "deleteFailed": "No ha funcionado. Inténtalo de nuevo.",
+      "clubsHelp": "Un club, o varios separados por comas. Con un club cada clase aparece en su página; con varios, ninguna, porque nadie sabe cuál.",
+      "groupPrices": "En grupo, cada persona paga"
     },
     "page": {
       "owedTitle": "Por pagar",
@@ -1367,7 +1378,8 @@
       "allTaken": "Todas las horas del {day} están ocupadas",
       "takenTap": "Toca una hora y te avisamos si se libera.",
       "teaches": "Da clase {hours}",
-      "comped": "Invita la casa"
+      "comped": "Invita la casa",
+      "atClub": "en {club}"
     },
     "me": {
       "title": "Tus clases",
@@ -1431,7 +1443,7 @@
     },
     "calendar": {
       "title": "Tu calendario",
-      "lead": "Las clases reservadas aquí aparecen en tu Google Calendar. Lo que escribas allí se convierte aquí en tiempo ocupado.",
+      "lead": "Cada clase ya llega a tu calendario. Cada reserva entra en tu correo con una invitación, y una cancelación la quita. Un toque y está en Google, Apple u Outlook. Nada de lo de abajo hace falta para eso.",
       "step1": "1. Comparte tu Google Calendar con esta dirección",
       "step1Help": "Google Calendar → tu calendario → Configuración y uso compartido → Compartir con determinadas personas → “Hacer cambios en eventos”.",
       "copy": "Copiar",
@@ -1455,7 +1467,9 @@
       "icalFailed": "No se pudo leer ese enlace. Debe ser la dirección secreta que termina en .ics.",
       "badAddress": "Eso no parece una dirección de calendario.",
       "badLink": "Eso no parece un enlace iCal.",
-      "how": "Nada sale de tu cuenta de Google: compartes un calendario con nuestra dirección como lo harías con un colega, y puedes dejar de compartirlo cuando quieras. Las clases aparecen allí con el nombre del alumno; borra una allí y aquí se cancela como cancelación tuya, y el alumno lo sabe. Todo lo demás que escribas allí (un partido, el dentista, vacaciones) simplemente bloquea ese tiempo para los alumnos."
+      "how": "Nada sale de tu cuenta de Google: compartes un calendario con nuestra dirección como lo harías con un colega, y puedes dejar de compartirlo cuando quieras. Las clases aparecen allí con el nombre del alumno; borra una allí y aquí se cancela como cancelación tuya, y el alumno lo sabe. Todo lo demás que escribas allí (un partido, el dentista, vacaciones) simplemente bloquea ese tiempo para los alumnos.",
+      "busyFold": "¿Quieres que el asistente vea cuándo estás ocupado en otro sitio?",
+      "busyHelp": "Comparte un calendario y todo lo que escribas ahí — un partido, el dentista, vacaciones — bloquea ese tiempo para tus alumnos. Las clases reservadas aquí aparecen ahí también. Hace falta un ordenador: la app de Google Calendar no permite compartir un calendario."
     },
     "import": {
       "title": "Trae tu hoja",
@@ -1484,7 +1498,7 @@
     },
     "managers": {
       "title": "Quién lleva tu agenda contigo",
-      "lead": "Una pareja o un asistente puede reservar, cancelar y anotar pagos. Los alumnos siguen viendo un solo nombre: el tuyo.",
+      "lead": "Alguien en recepción del club, o una pareja, que reserva, mueve y cancela por ti mientras estás en pista. Ve tu agenda y nunca tus ajustes. Los alumnos siguen viendo un solo nombre: el tuyo.",
       "makeLink": "Crear un enlace para esa persona",
       "shareText": "Lleva mi agenda de clases conmigo: {url}",
       "remove": "Quitar",

@@ -77,7 +77,16 @@ export function CoachCalendar({ serviceEmail, initial }: Props) {
         <h2 className="text-xl font-extrabold tracking-tight">{t("title")}</h2>
         <p className="text-sm text-muted">{t("lead")}</p>
       </div>
-      <ol className="flex flex-col gap-3 text-sm">
+      {/* Sharing a Google calendar needs a desk and five menus, and its real benefit is reading busy
+          time, not writing lessons — the invitation by email already does that. So it is a fold with
+          the benefit as its title, open only when a calendar is already attached. */}
+      <details open={attached} className="group" data-testid="calendar-fold">
+        <summary className="cursor-pointer list-none text-sm font-bold text-ink">
+          <span className="mr-1 inline-block transition group-open:rotate-90">▸</span>
+          {t("busyFold")}
+        </summary>
+        <p className="mt-2 text-xs text-muted">{t("busyHelp")}</p>
+      <ol className="mt-3 flex flex-col gap-3 text-sm">
         <li>
           <div className="font-bold">{t("step1")}</div>
           <p className="text-xs text-muted">{t("step1Help")}</p>
@@ -134,6 +143,7 @@ export function CoachCalendar({ serviceEmail, initial }: Props) {
         )}
       </div>
       <HowThisWorks text={t("how")} />
+      </details>
     </section>
   );
 }
