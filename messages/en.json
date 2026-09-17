@@ -1228,7 +1228,9 @@
       "how": "Pick a student or type a new name, then a day and a free time. Times outside your hours are yours to book too.",
       "heads": "How many came",
       "comp": "On me",
-      "compWhy": "Why? Your student reads this."
+      "compWhy": "Why? Your student reads this.",
+      "openHour": "Open this hour",
+      "opened": "Open: {when}. Students can book it."
     },
     "students": {
       "title": "Students",

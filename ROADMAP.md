@@ -79,6 +79,12 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **An hour outside the week.** The weekly template says what a normal week looks like, and a block
+  already took one hour of one date back. Now a coach can add one the same way: type a time on their
+  book and open it, and that Sunday evening is bookable without anybody else's Sunday moving. It
+  undoes to whatever the template says. A block still wins, because taking an hour back is the
+  stronger word.
+
 - **What a lesson costs, and giving one away.** A coach sells one-off lessons or only packages, and
   says so with a switch rather than by leaving a field empty. Behind one line, "I also teach pairs and
   groups" asks three more prices: **what each person pays** at two, three and four, never the court

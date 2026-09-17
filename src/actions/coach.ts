@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -212,6 +212,25 @@ export async function coachBlockAction(input: { startsAt?: string | null; day?: 
     const block = await blockTime(db, { coachId: coach.id, startsAt, minutes: input.minutes ?? coach.lessonMinutes, reason: input.reason ?? null });
     revalidateCoach(coach.handle);
     return { blockId: block.id };
+  });
+}
+
+/**
+ * "I can also do this hour." The opposite of blocking: one date opened on top of the weekly template,
+ * so a coach can say yes to a Sunday evening without moving everybody else's Sundays.
+ */
+export async function coachOpenAction(input: { startsAt?: string | null; day?: string | null; time?: string | null; minutes?: number | null }): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    let startsAt: Date;
+    if (input.startsAt) startsAt = new Date(input.startsAt);
+    else if (input.day && input.time && /^\d{4}-\d{2}-\d{2}$/.test(input.day) && /^\d{2}:\d{2}$/.test(input.time)) startsAt = zonedTimeToUtc(input.day, input.time, coach.tz);
+    else throw new DomainError("invalid", "time");
+    if (Number.isNaN(startsAt.getTime())) throw new DomainError("invalid", "time");
+    await openHour(db, coach.id, startsAt, input.minutes ?? coach.lessonMinutes);
+    revalidateCoach(coach.handle);
+    return null;
   });
 }
 

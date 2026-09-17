@@ -10,7 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn, sameHoursEveryDay } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
@@ -74,7 +74,10 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
     accepted && me ? studentRequests(db, coach.id, me.id, now) : Promise.resolve([]),
   ]);
   // Every slot inside the hours, minus the free ones: what a student can wait for.
-  const everySlot = accepted ? openSlots({ coach, from: now, to, busy: [], now }) : [];
+  // Every hour the coach could teach, free or not: the template plus the dates they opened. Without
+  // the openings an hour opened for one date would never show as taken, so nobody could wait for it.
+  const openings = accepted ? await openingsBetween(db, coach.id, now, to) : [];
+  const everySlot = accepted ? openSlots({ coach, from: now, to, busy: [], now, openings }) : [];
   const freeIso = new Set(slots.map((d) => d.toISOString()));
   const takenSlots = everySlot.filter((d) => !freeIso.has(d.toISOString()));
   const mine = lessons.filter((l) => l.coachId === coach.id);

@@ -351,6 +351,13 @@
       "when": 1789646740743,
       "tag": "0049_yellow_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789649883214,
+      "tag": "0050_worthless_switch",
+      "breakpoints": true
     }
   ]
 }

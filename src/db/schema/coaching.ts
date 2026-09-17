@@ -121,6 +121,35 @@ export const coachStudents = pgTable(
 
 export type CoachStudent = typeof coachStudents.$inferSelect;
 
+/**
+ * An hour the coach opened on one date, outside their weekly template.
+ *
+ * The template says what a normal week looks like; this says "and this Sunday evening as well". Its
+ * opposite already existed — `coach_blocks` takes an hour back — so between the two a coach can shape
+ * any single date without touching the week everybody else's Tuesdays depend on.
+ *
+ * A separate table rather than a second kind of row in `coach_blocks`: every query that reads blocks
+ * means "busy", and a row in there that meant the opposite would have to be excluded from each one,
+ * correctly, for ever.
+ */
+export const coachOpenings = pgTable(
+  "coach_openings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** web | telegram: where the coach opened it, for the same reason a block records it. */
+    source: text("source").notNull().default("web"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("coach_openings_coach_time_idx").on(t.coachId, t.startsAt)],
+);
+
+export type CoachOpening = typeof coachOpenings.$inferSelect;
+
 export const lessonPackages = pgTable(
   "lesson_packages",
   {

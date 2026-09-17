@@ -1228,7 +1228,9 @@
       "how": "Elige un alumno o escribe un nombre nuevo, luego un día y una hora libre. Las horas fuera de tu horario también puedes reservarlas tú.",
       "heads": "Cuántos vinieron",
       "comp": "Invita la casa",
-      "compWhy": "¿Por qué? Tu alumno lo verá."
+      "compWhy": "¿Por qué? Tu alumno lo verá.",
+      "openHour": "Abrir esta hora",
+      "opened": "Abierto: {when}. Tus alumnos ya pueden reservarla."
     },
     "students": {
       "title": "Alumnos",
