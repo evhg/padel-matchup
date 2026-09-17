@@ -21,6 +21,11 @@ import { getSessionPlayer } from "@/lib/session";
 import { playerTicket } from "@/lib/coach/link";
 import { botDeepLink } from "@/lib/telegram/bot";
 import { telegramBotUsername } from "@/lib/telegram/api";
+import { CoachNotify } from "@/components/coach/CoachNotify";
+import { reachFor } from "@/lib/coach/reach";
+import { emailEnabled } from "@/lib/config";
+import { playerHasPush } from "@/lib/domain/push";
+import { pushEnabled, vapidPublicKey } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -63,15 +68,48 @@ export default async function CoachPage({ searchParams }: Props) {
     // has to be one a club page can match (rule: the slug is the address).
     const clubOptions = (await listClubsForPicking(db)).map((c) => ({ slug: c.slug, name: c.name, city: c.city }));
     const resumedLink = found ? studentLink(baseUrl(), found.coach.handle, await inviteCode(db, found.coach)) : null;
+    const hasPush = pushEnabled() ? await playerHasPush(db, me.id) : false;
     return shell(
       <>
         {tag}
-        <CoachSetup initialClubs={((Array.isArray(sp.club) ? sp.club[0] : sp.club) ?? "").slice(0, 80)} clubOptions={clubOptions} botUsername={telegramBotUsername()} botUrl={botDeepLink(`coach_${playerTicket(me)}`)} existing={Boolean(found)} studentUrl={resumedLink} />
+        <CoachSetup
+          initialClubs={((Array.isArray(sp.club) ? sp.club[0] : sp.club) ?? "").slice(0, 80)}
+          clubOptions={clubOptions}
+          botUsername={telegramBotUsername()}
+          botUrl={botDeepLink(`coach_${playerTicket(me)}`)}
+          existing={Boolean(found)}
+          studentUrl={resumedLink}
+          email={me.email}
+          emailEnabled={emailEnabled()}
+          vapidPublicKey={vapidPublicKey()}
+          pushSubscribed={hasPush}
+        />
       </>,
     );
   }
 
   const { coach } = found;
+  // A book nobody can hear from is not a book. Coaches who finished the walk before the channel step
+  // existed land here, and the same screen a new coach gets stands in the way until one is picked.
+  //
+  // The coach only, never a manager: a manager runs somebody else's bookings and cannot set the
+  // coach's channel, so standing this in their way would block a book that is already reachable.
+  const reach = found.role === "coach" ? await reachFor(db, me) : null;
+  if (reach && !reach.any)
+    return shell(
+      <>
+        {tag}
+        <CoachNotify
+          botUsername={telegramBotUsername()}
+          botUrl={botDeepLink(`coach_${playerTicket(me)}`)}
+          email={me.email}
+          emailEnabled={emailEnabled()}
+          vapidPublicKey={vapidPublicKey()}
+          pushSubscribed={false}
+          gate
+        />
+      </>,
+    );
   const now = new Date();
   const today = todayIn(coach.tz, now);
   const days = dayRange(today, 14);

@@ -81,7 +81,7 @@ try {
   const rawTicket = decodeURIComponent(ticket ?? "");
   const replayed = await hook({ update_id: 900003, message: { message_id: 900003, date: 0, chat: { id: 616162, type: "private" }, from: stranger, text: `/start coach_${rawTicket}` } });
   check("the ticket that bound the coach is dead once she is bound: replayed from a second Telegram account it is refused as expired", replayed.outcome === "coach_link_expired", JSON.stringify(replayed));
-  await olga.getByRole("button", { name: "Email me instead" }).click();
+  await olga.getByTestId("notify-done").click();
 
   // The walk ends on the link, not on a Done button with the link two screens away.
   await olga.getByTestId("setup-link").waitFor({ timeout: 20000 });
@@ -313,6 +313,9 @@ try {
   await nina.getByTestId("manager-join").click();
   await nina.getByRole("heading", { name: "Today" }).waitFor({ timeout: 20000 });
   check("the manager lands in the coach's book after one name", (await nina.getByText("Pavel").count()) >= 1 || (await nina.getByText("Ivan").count()) >= 1);
+  // Nina has no channel of her own, and cannot set Olga's. The "pick a channel" screen is the coach's,
+  // so it never stands in the way of somebody running a book that is already reachable.
+  check("the channel screen does not block a manager", (await nina.getByTestId("notify-done").count()) === 0);
   await olga.reload();
   check("the coach sees the manager listed", (await olga.getByTestId("coach-managers").getByText("Nina").count()) === 1);
 

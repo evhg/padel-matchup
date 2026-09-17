@@ -111,7 +111,15 @@ try {
   await nok.getByTestId("pay-at-club").check();
   await nok.getByTestId("price-save").click();
   await nok.getByTestId("setup-notify").waitFor({ timeout: 20000 });
-  await nok.getByRole("button", { name: "Email me instead" }).click();
+  // Nok has not opened the bot, so there is nowhere to tell her anything. The walk used to let her
+  // past on a button reading "Email me instead" that collected no address; now it does not.
+  await nok.getByTestId("notify-done").click();
+  await nok.getByTestId("notify-none").waitFor({ timeout: 10000 });
+  check("the walk refuses to finish while the assistant has no way to reach the coach", (await nok.getByTestId("notify-none").count()) === 1);
+  const nokEmail = nok.getByTestId("notify-email");
+  await nokEmail.locator('input[type="email"]').fill("nok@example.test");
+  await nokEmail.getByRole("button", { name: "Save" }).click();
+  await nok.getByTestId("notify-done").click();
   await nok.getByTestId("setup-link").waitFor({ timeout: 20000 });
   await nok.getByTestId("setup-finish").click();
   await nok.waitForURL(/\/coach/, { timeout: 30000 });

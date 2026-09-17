@@ -62,7 +62,7 @@ try {
   const ticket = href?.match(/start=coach_([^&]+)/)?.[1];
   const bound = await say(`/start coach_${decodeURIComponent(ticket ?? "")}`);
   check("the coach's own assistant is bound, so the book can be seeded a line at a time", bound.outcome === "coach_linked", JSON.stringify(bound));
-  await nadia.getByRole("button", { name: "Email me instead" }).click();
+  await nadia.getByTestId("notify-done").click();
   await nadia.getByTestId("setup-link").waitFor({ timeout: 20000 });
   const handle = (await nadia.getByTestId("student-link").innerText()).match(/\/c\/([a-z0-9-]+)/)?.[1] ?? "";
   await nadia.getByTestId("setup-finish").click();
