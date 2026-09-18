@@ -98,6 +98,19 @@ Everything in this list is live. The README describes each in detail.
   "on me" over "I already paid" — the one collision that costs a friendship — is refused when the
   coach marked it paid, and asked once when the student merely says so.
 
+- **Eight things Erik tripped on, fixed on the screen they happened on.** A no-show tapped by accident,
+  or to see what the button does, or on a student who was only late, has **They came after all** on
+  the same row; the lesson goes back to done and keeps its package lesson and its price. Pausing a
+  student dimmed the whole row, so "Resume bookings" read as a disabled button: the dimming sits on
+  the text now and the resume button is the dark one. The student's name on the book opens their row
+  on the students screen. "Who runs your lessons with you" became a folded question, "Does someone
+  else take your bookings?", with a lead that says who the helper is and what they can do. The one
+  true sentence under "Your calendar" reads as body text, and every rem on a desk over 1280px is a
+  point larger. A coach changes what a lesson or a package costs — a tip, a rounding, a weekend at
+  double rate — with ✎ on the row. And "More" is gone: the three other screens are three buttons
+  above the book, and the link, the share buttons and the QR live on the students screen, where a
+  student is added.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a

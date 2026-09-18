@@ -3,7 +3,9 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { addPackageAction, addStudentAction, coachSetLessonPaidAction, extendPackageAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
+import { QRCodeSVG } from "qrcode.react";
+import { addPackageAction, addStudentAction, coachSetLessonPaidAction, extendPackageAction, setLessonAmountAction, setPackageAmountAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
+import { ShareButtons } from "@/components/ShareSheet";
 import { HowThisWorks } from "./HowThisWorks";
 import { PromptPayQr } from "./PromptPayQr";
 
@@ -13,13 +15,15 @@ export type StudentDTO = { playerId: string; name: string; status: string; lesso
 export type UnpaidLessonDTO = { lessonId: string; studentPlayerId: string; label: string; amount: number; claimed: boolean; hasSlip: boolean };
 
 type Props = { coachName: string; handle: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string;
+  /** The link the coach forwards: whoever opens it is on the list. It lives here, where students are added. */
+  studentUrl: string;
   /** What each student still owes, by player id: unpaid lessons plus an unpaid package. */
   owed: Record<string, number>;
   /** The unpaid lessons behind that figure. "Owes 3000" used to be a number with no tap under it. */
   unpaid: UnpaidLessonDTO[] };
 
 /** Students: requests to accept, packages to start, "paid" to note. One list, one action per row. */
-export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid }: Props) {
+export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid, studentUrl }: Props) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -38,6 +42,13 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
     });
 
   const pkgLine = (p: PackageDTO) => (p.days === null ? t("packageLineNoExpiry", { left: p.left, size: p.size }) : t("packageLine", { left: p.left, size: p.size, days: p.days }));
+  // A tip, a rounding, a weekend rate: the coach corrects the figure on the row it is owed on.
+  const askAmount = (name: string, current: number | null) => {
+    const raw = prompt(t("home.amountPrompt", { name, currency }), String(current ?? 0));
+    if (raw === null) return null;
+    const n = Number(raw.replace(/[^\d]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  };
   const canShowQr = Boolean(promptpayId || qrUrl || payLink);
   // Plain digits and the code, as everywhere else money is shown here; `toLocaleString` would
   // format one way on the server and another in the browser, and hydration would tear.
@@ -74,10 +85,15 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
         {rest.length === 0 && requests.length === 0 && <p className="mt-3 text-sm text-muted">{t("students.none")}</p>}
         <ul className="mt-3 flex flex-col gap-2">
           {rest.map((s) => (
-            <li key={s.playerId} className={`rounded-2xl border border-line bg-white px-4 py-3 ${s.status === "paused" || s.status === "left" ? "opacity-60" : ""}`}>
+            // The id is what the name on the coach's book links to; :target lights the row up on arrival.
+            // The dimming sits on the text, not the row: a dimmed row made "Resume bookings" look disabled.
+            <li key={s.playerId} id={`s-${s.playerId}`} className="scroll-mt-24 rounded-2xl border border-line bg-white px-4 py-3 target:ring-2 target:ring-accent" data-testid="student-row">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate font-bold">{s.name}</div>
+                <div className={`min-w-0 ${s.status === "paused" || s.status === "left" ? "opacity-60" : ""}`}>
+                  <div className="truncate font-bold">
+                    {s.name}
+                    {s.status === "paused" && <span className="chip-muted ml-2 align-middle">{t("students.paused")}</span>}
+                  </div>
                   <div className="text-xs text-muted">
                     {s.pkg ? pkgLine(s.pkg) : t("noPackage")}
                     {s.pkg ? ` · ${s.pkg.paid ? t("students.paid") : t("students.unpaid")}` : ""}
@@ -92,7 +108,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                 {s.status === "left" ? (
                   <span className="shrink-0 text-xs font-bold text-faint">{t("students.left")}</span>
                 ) : (
-                  <button type="button" className="btn-ghost btn-xs shrink-0" disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))}>
+                  <button type="button" className={`${s.status === "paused" ? "btn-secondary" : "btn-ghost"} btn-xs shrink-0`} disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))} data-testid="pause-toggle">
                     {s.status === "paused" ? t("students.resume") : t("students.pause")}
                   </button>
                 )}
@@ -115,9 +131,14 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                             </>
                           )}
                         </span>
-                        <button type="button" className="btn-secondary btn-xs shrink-0" disabled={pending} onClick={() => act(() => coachSetLessonPaidAction(u.lessonId, true))} data-testid="mark-lesson-paid">
-                          {t("students.markPaid")}
-                        </button>
+                        <span className="flex shrink-0 gap-1">
+                          <button type="button" className="btn-ghost btn-xs" disabled={pending} aria-label={t("home.editAmount")} title={t("home.editAmount")} onClick={() => { const n = askAmount(s.name, u.amount); if (n !== null) act(() => setLessonAmountAction(u.lessonId, n)); }} data-testid="edit-lesson-amount">
+                            ✎
+                          </button>
+                          <button type="button" className="btn-secondary btn-xs" disabled={pending} onClick={() => act(() => coachSetLessonPaidAction(u.lessonId, true))} data-testid="mark-lesson-paid">
+                            {t("students.markPaid")}
+                          </button>
+                        </span>
                       </li>
                     ))}
                 </ul>
@@ -141,6 +162,11 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                 {s.pkg && s.pkg.days !== null && (
                   <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => act(() => extendPackageAction(s.pkg!.id, 30))}>
                     {t("students.extend")}
+                  </button>
+                )}
+                {s.pkg && (
+                  <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => { const n = askAmount(s.name, s.pkg!.amount); if (n !== null) act(() => setPackageAmountAction(s.pkg!.id, n)); }} data-testid="edit-package-amount">
+                    ✎ {t("home.editAmount")}
                   </button>
                 )}
                 <button type="button" className="btn-ghost btn-xs" onClick={() => setPackageFor(packageFor === s.playerId ? null : s.playerId)}>
@@ -205,6 +231,22 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
           </form>
         )}
         {adding && <p className="mt-1 text-xs text-faint">{t("students.addHelp")}</p>}
+      </section>
+      {/* The link, the share buttons and the QR: this is where a student is added, so this is where the
+          door for them lives. They used to sit under "More" on the book. */}
+      <section className="card" data-testid="student-link-card">
+        <h2 className="text-lg font-extrabold tracking-tight">{t("students.linkTitle")}</h2>
+        <p className="mt-1 text-sm text-muted">{t("students.linkHelp")}</p>
+        <p className="mt-2 break-all font-mono text-xs text-muted">{studentUrl}</p>
+        <div className="mt-3">
+          <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
+        </div>
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-bold">{t("done.qr")}</summary>
+          <div className="mt-2 inline-block rounded-xl border border-line bg-white p-2">
+            <QRCodeSVG value={studentUrl} size={160} level="M" bgColor="#ffffff" fgColor="#14161a" marginSize={1} />
+          </div>
+        </details>
       </section>
       <HowThisWorks text={t("students.how")} />
     </div>

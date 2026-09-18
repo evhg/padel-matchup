@@ -320,6 +320,29 @@ Wall clock first, credits second. What actually moved it, measured:
   query on `feedback` since yesterday is the whole answer, and it also shows what the tester actually
   did (`lessons` since yesterday), which is worth more than the notes.
 
+### Screens the owner's tester tripped on
+
+- **Dim the text, never the row.** A paused student's row was `opacity-60` end to end, and the one
+  button on it that undoes the pause looked disabled — Erik asked whether it was. The same fault sat
+  on a no-show lesson row the moment it gained an undo button. Whatever is dimmed to say "inactive"
+  must not contain the control that makes it active again: put the opacity on the text block.
+- **A destructive tap gets an undo on the row, not a confirm on every tap.** A confirm on "No-show"
+  would tax every real no-show to protect the accidental one; "They came after all" beside the status
+  costs only the coach who needs it. Grep for status-setting buttons with no way back before shipping
+  one, and put the way back where the tap was.
+- **A title the reader cannot act on is not a title.** "Who runs your lessons with you" was read twice
+  by the owner and once by the tester, and neither knew what it was for. Open a section with the
+  question it answers ("Does someone else take your bookings?"), fold it shut until it applies, and
+  make the lead say who the person is and what they can do.
+- **A "More" toggle over a list is where things go to be forgotten.** The three other screens and the
+  student link sat under it, and the tester disliked the layout without being able to say why: a
+  toggle that reveals a list is a menu, and a menu is not a screen. Three doors are three buttons; the
+  link that used to hide there now lives where a student is added.
+- **One prompt() handler per suite, with an answer you can set.** `page.on("dialog", d => d.accept())`
+  answers every prompt with an empty string, so a test of "change the amount" would have set it to
+  zero and passed the wrong way. A second `once("dialog")` listener races the first and throws. Give
+  the helper one mutable answer (`promptText.value = "550"`) and pass it on `prompt` dialogs only.
+
 ### Documents rot within hours
 
 Ship the document change in the same pull request as the code. Twice in one day `ROADMAP.md` and

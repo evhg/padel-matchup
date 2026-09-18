@@ -8,7 +8,8 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { whenLabel } from "@/lib/coach/strings";
 import { monthCounts, monthRange } from "@/lib/coach/chains";
-import { getCoachForActor, listStudents, owedPerStudent, owedToCoach, packageLine } from "@/lib/domain/coaching";
+import { getCoachForActor, inviteCode, listStudents, owedPerStudent, owedToCoach, packageLine, studentLink } from "@/lib/domain/coaching";
+import { baseUrl } from "@/lib/config";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export default async function CoachStudentsPage() {
   // One join for every unpaid lesson on the book, bounded; the packages are already in `students`,
   // so what each student owes costs no query of its own (rule 12).
   const unpaidLessons = await owedToCoach(db, coach.id, 200);
+  const invite = await inviteCode(db, coach);
   const thisMonth = new Map(counts.perStudent.map((p) => [p.playerId, p.done]));
   const owed = owedPerStudent(
     unpaidLessons,
@@ -48,6 +50,7 @@ export default async function CoachStudentsPage() {
         </Link>
         <CoachStudents
           handle={coach.handle}
+          studentUrl={studentLink(baseUrl(), coach.handle, invite)}
           unpaid={unpaidLessons.map((l) => ({ lessonId: l.lessonId, studentPlayerId: l.studentPlayerId, label: whenLabel(l.startsAt, coach.tz, locale), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip }))}
           coachName={coach.displayName}
           currency={coach.currency}

@@ -1053,6 +1053,50 @@ export async function markNoShow(db: Db, coachId: string, lessonId: string): Pro
     .where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId), inArray(lessons.status, ["booked", "done"])));
 }
 
+/**
+ * The no-show taken back. A coach taps "No-show" by accident, or to see what it does, or the student
+ * walks in ten minutes late — and until now the only way back was a message to the owner. The lesson
+ * returns to "done": the package lesson it consumed stays consumed and the price stays owed, because
+ * both were true before the tap and are true after it.
+ */
+export async function unmarkNoShow(db: Db, coachId: string, lessonId: string): Promise<boolean> {
+  const rows = await db
+    .update(lessons)
+    .set({ status: "done" })
+    .where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId), eq(lessons.status, "no_show")))
+    .returning({ id: lessons.id });
+  return rows.length > 0;
+}
+
+/**
+ * The coach corrects what a lesson costs: a tip, a rounding, a weekend at double rate. Only for a
+ * lesson that carries a price of its own — one a package paid for has no amount to correct, and a
+ * comped one was set to zero on purpose. Zero is allowed and means "nothing owed", the way a comp does
+ * but without the reason; the coach who wants the student told uses "On me".
+ */
+export async function setLessonAmount(db: Db, coachId: string, lessonId: string, amount: number): Promise<Lesson | null> {
+  const clean = Math.round(amount);
+  if (!Number.isFinite(clean) || clean < 0 || clean > 1_000_000) throw new DomainError("invalid", "amount");
+  const [row] = await db
+    .update(lessons)
+    .set({ amount: clean })
+    .where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId), isNull(lessons.compedAt)))
+    .returning();
+  return row ?? null;
+}
+
+/** The same correction on a package: what was actually agreed, or actually paid. */
+export async function setPackageAmount(db: Db, coachId: string, packageId: string, amount: number): Promise<LessonPackage | null> {
+  const clean = Math.round(amount);
+  if (!Number.isFinite(clean) || clean < 0 || clean > 10_000_000) throw new DomainError("invalid", "amount");
+  const [row] = await db
+    .update(lessonPackages)
+    .set({ amount: clean > 0 ? clean : null })
+    .where(and(eq(lessonPackages.id, packageId), eq(lessonPackages.coachId, coachId)))
+    .returning();
+  return row ?? null;
+}
+
 export async function listCoachLessons(db: Db, coachId: string, from: Date, to: Date): Promise<LessonWithPeople[]> {
   const rows = await db
     .select({ lesson: lessons, student: players, pkg: lessonPackages })

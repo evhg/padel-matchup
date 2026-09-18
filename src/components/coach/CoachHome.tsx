@@ -4,8 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { QRCodeSVG } from "qrcode.react";
-import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, coachOpenAction, coachSetLessonPaidAction, compLessonAction, decideRequestAction } from "@/actions/coach";
+import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, coachOpenAction, coachSetLessonPaidAction, coachUndoNoShowAction, compLessonAction, decideRequestAction, setLessonAmountAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
@@ -40,14 +39,13 @@ type Props = {
   earned?: boolean;
 };
 
-/** The coach's book: today, the next days, one button to book. Everything else behind "More". */
+/** The coach's book: today, the next days, one button to book. Three doors to the other screens above it. */
 export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [booking, setBooking] = useState(false);
-  const [more, setMore] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +76,25 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
       await coachNoShowAction(l.id);
       router.refresh();
     });
+  // The tap taken back, on the row it was made on. A confirm on every no-show would tax the real
+  // ones; an undo costs only the coach who needs it.
+  const undoNoShow = (l: LessonDTO) =>
+    start(async () => {
+      await coachUndoNoShowAction(l.id);
+      router.refresh();
+    });
+  // A tip, a rounding, a weekend at double rate: the coach's book, the coach's number.
+  const editAmount = (l: LessonDTO) => {
+    const raw = prompt(t("home.amountPrompt", { name: l.studentName, currency: l.currency ?? "" }), String(l.amount ?? 0));
+    if (raw === null) return;
+    const n = Number(raw.replace(/[^\d]/g, ""));
+    if (!Number.isFinite(n)) return;
+    start(async () => {
+      const r = await setLessonAmountAction(l.id, n);
+      if (!r.ok) setError(errorText(r.error));
+      router.refresh();
+    });
+  };
   /** "On me." The reason is asked for once and reaches the student, because a gift nobody reads is a number. */
   /** The coach's tap is the only thing that marks a lesson paid; un-marking is a correction to their own book. */
   const markPaid = (l: LessonDTO, paid: boolean) =>
@@ -110,10 +127,22 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
   const row = (l: LessonDTO) => (
     // A row built for one button carries up to three now. It wraps: the time and the text claim the
     // first line, and on a phone the buttons drop underneath rather than crushing the name to nothing.
-    <li key={l.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-white px-4 py-3 ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>
-      <div className="w-14 shrink-0 text-xl font-extrabold leading-none tabular-nums">{l.time}</div>
-      <div className="min-w-0 flex-1 basis-40">
-        <div className="truncate font-bold">{l.studentName}</div>
+    // A cancelled or missed lesson is dimmed by its text, never by the row: a dimmed row made the one
+    // button it still carries ("They came after all") look disabled.
+    <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-white px-4 py-3" data-status={l.status}>
+      <div className={`w-14 shrink-0 text-xl font-extrabold leading-none tabular-nums ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>{l.time}</div>
+      <div className={`min-w-0 flex-1 basis-40 ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>
+        {/* The name opens this student on the students screen: their package, what they owe, their
+            lessons — one tap instead of a screen change and a scroll. */}
+        <div className="truncate font-bold">
+          {l.studentPlayerId ? (
+            <Link href={`/coach/students#s-${l.studentPlayerId}`} prefetch={false} className="underline-offset-4 hover:underline" title={t("students.jumpTo", { name: l.studentName })} data-testid="lesson-student">
+              {l.studentName}
+            </Link>
+          ) : (
+            l.studentName
+          )}
+        </div>
         <div className="truncate text-xs text-muted">
           {pkgLine(l)}
           {(l.heads ?? 1) > 1 ? ` · ${l.heads}` : ""}
@@ -142,6 +171,11 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
           {t("home.markPaid")}
         </button>
       )}
+      {l.amount != null && l.comped == null && (
+        <button type="button" className="btn-ghost btn-xs" onClick={() => editAmount(l)} disabled={pending} data-testid="edit-amount" aria-label={t("home.editAmount")} title={t("home.editAmount")}>
+          ✎
+        </button>
+      )}
       {(l.amount ?? 0) > 0 && l.paid && (
         <button type="button" className="btn-ghost btn-xs" onClick={() => markPaid(l, false)} disabled={pending}>
           {t("home.unmarkPaid")}
@@ -158,8 +192,13 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         </button>
       )}
       {l.status === "done" && l.day === today && (
-        <button type="button" className="btn-ghost btn-xs" onClick={() => noShow(l)} disabled={pending}>
+        <button type="button" className="btn-ghost btn-xs" onClick={() => noShow(l)} disabled={pending} data-testid="no-show">
           {t("home.noShow")}
+        </button>
+      )}
+      {l.status === "no_show" && (
+        <button type="button" className="btn-ghost btn-xs" onClick={() => undoNoShow(l)} disabled={pending} data-testid="undo-no-show">
+          ↩ {t("home.undoNoShow")}
         </button>
       )}
       </div>
@@ -207,6 +246,13 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         </section>
       )}
       <LevelChecks checks={levelChecks} by={{ kind: "coach" }} />
+      {/* The three other screens, as three doors in a row. They used to sit under a "More" toggle
+          with the link, the share buttons and a QR, and a coach opening it found a list. */}
+      <nav className="grid grid-cols-3 gap-2" aria-label={t("home.more")} data-testid="coach-nav">
+        <NavTile href="/coach/students" icon="👥" label={t("home.students")} />
+        <NavTile href="/coach/settings" icon="⚙️" label={t("home.settings")} />
+        <NavTile href="/me" icon="🎾" label={tRoot("common.myMatches")} />
+      </nav>
       <section className="card">
         <div className="flex items-baseline justify-between gap-3">
           <h1 className="text-3xl font-extrabold tracking-tight">{t("home.title")}</h1>
@@ -265,47 +311,6 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         </section>
       )}
 
-      <div className="text-sm">
-        <button type="button" className="text-muted hover:text-ink" aria-expanded={more} onClick={() => setMore((v) => !v)}>
-          {more ? "▾" : "▸"} {t("home.more")}
-        </button>
-        {more && (
-          <ul className="mt-2 flex flex-col gap-2 animate-pop">
-            <li>
-              <Link href="/coach/students" prefetch={false} className="font-bold underline underline-offset-4">
-                {t("home.students")}
-              </Link>
-            </li>
-            <li>
-              <Link href="/coach/settings" prefetch={false} className="font-bold underline underline-offset-4">
-                {t("home.settings")}
-              </Link>
-            </li>
-            <li>
-              <Link href="/me" prefetch={false} className="font-bold underline underline-offset-4">
-                {tRoot("common.myMatches")}
-              </Link>
-            </li>
-            <li className="text-muted">
-              {t("home.link")}: <span className="font-mono">{url}</span> · <span className="font-mono">/c/{handle}</span>
-            </li>
-            <li>
-              <div className="text-sm font-bold">{t("done.forward")}</div>
-              <div className="mt-1">
-                <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
-              </div>
-            </li>
-            <li>
-              <details>
-                <summary className="cursor-pointer font-bold">{t("done.qr")}</summary>
-                <div className="mt-2 inline-block rounded-xl border border-line bg-white p-2">
-                  <QRCodeSVG value={studentUrl} size={160} level="M" bgColor="#ffffff" fgColor="#14161a" marginSize={1} />
-                </div>
-              </details>
-            </li>
-          </ul>
-        )}
-      </div>
       <HowThisWorks text={t("home.how")} />
       {earned && (
         <details className="px-1 text-xs text-faint" data-testid="invite-coach">
@@ -316,6 +321,16 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         </details>
       )}
     </div>
+  );
+}
+
+/** One door: an icon, a word, the whole tile tappable. */
+function NavTile({ href, icon, label }: { href: string; icon: string; label: string }) {
+  return (
+    <Link href={href} prefetch={false} className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-line bg-white px-2 py-2 text-center text-xs font-bold leading-tight text-ink shadow-card transition hover:border-ink/40 active:scale-[0.98]">
+      <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
+      <span>{label}</span>
+    </Link>
   );
 }
 

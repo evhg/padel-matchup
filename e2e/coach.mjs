@@ -7,10 +7,12 @@ const results = [];
 const check = makeCheck(results);
 const TG_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret";
 const hook = (update) => fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": TG_SECRET }, body: JSON.stringify(update) }).then((r) => r.json());
+/** What a prompt() answers with. Confirms are accepted either way; a prompt gets this text. */
+const promptText = { value: "" };
 const newPage = async () => {
   const ctx = await browser.newContext(iphone);
   const page = await ctx.newPage();
-  page.on("dialog", (d) => d.accept());
+  page.on("dialog", (d) => d.accept(d.type() === "prompt" ? promptText.value : undefined));
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
   return page;
 };
@@ -270,6 +272,26 @@ try {
   await olga.goto(BASE + "/coach");
   await olga.locator("li", { hasText: "Dasha" }).first().getByTestId("lesson-money").waitFor({ timeout: 20000 });
   check("and the coach's row says paid", /500 THB · paid/.test(await olga.locator("li", { hasText: "Dasha" }).first().getByTestId("lesson-money").innerText()));
+  // Erik: a tip, a rounding. The coach changes the figure on the row, and the row shows the new one.
+  promptText.value = "550";
+  await olga.locator("li", { hasText: "Dasha" }).first().getByTestId("edit-amount").click();
+  await olga.locator("li", { hasText: "Dasha" }).first().getByText(/550 THB/).waitFor({ timeout: 20000 });
+  promptText.value = "";
+  check("the coach can change what a lesson costs, for a tip or a rounding", true);
+  check("the student's name on the book is a door to their row on the students screen", ((await olga.locator("li", { hasText: "Dasha" }).first().getByTestId("lesson-student").getAttribute("href")) ?? "").startsWith("/coach/students#s-"));
+  // "More" was a toggle over a list. The three other screens are three buttons now, and the link
+  // that used to hide there lives on the students screen, where a student is added.
+  check("the three other screens are three buttons, not a More toggle", (await olga.getByTestId("coach-nav").locator("a").count()) === 3 && (await olga.getByRole("button", { name: /^▸ More/ }).count()) === 0);
+  await olga.getByTestId("coach-nav").getByRole("link", { name: /Students/ }).click();
+  await olga.getByTestId("student-link-card").waitFor({ timeout: 20000 });
+  check("the students screen carries the link to hand out, with the share buttons", (await olga.getByTestId("student-link-card").getByText(/\/c\//).count()) === 1);
+  // Pausing dims the student, not the button that undoes it: a dimmed "Resume bookings" read as disabled.
+  const dashaRowS = olga.locator('[data-testid="student-row"]', { hasText: "Dasha" }).first();
+  await dashaRowS.getByTestId("pause-toggle").click();
+  await dashaRowS.getByRole("button", { name: "Resume bookings" }).waitFor({ timeout: 20000 });
+  check("resume bookings reads as a live button, with the student marked paused", ((await dashaRowS.getByTestId("pause-toggle").getAttribute("class")) ?? "").includes("btn-secondary") && (await dashaRowS.getByText("Paused").count()) === 1);
+  await dashaRowS.getByTestId("pause-toggle").click();
+  await dashaRowS.getByRole("button", { name: "Pause bookings" }).waitFor({ timeout: 20000 });
 
   // Ivan sees it on My matches with the package line.
   await ivan.goto(BASE + "/me");
@@ -344,6 +366,9 @@ try {
 
   // A manager: Olga makes one link; Nina opens it, gives a name, and sees Olga's book.
   await olga.goto(BASE + "/coach/settings");
+  // The section opens with the question it answers and stays shut until somebody is helping.
+  check("the helper section says what it is for before it asks for anything", (await olga.getByTestId("managers-fold").getAttribute("open")) === null && (await olga.getByText("Does someone else take your bookings?").count()) === 1);
+  await olga.getByTestId("managers-fold").locator("summary").click();
   await olga.getByRole("button", { name: "Make a link for them" }).click();
   const managerLink = (await olga.getByTestId("manager-link").textContent({ timeout: 20000 }))?.trim() ?? "";
   check("the coach gets one manager link", /\/coach\/join\/[a-z0-9]{8}$/.test(managerLink), managerLink);

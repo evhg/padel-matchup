@@ -1226,7 +1226,10 @@
       "markPaid": "Mark paid",
       "unmarkPaid": "Not paid after all",
       "compClaimed": "{name} says they already paid {amount}. Put it on you anyway? Their claim stays on the row.",
-      "slip": "See the slip"
+      "slip": "See the slip",
+      "undoNoShow": "They came after all",
+      "editAmount": "Change amount",
+      "amountPrompt": "New amount for {name}, in {currency}. A tip, a rounding, a weekend rate: your book, your number."
     },
     "book": {
       "student": "Student",
@@ -1282,7 +1285,11 @@
       "left": "Left",
       "lessonsOwed": "Unpaid lessons",
       "saysPaid": "says paid",
-      "withSlip": "with slip"
+      "withSlip": "with slip",
+      "paused": "Paused",
+      "linkTitle": "Your link for students",
+      "linkHelp": "Send it once. Whoever opens it is on your list and books free times alone.",
+      "jumpTo": "Open {name} on the students screen"
     },
     "settings": {
       "title": "Settings",
@@ -1514,8 +1521,8 @@
       "done": "{created, plural, one {# package} other {# packages}} added: {students, plural, =0 {no new students} one {# new student} other {# new students}}, {matched} already here."
     },
     "managers": {
-      "title": "Who runs your lessons with you",
-      "lead": "Someone at the club desk, or a partner, who books, moves and cancels for you while you are on court. They see your book and never your settings. Students still see one name: yours.",
+      "title": "A helper who books for you",
+      "lead": "Somebody at the club desk, your partner, an assistant: give them this link and they book, move and cancel lessons for you from their own phone while you are on court. They see your lessons, never these settings. Students still see one name: yours.",
       "makeLink": "Make a link for them",
       "shareText": "Help me run my lessons: {url}",
       "remove": "Remove",
@@ -1523,7 +1530,8 @@
       "joinLead": "{name} asked you to help run their lessons. Your name, and you are in.",
       "joinButton": "Help {name} run their lessons",
       "joinGone": "That link is not valid any more. Ask the coach for a new one.",
-      "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section."
+      "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section.",
+      "fold": "Does someone else take your bookings?"
     }
   },
   "coachFront": {
