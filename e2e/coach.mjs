@@ -247,10 +247,12 @@ try {
   // sees what each pays; Ivan, whose package pays, sees the count and no figure.
   await dasha.reload();
   await dasha.getByTestId("student-heads").waitFor({ timeout: 20000 });
-  check("a student is asked how many are coming once the coach has a group price, and sees what each pays", (await dasha.getByTestId("student-heads").locator('button[data-heads="2"]').innerText()).includes("500"));
+  await dasha.getByTestId("student-heads").locator('button[data-heads="2"]').click();
+  check("a student is asked how many are coming once the coach has a group price, and sees what each pays", (await dasha.getByTestId("each-pays").innerText()).includes("500"));
   await ivan.reload();
   await ivan.getByTestId("student-heads").waitFor({ timeout: 20000 });
-  check("a student whose package pays is asked how many, and shown no price", !(await ivan.getByTestId("student-heads").locator('button[data-heads="2"]').innerText()).includes("500"));
+  check("a student whose package pays is asked how many, and shown no price", (await ivan.getByTestId("each-pays").count()) === 0);
+  check("the header says the price is 'from' when there is more than one", (await ivan.getByText(/from 500 THB/).count()) === 1);
   // Ivan books a free time himself, then cancels in time: the lesson goes back on the package.
   await ivan.reload();
   await ivan.getByRole("heading", { name: "Book a lesson" }).waitFor({ timeout: 20000 });

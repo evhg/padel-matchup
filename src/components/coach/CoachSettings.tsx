@@ -131,7 +131,7 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
         {/* Benji sells sixty and ninety minutes, each with its own price. One more length, two more prices. */}
         <div>
           <div className="text-sm font-bold">{t("setup.secondOpen")}</div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-[7rem_1fr_1fr] gap-2">
             <label className="block text-xs font-bold text-muted">
               {t("setup.secondLength")}
               <select className="input mt-1" value={v.secondMinutes ?? ""} onChange={(e) => set("secondMinutes", e.target.value === "" ? null : Number(e.target.value))} data-testid="settings-second-minutes">

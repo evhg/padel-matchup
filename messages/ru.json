@@ -1439,7 +1439,9 @@
       "length": "Длина занятия",
       "packageOwed": "Абонемент на {size, plural, one {# занятие} few {# занятия} other {# занятий}}",
       "lessonTwo": "Занятия по {a} или {b} минут",
-      "noGap": "Нет окна на {minutes} минут: {day}"
+      "noGap": "Нет окна на {minutes} минут: {day}",
+      "from": "от {amount}",
+      "eachPaysLine": "Каждый платит {amount}"
     },
     "me": {
       "title": "Ваши занятия",

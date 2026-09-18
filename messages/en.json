@@ -1439,7 +1439,9 @@
       "length": "Lesson length",
       "packageOwed": "{size, plural, one {# lesson} other {# lessons}} package",
       "lessonTwo": "{a}- or {b}-minute lessons",
-      "noGap": "No {minutes}-minute gap on {day}"
+      "noGap": "No {minutes}-minute gap on {day}",
+      "from": "from {amount}",
+      "eachPaysLine": "Each pays {amount}"
     },
     "me": {
       "title": "Your lessons",
