@@ -175,6 +175,11 @@ Wall clock first, credits second. What actually moved it, measured:
   things this repo starts (`gate.sh`, `vitest`, `next build`, `next start`, `e2e/run.mjs`, and any
   loop you wrote) before calling work finished. Kill by **PID**, never by pattern: `pkill -f
   "next start"` once matched the backgrounding shell's own command line and killed the caller.
+- **Production is reached through the Supabase MCP, and only that.** The Claude Code environment
+  cannot open port 5432 (or 6543) whatever the network policy says, so a direct Postgres URL in the
+  environment does nothing from here: an hour went on proving that, and the owner confirmed it on
+  18 September. Query, migrate and verify through `execute_sql`; do not build or test anything that
+  needs a socket to the database.
 - **Do the cheap true thing before the expensive one.** Counting rows in production took one query and
   changed what was worth building next more than an hour of reasoning would have.
 
