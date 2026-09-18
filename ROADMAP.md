@@ -79,6 +79,15 @@ Everything in this list is live. The README describes each in detail.
   still to come refuses it, the same rule a coach meets when closing a book, and coming back is the
   same two taps as joining was.
 
+- **The desk reaches the person, and the directory keeps its word.** A note from the in-app form
+  carried only a player id, so the one sentence DECIDING.md promises — what changed — reached nobody:
+  Erik's two notes were fixed and he never heard. The desk now reaches a player the way every lesson
+  notice does, Telegram first, then email, then this device. When the assessor's daily budget is spent
+  the owner's Telegram says the note is queued for the next session, which reads the desk first,
+  rather than "no analysis". And a coach with no lesson in sixty days leaves the public directory and
+  the club page's coach list by the same rule that took their door off a student's screen; their page
+  still opens by link and stays in the sitemap, and the first lesson they book puts them back.
+
 - **The coach can see money.** Erik's test: Alicia booked, said she paid, and the coach's screens
   showed none of it — "no package" on the lesson, "Owes 3000 THB" on the student with no tap under it,
   and the "says paid" notice already scrolled away. Every lesson with a price now carries it on the

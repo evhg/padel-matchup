@@ -17,6 +17,9 @@ import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 export const PROPOSAL = { maxPerDay: 20, noteChars: 600, textChars: 3500, sweepAfterMs: 10 * 60 * 1000, claimTtlMs: 30 * 60 * 1000, sweepBatch: 5 } as const;
 
 /** docs/DECIDING.md, one line per rule, so the model judges with the same yardstick a person would. */
+/** The one reason that is not a failure: the note simply waits for the next session, which reads the desk before anything else. */
+export const BUDGET_SPENT = "the day's model budget is spent";
+
 export const DECIDING_BRIEF = `Rules, in order: 1 one job per screen (a screen at its budget must move something behind "More" before it gains a control); 2 defaults that need no decision; 3 discovery through use (no feature before it can be useful to that person); 4 words over widgets, copy in English, Russian and Spanish at once; 5 the bots stay quiet (one card per match, edited in place; a request that makes a bot talk more is declined unless the person asked to be talked to); 6 open and agent-native (nothing public gets closed); 7 privacy by default (first names, no phones or emails shown); 8 free tiers first (a paid plan below fifty emails a day is "later", not "no"); 9 small and finished (a unit test, typecheck, lint, browser suites, a production check; a migration, sessions, authentication, personal data or behaviour people rely on is a design decision for a person); 10 honest answers, never a promised date; 11 coach notes first; 12 a preference becomes a setting when three coaches ask; 13 the coach's calendar, sheet and money stay theirs; 14 students are answered while the coach teaches; 15 between lessons nobody types; 16 after the final point everyone hears once; 17 a reply is part of the note; 18 earned moments only, the photo is theirs; 19 coaches arrive on their own; 20 the club watches (its week is a template it fills once); 21 a level is a claim until someone who saw you play confirms it; 22 an Open repeats by itself. Verdicts: adopt (passes the rules, fits in a day, has a test), later (valid but bigger than a day or blocked by rule 8 or 9), decline (fails a rule, or something we deliberately do not do), ask (unclear; one question).`;
 
 const SYSTEM = `You advise the owner of Kicksmash (https://kicksma.sh), an open-source padel match-up app, on one note a player, coach or club just sent. The owner is not technical and decides what gets built. ${PRODUCT_FACTS} ${DECIDING_BRIEF}
@@ -58,7 +61,9 @@ export function formatProposal(note: Pick<Feedback, "id" | "name" | "source" | "
   const head = `<b>Feedback from ${esc(who)}</b> (${esc(note.source)}, ${esc(note.locale)}, ${when(note.createdAt)})\n<blockquote>${esc(quoted)}</blockquote>`;
   const body = p
     ? [`<b>Verdict:</b> ${esc(p.verdict)}${p.rule ? ` (${esc(p.rule)})` : ""}`, "<b>What would change:</b>", ...p.change.map((c) => `- ${esc(c)}`), `<b>Size and timeline:</b> ${esc(p.size)}; ${esc(p.timeline)}`, `<b>Needs:</b> ${esc(p.needs)}`, `<b>Recommendation:</b> ${esc(p.recommendation)}`].join("\n")
-    : `No analysis this time (${esc(reason ?? "the model was not available")}). Say 'assess ${id8}' in your Claude session for the proposal.`;
+    : reason === BUDGET_SPENT
+      ? `Queued: this note is assessed in the next Claude session, which reads the desk first. Say 'assess ${id8}' to do it now.`
+      : `No analysis this time (${esc(reason ?? "the model was not available")}). Say 'assess ${id8}' in your Claude session for the proposal.`;
   return `${head}\n\n${body}\n\n<b>Say 'build ${id8}' or 'skip ${id8}' in your Claude session.</b>`;
 }
 
@@ -66,7 +71,7 @@ export type ProposeOutcome = "sent" | "skipped:not_feedback" | "skipped:already"
 
 async function askModel(db: Db, note: Feedback, fetchImpl: typeof fetch, now: Date): Promise<{ proposal: Proposal | null; reason: string | null }> {
   if (!draftingEnabled()) return { proposal: null, reason: "the model is off" };
-  if (!(await withinBudget(db, now))) return { proposal: null, reason: "the day's model budget is spent" };
+  if (!(await withinBudget(db, now))) return { proposal: null, reason: BUDGET_SPENT };
   try {
     const user = `source: ${note.source}\nlocale: ${note.locale}\nrole: ${note.role ?? "player"}\nname: ${note.name ?? "(none)"}\ncontext: ${note.context ?? "(none)"}\nnote:\n${note.text.slice(0, 2000)}`;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {

@@ -28,7 +28,7 @@ export async function verifiersFor(db: Db, ev: Pick<Event, "venueName" | "venueS
   const out: Verifier[] = [];
   // By the slug, never the name: a club Kicksmash lists is called "WAREHAUS.club" and lives at
   // `warehaus`, and slugifying its name would look for coaches at a page nobody teaches on.
-  if (ev.venueSlug) for (const c of await coachesAtClub(db, ev.venueSlug)) out.push({ kind: "coach", id: c.id, name: c.displayName });
+  if (ev.venueSlug) for (const c of await coachesAtClub(db, ev.venueSlug, { includeQuiet: true })) out.push({ kind: "coach", id: c.id, name: c.displayName });
   if (ev.venueSlug) {
     const [club] = await db.select().from(clubs).where(eq(clubs.slug, ev.venueSlug)).limit(1);
     if (club && isClubLive(club) && club.claimedBy) out.push({ kind: "club", slug: club.slug, name: club.name });

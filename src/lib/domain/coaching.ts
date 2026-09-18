@@ -1106,6 +1106,17 @@ async function lastLessonByCoach(db: Db, coachIds: string[]): Promise<Map<string
  * and their lessons stay in the student's history, but the "Book more" button goes, because a button
  * that reaches nobody is worse than no button.
  */
+/**
+ * Which of these coaches are still awake. A lesson booked ahead sits in the future, so a coach with one
+ * is never quiet; a coach who has taught nobody yet is judged on the day they signed up, not treated
+ * as gone from the first hour. One indexed read for the ids in hand, then a predicate.
+ */
+async function awakeAmong(db: Db, coachIds: string[], now: Date): Promise<(c: Pick<Coach, "id" | "createdAt">) => boolean> {
+  const lastBy = await lastLessonByCoach(db, coachIds);
+  const quietBefore = now.getTime() - QUIET_COACH_DAYS * DAY_MS;
+  return (c) => Math.max(lastBy.get(c.id)?.getTime() ?? 0, c.createdAt.getTime()) >= quietBefore;
+}
+
 export async function listStudentCoaches(db: Db, playerId: string, now = new Date()): Promise<Pick<StudentCoach, "coach" | "status">[]> {
   const rows = await db
     .select({ status: coachStudents.status, coach: coaches })
@@ -1113,11 +1124,7 @@ export async function listStudentCoaches(db: Db, playerId: string, now = new Dat
     .innerJoin(coaches, eq(coaches.id, coachStudents.coachId))
     .where(and(eq(coachStudents.playerId, playerId), isNull(coaches.archivedAt)))
     .orderBy(desc(coachStudents.createdAt));
-  const lastBy = await lastLessonByCoach(db, rows.map((r) => r.coach.id));
-  const quietBefore = now.getTime() - QUIET_COACH_DAYS * DAY_MS;
-  // A lesson booked ahead sits in the future, so a coach with one is never quiet. A coach who has
-  // taught nobody yet is judged on the day they signed up, not treated as gone from the first hour.
-  const awake = (c: Coach) => Math.max(lastBy.get(c.id)?.getTime() ?? 0, c.createdAt.getTime()) >= quietBefore;
+  const awake = await awakeAmong(db, rows.map((r) => r.coach.id), now);
   return rows.filter((r) => awake(r.coach)).map((r) => ({ coach: r.coach, status: r.status as StudentStatus }));
 }
 
@@ -1208,14 +1215,27 @@ export async function getPlayerById(db: Db, playerId: string): Promise<Player | 
 
 // ---------------------------------------------------------------- findable
 
-/** Coaches who chose to be listed, newest last; a city narrows by the coach's zone. */
-export async function listPublicCoaches(db: Db, cityTz?: string | null, limit = 200): Promise<Coach[]> {
-  return db
+/** Whether a directory keeps a coach who went quiet. The sitemap does (their page still opens); a list somebody chooses from does not. */
+export type DirectoryOpts = { includeQuiet?: boolean; now?: Date };
+
+/**
+ * Coaches who chose to be listed, newest last; a city narrows by the coach's zone.
+ *
+ * A coach with no lesson in sixty days is left out, by the same rule that takes their door off a
+ * student's screen: a directory that lists a coach who never answers costs the next student a wasted
+ * ask. The first lesson they book puts them back. `includeQuiet` is for the sitemap, where the page
+ * still opens by link.
+ */
+export async function listPublicCoaches(db: Db, cityTz?: string | null, limit = 200, opts: DirectoryOpts = {}): Promise<Coach[]> {
+  const rows = await db
     .select()
     .from(coaches)
     .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), ...(cityTz ? [eq(coaches.tz, cityTz)] : [])))
     .orderBy(asc(coaches.createdAt))
     .limit(limit);
+  if (opts.includeQuiet || rows.length === 0) return rows;
+  const awake = await awakeAmong(db, rows.map((c) => c.id), opts.now ?? new Date());
+  return rows.filter(awake);
 }
 
 /** The first ten listed coaches of a city carry a founding badge, and everything stays free for them (mirrors founding clubs). */
@@ -1248,15 +1268,18 @@ export const isFoundingCoach = (coach: Pick<Coach, "foundingAt" | "foundingTz" |
  * matching on the text meant a club could be shown one of its coaches and not the other. Hits
  * `coaches_club_slugs_idx`, where the old text scan hit nothing.
  */
-export async function coachesAtClub(db: Db, clubNameOrSlug: string): Promise<Coach[]> {
+export async function coachesAtClub(db: Db, clubNameOrSlug: string, opts: DirectoryOpts = {}): Promise<Coach[]> {
   const slug = venueSlug(clubNameOrSlug);
   if (!slug) return [];
-  return db
+  const rows = await db
     .select()
     .from(coaches)
     .where(and(eq(coaches.isPublic, true), isNull(coaches.archivedAt), sql`${coaches.clubSlugs} @> ${JSON.stringify([slug])}::jsonb`))
     .orderBy(asc(coaches.createdAt))
     .limit(50);
+  if (opts.includeQuiet || rows.length === 0) return rows;
+  const awake = await awakeAmong(db, rows.map((c) => c.id), opts.now ?? new Date());
+  return rows.filter(awake);
 }
 
 /** A coach on a club's courts, and how much teaching they did there in the window asked for. */

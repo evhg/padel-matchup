@@ -24,7 +24,7 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
       answerPages = (await listPublishedAnswers(db, 500)).map((a) => ({ url: `${base}${answerPath(a)}`, lastModified: a.publishedAt ?? now, changeFrequency: "monthly" as const, priority: 0.6 }));
       clubPages = (await listLiveClubs(db)).map((c) => ({ url: `${base}/v/${c.slug}`, lastModified: c.updatedAt, changeFrequency: "daily" as const, priority: 0.7 }));
       // A listed coach's page exists in every language, each naming the others.
-      coachPages = (await listPublicCoaches(db)).flatMap((c) => {
+      coachPages = (await listPublicCoaches(db, null, 200, { includeQuiet: true })).flatMap((c) => {
         const path = `/c/${c.handle}`;
         const languages = Object.fromEntries([...locales.map((l) => [l, `${base}${localePath(path, l)}`]), ["x-default", `${base}${localePath(path, "en")}`]]);
         return locales.map((l) => ({ url: `${base}${localePath(path, l)}`, lastModified: c.updatedAt, changeFrequency: "weekly" as const, priority: l === "en" ? 0.7 : 0.6, alternates: { languages } }));
