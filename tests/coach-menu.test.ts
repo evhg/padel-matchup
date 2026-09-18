@@ -11,7 +11,10 @@ describe("the bot's menu buttons", () => {
     expect(menuWord("＋ Book")).toBe("book");
     expect(menuWord("🎾 My lessons")).toBe("lessons");
     expect(menuWord("Package left")).toBe("left");
-    expect(menuWord("✕ Cancel")).toBe("lessons");
+    expect(menuWord("✕ Cancel")).toBe("cancel");
+    expect(menuWord("↔ Move")).toBe("move");
+    expect(menuWord("💳 Pay & package")).toBe("pay");
+    expect(menuWord("⚙️ Настройки")).toBe("settings");
     // The bare word is the cancel intent, in every language: only the button lists lessons.
     expect(menuWord("Cancel")).toBeNull();
     expect(menuWord("cancel")).toBeNull();
@@ -31,10 +34,10 @@ describe("the bot's menu buttons", () => {
     for (const locale of ["en", "ru", "es"] as const) {
       const s = coachStrings(locale);
       const c = coachKeyboard(s);
-      expect(c.keyboard.flat().map((b) => b.text)).toEqual([s.menuToday, s.menuTomorrow, s.menuWeek, s.menuLow, s.menuBook]);
+      expect(c.keyboard.flat().map((b) => b.text)).toEqual([s.menuToday, s.menuTomorrow, s.menuWeek, s.menuBook, s.menuCancelCoach, s.menuMove, s.menuStudents, s.menuMoney, s.menuSettings, s.menuBlock]);
       expect(c.is_persistent).toBe(true);
       const st = studentKeyboard(s);
-      expect(st.keyboard.flat().map((b) => b.text)).toEqual([s.menuLessons, s.menuBook, s.menuLeft, s.menuCancel]);
+      expect(st.keyboard.flat().map((b) => b.text)).toEqual([s.menuLessons, s.menuBook, s.menuMove, s.menuCancel, s.menuPay]);
       // Every button round-trips through the parser's word.
       for (const b of [...c.keyboard.flat(), ...st.keyboard.flat()]) expect(menuWord(b.text)).not.toBeNull();
       expect(coachCommands(locale).map((x) => x.command)).toEqual(["today", "week", "coach", "help"]);

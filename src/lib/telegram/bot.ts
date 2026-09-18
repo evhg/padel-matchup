@@ -13,6 +13,7 @@ import { answerCallbackQuery, esc, sendMessage, type TgMessage, type TgUpdate } 
 import { botLocale, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
+import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
 import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
 import { continueGuidedNew, createFromChat, handleGuidedNew, startGuidedNew } from "./handlers/new";
@@ -53,6 +54,13 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   // A reply to one of the /new prompts (another time, another place) continues that match.
   const continued = cmd ? null : await continueGuidedNew(db, msg, chat, from, ctx);
   if (continued) return continued;
+  // A reply to one of the assistant's prompts (a name, a time, a package line) continues that flow —
+  // before the score reader, which would otherwise take "22:30" for a set.
+  if (isPrivate && !cmd && msg.reply_to_message?.text && /↳ (kn|ko|kp|sa)/.test(msg.reply_to_message.text)) {
+    const p = await findOrCreateTelegramPlayer(db, from);
+    const tapped = await continueTap(db, msg, p, await resolveRole(db, p));
+    if (tapped) return tapped;
+  }
   if (cmd) {
     if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);
     if (cmd.command === "new") return startGuidedNew(db, msg, chat);
@@ -137,6 +145,10 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
 
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
+  if (TAP_CALLBACK.test(data)) {
+    const handled = await handleTapCallback(db, cb, await findOrCreateTelegramPlayer(db, cb.from));
+    if (handled) return handled;
+  }
   if (COACH_CALLBACK.test(data)) {
     const handled = await handleCoachCallback(db, cb, await findOrCreateTelegramPlayer(db, cb.from));
     if (handled) return handled;

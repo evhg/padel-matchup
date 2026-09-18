@@ -47,6 +47,7 @@ import {
 } from "@/lib/domain/coaching";
 import { isDomainError } from "@/lib/domain/errors";
 import { coachCommands, coachKeyboard, menuWord, studentCommands, studentKeyboard } from "@/lib/coach/menu";
+import { agendaButtons, tapBlockDays, tapBookWho, tapCancelList, tapMoney, tapMoveList, tapSettings, tapStudentBook, tapStudentMove, tapStudentPay, tapStudents } from "./taps";
 import { answerCallbackQuery, editMessageText, esc, pinChatMessage, sendMessage, sendPhoto, setChatCommands, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser, unpinAllChatMessages } from "./api";
 
 /**
@@ -56,15 +57,15 @@ import { answerCallbackQuery, editMessageText, esc, pinChatMessage, sendMessage,
  */
 
 type Cb = NonNullable<TgUpdate["callback_query"]>;
-const kb = (rows: { text: string; callback_data?: string; url?: string }[][]): InlineKeyboard => ({ inline_keyboard: rows });
+export const kb = (rows: { text: string; callback_data?: string; url?: string }[][]): InlineKeyboard => ({ inline_keyboard: rows });
 
-const pkgText = (s: CoachBotStrings, pkg: { size: number; used: number; expiresAt: Date | null; closedAt: Date | null } | null, now = new Date()) => {
+export const pkgText = (s: CoachBotStrings, pkg: { size: number; used: number; expiresAt: Date | null; closedAt: Date | null } | null, now = new Date()) => {
   if (!pkg) return s.noPackage;
   const line = packageLine(pkg as Parameters<typeof packageLine>[0], now);
   return s.pkgLine(line.left, pkg.size, line.daysLeft);
 };
 
-const lessonLine = (l: LessonWithPeople, coach: Coach, locale: string, s: CoachBotStrings) => `${whenLabel(l.startsAt, coach.tz, locale).split(" ").slice(-1)[0]} ${l.student?.displayName ?? "?"} · ${pkgText(s, l.package)}`;
+export const lessonLine = (l: LessonWithPeople, coach: Coach, locale: string, s: CoachBotStrings) => `${whenLabel(l.startsAt, coach.tz, locale).split(" ").slice(-1)[0]} ${l.student?.displayName ?? "?"} · ${pkgText(s, l.package)}`;
 
 /**
  * Who the bot can recognise: everyone but somebody still waiting to be accepted. Those who left stay in
@@ -79,9 +80,9 @@ export async function studentRefs(db: Db, coachId: string): Promise<StudentRef[]
 
 // ------------------------------------------------------------------ coach flow
 
-async function bookForCoach(db: Db, coach: Coach, coachPlayer: Player, student: StudentRef, startsAt: Date, s: CoachBotStrings, locale: string, chatId: number, extraNote?: string): Promise<string> {
+export async function bookForCoach(db: Db, coach: Coach, coachPlayer: Player, student: StudentRef, startsAt: Date, s: CoachBotStrings, locale: string, chatId: number, extraNote?: string, o: { minutes?: number; heads?: number } = {}): Promise<string> {
   try {
-    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt, byCoach: true, source: "telegram", createdByPlayerId: coachPlayer.id });
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt, byCoach: true, source: "telegram", createdByPlayerId: coachPlayer.id, minutes: o.minutes, heads: o.heads });
     const studentPlayer = await getPlayerById(db, student.id);
     if (studentPlayer) await notifyLessonBooked(db, { lesson, coach, student: studentPlayer, pkg, by: "coach" });
     const text = `${s.booked(student.name, whenLabel(startsAt, coach.tz, locale), pkgText(s, pkg))}${extraNote ? `\n${extraNote}` : ""}`;
@@ -114,7 +115,7 @@ const weekdayName = (d: number, locale: string) => new Intl.DateTimeFormat(local
  * The weekly template as one readable line. A preset gets its own name; anything else is grouped by
  * the hours themselves, so a coach who teaches the same five mornings reads one line and not seven.
  */
-function hoursSummary(hours: Hours, s: CoachBotStrings, locale: string): string {
+export function hoursSummary(hours: Hours, s: CoachBotStrings, locale: string): string {
   const same = (a: Hours, b: Hours) => JSON.stringify(a) === JSON.stringify(b);
   if (same(hours, presetHours("mornings"))) return s.hoursMornings;
   if (same(hours, presetHours("afternoons"))) return s.hoursAfternoons;
@@ -191,13 +192,16 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
   const s = coachStrings(locale);
   const now = new Date();
   const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
-  // A tapped menu button is the same as the word typed; "Book" alone explains the one line it needs.
+  // A tapped menu button opens a flow of buttons; the day words are the same as typed.
   const tapped = menuWord(rawText);
-  if (tapped === "book") {
-    await say(s.menuBookHow);
-    return "coach:book_how";
-  }
-  const text = tapped && tapped !== "lessons" && tapped !== "left" ? tapped : rawText;
+  if (tapped === "book") return tapBookWho(db, coach, s, chatId);
+  if (tapped === "cancel") return tapCancelList(db, coach, s, locale, chatId);
+  if (tapped === "move") return tapMoveList(db, coach, s, locale, chatId);
+  if (tapped === "students") return tapStudents(db, coach, s, chatId);
+  if (tapped === "money") return tapMoney(db, coach, s, locale, chatId);
+  if (tapped === "settings") return tapSettings(db, coach, coachPlayer, s, locale, chatId);
+  if (tapped === "block") return tapBlockDays(coach, s, locale, chatId, 0);
+  const text = tapped && tapped !== "lessons" && tapped !== "left" && tapped !== "pay" ? tapped : rawText;
   // Settings first, and only when the line starts with a setting word, so a booking line is untouched.
   const setting = parseCoachSetting(text);
   if (setting) return applySetting(db, coach, setting, s, locale, chatId);
@@ -246,7 +250,7 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
       const rows = (await listCoachLessons(db, coach.id, from, to)).filter((l) => l.status === "booked" || l.status === "done");
       const label = intent.day === "week" ? `${dayOnlyLabel(dayStr, locale)} → ${dayOnlyLabel(utcToZonedParts(new Date(to.getTime() - 1), coach.tz).date, locale)}` : dayOnlyLabel(dayStr, locale);
       if (rows.length === 0) await say(s.agendaEmpty(label));
-      else await say(s.agenda(label, rows.map((l) => (intent.day === "week" ? `${whenLabel(l.startsAt, coach.tz, locale)} ${l.student?.displayName ?? "?"}` : lessonLine(l, coach, locale, s))).join("\n")));
+      else await say(s.agenda(label, rows.map((l) => (intent.day === "week" ? `${whenLabel(l.startsAt, coach.tz, locale)} ${l.student?.displayName ?? "?"}` : lessonLine(l, coach, locale, s))).join("\n")), agendaButtons(rows.filter((l) => l.status === "booked" || l.status === "done"), coach, locale));
       return "coach:agenda";
     }
     case "block": {
@@ -357,7 +361,7 @@ function moveRefusal(code: string, s: CoachBotStrings, cutoffHours: number): str
   return null;
 }
 
-async function moveOne(
+export async function moveOne(
   db: Db,
   coach: Coach,
   input: { lessonId: string; startsAt: Date; by: "coach" | "student"; actorPlayerId?: string | null },
@@ -387,7 +391,7 @@ async function moveOne(
   }
 }
 
-async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, editMessageId?: number): Promise<string> {
+export async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, editMessageId?: number): Promise<string> {
   const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "coach", coach });
   const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
   const pkg = lesson.packageId ? (await db.select().from(lessonPackages).where(eq(lessonPackages.id, lesson.packageId)).limit(1))[0] ?? null : null;
@@ -409,14 +413,20 @@ async function studentFlow(db: Db, player: Player, coaches: Pick<StudentCoach, "
   const now = new Date();
   const say = (t: string, keyboard?: InlineKeyboard) => sendMessage(chatId, esc(t), { silent: true, keyboard: keyboard ?? null });
   const tapped = menuWord(rawText);
-  const text = tapped === "lessons" || tapped === "left" ? tapped : rawText;
+  // "✕ Cancel" is the lessons list with a ✕ on each; the other buttons open their flow of taps.
+  const text = tapped === "lessons" || tapped === "left" || tapped === "cancel" ? "lessons" : rawText;
   const paused = mine.length === 0 ? coaches.filter((c) => c.status === "paused") : [];
   if (mine.length === 0 && paused.length === 0) return null;
   const tz = (mine[0] ?? paused[0]).coach.tz;
   const pausedLine = () => paused.map((c) => s.paused(c.coach.displayName)).join("\n");
-  if (tapped === "book") {
-    await say(mine.length ? s.menuBookHowStudent : pausedLine());
-    return mine.length ? "student:book_how" : "student:paused";
+  if (tapped === "book" || tapped === "move" || tapped === "pay") {
+    if (mine.length === 0) {
+      await say(pausedLine());
+      return "student:paused";
+    }
+    if (tapped === "book") return tapStudentBook(db, player, s, locale, chatId);
+    if (tapped === "move") return tapStudentMove(db, player, s, locale, chatId);
+    return tapStudentPay(db, player, s, locale, chatId);
   }
   const intent = parseStudentLine(text, { now, tz });
   if (mine.length === 0) {
@@ -528,7 +538,7 @@ async function offerSlots(db: Db, coach: Coach, day: string, s: CoachBotStrings,
   return "student:slots";
 }
 
-async function studentCancel(db: Db, player: Player, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, confirmed: boolean, editMessageId?: number): Promise<string> {
+export async function studentCancel(db: Db, player: Player, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, confirmed: boolean, editMessageId?: number): Promise<string> {
   const lesson = await getLesson(db, lessonId);
   if (!lesson || lesson.studentPlayerId !== player.id || lesson.status !== "booked") {
     await sendMessage(chatId, esc(s.nothingToCancel), { silent: true });
@@ -602,7 +612,7 @@ export async function sendRoleMenu(db: Db, player: Player, chatId: number, o: { 
   if (!role) return null;
   const locale = coachBotLocale(player.locale);
   const s = coachStrings(locale);
-  const sent = await sendMessage(chatId, esc(role === "coach" ? s.menuCoach : s.menuStudent), { silent: true, keyboard: role === "coach" ? coachKeyboard(s) : studentKeyboard(s) });
+  const sent = await sendMessage(chatId, esc(role === "coach" ? s.menuCoachTaps : s.menuStudentTaps), { silent: true, keyboard: role === "coach" ? coachKeyboard(s) : studentKeyboard(s) });
   if (o.pin && sent.ok) {
     await unpinAllChatMessages(chatId).catch(() => undefined);
     await pinChatMessage(chatId, sent.result.message_id).catch(() => undefined);

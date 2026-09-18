@@ -6,7 +6,7 @@ import type { ReplyKeyboard } from "@/lib/telegram/api";
  * private chat, one for coaches and one for students, in their language; a tap
  * sends the label, which becomes the same one-line intent the parser knows.
  */
-export type MenuWord = "today" | "tomorrow" | "week" | "low" | "book" | "lessons" | "left";
+export type MenuWord = "today" | "tomorrow" | "week" | "low" | "book" | "lessons" | "left" | "cancel" | "move" | "students" | "money" | "settings" | "pay" | "block";
 const LOCALES: CoachBotLocale[] = ["en", "ru", "es"];
 const strip = (label: string) => label.replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLowerCase();
 
@@ -22,7 +22,7 @@ export function menuWord(text: string): MenuWord | null {
   if (!t) return null;
   for (const locale of LOCALES) {
     const s = coachStrings(locale);
-    if (raw === s.menuCancel) return "lessons";
+    if (raw === s.menuCancel || raw === s.menuCancelCoach) return "cancel";
     const table: [string, MenuWord][] = [
       [s.menuToday, "today"],
       [s.menuTomorrow, "tomorrow"],
@@ -31,18 +31,29 @@ export function menuWord(text: string): MenuWord | null {
       [s.menuBook, "book"],
       [s.menuLessons, "lessons"],
       [s.menuLeft, "left"],
+      [s.menuMove, "move"],
+      [s.menuStudents, "students"],
+      [s.menuMoney, "money"],
+      [s.menuSettings, "settings"],
+      [s.menuPay, "pay"],
+      [s.menuBlock, "block"],
     ];
     for (const [label, word] of table) if (strip(label) === t) return word;
   }
   return null;
 }
 
+/**
+ * Nine doors for a coach, five for a student, and every one of them is a tap: the flows behind them
+ * are buttons all the way down (src/lib/telegram/taps.ts). The one-line grammar still works for a
+ * coach who likes it, but nobody has to learn it.
+ */
 export function coachKeyboard(s: CoachBotStrings): ReplyKeyboard {
-  return { keyboard: [[{ text: s.menuToday }, { text: s.menuTomorrow }], [{ text: s.menuWeek }, { text: s.menuLow }], [{ text: s.menuBook }]], is_persistent: true, resize_keyboard: true, input_field_placeholder: s.menuPlaceholder };
+  return { keyboard: [[{ text: s.menuToday }, { text: s.menuTomorrow }, { text: s.menuWeek }], [{ text: s.menuBook }, { text: s.menuCancelCoach }, { text: s.menuMove }], [{ text: s.menuStudents }, { text: s.menuMoney }, { text: s.menuSettings }], [{ text: s.menuBlock }]], is_persistent: true, resize_keyboard: true, input_field_placeholder: s.menuPlaceholder };
 }
 
 export function studentKeyboard(s: CoachBotStrings): ReplyKeyboard {
-  return { keyboard: [[{ text: s.menuLessons }, { text: s.menuBook }], [{ text: s.menuLeft }, { text: s.menuCancel }]], is_persistent: true, resize_keyboard: true, input_field_placeholder: s.menuPlaceholderStudent };
+  return { keyboard: [[{ text: s.menuLessons }, { text: s.menuBook }], [{ text: s.menuMove }, { text: s.menuCancel }], [{ text: s.menuPay }]], is_persistent: true, resize_keyboard: true, input_field_placeholder: s.menuPlaceholderStudent };
 }
 
 /** Commands for the chat's "/" menu, per role, in the coach's or student's language. */

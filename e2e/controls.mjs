@@ -22,6 +22,8 @@ const check = makeCheck(results);
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret";
 
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+/** The same nothing, packed the way the tap flows pack an id: 22 url-safe characters. */
+const PACKED = "AAAAAAAAAAAAAAAAAAAAAA";
 const chat = { id: 909090, type: "private" };
 const tapper = { id: 909090, is_bot: false, first_name: "Tapper", language_code: "en" };
 
@@ -49,6 +51,33 @@ const CONTROLS = {
   lw: `lw:${ZERO_UUID}`, // decline a freed hour
   rq: `rq:${ZERO_UUID}:y`, // coach answers an out-of-hours request
   wd: `wd:${ZERO_UUID}`, // drop a standing want
+  // The assistant as taps (src/lib/telegram/taps.ts): ids packed to 22 characters, dates to six digits.
+  kb: `kb:${PACKED}`, // who the lesson is for
+  kd: `kd:${PACKED}:60:w0`, // which day
+  kt: `kt:${PACKED}:60:260918`, // what time
+  kh: `kh:${PACKED}:60:29500000`, // how many, or book
+  ky: `ky:${PACKED}:60:29500000:1`, // book
+  kn: "kn:", // a new student: the name is asked
+  ko: `ko:${PACKED}:60:260918`, // a typed time: asked
+  kx: `kx:${PACKED}`, // cancel, asked once first
+  kz: "kz:", // keep it
+  km: `km:${PACKED}`, // move: which day
+  kl: `kl:${PACKED}`, // a lesson's card
+  kq: `kq:${PACKED}`, // no-show
+  kf: `kf:${PACKED}`, // on me
+  ks: "ks:", // the students
+  kp: `kp:${PACKED}`, // a package for a student
+  ke: "ke:cutoff:12", // a rule
+  kk: "kk:", // block time: which day
+  sb: `sb:${PACKED}`, // student picks a coach
+  sd: `sd:${PACKED}:60:w0`, // which day
+  st: `st:${PACKED}:60:260918`, // what time
+  sh: `sh:${PACKED}:60:29500000`, // how many, or book
+  sy: `sy:${PACKED}:60:29500000:1`, // book
+  sw: `sw:${PACKED}:260918`, // wait for the week
+  sa: `sa:${PACKED}:260918`, // ask for another time
+  sm: `sm:${PACKED}`, // move: which day
+  sk: `sk:${PACKED}`, // take a package
   // A match card in a room.
   j: "j:AAAA", // join
   l: "l:AAAA", // leave

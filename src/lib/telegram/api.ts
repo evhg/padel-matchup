@@ -75,7 +75,9 @@ export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 
 /** Takes a reply keyboard away (a role that ended). */
 export type ReplyKeyboardRemove = { remove_keyboard: true };
-export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
+/** Makes the person's next message a reply to this one: the one typed step in a flow of taps carries its context this way. */
+export type ForceReply = { force_reply: true; input_field_placeholder?: string; selective?: boolean };
+export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | ForceReply | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
 
 export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendMessage", {
