@@ -343,6 +343,22 @@ Wall clock first, credits second. What actually moved it, measured:
   zero and passed the wrong way. A second `once("dialog")` listener races the first and throws. Give
   the helper one mutable answer (`promptText.value = "550"`) and pass it on `prompt` dialogs only.
 
+- **A package that pays for a lesson leaves `amount` null, not zero.** `pkg ? 0 : priceFor()` plus
+  a fee made every package lesson carry `amount: 0`, which is a debt of nothing on every screen that
+  lists debts. Null means "nothing to owe"; zero means "was priced, now free" (a comp). Keep the two
+  apart in the one place that writes them, and test the null.
+- **A prop name is a namespace.** `offers` already meant waitlist offers on the student's screen, and
+  `offers` for packages collided with it in both the component and the page. Grep the props of the
+  component and the consts of its page before naming a new one; `packages` cost nothing.
+- **The truncating span must not hold the figure.** "Mon, Sep 21 10:00 · 800 THB" truncated to the
+  date at 390px because the amount sat inside the same `truncate` span as the label, behind two
+  buttons. Put the label in the span that truncates and the figure in a `shrink-0` beside it.
+
+- **"0/0 suites passed" is not a pass.** `E2E_ONLY=coach.mjs` matched no suite, the runner exited 0,
+  and a grep for `✗` found nothing — so a real failure in the coach suite was read as "passes on its
+  own, the gate's run was a race". The suite name is `coach`, no extension. Quote the `N/N checks
+  passed` and `1/1 suites passed` lines, never the exit code; a zero on the left is a run of nothing.
+
 ### Documents rot within hours
 
 Ship the document change in the same pull request as the code. Twice in one day `ROADMAP.md` and

@@ -118,9 +118,12 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                   {unpaid
                     .filter((u) => u.studentPlayerId === s.playerId)
                     .map((u) => (
-                      <li key={u.lessonId} className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate">
-                          {u.label} · {money(u.amount)}
+                      // The figure is what the row is for, so it never truncates: the date does, and the
+                      // buttons drop to a second line on a phone rather than pushing the money off it.
+                      <li key={u.lessonId} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="min-w-0 flex-1 basis-32 truncate">{u.label}</span>
+                        <span className="shrink-0 font-bold">
+                          {money(u.amount)}
                           {u.claimed && <span className="ml-1 font-bold text-ink">· {t("students.saysPaid")}</span>}
                           {u.hasSlip && (
                             <>

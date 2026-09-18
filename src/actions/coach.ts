@@ -10,11 +10,11 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
-import { notifyPaidConfirmed, notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
+import { notifyPackageTaken, notifyPaidConfirmed, notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { reachFor, type Reach } from "@/lib/coach/reach";
 import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
@@ -117,6 +117,14 @@ export type SettingsInput = {
   priceTwo: number | null;
   priceThree: number | null;
   priceFour: number | null;
+  /** A second lesson length and its two prices; null length means one length only. */
+  secondMinutes: number | null;
+  priceSecondSingle: number | null;
+  priceSecondTwo: number | null;
+  /** Per lesson outside the weekly hours. */
+  outsideHoursFee: number | null;
+  /** The packages on the coach's page, at most three. */
+  offers: OfferInput[];
   promptpayId: string;
   payLink: string;
   whatsapp: string;
@@ -146,12 +154,17 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       priceTwo: input.priceTwo,
       priceThree: input.priceThree,
       priceFour: input.priceFour,
+      secondMinutes: input.secondMinutes === input.lessonMinutes ? null : input.secondMinutes,
+      priceSecondSingle: input.priceSecondSingle,
+      priceSecondTwo: input.priceSecondTwo,
+      outsideHoursFee: input.outsideHoursFee,
       promptpayId: input.promptpayId,
       payLink: input.payLink,
       whatsapp: input.whatsapp,
       isPublic: Boolean(input.isPublic),
       tz: input.tz,
     });
+    await saveOffers(db, coach.id, input.offers ?? []);
     revalidateCoach(coach.handle);
     // Search engines hear about a listed page the moment it changes (or is unlisted: they drop it).
     if (Boolean(input.isPublic) || coach.isPublic) void pingIndexNow([`/c/${coach.handle}`, `/ru/c/${coach.handle}`, `/es/c/${coach.handle}`], { db }).catch(() => undefined);
@@ -183,7 +196,7 @@ export async function removeQrAction(): Promise<ActionResult<null>> {
 }
 
 /** Either an exact instant (a slot chip) or a day and a wall-clock time in the coach's zone (typed). */
-export async function coachBookAction(input: { studentPlayerId?: string | null; newName?: string | null; startsAt?: string | null; day?: string | null; time?: string | null; heads?: number }): Promise<ActionResult<{ lessonId: string; studentPlayerId: string; startsAt: string }>> {
+export async function coachBookAction(input: { studentPlayerId?: string | null; newName?: string | null; startsAt?: string | null; day?: string | null; time?: string | null; heads?: number; /** The lesson length, when the coach sells two. */ minutes?: number | null }): Promise<ActionResult<{ lessonId: string; studentPlayerId: string; startsAt: string }>> {
   return runA(async () => {
     const db = await getDb();
     const { me, coach } = await requireCoach(db);
@@ -199,7 +212,8 @@ export async function coachBookAction(input: { studentPlayerId?: string | null; 
       if (!name) throw new ActionFailure("name_required");
       studentPlayerId = (await addStudentByName(db, coach.id, name, locale)).id;
     }
-    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: true, source: "web", createdByPlayerId: me.id, heads: input.heads });
+    const minutes = input.minutes != null && LESSON_MINUTES.includes(input.minutes as (typeof LESSON_MINUTES)[number]) ? input.minutes : undefined;
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: true, source: "web", createdByPlayerId: me.id, heads: input.heads, minutes });
     const student = await getPlayerById(db, studentPlayerId);
     if (student) await notifyLessonBooked(db, { lesson, coach, student, pkg, by: "coach" }).catch(() => undefined);
     revalidateCoach(coach.handle);
@@ -525,11 +539,16 @@ export async function compLessonAction(lessonId: string, reason?: string | null)
   });
 }
 
-export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null; priceSingle?: number | null; priceTwo?: number | null; priceThree?: number | null; priceFour?: number | null; latePasses?: number | null; currency?: string | null; payAtClub?: boolean }): Promise<ActionResult<null>> {
+export async function savePaymentAction(input: { promptpayId?: string | null; payLink?: string | null; priceSingle?: number | null; priceTwo?: number | null; priceThree?: number | null; priceFour?: number | null; secondMinutes?: number | null; priceSecondSingle?: number | null; priceSecondTwo?: number | null; outsideHoursFee?: number | null; offers?: OfferInput[]; latePasses?: number | null; currency?: string | null; payAtClub?: boolean }): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
     const patch: CoachPatch = {};
+    if (input.secondMinutes !== undefined) patch.secondMinutes = input.secondMinutes === coach.lessonMinutes ? null : input.secondMinutes;
+    if (input.priceSecondSingle !== undefined) patch.priceSecondSingle = input.priceSecondSingle;
+    if (input.priceSecondTwo !== undefined) patch.priceSecondTwo = input.priceSecondTwo;
+    if (input.outsideHoursFee !== undefined) patch.outsideHoursFee = input.outsideHoursFee;
+    if (input.offers) await saveOffers(db, coach.id, input.offers);
     if (typeof input.promptpayId === "string") patch.promptpayId = input.promptpayId.trim();
     if (typeof input.payLink === "string") {
       const link = input.payLink.trim();
@@ -551,7 +570,7 @@ export async function savePaymentAction(input: { promptpayId?: string | null; pa
 }
 
 
-export async function studentBookAction(handle: string, startsAt: string, heads?: number): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
+export async function studentBookAction(handle: string, startsAt: string, heads?: number, minutes?: number | null): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
   return runA(async () => {
     const db = await getDb();
     const coach = await getCoachByHandle(db, handle);
@@ -561,10 +580,36 @@ export async function studentBookAction(handle: string, startsAt: string, heads?
     const at = new Date(startsAt);
     if (Number.isNaN(at.getTime())) throw new DomainError("invalid", "time");
     if ((await studentStatus(db, coach.id, me.id)) !== "accepted") throw new ActionFailure("not_student");
-    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id, heads });
+    // Only a length the coach sells: their usual one, or the second one when they have it.
+    const length = minutes != null && (minutes === coach.lessonMinutes || minutes === coach.secondMinutes) ? minutes : undefined;
+    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id, heads, minutes: length });
     await notifyLessonBooked(db, { lesson, coach, student: me, pkg, by: "student" }).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() };
+  });
+}
+
+/** A student takes a package from the coach's page: unpaid, at the offer's price, and the coach is told. */
+export async function takeOfferAction(handle: string, offerId: string): Promise<ActionResult<{ packageId: string; amount: number | null }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const coach = await getCoachByHandle(db, handle);
+    if (!coach) throw new ActionFailure("no_coach");
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const { pkg } = await takeOffer(db, coach, me.id, offerId);
+    await notifyPackageTaken(db, { coach, student: me, pkg }).catch(() => undefined);
+    revalidateCoach(coach.handle);
+    return { packageId: pkg.id, amount: pkg.amount };
+  });
+}
+
+/** The coach's package list, for the screens that edit it. */
+export async function myOffersAction(): Promise<ActionResult<OfferInput[]>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    return (await listOffers(db, coach.id)).map((o) => ({ id: o.id, size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays }));
   });
 }
 

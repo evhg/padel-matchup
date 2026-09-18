@@ -8,6 +8,8 @@ import { ShareButtons } from "@/components/ShareSheet";
 import { CoachNotify } from "./CoachNotify";
 import { HowThisWorks } from "./HowThisWorks";
 import { ImportSheet } from "./ImportSheet";
+import { OffersEditor } from "./OffersEditor";
+import { LESSON_MINUTES, type OfferInput } from "@/lib/domain/coaching";
 
 type Step = "where" | "length" | "hours" | "price" | "notify" | "link";
 type Day = { on: boolean; from: string; to: string };
@@ -63,6 +65,16 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   const [priceThree, setPriceThree] = useState("");
   const [priceFour, setPriceFour] = useState("");
   const [latePass, setLatePass] = useState(true);
+  // Benji's card: a second length with its own prices, an extra outside the hours, and packages.
+  // Each behind one line, shut by default, so a coach with one price still walks six short screens.
+  const [second, setSecond] = useState(false);
+  const [secondMinutes, setSecondMinutes] = useState<number>(90);
+  const [priceSecondSingle, setPriceSecondSingle] = useState("");
+  const [priceSecondTwo, setPriceSecondTwo] = useState("");
+  const [feeOpen, setFeeOpen] = useState(false);
+  const [fee, setFee] = useState("");
+  const [offersOpen, setOffersOpen] = useState(false);
+  const [offers, setOffers] = useState<OfferInput[]>([]);
   const [currency, setCurrency] = useState("THB");
   const [payAtClub, setPayAtClub] = useState(false);
   const [promptpay, setPromptpay] = useState("");
@@ -119,12 +131,18 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
         const n = Number(v.replace(/[^\d]/g, ""));
         return v.trim() === "" || !Number.isFinite(n) ? null : n;
       };
+      const secondLength = second && secondMinutes !== minutes ? secondMinutes : null;
       const r = await savePaymentAction({
         // The switch off clears every price: one-off lessons are not sold at any size.
         priceSingle: adhoc ? money(price) : null,
         priceTwo: adhoc && groups ? money(priceTwo) : null,
         priceThree: adhoc && groups ? money(priceThree) : null,
         priceFour: adhoc && groups ? money(priceFour) : null,
+        secondMinutes: adhoc ? secondLength : null,
+        priceSecondSingle: adhoc && secondLength ? money(priceSecondSingle) : null,
+        priceSecondTwo: adhoc && secondLength ? money(priceSecondTwo) : null,
+        outsideHoursFee: feeOpen ? money(fee) : null,
+        offers: offersOpen ? offers.filter((o) => o.size > 0 && o.price > 0) : [],
         latePasses: latePass ? 1 : 0,
         currency,
         payAtClub,
@@ -288,9 +306,61 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
                       <input className="input mt-1" value={priceFour} onChange={(e) => setPriceFour(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="350" data-testid="price-four" />
                     </label>
                   </div>
+                  {/* A coach thinks in what the pair pays at the desk; the book keeps what each pays. Both on screen. */}
+                  {Number(priceTwo.replace(/[^\d]/g, "")) > 0 && <p className="mt-1 text-xs text-muted">{t("setup.together", { amount: `${Number(priceTwo.replace(/[^\d]/g, "")) * 2} ${currency}`, n: 2 })}</p>}
+                </div>
+              )}
+              {!second ? (
+                <button type="button" className="text-xs font-bold text-muted underline underline-offset-4 hover:text-ink self-start" onClick={() => setSecond(true)} data-testid="second-open">
+                  {t("setup.secondOpen")}
+                </button>
+              ) : (
+                <div className="grid grid-cols-3 gap-2" data-testid="second-length">
+                  <label className="block text-xs font-bold text-muted">
+                    {t("setup.secondLength")}
+                    <select className="input mt-1" value={secondMinutes} onChange={(e) => setSecondMinutes(Number(e.target.value))} data-testid="second-minutes">
+                      {LESSON_MINUTES.filter((m) => m !== minutes).map((m) => (
+                        <option key={m} value={m}>
+                          {t("minutes", { n: m })}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-bold text-muted">
+                    {t("setup.secondSingle")}
+                    <input className="input mt-1" value={priceSecondSingle} onChange={(e) => setPriceSecondSingle(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="1200" data-testid="price-second-single" />
+                  </label>
+                  <label className="block text-xs font-bold text-muted">
+                    {t("setup.secondTwo")}
+                    <input className="input mt-1" value={priceSecondTwo} onChange={(e) => setPriceSecondTwo(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="900" data-testid="price-second-two" />
+                  </label>
                 </div>
               )}
             </>
+          )}
+          {!feeOpen ? (
+            <button type="button" className="text-xs font-bold text-muted underline underline-offset-4 hover:text-ink self-start" onClick={() => setFeeOpen(true)} data-testid="fee-open">
+              {t("setup.feeOpen")}
+            </button>
+          ) : (
+            <label className="block text-sm font-bold">
+              {t("setup.feeLabel")} ({currency})
+              <input className="input mt-1" value={fee} onChange={(e) => setFee(e.target.value)} inputMode="numeric" autoComplete="off" maxLength={9} placeholder="300" data-testid="fee" autoFocus />
+              <span className="mt-1 block text-xs font-normal text-muted">{t("setup.feeHelp")}</span>
+            </label>
+          )}
+          {!offersOpen ? (
+            <button type="button" className="text-xs font-bold text-muted underline underline-offset-4 hover:text-ink self-start" onClick={() => (setOffersOpen(true), setOffers((o) => (o.length ? o : [{ size: 10, minutes, heads: 1, price: 0, validDays: 70 }])))} data-testid="offers-open">
+              {t("setup.offersOpen")}
+            </button>
+          ) : (
+            <div>
+              <div className="text-sm font-bold">{t("page.packages")}</div>
+              <p className="mt-1 text-xs text-muted">{t("setup.offersHelp")}</p>
+              <div className="mt-2">
+                <OffersEditor value={offers} onChange={setOffers} lengths={[minutes, ...(second && secondMinutes !== minutes ? [secondMinutes] : [])]} currency={currency} />
+              </div>
+            </div>
           )}
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={latePass} onChange={(e) => setLatePass(e.target.checked)} data-testid="late-pass" />

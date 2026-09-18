@@ -10,7 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn, sameHoursEveryDay } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, availableSlots, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, busyBetween, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
 import { CITIES } from "@/lib/domain/cities";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
@@ -66,8 +66,8 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const today = todayIn(coach.tz, now);
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);
   const accepted = status === "accepted";
-  const [slots, lessons, pkg, waits, requests] = await Promise.all([
-    accepted ? availableSlots(db, coach, now, to, now) : Promise.resolve([]),
+  const [busy, lessons, pkg, waits, requests] = await Promise.all([
+    accepted ? busyBetween(db, coach.id, now, to) : Promise.resolve([]),
     me ? listStudentLessons(db, me.id, new Date(now.getTime() - 2 * 3_600_000)) : Promise.resolve([]),
     me ? activePackage(db, coach.id, me.id, now) : Promise.resolve(null),
     accepted && me ? studentWaitlist(db, coach.id, me.id, now) : Promise.resolve([]),
@@ -77,6 +77,11 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   // Every hour the coach could teach, free or not: the template plus the dates they opened. Without
   // the openings an hour opened for one date would never show as taken, so nobody could wait for it.
   const openings = accepted ? await openingsBetween(db, coach.id, now, to) : [];
+  const slots = accepted ? openSlots({ coach, from: now, to, busy, now, openings }) : [];
+  // The second length, when the coach sells one: its own free times, because a 90-minute lesson
+  // needs a 90-minute hole. Pure, from the same busy list: no second query.
+  const second = coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? coach.secondMinutes : null;
+  const slotsSecond = accepted && second ? openSlots({ coach, from: now, to, busy, now, openings, minutes: second }) : [];
   const everySlot = accepted ? openSlots({ coach, from: now, to, busy: [], now, openings }) : [];
   const freeIso = new Set(slots.map((d) => d.toISOString()));
   const takenSlots = everySlot.filter((d) => !freeIso.has(d.toISOString()));
@@ -84,8 +89,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const allDays = dayRange(today, STUDENT_HORIZON_DAYS + 1);
   const labels = labelsFor(allDays, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   const slotDtos = slotDTOs(slots, coach.tz, locale);
+  const slotSecondDtos = slotDTOs(slotsSecond, coach.tz, locale);
   const takenDtos = slotDTOs(takenSlots, coach.tz, locale);
-  const days = allDays.filter((d) => slotDtos.some((s) => s.day === d) || takenDtos.some((s) => s.day === d));
+  const days = allDays.filter((d) => slotDtos.some((s) => s.day === d) || takenDtos.some((s) => s.day === d) || slotSecondDtos.some((s) => s.day === d));
   const weekOf = Object.fromEntries(days.map((d) => [d, weekStartOf(new Date(`${d}T12:00:00Z`), "UTC")]));
   const label = (at: Date) => whenLabel(at, coach.tz, locale);
   const offers = waits.filter((w) => w.status === "offered" && w.slotStartsAt && w.offerExpiresAt).map((w) => ({ id: w.id, label: label(w.slotStartsAt!), minutesLeft: Math.max(1, Math.round((w.offerExpiresAt!.getTime() - now.getTime()) / 60_000)) }));
@@ -95,6 +101,8 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const line = pkg ? packageLine(pkg, now) : null;
   // What this student owes, and the ways this coach takes it. Sequential, after the rest (rule 8).
   const owed = accepted && me ? await owedBy(db, coach, me.id) : null;
+  // The packages on offer: everybody sees the prices, and a student on the list can take one.
+  const packageOffers = await listOffers(db, coach.id);
   const pay = { promptpay: Boolean(coach.promptpayId), link: coach.payLink || null, atClub: coach.payAtClub };
   const url = `${baseUrl()}/c/${coach.handle}`;
   const jsonLd = {
@@ -151,7 +159,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
           </section>
         ) : (
           <StudentBooking
-            prices={{ single: coach.priceSingle, two: coach.priceTwo, three: coach.priceThree, four: coach.priceFour, currency: coach.currency }}
+            prices={{ single: coach.priceSingle, two: coach.priceTwo, three: coach.priceThree, four: coach.priceFour, currency: coach.currency, minutes: coach.lessonMinutes, second: second ? { minutes: second, single: coach.priceSecondSingle, two: coach.priceSecondTwo } : null, fee: coach.outsideHoursFee }}
+            packages={packageOffers.map((o) => ({ id: o.id, size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays }))}
+            slotsSecond={slotSecondDtos}
             handle={coach.handle}
             coachName={coach.displayName}
             signedIn={Boolean(me)}
@@ -168,9 +178,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             requests={asked}
             minLocal={minLocal}
             lessons={mine.map((l) => studentLessonDTO(l, locale, labels, now))}
-            pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft } : null}
+            pkg={pkg && line ? { left: line.left, size: pkg.size, days: line.daysLeft, heads: pkg.heads, minutes: pkg.minutes } : null}
             cutoffHours={coach.cutoffHours}
-            owed={owed && owed.total > 0 ? { total: owed.total, currency: owed.currency, lessons: owed.lessons.map((l) => ({ id: l.id, label: label(l.startsAt), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip })) } : null}
+            owed={owed && owed.total > 0 ? { total: owed.total, currency: owed.currency, lessons: owed.lessons.map((l) => ({ id: l.id, label: label(l.startsAt), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip })), packages: owed.packages.map((p) => ({ id: p.id, size: p.size, amount: p.amount })) } : null}
             pay={pay}
             whatsappUrl={coach.whatsapp ? whatsappShareUrl("", coach.whatsapp) : null}
           />

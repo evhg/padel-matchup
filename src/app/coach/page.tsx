@@ -134,6 +134,7 @@ export default async function CoachPage({ searchParams }: Props) {
         inviteUrl={`${baseUrl()}/coaches?s=invite`}
         studentUrl={studentLink(baseUrl(), coach.handle, invite)}
         earned={earned}
+        lengths={[coach.lessonMinutes, ...(coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? [coach.secondMinutes] : [])]}
         today={today}
         welcome={sp.welcome === "1"}
         students={students.filter((s) => s.status !== "requested").map((s) => ({ id: s.player.id, name: s.player.displayName }))}

@@ -1184,7 +1184,25 @@
       "noticeHelp": "A student cannot book closer to the hour than this. You can always book closer yourself.",
       "notice2": "2 hours",
       "notice12": "12 hours",
-      "notice24": "A day"
+      "notice24": "A day",
+      "secondOpen": "I also offer a longer lesson",
+      "secondLength": "Its length",
+      "secondSingle": "One person",
+      "secondTwo": "Each, in a pair",
+      "together": "{amount} for the {n} together",
+      "feeOpen": "I charge extra outside my hours",
+      "feeLabel": "Extra per lesson outside your hours",
+      "feeHelp": "Added to any lesson that starts outside your weekly hours: a request you said yes to, or an hour you opened. On top of a package too.",
+      "offersOpen": "I sell packages",
+      "offersHelp": "Up to three. Students pick one on your page; it starts unpaid and you mark it paid when the money lands. The price is what each person pays.",
+      "offerLessons": "Lessons",
+      "offerLength": "Length",
+      "offerFor": "For",
+      "offerPrice": "Price, each",
+      "offerValid": "Valid, days",
+      "offerAdd": "Add a package",
+      "offerRemove": "Remove",
+      "persons": "{n, plural, one {# person} other {# persons}}"
     },
     "done": {
       "title": "Your assistant is ready",
@@ -1249,7 +1267,8 @@
       "comp": "On me",
       "compWhy": "Why? Your student reads this.",
       "openHour": "Open this hour",
-      "opened": "Open: {when}. Students can book it."
+      "opened": "Open: {when}. Students can book it.",
+      "length": "Length"
     },
     "students": {
       "title": "Students",
@@ -1402,7 +1421,23 @@
       "slipAttach": "Attach the bank slip",
       "slipAttached": "Slip attached",
       "slipReplace": "Replace the slip",
-      "slipTooBig": "That picture is too big. A screenshot of the slip is enough."
+      "slipTooBig": "That picture is too big. A screenshot of the slip is enough.",
+      "prices": "Prices",
+      "onePerson": "One person",
+      "pairEach": "In a pair, each",
+      "threeEach": "In a three, each",
+      "fourEach": "In a four, each",
+      "packages": "Packages",
+      "pkgLine": "{size, plural, one {# lesson} other {# lessons}} of {minutes} min",
+      "pkgFor": "for {n, plural, one {one person} other {# together}}",
+      "pkgValid": "valid {days} days",
+      "pkgEach": "{amount} each",
+      "pkgTake": "Take this package",
+      "pkgConfirm": "Take {size} lessons for {amount}? You pay {name} directly; nothing goes through Kicksmash.",
+      "pkgTaken": "Your package has started: {size} lessons. Pay {amount} to {name}; the ways are below.",
+      "feeLine": "Outside these hours: +{amount} per lesson",
+      "length": "Lesson length",
+      "packageOwed": "{size, plural, one {# lesson} other {# lessons}} package"
     },
     "me": {
       "title": "Your lessons",
@@ -1421,7 +1456,8 @@
       "too_soon": "Too short notice for that time.",
       "no_coach": "No coach page here yet.",
       "past": "That time has passed.",
-      "already_paid": "This lesson is already paid. A refund happens at the bank, not here."
+      "already_paid": "This lesson is already paid. A refund happens at the bank, not here.",
+      "has_package": "You already have a package with lessons left. Use it up first."
     },
     "email": {
       "paidSubject": "{student} says they paid",
