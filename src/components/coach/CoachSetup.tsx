@@ -315,7 +315,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
                   {t("setup.secondOpen")}
                 </button>
               ) : (
-                <div className="grid grid-cols-3 gap-2" data-testid="second-length">
+                <div className="grid grid-cols-[7rem_1fr_1fr] gap-2" data-testid="second-length">
                   <label className="block text-xs font-bold text-muted">
                     {t("setup.secondLength")}
                     <select className="input mt-1" value={secondMinutes} onChange={(e) => setSecondMinutes(Number(e.target.value))} data-testid="second-minutes">

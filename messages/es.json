@@ -1439,7 +1439,9 @@
       "length": "Duración de la clase",
       "packageOwed": "Bono de {size, plural, one {# clase} other {# clases}}",
       "lessonTwo": "Clases de {a} o {b} minutos",
-      "noGap": "Sin hueco de {minutes} minutos el {day}"
+      "noGap": "Sin hueco de {minutes} minutos el {day}",
+      "from": "desde {amount}",
+      "eachPaysLine": "Cada uno paga {amount}"
     },
     "me": {
       "title": "Tus clases",

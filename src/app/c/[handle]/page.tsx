@@ -142,7 +142,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             {second ? t("page.lessonTwo", { a: coach.lessonMinutes, b: second }) : t("page.lesson", { minutes: coach.lessonMinutes })}
             {/* The setup asks what a lesson costs and then nothing showed it: a student learned the
                 price only once they owed it. It is the first thing anyone wants to know. */}
-            {coach.priceSingle ? ` · ${coach.priceSingle} ${coach.currency}` : ""}
+            {coach.priceSingle ? ` · ${second || coach.priceTwo ? t("page.from", { amount: `${Math.min(...[coach.priceSingle, coach.priceTwo, coach.priceThree, coach.priceFour, coach.priceSecondSingle, coach.priceSecondTwo].filter((n): n is number => n != null && n > 0))} ${coach.currency}` }) : `${coach.priceSingle} ${coach.currency}`}` : ""}
           </p>
           {/* The week in one line, when every open day says the same thing. A student who opens the page
               after the last hour of the day is not offered today at all; this is what says why. */}

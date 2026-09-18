@@ -369,14 +369,20 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                 {groupPrices && (
                   <div>
                     <div className="text-xs font-bold uppercase text-faint">{t("page.heads")}</div>
+                    {/* Four chips of one digit, and one line under them for the chosen count. Four chips
+                        that each said "each pays 500 THB" stacked one per line on a phone. */}
                     <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={t("page.heads")} data-testid="student-heads">
                       {[1, 2, 3, 4].map((n) => (
-                        <button key={n} type="button" role="radio" aria-checked={heads === n} data-heads={n} className={chip(heads === n)} onClick={() => setHeads(n)}>
+                        <button key={n} type="button" role="radio" aria-checked={heads === n} data-heads={n} className={`${chip(heads === n)} min-w-12`} onClick={() => setHeads(n)}>
                           {n}
-                          {eachPays(n) != null && !pkg && <span className="ml-1 font-normal opacity-80">· {t("page.eachPays", { amount: money(eachPays(n)!) })}</span>}
                         </button>
                       ))}
                     </div>
+                    {eachPays(heads) != null && !pkg && (
+                      <p className="mt-1 text-xs text-muted" data-testid="each-pays">
+                        {t("page.eachPaysLine", { amount: money(eachPays(heads)!) })}
+                      </p>
+                    )}
                   </div>
                 )}
                 <button type="button" className="btn-primary w-full" disabled={!slot || pending} onClick={book}>
