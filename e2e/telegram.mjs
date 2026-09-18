@@ -191,8 +191,17 @@ try {
   check("/start gives a coach the assistant's menu", menu.json?.outcome === "coach_menu", JSON.stringify(menu.json));
   const tappedToday = await say(9, "📅 Today");
   check("the Today button lists the agenda", tappedToday.json?.outcome === "coach:agenda", JSON.stringify(tappedToday.json));
+  // Buttons all the way down: the Book button asks who, never for a line to type.
   const tappedBook = await say(10, "＋ Book");
-  check("the Book button explains the one line it needs", tappedBook.json?.outcome === "coach:book_how", JSON.stringify(tappedBook.json));
+  check("the Book button asks who the lesson is for, as buttons", tappedBook.json?.outcome === "coach:tap:who", JSON.stringify(tappedBook.json));
+  const tappedCancel = await say(13, "✕ Cancel");
+  check("the Cancel button lists the next lessons as buttons", ["coach:tap:cancel_list", "coach:tap:cancel_none"].includes(tappedCancel.json?.outcome), JSON.stringify(tappedCancel.json));
+  const tappedStudents = await say(14, "👥 Students");
+  check("the Students button lists everybody with a card each", tappedStudents.json?.outcome === "coach:tap:students", JSON.stringify(tappedStudents.json));
+  const tappedMoney = await say(15, "💰 Money");
+  check("the Money button lists what is owed, a paid button on each", ["coach:tap:money", "coach:tap:money_none"].includes(tappedMoney.json?.outcome), JSON.stringify(tappedMoney.json));
+  const tappedSettings = await say(16, "⚙️ Settings");
+  check("the Settings button shows the rules as buttons", tappedSettings.json?.outcome === "coach:tap:settings", JSON.stringify(tappedSettings.json));
   const slashWeek = await say(11, "/week");
   check("the menu's /week command is the week's agenda", slashWeek.json?.outcome === "coach:agenda", JSON.stringify(slashWeek.json));
   const coachCmd = await say(12, "/coach");
@@ -218,7 +227,8 @@ try {
   const price = await rookieSays(2, "price 800");
   check("a settings line lands with no form", price.json?.outcome === "coach:set:price", JSON.stringify(price.json));
   const shown = await rookieSays(3, "settings");
-  check("settings lists what the book is running on", shown.json?.outcome === "coach:settings", JSON.stringify(shown.json));
+  // "settings" typed is the same door as the ⚙️ button: the rules as buttons, the value in force marked.
+  check("settings lists what the book is running on", ["coach:settings", "coach:tap:settings"].includes(shown.json?.outcome), JSON.stringify(shown.json));
   const booking = await rookieSays(4, "priya tomorrow 9");
   check("a booking line is still a booking line beside the settings words", booking.json?.outcome === "coach:booked", JSON.stringify(booking.json));
   const moved = await rookieSays(5, "move priya tomorrow 10");
@@ -251,6 +261,10 @@ try {
   check("/lessons lists the student's lessons", lessonsCmd.json?.outcome === "student:lessons", JSON.stringify(lessonsCmd.json));
   const slots = await ivanSays(5, "завтра");
   check("a day alone offers the free times as buttons", slots.json?.outcome === "student:slots" || slots.json?.outcome === "student:no_free", JSON.stringify(slots.json));
+  const studentBook = await ivanSays(30, "＋ Book");
+  check("the student's Book button asks which day, as buttons", studentBook.json?.outcome === "student:tap:day", JSON.stringify(studentBook.json));
+  const studentPay = await ivanSays(31, "💳 Pay & package");
+  check("the student's Pay button shows the package and what is owed", studentPay.json?.outcome === "student:tap:pay", JSON.stringify(studentPay.json));
   const studentCancel = await ivanSays(6, `отмена ${day.ru}`);
   check("the student cancels in one line", studentCancel.json?.outcome === "student:cancelled" || studentCancel.json?.outcome === "student:cancel:confirm", JSON.stringify(studentCancel.json));
   await ivanCtx.close();

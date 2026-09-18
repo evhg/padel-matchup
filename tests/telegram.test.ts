@@ -598,7 +598,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     // The menu with the student's buttons, pinned once, then the link that signs a browser in for My matches.
     const menu = sent("sendMessage").find((c) => JSON.stringify(c.body.reply_markup).includes("My lessons"));
     expect(menu).toBeDefined();
-    expect(JSON.stringify(menu!.body.reply_markup)).toContain("Package left");
+    expect(JSON.stringify(menu!.body.reply_markup)).toContain("Pay & package");
     expect(sent("pinChatMessage")).toHaveLength(1);
     expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/\/p\/[A-Za-z0-9_-]+/);
     const commands = sent("setMyCommands").at(-1)!.body.commands as { command: string }[];

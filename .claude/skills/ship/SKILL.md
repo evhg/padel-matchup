@@ -364,6 +364,24 @@ Wall clock first, credits second. What actually moved it, measured:
   own, the gate's run was a race". The suite name is `coach`, no extension. Quote the `N/N checks
   passed` and `1/1 suites passed` lines, never the exit code; a zero on the left is a run of nothing.
 
+### The bot as buttons
+
+- **A reply to a prompt is read before the score reader.** `plainScore` takes any reply to a bot
+  message that looks like a score, and "22:30" typed as the time for a lesson looked like one, so the
+  tap flow's typed step came back as `score_how`. Anything that reads a reply to one of our prompts
+  runs first, gated on the prompt's own trailer, before the general readers see the message.
+- **64 bytes is the whole budget of a button.** A uuid is 36; three of them do not fit. Pack ids to
+  22 url-safe characters (`packId`), dates to six digits, times to epoch minutes, and read them back
+  by shape. The state of a flow lives in the button, never in a table, so a coach who taps a week-old
+  message still lands somewhere sensible.
+- **A new button is a row in `e2e/controls.mjs` before it is anything else.** The controls suite
+  posts every prefix the source emits and fails on one it does not know, which is how twenty-six new
+  tap prefixes were caught in the first gate rather than by a coach whose button did nothing. Write
+  the row (a packed id is 22 "A"s) the moment the prefix is typed.
+- **Today may be over where the coach is.** A test that tapped the first day button got an empty
+  time picker at 22:00 Bangkok, because "today" had no hours left. Pick the day after tomorrow in a
+  test, and in the product show the day even when it is empty, with the way to type a time under it.
+
 ### Documents rot within hours
 
 Ship the document change in the same pull request as the code. Twice in one day `ROADMAP.md` and

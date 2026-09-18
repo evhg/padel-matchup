@@ -33,8 +33,9 @@ Everything in this list is live. The README describes each in detail.
   with a service account cannot be done at all. Money is
   tracked, never processed: the student says they have paid, the coach confirms it, and unpaid warns
   rather than blocks. All of it works in Telegram as well as on the web: three taps set a book up —
-  city, lesson length, when you teach — and after that it is one line at a time (`price 800`,
-  `hours mornings`, `move anna fri 15`, `unpaid`, `settings`).
+  city, lesson length, when you teach — and after that every flow is buttons (see "The assistant as
+  taps" below); the one-line grammar (`price 800`, `move anna fri 15`, `unpaid`) still works for a
+  coach who likes it.
 - **What a player wants, recorded.** "Tuesdays around two at Rawai", said once on their own page or
   as `/want tue 14 Rawai Padel` in the chat. A match that fits finds them within the hour, and a seat
   that opens goes to whoever asked for that hour before it goes to the crew or the club's regulars.
@@ -121,6 +122,19 @@ Everything in this list is live. The README describes each in detail.
   package starts unpaid at the offer's price, the coach hears, and the student sees the figure and the
   ways to pay on the same screen. A pair package books pairs. Prices stay what each person pays; the
   screen shows what the pair pays together beside it, because that is the number on the card.
+
+- **The assistant as taps.** Padel players do not type `anna fri 15 90`, and the owner said so. Every
+  flow in the Telegram chat is buttons now, for the coach and for the student, without leaving the
+  app: book (who, how long, which day, what time, how many), cancel with one question first, move
+  (which lesson, which day, which free time), block a day or one of its hours, a card per lesson
+  with no-show and its undo, on me, and paid; students with a card each, a package started from the coach's own offers with one tap,
+  the money with a paid button on every open figure, and the rules as buttons with the value in
+  force marked. A student books, moves, cancels, pays, takes a package, waits for a spot that week,
+  or asks the coach for an hour outside the grid. Stateless like the setup walk: each button carries
+  what has been chosen so far, packed into Telegram's 64 bytes; the three typed steps that cannot be
+  buttons — a new student's name, a time the grid does not offer, a package that is not on the
+  page — are forced replies whose prompt carries its own context. The one-line grammar stays for a
+  coach who likes it.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
