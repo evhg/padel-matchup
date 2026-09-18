@@ -123,7 +123,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         {/* The money, on the row. Until now a coach saw "no package" and nothing else, and learned that a
             student had paid from a notice that scrolled away. */}
         {(l.amount ?? 0) > 0 && l.comped == null && (
-          <div className={`text-xs font-bold ${l.paid ? "text-ok" : l.claimed ? "text-accent" : "text-danger"}`} data-testid="lesson-money">
+          <div className={`text-xs font-bold ${l.paid ? "text-ok" : l.claimed ? "text-ink" : "text-danger"}`} data-testid="lesson-money">
             {t(l.paid ? "home.paid" : l.claimed ? "home.saysPaid" : "home.unpaid", { amount: `${l.amount} ${l.currency ?? ""}`.trim() })}
             {l.hasSlip && (
               <>

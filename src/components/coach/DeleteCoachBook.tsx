@@ -15,7 +15,7 @@ export function DeleteCoachBook({ students, lessons }: { students: number; lesso
   const router = useRouter();
   const [pending, start] = useTransition();
   return (
-    <p className="mt-6 text-center text-xs text-faint">
+    <p className="mt-6 text-center text-sm text-muted">
       <button
         type="button"
         className="underline hover:text-muted"
