@@ -162,6 +162,7 @@ try {
   check("settings save with a PromptPay number", true);
   check("settings carry every price the walk asked", (await olga.getByTestId("settings-price-single").inputValue()) === "800" && (await olga.getByTestId("settings-priceTwo").inputValue()) === "500");
   check("the notice chosen in the walk is what settings show", (await olga.getByLabel("Shortest notice for a booking (hours)").inputValue()) === "12");
+  await shot(olga, "67-coach-settings-prices");
   check("settings carry the second length, the extra outside the hours and the package", (await olga.getByTestId("settings-second-minutes").inputValue()) === "90" && (await olga.getByTestId("settings-price-second-single").inputValue()) === "1200" && (await olga.getByTestId("settings-fee").inputValue()) === "300" && (await olga.getByTestId("offer-price-0").inputValue()) === "7000");
   const calendarCard = olga.getByTestId("coach-calendar");
   // The Google steps sit behind a fold now: the lesson already reaches the coach's calendar by email,
@@ -178,6 +179,7 @@ try {
   const ivan = await newPage();
   await ivan.goto(`${BASE}/c/${handle}`);
   check("the public page names the coach and the club", (await ivan.getByRole("heading", { name: "Olga" }).count()) === 1 && (await ivan.getByText(/at Warehaus/).count()) === 1);
+  check("the header names both lengths when the coach sells two", (await ivan.getByText(/60- or 90-minute lessons/).count()) === 1);
   check("the public page carries structured data and language alternates", (await ivan.locator('script[type="application/ld+json"]').count()) === 1 && (await ivan.locator('link[rel="alternate"][hreflang="ru"]').count()) === 1);
   await ivan.getByPlaceholder("e.g. Alex").fill("Ivan");
   await ivan.getByRole("button", { name: "Ask to become a student" }).click();
@@ -204,6 +206,7 @@ try {
   await mila.getByText("Pick a day").waitFor({ timeout: 20000 });
   const priceCard = mila.getByTestId("price-card");
   check("the page shows the prices the way the card at the desk has them: both lengths, the extra, the package", (await priceCard.getByText(/90 min/).count()) >= 1 && (await priceCard.getByText(/1200 THB/).count()) === 1 && (await priceCard.getByText(/\+300 THB per lesson/).count()) === 1 && (await mila.getByTestId("offers-list").getByText(/10 lessons of 60 min/).count()) === 1);
+  await shot(mila, "66-student-prices");
   check("a student picks the lesson length when the coach sells two, and sees what each costs", (await mila.getByTestId("student-length").locator('button[data-minutes="90"]').count()) === 1 && (await mila.getByTestId("student-length").getByText(/1200 THB/).count()) === 1);
   await mila.getByTestId("take-offer").click();
   await mila.getByText(/Your package has started/).waitFor({ timeout: 20000 });

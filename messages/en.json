@@ -1437,7 +1437,9 @@
       "pkgTaken": "Your package has started: {size} lessons. Pay {amount} to {name}; the ways are below.",
       "feeLine": "Outside these hours: +{amount} per lesson",
       "length": "Lesson length",
-      "packageOwed": "{size, plural, one {# lesson} other {# lessons}} package"
+      "packageOwed": "{size, plural, one {# lesson} other {# lessons}} package",
+      "lessonTwo": "{a}- or {b}-minute lessons",
+      "noGap": "No {minutes}-minute gap on {day}"
     },
     "me": {
       "title": "Your lessons",

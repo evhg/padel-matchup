@@ -1437,7 +1437,9 @@
       "pkgTaken": "Ваш абонемент начался: {size} занятий. Оплатите {amount} — {name}; способы ниже.",
       "feeLine": "Вне этих часов: +{amount} за занятие",
       "length": "Длина занятия",
-      "packageOwed": "Абонемент на {size, plural, one {# занятие} few {# занятия} other {# занятий}}"
+      "packageOwed": "Абонемент на {size, plural, one {# занятие} few {# занятия} other {# занятий}}",
+      "lessonTwo": "Занятия по {a} или {b} минут",
+      "noGap": "Нет окна на {minutes} минут: {day}"
     },
     "me": {
       "title": "Ваши занятия",

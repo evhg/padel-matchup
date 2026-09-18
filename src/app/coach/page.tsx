@@ -125,6 +125,8 @@ export default async function CoachPage({ searchParams }: Props) {
   // Sequential, after the burst above: the pooler stalls on pipelined bursts (rule 8).
   const openings = await openingsBetween(db, coach.id, now, to);
   const slots = openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now, openings });
+  const second = coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? coach.secondMinutes : null;
+  const slotsSecond = second ? openSlots({ coach: { ...coach, minNoticeHours: 0 }, from: now, to, busy, now, openings, minutes: second }) : [];
   return shell(
     <>
       <CoachHome
@@ -134,7 +136,8 @@ export default async function CoachPage({ searchParams }: Props) {
         inviteUrl={`${baseUrl()}/coaches?s=invite`}
         studentUrl={studentLink(baseUrl(), coach.handle, invite)}
         earned={earned}
-        lengths={[coach.lessonMinutes, ...(coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? [coach.secondMinutes] : [])]}
+        lengths={[coach.lessonMinutes, ...(second ? [second] : [])]}
+        slotsSecond={slotDTOs(slotsSecond, coach.tz, locale)}
         today={today}
         welcome={sp.welcome === "1"}
         students={students.filter((s) => s.status !== "requested").map((s) => ({ id: s.player.id, name: s.player.displayName }))}

@@ -39,10 +39,12 @@ type Props = {
   earned?: boolean;
   /** The lengths this coach sells: the usual one first. Two of them put a picker on the book form. */
   lengths?: number[];
+  /** Free times for the second length: a longer lesson needs a longer hole. */
+  slotsSecond?: SlotDTO[];
 };
 
 /** The coach's book: today, the next days, one button to book. Three doors to the other screens above it. */
-export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [] }: Props) {
+export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [], slotsSecond = [] }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -289,6 +291,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
             students={students}
             lengths={lengths}
             slots={slots}
+            slotsSecond={slotsSecond}
             days={days}
             dayLabels={dayLabels}
             onDone={(text) => {
@@ -338,7 +341,7 @@ function NavTile({ href, icon, label }: { href: string; icon: string; label: str
   );
 }
 
-function BookForm({ students, slots, days, dayLabels, lengths, onDone, onCancel }: { students: StudentOption[]; slots: SlotDTO[]; days: string[]; dayLabels: Record<string, string>; lengths: number[]; onDone: (text: string) => void; onCancel: () => void }) {
+function BookForm({ students, slots, slotsSecond, days, dayLabels, lengths, onDone, onCancel }: { students: StudentOption[]; slots: SlotDTO[]; slotsSecond: SlotDTO[]; days: string[]; dayLabels: Record<string, string>; lengths: number[]; onDone: (text: string) => void; onCancel: () => void }) {
   const t = useTranslations("coach");
   const [pending, start] = useTransition();
   // Which length, when the coach sells two. The usual one unless they say otherwise.
@@ -352,7 +355,9 @@ function BookForm({ students, slots, days, dayLabels, lengths, onDone, onCancel 
   // case costs no taps and nobody has to think about it.
   const [heads, setHeads] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const daySlots = slots.filter((s) => s.day === day);
+  // The free times of the length picked: a 90-minute lesson at a 60-minute hole would only bounce
+  // as "taken", which is the wrong word for it.
+  const daySlots = (minutes != null && lengths.length > 1 && minutes === lengths[1] ? slotsSecond : slots).filter((s) => s.day === day);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,7 +480,7 @@ function BookForm({ students, slots, days, dayLabels, lengths, onDone, onCancel 
           <div className="text-sm font-bold">{t("book.length")}</div>
           <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t("book.length")} data-testid="book-length">
             {lengths.map((m) => (
-              <button key={m} type="button" role="radio" aria-checked={(minutes ?? lengths[0]) === m} data-minutes={m} className={chip((minutes ?? lengths[0]) === m)} onClick={() => setMinutes(m)}>
+              <button key={m} type="button" role="radio" aria-checked={(minutes ?? lengths[0]) === m} data-minutes={m} className={chip((minutes ?? lengths[0]) === m)} onClick={() => (setMinutes(m), setSlot(null))}>
                 {t("minutes", { n: m })}
               </button>
             ))}
