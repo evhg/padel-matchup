@@ -171,6 +171,21 @@ describe("the feedback loop", () => {
     expect((reply.body.headers as Record<string, string>)["In-Reply-To"]).toBe(`<${emailId}@club.example>`);
   });
 
+  it("a web note from a player with an email is answered on that email, the way a lesson notice would be", async () => {
+    const { makePlayer } = await import("./helpers/db");
+    const { updatePlayer } = await import("@/lib/domain/players");
+    const p = await makePlayer(db, "Dikke Henk");
+    await updatePlayer(db, p.id, { email: "henk@example.com" });
+    const row = await createFeedback(db, { source: "web", text: "The delete link is tiny.", locale: "en", playerId: p.id });
+    const before = calls.length;
+    const r = await decideFeedback(db, row.id, { status: "shipped", message: "The delete link is readable now." });
+    expect(r.delivery).toEqual({ status: "sent" });
+    expect(r.item?.messagesSent).toBe(1);
+    const sent = calls.slice(before).find((c) => c.url === "https://api.resend.com/emails")!;
+    expect(sent.body.to).toEqual(["henk@example.com"]);
+    expect(String(sent.body.text)).toContain("readable now");
+  });
+
   it("web notes without a channel are kept but cannot be answered; the week's numbers add up", async () => {
     const row = await createFeedback(db, { source: "web", text: "Dark mode please, the court lights are bright enough.", locale: "en" });
     const r = await decideFeedback(db, row.id, { status: "declined", message: "no way to send this" });

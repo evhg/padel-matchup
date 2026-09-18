@@ -6,6 +6,9 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { dc } from "@/lib/discord/api";
 import { sendPlainEmail } from "@/lib/outreach/desk";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { baseUrl } from "@/lib/config";
+import { removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
+import { pushEnabled, sendPush } from "@/lib/push";
 
 /**
  * The feedback loop's memory. Intake stores a row and says thanks at once;
@@ -216,7 +219,7 @@ export async function appendFeedbackReply(db: Db, id: string, replyText: string,
 export type Delivery = { status: "sent" | "failed" | "capped" | "no_channel" | "not_found"; error?: string };
 
 /** The one way out: the person hears from us on the channel they used. */
-export async function deliverToPerson(item: Feedback, text: string, fetchImpl: typeof fetch = fetch): Promise<Delivery> {
+export async function deliverToPerson(item: Feedback, text: string, fetchImpl: typeof fetch = fetch, db?: Db): Promise<Delivery> {
   const message = text.trim().slice(0, FEEDBACK_LIMITS.messageMax);
   if (!message) return { status: "failed", error: "empty" };
   if (item.messagesSent >= FEEDBACK_LIMITS.messagesPerItem) return { status: "capped" };
@@ -242,6 +245,29 @@ export async function deliverToPerson(item: Feedback, text: string, fetchImpl: t
     const res = await sendMessage(item.telegramUserId, esc(message));
     return res.ok ? { status: "sent" } : { status: "failed", error: res.description };
   }
+  // A note from the in-app form carries only a player, and until now that was "no channel": Erik's
+  // two notes were fixed and he never heard. The app already knows how to reach a player — the same
+  // order every lesson notice takes: Telegram, then email, then this device.
+  if (db && item.playerId) {
+    const [p] = await db.select().from(players).where(eq(players.id, item.playerId)).limit(1);
+    if (p?.telegramId && telegramEnabled()) {
+      const res = await sendMessage(p.telegramId, esc(message));
+      if (res.ok) return { status: "sent" };
+    }
+    if (p?.email) {
+      const res = await sendPlainEmail({ to: p.email, subject: "About your note to Kicksmash", text: message }, fetchImpl);
+      if (res.ok) return { status: "sent" };
+    }
+    if (p && pushEnabled()) {
+      let sent = false;
+      for (const sub of await subscriptionsFor(db, [p.id])) {
+        const r = await sendPush(sub, { title: "Kicksmash", body: message.slice(0, 140), url: `${baseUrl()}/me` }).catch(() => "failed" as const);
+        if (r === "gone") await removePushSubscription(db, sub.endpoint).catch(() => undefined);
+        else if (r !== "failed") sent = true;
+      }
+      if (sent) return { status: "sent" };
+    }
+  }
   return { status: "no_channel" };
 }
 
@@ -253,7 +279,7 @@ export async function decideFeedback(db: Db, id: string, d: Decision, now = new 
   if (!item) return { item: null, delivery: { status: "not_found" } };
   let delivery: Delivery | null = null;
   if (d.message && d.message.trim()) {
-    delivery = await deliverToPerson(item, d.message, fetchImpl);
+    delivery = await deliverToPerson(item, d.message, fetchImpl, db);
   }
   const sent = delivery?.status === "sent";
   const [row] = await db

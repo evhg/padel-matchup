@@ -309,6 +309,12 @@ Wall clock first, credits second. What actually moved it, measured:
   "what changed" that DECIDING.md promises reaches nobody. Until the desk can reach a player by their
   own channels (`channelFor` already knows how), close the note honestly and say so to the owner rather
   than reporting the person was told.
+- **A rule that closes one door should close every door with the same name.** The sixty-day rule took
+  a quiet coach off a student's screen and left them in the public directory, the club page's coach
+  list, the sitemap and the level verifiers. Three of those are "somebody chooses a coach here" and got
+  the rule; the sitemap (the page still opens) and the verifiers (somebody who saw you play can still
+  say so) deliberately did not. When a rule lands in one query, grep the others that list the same
+  rows and decide each one on what the reader is choosing, not on whether it is convenient.
 - **Read the desk when the owner asks "any feedback?"** The assessor can run out of budget and leave
   notes at "acknowledged" with no proposal; the owner's Telegram then carries only "no analysis". One
   query on `feedback` since yesterday is the whole answer, and it also shows what the tester actually

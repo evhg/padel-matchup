@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { availableSlots, blockTime, bookLesson, cancelLesson, createCoach, leaveCoach, listStudentCoaches, listStudents, presetHours, QUIET_COACH_DAYS, requestStudent, setStudentStatus, studentStatus, unblockTime } from "@/lib/domain/coaching";
+import { availableSlots, blockTime, bookLesson, cancelLesson, createCoach, leaveCoach, listPublicCoaches, listStudentCoaches, listStudents, presetHours, QUIET_COACH_DAYS, requestStudent, setStudentStatus, studentStatus, unblockTime } from "@/lib/domain/coaching";
 import { matchStudent } from "@/lib/coach/assistant";
 import { studentRefs } from "@/lib/telegram/coach";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
@@ -149,6 +149,16 @@ describe("a player takes a coach off their own list", () => {
       // One lesson a year out. The door must stay, or the student cannot reach the lesson they hold.
       await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: after(365), byCoach: true });
       expect((await listStudentCoaches(db, student.id, after(QUIET_COACH_DAYS + 1))).map((c) => c.coach.id)).toEqual([coach.id]);
+    });
+
+    it("takes a quiet coach off the public directory by the same rule, and keeps them in the sitemap", async () => {
+      const { coach } = await pair("Ivo");
+      await bookLesson(db, { coach, studentPlayerId: (await makePlayer(db, "IvoStudent")).id, startsAt: new Date(booked), byCoach: true });
+      const listed = async (days: number, includeQuiet = false) => (await listPublicCoaches(db, "Asia/Bangkok", 200, { now: after(days), includeQuiet })).map((c) => c.id);
+      expect(await listed(QUIET_COACH_DAYS - 10)).toContain(coach.id);
+      expect(await listed(QUIET_COACH_DAYS + 1)).not.toContain(coach.id);
+      // The page still opens by link, so the sitemap keeps it.
+      expect(await listed(QUIET_COACH_DAYS + 1, true)).toContain(coach.id);
     });
 
     it("judges a coach who has taught nobody yet on the day they signed up", async () => {
