@@ -39,6 +39,7 @@ export function coachLessonDTO(l: LessonWithPeople, coach: Pick<Coach, "tz" | "c
     studentPlayerId: l.studentPlayerId,
     status: l.status,
     heads: l.heads,
+    minutes: l.minutes,
     /** The coach gave it away; the reason is what the student reads. */
     comped: l.compedAt ? (l.compReason ?? "") : null,
     /** Money: what it costs, whether the coach marked it paid, whether the student says so, and whether a slip came with that. */

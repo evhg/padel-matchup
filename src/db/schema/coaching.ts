@@ -43,6 +43,20 @@ export const coaches = pgTable(
     priceTwo: integer("price_two"),
     priceThree: integer("price_three"),
     priceFour: integer("price_four"),
+    /**
+     * A second lesson length the coach sells beside `lessonMinutes` (Benji: 60 and 90), with what one
+     * person and each of a pair pays for it. Null: one length only. Three and four at this length
+     * fall back to the pair price, as the main ladder does.
+     */
+    secondMinutes: integer("second_minutes"),
+    priceSecondSingle: integer("price_second_single"),
+    priceSecondTwo: integer("price_second_two"),
+    /**
+     * Added to any lesson that starts outside the weekly hours — a request the coach said yes to, an
+     * hour they opened on one date, a lesson they booked themselves at dinner time. Per lesson, on
+     * top of the price or of a package. Null: no extra.
+     */
+    outsideHoursFee: integer("outside_hours_fee"),
     /** The currency every price and package amount of this coach is in. */
     currency: text("currency").notNull().default("THB"),
     /** The coach takes cash or a card at the club: a payment method with nothing to show but a sentence. */
@@ -150,6 +164,35 @@ export const coachOpenings = pgTable(
 
 export type CoachOpening = typeof coachOpenings.$inferSelect;
 
+/**
+ * A package the coach sells, as students see it on the page: "10 lessons of 60 min, one person,
+ * 25,200 THB, valid 70 days". At most three live ones per coach. A student taps one and a
+ * `lesson_packages` row is made for them, unpaid, pointing back here. Archived rather than deleted
+ * when the coach changes the list, so a package somebody already holds keeps its origin.
+ */
+export const coachPackageOffers = pgTable(
+  "coach_package_offers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    size: integer("size").notNull(),
+    minutes: integer("minutes").notNull(),
+    /** How many on court for each lesson of it: the price below is what each of them pays. */
+    heads: integer("heads").notNull().default(1),
+    /** Per person, whole currency units, in the coach's currency. */
+    price: integer("price").notNull(),
+    validDays: integer("valid_days"),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (t) => [index("coach_package_offers_coach_idx").on(t.coachId, t.position)],
+);
+
+export type CoachPackageOffer = typeof coachPackageOffers.$inferSelect;
+
 export const lessonPackages = pgTable(
   "lesson_packages",
   {
@@ -168,6 +211,11 @@ export const lessonPackages = pgTable(
     currency: text("currency").notNull().default("THB"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     latePassesUsed: integer("late_passes_used").notNull().default(0),
+    /** Lessons from it are for this many on court (a pair package), and this long. Null minutes: the coach's usual length. */
+    heads: integer("heads").notNull().default(1),
+    minutes: integer("minutes"),
+    /** The offer on the coach's page it came from, when a student took it there. */
+    offerId: uuid("offer_id").references(() => coachPackageOffers.id, { onDelete: "set null" }),
     note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true }),

@@ -155,6 +155,14 @@ export async function notifyStudentJoined(db: Db, coach: Coach, student: Player)
   await tell(db, coachPlayer, s.studentJoined(student.displayName));
 }
 
+/** A student took a package from the page. Unpaid until the coach says so; this is what asks them to look. */
+export async function notifyPackageTaken(db: Db, n: { coach: Coach; student: Player; pkg: LessonPackage }): Promise<void> {
+  const coachPlayer = await getPlayerById(db, n.coach.playerId);
+  if (!coachPlayer) return;
+  const s = coachStrings(coachBotLocale(coachPlayer.locale));
+  await tell(db, coachPlayer, s.packageTaken(n.student.displayName, n.pkg.size, n.pkg.amount != null ? `${n.pkg.amount} ${n.pkg.currency}` : ""), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/coach/students#s-${n.student.id}` }]] });
+}
+
 export async function notifyStudentRequest(db: Db, coach: Coach, student: Player): Promise<void> {
   const coachPlayer = await getPlayerById(db, coach.playerId);
   if (!coachPlayer) return;

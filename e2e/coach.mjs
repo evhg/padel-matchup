@@ -65,6 +65,16 @@ try {
   check("the assistant exists after the third step; the rest can wait", (await olga.getByText(/Your assistant exists/).count()) === 1);
   check("the walk asks what a lesson costs and how students pay, which nothing did before", (await olga.getByTestId("price-single").count()) === 1 && (await olga.getByTestId("pay-at-club").count()) === 1);
   await olga.getByTestId("price-single").fill("800");
+  // Benji's card: a second length with its prices, an extra outside the hours, and a package. Each
+  // sits behind one line, so a coach with one price still walks the same six short screens.
+  await olga.getByTestId("second-open").click();
+  await olga.getByTestId("price-second-single").fill("1200");
+  await olga.getByTestId("price-second-two").fill("900");
+  await olga.getByTestId("fee-open").click();
+  await olga.getByTestId("fee").fill("300");
+  await olga.getByTestId("offers-open").click();
+  await olga.getByTestId("offer-price-0").fill("7000");
+  check("the price step takes a second length, an extra outside the hours and a package, each behind one line", (await olga.getByTestId("second-minutes").inputValue()) === "90" && (await olga.getByTestId("offer-size-0").inputValue()) === "10" && (await olga.getByTestId("offer-valid-0").inputValue()) === "70");
   await olga.getByTestId("pay-at-club").check();
   await olga.getByTestId("price-save").click();
 
@@ -152,6 +162,7 @@ try {
   check("settings save with a PromptPay number", true);
   check("settings carry every price the walk asked", (await olga.getByTestId("settings-price-single").inputValue()) === "800" && (await olga.getByTestId("settings-priceTwo").inputValue()) === "500");
   check("the notice chosen in the walk is what settings show", (await olga.getByLabel("Shortest notice for a booking (hours)").inputValue()) === "12");
+  check("settings carry the second length, the extra outside the hours and the package", (await olga.getByTestId("settings-second-minutes").inputValue()) === "90" && (await olga.getByTestId("settings-price-second-single").inputValue()) === "1200" && (await olga.getByTestId("settings-fee").inputValue()) === "300" && (await olga.getByTestId("offer-price-0").inputValue()) === "7000");
   const calendarCard = olga.getByTestId("coach-calendar");
   // The Google steps sit behind a fold now: the lesson already reaches the coach's calendar by email,
   // and sharing a calendar is only for reading busy time, which most coaches never need.
@@ -185,6 +196,20 @@ try {
   await wrong.goto(`${BASE}/c/${handle}?i=notthecode`);
   check("a wrong code is just the public page", (await wrong.getByTestId("ask-to-join").count()) === 1);
 
+  // Mila opens the link and takes the package from the page. It starts unpaid, with what to pay and how.
+  const mila = await newPage();
+  await mila.goto(`${BASE}/c/${handle}?i=${inviteCode}`);
+  await mila.getByPlaceholder("e.g. Alex").fill("Mila");
+  await mila.getByRole("button", { name: "I'm in" }).click();
+  await mila.getByText("Pick a day").waitFor({ timeout: 20000 });
+  const priceCard = mila.getByTestId("price-card");
+  check("the page shows the prices the way the card at the desk has them: both lengths, the extra, the package", (await priceCard.getByText(/90 min/).count()) >= 1 && (await priceCard.getByText(/1200 THB/).count()) === 1 && (await priceCard.getByText(/\+300 THB per lesson/).count()) === 1 && (await mila.getByTestId("offers-list").getByText(/10 lessons of 60 min/).count()) === 1);
+  check("a student picks the lesson length when the coach sells two, and sees what each costs", (await mila.getByTestId("student-length").locator('button[data-minutes="90"]').count()) === 1 && (await mila.getByTestId("student-length").getByText(/1200 THB/).count()) === 1);
+  await mila.getByTestId("take-offer").click();
+  await mila.getByText(/Your package has started/).waitFor({ timeout: 20000 });
+  await mila.getByTestId("owed").waitFor({ timeout: 20000 });
+  check("taking a package starts it unpaid, with the figure and the ways to pay on the same screen", (await mila.getByTestId("owed").getByText(/7000 THB/).count()) >= 1 && (await mila.getByTestId("owed-package").count()) === 1 && (await mila.getByTestId("take-offer").count()) === 0 && (await mila.getByText(/10 of 10 left/).count()) >= 1);
+
   // Olga accepts and starts a package of ten.
   await olga.goto(BASE + "/coach/students");
   await olga.getByText("Waiting for your yes").waitFor({ timeout: 20000 });
@@ -215,10 +240,14 @@ try {
   await olga.getByText("Pavel").first().waitFor({ timeout: 20000 });
   check("the imported student appears with lessons left and the expiry", (await olga.getByText(/6 of 10 left/).count()) === 1);
 
-  // Olga sells pairs now, so Ivan is asked how many are coming, and sees what each pays.
+  // Olga sells pairs now, so a student is asked how many are coming. Dasha, who holds no package,
+  // sees what each pays; Ivan, whose package pays, sees the count and no figure.
+  await dasha.reload();
+  await dasha.getByTestId("student-heads").waitFor({ timeout: 20000 });
+  check("a student is asked how many are coming once the coach has a group price, and sees what each pays", (await dasha.getByTestId("student-heads").locator('button[data-heads="2"]').innerText()).includes("500"));
   await ivan.reload();
   await ivan.getByTestId("student-heads").waitFor({ timeout: 20000 });
-  check("a student is asked how many are coming once the coach has a group price, and sees what each pays", (await ivan.getByTestId("student-heads").locator('button[data-heads="2"]').innerText()).includes("500"));
+  check("a student whose package pays is asked how many, and shown no price", !(await ivan.getByTestId("student-heads").locator('button[data-heads="2"]').innerText()).includes("500"));
   // Ivan books a free time himself, then cancels in time: the lesson goes back on the package.
   await ivan.reload();
   await ivan.getByRole("heading", { name: "Book a lesson" }).waitFor({ timeout: 20000 });
@@ -266,6 +295,8 @@ try {
   const dashaStudent = olga.locator("li", { hasText: "Dasha" }).first();
   await dashaStudent.getByTestId("unpaid-lessons").waitFor({ timeout: 20000 });
   check("the students screen lists the unpaid lesson under the figure it adds up to", (await dashaStudent.getByTestId("mark-lesson-paid").count()) === 1 && /Owes 500/.test(await dashaStudent.innerText()));
+  const milaStudent = olga.locator('[data-testid="student-row"]', { hasText: "Mila" }).first();
+  check("the package a student took from the page is on the coach's students screen, unpaid", /10 of 10 left · 70 days · Not paid yet/.test(await milaStudent.innerText()) && /Owes 7000/.test(await milaStudent.innerText()), (await milaStudent.innerText()).slice(0, 120));
   await dashaStudent.getByTestId("mark-lesson-paid").click();
   await olga.getByText(/Owes 500/).waitFor({ state: "detached", timeout: 20000 });
   check("mark paid takes the lesson off what is owed", (await olga.getByText(/Owes 500/).count()) === 0);
@@ -363,6 +394,9 @@ try {
   await ivan.goto(`${BASE}/c/${handle}`);
   await ivan.getByText(/7 of 10 left/).waitFor({ timeout: 20000 });
   check("the coach's yes books the lesson at the requested time", (await ivan.getByText(/23:30/).count()) >= 1);
+  // 23:30 is outside Olga's hours, so Benji's extra applies — on top of the package, which paid for the lesson itself.
+  await ivan.getByTestId("owed").waitFor({ timeout: 20000 });
+  check("a lesson outside the hours carries the extra, on top of the package", (await ivan.getByTestId("owed").getByText(/23:30 · 300 THB/).count()) === 1, await ivan.getByTestId("owed").innerText());
 
   // A manager: Olga makes one link; Nina opens it, gives a name, and sees Olga's book.
   await olga.goto(BASE + "/coach/settings");

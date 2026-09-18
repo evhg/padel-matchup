@@ -9,7 +9,7 @@ import { ShareButtons } from "@/components/ShareSheet";
 import { LevelChecks, type LevelCheckDTO } from "@/components/LevelChecks";
 import { HowThisWorks } from "./HowThisWorks";
 
-export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; heads?: number; comped?: string | null; amount?: number | null; currency?: string; paid?: boolean; claimed?: boolean; hasSlip?: boolean; pkg: { left: number; size: number; days: number | null } | null };
+export type LessonDTO = { id: string; iso: string; day: string; time: string; dayLabel: string; studentName: string; studentPlayerId: string | null; status: string; heads?: number; minutes?: number; comped?: string | null; amount?: number | null; currency?: string; paid?: boolean; claimed?: boolean; hasSlip?: boolean; pkg: { left: number; size: number; days: number | null } | null };
 export type SlotDTO = { iso: string; day: string; time: string };
 export type StudentOption = { id: string; name: string };
 
@@ -37,10 +37,12 @@ type Props = {
   levelChecks?: LevelCheckDTO[];
   /** The assistant has proved itself (a few students, a few lessons): only then is the coach asked to pass it on. */
   earned?: boolean;
+  /** The lengths this coach sells: the usual one first. Two of them put a picker on the book form. */
+  lengths?: number[];
 };
 
 /** The coach's book: today, the next days, one button to book. Three doors to the other screens above it. */
-export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false }: Props) {
+export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [] }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -146,6 +148,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         <div className="truncate text-xs text-muted">
           {pkgLine(l)}
           {(l.heads ?? 1) > 1 ? ` · ${l.heads}` : ""}
+          {l.minutes != null && lengths.length > 1 && l.minutes !== lengths[0] ? ` · ${t("minutes", { n: l.minutes })}` : ""}
           {l.status !== "booked" ? ` · ${t(`home.status.${l.status}` as "home.status.done")}` : ""}
           {l.comped != null ? ` · ${t("book.comp")}${l.comped ? ` — ${l.comped}` : ""}` : ""}
         </div>
@@ -284,6 +287,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
         ) : (
           <BookForm
             students={students}
+            lengths={lengths}
             slots={slots}
             days={days}
             dayLabels={dayLabels}
@@ -334,9 +338,11 @@ function NavTile({ href, icon, label }: { href: string; icon: string; label: str
   );
 }
 
-function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { students: StudentOption[]; slots: SlotDTO[]; days: string[]; dayLabels: Record<string, string>; onDone: (text: string) => void; onCancel: () => void }) {
+function BookForm({ students, slots, days, dayLabels, lengths, onDone, onCancel }: { students: StudentOption[]; slots: SlotDTO[]; days: string[]; dayLabels: Record<string, string>; lengths: number[]; onDone: (text: string) => void; onCancel: () => void }) {
   const t = useTranslations("coach");
   const [pending, start] = useTransition();
+  // Which length, when the coach sells two. The usual one unless they say otherwise.
+  const [minutes, setMinutes] = useState<number | null>(null);
   const [studentId, setStudentId] = useState<string>(students[0]?.id ?? "new");
   const [newName, setNewName] = useState("");
   const [day, setDay] = useState(days[0] ?? "");
@@ -353,7 +359,7 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
     setError(null);
     start(async () => {
       const name = studentId === "new" ? newName : (students.find((s) => s.id === studentId)?.name ?? "");
-      const r = await coachBookAction({ studentPlayerId: studentId === "new" ? null : studentId, newName: studentId === "new" ? newName : null, startsAt: slot, day: slot ? null : day, time: slot ? null : customTime || null, heads });
+      const r = await coachBookAction({ studentPlayerId: studentId === "new" ? null : studentId, newName: studentId === "new" ? newName : null, startsAt: slot, day: slot ? null : day, time: slot ? null : customTime || null, heads, minutes });
       if (!r.ok) {
         setError(["slot_taken", "not_student", "outside_hours", "too_soon", "no_coach", "past"].includes(r.error) ? t(`errors.${r.error}` as "errors.slot_taken") : t("errors.slot_taken"));
         return;
@@ -464,6 +470,18 @@ function BookForm({ students, slots, days, dayLabels, onDone, onCancel }: { stud
           }}
         />
       </div>
+      {lengths.length > 1 && (
+        <div>
+          <div className="text-sm font-bold">{t("book.length")}</div>
+          <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t("book.length")} data-testid="book-length">
+            {lengths.map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={(minutes ?? lengths[0]) === m} data-minutes={m} className={chip((minutes ?? lengths[0]) === m)} onClick={() => setMinutes(m)}>
+                {t("minutes", { n: m })}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div>
         <div className="text-sm font-bold">{t("book.heads")}</div>
         {/* A padel court holds four. One is the common case, so it costs no taps. */}

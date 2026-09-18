@@ -6,14 +6,15 @@ import { useRouter } from "next/navigation";
 import { removeQrAction, saveCoachSettingsAction, uploadQrAction, type SettingsInput } from "@/actions/coach";
 import { LESSON_MINUTES, QR_UPLOAD_MAX_BYTES } from "@/lib/domain/coaching";
 import { HowThisWorks } from "./HowThisWorks";
+import { OffersEditor } from "./OffersEditor";
 import { PromptPayQr } from "./PromptPayQr";
 
-type Props = { initial: SettingsInput; hasQr: boolean; qrUrl: string | null };
+type Props = { initial: SettingsInput; hasQr: boolean; qrUrl: string | null; currency: string };
 
 const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + i))));
 
 /** One form, saved with one button. Words over widgets: hours are typed the way a coach says them. */
-export function CoachSettings({ initial, hasQr, qrUrl }: Props) {
+export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
   const t = useTranslations("coach");
   const locale = useLocale();
   const router = useRouter();
@@ -124,6 +125,44 @@ export function CoachSettings({ initial, hasQr, qrUrl }: Props) {
                 <input className="input mt-1" inputMode="numeric" value={v[k] ?? ""} onChange={(e) => set(k, e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")))} data-testid={`settings-${k}`} />
               </label>
             ))}
+          </div>
+          {v.priceTwo ? <p className="mt-1 text-xs text-muted">{t("setup.together", { amount: `${v.priceTwo * 2} ${currency}`, n: 2 })}</p> : null}
+        </div>
+        {/* Benji sells sixty and ninety minutes, each with its own price. One more length, two more prices. */}
+        <div>
+          <div className="text-sm font-bold">{t("setup.secondOpen")}</div>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <label className="block text-xs font-bold text-muted">
+              {t("setup.secondLength")}
+              <select className="input mt-1" value={v.secondMinutes ?? ""} onChange={(e) => set("secondMinutes", e.target.value === "" ? null : Number(e.target.value))} data-testid="settings-second-minutes">
+                <option value="">—</option>
+                {LESSON_MINUTES.filter((m) => m !== v.lessonMinutes).map((m) => (
+                  <option key={m} value={m}>
+                    {t("minutes", { n: m })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-bold text-muted">
+              {t("setup.secondSingle")}
+              <input className="input mt-1" inputMode="numeric" value={v.priceSecondSingle ?? ""} disabled={v.secondMinutes == null} onChange={(e) => set("priceSecondSingle", e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")))} data-testid="settings-price-second-single" />
+            </label>
+            <label className="block text-xs font-bold text-muted">
+              {t("setup.secondTwo")}
+              <input className="input mt-1" inputMode="numeric" value={v.priceSecondTwo ?? ""} disabled={v.secondMinutes == null} onChange={(e) => set("priceSecondTwo", e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")))} data-testid="settings-price-second-two" />
+            </label>
+          </div>
+        </div>
+        <label className="block text-sm font-bold">
+          {t("setup.feeLabel")} ({currency})
+          <input className="input mt-1" inputMode="numeric" value={v.outsideHoursFee ?? ""} onChange={(e) => set("outsideHoursFee", e.target.value.trim() === "" ? null : Number(e.target.value.replace(/[^\d]/g, "")))} placeholder="300" data-testid="settings-fee" />
+          <span className="mt-1 block text-xs font-normal text-muted">{t("setup.feeHelp")}</span>
+        </label>
+        <div>
+          <div className="text-sm font-bold">{t("page.packages")}</div>
+          <p className="text-xs text-muted">{t("setup.offersHelp")}</p>
+          <div className="mt-2">
+            <OffersEditor value={v.offers} onChange={(offers) => set("offers", offers)} lengths={[v.lessonMinutes, ...(v.secondMinutes != null && v.secondMinutes !== v.lessonMinutes ? [v.secondMinutes] : [])]} currency={currency} />
           </div>
         </div>
         <label className="block text-sm font-bold">

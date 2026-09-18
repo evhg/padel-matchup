@@ -111,6 +111,17 @@ Everything in this list is live. The README describes each in detail.
   above the book, and the link, the share buttons and the QR live on the students screen, where a
   student is added.
 
+- **Benji's card, in the book.** A coach's price card at the desk says 60 and 90 minutes, each with a
+  price for one and for a pair; ten-lesson packages for one or for two; and 300 more for a lesson
+  outside working hours. Every line of it is sayable now, in the setup walk behind three one-line
+  folds and in settings, and the book charges it: a second lesson length with its own two prices,
+  which a student picks with the free times of that length; an extra outside the weekly hours, added
+  to a request the coach said yes to, an hour they opened, or a package lesson, which then owes just
+  the extra; and up to three packages on the coach's page, which a student takes with one tap — the
+  package starts unpaid at the offer's price, the coach hears, and the student sees the figure and the
+  ways to pay on the same screen. A pair package books pairs. Prices stay what each person pays; the
+  screen shows what the pair pays together beside it, because that is the number on the card.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a

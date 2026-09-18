@@ -1184,7 +1184,25 @@
       "noticeHelp": "Un alumno no puede reservar con menos margen. Tú siempre puedes reservar más cerca de la hora.",
       "notice2": "2 horas",
       "notice12": "12 horas",
-      "notice24": "Un día"
+      "notice24": "Un día",
+      "secondOpen": "También doy una clase más larga",
+      "secondLength": "Su duración",
+      "secondSingle": "Una persona",
+      "secondTwo": "Cada uno, en pareja",
+      "together": "{amount} entre los {n}",
+      "feeOpen": "Cobro extra fuera de mi horario",
+      "feeLabel": "Extra por clase fuera de tu horario",
+      "feeHelp": "Se añade a cualquier clase fuera de tu horario semanal: una petición que aceptaste o una hora que abriste. También sobre un bono.",
+      "offersOpen": "Vendo bonos",
+      "offersHelp": "Hasta tres. Los alumnos eligen uno en tu página; empieza sin pagar y tú lo marcas pagado cuando llegue el dinero. El precio es lo que paga cada persona.",
+      "offerLessons": "Clases",
+      "offerLength": "Duración",
+      "offerFor": "Para",
+      "offerPrice": "Precio, cada uno",
+      "offerValid": "Válido, días",
+      "offerAdd": "Añadir un bono",
+      "offerRemove": "Quitar",
+      "persons": "{n, plural, one {# persona} other {# personas}}"
     },
     "done": {
       "title": "Tu asistente está listo",
@@ -1249,7 +1267,8 @@
       "comp": "Invita la casa",
       "compWhy": "¿Por qué? Tu alumno lo verá.",
       "openHour": "Abrir esta hora",
-      "opened": "Abierto: {when}. Tus alumnos ya pueden reservarla."
+      "opened": "Abierto: {when}. Tus alumnos ya pueden reservarla.",
+      "length": "Duración"
     },
     "students": {
       "title": "Alumnos",
@@ -1402,7 +1421,23 @@
       "slipAttach": "Adjuntar el justificante del banco",
       "slipAttached": "Justificante adjunto",
       "slipReplace": "Cambiar el justificante",
-      "slipTooBig": "Esa imagen es demasiado grande. Con una captura del justificante basta."
+      "slipTooBig": "Esa imagen es demasiado grande. Con una captura del justificante basta.",
+      "prices": "Precios",
+      "onePerson": "Una persona",
+      "pairEach": "En pareja, cada uno",
+      "threeEach": "Entre tres, cada uno",
+      "fourEach": "Entre cuatro, cada uno",
+      "packages": "Bonos",
+      "pkgLine": "{size, plural, one {# clase} other {# clases}} de {minutes} min",
+      "pkgFor": "{n, plural, one {para una persona} other {para # juntos}}",
+      "pkgValid": "válido {days} días",
+      "pkgEach": "{amount} cada uno",
+      "pkgTake": "Coger este bono",
+      "pkgConfirm": "¿Coger {size} clases por {amount}? Pagas a {name} directamente; nada pasa por Kicksmash.",
+      "pkgTaken": "Tu bono ha empezado: {size} clases. Paga {amount} a {name}; abajo tienes cómo.",
+      "feeLine": "Fuera de este horario: +{amount} por clase",
+      "length": "Duración de la clase",
+      "packageOwed": "Bono de {size, plural, one {# clase} other {# clases}}"
     },
     "me": {
       "title": "Tus clases",
@@ -1421,7 +1456,8 @@
       "too_soon": "Demasiado poca antelación para esa hora.",
       "no_coach": "Aquí no hay agenda todavía.",
       "past": "Esa hora ya pasó.",
-      "already_paid": "Esta clase ya está pagada. Una devolución se hace en el banco, no aquí."
+      "already_paid": "Esta clase ya está pagada. Una devolución se hace en el banco, no aquí.",
+      "has_package": "Ya tienes un bono con clases por usar. Úsalo primero."
     },
     "email": {
       "paidSubject": "{student} dice que pagó",

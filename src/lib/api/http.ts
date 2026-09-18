@@ -34,6 +34,7 @@ const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   not_member: 403,
   forbidden: 403,
   already_paid: 409,
+  has_package: 409,
   invalid: 422,
   locked: 409,
   not_started: 409,

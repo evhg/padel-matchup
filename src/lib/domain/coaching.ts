@@ -2,7 +2,7 @@ import { transliterate } from "@/lib/translit";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { newCoachCode } from "@/lib/codes";
-import { coachAssets, coachBlocks, coachManagers, coachOpenings, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
+import { coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { venueSlug, venueSlugFor } from "./venueBoard";
@@ -277,7 +277,7 @@ export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> =
 /** A payment link a student can open: http(s), at least a few characters, no spaces. */
 export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
 
-export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
+export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
   const clean: CoachPatch = { ...patch };
@@ -286,9 +286,14 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   if (clean.cutoffHours !== undefined) clean.cutoffHours = Math.min(72, Math.max(0, Math.round(clean.cutoffHours)));
   // A price is a whole number of currency units, or nothing. Zero is nothing: a coach who clears the
   // field means "I do not sell this", not "this one is free" — that is what comping a lesson is for.
-  for (const k of ["priceSingle", "priceTwo", "priceThree", "priceFour"] as const) {
+  for (const k of ["priceSingle", "priceTwo", "priceThree", "priceFour", "priceSecondSingle", "priceSecondTwo", "outsideHoursFee"] as const) {
     const v = clean[k];
     if (v !== undefined) clean[k] = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.round(v);
+  }
+  // A second length is one of the lengths a lesson can be, and not the first one said twice.
+  if (clean.secondMinutes !== undefined) {
+    const m = clean.secondMinutes;
+    clean.secondMinutes = m != null && LESSON_MINUTES.includes(m as (typeof LESSON_MINUTES)[number]) ? m : null;
   }
   if (clean.latePasses !== undefined) clean.latePasses = Math.min(5, Math.max(0, Math.round(clean.latePasses)));
   if (clean.minNoticeHours !== undefined) clean.minNoticeHours = Math.min(48, Math.max(0, Math.round(clean.minNoticeHours)));
@@ -475,7 +480,7 @@ export function packageLine(p: LessonPackage, now = new Date()): { left: number;
   return { left, daysLeft, expired: daysLeft !== null && daysLeft <= 0 };
 }
 
-export type CreatePackageInput = { coachId: string; studentPlayerId: string; size: number; validDays?: number | null; expiresAt?: Date | null; amount?: number | null; currency?: string | null; note?: string | null; paid?: boolean; /** Lessons already taken before the package came here (a sheet import). */ used?: number | null };
+export type CreatePackageInput = { coachId: string; studentPlayerId: string; size: number; validDays?: number | null; expiresAt?: Date | null; amount?: number | null; currency?: string | null; note?: string | null; paid?: boolean; /** Lessons already taken before the package came here (a sheet import). */ used?: number | null; /** A pair package: each lesson from it is for this many on court. */ heads?: number | null; /** Each lesson from it is this long; null means the coach's usual length. */ minutes?: number | null; /** The offer on the coach's page it was taken from. */ offerId?: string | null };
 
 export async function createPackage(db: Db, input: CreatePackageInput, now = new Date()): Promise<LessonPackage> {
   const size = Math.round(input.size);
@@ -492,6 +497,9 @@ export async function createPackage(db: Db, input: CreatePackageInput, now = new
       expiresAt,
       amount,
       currency: (input.currency ?? "THB").toUpperCase().slice(0, 3),
+      heads: Math.min(MAX_HEADS, Math.max(1, Math.round(input.heads ?? 1))),
+      minutes: input.minutes != null && LESSON_MINUTES.includes(input.minutes as (typeof LESSON_MINUTES)[number]) ? input.minutes : null,
+      offerId: input.offerId ?? null,
       note: input.note?.trim().slice(0, 120) || null,
       paidAt: input.paid ? now : null,
       createdAt: now,
@@ -499,6 +507,82 @@ export async function createPackage(db: Db, input: CreatePackageInput, now = new
     .returning();
   await setStudentStatus(db, input.coachId, input.studentPlayerId, "accepted");
   return row;
+}
+
+// ---------------------------------------------------------------- package offers
+
+/** Three is a menu; four is a price list nobody reads on a phone. */
+export const MAX_OFFERS = 3;
+
+export type OfferInput = { id?: string | null; size: number; minutes: number; heads: number; price: number; validDays: number | null };
+
+/** The live offers on a coach's page, in the order the coach put them. One indexed read. */
+export async function listOffers(db: Db, coachId: string): Promise<CoachPackageOffer[]> {
+  return db
+    .select()
+    .from(coachPackageOffers)
+    .where(and(eq(coachPackageOffers.coachId, coachId), isNull(coachPackageOffers.archivedAt)))
+    .orderBy(asc(coachPackageOffers.position), asc(coachPackageOffers.createdAt))
+    .limit(MAX_OFFERS);
+}
+
+/**
+ * The coach's list, saved whole. An offer with an id is updated in place, one without is new, and
+ * one that is no longer on the list is archived rather than deleted, because a student who took it
+ * yesterday holds a package that points at it. Every row is checked before any is written, so a bad
+ * third row does not leave the first two half-saved.
+ */
+export async function saveOffers(db: Db, coachId: string, offers: OfferInput[], now = new Date()): Promise<CoachPackageOffer[]> {
+  if (offers.length > MAX_OFFERS) throw new DomainError("invalid", "offers");
+  const clean = offers.map((o, i) => {
+    const size = Math.round(Number(o.size));
+    const minutes = Math.round(Number(o.minutes));
+    const heads = Math.round(Number(o.heads ?? 1));
+    const price = Math.round(Number(o.price));
+    const validDays = o.validDays == null || o.validDays === 0 ? null : Math.round(Number(o.validDays));
+    if (!Number.isFinite(size) || size < 1 || size > 200) throw new DomainError("invalid", `offer.${i}.size`);
+    if (!LESSON_MINUTES.includes(minutes as (typeof LESSON_MINUTES)[number])) throw new DomainError("invalid", `offer.${i}.minutes`);
+    if (heads < 1 || heads > MAX_HEADS) throw new DomainError("invalid", `offer.${i}.heads`);
+    if (!Number.isFinite(price) || price < 1 || price > 10_000_000) throw new DomainError("invalid", `offer.${i}.price`);
+    if (validDays !== null && (!Number.isFinite(validDays) || validDays < 1 || validDays > 730)) throw new DomainError("invalid", `offer.${i}.validDays`);
+    return { id: o.id || null, size, minutes, heads, price, validDays, position: i };
+  });
+  const live = await listOffers(db, coachId);
+  const keep = new Set(clean.map((o) => o.id).filter(Boolean));
+  const gone = live.filter((o) => !keep.has(o.id)).map((o) => o.id);
+  if (gone.length) await db.update(coachPackageOffers).set({ archivedAt: now }).where(and(eq(coachPackageOffers.coachId, coachId), inArray(coachPackageOffers.id, gone)));
+  for (const o of clean) {
+    if (o.id && live.some((l) => l.id === o.id)) {
+      await db.update(coachPackageOffers).set({ size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays, position: o.position }).where(and(eq(coachPackageOffers.id, o.id), eq(coachPackageOffers.coachId, coachId)));
+    } else {
+      await db.insert(coachPackageOffers).values({ coachId, size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays, position: o.position, createdAt: now });
+    }
+  }
+  return listOffers(db, coachId);
+}
+
+/**
+ * A student takes a package from the coach's page. The package starts unpaid, at the offer's price
+ * in the coach's currency, and the coach hears about it the way they hear about a booking. One open
+ * package at a time: a second tap while lessons are left is refused, because it was almost always
+ * the same tap twice.
+ */
+export async function takeOffer(db: Db, coach: Coach, studentPlayerId: string, offerId: string, now = new Date()): Promise<{ pkg: LessonPackage; offer: CoachPackageOffer }> {
+  const [offer] = await db.select().from(coachPackageOffers).where(and(eq(coachPackageOffers.id, offerId), eq(coachPackageOffers.coachId, coach.id), isNull(coachPackageOffers.archivedAt))).limit(1);
+  if (!offer) throw new DomainError("not_found");
+  if ((await studentStatus(db, coach.id, studentPlayerId)) !== "accepted") throw new DomainError("not_student");
+  if (await activePackage(db, coach.id, studentPlayerId, now)) throw new DomainError("has_package");
+  const pkg = await createPackage(db, { coachId: coach.id, studentPlayerId, size: offer.size, validDays: offer.validDays, amount: offer.price, currency: coach.currency, heads: offer.heads, minutes: offer.minutes, offerId: offer.id }, now);
+  await recordFact(db, {
+    kind: "package.taken",
+    channel: channelOf(null),
+    actorPlayerId: studentPlayerId,
+    subject: { type: "package", id: pkg.id },
+    code: coach.handle,
+    city: cityOf(coach.tz, null)?.slug ?? null,
+    data: { size: offer.size, minutes: offer.minutes, heads: offer.heads, price: offer.price },
+  });
+  return { pkg, offer };
 }
 
 /** The package a new lesson draws from: open, with lessons left, the one expiring soonest first. */
@@ -769,10 +853,10 @@ export async function setLessonPaid(db: Db, coachId: string, lessonId: string, p
   return row ?? null;
 }
 
-export async function availableSlots(db: Db, coach: Coach, from: Date, to: Date, now = new Date()): Promise<Date[]> {
+export async function availableSlots(db: Db, coach: Coach, from: Date, to: Date, now = new Date(), minutes?: number): Promise<Date[]> {
   const busy = await busyBetween(db, coach.id, from, to);
   const openings = await openingsBetween(db, coach.id, from, to);
-  return openSlots({ coach, from, to, busy, now, openings });
+  return openSlots({ coach, from, to, busy, now, openings, minutes });
 }
 
 /** The hours this coach opened on single dates inside the window. One indexed read, bounded by the window. */
@@ -803,6 +887,14 @@ export async function closeHour(db: Db, coachId: string, startsAt: Date): Promis
   await db.delete(coachOpenings).where(and(eq(coachOpenings.coachId, coachId), eq(coachOpenings.startsAt, startsAt)));
 }
 
+/**
+ * The extra for a lesson outside the weekly hours: a request the coach said yes to, an hour they
+ * opened on one date, or one they booked themselves at dinner time. Zero when the coach charges none.
+ */
+export function outsideHoursFee(coach: Pick<Coach, "hours" | "tz" | "outsideHoursFee">, at: Date, minutes: number): number {
+  return coach.outsideHoursFee && coach.outsideHoursFee > 0 && !withinHours(coach, at, minutes) ? coach.outsideHoursFee : 0;
+}
+
 /** True when `at` starts inside the weekly template (used to tell a student's booking from a coach's exception). */
 export function withinHours(coach: Pick<Coach, "hours" | "tz">, at: Date, minutes: number): boolean {
   const { date, time } = utcToZonedParts(at, coach.tz);
@@ -826,7 +918,9 @@ export const MAX_HEADS = 4;
  * falls back to the next smaller one and finally to the single price, so a coach who set one number
  * keeps working and a coach who sets only a pair price does not accidentally charge a trio nothing.
  */
-export function priceFor(coach: Pick<Coach, "priceSingle" | "priceTwo" | "priceThree" | "priceFour">, heads = 1): number | null {
+export function priceFor(coach: Pick<Coach, "priceSingle" | "priceTwo" | "priceThree" | "priceFour"> & Partial<Pick<Coach, "secondMinutes" | "priceSecondSingle" | "priceSecondTwo">>, heads = 1, minutes?: number | null): number | null {
+  // The second length has a ladder of two: one person, and each of a pair, which three and four fall back to.
+  if (minutes != null && coach.secondMinutes != null && minutes === coach.secondMinutes) return (heads >= 2 ? [coach.priceSecondTwo, coach.priceSecondSingle] : [coach.priceSecondSingle]).find((n) => n != null) ?? null;
   const ladder = [coach.priceFour, coach.priceThree, coach.priceTwo, coach.priceSingle];
   // heads 4 reads the whole ladder, 3 drops the four-price, and so on down to 1, which is the single price.
   return ladder.slice(Math.max(0, MAX_HEADS - Math.min(Math.max(heads, 1), MAX_HEADS))).find((n) => n != null) ?? null;
@@ -839,9 +933,14 @@ export function priceFor(coach: Pick<Coach, "priceSingle" | "priceTwo" | "priceT
  */
 export async function bookLesson(db: Db, input: BookLessonInput, now = new Date()): Promise<{ lesson: Lesson; package: LessonPackage | null }> {
   const { coach } = input;
-  const minutes = input.minutes ?? coach.lessonMinutes;
   const startsAt = new Date(Math.floor(input.startsAt.getTime() / 60_000) * 60_000);
   if (startsAt.getTime() <= now.getTime()) throw new DomainError("past");
+  // The package first, because it can say how long the lesson is and how many are on court. A
+  // package for one length does not pay for a lesson the student explicitly asked at another.
+  const open = await activePackage(db, coach.id, input.studentPlayerId, now);
+  const pkg = open && (input.minutes == null || open.minutes == null || open.minutes === input.minutes) ? open : null;
+  const minutes = input.minutes ?? pkg?.minutes ?? coach.lessonMinutes;
+  const heads = Math.min(Math.max(input.heads ?? pkg?.heads ?? 1, 1), MAX_HEADS);
   if (!input.byCoach) {
     if ((await studentStatus(db, coach.id, input.studentPlayerId)) !== "accepted") throw new DomainError("not_student");
     if (startsAt.getTime() < now.getTime() + coach.minNoticeHours * HOUR_MS) throw new DomainError("too_soon");
@@ -850,7 +949,11 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
   const end = new Date(startsAt.getTime() + minutes * 60_000);
   const busy = await busyBetween(db, coach.id, startsAt, end);
   if (busy.some((b) => overlaps(startsAt.getTime(), end.getTime(), b))) throw new DomainError("slot_taken");
-  const pkg = await activePackage(db, coach.id, input.studentPlayerId, now);
+  // What it costs: the price for this many at this length, unless a package pays; plus the extra for
+  // an hour outside the week, which a package does not cover. Null when nothing is owed at all.
+  const fee = outsideHoursFee(coach, startsAt, minutes);
+  const price = pkg ? null : priceFor(coach, heads, minutes);
+  const amount = price == null && fee === 0 ? null : (price ?? 0) + fee;
   const [lesson] = await db
     .insert(lessons)
     .values({
@@ -862,11 +965,11 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
       status: "booked",
       source: input.source ?? "web",
       consumed: Boolean(pkg),
-      heads: Math.min(Math.max(input.heads ?? 1, 1), MAX_HEADS),
-      // No package paying for it: the lesson carries the coach's price as it stood when it was booked,
-      // so raising the price next month never rewrites what last month's lessons cost. Per head, so a
-      // pair is two lessons at the pair price rather than one lesson somebody has to divide.
-      amount: pkg ? null : priceFor(coach, input.heads ?? 1),
+      heads,
+      // The lesson carries the coach's price as it stood when it was booked, so raising the price next
+      // month never rewrites what last month's lessons cost. Per head, so a pair is two lessons at the
+      // pair price rather than one lesson somebody has to divide.
+      amount,
       note: input.note?.trim().slice(0, 200) || null,
       // Where it happens, but only when there is one answer. A coach who teaches at two clubs gets
       // null: guessing would put this lesson on the other club's page, and a club reading a wrong

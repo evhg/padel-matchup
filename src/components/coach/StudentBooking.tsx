@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentAttachSlipAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction } from "@/actions/coach";
+import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentAttachSlipAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction, takeOfferAction } from "@/actions/coach";
 import type { StudentStatus } from "@/lib/domain/coaching";
 import { HowThisWorks } from "./HowThisWorks";
 
@@ -12,6 +12,8 @@ type Slot = { iso: string; day: string; time: string };
 export type WaitDTO = { id: string; label: string; week: boolean };
 export type OfferDTO = { id: string; label: string; minutesLeft: number };
 export type RequestDTO = { id: string; label: string };
+/** A package on the coach's page: what it is, what each person pays, how long it lasts. */
+export type OfferDTO2 = { id: string; size: number; minutes: number; heads: number; price: number; validDays: number | null };
 type Props = {
   handle: string;
   coachName: string;
@@ -25,12 +27,19 @@ type Props = {
   /** Monday of the week each day belongs to, for the week waitlist. */
   weekOf?: Record<string, string>;
   lessons: StudentLessonDTO[];
-  pkg: { left: number; size: number; days: number | null } | null;
+  pkg: { left: number; size: number; days: number | null; heads?: number; minutes?: number | null } | null;
   cutoffHours: number;
   /** What this student owes and whether they have already said they sent it. Null when nothing is open. */
-  owed?: { total: number; currency: string; lessons: { id: string; label: string; amount: number; claimed: boolean; hasSlip?: boolean }[] } | null;
-  /** What each person pays, by group size. Null sizes fall back to the next smaller one. The picker shows only when a group price exists. */
-  prices?: { single: number | null; two: number | null; three: number | null; four: number | null; currency: string } | null;
+  owed?: { total: number; currency: string; lessons: { id: string; label: string; amount: number; claimed: boolean; hasSlip?: boolean }[]; packages?: { id: string; size: number; amount: number }[] } | null;
+  /**
+   * What each person pays, by group size and by length. Null sizes fall back to the next smaller one.
+   * `second` is the coach's other length with its two prices; `fee` the extra outside the hours.
+   */
+  prices?: { single: number | null; two: number | null; three: number | null; four: number | null; currency: string; minutes?: number; second?: { minutes: number; single: number | null; two: number | null } | null; fee?: number | null } | null;
+  /** The packages on the coach's page, at most three. */
+  packages?: OfferDTO2[];
+  /** Free times for the second length, when the coach sells one: a longer lesson needs a longer hole. */
+  slotsSecond?: Slot[];
   /** The ways this coach takes money. Nothing passes through Kicksmash; these are instructions. */
   pay?: { promptpay: boolean; link: string | null; atClub: boolean };
   whatsappUrl: string | null;
@@ -45,7 +54,7 @@ type Props = {
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -53,7 +62,14 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const [name, setName] = useState("");
   const [pickedDay, setDay] = useState(days[0] ?? "");
   const [slot, setSlot] = useState<string | null>(null);
-  const [heads, setHeads] = useState(1);
+  // A pair package books pairs; otherwise one, the common case, which costs no taps.
+  const [heads, setHeads] = useState(pkg?.heads ?? 1);
+  // Which length, when the coach sells two: the package's, else the usual one.
+  const [pickedMinutes, setMinutes] = useState<number | null>(null);
+  const second = prices?.second ?? null;
+  const usual = prices?.minutes ?? null;
+  const length = pickedMinutes ?? (second && pkg?.minutes === second.minutes ? second.minutes : usual);
+  const longer = Boolean(second && length === second.minutes);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -63,8 +79,9 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
    * screen, which is exactly what it was.
    */
   const day = days.includes(pickedDay) ? pickedDay : (days[0] ?? "");
-  const daySlots = slots.filter((s) => s.day === day);
-  const dayTaken = taken.filter((s) => s.day === day);
+  const daySlots = (longer ? slotsSecond : slots).filter((s) => s.day === day);
+  // Taken hours are drawn for the usual length only: a longer lesson's "taken" is any shorter hole.
+  const dayTaken = longer ? [] : taken.filter((s) => s.day === day);
   // Free and taken in one row, in the order the hours come. Taken ones used to be appended after the
   // free ones, so a booked 16:00 sat to the right of a free 19:00 and the row read as nonsense.
   const dayHours = [...daySlots.map((s) => ({ ...s, free: true })), ...dayTaken.map((s) => ({ ...s, free: false }))].sort((a, b) => a.iso.localeCompare(b.iso));
@@ -78,13 +95,30 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
   // What one person pays at this size, falling down the ladder the way the book does. A local copy
   // on purpose: the domain's `priceFor` lives beside the database and cannot come into a client bundle.
-  const eachPays = (n: number): number | null => {
+  const eachPays = (n: number, minutes: number | null = length): number | null => {
     if (!prices) return null;
+    if (second && minutes === second.minutes) return (n >= 2 ? [second.two, second.single] : [second.single]).find((x) => x != null) ?? null;
     const ladder = [prices.four, prices.three, prices.two, prices.single];
     return ladder.slice(Math.max(0, 4 - Math.min(Math.max(n, 1), 4))).find((x) => x != null) ?? null;
   };
-  const groupPrices = Boolean(prices && (prices.two || prices.three || prices.four));
-  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "too_late", "no_coach", "past"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  const groupPrices = Boolean(prices && (longer ? second?.two : prices.two || prices.three || prices.four));
+  const money = (n: number) => `${n} ${prices?.currency ?? owed?.currency ?? ""}`.trim();
+  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "too_late", "no_coach", "past", "has_package"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+
+  /** The student takes a package from the page: unpaid, and the ways to pay are on this screen. */
+  const takePackage = (o: OfferDTO2) => {
+    if (!confirm(t("page.pkgConfirm", { size: o.size, amount: money(o.price), name: coachName }))) return;
+    setError(null);
+    start(async () => {
+      const r = await takeOfferAction(handle, o.id);
+      if (!r.ok) {
+        setError(errorText(r.error));
+        return;
+      }
+      setNote(t("page.pkgTaken", { size: o.size, amount: money(o.price), name: coachName }));
+      router.refresh();
+    });
+  };
 
   const request = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +137,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
     if (!slot) return;
     setError(null);
     start(async () => {
-      const r = await studentBookAction(handle, slot, heads);
+      const r = await studentBookAction(handle, slot, heads, length);
       if (!r.ok) {
         setError(errorText(r.error));
         return;
@@ -302,6 +336,19 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                     ))}
                   </div>
                 </div>
+                {second && usual && (
+                  <div>
+                    <div className="text-xs font-bold uppercase text-faint">{t("page.length")}</div>
+                    <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label={t("page.length")} data-testid="student-length">
+                      {[usual, second.minutes].map((m) => (
+                        <button key={m} type="button" role="radio" aria-checked={length === m} data-minutes={m} className={chip(length === m)} onClick={() => (setMinutes(m), setSlot(null))}>
+                          {t("minutes", { n: m })}
+                          {eachPays(heads, m) != null && !pkg && <span className="ml-1 font-normal opacity-80">· {money(eachPays(heads, m)!)}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <div className="text-xs font-bold uppercase text-faint">{daySlots.length > 0 ? t("page.freeOn", { day: dayLabels[day] ?? day }) : t("page.allTaken", { day: dayLabels[day] ?? day })}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -326,7 +373,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                       {[1, 2, 3, 4].map((n) => (
                         <button key={n} type="button" role="radio" aria-checked={heads === n} data-heads={n} className={chip(heads === n)} onClick={() => setHeads(n)}>
                           {n}
-                          {eachPays(n) != null && <span className="ml-1 font-normal opacity-80">· {t("page.eachPays", { amount: `${eachPays(n)} ${prices!.currency}` })}</span>}
+                          {eachPays(n) != null && !pkg && <span className="ml-1 font-normal opacity-80">· {t("page.eachPays", { amount: money(eachPays(n)!) })}</span>}
                         </button>
                       ))}
                     </div>
@@ -348,7 +395,10 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
               </button>
             ) : (
               <form onSubmit={ask} className="flex flex-col gap-2 rounded-2xl border border-line bg-white p-3 animate-pop" data-testid="ask-form">
-                <p className="text-xs text-muted">{t("page.otherTimeHelp", { name: coachName })}</p>
+                <p className="text-xs text-muted">
+                  {t("page.otherTimeHelp", { name: coachName })}
+                  {prices?.fee ? ` ${t("page.feeLine", { amount: money(prices.fee) })}.` : ""}
+                </p>
                 <input type="datetime-local" className="input" value={askLocal} min={minLocal} onChange={(e) => setAskLocal(e.target.value)} required />
                 <input className="input" value={askNote} onChange={(e) => setAskNote(e.target.value)} placeholder={t("page.otherTimeNote")} maxLength={200} />
                 <div className="flex gap-2">
@@ -387,6 +437,58 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
         )}
       </section>
 
+      {/* The prices, the way Benji's card at the desk has them: every length, every size, the packages,
+          and the extra outside the hours. A student learned the price only once they owed it. */}
+      {prices && (prices.single || packages.length > 0) && (
+        <section className="card" data-testid="price-card">
+          <h2 className="text-lg font-extrabold">{t("page.prices")}</h2>
+          {prices.single && usual && (
+            <dl className="mt-2 flex flex-col gap-2 text-sm">
+              {[{ minutes: usual, one: prices.single, pair: prices.two, three: prices.three, four: prices.four }, ...(second ? [{ minutes: second.minutes, one: second.single, pair: second.two, three: null, four: null }] : [])].map((row) => (
+                <div key={row.minutes} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                  <dt className="w-16 shrink-0 font-bold">{t("minutes", { n: row.minutes })}</dt>
+                  <dd className="min-w-0 flex-1 text-muted">
+                    {[
+                      row.one != null ? `${t("page.onePerson")} ${money(row.one)}` : null,
+                      row.pair != null ? `${t("page.pairEach")} ${money(row.pair)}` : null,
+                      row.three != null ? `${t("page.threeEach")} ${money(row.three)}` : null,
+                      row.four != null ? `${t("page.fourEach")} ${money(row.four)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {prices.fee ? <p className="mt-2 text-xs text-muted">{t("page.feeLine", { amount: money(prices.fee) })}</p> : null}
+          {packages.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-sm font-extrabold">{t("page.packages")}</h3>
+              <ul className="mt-2 flex flex-col gap-2" data-testid="offers-list">
+                {packages.map((o) => (
+                  <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-bg px-4 py-3">
+                    <div className="min-w-0 flex-1 basis-40">
+                      <div className="font-bold">
+                        {t("page.pkgLine", { size: o.size, minutes: o.minutes })} · {t("page.pkgFor", { n: o.heads })}
+                      </div>
+                      <div className="text-xs text-muted">
+                        {o.heads > 1 ? t("page.pkgEach", { amount: money(o.price) }) : money(o.price)}
+                        {o.validDays ? ` · ${t("page.pkgValid", { days: o.validDays })}` : ""}
+                      </div>
+                    </div>
+                    {status === "accepted" && !pkg && (
+                      <button type="button" className="btn-secondary btn-xs ml-auto shrink-0" disabled={pending} onClick={() => takePackage(o)} data-testid="take-offer">
+                        {t("page.pkgTake")}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
       {(lessons.length > 0 || pkgLine) && (
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("page.yourLessons")}</h2>
@@ -459,6 +561,14 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
             </p>
           </div>
           <ul className="flex flex-col gap-1 text-sm text-muted">
+            {/* An unpaid package sat in the total with no line of its own. */}
+            {(owed.packages ?? []).map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3" data-testid="owed-package">
+                <span>
+                  {t("page.packageOwed", { size: p.size })} · {p.amount} {owed.currency}
+                </span>
+              </li>
+            ))}
             {owed.lessons.map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-3">
                 <span>

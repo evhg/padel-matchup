@@ -11,7 +11,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { listManagers } from "@/lib/coach/chains";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
-import { coachBookContents, formatHoursLine, getCoachForActor } from "@/lib/domain/coaching";
+import { coachBookContents, formatHoursLine, getCoachForActor, listOffers } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export default async function CoachSettingsPage() {
   const [t, managers] = await Promise.all([getTranslations("coach"), listManagers(db, coach.id)]);
   // Sequential after those two, not alongside them: the pooler stalls on pipelined bursts (rule 8).
   const contents = role === "coach" ? await coachBookContents(db, coach.id) : null;
+  const offers = await listOffers(db, coach.id);
   return (
     <>
       <Header />
@@ -38,6 +39,7 @@ export default async function CoachSettingsPage() {
           ← {t("home.title")}
         </Link>
         <CoachSettings
+          currency={coach.currency}
           hasQr={Boolean(coach.qrAssetId)}
           qrUrl={coach.qrAssetId ? `/c/${coach.handle}/qr` : null}
           initial={{
@@ -52,6 +54,11 @@ export default async function CoachSettingsPage() {
             priceTwo: coach.priceTwo,
             priceThree: coach.priceThree,
             priceFour: coach.priceFour,
+            secondMinutes: coach.secondMinutes,
+            priceSecondSingle: coach.priceSecondSingle,
+            priceSecondTwo: coach.priceSecondTwo,
+            outsideHoursFee: coach.outsideHoursFee,
+            offers: offers.map((o) => ({ id: o.id, size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays })),
             promptpayId: coach.promptpayId ?? "",
             payLink: coach.payLink ?? "",
             whatsapp: coach.whatsapp ? `+${coach.whatsapp}` : "",
