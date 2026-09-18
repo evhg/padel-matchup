@@ -1226,7 +1226,10 @@
       "markPaid": "Marcar pagado",
       "unmarkPaid": "No estaba pagado",
       "compClaimed": "{name} dice que ya pagó {amount}. ¿Invitas igualmente? Su aviso se queda en la fila.",
-      "slip": "Ver el justificante"
+      "slip": "Ver el justificante",
+      "undoNoShow": "Sí vino",
+      "editAmount": "Cambiar importe",
+      "amountPrompt": "Nuevo importe para {name}, en {currency}. Una propina, un redondeo, tarifa de fin de semana: tu libro, tu cifra."
     },
     "book": {
       "student": "Alumno",
@@ -1282,7 +1285,11 @@
       "left": "Se fue",
       "lessonsOwed": "Clases sin pagar",
       "saysPaid": "dice que pagó",
-      "withSlip": "con justificante"
+      "withSlip": "con justificante",
+      "paused": "En pausa",
+      "linkTitle": "Tu enlace para alumnos",
+      "linkHelp": "Envíalo una vez. Quien lo abra queda en tu lista y reserva horas libres por su cuenta.",
+      "jumpTo": "Abrir a {name} en la pantalla de alumnos"
     },
     "settings": {
       "title": "Ajustes",
@@ -1514,8 +1521,8 @@
       "done": "{created, plural, one {# bono añadido} other {# bonos añadidos}}: {students, plural, =0 {sin alumnos nuevos} one {# alumno nuevo} other {# alumnos nuevos}}, {matched} ya estaban."
     },
     "managers": {
-      "title": "Quién lleva tu agenda contigo",
-      "lead": "Alguien en recepción del club, o una pareja, que reserva, mueve y cancela por ti mientras estás en pista. Ve tu agenda y nunca tus ajustes. Los alumnos siguen viendo un solo nombre: el tuyo.",
+      "title": "Un ayudante que reserva por ti",
+      "lead": "Alguien en recepción del club, tu pareja, un asistente: dales este enlace y reservan, mueven y cancelan clases por ti desde su propio teléfono mientras estás en pista. Ven tus clases, nunca estos ajustes. Los alumnos siguen viendo un solo nombre: el tuyo.",
       "makeLink": "Crear un enlace para esa persona",
       "shareText": "Lleva mi agenda de clases conmigo: {url}",
       "remove": "Quitar",
@@ -1523,7 +1530,8 @@
       "joinLead": "{name} te ha pedido ayuda con sus clases. Tu nombre, y dentro.",
       "joinButton": "Unirme a la agenda de {name}",
       "joinGone": "Ese enlace ya no vale. Pide otro al entrenador.",
-      "how": "Cualquiera con el enlace puede unirse una vez creado; crea uno nuevo y el anterior deja de funcionar. Un gestor ve y hace todo lo que tú haces aquí, salvo esta sección."
+      "how": "Cualquiera con el enlace puede unirse una vez creado; crea uno nuevo y el anterior deja de funcionar. Un gestor ve y hace todo lo que tú haces aquí, salvo esta sección.",
+      "fold": "¿Alguien más gestiona tus reservas?"
     }
   },
   "coachFront": {

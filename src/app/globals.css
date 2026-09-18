@@ -30,6 +30,13 @@
     color-scheme: light;
     -webkit-text-size-adjust: 100%;
   }
+  /* Every size here is in rem, so one line lifts the whole phone-first layout for a desk: the text
+     under "Your calendar" was unreadable on a 5k screen at 16px, and so was every other footnote. */
+  @media (min-width: 1280px) {
+    html {
+      font-size: 17px;
+    }
+  }
   body {
     @apply bg-bg text-ink font-sans antialiased;
     font-feature-settings: "cv11", "ss01", "tnum";

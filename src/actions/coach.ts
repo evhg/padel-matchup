@@ -10,7 +10,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount} from "@/lib/domain/coaching";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -276,6 +276,38 @@ export async function coachNoShowAction(lessonId: string): Promise<ActionResult<
     const db = await getDb();
     const { coach } = await requireCoach(db);
     await markNoShow(db, coach.id, lessonId);
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+/** The tap taken back: an accident, a try-out, or a student who was only late. */
+export async function coachUndoNoShowAction(lessonId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    if (!(await unmarkNoShow(db, coach.id, lessonId))) throw new ActionFailure("not_found");
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+/** The coach corrects what one lesson costs: a tip, a rounding, a weekend rate. Their book, their number. */
+export async function setLessonAmountAction(lessonId: string, amount: number): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    if (!(await setLessonAmount(db, coach.id, lessonId, Number(amount)))) throw new ActionFailure("not_found");
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+export async function setPackageAmountAction(packageId: string, amount: number): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    if (!(await setPackageAmount(db, coach.id, packageId, Number(amount)))) throw new ActionFailure("not_found");
     revalidateCoach(coach.handle);
     return null;
   });

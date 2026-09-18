@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { attachSlip, bookLesson, compLesson, createCoach, createPackage, getSlip, MAX_HEADS, owedBy, presetHours, priceFor, setLessonPaid, setStudentStatus, updateCoach } from "@/lib/domain/coaching";
+import { attachSlip, bookLesson, compLesson, createCoach, createPackage, getLesson, getSlip, markNoShow, MAX_HEADS, owedBy, presetHours, priceFor, setLessonAmount, setLessonPaid, setPackageAmount, setStudentStatus, unmarkNoShow, updateCoach } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 /**
@@ -165,5 +165,81 @@ describe("the slip", () => {
     const { student, lesson } = await booked("Sol");
     await expect(attachSlip(db, lesson.id, student.id, "application/pdf", PNG)).rejects.toMatchObject({ code: "invalid" });
     await expect(attachSlip(db, lesson.id, student.id, "image/png", "A".repeat(900_000))).rejects.toMatchObject({ code: "invalid" });
+  });
+});
+
+/**
+ * Two corrections the coach makes to their own book. A no-show tapped by accident, or by a coach
+ * trying the button, or on a student who was only late; and a figure that is not what was paid — a
+ * tip, a rounding, a weekend at double rate.
+ */
+describe("the coach corrects the book", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const setup = async (name: string) => {
+    const cp = await makePlayer(db, `${name}Coach`);
+    const made = await createCoach(db, { playerId: cp.id, displayName: `${name}Coach`, tz: "Asia/Bangkok", hours: presetHours("both") });
+    const coach = await updateCoach(db, made.id, { priceSingle: 800 });
+    const student = await makePlayer(db, name);
+    await setStudentStatus(db, coach.id, student.id, "accepted");
+    return { coach, student };
+  };
+  // 2026-03-02 is a Monday; 09:00 Bangkok is inside the "both" preset and outside every cutoff.
+  const now = new Date("2026-03-01T03:00:00Z");
+  const at = new Date("2026-03-02T02:00:00Z");
+
+  it("takes a no-show back to done, and leaves the package lesson and the price where they were", async () => {
+    const { coach, student } = await setup("Una");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at, byCoach: true }, now);
+    await markNoShow(db, coach.id, lesson.id);
+    expect((await getLesson(db, lesson.id))?.status).toBe("no_show");
+    expect(await unmarkNoShow(db, coach.id, lesson.id)).toBe(true);
+    const back = await getLesson(db, lesson.id);
+    expect(back?.status).toBe("done");
+    expect(back?.amount).toBe(800);
+    // Not a no-show any more: the second undo has nothing to do, and says so.
+    expect(await unmarkNoShow(db, coach.id, lesson.id)).toBe(false);
+  });
+
+  it("does not undo a no-show for another coach", async () => {
+    const { coach, student } = await setup("Vera");
+    const other = await setup("Wim");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at, byCoach: true }, now);
+    await markNoShow(db, coach.id, lesson.id);
+    expect(await unmarkNoShow(db, other.coach.id, lesson.id)).toBe(false);
+    expect((await getLesson(db, lesson.id))?.status).toBe("no_show");
+  });
+
+  it("changes what a lesson costs, and what is owed follows", async () => {
+    const { coach, student } = await setup("Xavi");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at, byCoach: true }, now);
+    expect((await setLessonAmount(db, coach.id, lesson.id, 850))?.amount).toBe(850);
+    expect((await owedBy(db, coach, student.id)).total).toBe(850);
+    // Zero is "nothing owed", without a reason: the row leaves the debt.
+    await setLessonAmount(db, coach.id, lesson.id, 0);
+    expect((await owedBy(db, coach, student.id)).total).toBe(0);
+  });
+
+  it("refuses a figure that is not one, and leaves a comped lesson at zero", async () => {
+    const { coach, student } = await setup("Yara");
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at, byCoach: true }, now);
+    await expect(setLessonAmount(db, coach.id, lesson.id, -5)).rejects.toMatchObject({ code: "invalid" });
+    await expect(setLessonAmount(db, coach.id, lesson.id, Number.NaN)).rejects.toMatchObject({ code: "invalid" });
+    await compLesson(db, { lessonId: lesson.id, coach, reason: "late" }, now);
+    expect(await setLessonAmount(db, coach.id, lesson.id, 900)).toBeNull();
+    expect((await getLesson(db, lesson.id))?.amount).toBe(0);
+  });
+
+  it("changes what a package costs, and a zero clears the figure rather than storing a debt of nothing", async () => {
+    const { coach, student } = await setup("Zoe");
+    const pkg = await createPackage(db, { coachId: coach.id, studentPlayerId: student.id, size: 10, amount: 8000 }, now);
+    expect((await setPackageAmount(db, coach.id, pkg.id, 8500))?.amount).toBe(8500);
+    expect((await owedBy(db, coach, student.id)).total).toBe(8500);
+    expect((await setPackageAmount(db, coach.id, pkg.id, 0))?.amount).toBeNull();
   });
 });

@@ -75,7 +75,8 @@ export function CoachCalendar({ serviceEmail, initial }: Props) {
     <section className="card flex flex-col gap-4" data-testid="coach-calendar">
       <div>
         <h2 className="text-xl font-extrabold tracking-tight">{t("title")}</h2>
-        <p className="text-sm text-muted">{t("lead")}</p>
+        {/* The one sentence a coach needs is this; on a desk screen it read as a footnote in grey. */}
+        <p className="mt-1 text-base text-ink">{t("lead")}</p>
       </div>
       {/* Sharing a Google calendar needs a desk and five menus, and its real benefit is reading busy
           time, not writing lessons — the invitation by email already does that. So it is a fold with
@@ -85,11 +86,11 @@ export function CoachCalendar({ serviceEmail, initial }: Props) {
           <span className="mr-1 inline-block transition group-open:rotate-90">▸</span>
           {t("busyFold")}
         </summary>
-        <p className="mt-2 text-xs text-muted">{t("busyHelp")}</p>
+        <p className="mt-2 text-sm text-muted">{t("busyHelp")}</p>
       <ol className="mt-3 flex flex-col gap-3 text-sm">
         <li>
           <div className="font-bold">{t("step1")}</div>
-          <p className="text-xs text-muted">{t("step1Help")}</p>
+          <p className="text-sm text-muted">{t("step1Help")}</p>
           {serviceEmail ? (
             <div className="mt-1 flex items-center gap-2">
               <code className="truncate rounded bg-panel px-2 py-1 text-xs" data-testid="service-email">
@@ -107,14 +108,14 @@ export function CoachCalendar({ serviceEmail, initial }: Props) {
           <label className="block font-bold" htmlFor="gcal-id">
             {t("step2")}
           </label>
-          <p className="text-xs text-muted">{t("step2Help")}</p>
+          <p className="text-sm text-muted">{t("step2Help")}</p>
           <input id="gcal-id" className="input mt-1" value={gcalId} onChange={(e) => setGcalId(e.target.value)} inputMode="email" autoComplete="off" placeholder="name@gmail.com" maxLength={120} />
         </li>
       </ol>
       {showIcal ? (
         <label className="block text-sm font-bold" htmlFor="ical-url">
           {t("ical")}
-          <p className="text-xs font-normal text-muted">{t("icalHelp")}</p>
+          <p className="text-sm font-normal text-muted">{t("icalHelp")}</p>
           <input id="ical-url" className="input mt-1" value={icalUrl} onChange={(e) => setIcalUrl(e.target.value)} inputMode="url" autoComplete="off" placeholder="https://…/basic.ics" maxLength={500} />
         </label>
       ) : (
