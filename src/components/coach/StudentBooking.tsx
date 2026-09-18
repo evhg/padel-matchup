@@ -350,7 +350,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                   </div>
                 )}
                 <div>
-                  <div className="text-xs font-bold uppercase text-faint">{daySlots.length > 0 ? t("page.freeOn", { day: dayLabels[day] ?? day }) : t("page.allTaken", { day: dayLabels[day] ?? day })}</div>
+                  <div className="text-xs font-bold uppercase text-faint">{daySlots.length > 0 ? t("page.freeOn", { day: dayLabels[day] ?? day }) : longer && length ? t("page.noGap", { minutes: length, day: dayLabels[day] ?? day }) : t("page.allTaken", { day: dayLabels[day] ?? day })}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {dayHours.map((s) =>
                       s.free ? (

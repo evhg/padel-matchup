@@ -65,6 +65,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   }
   const today = todayIn(coach.tz, now);
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);
+  const second = coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? coach.secondMinutes : null;
   const accepted = status === "accepted";
   const [busy, lessons, pkg, waits, requests] = await Promise.all([
     accepted ? busyBetween(db, coach.id, now, to) : Promise.resolve([]),
@@ -80,7 +81,6 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const slots = accepted ? openSlots({ coach, from: now, to, busy, now, openings }) : [];
   // The second length, when the coach sells one: its own free times, because a 90-minute lesson
   // needs a 90-minute hole. Pure, from the same busy list: no second query.
-  const second = coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? coach.secondMinutes : null;
   const slotsSecond = accepted && second ? openSlots({ coach, from: now, to, busy, now, openings, minutes: second }) : [];
   const everySlot = accepted ? openSlots({ coach, from: now, to, busy: [], now, openings }) : [];
   const freeIso = new Set(slots.map((d) => d.toISOString()));
@@ -139,7 +139,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
                 {" · "}
               </>
             )}
-            {t("page.lesson", { minutes: coach.lessonMinutes })}
+            {second ? t("page.lessonTwo", { a: coach.lessonMinutes, b: second }) : t("page.lesson", { minutes: coach.lessonMinutes })}
             {/* The setup asks what a lesson costs and then nothing showed it: a student learned the
                 price only once they owed it. It is the first thing anyone wants to know. */}
             {coach.priceSingle ? ` · ${coach.priceSingle} ${coach.currency}` : ""}

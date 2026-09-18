@@ -1437,7 +1437,9 @@
       "pkgTaken": "Tu bono ha empezado: {size} clases. Paga {amount} a {name}; abajo tienes cómo.",
       "feeLine": "Fuera de este horario: +{amount} por clase",
       "length": "Duración de la clase",
-      "packageOwed": "Bono de {size, plural, one {# clase} other {# clases}}"
+      "packageOwed": "Bono de {size, plural, one {# clase} other {# clases}}",
+      "lessonTwo": "Clases de {a} o {b} minutos",
+      "noGap": "Sin hueco de {minutes} minutos el {day}"
     },
     "me": {
       "title": "Tus clases",
