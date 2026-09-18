@@ -105,7 +105,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                       <li key={u.lessonId} className="flex items-center justify-between gap-2">
                         <span className="min-w-0 truncate">
                           {u.label} · {money(u.amount)}
-                          {u.claimed && <span className="ml-1 font-bold text-accent">· {t("students.saysPaid")}</span>}
+                          {u.claimed && <span className="ml-1 font-bold text-ink">· {t("students.saysPaid")}</span>}
                           {u.hasSlip && (
                             <>
                               {" "}

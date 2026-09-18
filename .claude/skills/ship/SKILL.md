@@ -301,6 +301,19 @@ Wall clock first, credits second. What actually moved it, measured:
   module (`domain/venueBoard.ts` holds `venueSlugFor` for exactly this reason). Read the import trace
   from the bottom up: the last line is the innocent screen, the first is what dragged the world in.
 
+### The feedback desk
+
+- **A web-form note has no way back to the person.** `deliverToPerson` answers by email or Telegram,
+  and a note from the in-app form carries neither — only a `player_id`. So "shipped" on such a note is
+  bookkeeping (status, `shipped_at`, `pr_url`, the `feedback_shipped` metric) and the one-sentence
+  "what changed" that DECIDING.md promises reaches nobody. Until the desk can reach a player by their
+  own channels (`channelFor` already knows how), close the note honestly and say so to the owner rather
+  than reporting the person was told.
+- **Read the desk when the owner asks "any feedback?"** The assessor can run out of budget and leave
+  notes at "acknowledged" with no proposal; the owner's Telegram then carries only "no analysis". One
+  query on `feedback` since yesterday is the whole answer, and it also shows what the tester actually
+  did (`lessons` since yesterday), which is worth more than the notes.
+
 ### Documents rot within hours
 
 Ship the document change in the same pull request as the code. Twice in one day `ROADMAP.md` and
