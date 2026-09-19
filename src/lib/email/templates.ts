@@ -2,7 +2,8 @@ import { createTranslator } from "next-intl";
 import { loadMessages, toLocale, type Locale } from "@/i18n/config";
 import { APP_NAME } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
-import type { Event } from "@/db/schema";
+import type { Event, Player } from "@/db/schema";
+import { bindDeepLink } from "@/lib/telegram/deepLinks";
 
 export type Rendered = { subject: string; html: string; text: string };
 
@@ -36,7 +37,16 @@ export type LayoutInput = {
   personal?: { label: string; url: string };
   /** Quiet link after the footer (e.g. "never email me again"). */
   footerLink?: { label: string; url: string };
+  /** "Get this on Telegram": the bot's deep link that binds the reader's Telegram to this player. See telegramLine. */
+  telegram?: { label: string; url: string };
 };
+
+/** The email's Telegram line for a player who has none yet; nothing for one who has, or until the bot has a username. */
+export function telegramLine(label: string, player: Pick<Player, "id" | "telegramId"> | null | undefined): LayoutInput["telegram"] {
+  if (!player || player.telegramId !== null) return undefined;
+  const url = bindDeepLink(player);
+  return url ? { label, url } : undefined;
+}
 
 export function layout(i: LayoutInput): { html: string; text: string } {
   const meta = (i.meta ?? [])
@@ -59,7 +69,7 @@ ${meta ? `<tr><td style="padding-top:16px"><table role="presentation" cellpaddin
 <tr><td style="padding-top:22px">${i.cta ? btn(i.cta.label, i.cta.url, true) : ""}${i.secondary ? btn(i.secondary.label, i.secondary.url, false) : ""}</td></tr>
 ${i.cta && i.cta.url === i.eventUrl ? "" : `<tr><td style="padding-top:10px"><a href="${esc(i.eventUrl)}" style="color:#9AA0A6;font-size:13px;text-decoration:underline">${esc(i.openLabel)}</a></td></tr>`}
 ${i.personal ? `<tr><td style="padding-top:18px"><div style="background:#F4F3EE;border-radius:14px;padding:12px 14px;font-size:13px;color:#2A2F36"><strong>${esc(i.personal.label)}</strong><br><a href="${esc(i.personal.url)}" style="color:#1B4FD8;word-break:break-all">${esc(i.personal.url)}</a></div></td></tr>` : ""}
-<tr><td style="padding-top:26px;border-top:1px solid #E4E2DA;margin-top:20px;font-size:12px;color:#8A919C;line-height:1.5">${esc(i.footer)}<br><a href="${esc(i.eventUrl)}" style="color:#8A919C">${esc(i.eventUrl)}</a>${i.footerLink ? `<br><a href="${esc(i.footerLink.url)}" style="color:#8A919C;text-decoration:underline">${esc(i.footerLink.label)}</a>` : ""}</td></tr>
+<tr><td style="padding-top:26px;border-top:1px solid #E4E2DA;margin-top:20px;font-size:12px;color:#8A919C;line-height:1.5">${esc(i.footer)}<br><a href="${esc(i.eventUrl)}" style="color:#8A919C">${esc(i.eventUrl)}</a>${i.footerLink ? `<br><a href="${esc(i.footerLink.url)}" style="color:#8A919C;text-decoration:underline">${esc(i.footerLink.label)}</a>` : ""}${i.telegram ? `<br><a href="${esc(i.telegram.url)}" style="color:#1B4FD8;text-decoration:underline">${esc(i.telegram.label)}</a>` : ""}</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [
     i.heading,
@@ -75,6 +85,7 @@ ${i.personal ? `<tr><td style="padding-top:18px"><div style="background:#F4F3EE;
     "",
     i.footer,
     i.footerLink ? `${i.footerLink.label}: ${i.footerLink.url}` : undefined,
+    i.telegram ? `${i.telegram.label}: ${i.telegram.url}` : undefined,
   ]
     .filter((l) => l !== undefined)
     .join("\n");

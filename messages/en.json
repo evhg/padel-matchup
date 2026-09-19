@@ -420,6 +420,7 @@
     "rejectedByYou": "You declined {name}'s request"
   },
   "email": {
+    "telegramLine": "Get this on Telegram: one tap, and your matches, reminders and results come to the chat.",
     "clubMatch": {"subject": "{club}: a match on {day}", "heading": "New at {club}", "body": "{club} has put a match on the board for {day} at {time}. {spots} Tap to take a spot."},
     "wanted": {"subject": "A match on {day}, where you asked to play", "heading": "The match you asked for", "body": "You said you wanted to play around this time at {venue}. There is a match on {day} at {time}. {spots} Tap to take a spot. To stop these, remove the request on your own page."},
     "openMatch": "Open the match",
@@ -1311,7 +1312,9 @@
       "jumpTo": "Open {name} on the students screen",
       "statement": "Statement, as a file",
       "statementThis": "this month",
-      "statementLast": "last month"
+      "statementLast": "last month",
+      "telegramTitle": "Or in Telegram",
+      "telegramHelp": "The same list, one tap: whoever opens this is on your list, with the buttons under the text field."
     },
     "settings": {
       "title": "Settings",
@@ -1845,7 +1848,8 @@
     "rankingPoints": "Points",
     "rankingPodiums": "Podiums",
     "rankingEditions": "Editions",
-    "luckyLoser": "{name} take the place of a pair that withdrew."
+    "luckyLoser": "{name} take the place of a pair that withdrew.",
+    "claimTelegram": "Or in Telegram: your partner taps this, and the match times come to their chat."
   },
   "series": {
     "eyebrow": "Series",

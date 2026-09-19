@@ -540,11 +540,12 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     const olga = user(93, "Olga");
     const dm = { id: 93, type: "private" as const };
     const send = (id: number, text: string) => handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat: dm, from: olga, text } }, NO_SIDE_EFFECTS);
-    // A plain player first: the general start, and nothing of a role left behind.
+    // A plain player first: the general start, then the player's own keyboard and commands, nothing of a role.
     calls = [];
     expect(await send(720, "/start")).toBe("private_start");
-    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
-    expect(sent("deleteMyCommands")).toHaveLength(1);
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("Find a match");
+    expect(sent("deleteMyCommands")).toHaveLength(0);
+    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).toEqual(["games", "new", "want", "coach", "help"]);
     const [me] = await db.select().from(players).where(eq(players.telegramId, 93));
     await createCoach(db, { playerId: me.id, displayName: "Olga", clubNames: "Warehaus", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok" });
     calls = [];
@@ -571,12 +572,12 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(726, "Zzq9")).toBe("coach:help");
     expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("anna fri 15");
-    // The book archived: the role's command from the stale "/" menu gets the general help, and the keyboard and the commands go.
+    // The book archived: the role's command from the stale "/" menu gets the general help, and the player's keyboard and commands take the coach's place.
     await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.playerId, me.id));
     calls = [];
     expect(await send(727, "/today")).toBe("private_role_ended");
-    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
-    expect(sent("deleteMyCommands")).toHaveLength(1);
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("Find a match");
+    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).toContain("games");
   });
 
   it("a student's private chat: /start gives the student's menu and the personal link; once the coach is gone, a tapped button takes the keyboard and the commands away", async () => {
@@ -626,17 +627,18 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(743, "hello?")).toBe("private_other");
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup ?? {})).not.toContain("remove_keyboard");
-    // The coach archives the book: the next tap on the old keyboard gets the general help, and the keyboard and the role's commands go with it.
+    // The coach archives the book: the next tap on the old keyboard gets the general help, and the player's keyboard and commands take the student's place.
     await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.id, coach.id));
     calls = [];
     expect(await send(733, "🎾 My lessons")).toBe("private_role_ended");
-    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("remove_keyboard");
-    expect(sent("deleteMyCommands")).toHaveLength(1);
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("Find a match");
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).not.toContain("My lessons");
+    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).not.toContain("lessons");
     // So does the role's command from the stale "/" menu; /lessons, which everyone has, says what a student would need to hear.
     calls = [];
     expect(await send(744, "/lessons")).toBe("student:none");
     expect(String(sent("sendMessage").at(-1)!.body.text)).toMatch(/accept/i);
-    expect(sent("deleteMyCommands")).toHaveLength(1);
+    expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("Find a match");
     // Ordinary text after that is the ordinary help; nothing left to take away.
     calls = [];
     expect(await send(734, "hello?")).toBe("private_other");

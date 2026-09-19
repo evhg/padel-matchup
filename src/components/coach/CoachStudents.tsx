@@ -19,13 +19,15 @@ type Props = { coachName: string; handle: string; students: StudentDTO[]; prompt
   months: { thisMonth: string; lastMonth: string };
   /** The link the coach forwards: whoever opens it is on the list. It lives here, where students are added. */
   studentUrl: string;
+  /** The same door as a t.me link: the student lands in the bot with the buttons; null until the bot has a username. */
+  telegramUrl?: string | null;
   /** What each student still owes, by player id: unpaid lessons plus an unpaid package. */
   owed: Record<string, number>;
   /** The unpaid lessons behind that figure. "Owes 3000" used to be a number with no tap under it. */
   unpaid: UnpaidLessonDTO[] };
 
 /** Students: requests to accept, packages to start, "paid" to note. One list, one action per row. */
-export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid, studentUrl, months }: Props) {
+export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid, studentUrl, telegramUrl = null, months }: Props) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -257,6 +259,16 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
         <div className="mt-3">
           <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
         </div>
+        {telegramUrl && (
+          <div className="mt-3 rounded-xl bg-panel p-3" data-testid="student-telegram-link">
+            <div className="text-sm font-bold">{t("students.telegramTitle")}</div>
+            <p className="mt-1 text-xs text-muted">{t("students.telegramHelp")}</p>
+            <p className="mt-1 break-all font-mono text-xs text-muted">{telegramUrl}</p>
+            <div className="mt-2">
+              <ShareButtons url={telegramUrl} text={t("done.forwardText", { coach: coachName, url: telegramUrl })} size="sm" />
+            </div>
+          </div>
+        )}
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-bold">{t("done.qr")}</summary>
           <div className="mt-2 inline-block rounded-xl border border-line bg-white p-2">

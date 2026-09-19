@@ -30,12 +30,12 @@ const shortLine = (ev: Event, locale: BotLocale, occupied: number) => `${formatE
 
 /** /games [city]: the player's own upcoming matches, then the open ones listed in their city, each one tap from its card. */
 export
-async function gamesFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string): Promise<string> {
+async function gamesFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, o: { /** The "My matches" button: the player's own list and nothing else. */ mineOnly?: boolean } = {}): Promise<string> {
   const locale = chatLocale(chat);
   const s = strings(locale);
   const base = baseUrl();
   const player = await findOrCreateTelegramPlayer(db, from);
-  const city = cityInText(args) ?? (await playerCity(db, player.id, chat));
+  const city = o.mineOnly ? null : (cityInText(args) ?? (await playerCity(db, player.id, chat)));
   const { upcoming } = await getPlayerEvents(db, player.id);
   const mine = await withCounts(db, upcoming.map((m) => m.event).filter((e) => e.status !== "cancelled").slice(0, 5));
   const board = city ? (await getCityBoard(db, city)).events.filter((b) => !mine.some((m) => m.event.id === b.event.id)).slice(0, 10) : [];
@@ -45,7 +45,9 @@ async function gamesFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: T
     for (const m of mine) lines.push(`• <a href="${base}/${m.event.code}">${esc(shortLine(m.event, locale, m.occupied))}</a>`);
     lines.push("");
   }
-  if (!city) lines.push(esc(s.gamesWhichCity));
+  if (o.mineOnly) {
+    if (!mine.length) lines.push(esc(s.gamesMineNone));
+  } else if (!city) lines.push(esc(s.gamesWhichCity));
   else if (board.length === 0) lines.push(esc(s.gamesNone(city.name)));
   else {
     lines.push(`<b>${esc(s.gamesTitle(city.name))}</b>`);

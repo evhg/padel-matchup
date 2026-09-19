@@ -420,6 +420,7 @@
     "rejectedByYou": "Rechazaste la solicitud de {name}"
   },
   "email": {
+    "telegramLine": "Recíbelo en Telegram: un toque, y tus partidos, recordatorios y resultados llegan al chat.",
     "clubMatch": {"subject": "{club}: partido el {day}", "heading": "Nuevo en {club}", "body": "{club} ha puesto un partido el {day} a las {time}. {spots} Toca para coger sitio."},
     "wanted": {"subject": "Un partido el {day}, donde pediste jugar", "heading": "El partido que pediste", "body": "Dijiste que querías jugar sobre esta hora en {venue}. Hay un partido el {day} a las {time}. {spots} Toca para ocupar una plaza. Para dejar de recibirlos, quita la petición en tu página."},
     "openMatch": "Abrir el partido",
@@ -1311,7 +1312,9 @@
       "jumpTo": "Abrir a {name} en la pantalla de alumnos",
       "statement": "Extracto, como archivo",
       "statementThis": "este mes",
-      "statementLast": "el mes pasado"
+      "statementLast": "el mes pasado",
+      "telegramTitle": "O en Telegram",
+      "telegramHelp": "La misma lista, en un toque: quien lo abra está en tu lista, con los botones bajo el campo de texto."
     },
     "settings": {
       "title": "Ajustes",
@@ -1845,7 +1848,8 @@
     "rankingPoints": "Puntos",
     "rankingPodiums": "Podios",
     "rankingEditions": "Ediciones",
-    "luckyLoser": "{name} ocupan el lugar de una pareja retirada."
+    "luckyLoser": "{name} ocupan el lugar de una pareja retirada.",
+    "claimTelegram": "O en Telegram: tu pareja lo toca, y las horas de los partidos llegan a su chat."
   },
   "series": {
     "eyebrow": "Serie",

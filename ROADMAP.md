@@ -195,6 +195,16 @@ Everything in this list is live. The README describes each in detail.
   reached in every finished category, both players of the pair, a bonus for the consolation winner.
   With this the serious tournament of the vision is built end to end.
 
+- **The player's door in Telegram.** A coach and a student had buttons; a player had a help text
+  with commands in it. Now every player gets six buttons under the text field on /start: find a
+  match, my matches, new match, when I want to play, coach me, help. The games list asks for the
+  city with buttons when the chat's city is not known; "when I want to play" is a day, an hour and
+  a place as taps, and the want is on record. Three links open the bot on the right door with one
+  tap: a coach's student invite (beside the web link on the students screen), a tournament
+  partner's claim (under the web link the entrant gets), and a "Get this on Telegram" line at the
+  foot of every email to a player who has no Telegram yet, which binds their account when tapped.
+  Someone whose coach or student days are over gets the player's keyboard, not an empty one.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a

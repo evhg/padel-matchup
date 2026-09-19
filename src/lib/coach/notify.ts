@@ -6,7 +6,7 @@ import { getPlayerById, packageLine, type CancelOutcome } from "@/lib/domain/coa
 import { sendEmail } from "@/lib/email/send";
 import { pushEnabled, sendPush } from "@/lib/push";
 import { removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
-import { layout, translatorFor } from "@/lib/email/templates";
+import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { epochMin, OFFER_MINUTES, type Offer } from "./chains";
 import { coachBotLocale, coachStrings, whenLabel, type CoachBotStrings } from "./strings";
@@ -59,7 +59,7 @@ export async function tell(db: Db, p: Player | null | undefined, text: string, k
   if (via === "email" && p.email) {
     const { t } = await translatorFor(p.locale);
     const [heading, ...rest] = text.split("\n");
-    const { html, text: plain } = layout({ heading, body: rest.join("\n") || heading, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("email.openMatch"), cta: { label: t("email.openMatch"), url } });
+    const { html, text: plain } = layout({ heading, body: rest.join("\n") || heading, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("email.openMatch"), cta: { label: t("email.openMatch"), url }, telegram: telegramLine(t("email.telegramLine"), p) });
     await sendEmail({ to: p.email, subject: heading, html, text: plain }).catch(() => undefined);
     return;
   }
@@ -183,6 +183,7 @@ export async function notifyStudentInvited(db: Db, coach: Coach, student: Player
     footer: t("email.footer", { app: APP_NAME }),
     eventUrl: url,
     openLabel: t("coach.email.open"),
+    telegram: telegramLine(t("email.telegramLine"), student),
   });
   await sendEmail({ to: student.email, subject: t("coach.email.invitedSubject", vars), html, text });
 }
