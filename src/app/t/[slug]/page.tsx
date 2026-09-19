@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { ShareButtons } from "@/components/ShareSheet";
+import { AutoRefresh } from "@/components/tournament/AutoRefresh";
 import { ClaimCard } from "@/components/tournament/ClaimCard";
 import { DrawView } from "@/components/tournament/DrawView";
 import { EnterForm } from "@/components/tournament/EnterForm";
@@ -52,6 +53,9 @@ export default async function TournamentPage({ params, searchParams }: Props) {
   );
   const myPairIds = new Set(mine.map((e) => e.id));
   const play = draws.size > 0 ? await orderOfPlay(db, c.id) : [];
+  // During the days of play the page asks again every minute: the tables and the brackets move with the scores.
+  const today = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const live = play.length > 0 && c.startsOn <= today && today <= c.endsOn;
   const claim = sp.claim ? await pairByClaimToken(db, sp.claim) : null;
   const claimedPair = sp.claimed && me ? await pairSummary(db, sp.claimed) : null;
   const claimed = claimedPair && claimedPair.p2PlayerId === me?.id ? claimedPair : null;
@@ -77,6 +81,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        {live && <AutoRefresh seconds={60} />}
         <section className="card">
           <span className="chip-muted">🏆 {t("tournament.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{c.name}</h1>
@@ -95,11 +100,18 @@ export default async function TournamentPage({ params, searchParams }: Props) {
               <span className="font-bold">{t("tournament.entryFee")}:</span> {c.entryNote}
             </p>
           )}
-          {organizer && (
-            <Link href={`/t/${c.slug}/manage`} prefetch={false} className="btn-ghost btn-sm mt-3 inline-block" data-testid="manage-link">
-              {t("tournament.manage")}
-            </Link>
-          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {organizer && (
+              <Link href={`/t/${c.slug}/manage`} prefetch={false} className="btn-ghost btn-sm inline-block" data-testid="manage-link">
+                {t("tournament.manage")}
+              </Link>
+            )}
+            {play.length > 0 && (
+              <Link href={`/t/${c.slug}/tv`} prefetch={false} className="btn-ghost btn-sm inline-block" data-testid="tv-link">
+                📺 {t("tournament.tvOpen")}
+              </Link>
+            )}
+          </div>
         </section>
 
         {claimed && (

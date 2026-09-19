@@ -292,6 +292,11 @@ Wall clock first, credits second. What actually moved it, measured:
   `<label>` with the input. Put the hint beside the label, not in it (a `<div>` around both), and the
   label names exactly what the reader sees in bold. The fix by regex mangled two files; a form's
   return block is rewritten whole, never patched by pattern.
+- **A draw shuffles, so a suite picks by state, never by position.** "The first Score button" was a
+  pending match in three runs and Cal's finished match in the fourth, whose form has no walkover
+  buttons, and the click timed out. Anything generated with a random seed changes order between
+  runs: filter the locator on what the step needs (`hasNotText` the finished score, `has` the
+  button), and never on `.first()` alone.
 - **A controlled input wipes what was typed before React hydrated it.** On the long manage page,
   Playwright filled the courts textarea before hydration; React's first client render set
   `value=""` from state, the button stayed disabled, and the click timed out. A probe on a short

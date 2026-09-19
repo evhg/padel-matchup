@@ -3,7 +3,8 @@
 // pair waits and moves up when one withdraws, the organiser marks paid and closes entries; then the draw:
 // groups of four made and published, a player scores their own match from the page, a wrong score is
 // refused with the rule's name, the table counts it, and the organiser gives a walkover; then the courts: two
-// courts and a window, every match a court and a time, the order of play on the page, one match moved.
+// courts and a window, every match a court and a time, the order of play on the page, one match moved; and the
+// club's screen with each court's match now and next.
 import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
@@ -163,7 +164,9 @@ try {
   check("the group table counts Cal's played match", /6-4|4-6/.test(await calRow.innerText()));
   // The desk's forms wait behind a tap each, so thirty matches do not open thirty forms.
   check("the desk shows no open score form until asked", (await org.locator('[data-testid^="score-"]').count()) === 0);
-  await org.getByRole("button", { name: "Score", exact: true }).first().click();
+  // A pending match, not Cal's finished one (the groups shuffle, so it may come first): only a pending match offers a walkover.
+  const pendingLine = org.locator('[data-testid^="match-"]').filter({ hasNotText: "6-4" }).filter({ has: org.getByRole("button", { name: "Score", exact: true }) }).first();
+  await pendingLine.getByRole("button", { name: "Score", exact: true }).click();
   const openForm = org.locator('[data-testid^="score-"]').first();
   await openForm.getByRole("button", { name: /Walkover to/ }).first().click();
   await org.getByText("w/o").first().waitFor({ timeout: 20000 });
@@ -193,6 +196,16 @@ try {
   // The form closes on the action's answer; the order of play follows on the refresh, so wait for the time itself.
   await org.getByTestId("order-of-play").getByText("15:30").first().waitFor({ timeout: 20000 });
   check("a match moved to Court 2 at 15:30 the next day", true);
+
+  // 14. The club's screen: each court, now and next, in big type, from the link on the page.
+  await cal.reload();
+  await cal.getByTestId("tv-link").click();
+  await cal.waitForURL(/\/tv$/, { timeout: 20000 });
+  const tv = cal.getByTestId("tv");
+  // Court names and "Next" are set in capitals by CSS, and innerText carries the transform.
+  const tvText = (await tv.innerText()).toLowerCase();
+  check("the live screen shows both courts with a next match each", tvText.includes("court 1") && tvText.includes("court 2") && tvText.includes("next") && (await cal.getByTestId("tv-courts").count()) === 1);
+  await shot(cal, "tournament-tv");
 } catch (e) {
   await crashed(browser, results, e);
 }
