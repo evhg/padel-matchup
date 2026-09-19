@@ -56,7 +56,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   if (continued) return continued;
   // A reply to one of the assistant's prompts (a name, a time, a package line) continues that flow —
   // before the score reader, which would otherwise take "22:30" for a set.
-  if (isPrivate && !cmd && msg.reply_to_message?.text && /↳ (kn|ko|kp|sa)/.test(msg.reply_to_message.text)) {
+  if (isPrivate && !cmd && msg.reply_to_message?.text && /↳ kn/.test(msg.reply_to_message.text)) {
     const p = await findOrCreateTelegramPlayer(db, from);
     const tapped = await continueTap(db, msg, p, await resolveRole(db, p));
     if (tapped) return tapped;

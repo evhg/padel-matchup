@@ -68,6 +68,8 @@ const CONTROLS = {
   ks: "ks:", // the students
   kp: `kp:${PACKED}`, // a package for a student
   ke: "ke:cutoff:12", // a rule
+  kv: "kv:p1:80", // a figure on the keypad
+  kg: "kg:", // the packages on the page
   kk: "kk:", // block time: which day
   sb: `sb:${PACKED}`, // student picks a coach
   sd: `sd:${PACKED}:60:w0`, // which day

@@ -131,10 +131,12 @@ Everything in this list is live. The README describes each in detail.
   the money with a paid button on every open figure, and the rules as buttons with the value in
   force marked. A student books, moves, cancels, pays, takes a package, waits for a spot that week,
   or asks the coach for an hour outside the grid. Stateless like the setup walk: each button carries
-  what has been chosen so far, packed into Telegram's 64 bytes; the three typed steps that cannot be
-  buttons — a new student's name, a time the grid does not offer, a package that is not on the
-  page — are forced replies whose prompt carries its own context. The one-line grammar stays for a
-  coach who likes it.
+  what has been chosen so far, packed into Telegram's 64 bytes. Numbers are a keypad in the chat
+  (the digits, ⌫, ✓), so a price, the pair price, the second length and its prices, the extra outside
+  the hours, a PromptPay number and a package's price are all taps; an hour the grid does not offer
+  is the hour as a button and then the quarter; the packages on the coach's page are listed, removed
+  and added in the chat. The one typed thing left is a new student's name, as a forced reply whose
+  prompt carries its own context. The one-line grammar stays for a coach who likes it.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on

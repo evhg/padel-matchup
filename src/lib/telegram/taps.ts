@@ -21,6 +21,7 @@ import {
   LESSON_MINUTES,
   listCoachLessons,
   listOffers,
+  saveOffers,
   listStudentLessons,
   listStudents,
   markNoShow,
@@ -34,6 +35,7 @@ import {
   takeOffer,
   unmarkNoShow,
   updateCoach,
+  MAX_OFFERS,
   type Hours,
   type LessonWithPeople,
 } from "@/lib/domain/coaching";
@@ -80,16 +82,6 @@ const lengthsOf = (coach: Coach): number[] => [coach.lessonMinutes, ...(coach.se
 /** Whether the head count is worth a question: only when a pair pays something else than one. */
 const asksHeads = (coach: Coach, minutes: number): boolean => priceFor(coach, 2, minutes) !== priceFor(coach, 1, minutes);
 
-const TIME_RE = /^\s*(\d{1,2})(?:[:.hч](\d{2}))?\s*$/;
-function parseTypedTime(text: string): string | null {
-  const m = TIME_RE.exec(text);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const mi = Number(m[2] ?? 0);
-  if (h > 23 || mi > 59) return null;
-  return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
-}
-
 /** Seven days from today in the coach's zone, two per row, plus the week after. */
 function dayPicker(tz: string, locale: string, week: number, cbFor: (dateStr: string) => string, next: string | null, s: CoachBotStrings): InlineKeyboard {
   const today = utcToZonedParts(new Date(), tz).date;
@@ -106,6 +98,26 @@ async function timeRows(db: Db, coach: Coach, dateStr: string, minutes: number, 
   const free = (await availableSlots(db, o.anyHour ? { ...coach, minNoticeHours: 0 } : coach, from, new Date(from.getTime() + DAY_MS), new Date(), minutes)).slice(0, 16);
   return chunk(free.map((d) => ({ text: timeOf(d, coach.tz, o.locale), callback_data: cbFor(d) })), 4);
 }
+
+/**
+ * A number, tapped. Twelve buttons in the chat: the digits, ⌫ and ✓. The digits so far ride in the
+ * callback, so the keypad is as stateless as everything else here. One component for every figure
+ * the book asks for — a price, a fee, a package's price, a PromptPay number — so nobody ever types
+ * one, which is what the Russian players asked for through the owner.
+ */
+function keypad(prefix: string, digits: string, s: CoachBotStrings): InlineKeyboard {
+  const key = (d: string) => ({ text: d, callback_data: `${prefix}${(digits + d).slice(0, 7)}` });
+  return kb([
+    [key("1"), key("2"), key("3")],
+    [key("4"), key("5"), key("6")],
+    [key("7"), key("8"), key("9")],
+    [{ text: "⌫", callback_data: `${prefix}${digits.slice(0, -1)}` }, key("0"), { text: s.tapKeypadOk, callback_data: `${prefix}${digits}:ok` }],
+  ]);
+}
+
+/** The hours of a day as buttons, six to a row, then the quarter hours. */
+const hourRows = (cbFor: (hh: string) => string) => chunk(Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, "0")).map((hh) => ({ text: `${hh}:00`, callback_data: cbFor(hh) })), 6);
+const minuteRow = (hh: string, cbFor: (mm: string) => string) => [["00", "15", "30", "45"].map((mm) => ({ text: `${hh}:${mm}`, callback_data: cbFor(mm) }))];
 
 const trailer = (code: string) => `\n↳ ${code}`;
 /** A prompt whose answer comes back as a reply, with the flow's state in the last line. */
@@ -315,15 +327,47 @@ async function studentCard(db: Db, coach: Coach, sid: string, s: CoachBotStrings
   return "coach:tap:student";
 }
 
-/** "＋ Package" on a student: the coach's own offers as buttons, or a typed line for anything else. */
+/** "＋ Package" on a student: the coach's own offers as buttons, or any other package in three taps and a keypad. */
 async function packagePicker(db: Db, coach: Coach, sid: string, s: CoachBotStrings, chatId: number, editId: number | null): Promise<string> {
   const student = await getPlayerById(db, sid);
   if (!student) return "coach:tap:none";
   const offers = await listOffers(db, coach.id);
   const rows = offers.map((o) => [{ text: s.tapPackageLabel(o.size, o.minutes, o.heads, money(o.price, coach.currency)), callback_data: `kp:${packId(sid)}:${packId(o.id)}` }]);
-  rows.push([{ text: s.tapPackageCustom, callback_data: `kp:${packId(sid)}:c` }]);
+  rows.push([{ text: s.tapPackageCustom, callback_data: `kp:${packId(sid)}:n` }]);
   await put(chatId, editId, s.tapWhichPackage(student.displayName), kb(rows));
   return "coach:tap:package_pick";
+}
+
+const SIZES = [5, 8, 10, 20];
+const VALID_DAYS = [30, 70, 90, 0];
+const daysLabel = (d: number, s: CoachBotStrings) => (d ? s.tapDays(d) : s.tapNoExpiry);
+
+/** Any package for a student, as taps: how many lessons, how long it lasts, and the price on the keypad. */
+async function customPackage(db: Db, coach: Coach, sid: string, seg: string[], s: CoachBotStrings, locale: string, chatId: number, editId: number | null): Promise<string> {
+  // seg: ["n"] sizes · ["n", size] days · ["n", size, days, digits?] keypad · [..., digits, "ok"] create
+  const base = `kp:${packId(sid)}:n`;
+  if (seg.length === 1) {
+    await put(chatId, editId, s.tapHowManyLessons, kb([SIZES.map((n) => ({ text: String(n), callback_data: `${base}:${n}` }))]));
+    return "coach:tap:package_size";
+  }
+  const size = Number(seg[1]);
+  if (!SIZES.includes(size)) return "coach:tap:none";
+  if (seg.length === 2) {
+    await put(chatId, editId, s.tapValidFor, kb([VALID_DAYS.map((d) => ({ text: daysLabel(d, s), callback_data: `${base}:${size}:${d}` }))]));
+    return "coach:tap:package_days";
+  }
+  const days = Number(seg[2]);
+  if (!VALID_DAYS.includes(days)) return "coach:tap:none";
+  const digits = (seg[3] ?? "").replace(/\D/g, "");
+  if (seg[4] === "ok") {
+    const price = Number(digits);
+    if (!digits || !Number.isFinite(price) || price < 1) return "coach:tap:none";
+    if (editId) await deleteMessage(chatId, editId).catch(() => undefined);
+    return packageMade(db, coach, sid, { size, validDays: days || null, amount: price }, s, locale, chatId);
+  }
+  const hint = coach.priceSingle ? `${size} × ${coach.priceSingle} = ${money(size * coach.priceSingle, coach.currency)}` : "";
+  await put(chatId, editId, s.tapEnter(s.tapPriceEach(hint), digits), keypad(`${base}:${size}:${days}:`, digits, s));
+  return "coach:tap:package_price";
 }
 
 async function packageMade(db: Db, coach: Coach, sid: string, input: { size: number; validDays: number | null; amount: number | null; minutes?: number | null; heads?: number | null; offerId?: string | null }, s: CoachBotStrings, locale: string, chatId: number): Promise<string> {
@@ -385,10 +429,110 @@ export async function tapSettings(db: Db, coach: Coach, player: Player, s: Coach
     [6, 12, 24].map((h) => ({ text: mark(coach.cutoffHours === h, `${s.labCutoff} ${h} h`), callback_data: `ke:cutoff:${h}` })),
     [0, 1, 2].map((n) => ({ text: mark(coach.latePasses === n, `${s.labPasses}: ${n}`), callback_data: `ke:passes:${n}` })),
   ];
+  rows.push([
+    { text: `${s.labPrice}: ${coach.priceSingle ? money(coach.priceSingle, coach.currency) : s.labNotSet}`, callback_data: "kv:p1:" },
+    { text: `${s.tapPairEach}: ${coach.priceTwo ? money(coach.priceTwo, coach.currency) : s.labNotSet}`, callback_data: "kv:p2:" },
+  ]);
+  rows.push([{ text: mark(!coach.secondMinutes, `${s.tapSecondLength}: ${s.tapNone}`), callback_data: "ke:second:0" }, ...LESSON_MINUTES.filter((m) => m !== coach.lessonMinutes).map((m) => ({ text: mark(coach.secondMinutes === m, s.minutesLabel(m)), callback_data: `ke:second:${m}` }))]);
+  if (coach.secondMinutes)
+    rows.push([
+      { text: `${s.tapSecondOne}: ${coach.priceSecondSingle ? money(coach.priceSecondSingle, coach.currency) : s.labNotSet}`, callback_data: "kv:s1:" },
+      { text: `${s.tapSecondPair}: ${coach.priceSecondTwo ? money(coach.priceSecondTwo, coach.currency) : s.labNotSet}`, callback_data: "kv:s2:" },
+    ]);
+  rows.push([
+    { text: `${s.tapFee}: ${coach.outsideHoursFee ? money(coach.outsideHoursFee, coach.currency) : s.labNotSet}`, callback_data: "kv:fee:" },
+    { text: `${s.labPromptpay}: ${coach.promptpayId || s.labNotSet}`, callback_data: "kv:pp:" },
+  ]);
+  rows.push([{ text: `📦 ${s.tapOffersTitle}`, callback_data: "kg:" }]);
   const token = await getOrCreatePersonalToken(db, player.id);
   rows.push([{ text: s.tapSettingsWeb, url: `${personalUrl(baseUrl(), token)}?next=/coach/settings` }]);
   await put(chatId, editId, `${s.settings(lines.join("\n")).split("\n").slice(0, -1).join("\n")}\n${s.tapSettingsHow}`, kb(rows));
   return "coach:tap:settings";
+}
+
+/** The figures in settings, one keypad each. `kv:<field>:<digits>` and `:ok` to save. */
+const FIELDS: Record<string, { label: (s: CoachBotStrings) => string; patch: (n: number) => Parameters<typeof updateCoach>[2] }> = {
+  p1: { label: (s) => s.labPrice, patch: (n) => ({ priceSingle: n || null }) },
+  p2: { label: (s) => s.tapPairEach, patch: (n) => ({ priceTwo: n || null }) },
+  s1: { label: (s) => s.tapSecondOne, patch: (n) => ({ priceSecondSingle: n || null }) },
+  s2: { label: (s) => s.tapSecondPair, patch: (n) => ({ priceSecondTwo: n || null }) },
+  fee: { label: (s) => s.tapFee, patch: (n) => ({ outsideHoursFee: n || null }) },
+  pp: { label: (s) => s.labPromptpay, patch: () => ({}) },
+};
+
+async function settingsKeypad(db: Db, coach: Coach, player: Player, field: string, digits: string, done: boolean, s: CoachBotStrings, locale: string, chatId: number, editId: number): Promise<string> {
+  const f = FIELDS[field];
+  if (!f) return "coach:tap:none";
+  if (done) {
+    // PromptPay is digits too, but ten to thirteen of them and never a sum: it keeps its own shape.
+    if (field === "pp") await updateCoach(db, coach.id, { promptpayId: digits });
+    else await updateCoach(db, coach.id, f.patch(Number(digits)));
+    const fresh = (await getCoachForActor(db, player.id))?.coach ?? coach;
+    await tapSettings(db, fresh, player, s, locale, chatId, editId);
+    return `coach:set:${field}`;
+  }
+  const prefix = `kv:${field}:`;
+  const wide = field === "pp" ? digits.slice(0, 13) : digits;
+  const pad = keypad(prefix, wide, s);
+  if (field === "pp") for (const row of pad.inline_keyboard) for (const b of row) if (b.callback_data && !b.callback_data.endsWith(":ok")) b.callback_data = `${prefix}${(b.callback_data.slice(prefix.length) + "").slice(0, 13)}`;
+  await put(chatId, editId, s.tapEnter(f.label(s), wide), pad);
+  return "coach:tap:keypad";
+}
+
+/** The packages on the coach's page, managed in the chat: a list with ✕ on each, and a new one in four taps and a keypad. */
+async function offersScreen(db: Db, coach: Coach, seg: string[], s: CoachBotStrings, locale: string, chatId: number, editId: number | null): Promise<string> {
+  const offers = await listOffers(db, coach.id);
+  const asInput = (o: (typeof offers)[number]) => ({ id: o.id, size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays });
+  if (seg[0] === "x") {
+    const gone = unpackId(seg[1] ?? "");
+    await saveOffers(db, coach.id, offers.filter((o) => o.id !== gone).map(asInput));
+    return offersScreen(db, coach, [""], s, locale, chatId, editId);
+  }
+  if (seg[0] === "n") {
+    const base = "kg:n";
+    const lengths = lengthsOf(coach);
+    if (seg.length === 1) {
+      await put(chatId, editId, s.tapHowManyLessons, kb([SIZES.map((n) => ({ text: String(n), callback_data: `${base}:${n}` }))]));
+      return "coach:tap:offer_size";
+    }
+    const size = Number(seg[1]);
+    if (!SIZES.includes(size)) return "coach:tap:none";
+    if (seg.length === 2) {
+      if (lengths.length === 1) return offersScreen(db, coach, ["n", String(size), String(lengths[0])], s, locale, chatId, editId);
+      await put(chatId, editId, s.tapHowLong, kb([lengths.map((m) => ({ text: s.minutesLabel(m), callback_data: `${base}:${size}:${m}` }))]));
+      return "coach:tap:offer_length";
+    }
+    const minutes = Number(seg[2]);
+    if (!lengths.includes(minutes)) return "coach:tap:none";
+    if (seg.length === 3) {
+      await put(chatId, editId, s.tapForHowMany, kb([[1, 2, 3, 4].map((n) => ({ text: String(n), callback_data: `${base}:${size}:${minutes}:${n}` }))]));
+      return "coach:tap:offer_heads";
+    }
+    const heads = Number(seg[3]);
+    if (heads < 1 || heads > 4) return "coach:tap:none";
+    if (seg.length === 4) {
+      await put(chatId, editId, s.tapValidFor, kb([VALID_DAYS.map((d) => ({ text: daysLabel(d, s), callback_data: `${base}:${size}:${minutes}:${heads}:${d}` }))]));
+      return "coach:tap:offer_days";
+    }
+    const days = Number(seg[4]);
+    if (!VALID_DAYS.includes(days)) return "coach:tap:none";
+    const digits = (seg[5] ?? "").replace(/\D/g, "");
+    if (seg[6] === "ok") {
+      const price = Number(digits);
+      if (!digits || price < 1) return "coach:tap:none";
+      await saveOffers(db, coach.id, [...offers.map(asInput), { size, minutes, heads, price, validDays: days || null }]);
+      return offersScreen(db, coach, [""], s, locale, chatId, editId);
+    }
+    const each = priceFor(coach, heads, minutes);
+    const hint = each ? `${size} × ${each} = ${money(size * each, coach.currency)}` : "";
+    await put(chatId, editId, s.tapEnter(s.tapPriceEach(hint), digits), keypad(`${base}:${size}:${minutes}:${heads}:${days}:`, digits, s));
+    return "coach:tap:offer_price";
+  }
+  const rows = offers.map((o) => [{ text: `✕ ${s.tapPackageLabel(o.size, o.minutes, o.heads, money(o.price, coach.currency))}${o.validDays ? ` · ${s.tapDays(o.validDays)}` : ""}`, callback_data: `kg:x:${packId(o.id)}` }]);
+  if (offers.length < MAX_OFFERS) rows.push([{ text: s.tapOfferAdd, callback_data: "kg:n" }]);
+  rows.push([{ text: s.tapBack, callback_data: "ke:show:" }]);
+  await put(chatId, editId, offers.length ? s.tapOffersTitle : s.tapOffersNone, kb(rows));
+  return "coach:tap:offers";
 }
 
 // ------------------------------------------------------------------ student: book, move, pay
@@ -544,7 +688,7 @@ async function takePackage(db: Db, player: Player, coach: Coach, offerId: string
 // ------------------------------------------------------------------ callbacks
 
 /** Every tap this module answers. Free-form after the prefix; each branch reads its own segments. */
-export const TAP_CALLBACK = /^(kb|kd|kt|kh|ky|kn|ko|kx|kz|km|kl|kq|kf|ks|kp|ke|kk|sb|sd|st|sh|sy|sw|sa|sm|sk):/;
+export const TAP_CALLBACK = /^(kb|kd|kt|kh|ky|kn|ko|kx|kz|km|kl|kq|kf|ks|kp|ke|kk|kv|kg|sb|sd|st|sh|sy|sw|sa|sm|sk):/;
 
 export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise<string | null> {
   const data = cb.data ?? "";
@@ -603,12 +747,18 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
         return "coach:tap:ask_name";
       }
       case "ko": {
+        // A time the grid does not offer: the hour as a button, then the quarter hour.
         const sid = unpackId(seg[0]);
         const day = fromYmd(seg[2] ?? "");
         if (!sid || !day) return "coach:tap:none";
-        await deleteMessage(chatId, editId).catch(() => undefined);
-        await ask(chatId, s.tapAskTime(dayOnlyLabel(day, locale)), `ko:${seg[0]}:${seg[1]}:${seg[2]}`, "15:30");
-        return "coach:tap:ask_time";
+        const base = `ko:${seg[0]}:${seg[1]}:${seg[2]}`;
+        if (seg[3] && seg[4]) return coachHeadsOrBook(db, coach, coachPlayer, sid, Number(seg[1]) || coach.lessonMinutes, zonedTimeToUtc(day, `${seg[3]}:${seg[4]}`, coach.tz), s, locale, chatId, editId);
+        if (seg[3]) {
+          await put(chatId, editId, s.tapWhichMinute(`${seg[3]}:00`), kb([...minuteRow(seg[3], (mm) => `${base}:${seg[3]}:${mm}`), [{ text: s.tapBack, callback_data: base }]]));
+          return "coach:tap:minute";
+        }
+        await put(chatId, editId, `${dayOnlyLabel(day, locale)} — ${s.tapWhichHour}`, kb([...hourRows((hh) => `${base}:${hh}`), [{ text: s.tapBack, callback_data: `kt:${seg[0]}:${seg[1]}:${seg[2]}` }]]));
+        return "coach:tap:hour";
       }
       case "kx": {
         const lid = unpackId(seg[0]);
@@ -684,12 +834,7 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
         const sid = unpackId(seg[0]);
         if (!sid) return "coach:tap:none";
         if (!seg[1]) return packagePicker(db, coach, sid, s, chatId, editId);
-        if (seg[1] === "c") {
-          const student = await getPlayerById(db, sid);
-          await deleteMessage(chatId, editId).catch(() => undefined);
-          await ask(chatId, s.tapAskPackage(student?.displayName ?? "?"), `kp:${seg[0]}`, "10 90d 6000");
-          return "coach:tap:ask_package";
-        }
+        if (seg[1] === "n") return customPackage(db, coach, sid, seg.slice(1), s, locale, chatId, editId);
         const offerId = unpackId(seg[1]);
         const offer = offerId ? (await listOffers(db, coach.id)).find((o) => o.id === offerId) : null;
         if (!offer) return "coach:tap:none";
@@ -702,9 +847,15 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
         if (!day) return "coach:tap:none";
         return seg[1] ? blockIt(db, coach, day, seg[1], s, locale, chatId, editId) : blockWhat(coach, day, s, locale, chatId, editId);
       }
+      case "kv":
+        return settingsKeypad(db, coach, player, seg[0], (seg[1] ?? "").replace(/\D/g, ""), seg[2] === "ok", s, locale, chatId, editId);
+      case "kg":
+        return offersScreen(db, coach, seg, s, locale, chatId, editId);
       case "ke": {
         const [key, val] = seg;
-        if (key === "lesson" && LESSON_MINUTES.includes(Number(val) as (typeof LESSON_MINUTES)[number])) await updateCoach(db, coach.id, { lessonMinutes: Number(val) });
+        if (key === "show") return tapSettings(db, coach, player, s, locale, chatId, editId);
+        if (key === "second" && (val === "0" || LESSON_MINUTES.includes(Number(val) as (typeof LESSON_MINUTES)[number]))) await updateCoach(db, coach.id, { secondMinutes: Number(val) || null });
+        else if (key === "lesson" && LESSON_MINUTES.includes(Number(val) as (typeof LESSON_MINUTES)[number])) await updateCoach(db, coach.id, { lessonMinutes: Number(val) });
         else if (key === "hours" && (val === "mornings" || val === "afternoons" || val === "both")) await updateCoach(db, coach.id, { hours: presetHours(val) });
         else if (key === "cutoff" && Number.isFinite(Number(val))) await updateCoach(db, coach.id, { cutoffHours: Number(val) });
         else if (key === "passes" && Number.isFinite(Number(val))) await updateCoach(db, coach.id, { latePasses: Number(val) });
@@ -778,9 +929,14 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
     case "sa": {
       const day = fromYmd(seg[1] ?? "");
       if (!day) return "student:tap:none";
-      await deleteMessage(chatId, editId).catch(() => undefined);
-      await ask(chatId, s.tapAskAnotherTime(dayOnlyLabel(day, locale)), `sa:${seg[0]}:${seg[1]}`, "19:30");
-      return "student:tap:ask_time";
+      const base = `sa:${seg[0]}:${seg[1]}`;
+      if (seg[2] && seg[3]) return askCoach(db, player, coach, zonedTimeToUtc(day, `${seg[2]}:${seg[3]}`, coach.tz), s, locale, chatId, editId);
+      if (seg[2]) {
+        await put(chatId, editId, s.tapWhichMinute(`${seg[2]}:00`), kb([...minuteRow(seg[2], (mm) => `${base}:${seg[2]}:${mm}`), [{ text: s.tapBack, callback_data: base }]]));
+        return "student:tap:minute";
+      }
+      await put(chatId, editId, `${dayOnlyLabel(day, locale)} — ${s.tapWhichHour}`, kb([...hourRows((hh) => `${base}:${hh}`), [{ text: s.tapBack, callback_data: `st:${seg[0]}:${coach.lessonMinutes}:${seg[1]}` }]]));
+      return "student:tap:hour";
     }
     case "sk":
       if (!seg[1]) return packagesFor(db, coach, s, chatId, editId);
@@ -789,93 +945,46 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
   return null;
 }
 
-// ------------------------------------------------------------------ the typed step, as a reply
+/** The student's request for an hour outside the grid: booked at once when the rules allow, otherwise the coach's yes or no. */
+async function askCoach(db: Db, player: Player, coach: Coach, at: Date, s: CoachBotStrings, locale: string, chatId: number, editId: number | null): Promise<string> {
+  try {
+    const r = await requestOrBook(db, coach, player.id, at, null);
+    if (r.kind === "booked") {
+      await notifyLessonBooked(db, { lesson: r.lesson, coach, student: player, pkg: r.package, by: "student" });
+      await put(chatId, editId, s.youBooked(coach.displayName, whenLabel(r.lesson.startsAt, coach.tz, locale), pkgText(s, r.package)), kb([[{ text: s.cancel, callback_data: `lc:${r.lesson.id}` }]]));
+      return "student:booked";
+    }
+    await notifyRequest(db, coach, player, r.request).catch(() => undefined);
+    await put(chatId, editId, s.tapAskedCoach(coach.displayName, whenLabel(at, coach.tz, locale)), kb([]));
+    return "student:tap:requested";
+  } catch (e) {
+    if (!isDomainError(e)) throw e;
+    await put(chatId, editId, e.code === "past" ? s.past : e.code === "slot_taken" ? s.moveTaken : s.notStudent, kb([]));
+    return `student:tap:${e.code}`;
+  }
+}
 
-const PKG_RE = /^\+?\s*(\d{1,3})(?:\s+(\d{1,3})\s*[dд])?(?:\s+(\d{2,7}))?\s*$/;
+// ------------------------------------------------------------------ the one typed step, as a reply: a name
 
 /**
- * A reply to one of the prompts above: a name, a time or a package line. The prompt's last line says
- * which flow it belongs to and where it was, so nothing is remembered between messages. Null when the
- * message is not such a reply, so the one-line grammar reads it instead.
+ * A reply to the one prompt left: a new student's name. The prompt's last line says so, so the
+ * answer needs no memory. Null when the message is not such a reply, so the one-line grammar reads
+ * it instead.
  */
 export async function continueTap(db: Db, msg: TgMessage, player: Player, resolved: ResolvedRole): Promise<string | null> {
   const parent = msg.reply_to_message;
   const botId = telegramBotId();
   if (!parent?.text || !msg.text || !botId || String(parent.from?.id) !== botId) return null;
-  const t = /↳ (kn|ko|kp|sa)(?::(\S+))?\s*$/.exec(parent.text);
-  if (!t) return null;
-  const [, code, restRaw] = t;
-  const seg = (restRaw ?? "").split(":");
+  if (!/↳ kn\s*$/.test(parent.text) || resolved?.kind !== "coach") return null;
   const chatId = msg.chat.id;
   const locale: CoachBotLocale = coachBotLocale(player.locale);
   const s = coachStrings(locale);
-  const text = msg.text.trim();
-
-  if (code === "sa") {
-    if (resolved?.kind !== "student") return null;
-    const cid = unpackId(seg[0]);
-    const day = fromYmd(seg[1] ?? "");
-    const coach = resolved.coaches.find((c) => c.coach.id === cid && c.status === "accepted")?.coach;
-    if (!coach || !day) return null;
-    const time = parseTypedTime(text);
-    if (!time) {
-      await ask(chatId, s.tapBadTime, `sa:${seg[0]}:${seg[1]}`, "19:30");
-      return "student:tap:bad_time";
-    }
-    await deleteMessage(chatId, parent.message_id).catch(() => undefined);
-    const at = zonedTimeToUtc(day, time, coach.tz);
-    try {
-      const r = await requestOrBook(db, coach, player.id, at, null);
-      if (r.kind === "booked") {
-        await notifyLessonBooked(db, { lesson: r.lesson, coach, student: player, pkg: r.package, by: "student" });
-        await sendMessage(chatId, esc(s.youBooked(coach.displayName, whenLabel(r.lesson.startsAt, coach.tz, locale), pkgText(s, r.package))), { silent: true, keyboard: kb([[{ text: s.cancel, callback_data: `lc:${r.lesson.id}` }]]) });
-        return "student:booked";
-      }
-      await notifyRequest(db, coach, player, r.request).catch(() => undefined);
-      await sendMessage(chatId, esc(s.tapAskedCoach(coach.displayName, whenLabel(at, coach.tz, locale))), { silent: true });
-      return "student:tap:requested";
-    } catch (e) {
-      if (!isDomainError(e)) throw e;
-      await sendMessage(chatId, esc(e.code === "past" ? s.past : e.code === "slot_taken" ? s.moveTaken : s.notStudent), { silent: true });
-      return `student:tap:${e.code}`;
-    }
-  }
-
-  if (resolved?.kind !== "coach") return null;
-  const coach = resolved.coach;
-  const coachPlayer = resolved.role === "coach" ? player : ((await getPlayerById(db, coach.playerId)) ?? player);
-  if (code === "kn") {
-    const name = text.replace(/\s+/g, " ").slice(0, 40);
-    if (!name) return null;
-    await deleteMessage(chatId, parent.message_id).catch(() => undefined);
-    const p = await addStudentByName(db, coach.id, name, locale);
-    await sendMessage(chatId, esc(s.bookedNew(p.displayName)), { silent: true });
-    return afterWho(db, coach, p.id, s, locale, chatId, null);
-  }
-  if (code === "ko") {
-    const sid = unpackId(seg[0]);
-    const day = fromYmd(seg[2] ?? "");
-    if (!sid || !day) return null;
-    const time = parseTypedTime(text);
-    if (!time) {
-      await ask(chatId, s.tapBadTime, `ko:${seg[0]}:${seg[1]}:${seg[2]}`, "15:30");
-      return "coach:tap:bad_time";
-    }
-    await deleteMessage(chatId, parent.message_id).catch(() => undefined);
-    return coachHeadsOrBook(db, coach, coachPlayer, sid, Number(seg[1]) || coach.lessonMinutes, zonedTimeToUtc(day, time, coach.tz), s, locale, chatId, null);
-  }
-  if (code === "kp") {
-    const sid = unpackId(seg[0]);
-    if (!sid) return null;
-    const m = PKG_RE.exec(text);
-    if (!m) {
-      await ask(chatId, s.tapBadPackage, `kp:${seg[0]}`, "10 90d 6000");
-      return "coach:tap:bad_package";
-    }
-    await deleteMessage(chatId, parent.message_id).catch(() => undefined);
-    return packageMade(db, coach, sid, { size: Number(m[1]), validDays: m[2] ? Number(m[2]) : 90, amount: m[3] ? Number(m[3]) : null }, s, locale, chatId);
-  }
-  return null;
+  const name = msg.text.trim().replace(/\s+/g, " ").slice(0, 40);
+  if (!name) return null;
+  await deleteMessage(chatId, parent.message_id).catch(() => undefined);
+  const p = await addStudentByName(db, resolved.coach.id, name, locale);
+  await sendMessage(chatId, esc(s.bookedNew(p.displayName)), { silent: true });
+  return afterWho(db, resolved.coach, p.id, s, locale, chatId, null);
 }
 
 export { packageLine };

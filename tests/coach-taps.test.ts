@@ -120,15 +120,16 @@ describe("the coach books, cancels, moves and settles with taps", () => {
     expect(p).toBeTruthy();
   });
 
-  it("takes a typed time when the grid has none, and books outside the hours with the extra", async () => {
+  it("takes an hour and a quarter as taps when the grid has none, and books outside the hours with the extra", async () => {
     await say(coachChat, tgCoach, "＋ Book");
     await tap(coachChat, tgCoach, button(/^Ivan$/));
     await tap(coachChat, tgCoach, button(/60 min/));
     const day = last().buttons[3].callback_data!;
     await tap(coachChat, tgCoach, day);
-    expect(await tap(coachChat, tgCoach, button(/Another time/))).toBe("coach:tap:ask_time");
-    expect(await reply(coachChat, tgCoach, "half past")).toBe("coach:tap:bad_time");
-    expect(await reply(coachChat, tgCoach, "22:30")).toBe("coach:tap:heads");
+    expect(await tap(coachChat, tgCoach, button(/Another time/))).toBe("coach:tap:hour");
+    expect(last().buttons.filter((b) => /^\d\d:00$/.test(b.text)).length).toBe(18);
+    expect(await tap(coachChat, tgCoach, button(/^22:00$/))).toBe("coach:tap:minute");
+    expect(await tap(coachChat, tgCoach, button(/^22:30$/))).toBe("coach:tap:heads");
     expect(await tap(coachChat, tgCoach, button(/^1$/))).toBe("coach:booked");
     const late = (await db.select().from(lessons).where(eq(lessons.coachId, coachId))).find((l) => l.minutes === 60 && l.heads === 1);
     expect(late?.amount).toBe(800 + 300);
@@ -194,6 +195,28 @@ describe("the coach books, cancels, moves and settles with taps", () => {
     expect(last().buttons.some((b) => b.callback_data === `cp:${pkg.id}`)).toBe(true);
   });
 
+  it("starts any other package with three taps and a keypad, never a typed line", async () => {
+    await say(coachChat, tgCoach, "👥 Students");
+    await tap(coachChat, tgCoach, button(/^Ivan$/));
+    await tap(coachChat, tgCoach, button(/Package/));
+    expect(await tap(coachChat, tgCoach, button(/Another package/))).toBe("coach:tap:package_size");
+    expect(await tap(coachChat, tgCoach, button(/^5$/))).toBe("coach:tap:package_days");
+    expect(await tap(coachChat, tgCoach, button(/^30 d$/))).toBe("coach:tap:package_price");
+    // The keypad: 3, 5, 0, 0, then a slip and its ⌫, then done.
+    expect(last().text).toMatch(/5 × 800 = 4000 THB/);
+    for (const d of ["3", "5", "0", "0", "9"]) await tap(coachChat, tgCoach, button(new RegExp(`^${d}$`)));
+    expect(last().text).toMatch(/35009$/);
+    await tap(coachChat, tgCoach, button(/^⌫$/));
+    expect(last().text).toMatch(/3500$/);
+    expect(await tap(coachChat, tgCoach, button(/Done/))).toBe("coach:package");
+    const pkgs = await db.select().from(lessonPackages).where(eq(lessonPackages.studentPlayerId, studentId));
+    expect(pkgs.some((p) => p.size === 5 && p.amount === 3500 && p.expiresAt !== null)).toBe(true);
+    // The typed line still works for a coach who likes it.
+    expect(await say(coachChat, tgCoach, "ivan +8 60d 5000")).toBe("coach:package");
+    await db.update(lessonPackages).set({ closedAt: new Date() }).where(eq(lessonPackages.studentPlayerId, studentId));
+    await createPackage(db, { coachId, studentPlayerId: studentId, size: 10, amount: 7000 });
+  });
+
   it("shows the money with a paid button on every open figure", async () => {
     expect(await say(coachChat, tgCoach, "💰 Money")).toBe("coach:tap:money");
     expect(last().text).toMatch(/Ivan · package of 10 · 7000 THB/);
@@ -210,6 +233,41 @@ describe("the coach books, cancels, moves and settles with taps", () => {
     expect(last().buttons.some((b) => b.url?.includes("/coach/settings"))).toBe(true);
     expect(await tap(coachChat, tgCoach, "ke:lesson:45")).toBe("coach:set:lesson");
     await tap(coachChat, tgCoach, "ke:lesson:60");
+  });
+
+  it("sets a price on the keypad, the second length with a tap, and its prices on the keypad", async () => {
+    await say(coachChat, tgCoach, "⚙️ Settings");
+    expect(await tap(coachChat, tgCoach, button(/^Price: 800 THB$/))).toBe("coach:tap:keypad");
+    for (const d of ["9", "0", "0"]) await tap(coachChat, tgCoach, button(new RegExp(`^${d}$`)));
+    expect(await tap(coachChat, tgCoach, button(/Done/))).toBe("coach:set:p1");
+    expect(last().buttons.some((b) => b.text === "Price: 900 THB")).toBe(true);
+    expect(await tap(coachChat, tgCoach, "ke:second:0")).toBe("coach:set:second");
+    expect(last().buttons.some((b) => /Second length, one person/.test(b.text))).toBe(false);
+    expect(await tap(coachChat, tgCoach, "ke:second:90")).toBe("coach:set:second");
+    expect(await tap(coachChat, tgCoach, button(/Second length, pair each/))).toBe("coach:tap:keypad");
+    for (const d of ["9", "5", "0"]) await tap(coachChat, tgCoach, button(new RegExp(`^${d}$`)));
+    expect(await tap(coachChat, tgCoach, button(/Done/))).toBe("coach:set:s2");
+    expect(last().buttons.some((b) => b.text === "Second length, pair each: 950 THB")).toBe(true);
+    // Back to 800, so the rest of the file reads the numbers it was written for.
+    await tap(coachChat, tgCoach, "kv:p1:800:ok");
+  });
+
+  it("manages the packages on the page in the chat: list, remove, add in four taps and a keypad", async () => {
+    await say(coachChat, tgCoach, "⚙️ Settings");
+    expect(await tap(coachChat, tgCoach, button(/Packages on your page/))).toBe("coach:tap:offers");
+    expect(last().buttons.some((b) => /✕ 10 × 60 min · 7000 THB · 70 d/.test(b.text))).toBe(true);
+    expect(await tap(coachChat, tgCoach, button(/Add a package/))).toBe("coach:tap:offer_size");
+    expect(await tap(coachChat, tgCoach, button(/^20$/))).toBe("coach:tap:offer_length");
+    expect(await tap(coachChat, tgCoach, button(/90 min/))).toBe("coach:tap:offer_heads");
+    expect(await tap(coachChat, tgCoach, button(/^2$/))).toBe("coach:tap:offer_days");
+    expect(await tap(coachChat, tgCoach, button(/No expiry/))).toBe("coach:tap:offer_price");
+    for (const d of ["8", "0", "0"]) await tap(coachChat, tgCoach, button(new RegExp(`^${d}$`)));
+    expect(await tap(coachChat, tgCoach, button(/Done/))).toBe("coach:tap:offers");
+    expect(last().buttons.some((b) => /✕ 20 × 90 min · 2 · 800 THB$/.test(b.text))).toBe(true);
+    const removeNew = last().buttons.find((b) => /20 × 90/.test(b.text))!.callback_data!;
+    expect(await tap(coachChat, tgCoach, removeNew)).toBe("coach:tap:offers");
+    expect(last().buttons.some((b) => /20 × 90/.test(b.text))).toBe(false);
+    expect(await tap(coachChat, tgCoach, button(/Back/))).toBe("coach:tap:settings");
   });
 
   it("blocks a day or one of its hours with taps, and names the lessons in the way", async () => {
@@ -249,12 +307,13 @@ describe("the student books, moves, pays and takes a package with taps", () => {
     expect(await tap(studentChat, tgStudent, time)).toBe("student:moved");
   });
 
-  it("asks the coach for a time outside the hours, from a typed time only", async () => {
+  it("asks the coach for a time outside the hours, with the hour and the minutes as taps", async () => {
     await say(studentChat, tgStudent, "＋ Book");
     const day = last().buttons[2].callback_data!;
     await tap(studentChat, tgStudent, day);
-    expect(await tap(studentChat, tgStudent, button(/Ask for another time/))).toBe("student:tap:ask_time");
-    expect(await reply(studentChat, tgStudent, "23:30")).toBe("student:tap:requested");
+    expect(await tap(studentChat, tgStudent, button(/Ask for another time/))).toBe("student:tap:hour");
+    expect(await tap(studentChat, tgStudent, button(/^23:00$/))).toBe("student:tap:minute");
+    expect(await tap(studentChat, tgStudent, button(/^23:30$/))).toBe("student:tap:requested");
     expect(last().text).toMatch(/^Asked Olga for/);
   });
 
