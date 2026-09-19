@@ -292,6 +292,14 @@ Wall clock first, credits second. What actually moved it, measured:
   `<label>` with the input. Put the hint beside the label, not in it (a `<div>` around both), and the
   label names exactly what the reader sees in bold. The fix by regex mangled two files; a form's
   return block is rewritten whole, never patched by pattern.
+- **A shuffle must not cross a line the rules drew.** `orderEntrants` shuffled every unseeded pair
+  together, so a pair on the waiting list could land in the field and a pair in the field could be
+  "out"; the lucky-loser test caught it as a replacement in five matches instead of two. When a list
+  has tiers with meaning (the field, then the waiting list), shuffle inside each tier, never across.
+- **A read named for one screen is narrower than the next screen thinks.** `orderOfPlay` listed the
+  matches with a time, which is what the page wanted; the results file reused it and lost every
+  match played before the schedule was made. When a second caller reuses a read, check its `where`
+  against what the second caller means, and add the option (`all`) rather than the assumption.
 - **A draw shuffles, so a suite picks by state, never by position.** "The first Score button" was a
   pending match in three runs and Cal's finished match in the fourth, whose form has no walkover
   buttons, and the click timed out. Anything generated with a random seed changes order between
