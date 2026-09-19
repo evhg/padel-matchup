@@ -13,6 +13,7 @@ import { answerCallbackQuery, esc, sendMessage, type TgMessage, type TgUpdate } 
 import { botLocale, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
+import { continueScoreReply, SCORE_TRAILER } from "./tournament";
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
 import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
@@ -60,6 +61,11 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     const p = await findOrCreateTelegramPlayer(db, from);
     const tapped = await continueTap(db, msg, p, await resolveRole(db, p));
     if (tapped) return tapped;
+  }
+  // A score in reply to a tournament match notice lands on that match, before the general score reader.
+  if (isPrivate && !cmd && msg.reply_to_message?.text && SCORE_TRAILER.test(msg.reply_to_message.text)) {
+    const scored = await continueScoreReply(db, msg, await findOrCreateTelegramPlayer(db, from));
+    if (scored) return scored;
   }
   if (cmd) {
     if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);

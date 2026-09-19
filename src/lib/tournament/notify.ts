@@ -4,6 +4,8 @@ import type { Competition, CompetitionCategory, CompetitionMatch, CompetitionPai
 import { roundKey } from "@/lib/domain/draw";
 import type { PlayRow } from "@/lib/domain/competitionSchedule";
 import { whenLabel } from "@/lib/tournamentText";
+import { packId } from "@/lib/telegram/taps";
+import type { PodiumAward } from "@/lib/domain/competitionLive";
 import { baseUrl } from "@/lib/config";
 import { tell } from "@/lib/coach/notify";
 import { getPlayer } from "@/lib/domain/players";
@@ -18,14 +20,17 @@ import { translatorFor } from "@/lib/email/templates";
 
 const pageUrl = (c: Pick<Competition, "slug">) => `${baseUrl()}/t/${c.slug}`;
 
-async function say(db: Db, playerId: string | null | undefined, c: Pick<Competition, "slug">, lines: (t: (key: string, values?: Record<string, string | number>) => string) => [string, string]): Promise<void> {
+async function say(db: Db, playerId: string | null | undefined, c: Pick<Competition, "slug">, lines: (t: (key: string, values?: Record<string, string | number>) => string) => [string, string], o: { trailer?: string; url?: string } = {}): Promise<void> {
   if (!playerId) return;
   const p = await getPlayer(db, playerId);
   if (!p) return;
   const { t } = await translatorFor(p.locale);
   const [head, body] = lines(t);
-  await tell(db, p, `${head}\n${body}`, { inline_keyboard: [[{ text: t("tournament.open"), url: pageUrl(c) }]] });
+  await tell(db, p, `${head}\n${body}`, { inline_keyboard: [[{ text: t("tournament.open"), url: o.url ?? pageUrl(c) }]] }, { trailer: o.trailer });
 }
+
+/** The last line of a one-match notice in Telegram: a reply with the score lands on this match. */
+const scoreTrailer = (matchId: string) => `↳ ks:${packId(matchId)}`;
 
 export async function tellOrganizerOfEntry(db: Db, e: { competition: Competition; category: CompetitionCategory; player: { displayName: string }; partner: { displayName: string } }, pairsInCategory: number): Promise<void> {
   await say(db, e.competition.organizerPlayerId, e.competition, (t) => [
@@ -116,13 +121,20 @@ export async function tellMoved(db: Db, competition: Competition, row: PlayRow):
   for (const playerId of [...row.aPlayers, ...row.bPlayers]) {
     const p = await getPlayer(db, playerId);
     if (!p || !row.scheduledAt) continue;
-    await say(db, playerId, competition, (t) => [t("tournament.noticeMovedTitle", { name: competition.name }), t("tournament.noticeScheduleLine", { when: whenLabel(row.scheduledAt!, competition.tz, p.locale), court: row.courtName ?? "", category: row.categoryName, opponent: opponentOf(t, row, playerId) })]);
+    await say(db, playerId, competition, (t) => [t("tournament.noticeMovedTitle", { name: competition.name }), t("tournament.noticeScheduleLine", { when: whenLabel(row.scheduledAt!, competition.tz, p.locale), court: row.courtName ?? "", category: row.categoryName, opponent: opponentOf(t, row, playerId) })], { trailer: scoreTrailer(row.id) });
   }
 }
 
 /** Fifteen minutes before: the court, the opponent, the category. */
 export async function tellMatchSoon(db: Db, competition: Competition, row: PlayRow): Promise<void> {
   for (const playerId of [...row.aPlayers, ...row.bPlayers]) {
-    await say(db, playerId, competition, (t) => [t("tournament.noticeSoonTitle", { court: row.courtName ?? "" }), t("tournament.noticeSoonLine", { category: row.categoryName, opponent: opponentOf(t, row, playerId), name: competition.name })]);
+    await say(db, playerId, competition, (t) => [t("tournament.noticeSoonTitle", { court: row.courtName ?? "" }), `${t("tournament.noticeSoonLine", { category: row.categoryName, opponent: opponentOf(t, row, playerId), name: competition.name })}\n${t("tournament.scoreReplyHelp")}`], { trailer: scoreTrailer(row.id) });
+  }
+}
+
+/** The podium, once, to every player on it: the place, the category, the partner, and the moment's own page. */
+export async function tellPodium(db: Db, competition: Competition, category: CompetitionCategory, awards: readonly PodiumAward[]): Promise<void> {
+  for (const a of awards) {
+    await say(db, a.player.id, competition, (t) => [t("tournament.noticePodiumTitle", { place: t(`tournament.place${a.place}`), name: competition.name }), t("tournament.noticePodiumLine", { category: category.name, partner: a.partnerName })], { url: `${baseUrl()}/m/${a.milestone.id}` });
   }
 }

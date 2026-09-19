@@ -46,12 +46,12 @@ export function channelFor(
   return configured.push ? "push" : "none";
 }
 
-export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard): Promise<void> {
+export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard, o: { /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string } = {}): Promise<void> {
   if (!p) return;
   const via = channelFor(p, { telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() });
   if (via === "none") return;
   if (via === "telegram" && p.telegramId) {
-    await sendMessage(p.telegramId, esc(text), { silent: true, keyboard: keyboard ?? null }).catch(() => undefined);
+    await sendMessage(p.telegramId, esc(text) + (o.trailer ? `\n${esc(o.trailer)}` : ""), { silent: true, keyboard: keyboard ?? null }).catch(() => undefined);
     return;
   }
   // The link a button would have opened, so the fallback is not a dead end.

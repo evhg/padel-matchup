@@ -12,7 +12,7 @@ import {
   type CompetitionCategory,
   type CompetitionMatch,
 } from "@/db/schema";
-import { checkScore, groupTable, isScoringCode, planDraw, progress, scoringOfMatch, type MatchLike, type TableRow } from "./draw";
+import { checkScore, groupTable, isScoringCode, planDraw, progress, scoringOfMatch, type MatchLike, type ScoringCode, type TableRow } from "./draw";
 import { DomainError } from "./errors";
 import { isOrganizer } from "./competitions";
 import { bumpMetric } from "./metrics";
@@ -342,4 +342,15 @@ export async function competitionDraws(db: Db, competitionId: string, categories
     out.set(category.id, { category, groups, qualifying: byRounds(mine.filter((m) => m.phase === "qualifying").map(view)), main, consolation, champion: last(main), consolationWinner: last(consolation) });
   }
   return out;
+}
+
+/** The scoring rule one match plays under, or null when there is no such match. */
+export async function matchRule(db: Db, matchId: string): Promise<{ code: ScoringCode; categoryId: string } | null> {
+  const [m] = await db.select().from(competitionMatches).where(eq(competitionMatches.id, matchId)).limit(1);
+  if (!m) return null;
+  const [category] = await db.select().from(competitionCategories).where(eq(competitionCategories.id, m.categoryId)).limit(1);
+  if (!category) return null;
+  const rows = await matchesOf(db, category.id);
+  const rounds = Math.max(0, ...rows.filter((x) => x.phase === "main").map((x) => x.round));
+  return { code: scoringOfMatch(m, rounds, category), categoryId: category.id };
 }

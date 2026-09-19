@@ -3,7 +3,8 @@
 // pair waits and moves up when one withdraws, the organiser marks paid and closes entries; then the draw:
 // groups of four made and published, a player scores their own match from the page, a wrong score is
 // refused with the rule's name, the table counts it, and the organiser gives a walkover; then the courts: two
-// courts and a window, every match a court and a time, the order of play on the page, one match moved.
+// courts and a window, every match a court and a time, the order of play on the page, one match moved; and the
+// club's screen with each court's match now and next.
 import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
@@ -193,6 +194,14 @@ try {
   // The form closes on the action's answer; the order of play follows on the refresh, so wait for the time itself.
   await org.getByTestId("order-of-play").getByText("15:30").first().waitFor({ timeout: 20000 });
   check("a match moved to Court 2 at 15:30 the next day", true);
+
+  // 14. The club's screen: each court, now and next, in big type, from the link on the page.
+  await cal.reload();
+  await cal.getByTestId("tv-link").click();
+  await cal.waitForURL(/\/tv$/, { timeout: 20000 });
+  const tv = cal.getByTestId("tv");
+  check("the live screen shows both courts with a next match each", (await cal.getByTestId("tv-courts").innerText()).includes("Court 1") && (await cal.getByTestId("tv-courts").innerText()).includes("Court 2") && (await tv.innerText()).includes("Next"));
+  await shot(cal, "tournament-tv");
 } catch (e) {
   await crashed(browser, results, e);
 }

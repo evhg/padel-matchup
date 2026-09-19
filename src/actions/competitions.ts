@@ -29,6 +29,7 @@ import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getSessionPlayer } from "@/lib/session";
 import { moveMatch, orderOfPlay, scheduleCompetition, setCourts } from "@/lib/domain/competitionSchedule";
 import { zonedTimeToUtc } from "@/lib/dates";
+import { afterResult } from "@/lib/tournament/live";
 import { tellDrawPublished, tellMoved, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed, tellSchedule } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -254,7 +255,8 @@ export async function enterScoreAction(slug: string, matchId: string, text: stri
       .filter(Boolean)
       .map((s) => s.split(/[-:]/).map((n) => Number(n)));
     if (sets.length === 0 || sets.some((s) => s.length !== 2 || s.some((n) => !Number.isInteger(n) || n < 0))) throw new DomainError("invalid", "score_shape");
-    await enterMatchScore(db, { matchId, actorPlayerId: player.id, scoreA: sets.map((s) => s[0]), scoreB: sets.map((s) => s[1]) });
+    const m = await enterMatchScore(db, { matchId, actorPlayerId: player.id, scoreA: sets.map((s) => s[0]), scoreB: sets.map((s) => s[1]) });
+    await afterResult(db, m.categoryId);
     refresh(slug);
     return null;
   });
@@ -263,7 +265,8 @@ export async function enterScoreAction(slug: string, matchId: string, text: stri
 export async function walkoverAction(slug: string, matchId: string, winner: "A" | "B"): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, player } = await me();
-    await walkoverMatch(db, { matchId, organizerPlayerId: player.id, winner });
+    const m = await walkoverMatch(db, { matchId, organizerPlayerId: player.id, winner });
+    await afterResult(db, m.categoryId);
     refresh(slug);
     return null;
   });

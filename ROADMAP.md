@@ -174,8 +174,17 @@ Everything in this list is live. The README describes each in detail.
   never one player on two courts across categories, played matches keeping their slot. Every player
   hears their own list on the channel they have; a match moved by the organiser tells both pairs;
   fifteen minutes before a match, both pairs hear the court (the five-minute push job). The order of
-  play, by day and time with the court, is on the page for the desk and the players. Steps 4 and 5
-  are the live screen and the big-event extras.
+  play, by day and time with the court, is on the page for the desk and the players.
+
+- **The serious tournament, step 4: live.** The club's screen (`/t/<slug>/tv`): each court's match
+  now and next in big type, the latest results, the champions, asked again every thirty seconds.
+  The page itself asks again every minute during the days of play, so the tables and the brackets
+  move with the scores. A player answers the "in 15 minutes" or "your match moved" notice in
+  Telegram with the score, "6-4 3-6 10-8", and it lands on that match — the notice carries the
+  match as its last line, read before the general score reader; a wrong score is refused with the
+  round's rule, somebody else's match with "not yours". When a category's final is in, every
+  player on the podium (champions, finalists, both semi-final losers) gets the moment once, with
+  its own page, and hears it. Step 5 is the big-event extras.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
@@ -276,10 +285,8 @@ linked and four have an email address.
    of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
    strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
    website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
-3. **The serious tournament, steps 4 and 5.** Steps 1–3 (entries; the draw; courts and times) are
-   under Built. Next, in order: (4) live — scores from the desk
-   or from a player of the match, the bracket and the group tables updating, a TV page for the
-   club's screen, the podium as a moment; (5) the big-event extras — a stream link on a match or a
+3. **The serious tournament, step 5.** Steps 1–4 (entries; the draw; courts and times; live) are
+   under Built. Next: (5) the big-event extras — a stream link on a match or a
    court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a
    lucky loser, a results file, a ranking across editions.
 4. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
