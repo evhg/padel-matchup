@@ -146,6 +146,18 @@ Everything in this list is live. The README describes each in detail.
   Money as two buttons that send the month as text. Comped lessons count as done and owe nothing; a
   package counts in the month it was started, at the price agreed.
 
+- **The serious tournament, step 1: entries.** The second engine beside the rotation engine, the one
+  Thailand's series and FIP run. A competition (`/t/<slug>`) has days, a place, an entry note (the
+  fee and the ways to pay, as text; money never moves through us) and categories: Pro, Amateur,
+  Mixed, Senior, or a level band, each with a field of 8, 16 or 32 pairs. Pairs enter a category;
+  a player enters at most two categories in one competition, once each; a full category takes the
+  pair on its waiting list, and a withdrawal moves the first waiting pair up and tells them. A
+  partner is entered by name and confirms the spot by link, signed in or by typing their name; the
+  placeholder folds into their account. The organiser's desk (`/t/<slug>/manage`) opens and closes
+  entries, adds categories, enters a pair by two names whatever their levels say, marks paid, and
+  hears of every entry on the channel they have. Steps 2–5 are the draw, the courts, the live
+  scores and the big-event extras, under "Next".
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a
@@ -245,10 +257,17 @@ linked and four have an email address.
    of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
    strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
    website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
-3. **The serious tournament.** What Thailand's top organisers and FIP run: pairs registered per category,
-   a group stage then a knockout, a consolation draw, a qualifying draw into a main draw with seeds,
-   scoring set per phase, the draw published, courts scheduled, scores live per court. This is a second
-   engine beside the rotation engine, not a feature on top of it, and deserves its own decision.
+3. **The serious tournament, steps 2–5.** Step 1 (entries, categories, the waiting list, the partner
+   by name) is under Built. Next, in order: (2) the draw — groups of four or five with the top two
+   through, a knockout with seeds placed the FIP way and byes, a consolation draw, a qualifying draw
+   feeding the main draw, scoring per phase checked as scores are entered, the draw locked and
+   published; (3) courts and times — every match a court and a time from the match lengths and the
+   court list, a rest between a player's matches, the organiser moving a match with two taps, each
+   player told "court 3 at 14:40" and again fifteen minutes before; (4) live — scores from the desk
+   or from a player of the match, the bracket and the group tables updating, a TV page for the
+   club's screen, the podium as a moment; (5) the big-event extras — a stream link on a match or a
+   court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a
+   lucky loser, a results file, a ranking across editions.
 4. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
    matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
    passes through Kicksmash.

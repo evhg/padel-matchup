@@ -46,7 +46,7 @@ export function channelFor(
   return configured.push ? "push" : "none";
 }
 
-async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard): Promise<void> {
+export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard): Promise<void> {
   if (!p) return;
   const via = channelFor(p, { telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() });
   if (via === "none") return;

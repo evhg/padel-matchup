@@ -1,6 +1,6 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, players, scores, slots, tournamentMatches, tournamentRounds, venues } from "@/db/schema";
+import { activity, competitionPairs, competitions, events, players, scores, slots, tournamentMatches, tournamentRounds, venues } from "@/db/schema";
 import { DomainError } from "./errors";
 
 /**
@@ -38,6 +38,10 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
     }
 
     await tx.update(scores).set({ enteredByPlayerId: into }).where(inArray(scores.enteredByPlayerId, sources));
+    await tx.update(competitions).set({ organizerPlayerId: into }).where(inArray(competitions.organizerPlayerId, sources));
+    await tx.update(competitionPairs).set({ p1PlayerId: into }).where(inArray(competitionPairs.p1PlayerId, sources));
+    await tx.update(competitionPairs).set({ p2PlayerId: into }).where(inArray(competitionPairs.p2PlayerId, sources));
+    await tx.update(competitionPairs).set({ enteredByPlayerId: into }).where(inArray(competitionPairs.enteredByPlayerId, sources));
     await tx.update(activity).set({ actorPlayerId: into }).where(inArray(activity.actorPlayerId, sources));
     for (const col of [tournamentMatches.a1, tournamentMatches.a2, tournamentMatches.b1, tournamentMatches.b2] as const) {
       await tx.update(tournamentMatches).set({ [col.name === "a1" ? "a1" : col.name === "a2" ? "a2" : col.name === "b1" ? "b1" : "b2"]: into } as never).where(inArray(col, sources));

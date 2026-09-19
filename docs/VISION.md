@@ -54,7 +54,7 @@ Thailand, then Singapore. Thai joins English, Russian and Spanish; LINE is the f
 - A fact log is added before the channel work, so every channel records what it did from day one.
 - The channel adapter is shaped for LINE: a card that cannot be edited is re-sent only when the roster changes, replies are free and pushes are budgeted, LINE sign-in joins Telegram sign-in.
 - A coach's clubs become venue slugs instead of free text, so a club can see its coaches without guessing.
-- The schema leaves room for court capacity, court holds and sensor sessions. It does **not** yet leave room for the serious tournament: there is no pairs table, no category column and no draw-phase column anywhere, and the rotation engine is built on the opposite assumption — partners split every round. Pairs, categories and draw phases (pool, knockout, consolation, qualifying) are a second engine beside the first, not a feature on top of it, and none is built until the owner says so.
+- The schema leaves room for court capacity, court holds and sensor sessions. The serious tournament is a second engine beside the first, not a feature on top of it: the rotation engine splits partners every round, so pairs, categories and (next) the draw phases have their own tables (`competitions`, `competition_categories`, `competition_pairs`; decided 19 September 2026, step 1 built the same day). Draw, courts, live scores and the big-event extras follow in that order.
 - Thai becomes the fourth locale when the LINE channel ships.
 
 ## After the restructure

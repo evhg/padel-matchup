@@ -287,6 +287,24 @@ Wall clock first, credits second. What actually moved it, measured:
   good code. When a factory silently drops a field, the test is lying about the state it set up: build
   the row the way the app builds it (`createCoach` then `updateCoach`), or widen the factory.
 
+- **Help text inside a `<label>` is part of the label's name.** `getByLabel("Name", { exact: true })`
+  timed out because the label read "NameAs it goes on the poster.": the hint `<span>` sat inside the
+  `<label>` with the input. Put the hint beside the label, not in it (a `<div>` around both), and the
+  label names exactly what the reader sees in bold. The fix by regex mangled two files; a form's
+  return block is rewritten whole, never patched by pattern.
+- **`innerText` carries `text-transform`.** A chip set in capitals by CSS reads "8 PAIRS OF 8" to
+  Playwright, so four checks written from the source strings ("8 pairs of 8", "Entries closed") went
+  red while the screen was right. Compare lower-cased text, or read `textContent`, whenever the check
+  touches a `.chip-*` or anything else the stylesheet capitalises.
+- **The suite map reads the `e2e/` directory, so the suite file comes before the rule.** A rule for
+  the tournament paths printed "no suite" until `e2e/tournament.mjs` existed, because `ALL` is the
+  directory listing and a rule's suites are filtered against it. Write the suite, then ask
+  `node scripts/suites.mjs --files … --why`, and read its answer, never assume it.
+- **A migration lands in production the moment the schema is final, not after the gate.** The gate
+  proves the code; the tables are additive and the same either way. Applying 0053 while the browser
+  suite ran cost nothing, and the merge never waited on it. Then read the row back
+  (`select … from drizzle.__drizzle_migrations order by id desc limit 3`) before writing "applied".
+
 - **A "hidden" element in a Playwright timeout is often a crushed one.** `locator resolved to hidden
   <div …>500 THB · not paid</div>` — the element was there and on screen, but a row built for one
   button now carried three, the text column collapsed to zero width, and Playwright counts zero-size
