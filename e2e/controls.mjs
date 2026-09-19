@@ -70,6 +70,7 @@ const CONTROLS = {
   ke: "ke:cutoff:12", // a rule
   kv: "kv:p1:80", // a figure on the keypad
   kg: "kg:", // the packages on the page
+  kw: "kw:1", // last month's statement
   kk: "kk:", // block time: which day
   sb: `sb:${PACKED}`, // student picks a coach
   sd: `sd:${PACKED}:60:w0`, // which day

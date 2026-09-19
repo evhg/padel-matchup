@@ -16,6 +16,7 @@ import { utcToZonedParts, weekdayName } from "@/lib/dates";
 import { isClubLive } from "@/lib/domain/clubs";
 import { isPackageOpen } from "@/lib/domain/coaching";
 import { monthCounts, monthRange } from "./chains";
+import { coachStatement, statementCsv, type StatementLabels } from "./statement";
 
 /**
  * The monthly wrap: on the 1st, one message to each coach and each club with
@@ -172,7 +173,24 @@ export type WrapNote = {
   open: string;
   footer: string;
   optOut: string;
+  /** The month's statement as a file, for a coach: one line per student, a spreadsheet opens it. */
+  attachment?: { filename: string; content: string; contentType: string };
 };
+
+/** The statement's column names in the coach's language. */
+export const statementLabels = (t: (key: string) => string): StatementLabels => ({
+  student: t("wrap.stStudent"),
+  done: t("wrap.stDone"),
+  noShows: t("wrap.stNoShows"),
+  late: t("wrap.stLate"),
+  comped: t("wrap.stComped"),
+  lessonsPaid: t("wrap.stLessonsPaid"),
+  lessonsUnpaid: t("wrap.stLessonsUnpaid"),
+  packages: t("wrap.stPackages"),
+  packagesPaid: t("wrap.stPackagesPaid"),
+  packagesUnpaid: t("wrap.stPackagesUnpaid"),
+  total: t("wrap.stTotal"),
+});
 type Translate = (
   localeLike: string | null | undefined,
 ) => Promise<{
@@ -267,14 +285,17 @@ export async function monthlyWraps(
         w.done >= WRAP.inviteAfterLessons
           ? ` ${t("wrap.coachInvite", { url: `${deps.baseUrl}/coaches?s=wrap` })}`
           : "";
+      // The accountant's copy rides along: the same month, one line per student.
+      const statement = await coachStatement(db, coach, month.from, month.to);
       await deps.deliver(player, {
         subject: t("wrap.coachSubject", vars),
         heading: t("wrap.coachSubject", vars),
-        body: `${t("wrap.coachBody", vars)}${invite}`,
+        body: `${t("wrap.coachBody", vars)}${invite} ${t("wrap.stAttached")}`,
         url: `${deps.baseUrl}/coach`,
         open: t("wrap.open"),
         footer: t("wrap.footer", { app: deps.appName }),
         optOut: t("email.optOut"),
+        attachment: { filename: `statement-${month.label}.csv`, content: statementCsv(statement, statementLabels(t)), contentType: "text/csv; charset=utf-8" },
       });
       out.coaches++;
     } catch (e) {

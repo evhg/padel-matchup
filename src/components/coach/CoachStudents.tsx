@@ -15,6 +15,8 @@ export type StudentDTO = { playerId: string; name: string; status: string; lesso
 export type UnpaidLessonDTO = { lessonId: string; studentPlayerId: string; label: string; amount: number; claimed: boolean; hasSlip: boolean };
 
 type Props = { coachName: string; handle: string; students: StudentDTO[]; promptpayId: string | null; qrUrl: string | null; payLink: string | null; currency: string;
+  /** "2026-09" and the month before: the statement links. */
+  months: { thisMonth: string; lastMonth: string };
   /** The link the coach forwards: whoever opens it is on the list. It lives here, where students are added. */
   studentUrl: string;
   /** What each student still owes, by player id: unpaid lessons plus an unpaid package. */
@@ -23,7 +25,7 @@ type Props = { coachName: string; handle: string; students: StudentDTO[]; prompt
   unpaid: UnpaidLessonDTO[] };
 
 /** Students: requests to accept, packages to start, "paid" to note. One list, one action per row. */
-export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid, studentUrl }: Props) {
+export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl, payLink, currency, owed, unpaid, studentUrl, months }: Props) {
   const t = useTranslations("coach");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -67,6 +69,17 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
             {t("students.owedTotal", { count: debtors.length, amount: money(owedTotal) })}
           </p>
         )}
+        {/* The accountant's copy: one line per student, a spreadsheet opens it. The amount edit was the entry; this is the exit. */}
+        <p className="mt-1 text-xs text-muted" data-testid="statement-links">
+          {t("students.statement")}:{" "}
+          <a href={`/coach/statement.csv?month=${months.thisMonth}`} className="link">
+            {t("students.statementThis")}
+          </a>
+          {" · "}
+          <a href={`/coach/statement.csv?month=${months.lastMonth}`} className="link">
+            {t("students.statementLast")}
+          </a>
+        </p>
         {requests.length > 0 && (
           <div className="mt-4">
             <div className="text-xs font-bold uppercase text-faint">{t("students.requests")}</div>

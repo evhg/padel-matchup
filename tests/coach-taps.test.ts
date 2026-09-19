@@ -223,6 +223,12 @@ describe("the coach books, cancels, moves and settles with taps", () => {
     expect(last().buttons.some((b) => b.callback_data?.startsWith("cp:"))).toBe(true);
     expect(last().buttons.some((b) => b.callback_data?.startsWith("cq:"))).toBe(true);
     expect(await tap(coachChat, tgCoach, last().buttons.find((b) => b.callback_data?.startsWith("cp:"))!.callback_data!)).toBe("coach:paid");
+    // The month as an accountant wants it, in the chat, from the same screen.
+    await say(coachChat, tgCoach, "💰 Money");
+    expect(await tap(coachChat, tgCoach, button(/Statement: this month/))).toBe("coach:tap:statement");
+    expect(last().text).toMatch(/^Statement, /);
+    expect(last().text).toMatch(/Ivan: .*packages/);
+    expect(last().text).toMatch(/Total: /);
   });
 
   it("changes the rules with taps and marks the one in force", async () => {

@@ -715,7 +715,7 @@
       "declinedBody": "{verifier} did not confirm your level this time. Play with them and ask again, or ask another coach."
     }
   },
-  "wrap": {"coachSubject": "{month}: {done, plural, one {# lesson} other {# lessons}} with you", "coachBody": "{done, plural, =0 {No lessons} one {# lesson} other {# lessons}} done with {students, plural, one {# student} other {# students}}, {noShows, plural, =0 {no no-shows} one {# no-show} other {# no-shows}}. {packages, plural, =0 {No new packages} one {# new package} other {# new packages}}; {left, plural, =0 {nothing} one {# lesson} other {# lessons}} left on the open ones.{busiest, select, none {} other { Busiest day: {busiest}.}}", "coachInvite": "If this saved you time, a coach you know gets the same in a minute: {url}", "clubSubject": "{month} on {club}'s page: {matches, plural, one {# match} other {# matches}}", "clubBody": "{matches, plural, one {# match} other {# matches}} on your page, {filled} of {seats} seats taken ({rate}%), {players, plural, one {# player} other {# players}}.{busiest, select, none {} other { Busiest slot: {busiest}.}}", "open": "Open", "footer": "Sent by {app} in the first days of the month. Nothing to do, nothing to answer."},
+  "wrap": {"coachSubject": "{month}: {done, plural, one {# lesson} other {# lessons}} with you", "coachBody": "{done, plural, =0 {No lessons} one {# lesson} other {# lessons}} done with {students, plural, one {# student} other {# students}}, {noShows, plural, =0 {no no-shows} one {# no-show} other {# no-shows}}. {packages, plural, =0 {No new packages} one {# new package} other {# new packages}}; {left, plural, =0 {nothing} one {# lesson} other {# lessons}} left on the open ones.{busiest, select, none {} other { Busiest day: {busiest}.}}", "coachInvite": "If this saved you time, a coach you know gets the same in a minute: {url}", "clubSubject": "{month} on {club}'s page: {matches, plural, one {# match} other {# matches}}", "clubBody": "{matches, plural, one {# match} other {# matches}} on your page, {filled} of {seats} seats taken ({rate}%), {players, plural, one {# player} other {# players}}.{busiest, select, none {} other { Busiest slot: {busiest}.}}", "open": "Open", "footer": "Sent by {app} in the first days of the month. Nothing to do, nothing to answer.", "stStudent": "Student", "stDone": "Lessons done", "stNoShows": "No-shows", "stLate": "Late cancellations", "stComped": "On the house", "stLessonsPaid": "Lessons paid", "stLessonsUnpaid": "Lessons unpaid", "stPackages": "Packages started", "stPackagesPaid": "Packages paid", "stPackagesUnpaid": "Packages unpaid", "stTotal": "Total", "stAttached": "The statement for the month is attached: one line per student, a spreadsheet opens it."},
   "level": {
     "label": "Level",
     "any": "Any level",
@@ -1308,7 +1308,10 @@
       "paused": "Paused",
       "linkTitle": "Your link for students",
       "linkHelp": "Send it once. Whoever opens it is on your list and books free times alone.",
-      "jumpTo": "Open {name} on the students screen"
+      "jumpTo": "Open {name} on the students screen",
+      "statement": "Statement, as a file",
+      "statementThis": "this month",
+      "statementLast": "last month"
     },
     "settings": {
       "title": "Settings",

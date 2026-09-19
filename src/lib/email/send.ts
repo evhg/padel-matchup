@@ -17,6 +17,8 @@ export type OutgoingEmail = {
   html: string;
   text: string;
   ics?: { content: string; method: "REQUEST" | "CANCEL" };
+  /** Any other file: the month's statement, for one. UTF-8 text, base64-encoded here. */
+  files?: { filename: string; content: string; contentType: string }[];
 };
 
 /**
@@ -45,13 +47,18 @@ export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
       subject: msg.subject,
       html: msg.html,
       text: msg.text,
-      attachments: msg.ics
+      attachments: msg.ics || msg.files?.length
         ? [
-            {
-              filename: msg.ics.method === "CANCEL" ? "cancel.ics" : "invite.ics",
-              content: Buffer.from(msg.ics.content, "utf8").toString("base64"),
-              contentType: `text/calendar; charset=utf-8; method=${msg.ics.method}`,
-            },
+            ...(msg.ics
+              ? [
+                  {
+                    filename: msg.ics.method === "CANCEL" ? "cancel.ics" : "invite.ics",
+                    content: Buffer.from(msg.ics.content, "utf8").toString("base64"),
+                    contentType: `text/calendar; charset=utf-8; method=${msg.ics.method}`,
+                  },
+                ]
+              : []),
+            ...(msg.files ?? []).map((f) => ({ filename: f.filename, content: Buffer.from(f.content, "utf8").toString("base64"), contentType: f.contentType })),
           ]
         : undefined,
     });
