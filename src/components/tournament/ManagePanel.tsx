@@ -3,10 +3,10 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { addCategoryAction, deskEnterAction, removeCategoryAction, setCompetitionStatusAction, setPairPaidAction, setPairSeedAction, withdrawPairAction } from "@/actions/competitions";
+import { addCategoryAction, checkInAction, deskEnterAction, removeCategoryAction, setCompetitionStatusAction, setPairPaidAction, setPairSeedAction, withdrawPairAction } from "@/actions/competitions";
 import { bandLabel } from "@/lib/tournamentText";
 
-export type PairRow = { id: string; p1: string; p2: string; paid: boolean; claimed: boolean; position: number; seed: number | null; wildcard: boolean };
+export type PairRow = { id: string; p1: string; p2: string; paid: boolean; claimed: boolean; position: number; seed: number | null; wildcard: boolean; checkedIn: boolean };
 export type CategoryRow = { id: string; name: string; levelMin: number | null; levelMax: number | null; maxPairs: number; drawStatus: string; entered: PairRow[]; waiting: PairRow[] };
 
 const LEVELS = Array.from({ length: 15 }, (_, i) => i * 0.5);
@@ -69,7 +69,10 @@ export function ManagePanel({ slug, status, categories }: { slug: string; status
                       {p.p1} & {p.p2}
                       {!p.claimed && <span className="ml-1 text-xs font-normal text-faint">({t("tournament.unclaimed")})</span>}
                     </div>
-                    <div className={`shrink-0 text-xs font-bold ${p.paid ? "text-ok" : "text-muted"}`}>{p.paid ? t("tournament.paid") : t("tournament.notPaid")}</div>
+                    <div className={`shrink-0 text-xs font-bold ${p.paid ? "text-ok" : "text-muted"}`}>
+                      {p.paid ? t("tournament.paid") : t("tournament.notPaid")}
+                      {c.drawStatus !== "none" && p.checkedIn && <span className="ml-2 text-ok">✓ {t("tournament.checkedIn")}</span>}
+                    </div>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     {c.drawStatus === "none" && (
@@ -88,6 +91,11 @@ export function ManagePanel({ slug, status, categories }: { slug: string; status
                     <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => act(() => setPairPaidAction(slug, p.id, !p.paid))}>
                       {p.paid ? t("tournament.markUnpaid") : t("tournament.markPaid")}
                     </button>
+                    {c.drawStatus !== "none" && (
+                      <button type="button" className="btn-ghost btn-sm" disabled={pending} data-testid={`checkin-${p.id}`} onClick={() => act(() => checkInAction(slug, p.id, !p.checkedIn))}>
+                        {p.checkedIn ? t("tournament.undoCheckIn") : t("tournament.checkIn")}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="btn-ghost btn-sm"

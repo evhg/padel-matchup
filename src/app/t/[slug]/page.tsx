@@ -111,6 +111,16 @@ export default async function TournamentPage({ params, searchParams }: Props) {
                 📺 {t("tournament.tvOpen")}
               </Link>
             )}
+            {play.length > 0 && (
+              <a href={`/t/${c.slug}/results.csv`} className="btn-ghost btn-sm inline-block" data-testid="results-link">
+                {t("tournament.resultsFile")}
+              </a>
+            )}
+            {c.seriesTag && (
+              <Link href={`/t/series/${encodeURIComponent(c.seriesTag)}`} prefetch={false} className="btn-ghost btn-sm inline-block" data-testid="ranking-link">
+                {t("tournament.ranking")}
+              </Link>
+            )}
           </div>
         </section>
 

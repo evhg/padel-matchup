@@ -184,7 +184,16 @@ Everything in this list is live. The README describes each in detail.
   match as its last line, read before the general score reader; a wrong score is refused with the
   round's rule, somebody else's match with "not yours". When a category's final is in, every
   player on the podium (champions, finalists, both semi-final losers) gets the moment once, with
-  its own page, and hears it. Step 5 is the big-event extras.
+  its own page, and hears it.
+
+- **The serious tournament, step 5: the big-event extras.** A stream link on a match (rule 26: the
+  organiser pastes YouTube, Twitch or Facebook Live; the page and the club's screen show "Watch
+  live"); the desk's check-in mark on a pair; the lucky loser — a pair out of a made draw is
+  replaced by the first pair waiting in every match still to play, with nobody waiting the other
+  side walks through, played results stand; the results as a file (`/t/<slug>/results.csv`); and a
+  ranking across the editions that share a series tag (`/t/series/<tag>`): points for the round
+  reached in every finished category, both players of the pair, a bonus for the consolation winner.
+  With this the serious tournament of the vision is built end to end.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
@@ -285,8 +294,9 @@ linked and four have an email address.
    of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
    strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
    website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
-3. **The serious tournament, step 5.** Steps 1–4 (entries; the draw; courts and times; live) are
-   under Built. Next: (5) the big-event extras — a stream link on a match or a
+3. **The serious tournament: run one for real.** All five steps are under Built. What is left is
+   not code: an organiser (the Thai Padel Series, or Erik's next Open) runs a weekend on it, and what
+   they trip on comes back here. Formerly listed here: the big-event extras — a stream link on a match or a
    court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a
    lucky loser, a results file, a ranking across editions.
 4. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:

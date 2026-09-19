@@ -4,6 +4,7 @@ import { roundKey, scoreText } from "@/lib/domain/draw";
 import { utcToZonedParts } from "@/lib/dates";
 import { whenLabel } from "@/lib/tournamentText";
 import { MoveMatch } from "./MoveMatch";
+import { StreamForm } from "./StreamForm";
 import { ScoreForm } from "./ScoreForm";
 
 /** The translator, typed loosely: the typed key union is too deep to pass around, and every key here is proven by the message files. */
@@ -44,7 +45,17 @@ function MatchLine({ t, m, slug, canScore, organizer, ruleLabel, where }: { t: T
           {whenLabel(m.scheduledAt, where.tz, where.locale)} · {m.courtName}
         </div>
       )}
-      {organizer && !done && !m.bye && <MoveMatch slug={slug} matchId={m.id} courtNames={where.courtNames} court={m.courtName} local={m.scheduledAt ? `${utcToZonedParts(m.scheduledAt, where.tz).date}T${utcToZonedParts(m.scheduledAt, where.tz).time}` : null} />}
+      {m.streamUrl && (
+        <a href={m.streamUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm mt-1 inline-block" data-testid="watch-live">
+          ▶ {t("tournament.watchLive")}
+        </a>
+      )}
+      {organizer && !done && !m.bye && (
+        <div className="flex flex-wrap gap-2">
+          <MoveMatch slug={slug} matchId={m.id} courtNames={where.courtNames} court={m.courtName} local={m.scheduledAt ? `${utcToZonedParts(m.scheduledAt, where.tz).date}T${utcToZonedParts(m.scheduledAt, where.tz).time}` : null} />
+          <StreamForm slug={slug} matchId={m.id} url={m.streamUrl} />
+        </div>
+      )}
       {ready && (canScore || organizer) && (!done || organizer) && <ScoreForm slug={slug} matchId={m.id} rule={m.scoring} ruleLabel={ruleLabel} organizer={organizer} done={done} aName={m.a?.name ?? "A"} bName={m.b?.name ?? "B"} />}
     </li>
   );

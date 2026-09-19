@@ -161,7 +161,8 @@ export async function makeDraw(db: Db, input: { categoryId: string; organizerPla
     .where(and(eq(competitionPairs.categoryId, category.id), inArray(competitionPairs.status, ["entered", "waiting"])))
     .orderBy(asc(competitionPairs.status), asc(competitionPairs.position));
   if (pairs.length < 2) throw new DomainError("invalid", "few");
-  const entrants = pairs.map((p, i) => ({ id: p.id, seed: p.seed, wildcard: p.wildcard, order: i + 1 }));
+  // The waiting list never displaces the field: it is beyond the field, or in the qualifying when there is one.
+  const entrants = pairs.map((p, i) => ({ id: p.id, seed: p.seed, wildcard: p.wildcard, order: i + 1, tier: p.status === "waiting" ? (1 as const) : (0 as const) }));
   const plan = planDraw(entrants, {
     format: category.format,
     maxPairs: category.maxPairs,

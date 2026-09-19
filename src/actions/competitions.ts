@@ -29,6 +29,8 @@ import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getSessionPlayer } from "@/lib/session";
 import { moveMatch, orderOfPlay, scheduleCompetition, setCourts } from "@/lib/domain/competitionSchedule";
 import { zonedTimeToUtc } from "@/lib/dates";
+import { luckyLoser, setCheckedIn, setStreamUrl } from "@/lib/domain/competitionExtras";
+import { advanceCategory } from "@/lib/domain/competitionDraw";
 import { afterResult } from "@/lib/tournament/live";
 import { tellDrawPublished, tellMoved, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed, tellSchedule } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
@@ -152,7 +154,15 @@ export async function deskEnterAction(slug: string, categoryId: string, input: {
 export async function withdrawPairAction(slug: string, pairId: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, player } = await me();
-    const { movedUp } = await withdrawPair(db, { pairId, actorPlayerId: player.id });
+    const { pair, movedUp } = await withdrawPair(db, { pairId, actorPlayerId: player.id });
+    // Out of a made draw: the first pair waiting takes the place in every match still to play.
+    const [cat] = await db.select().from(competitionCategories).where(eq(competitionCategories.id, pair.categoryId)).limit(1);
+    if (cat && cat.drawStatus !== "none") {
+      // `withdrawPair` moved the first waiting pair up already; it takes the place in the draw. The notice below covers it.
+      await luckyLoser(db, { categoryId: cat.id, withdrawnPairId: pair.id, replacementId: movedUp?.id ?? null });
+      await advanceCategory(db, cat.id);
+      await afterResult(db, cat.id);
+    }
     if (movedUp) {
       const [c] = await db.select().from(competitions).where(eq(competitions.id, movedUp.competitionId)).limit(1);
       const [cat] = await db.select().from(competitionCategories).where(eq(competitionCategories.id, movedUp.categoryId)).limit(1);
@@ -312,6 +322,29 @@ export async function moveMatchAction(slug: string, matchId: string, courtName: 
     const moved = await moveMatch(db, { matchId, organizerPlayerId: player.id, courtName, scheduledAt: zonedTimeToUtc(m[1], m[2], c.tz) });
     const row = (await orderOfPlay(db, c.id)).find((r) => r.id === moved.id);
     if (row) await tellMoved(db, c, row).catch(() => undefined);
+    refresh(slug);
+    return null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The big-event extras
+// ---------------------------------------------------------------------------
+
+/** A https link to the stream of one match; empty clears it. */
+export async function setStreamUrlAction(slug: string, matchId: string, url: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await setStreamUrl(db, { matchId, organizerPlayerId: player.id, url });
+    refresh(slug);
+    return null;
+  });
+}
+
+export async function checkInAction(slug: string, pairId: string, on: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await setCheckedIn(db, { pairId, organizerPlayerId: player.id, on });
     refresh(slug);
     return null;
   });
