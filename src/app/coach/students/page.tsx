@@ -9,6 +9,7 @@ import { getDb } from "@/db";
 import { whenLabel } from "@/lib/coach/strings";
 import { monthCounts, monthRange } from "@/lib/coach/chains";
 import { getCoachForActor, inviteCode, listStudents, owedPerStudent, owedToCoach, packageLine, studentLink } from "@/lib/domain/coaching";
+import { studentDeepLink } from "@/lib/telegram/deepLinks";
 import { baseUrl } from "@/lib/config";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -51,6 +52,7 @@ export default async function CoachStudentsPage() {
         <CoachStudents
           handle={coach.handle}
           studentUrl={studentLink(baseUrl(), coach.handle, invite)}
+          telegramUrl={studentDeepLink(invite)}
           months={{ thisMonth: month.label, lastMonth: monthRange(coach.tz, new Date(month.from.getTime() - 1)).label }}
           unpaid={unpaidLessons.map((l) => ({ lessonId: l.lessonId, studentPlayerId: l.studentPlayerId, label: whenLabel(l.startsAt, coach.tz, locale), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip }))}
           coachName={coach.displayName}

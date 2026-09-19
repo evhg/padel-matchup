@@ -40,6 +40,14 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
                 {copied ? t("common.copied") : t("common.copy")}
               </button>
             </div>
+            {done.claimTelegram && (
+              <p className="mt-2 text-xs text-muted">
+                {t("tournament.claimTelegram")}{" "}
+                <a href={done.claimTelegram} className="break-all underline" data-testid="claim-telegram">
+                  {done.claimTelegram}
+                </a>
+              </p>
+            )}
           </div>
         )}
       </div>

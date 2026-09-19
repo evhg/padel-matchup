@@ -173,6 +173,8 @@ export type WrapNote = {
   open: string;
   footer: string;
   optOut: string;
+  /** The "get this on Telegram" label, for a reader who has no Telegram yet. */
+  telegram: string;
   /** The month's statement as a file, for a coach: one line per student, a spreadsheet opens it. */
   attachment?: { filename: string; content: string; contentType: string };
 };
@@ -294,6 +296,7 @@ export async function monthlyWraps(
         url: `${deps.baseUrl}/coach`,
         open: t("wrap.open"),
         footer: t("wrap.footer", { app: deps.appName }),
+        telegram: t("email.telegramLine"),
         optOut: t("email.optOut"),
         attachment: { filename: `statement-${month.label}.csv`, content: statementCsv(statement, statementLabels(t)), contentType: "text/csv; charset=utf-8" },
       });
@@ -350,6 +353,7 @@ export async function monthlyWraps(
         url: `${deps.baseUrl}/v/${club.slug}/manage/${club.manageToken}`,
         open: t("wrap.open"),
         footer: t("wrap.footer", { app: deps.appName }),
+        telegram: t("email.telegramLine"),
         optOut: t("email.optOut"),
       });
       out.clubs++;

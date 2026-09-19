@@ -8,7 +8,7 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { formatLevel } from "@/lib/domain/levels";
 import type { Admitted, VerifierSource } from "@/lib/domain/verify";
 import { sendEmail } from "@/lib/email/send";
-import { layout, translatorFor } from "@/lib/email/templates";
+import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { notifyCreator, notifyLineupChange, notifyRequestDecided } from "@/lib/notify";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 
@@ -18,10 +18,10 @@ import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
  * channels they have. Nothing here throws into the request path.
  */
 
-async function reach(p: Pick<Player, "email" | "telegramId" | "locale" | "emailNotifications">, n: { subject: string; heading: string; body: string; url: string; open: string; footer: string }): Promise<void> {
+async function reach(p: Pick<Player, "id" | "email" | "telegramId" | "locale" | "emailNotifications">, n: { subject: string; heading: string; body: string; url: string; open: string; footer: string; telegram: string }): Promise<void> {
   // An activity line, so the player's email opt-out applies (Telegram stays: it is the channel they chose for the bot).
   if (emailEnabled() && p.email && p.emailNotifications !== false) {
-    const { html, text } = layout({ heading: n.heading, body: n.body, cta: { label: n.open, url: n.url }, footer: n.footer, eventUrl: n.url, openLabel: n.open });
+    const { html, text } = layout({ heading: n.heading, body: n.body, cta: { label: n.open, url: n.url }, footer: n.footer, eventUrl: n.url, openLabel: n.open, telegram: telegramLine(n.telegram, p) });
     await sendEmail({ to: p.email, subject: n.subject, html, text }).catch(() => undefined);
   }
   if (telegramEnabled() && p.telegramId) {
@@ -59,6 +59,7 @@ export async function notifyLevelCheckAsked(db: Db, check: LevelCheck, asker: Pl
     url: v.url,
     open: t("levelCheck.notify.open"),
     footer: t("email.footer", { app: APP_NAME }),
+    telegram: t("email.telegramLine"),
   });
 }
 
@@ -78,6 +79,7 @@ export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; pl
     url,
     open: t("levelCheck.notify.open"),
     footer: t("email.footer", { app: APP_NAME }),
+    telegram: t("email.telegramLine"),
   });
 }
 

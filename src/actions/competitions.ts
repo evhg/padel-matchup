@@ -32,6 +32,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { luckyLoser, setCheckedIn, setStreamUrl } from "@/lib/domain/competitionExtras";
 import { advanceCategory } from "@/lib/domain/competitionDraw";
 import { afterResult } from "@/lib/tournament/live";
+import { claimDeepLink } from "@/lib/telegram/deepLinks";
 import { tellDrawPublished, tellMoved, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed, tellSchedule } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -119,7 +120,7 @@ export async function removeCategoryAction(slug: string, categoryId: string): Pr
   });
 }
 
-export type EnteredView = { status: "entered" | "waiting"; position: number; category: string; claimLink: string | null };
+export type EnteredView = { status: "entered" | "waiting"; position: number; category: string; claimLink: string | null; /** The same claim as a t.me link, for a partner who lives in Telegram; null until the bot has a username. */ claimTelegram: string | null };
 
 /** A player enters a category with a partner by name; the organiser hears, the player gets the partner's link. */
 export async function enterPairAction(slug: string, categoryId: string, input: { yourName?: string | null; partnerName: string }): Promise<ActionResult<EnteredView>> {
@@ -132,7 +133,7 @@ export async function enterPairAction(slug: string, categoryId: string, input: {
     const count = (await db.select({ id: competitionPairs.id }).from(competitionPairs).where(eq(competitionPairs.categoryId, categoryId))).length;
     await tellOrganizerOfEntry(db, e, count).catch(() => undefined);
     refresh(slug);
-    return { status: e.pair.status === "waiting" ? "waiting" : "entered", position: e.pair.position, category: e.category.name, claimLink: e.claimToken ? `${baseUrl()}/t/${slug}?claim=${e.claimToken}` : null };
+    return { status: e.pair.status === "waiting" ? "waiting" : "entered", position: e.pair.position, category: e.category.name, claimLink: e.claimToken ? `${baseUrl()}/t/${slug}?claim=${e.claimToken}` : null, claimTelegram: e.claimToken ? claimDeepLink(e.claimToken) : null };
   });
 }
 
@@ -146,7 +147,7 @@ export async function deskEnterAction(slug: string, categoryId: string, input: {
     const p1 = await createPlayer(db, { displayName: input.p1, locale });
     const e = await enterPair(db, { categoryId, playerId: p1.id, partner: { name: input.p2 }, locale, byOrganizer: true });
     refresh(slug);
-    return { status: e.pair.status === "waiting" ? "waiting" : "entered", position: e.pair.position, category: e.category.name, claimLink: null };
+    return { status: e.pair.status === "waiting" ? "waiting" : "entered", position: e.pair.position, category: e.category.name, claimLink: null, claimTelegram: null };
   });
 }
 

@@ -87,6 +87,20 @@ try {
   check("/tz sets the chat's zone", tzSet.json?.outcome === "tz");
   const priv = await hook({ update_id: 8, message: { message_id: 3, date: 0, chat: { id: 424242, type: "private" }, from: ivan, text: "/start" } });
   check("private /start is answered with the personal link", priv.json?.outcome === "private_start");
+  // The player's door: a keyboard label is a door, the games list asks for the city with buttons, the want request is three taps.
+  const dm = { id: 424242, type: "private" };
+  const findTap = await hook({ update_id: 60, message: { message_id: 60, date: 0, chat: dm, from: ivan, text: "🔎 Найти матч" } });
+  check("the Find a match button asks for the city with buttons", findTap.json?.outcome === "player:find:city", JSON.stringify(findTap.json));
+  const cityTap = await hook({ update_id: 61, callback_query: { id: "cbpg", from: ivan, message: { message_id: 61, date: 0, chat: dm }, data: "pg:phuket" } });
+  check("a city button lists the open matches there", /^games:\d+\+\d+$/.test(cityTap.json?.outcome ?? ""), JSON.stringify(cityTap.json));
+  const wantTap = await hook({ update_id: 62, message: { message_id: 62, date: 0, chat: dm, from: ivan, text: "🕒 Когда хочу играть" } });
+  check("the When I want to play button asks for a day", wantTap.json?.outcome === "player:want:day", JSON.stringify(wantTap.json));
+  const dayTap = await hook({ update_id: 63, callback_query: { id: "cbpw1", from: ivan, message: { message_id: 63, date: 0, chat: dm }, data: "pw:d:x" } });
+  check("a day button asks for the hour", dayTap.json?.outcome === "player:want:hour", JSON.stringify(dayTap.json));
+  const hourTap = await hook({ update_id: 64, callback_query: { id: "cbpw2", from: ivan, message: { message_id: 64, date: 0, chat: dm }, data: "pw:t:x:x" } });
+  check("an hour button asks for the place", hourTap.json?.outcome === "player:want:place", JSON.stringify(hourTap.json));
+  const placeTap = await hook({ update_id: 65, callback_query: { id: "cbpw3", from: ivan, message: { message_id: 65, date: 0, chat: dm }, data: "pw:p:x:x:c:phuket" } });
+  check("a place button saves the want", placeTap.json?.outcome === "player:want:saved", JSON.stringify(placeTap.json));
   // Inline mode: the exact code gives that card; a chosen result is remembered; a tap under it joins.
   const iq = await hook({ update_id: 30, inline_query: { id: "iq1", from: ivan, query: code, offset: "" } });
   check("@bot CODE answers the inline query with that one card", iq.json?.outcome === "inline:1", JSON.stringify(iq.json));

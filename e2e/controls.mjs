@@ -33,6 +33,9 @@ const tapper = { id: 909090, is_bot: false, first_name: "Tapper", language_code:
  * more truthful.
  */
 const CONTROLS = {
+  // The player's doors: a city for the games list, the want request's day / hour / place.
+  pg: "pg:phuket",
+  pw: "pw:d:x",
   // The coach's book, one thread at a time.
   cu: `cu:${ZERO_UUID}`, // undo a booking
   cp: `cp:${ZERO_UUID}`, // package paid

@@ -194,6 +194,12 @@ Wall clock first, credits second. What actually moved it, measured:
   several lines`) and a shell loop chained with `&&` exited before the other keys were added. Add
   such keys with a string insert before that line's closing `},` (json.dumps each value, then
   `json.load` the file to prove it), and run the script's keys after, one command each.
+- **The script puts a key after the section's last key, even when that key is a nested object.**
+  `email.telegramLine` landed inside `email.scoreNudge` because `scoreNudge` closed the `email`
+  section, and the script printed `added … (after "cta")` as if all were well. After every add,
+  prove where it landed: `node -e 'JSON.parse(...).email.telegramLine'` must not be undefined. Move a
+  stray key by string edit (the line out of the nested block, then in under the section's opening
+  line), never by round-tripping the file.
 - **A line that recurs in a file is not an anchor.** `const t = await getTranslations("coach")` appears
   in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
   and the page did not compile. Anchor on a neighbouring line unique to the function (the one after

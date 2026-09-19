@@ -21,7 +21,7 @@ import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
-import { layout, translatorFor } from "@/lib/email/templates";
+import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
 import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
@@ -41,7 +41,7 @@ function organizerAddress(): string {
   return m ? m[1] : from;
 }
 
-type Recipient = Pick<Player, "id" | "displayName" | "email" | "locale">;
+type Recipient = Pick<Player, "id" | "displayName" | "email" | "locale" | "telegramId">;
 
 async function ctx(db: Db, ev: Event, localeLike: string | null | undefined, recipient?: Recipient | null, detail?: EventDetail) {
   const { t, locale } = await translatorFor(localeLike);
@@ -76,7 +76,7 @@ async function ctx(db: Db, ev: Event, localeLike: string | null | undefined, rec
     }
   }
   const playersLine = names.length ? t("calendar.players", { names: names.join(", ") }) : null;
-  return { t, locale, url, publicUrl, vars, meta, footer: t("email.footer", { app: APP_NAME }), openLabel: t("email.openMatch"), title, venue, personal, complete, names, playersLine, detail: d };
+  return { t, locale, url, publicUrl, vars, meta, footer: t("email.footer", { app: APP_NAME }), openLabel: t("email.openMatch"), title, venue, personal, telegram: telegramLine(t("email.telegramLine"), recipient), complete, names, playersLine, detail: d };
 }
 type Ctx = Awaited<ReturnType<typeof ctx>>;
 
@@ -114,6 +114,7 @@ export async function sendCalendarInvite(db: Db, ev: Event, player: Player, kind
     eventUrl: c.url,
     openLabel: c.openLabel,
     personal: c.personal,
+  telegram: c.telegram,
   });
   return sendEmail({
     to: player.email,
@@ -136,6 +137,7 @@ export async function sendPersonalLinkEmail(db: Db, player: Player): Promise<boo
     footer: t("email.personal.footer"),
     eventUrl: url,
     openLabel: t("common.myMatches"),
+    telegram: telegramLine(t("email.telegramLine"), player),
   });
   return sendEmail({ to: player.email, subject: t("email.personal.subject"), html, text });
 }
@@ -169,7 +171,7 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
     const subjectKey = (kind === "waitlisted" ? "joined" : kind) as Exclude<CreatorKind, "waitlisted">;
     const subject = c.t(`email.creator.${subjectKey}Subject`, vars);
     const body = c.t(`email.creator.${kind}Body`, vars);
-    const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+    const { html, text } = layout({ heading: subject, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
     await sendEmail({ to: creator.email, subject, html, text });
   }
   // Organizers who linked Telegram get the same line there. Loaded lazily: the bot imports the operations, which import this file.
@@ -193,7 +195,7 @@ export async function notifyRequestDecided(db: Db, ev: Event, player: Player, ap
   if (!player.email) return;
   const c = await ctx(db, ev, player.locale, player);
   const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
-  const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel });
+  const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel, telegram: c.telegram });
   await sendEmail({ to: player.email, subject: c.t("email.requestDeclined.subject", vars), html, text });
 }
 
@@ -209,7 +211,7 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
     const c = await ctx(db, ev, p.locale, p, detail);
     const vars = { ...c.vars, group: group.name, organizer: organizer?.displayName ?? "" };
     if (emailEnabled() && p.email && p.emailNotifications) {
-      const { html, text } = layout({ heading: c.t("email.groupMatch.heading", vars), body: c.t("email.groupMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      const { html, text } = layout({ heading: c.t("email.groupMatch.heading", vars), body: c.t("email.groupMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
       await sendEmail({ to: p.email, subject: c.t("email.groupMatch.subject", vars), html, text });
       emails++;
     }
@@ -259,7 +261,7 @@ export async function notifyClubMatch(db: Db, club: { slug: string; name: string
     const c = await ctx(db, ev, p.locale, p, detail);
     const vars = { ...c.vars, club: club.name };
     if (emailEnabled() && p.email && p.emailNotifications) {
-      const { html, text } = layout({ heading: c.t("email.clubMatch.heading", vars), body: c.t("email.clubMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      const { html, text } = layout({ heading: c.t("email.clubMatch.heading", vars), body: c.t("email.clubMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
       await sendEmail({ to: p.email, subject: c.t("email.clubMatch.subject", vars), html, text }).catch(() => undefined);
       emails++;
     }
@@ -293,7 +295,7 @@ export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise
   for (const p of people) {
     const c = await ctx(db, ev, p.locale, p, detail);
     if (emailEnabled() && p.email && p.emailNotifications) {
-      const { html, text } = layout({ heading: c.t("email.wanted.heading", c.vars), body: c.t("email.wanted.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      const { html, text } = layout({ heading: c.t("email.wanted.heading", c.vars), body: c.t("email.wanted.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
       await sendEmail({ to: p.email, subject: c.t("email.wanted.subject", c.vars), html, text }).catch(() => undefined);
       emails++;
     }
@@ -353,7 +355,7 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
   await Promise.all(
     participantsWithEmail(detail.roster).map(async (r) => {
       const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
-      const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
       await sendEmail({ to: r.email, subject: c.t("email.updated.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(ev, c, { name: r.name, email: r.email }, "REQUEST") } });
     }),
   );
@@ -393,7 +395,8 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
           footer: c.footer,
           eventUrl: c.url,
           openLabel: c.openLabel,
-        });
+        telegram: c.telegram,
+      });
         await sendEmail({ to: r.email, subject: c.t(`${ns}.subject` as "email.lineupComplete.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(fresh, c, { name: r.name, email: r.email }, "REQUEST") } });
       }),
   );
@@ -406,7 +409,7 @@ export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
   await Promise.all(
     participantsWithEmail(detail.roster).map(async (r) => {
       const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
-      const { html, text } = layout({ heading: c.t("email.cancelled.heading"), body: c.t("email.cancelled.body", { ...c.vars, organizer: detail.creator.displayName }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+      const { html, text } = layout({ heading: c.t("email.cancelled.heading"), body: c.t("email.cancelled.body", { ...c.vars, organizer: detail.creator.displayName }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
       await sendEmail({ to: r.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: r.name, email: r.email }, "CANCEL") } });
     }),
   );
@@ -418,7 +421,7 @@ export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string |
   const p = await getPlayer(db, removedPlayerId);
   if (!p?.email) return;
   const c = await ctx(db, ev, p.locale, p);
-  const { html, text } = layout({ heading: c.t("activity.removed", { name: p.displayName }), body: c.t("email.footer", { app: APP_NAME }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+  const { html, text } = layout({ heading: c.t("activity.removed", { name: p.displayName }), body: c.t("email.footer", { app: APP_NAME }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
   await sendEmail({ to: p.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: p.displayName, email: p.email }, "CANCEL") } });
 }
 
@@ -438,7 +441,8 @@ export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Pl
     footerLink: { label: c.t("email.optOut"), url: `${baseUrl()}${optOutPath(slot.invitedEmail)}` },
     eventUrl: c.publicUrl,
     openLabel: c.openLabel,
-  });
+  telegram: c.telegram,
+});
   return sendEmail({ to: slot.invitedEmail, subject: c.t("email.invite.subject", { ...c.vars, organizer: creator.displayName }), html, text });
 }
 
@@ -459,7 +463,8 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
     footerLink: { label: c.t("email.optOut"), url: `${baseUrl()}${optOutPath(slot.invitedEmail)}` },
     eventUrl: c.publicUrl,
     openLabel: c.openLabel,
-  });
+  telegram: c.telegram,
+});
   return sendEmail({ to: slot.invitedEmail, subject: c.t("email.inviteReminder.subject", c.vars), html, text });
 }
 
@@ -467,7 +472,7 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
 export async function sendScoreReminder(db: Db, ev: Event, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !creator.email || !creator.emailNotifications) return false;
   const c = await ctx(db, ev, creator.locale, creator);
-  const { html, text } = layout({ heading: c.t("email.scoreReminder.heading"), body: c.t("email.scoreReminder.body", c.vars), meta: c.meta, cta: { label: c.t("email.scoreReminder.cta"), url: `${c.url}#score` }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel });
+  const { html, text } = layout({ heading: c.t("email.scoreReminder.heading"), body: c.t("email.scoreReminder.body", c.vars), meta: c.meta, cta: { label: c.t("email.scoreReminder.cta"), url: `${c.url}#score` }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
   return sendEmail({ to: creator.email, subject: c.t("email.scoreReminder.subject"), html, text });
 }
 

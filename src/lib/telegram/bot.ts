@@ -14,6 +14,7 @@ import { botLocale, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
 import { continueScoreReply, SCORE_TRAILER } from "./tournament";
+import { handlePlayerCallback, playerMenu, playerMenuWord, PLAYER_CALLBACK } from "./player";
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
 import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
@@ -66,6 +67,11 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   if (isPrivate && !cmd && msg.reply_to_message?.text && SCORE_TRAILER.test(msg.reply_to_message.text)) {
     const scored = await continueScoreReply(db, msg, await findOrCreateTelegramPlayer(db, from));
     if (scored) return scored;
+  }
+  // A player's keyboard button ("Find a match", "When I want to play"): a door, before anything reads the text.
+  if (isPrivate && !cmd && msg.text && !msg.reply_to_message) {
+    const word = playerMenuWord(msg.text);
+    if (word) return playerMenu(db, msg, chat, from, word, ctx);
   }
   if (cmd) {
     if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);
@@ -142,7 +148,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     // The book could not read the word and no match answers to it: the book's help.
     if (resolved?.kind === "coach") return coachHelp(player, chat.chatId);
     // A button left over from a role that ended (the coach archived, the student let go): the help, and the keyboard and the role's commands go with it.
-    if (!resolved && msg.text && menuWord(msg.text)) return roleEnded(chat.chatId, s.privateHelp);
+    if (!resolved && msg.text && menuWord(msg.text)) return roleEnded(chat, s.privateHelp);
     await sendMessage(chat.chatId, esc(s.privateHelp), { silent: true });
     return "private_other";
   }
@@ -151,6 +157,10 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
 
 async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
   const data = cb.data ?? "";
+  if (PLAYER_CALLBACK.test(data) && cb.message) {
+    const { chat } = await upsertChat(db, cb.message.chat, cb.from);
+    return handlePlayerCallback(db, cb, data, chat);
+  }
   if (TAP_CALLBACK.test(data)) {
     const handled = await handleTapCallback(db, cb, await findOrCreateTelegramPlayer(db, cb.from));
     if (handled) return handled;
