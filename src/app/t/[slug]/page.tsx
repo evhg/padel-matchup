@@ -5,17 +5,19 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { ShareButtons } from "@/components/ShareSheet";
 import { ClaimCard } from "@/components/tournament/ClaimCard";
+import { DrawView } from "@/components/tournament/DrawView";
 import { EnterForm } from "@/components/tournament/EnterForm";
 import { WithdrawButton } from "@/components/tournament/WithdrawButton";
 import { getDb } from "@/db";
 import { baseUrl, shortHost } from "@/lib/config";
-import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken } from "@/lib/domain/competitions";
+import { competitionDraws } from "@/lib/domain/competitionDraw";
+import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken, pairSummary } from "@/lib/domain/competitions";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 import { bandLabel, dayRange } from "@/lib/tournamentText";
 
 export const dynamic = "force-dynamic";
-type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ claim?: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ claim?: string; claimed?: string }> };
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
 
@@ -41,7 +43,15 @@ export default async function TournamentPage({ params, searchParams }: Props) {
   if (!c) notFound();
   const [t, locale, me, page] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), competitionPage(db, c)]);
   const mine = me ? await entriesOf(db, c.id, me.id) : [];
+  const draws = await competitionDraws(
+    db,
+    c.id,
+    page.categories.map((k) => k.category).filter((k) => k.drawStatus === "published" || k.drawStatus === "done"),
+  );
+  const myPairIds = new Set(mine.map((e) => e.id));
   const claim = sp.claim ? await pairByClaimToken(db, sp.claim) : null;
+  const claimedPair = sp.claimed && me ? await pairSummary(db, sp.claimed) : null;
+  const claimed = claimedPair && claimedPair.p2PlayerId === me?.id ? claimedPair : null;
   const organizer = isOrganizer(c, me?.id);
   const url = `${baseUrl()}/t/${c.slug}`;
   const days = dayRange(c.startsOn, c.endsOn, locale);
@@ -89,6 +99,11 @@ export default async function TournamentPage({ params, searchParams }: Props) {
           )}
         </section>
 
+        {claimed && (
+          <section className="card" data-testid="claim-card">
+            <p className="font-bold text-ok">{t("tournament.claimed", { category: claimed.categoryName, p1: claimed.p1Name })}</p>
+          </section>
+        )}
         {sp.claim &&
           (claim ? (
             <ClaimCard slug={c.slug} token={sp.claim} p1Name={claim.p1Name} categoryName={claim.categoryName} hasIdentity={Boolean(me)} own={me?.id === claim.p1PlayerId} />
@@ -175,7 +190,14 @@ export default async function TournamentPage({ params, searchParams }: Props) {
                     </ol>
                   </div>
                 )}
-                {c.status === "open" && <EnterForm slug={c.slug} categoryId={category.id} categoryName={category.name} hasIdentity={Boolean(me)} full={full} />}
+                {c.status === "open" && category.drawStatus === "none" && <EnterForm slug={c.slug} categoryId={category.id} categoryName={category.name} hasIdentity={Boolean(me)} full={full} />}
+                {draws.get(category.id) && (
+                  <DrawView
+                    view={draws.get(category.id)!}
+                    slug={c.slug}
+                    myMatchIds={[...draws.get(category.id)!.groups.flatMap((g) => g.matches), ...draws.get(category.id)!.qualifying.flat(), ...draws.get(category.id)!.main.flat(), ...draws.get(category.id)!.consolation.flat()].filter((m) => (m.pairAId && myPairIds.has(m.pairAId)) || (m.pairBId && myPairIds.has(m.pairBId))).map((m) => m.id)}
+                  />
+                )}
               </section>
             );
           })

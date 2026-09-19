@@ -155,8 +155,18 @@ Everything in this list is live. The README describes each in detail.
   partner is entered by name and confirms the spot by link, signed in or by typing their name; the
   placeholder folds into their account. The organiser's desk (`/t/<slug>/manage`) opens and closes
   entries, adds categories, enters a pair by two names whatever their levels say, marks paid, and
-  hears of every entry on the channel they have. Steps 2–5 are the draw, the courts, the live
-  scores and the big-event extras, under "Next".
+  hears of every entry on the channel they have.
+
+- **The serious tournament, step 2: the draw.** Made whole from the field: a qualifying knockout for
+  the spots past the direct entries, groups of four or five filled snake-wise by seed with the top
+  two through, a knockout seeded so the top two meet last with byes for the top seeds, and a
+  consolation draw for the rest (or, in a straight knockout, for the first-round losers). Scoring is
+  set per phase (one set to six with a tie-break, a super set to nine, two sets and a super tie-break,
+  best of three) and a score is checked against the rule of its round. The organiser makes the draw,
+  looks at it, redraws or publishes; every player hears where they start. A score comes from the
+  organiser or from a player of either pair, on the page, and is correctable until the next match
+  built on it has one; a walkover is one tap. Group tables (wins, head-to-head, sets, games), the
+  rounds by name, the champions. Steps 3–5 are the courts, the live screen and the big-event extras.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
@@ -257,11 +267,9 @@ linked and four have an email address.
    of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
    strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
    website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
-3. **The serious tournament, steps 2–5.** Step 1 (entries, categories, the waiting list, the partner
-   by name) is under Built. Next, in order: (2) the draw — groups of four or five with the top two
-   through, a knockout with seeds placed the FIP way and byes, a consolation draw, a qualifying draw
-   feeding the main draw, scoring per phase checked as scores are entered, the draw locked and
-   published; (3) courts and times — every match a court and a time from the match lengths and the
+3. **The serious tournament, steps 3–5.** Steps 1 and 2 (entries, categories, the waiting list, the
+   partner by name; the draw with groups, knockout, consolation, qualifying and scoring per phase)
+   are under Built. Next, in order: (3) courts and times — every match a court and a time from the match lengths and the
    court list, a rest between a player's matches, the organiser moving a match with two taps, each
    player told "court 3 at 14:40" and again fifteen minutes before; (4) live — scores from the desk
    or from a player of the match, the bracket and the group tables updating, a TV page for the

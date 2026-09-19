@@ -278,6 +278,8 @@ export async function enterPair(db: Db, input: EnterInput): Promise<Entered> {
   const [c] = await db.select().from(competitions).where(eq(competitions.id, cat.competitionId)).limit(1);
   if (!c) throw new DomainError("not_found", "competition");
   if (c.status !== "open" && !input.byOrganizer) throw new DomainError("closed");
+  // Once the draw is made the field is the field; a late pair is the organiser's call, before the redraw.
+  if (cat.drawStatus !== "none") throw new DomainError("closed", "drawn");
   const player = await getPlayer(db, input.playerId);
   if (!player) throw new DomainError("not_found", "player");
   let partner: Player;
@@ -406,6 +408,22 @@ export async function pairByClaimToken(db: Db, token: string): Promise<(Competit
     .where(eq(competitionPairs.claimToken, t))
     .limit(1);
   return row && inPlay(row.pair) ? { ...row.pair, p1Name: row.p1Name, p2Name: row.p2Name, categoryName: row.categoryName } : null;
+}
+
+/** A pair by id with its names and category, for the page after a claim. */
+export async function pairSummary(db: Db, pairId: string): Promise<{ id: string; p1PlayerId: string; p2PlayerId: string; p1Name: string; p2Name: string; categoryName: string; status: CompetitionPair["status"] } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(pairId)) return null;
+  const p1 = alias(players, "p1");
+  const p2 = alias(players, "p2");
+  const [row] = await db
+    .select({ pair: competitionPairs, p1Name: p1.displayName, p2Name: p2.displayName, categoryName: competitionCategories.name })
+    .from(competitionPairs)
+    .innerJoin(p1, eq(p1.id, competitionPairs.p1PlayerId))
+    .innerJoin(p2, eq(p2.id, competitionPairs.p2PlayerId))
+    .innerJoin(competitionCategories, eq(competitionCategories.id, competitionPairs.categoryId))
+    .where(eq(competitionPairs.id, pairId))
+    .limit(1);
+  return row ? { id: row.pair.id, p1PlayerId: row.pair.p1PlayerId, p2PlayerId: row.pair.p2PlayerId, p1Name: row.p1Name, p2Name: row.p2Name, categoryName: row.categoryName, status: row.pair.status } : null;
 }
 
 // ---------------------------------------------------------------------------

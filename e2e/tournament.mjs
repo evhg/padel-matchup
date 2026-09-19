@@ -1,6 +1,8 @@
-// The serious tournament, step 1 (see e2e/run.mjs): an organiser makes a competition and its categories,
-// a player enters with a partner by name, the partner claims the spot by link, the desk fills the field,
-// the ninth pair waits and moves up when one withdraws, the organiser marks paid and closes entries.
+// The serious tournament (see e2e/run.mjs): an organiser makes a competition and its categories, a player
+// enters with a partner by name, the partner claims the spot by link, the desk fills the field, the ninth
+// pair waits and moves up when one withdraws, the organiser marks paid and closes entries; then the draw:
+// groups of four made and published, a player scores their own match from the page, a wrong score is
+// refused with the rule's name, the table counts it, and the organiser gives a walkover.
 import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
@@ -124,6 +126,48 @@ try {
   await cal.goto(`${BASE}/t/phuket-open/manage`);
   await cal.waitForURL(/\/t\/phuket-open$/, { timeout: 20000 });
   check("a player asking for the manage screen lands on the public page", true);
+
+  // 9. The draw for Gold: groups of four, the top two through, made from the desk and looked at before anyone sees it.
+  await org.reload();
+  const controls = org.locator('[data-testid^="draw-controls-"]').filter({ hasText: "Draw settings · Gold" }); // "Golden point" sits in every card
+  await controls.getByRole("button", { name: "Make the draw" }).click();
+  await controls.getByRole("button", { name: "Publish the draw" }).waitFor({ timeout: 20000 });
+  check("the draw is made and waits for publication", (await low(controls)).includes("draw made") && (await org.getByTestId("group-A").count()) === 1 && (await org.getByTestId("group-B").count()) === 1);
+  await cal.reload();
+  check("the public page shows no draw before publication", (await cal.getByTestId("groups").count()) === 0);
+  await controls.getByRole("button", { name: "Publish the draw" }).click();
+  await controls.getByRole("button", { name: "Publish the draw" }).waitFor({ state: "detached", timeout: 20000 });
+  await cal.reload();
+  const mainDraw = cal.getByTestId("main-draw");
+  check("the public page shows the groups and the main draw with its places to be decided", (await cal.getByTestId("group-A").count()) === 1 && (await mainDraw.count()) === 1 && (await mainDraw.innerText()).includes("to be decided"));
+  await shot(cal, "tournament-draw-public");
+
+  // 10. Cal scores his own match from the page; a score outside the rule is refused by name.
+  check("Cal sees a score form under his three group matches and nobody else's", (await cal.locator('[data-testid^="score-"]').count()) === 3);
+  const myForm = cal.locator('[data-testid^="score-"]').first();
+  await myForm.getByRole("textbox").fill("6-4");
+  await myForm.getByRole("button", { name: "Save the score" }).click();
+  await cal.getByText("6-4", { exact: true }).first().waitFor({ timeout: 20000 });
+  check("the score is on the page", true);
+  const nextForm = cal.locator('[data-testid^="score-"]').first();
+  await nextForm.getByRole("textbox").fill("6-5");
+  await nextForm.getByRole("button", { name: "Save the score" }).click();
+  await nextForm.getByText(/does not fit/).waitFor({ timeout: 20000 });
+  check("a score outside the rule is refused with the rule's name", (await nextForm.innerText()).includes("One set to 6"));
+
+  // 11. The organiser's table counts the played match, and a walkover is one tap.
+  await org.reload();
+  const calRow = org.locator("tr").filter({ hasText: "Cal & Dee" });
+  // "6-4" is A then B in the match's own order; Cal's pair is either side, so the table reads 6-4 or 4-6.
+  check("the group table counts Cal's played match", /6-4|4-6/.test(await calRow.innerText()));
+  // The desk's forms wait behind a tap each, so thirty matches do not open thirty forms.
+  check("the desk shows no open score form until asked", (await org.locator('[data-testid^="score-"]').count()) === 0);
+  await org.getByRole("button", { name: "Score", exact: true }).first().click();
+  const openForm = org.locator('[data-testid^="score-"]').first();
+  await openForm.getByRole("button", { name: /Walkover to/ }).first().click();
+  await org.getByText("w/o").first().waitFor({ timeout: 20000 });
+  check("a walkover is recorded", true);
+  await shot(org, "tournament-draw-manage");
 } catch (e) {
   await crashed(browser, results, e);
 }

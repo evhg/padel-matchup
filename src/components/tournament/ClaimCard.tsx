@@ -12,7 +12,7 @@ export function ClaimCard({ slug, token, p1Name, categoryName, hasIdentity, own 
   const [pending, start] = useTransition();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ category: string; p1: string } | null>(null);
+  const [done, setDone] = useState<{ category: string; p1: string; pairId: string } | null>(null);
   if (own) {
     return (
       <section className="card" data-testid="claim-card">
@@ -40,8 +40,8 @@ export function ClaimCard({ slug, token, p1Name, categoryName, hasIdentity, own 
             const r = await claimSpotAction(slug, token, hasIdentity ? undefined : name);
             if (r.ok) {
               setDone(r.data);
-              router.replace(`/t/${slug}`);
-              router.refresh();
+              // The server keeps the confirmation on the page; a refresh here would replace this card with "link used".
+              router.replace(`/t/${slug}?claimed=${r.data.pairId}`);
             } else setError(r.error === "not_found" ? t("tournament.claimGone") : r.error === "invalid" && r.detail === "own_pair" ? t("tournament.claimOwn") : r.error === "already_in" ? t("tournament.errAlreadyIn", { who: t("tournament.you") }) : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
           });
         }}
