@@ -45,7 +45,7 @@ describe("the tournament live", () => {
     const gold = await addCategory(db, { competitionId: c.id, organizerPlayerId: org.id, name: "Gold", maxPairs: 8 });
     const people: { player: Awaited<ReturnType<typeof makePlayer>>; pair: string }[] = [];
     for (let i = 1; i <= 8; i++) {
-      const player = await makePlayer(db, `L${i}`, { telegramId: `55${i}` });
+      const player = await makePlayer(db, `L${i}`, { telegramId: 550 + i });
       const e = await enterPair(db, { categoryId: gold.id, playerId: player.id, partner: { name: `LM${i}` }, locale: "en", byOrganizer: true });
       people.push({ player, pair: e.pair.id });
     }
@@ -71,15 +71,15 @@ describe("the tournament live", () => {
     const first = play[0];
     const mine = people.find((p) => first.aPlayers.includes(p.player.id) || first.bPlayers.includes(p.player.id))!;
     const stranger = people.find((p) => !first.aPlayers.includes(p.player.id) && !first.bPlayers.includes(p.player.id))!;
-    const notice = { message_id: 7, date: 0, chat: { id: Number(mine.player.telegramId), type: "private" as const, first_name: "L" }, from: { id: 123456, is_bot: true, first_name: "Kicksmash" }, text: `In 15 minutes: Court 1\nGold vs X at Live Open.\n↳ ks:${packId(first.id)}` };
-    const reply = (tgId: string, text: string, id: number) =>
-      handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat: { id: Number(tgId), type: "private", first_name: "L" }, from: { id: Number(tgId), first_name: "L", language_code: "en" }, text, reply_to_message: { ...notice, chat: { id: Number(tgId), type: "private", first_name: "L" } } } }, NO_SIDE_EFFECTS);
-    expect(await reply(stranger.player.telegramId!, "6-4", 1)).toBe("tournament:score:refused");
+    const notice = { message_id: 7, date: 0, chat: { id: Number(mine.player.telegramId), type: "private" as const }, from: { id: 123456, is_bot: true, first_name: "Kicksmash" }, text: `In 15 minutes: Court 1\nGold vs X at Live Open.\n↳ ks:${packId(first.id)}` };
+    const reply = (tgId: number | null, text: string, id: number) =>
+      handleTelegramUpdate(db, { update_id: id, message: { message_id: id, date: 0, chat: { id: Number(tgId), type: "private" }, from: { id: Number(tgId), first_name: "L", language_code: "en" }, text, reply_to_message: { ...notice, chat: { id: Number(tgId), type: "private" } } } }, NO_SIDE_EFFECTS);
+    expect(await reply(stranger.player.telegramId, "6-4", 1)).toBe("tournament:score:refused");
     expect(texts().at(-1)).toContain("not yours");
-    expect(await reply(mine.player.telegramId!, "6-5", 2)).toBe("tournament:score:refused");
+    expect(await reply(mine.player.telegramId, "6-5", 2)).toBe("tournament:score:refused");
     expect(texts().at(-1)).toContain("One set to 6");
-    expect(await reply(mine.player.telegramId!, "hello", 3)).toBe("tournament:score:help");
-    expect(await reply(mine.player.telegramId!, "6-4", 4)).toBe("tournament:score:saved");
+    expect(await reply(mine.player.telegramId, "hello", 3)).toBe("tournament:score:help");
+    expect(await reply(mine.player.telegramId, "6-4", 4)).toBe("tournament:score:saved");
     expect(texts().at(-1)).toContain("Saved: 6-4");
     const after = await liveBoard(db, c.id, ["Court 1", "Court 2"], categories, new Date("2026-10-10T02:05:00Z"));
     expect(after.latest.map((m) => m.id)).toEqual([first.id]);
