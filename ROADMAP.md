@@ -166,7 +166,16 @@ Everything in this list is live. The README describes each in detail.
   looks at it, redraws or publishes; every player hears where they start. A score comes from the
   organiser or from a player of either pair, on the page, and is correctable until the next match
   built on it has one; a walkover is one tap. Group tables (wins, head-to-head, sets, games), the
-  rounds by name, the champions. Steps 3–5 are the courts, the live screen and the big-event extras.
+  rounds by name, the champions.
+
+- **The serious tournament, step 3: courts and times.** The organiser names the courts and the day's
+  window; one button gives every match of every drawn category a court and a time — the groups
+  first, a rest between a pair's matches, a round after the round it is built on, the finals last,
+  never one player on two courts across categories, played matches keeping their slot. Every player
+  hears their own list on the channel they have; a match moved by the organiser tells both pairs;
+  fifteen minutes before a match, both pairs hear the court (the five-minute push job). The order of
+  play, by day and time with the court, is on the page for the desk and the players. Steps 4 and 5
+  are the live screen and the big-event extras.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
@@ -267,11 +276,8 @@ linked and four have an email address.
    of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
    strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
    website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
-3. **The serious tournament, steps 3–5.** Steps 1 and 2 (entries, categories, the waiting list, the
-   partner by name; the draw with groups, knockout, consolation, qualifying and scoring per phase)
-   are under Built. Next, in order: (3) courts and times — every match a court and a time from the match lengths and the
-   court list, a rest between a player's matches, the organiser moving a match with two taps, each
-   player told "court 3 at 14:40" and again fifteen minutes before; (4) live — scores from the desk
+3. **The serious tournament, steps 4 and 5.** Steps 1–3 (entries; the draw; courts and times) are
+   under Built. Next, in order: (4) live — scores from the desk
    or from a player of the match, the bracket and the group tables updating, a TV page for the
    club's screen, the podium as a moment; (5) the big-event extras — a stream link on a match or a
    court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a

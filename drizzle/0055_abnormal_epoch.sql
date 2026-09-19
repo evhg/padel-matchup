@@ -1,0 +1,1 @@
+ALTER TABLE "competition_matches" ADD COLUMN "reminded_at" timestamp with time zone;

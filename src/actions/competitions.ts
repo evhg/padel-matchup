@@ -27,7 +27,9 @@ import {
 import { DomainError } from "@/lib/domain/errors";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getSessionPlayer } from "@/lib/session";
-import { tellDrawPublished, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed } from "@/lib/tournament/notify";
+import { moveMatch, orderOfPlay, scheduleCompetition, setCourts } from "@/lib/domain/competitionSchedule";
+import { zonedTimeToUtc } from "@/lib/dates";
+import { tellDrawPublished, tellMoved, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed, tellSchedule } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
 /**
@@ -262,6 +264,51 @@ export async function walkoverAction(slug: string, matchId: string, winner: "A" 
   return runA(async () => {
     const { db, player } = await me();
     await walkoverMatch(db, { matchId, organizerPlayerId: player.id, winner });
+    refresh(slug);
+    return null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Courts and times
+// ---------------------------------------------------------------------------
+
+export async function setCourtsAction(slug: string, input: { courtNames: string[]; dayStart?: string | null; dayEnd?: string | null }): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    const c = await getCompetition(db, slug);
+    if (!c) throw new DomainError("not_found");
+    await setCourts(db, { competitionId: c.id, organizerPlayerId: player.id, courtNames: input.courtNames, dayStart: input.dayStart, dayEnd: input.dayEnd });
+    refresh(slug);
+    return null;
+  });
+}
+
+/** Every match a court and a time, and every player their list. */
+export async function makeScheduleAction(slug: string): Promise<ActionResult<{ count: number }>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    const c = await getCompetition(db, slug);
+    if (!c) throw new DomainError("not_found");
+    const { slots } = await scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: player.id });
+    const rows = await orderOfPlay(db, c.id);
+    await tellSchedule(db, c, rows.filter((r) => slots.some((s) => s.id === r.id))).catch(() => undefined);
+    refresh(slug);
+    return { count: slots.length };
+  });
+}
+
+/** A new court or time for one match, given as the competition's local "YYYY-MM-DDTHH:MM"; both pairs hear. */
+export async function moveMatchAction(slug: string, matchId: string, courtName: string, local: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    const c = await getCompetition(db, slug);
+    if (!c) throw new DomainError("not_found");
+    const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(local);
+    if (!m) throw new DomainError("invalid", "time");
+    const moved = await moveMatch(db, { matchId, organizerPlayerId: player.id, courtName, scheduledAt: zonedTimeToUtc(m[1], m[2], c.tz) });
+    const row = (await orderOfPlay(db, c.id)).find((r) => r.id === moved.id);
+    if (row) await tellMoved(db, c, row).catch(() => undefined);
     refresh(slug);
     return null;
   });

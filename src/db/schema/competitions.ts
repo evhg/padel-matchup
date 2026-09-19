@@ -160,6 +160,8 @@ export const competitionMatches = pgTable(
     status: text("status").$type<MatchStatus>().notNull().default("pending"),
     courtName: text("court_name"),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    /** The fifteen-minute notice went, once. */
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
     streamUrl: text("stream_url"),
     enteredByPlayerId: uuid("entered_by_player_id").references(() => players.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

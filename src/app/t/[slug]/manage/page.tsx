@@ -4,13 +4,16 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { CompetitionForm } from "@/components/tournament/CompetitionForm";
+import { CourtsForm } from "@/components/tournament/CourtsForm";
 import { DrawControls } from "@/components/tournament/DrawControls";
+import { OrderOfPlay } from "@/components/tournament/OrderOfPlay";
 import { DrawView } from "@/components/tournament/DrawView";
 import { ManagePanel } from "@/components/tournament/ManagePanel";
 import { getDb } from "@/db";
 import { CITIES } from "@/lib/domain/cities";
 import { listClubsForPicking } from "@/lib/domain/clubs";
 import { competitionDraws } from "@/lib/domain/competitionDraw";
+import { COURTS, orderOfPlay } from "@/lib/domain/competitionSchedule";
 import { competitionPage, getCompetition, isOrganizer } from "@/lib/domain/competitions";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -34,6 +37,7 @@ export default async function ManageTournamentPage({ params }: Props) {
   if (!isOrganizer(c, me?.id)) redirect(`/t/${slug}`);
   const [t, page, clubs] = await Promise.all([getTranslations(), competitionPage(db, c), listClubsForPicking(db)]);
   const draws = await competitionDraws(db, c.id, page.categories.map((k) => k.category));
+  const play = await orderOfPlay(db, c.id);
   return (
     <>
       <Header />
@@ -59,6 +63,8 @@ export default async function ManageTournamentPage({ params }: Props) {
             waiting: k.waiting.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard })),
           }))}
         />
+        <CourtsForm slug={c.slug} courtNames={c.courtNames ?? []} dayStart={c.dayStart ?? COURTS.defaultStart} dayEnd={c.dayEnd ?? COURTS.defaultEnd} hasDraw={draws.size > 0} />
+        {play.length > 0 && <OrderOfPlay rows={play} tz={c.tz} />}
         {page.categories.map(({ category }) => {
           const view = draws.get(category.id);
           return (
@@ -74,7 +80,7 @@ export default async function ManageTournamentPage({ params }: Props) {
                   <h2 className="text-lg font-extrabold">
                     {t("tournament.draw")} · {category.name}
                   </h2>
-                  <DrawView view={view} slug={c.slug} organizer />
+                  <DrawView view={view} slug={c.slug} organizer tz={c.tz} courtNames={c.courtNames ?? []} />
                 </section>
               )}
             </section>

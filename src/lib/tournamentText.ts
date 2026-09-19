@@ -17,3 +17,13 @@ export function bandLabel(min: number | null, max: number | null): string | null
   if (max !== null) return `≤ ${f(max)}`;
   return null;
 }
+
+/** "Sat 10:20" in the competition's zone and the reader's language. */
+export function whenLabel(at: Date, tz: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(at);
+}
+
+/** "Saturday 10 October" for the order of play's day headings. */
+export function dayHeading(at: Date, tz: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: "long", day: "numeric", month: "long" }).format(at);
+}

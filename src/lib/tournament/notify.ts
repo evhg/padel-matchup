@@ -2,6 +2,8 @@ import "server-only";
 import type { Db } from "@/db";
 import type { Competition, CompetitionCategory, CompetitionMatch, CompetitionPair } from "@/db/schema";
 import { roundKey } from "@/lib/domain/draw";
+import type { PlayRow } from "@/lib/domain/competitionSchedule";
+import { whenLabel } from "@/lib/tournamentText";
 import { baseUrl } from "@/lib/config";
 import { tell } from "@/lib/coach/notify";
 import { getPlayer } from "@/lib/domain/players";
@@ -83,4 +85,44 @@ export function roundName(t: (key: string, values?: Record<string, string | numb
   if (k.key === "semi") return t("tournament.roundSemi");
   if (k.key === "quarter") return t("tournament.roundQuarter");
   return t("tournament.roundOf", { n: k.of ?? 0 });
+}
+
+const opponentOf = (t: (key: string, values?: Record<string, string | number>) => string, row: PlayRow, playerId: string): string => {
+  const mineIsA = row.aPlayers.includes(playerId);
+  const other = mineIsA ? row.bName : row.aName;
+  return other ?? t("tournament.opponentTbd");
+};
+
+/** Every player with a time hears their own list: day and time, court, category, the opponent or "the winner to come". */
+export async function tellSchedule(db: Db, competition: Competition, rows: readonly PlayRow[]): Promise<void> {
+  const byPlayer = new Map<string, PlayRow[]>();
+  for (const r of rows) for (const id of [...r.aPlayers, ...r.bPlayers]) byPlayer.set(id, [...(byPlayer.get(id) ?? []), r]);
+  for (const [playerId, mine] of byPlayer) {
+    const p = await getPlayer(db, playerId);
+    if (!p) continue;
+    await say(db, playerId, competition, (t) => [
+      t("tournament.noticeScheduleTitle", { name: competition.name }),
+      mine
+        .filter((r) => r.scheduledAt)
+        .sort((a, b) => a.scheduledAt!.getTime() - b.scheduledAt!.getTime())
+        .map((r) => t("tournament.noticeScheduleLine", { when: whenLabel(r.scheduledAt!, competition.tz, p.locale), court: r.courtName ?? "", category: r.categoryName, opponent: opponentOf(t, r, playerId) }))
+        .join("\n"),
+    ]);
+  }
+}
+
+/** Both pairs of a moved match hear the new court and time. */
+export async function tellMoved(db: Db, competition: Competition, row: PlayRow): Promise<void> {
+  for (const playerId of [...row.aPlayers, ...row.bPlayers]) {
+    const p = await getPlayer(db, playerId);
+    if (!p || !row.scheduledAt) continue;
+    await say(db, playerId, competition, (t) => [t("tournament.noticeMovedTitle", { name: competition.name }), t("tournament.noticeScheduleLine", { when: whenLabel(row.scheduledAt!, competition.tz, p.locale), court: row.courtName ?? "", category: row.categoryName, opponent: opponentOf(t, row, playerId) })]);
+  }
+}
+
+/** Fifteen minutes before: the court, the opponent, the category. */
+export async function tellMatchSoon(db: Db, competition: Competition, row: PlayRow): Promise<void> {
+  for (const playerId of [...row.aPlayers, ...row.bPlayers]) {
+    await say(db, playerId, competition, (t) => [t("tournament.noticeSoonTitle", { court: row.courtName ?? "" }), t("tournament.noticeSoonLine", { category: row.categoryName, opponent: opponentOf(t, row, playerId), name: competition.name })]);
+  }
 }
