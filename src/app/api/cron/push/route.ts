@@ -14,6 +14,8 @@ import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
 import { expireRequests, lessonRemindersDue, tickWaitlist } from "@/lib/coach/chains";
 import { notifyLessonReminder, notifyOffer, notifyOfferLapsed } from "@/lib/coach/notify";
+import { matchRemindersDue, orderOfPlay } from "@/lib/domain/competitionSchedule";
+import { tellMatchSoon } from "@/lib/tournament/notify";
 import { lessonPackages } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { channels, sendReminders } from "@/lib/channels";
@@ -57,6 +59,18 @@ export async function GET(req: Request) {
       coachTick.reminded++;
     }
     coachTick.requestsExpired = await expireRequests(db, now);
+  } catch (e) {
+    void reportError("cron", e, { path: "/api/cron/push" });
+  }
+  // The serious tournament: fifteen minutes before a match, both pairs hear the court.
+  try {
+    const rowsByCompetition = new Map<string, Awaited<ReturnType<typeof orderOfPlay>>>();
+    for (const due of await matchRemindersDue(db, now)) {
+      const rows = rowsByCompetition.get(due.competition.id) ?? (await orderOfPlay(db, due.competition.id));
+      rowsByCompetition.set(due.competition.id, rows);
+      const row = rows.find((r) => r.id === due.match.id);
+      if (row) await tellMatchSoon(db, due.competition, row).catch(() => undefined);
+    }
   } catch (e) {
     void reportError("cron", e, { path: "/api/cron/push" });
   }

@@ -2,7 +2,8 @@
 // enters with a partner by name, the partner claims the spot by link, the desk fills the field, the ninth
 // pair waits and moves up when one withdraws, the organiser marks paid and closes entries; then the draw:
 // groups of four made and published, a player scores their own match from the page, a wrong score is
-// refused with the rule's name, the table counts it, and the organiser gives a walkover.
+// refused with the rule's name, the table counts it, and the organiser gives a walkover; then the courts: two
+// courts and a window, every match a court and a time, the order of play on the page, one match moved.
 import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
@@ -168,6 +169,30 @@ try {
   await org.getByText("w/o").first().waitFor({ timeout: 20000 });
   check("a walkover is recorded", true);
   await shot(org, "tournament-draw-manage");
+
+  // 12. Courts and times: two courts, nine to nine, and every match of the draw gets a slot. A fresh page
+  // first: a fill during the walkover's pending refresh was lost once.
+  await org.reload();
+  const courts = org.getByTestId("courts-form");
+  await courts.getByLabel("Courts").fill("Court 1\nCourt 2");
+  await courts.getByRole("button", { name: "Make the schedule" }).click();
+  await courts.getByText(/given a court and a time/).waitFor({ timeout: 30000 });
+  check("the schedule is made", (await courts.innerText()).includes("given a court and a time"));
+  await cal.reload();
+  const play = cal.getByTestId("order-of-play");
+  check("the public page carries the order of play by day with courts and times", (await play.count()) === 1 && (await play.innerText()).includes("Court 1") && (await play.innerText()).includes("Court 2") && (await cal.locator('[data-testid="match-when"]').count()) > 0);
+  await shot(cal, "tournament-schedule-public");
+  // 13. The organiser moves one match to Court 2 at a time of their choosing.
+  await org.reload();
+  await org.getByRole("button", { name: "Move", exact: true }).first().click();
+  const move = org.locator('[data-testid^="move-"]').first();
+  await move.getByLabel("Court").selectOption("Court 2");
+  await move.getByLabel("Move").fill(`${inDays(31)}T15:30`);
+  await move.getByRole("button", { name: "Move", exact: true }).click();
+  await move.waitFor({ state: "detached", timeout: 20000 });
+  // The form closes on the action's answer; the order of play follows on the refresh, so wait for the time itself.
+  await org.getByTestId("order-of-play").getByText("15:30").first().waitFor({ timeout: 20000 });
+  check("a match moved to Court 2 at 15:30 the next day", true);
 } catch (e) {
   await crashed(browser, results, e);
 }

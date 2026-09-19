@@ -292,6 +292,16 @@ Wall clock first, credits second. What actually moved it, measured:
   `<label>` with the input. Put the hint beside the label, not in it (a `<div>` around both), and the
   label names exactly what the reader sees in bold. The fix by regex mangled two files; a form's
   return block is rewritten whole, never patched by pattern.
+- **A controlled input wipes what was typed before React hydrated it.** On the long manage page,
+  Playwright filled the courts textarea before hydration; React's first client render set
+  `value=""` from state, the button stayed disabled, and the click timed out. A probe on a short
+  page passed, which is the tell: the fault is timing, not the selector. A form a person can reach
+  before the page is interactive is uncontrolled (`defaultValue` + a ref, read on submit), and a
+  suite reloads before it fills a long page.
+- **`ls` the folder before naming a new module.** A heredoc to `src/lib/domain/schedule.ts` overwrote
+  the existing schedule module (the API's `buildSchedule`) without a word; only `tsc` on another file
+  said so. The court scheduler is `courtSchedule.ts`. Before `cat > path`, `ls` the folder or `git
+  status` the path; a name that reads right is not a name that is free.
 - **A success message the next render replaces is a race, and the test will lose it one run in
   four.** The claim card said "Confirmed" from client state and called `router.refresh()`; the server
   then rendered the same URL with a spent token, which is the "link used" card, and the message was

@@ -1,6 +1,9 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { DrawView as View, MatchView } from "@/lib/domain/competitionDraw";
 import { roundKey, scoreText } from "@/lib/domain/draw";
+import { utcToZonedParts } from "@/lib/dates";
+import { whenLabel } from "@/lib/tournamentText";
+import { MoveMatch } from "./MoveMatch";
 import { ScoreForm } from "./ScoreForm";
 
 /** The translator, typed loosely: the typed key union is too deep to pass around, and every key here is proven by the message files. */
@@ -18,7 +21,9 @@ const pairLabel = (t: T, p: MatchView["a"], m: MatchView, side: "A" | "B") => {
   return t("tournament.tbd");
 };
 
-function MatchLine({ t, m, slug, canScore, organizer, ruleLabel }: { t: T; m: MatchView; slug: string; canScore: boolean; organizer: boolean; ruleLabel: string }) {
+type Where = { tz: string; locale: string; courtNames: string[] };
+
+function MatchLine({ t, m, slug, canScore, organizer, ruleLabel, where }: { t: T; m: MatchView; slug: string; canScore: boolean; organizer: boolean; ruleLabel: string; where: Where }) {
   const done = over(m);
   const a = pairLabel(t, m.a, m, "A");
   const b = pairLabel(t, m.b, m, "B");
@@ -34,6 +39,12 @@ function MatchLine({ t, m, slug, canScore, organizer, ruleLabel }: { t: T; m: Ma
         </div>
         <div className="shrink-0 text-right font-semibold tabular-nums">{m.status === "walkover" ? t("tournament.walkover") : done ? scoreText(m.scoreA, m.scoreB) : m.bye ? "" : "·"}</div>
       </div>
+      {m.scheduledAt && !m.bye && (
+        <div className="text-xs text-muted" data-testid="match-when">
+          {whenLabel(m.scheduledAt, where.tz, where.locale)} · {m.courtName}
+        </div>
+      )}
+      {organizer && !done && !m.bye && <MoveMatch slug={slug} matchId={m.id} courtNames={where.courtNames} court={m.courtName} local={m.scheduledAt ? `${utcToZonedParts(m.scheduledAt, where.tz).date}T${utcToZonedParts(m.scheduledAt, where.tz).time}` : null} />}
       {ready && (canScore || organizer) && (!done || organizer) && <ScoreForm slug={slug} matchId={m.id} rule={m.scoring} ruleLabel={ruleLabel} organizer={organizer} done={done} aName={m.a?.name ?? "A"} bName={m.b?.name ?? "B"} />}
     </li>
   );
@@ -44,8 +55,10 @@ function MatchLine({ t, m, slug, canScore, organizer, ruleLabel }: { t: T; m: Ma
  * draw round by round, the consolation, and the champions. A player of a pair gets the score form
  * under their own match; the organiser under every match.
  */
-export async function DrawView({ view, slug, myMatchIds = [], organizer = false }: { view: View; slug: string; myMatchIds?: string[]; organizer?: boolean }) {
-  const t = (await getTranslations()) as unknown as T;
+export async function DrawView({ view, slug, myMatchIds = [], organizer = false, tz, courtNames = [] }: { view: View; slug: string; myMatchIds?: string[]; organizer?: boolean; tz: string; courtNames?: string[] }) {
+  const [t0, locale] = await Promise.all([getTranslations(), getLocale()]);
+  const t = t0 as unknown as T;
+  const where: Where = { tz, locale, courtNames };
   const mine = new Set(myMatchIds);
   const ruleLabel = (code: string) => t(`tournament.sc_${code}`);
   const rounds = (phase: MatchView[][], title: string, testId: string) =>
@@ -57,7 +70,7 @@ export async function DrawView({ view, slug, myMatchIds = [], organizer = false 
             <div className="text-xs font-bold uppercase tracking-wide text-muted">{roundName(t, i + 1, phase.length)}</div>
             <ul className="divide-y divide-line">
               {ms.map((m) => (
-                <MatchLine key={m.id} t={t} m={m} slug={slug} canScore={mine.has(m.id)} organizer={organizer} ruleLabel={ruleLabel(m.scoring)} />
+                <MatchLine key={m.id} t={t} m={m} slug={slug} canScore={mine.has(m.id)} organizer={organizer} ruleLabel={ruleLabel(m.scoring)} where={where} />
               ))}
             </ul>
           </div>
@@ -106,7 +119,7 @@ export async function DrawView({ view, slug, myMatchIds = [], organizer = false 
               </table>
               <ul className="mt-1 divide-y divide-line">
                 {g.matches.map((m) => (
-                  <MatchLine key={m.id} t={t} m={m} slug={slug} canScore={mine.has(m.id)} organizer={organizer} ruleLabel={ruleLabel(m.scoring)} />
+                  <MatchLine key={m.id} t={t} m={m} slug={slug} canScore={mine.has(m.id)} organizer={organizer} ruleLabel={ruleLabel(m.scoring)} where={where} />
                 ))}
               </ul>
             </div>

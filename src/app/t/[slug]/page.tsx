@@ -7,10 +7,12 @@ import { ShareButtons } from "@/components/ShareSheet";
 import { ClaimCard } from "@/components/tournament/ClaimCard";
 import { DrawView } from "@/components/tournament/DrawView";
 import { EnterForm } from "@/components/tournament/EnterForm";
+import { OrderOfPlay } from "@/components/tournament/OrderOfPlay";
 import { WithdrawButton } from "@/components/tournament/WithdrawButton";
 import { getDb } from "@/db";
 import { baseUrl, shortHost } from "@/lib/config";
 import { competitionDraws } from "@/lib/domain/competitionDraw";
+import { orderOfPlay } from "@/lib/domain/competitionSchedule";
 import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken, pairSummary } from "@/lib/domain/competitions";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
@@ -49,6 +51,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
     page.categories.map((k) => k.category).filter((k) => k.drawStatus === "published" || k.drawStatus === "done"),
   );
   const myPairIds = new Set(mine.map((e) => e.id));
+  const play = draws.size > 0 ? await orderOfPlay(db, c.id) : [];
   const claim = sp.claim ? await pairByClaimToken(db, sp.claim) : null;
   const claimedPair = sp.claimed && me ? await pairSummary(db, sp.claimed) : null;
   const claimed = claimedPair && claimedPair.p2PlayerId === me?.id ? claimedPair : null;
@@ -113,6 +116,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
             </section>
           ))}
 
+        {play.length > 0 && <OrderOfPlay rows={play} tz={c.tz} />}
         {mine.length > 0 && (
           <section className="card" data-testid="my-entries">
             <h2 className="text-lg font-extrabold">{t("tournament.yourEntries")}</h2>
@@ -195,6 +199,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
                   <DrawView
                     view={draws.get(category.id)!}
                     slug={c.slug}
+                    tz={c.tz}
                     myMatchIds={[...draws.get(category.id)!.groups.flatMap((g) => g.matches), ...draws.get(category.id)!.qualifying.flat(), ...draws.get(category.id)!.main.flat(), ...draws.get(category.id)!.consolation.flat()].filter((m) => (m.pairAId && myPairIds.has(m.pairAId)) || (m.pairBId && myPairIds.has(m.pairBId))).map((m) => m.id)}
                   />
                 )}
