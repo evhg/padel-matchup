@@ -4,10 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { CompetitionForm } from "@/components/tournament/CompetitionForm";
+import { DrawControls } from "@/components/tournament/DrawControls";
+import { DrawView } from "@/components/tournament/DrawView";
 import { ManagePanel } from "@/components/tournament/ManagePanel";
 import { getDb } from "@/db";
 import { CITIES } from "@/lib/domain/cities";
 import { listClubsForPicking } from "@/lib/domain/clubs";
+import { competitionDraws } from "@/lib/domain/competitionDraw";
 import { competitionPage, getCompetition, isOrganizer } from "@/lib/domain/competitions";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -30,6 +33,7 @@ export default async function ManageTournamentPage({ params }: Props) {
   const me = await getSessionPlayer(db);
   if (!isOrganizer(c, me?.id)) redirect(`/t/${slug}`);
   const [t, page, clubs] = await Promise.all([getTranslations(), competitionPage(db, c), listClubsForPicking(db)]);
+  const draws = await competitionDraws(db, c.id, page.categories.map((k) => k.category));
   return (
     <>
       <Header />
@@ -50,10 +54,32 @@ export default async function ManageTournamentPage({ params }: Props) {
             levelMin: k.category.levelMin,
             levelMax: k.category.levelMax,
             maxPairs: k.category.maxPairs,
-            entered: k.entered.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position })),
-            waiting: k.waiting.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position })),
+            drawStatus: k.category.drawStatus,
+            entered: k.entered.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard })),
+            waiting: k.waiting.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard })),
           }))}
         />
+        {page.categories.map(({ category }) => {
+          const view = draws.get(category.id);
+          return (
+            <section key={category.id} className="flex flex-col gap-4">
+              <DrawControls
+                slug={c.slug}
+                categoryId={category.id}
+                categoryName={category.name}
+                settings={{ format: category.format, groupSize: category.groupSize, groupsThrough: category.groupsThrough, consolation: category.consolation, qualifyingSpots: category.qualifyingSpots, scoringGroup: category.scoringGroup, scoringKnockout: category.scoringKnockout, scoringFinal: category.scoringFinal, goldenPoint: category.goldenPoint, drawStatus: category.drawStatus, maxPairs: category.maxPairs }}
+              />
+              {view && (
+                <section className="card">
+                  <h2 className="text-lg font-extrabold">
+                    {t("tournament.draw")} · {category.name}
+                  </h2>
+                  <DrawView view={view} slug={c.slug} organizer />
+                </section>
+              )}
+            </section>
+          );
+        })}
         <section className="flex flex-col gap-2">
           <h2 className="px-1 text-lg font-extrabold">{t("tournament.details")}</h2>
           <CompetitionForm

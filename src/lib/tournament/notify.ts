@@ -1,6 +1,7 @@
 import "server-only";
 import type { Db } from "@/db";
-import type { Competition, CompetitionCategory, CompetitionPair } from "@/db/schema";
+import type { Competition, CompetitionCategory, CompetitionMatch, CompetitionPair } from "@/db/schema";
+import { roundKey } from "@/lib/domain/draw";
 import { baseUrl } from "@/lib/config";
 import { tell } from "@/lib/coach/notify";
 import { getPlayer } from "@/lib/domain/players";
@@ -42,4 +43,44 @@ export async function tellMovedUp(db: Db, moved: CompetitionPair, competition: C
 
 export async function tellPartnerClaimed(db: Db, pair: CompetitionPair, competition: Competition, category: CompetitionCategory, partnerName: string): Promise<void> {
   await say(db, pair.p1PlayerId, competition, (t) => [t("tournament.noticePartnerClaimed", { partner: partnerName, category: category.name }), competition.name]);
+}
+
+/**
+ * The draw is out: every player of every pair in it hears where they start — their group, the round
+ * of their first knockout match, or the qualifying. One message per person, in their language.
+ */
+export async function tellDrawPublished(db: Db, competition: Competition, category: CompetitionCategory, pairs: readonly CompetitionPair[], matches: readonly CompetitionMatch[]): Promise<void> {
+  const mainRounds = Math.max(0, ...matches.filter((m) => m.phase === "main").map((m) => m.round));
+  const firstOf = (pairId: string): { kind: "group"; label: string } | { kind: "qualifying" } | { kind: "knockout"; round: number } | null => {
+    const mine = matches.filter((m) => m.pairAId === pairId || m.pairBId === pairId);
+    const group = mine.find((m) => m.phase === "group");
+    if (group?.groupLabel) return { kind: "group", label: group.groupLabel };
+    if (mine.some((m) => m.phase === "qualifying")) return { kind: "qualifying" };
+    const main = mine.filter((m) => m.phase === "main" && !m.bye).sort((a, b) => a.round - b.round)[0] ?? mine.filter((m) => m.phase === "main").sort((a, b) => a.round - b.round)[0];
+    return main ? { kind: "knockout", round: main.round } : null;
+  };
+  for (const pair of pairs) {
+    const start = firstOf(pair.id);
+    if (!start) continue;
+    for (const playerId of [pair.p1PlayerId, pair.p2PlayerId]) {
+      await say(db, playerId, competition, (t) => {
+        const line =
+          start.kind === "group"
+            ? t("tournament.noticeDrawGroup", { category: category.name, label: start.label })
+            : start.kind === "qualifying"
+              ? t("tournament.noticeDrawQualifying", { category: category.name })
+              : t("tournament.noticeDrawKnockout", { category: category.name, round: roundName(t, start.round, mainRounds) });
+        return [t("tournament.noticeDrawTitle", { name: competition.name }), line];
+      });
+    }
+  }
+}
+
+/** "Final", "Semi-finals", "Round of 16" in the reader's language. */
+export function roundName(t: (key: string, values?: Record<string, string | number>) => string, round: number, rounds: number): string {
+  const k = roundKey(round, rounds);
+  if (k.key === "final") return t("tournament.roundFinal");
+  if (k.key === "semi") return t("tournament.roundSemi");
+  if (k.key === "quarter") return t("tournament.roundQuarter");
+  return t("tournament.roundOf", { n: k.of ?? 0 });
 }

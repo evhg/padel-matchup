@@ -278,6 +278,8 @@ export async function enterPair(db: Db, input: EnterInput): Promise<Entered> {
   const [c] = await db.select().from(competitions).where(eq(competitions.id, cat.competitionId)).limit(1);
   if (!c) throw new DomainError("not_found", "competition");
   if (c.status !== "open" && !input.byOrganizer) throw new DomainError("closed");
+  // Once the draw is made the field is the field; a late pair is the organiser's call, before the redraw.
+  if (cat.drawStatus !== "none") throw new DomainError("closed", "drawn");
   const player = await getPlayer(db, input.playerId);
   if (!player) throw new DomainError("not_found", "player");
   let partner: Player;

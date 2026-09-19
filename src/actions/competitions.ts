@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
-import { competitionCategories, competitionPairs, competitions } from "@/db/schema";
+import { competitionCategories, competitionMatches, competitionPairs, competitions } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
+import { clearDraw, enterMatchScore, makeDraw, publishDraw, setPairSeed, updateDrawSettings, walkoverMatch, type DrawSettings } from "@/lib/domain/competitionDraw";
 import {
   addCategory,
   claimPartnerSpot,
@@ -26,7 +27,7 @@ import {
 import { DomainError } from "@/lib/domain/errors";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getSessionPlayer } from "@/lib/session";
-import { tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed } from "@/lib/tournament/notify";
+import { tellDrawPublished, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
 /**
@@ -181,5 +182,87 @@ export async function claimSpotAction(slug: string, token: string, name?: string
     const p1 = await getPlayer(db, pair.p1PlayerId);
     refresh(slug);
     return { category: cat.name, p1: p1?.displayName ?? "" };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The draw
+// ---------------------------------------------------------------------------
+
+export async function updateDrawSettingsAction(slug: string, categoryId: string, input: DrawSettings): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await updateDrawSettings(db, { ...input, categoryId, organizerPlayerId: player.id });
+    refresh(slug);
+    return null;
+  });
+}
+
+export async function setPairSeedAction(slug: string, pairId: string, seed: number | null, wildcard?: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await setPairSeed(db, { pairId, organizerPlayerId: player.id, seed, wildcard });
+    refresh(slug);
+    return null;
+  });
+}
+
+export async function makeDrawAction(slug: string, categoryId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await makeDraw(db, { categoryId, organizerPlayerId: player.id });
+    refresh(slug);
+    return null;
+  });
+}
+
+export async function clearDrawAction(slug: string, categoryId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await clearDraw(db, { categoryId, organizerPlayerId: player.id });
+    refresh(slug);
+    return null;
+  });
+}
+
+/** Published, and every player in the draw hears where they start. */
+export async function publishDrawAction(slug: string, categoryId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    const category = await publishDraw(db, { categoryId, organizerPlayerId: player.id });
+    const [c] = await db.select().from(competitions).where(eq(competitions.id, category.competitionId)).limit(1);
+    const pairs = await db
+      .select()
+      .from(competitionPairs)
+      .where(and(eq(competitionPairs.categoryId, categoryId), inArray(competitionPairs.status, ["entered", "waiting"])));
+    const matches = await db.select().from(competitionMatches).where(eq(competitionMatches.categoryId, categoryId));
+    if (c) await tellDrawPublished(db, c, category, pairs, matches).catch(() => undefined);
+    refresh(slug);
+    return null;
+  });
+}
+
+/** "6-4 3-6 10-8" from the organiser or a player of either pair. */
+export async function enterScoreAction(slug: string, matchId: string, text: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    const sets = text
+      .trim()
+      .split(/[\s,;]+/)
+      .filter(Boolean)
+      .map((s) => s.split(/[-:]/).map((n) => Number(n)));
+    if (sets.length === 0 || sets.some((s) => s.length !== 2 || s.some((n) => !Number.isInteger(n) || n < 0))) throw new DomainError("invalid", "score_shape");
+    await enterMatchScore(db, { matchId, actorPlayerId: player.id, scoreA: sets.map((s) => s[0]), scoreB: sets.map((s) => s[1]) });
+    refresh(slug);
+    return null;
+  });
+}
+
+export async function walkoverAction(slug: string, matchId: string, winner: "A" | "B"): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, player } = await me();
+    await walkoverMatch(db, { matchId, organizerPlayerId: player.id, winner });
+    refresh(slug);
+    return null;
   });
 }

@@ -3,11 +3,11 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { addCategoryAction, deskEnterAction, removeCategoryAction, setCompetitionStatusAction, setPairPaidAction, withdrawPairAction } from "@/actions/competitions";
+import { addCategoryAction, deskEnterAction, removeCategoryAction, setCompetitionStatusAction, setPairPaidAction, setPairSeedAction, withdrawPairAction } from "@/actions/competitions";
 import { bandLabel } from "@/lib/tournamentText";
 
-export type PairRow = { id: string; p1: string; p2: string; paid: boolean; claimed: boolean; position: number };
-export type CategoryRow = { id: string; name: string; levelMin: number | null; levelMax: number | null; maxPairs: number; entered: PairRow[]; waiting: PairRow[] };
+export type PairRow = { id: string; p1: string; p2: string; paid: boolean; claimed: boolean; position: number; seed: number | null; wildcard: boolean };
+export type CategoryRow = { id: string; name: string; levelMin: number | null; levelMax: number | null; maxPairs: number; drawStatus: string; entered: PairRow[]; waiting: PairRow[] };
 
 const LEVELS = Array.from({ length: 15 }, (_, i) => i * 0.5);
 const SIZES = [8, 12, 16, 24, 32, 48, 64];
@@ -71,7 +71,20 @@ export function ManagePanel({ slug, status, categories }: { slug: string; status
                     </div>
                     <div className={`shrink-0 text-xs font-bold ${p.paid ? "text-ok" : "text-muted"}`}>{p.paid ? t("tournament.paid") : t("tournament.notPaid")}</div>
                   </div>
-                  <div className="mt-1 flex gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {c.drawStatus === "none" && (
+                      <label className="flex items-center gap-1 text-xs font-bold">
+                        {t("tournament.seed")}
+                        <select className="input py-1 text-xs" value={p.seed ?? ""} disabled={pending} aria-label={`${t("tournament.seed")} ${p.p1}`} onChange={(e) => act(() => setPairSeedAction(slug, p.id, e.target.value === "" ? null : Number(e.target.value)))}>
+                          <option value="">—</option>
+                          {Array.from({ length: Math.min(16, c.maxPairs) }, (_, i) => i + 1).map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => act(() => setPairPaidAction(slug, p.id, !p.paid))}>
                       {p.paid ? t("tournament.markUnpaid") : t("tournament.markPaid")}
                     </button>

@@ -379,6 +379,13 @@
       "when": 1789796208170,
       "tag": "0053_fixed_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789806971756,
+      "tag": "0054_narrow_joshua_kane",
+      "breakpoints": true
     }
   ]
 }
