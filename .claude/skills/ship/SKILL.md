@@ -292,6 +292,12 @@ Wall clock first, credits second. What actually moved it, measured:
   `<label>` with the input. Put the hint beside the label, not in it (a `<div>` around both), and the
   label names exactly what the reader sees in bold. The fix by regex mangled two files; a form's
   return block is rewritten whole, never patched by pattern.
+- **A success message the next render replaces is a race, and the test will lose it one run in
+  four.** The claim card said "Confirmed" from client state and called `router.refresh()`; the server
+  then rendered the same URL with a spent token, which is the "link used" card, and the message was
+  gone before Playwright read it. Three green runs, then a timeout. A confirmation the reader should
+  keep is the server's to render: navigate to a state the page can rebuild (`?claimed=<id>`), never
+  refresh under a message.
 - **A view that echoes its input is not a read.** `competitionDraws` returns the category object it
   was handed, so a test that kept the object from `makeDraw` read `drawn` after the final had set
   `done` in the database. When a function takes a row and returns it inside its result, the caller

@@ -170,7 +170,7 @@ export async function setPairPaidAction(slug: string, pairId: string, paid: bool
 }
 
 /** The partner confirms the spot, signed in or by typing their name; the player who named them hears. */
-export async function claimSpotAction(slug: string, token: string, name?: string | null): Promise<ActionResult<{ category: string; p1: string }>> {
+export async function claimSpotAction(slug: string, token: string, name?: string | null): Promise<ActionResult<{ category: string; p1: string; pairId: string }>> {
   const db = await getDb();
   return runA(async () => {
     const player = await requirePlayer(db, name);
@@ -181,7 +181,7 @@ export async function claimSpotAction(slug: string, token: string, name?: string
     await tellPartnerClaimed(db, pair, c, cat, player.displayName).catch(() => undefined);
     const p1 = await getPlayer(db, pair.p1PlayerId);
     refresh(slug);
-    return { category: cat.name, p1: p1?.displayName ?? "" };
+    return { category: cat.name, p1: p1?.displayName ?? "", pairId: pair.id };
   });
 }
 

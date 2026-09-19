@@ -410,6 +410,22 @@ export async function pairByClaimToken(db: Db, token: string): Promise<(Competit
   return row && inPlay(row.pair) ? { ...row.pair, p1Name: row.p1Name, p2Name: row.p2Name, categoryName: row.categoryName } : null;
 }
 
+/** A pair by id with its names and category, for the page after a claim. */
+export async function pairSummary(db: Db, pairId: string): Promise<{ id: string; p1PlayerId: string; p2PlayerId: string; p1Name: string; p2Name: string; categoryName: string; status: CompetitionPair["status"] } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(pairId)) return null;
+  const p1 = alias(players, "p1");
+  const p2 = alias(players, "p2");
+  const [row] = await db
+    .select({ pair: competitionPairs, p1Name: p1.displayName, p2Name: p2.displayName, categoryName: competitionCategories.name })
+    .from(competitionPairs)
+    .innerJoin(p1, eq(p1.id, competitionPairs.p1PlayerId))
+    .innerJoin(p2, eq(p2.id, competitionPairs.p2PlayerId))
+    .innerJoin(competitionCategories, eq(competitionCategories.id, competitionPairs.categoryId))
+    .where(eq(competitionPairs.id, pairId))
+    .limit(1);
+  return row ? { id: row.pair.id, p1PlayerId: row.pair.p1PlayerId, p2PlayerId: row.pair.p2PlayerId, p1Name: row.p1Name, p2Name: row.p2Name, categoryName: row.categoryName, status: row.pair.status } : null;
+}
+
 // ---------------------------------------------------------------------------
 // The page
 // ---------------------------------------------------------------------------

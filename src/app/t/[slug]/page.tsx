@@ -11,13 +11,13 @@ import { WithdrawButton } from "@/components/tournament/WithdrawButton";
 import { getDb } from "@/db";
 import { baseUrl, shortHost } from "@/lib/config";
 import { competitionDraws } from "@/lib/domain/competitionDraw";
-import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken } from "@/lib/domain/competitions";
+import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken, pairSummary } from "@/lib/domain/competitions";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 import { bandLabel, dayRange } from "@/lib/tournamentText";
 
 export const dynamic = "force-dynamic";
-type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ claim?: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ claim?: string; claimed?: string }> };
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
 
@@ -50,6 +50,8 @@ export default async function TournamentPage({ params, searchParams }: Props) {
   );
   const myPairIds = new Set(mine.map((e) => e.id));
   const claim = sp.claim ? await pairByClaimToken(db, sp.claim) : null;
+  const claimedPair = sp.claimed && me ? await pairSummary(db, sp.claimed) : null;
+  const claimed = claimedPair && claimedPair.p2PlayerId === me?.id ? claimedPair : null;
   const organizer = isOrganizer(c, me?.id);
   const url = `${baseUrl()}/t/${c.slug}`;
   const days = dayRange(c.startsOn, c.endsOn, locale);
@@ -97,6 +99,11 @@ export default async function TournamentPage({ params, searchParams }: Props) {
           )}
         </section>
 
+        {claimed && (
+          <section className="card" data-testid="claim-card">
+            <p className="font-bold text-ok">{t("tournament.claimed", { category: claimed.categoryName, p1: claimed.p1Name })}</p>
+          </section>
+        )}
         {sp.claim &&
           (claim ? (
             <ClaimCard slug={c.slug} token={sp.claim} p1Name={claim.p1Name} categoryName={claim.categoryName} hasIdentity={Boolean(me)} own={me?.id === claim.p1PlayerId} />
