@@ -164,7 +164,9 @@ try {
   check("the group table counts Cal's played match", /6-4|4-6/.test(await calRow.innerText()));
   // The desk's forms wait behind a tap each, so thirty matches do not open thirty forms.
   check("the desk shows no open score form until asked", (await org.locator('[data-testid^="score-"]').count()) === 0);
-  await org.getByRole("button", { name: "Score", exact: true }).first().click();
+  // A pending match, not Cal's finished one (the groups shuffle, so it may come first): only a pending match offers a walkover.
+  const pendingLine = org.locator('[data-testid^="match-"]').filter({ hasNotText: "6-4" }).filter({ has: org.getByRole("button", { name: "Score", exact: true }) }).first();
+  await pendingLine.getByRole("button", { name: "Score", exact: true }).click();
   const openForm = org.locator('[data-testid^="score-"]').first();
   await openForm.getByRole("button", { name: /Walkover to/ }).first().click();
   await org.getByText("w/o").first().waitFor({ timeout: 20000 });
@@ -200,7 +202,9 @@ try {
   await cal.getByTestId("tv-link").click();
   await cal.waitForURL(/\/tv$/, { timeout: 20000 });
   const tv = cal.getByTestId("tv");
-  check("the live screen shows both courts with a next match each", (await cal.getByTestId("tv-courts").innerText()).includes("Court 1") && (await cal.getByTestId("tv-courts").innerText()).includes("Court 2") && (await tv.innerText()).includes("Next"));
+  // Court names and "Next" are set in capitals by CSS, and innerText carries the transform.
+  const tvText = (await tv.innerText()).toLowerCase();
+  check("the live screen shows both courts with a next match each", tvText.includes("court 1") && tvText.includes("court 2") && tvText.includes("next") && (await cal.getByTestId("tv-courts").count()) === 1);
   await shot(cal, "tournament-tv");
 } catch (e) {
   await crashed(browser, results, e);
