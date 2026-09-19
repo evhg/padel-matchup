@@ -14,3 +14,4 @@ export * from "./coaching";
 export * from "./channels";
 export * from "./api";
 export * from "./ops";
+export * from "./competitions";

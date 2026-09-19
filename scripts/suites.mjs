@@ -55,6 +55,7 @@ const RULES = [
   [/^src\/lib\/domain\/(clubs|venueBoard)\.ts$/, ["clubs", "venues"], "clubs and their boards"],
   [/^src\/lib\/booking\//, ["clubs"], "booking platforms and availability"],
   [/^src\/lib\/domain\/series\.ts$/, ["series"], "series"],
+  [/^src\/(lib\/domain\/competitions\.ts|lib\/tournament\/|lib\/tournamentText\.ts|actions\/competitions\.ts|app\/t\/|components\/tournament\/)/, ["tournament"], "the serious tournament: its rules, its notices, its screens"],
   [/^src\/lib\/domain\/(passport|profile)\.ts$/, ["passport"], "the player passport"],
   [/^src\/lib\/domain\/(levels|rating|requests)\.ts$/, ["levels", "passport"], "the level, which the passport draws"],
   [/^src\/lib\/domain\/groups\.ts$/, ["groups"], "groups"],

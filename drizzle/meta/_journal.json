@@ -372,6 +372,13 @@
       "when": 1789727962739,
       "tag": "0052_aromatic_ultimo",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789796208170,
+      "tag": "0053_fixed_banshee",
+      "breakpoints": true
     }
   ]
 }

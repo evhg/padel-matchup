@@ -3,6 +3,7 @@ import type { Db } from "@/db";
 import { coachManagers, coaches, events, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
 import { dropWantsFor } from "./demand";
 import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching";
+import { withdrawEntriesOf } from "./competitions";
 import { getPlayer } from "./players";
 import { cancelEvent } from "./events";
 import { leaveEvent, type Promotion } from "./slots";
@@ -68,6 +69,8 @@ export async function anonymizePlayer(
   // Running someone else's lessons is an access grant, not history: it ends with the account.
   await db.delete(coachManagers).where(eq(coachManagers.playerId, playerId));
 
+  // A pair they were half of leaves the draw; the spot goes to the first pair waiting, if any.
+  await withdrawEntriesOf(db, playerId, now);
   await db.delete(pushSubscriptions).where(eq(pushSubscriptions.playerId, playerId));
   // What they said they wanted goes with them. It is a standing instruction to contact them, and the
   // one thing an account deletion must not leave behind is a reason to send somebody a message.
