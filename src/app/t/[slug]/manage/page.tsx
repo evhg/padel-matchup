@@ -59,8 +59,8 @@ export default async function ManageTournamentPage({ params }: Props) {
             levelMax: k.category.levelMax,
             maxPairs: k.category.maxPairs,
             drawStatus: k.category.drawStatus,
-            entered: k.entered.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard })),
-            waiting: k.waiting.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard })),
+            entered: k.entered.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard, checkedIn: p.checkedIn })),
+            waiting: k.waiting.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard, checkedIn: p.checkedIn })),
           }))}
         />
         <CourtsForm slug={c.slug} courtNames={c.courtNames ?? []} dayStart={c.dayStart ?? COURTS.defaultStart} dayEnd={c.dayEnd ?? COURTS.defaultEnd} hasDraw={draws.size > 0} />
@@ -93,7 +93,7 @@ export default async function ManageTournamentPage({ params }: Props) {
             slug={c.slug}
             cities={CITIES.map((x) => ({ slug: x.slug, name: x.name, tz: x.tz }))}
             listed={clubs.map((x) => x.name)}
-            initial={{ name: c.name, startsOn: c.startsOn, endsOn: c.endsOn, venueName: c.venueName ?? "", city: c.city ?? "", entryNote: c.entryNote ?? "" }}
+            initial={{ name: c.name, startsOn: c.startsOn, endsOn: c.endsOn, venueName: c.venueName ?? "", city: c.city ?? "", entryNote: c.entryNote ?? "", seriesTag: c.seriesTag ?? "" }}
           />
         </section>
       </main>

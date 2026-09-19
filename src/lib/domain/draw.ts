@@ -80,7 +80,14 @@ export const scoreText = (a: readonly number[] | null | undefined, b: readonly n
 // The plan
 // ---------------------------------------------------------------------------
 
-export type Entrant = { id: string; seed: number | null; wildcard: boolean; order: number };
+export type Entrant = {
+  id: string;
+  seed: number | null;
+  wildcard: boolean;
+  order: number;
+  /** 0 for a pair in the field, 1 for a pair on the waiting list: it never displaces a pair in the field, and plays the qualifying when there is one. */
+  tier?: 0 | 1;
+};
 export type PlannedMatch = {
   phase: MatchPhase;
   groupLabel: string | null;
@@ -116,15 +123,20 @@ export const GROUP_LABELS = "ABCDEFGHIJKLMNOP".split("");
 export const nextPow2 = (n: number): number => (n <= 1 ? 1 : 2 ** Math.ceil(Math.log2(n)));
 const isPow2 = (n: number) => n > 0 && (n & (n - 1)) === 0;
 
-/** Seeds first (1 before 2), then wildcards, then the order of entry; the unseeded rest shuffled so a draw is a draw. */
+/** Seeds first (1 before 2), then wildcards, then the unseeded rest shuffled so a draw is a draw; the waiting list (tier 1) after all of them, shuffled among themselves. */
 export function orderEntrants(entrants: readonly Entrant[], rnd: () => number): Entrant[] {
-  const seeded = entrants.filter((e) => e.seed !== null).sort((a, b) => a.seed! - b.seed! || a.order - b.order);
-  const wild = entrants.filter((e) => e.seed === null && e.wildcard).sort((a, b) => a.order - b.order);
+  const field = entrants.filter((e) => (e.tier ?? 0) === 0);
+  const seeded = field.filter((e) => e.seed !== null).sort((a, b) => a.seed! - b.seed! || a.order - b.order);
+  const wild = field.filter((e) => e.seed === null && e.wildcard).sort((a, b) => a.order - b.order);
   const rest = seededShuffle(
-    entrants.filter((e) => e.seed === null && !e.wildcard),
+    field.filter((e) => e.seed === null && !e.wildcard),
     rnd,
   );
-  return [...seeded, ...wild, ...rest];
+  const waiting = seededShuffle(
+    entrants.filter((e) => (e.tier ?? 0) === 1),
+    rnd,
+  );
+  return [...seeded, ...wild, ...rest, ...waiting];
 }
 
 /** The slot order of a bracket by seed number: 1 meets the last seed, 2 the second-last, and the halves keep the top two apart. */

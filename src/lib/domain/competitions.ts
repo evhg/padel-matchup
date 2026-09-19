@@ -85,6 +85,8 @@ export type CompetitionFields = {
   venueSlug?: string | null;
   city?: string | null;
   entryNote?: string | null;
+  /** Editions of one series share a tag; the ranking across them adds up. */
+  seriesTag?: string | null;
 };
 
 function checkFields(input: CompetitionFields) {
@@ -103,6 +105,7 @@ function checkFields(input: CompetitionFields) {
     venueSlug: clean(input.venueSlug, COMPETITION.venueMax),
     city: clean(input.city, COMPETITION.cityMax),
     entryNote: clean(input.entryNote, COMPETITION.noteMax),
+    seriesTag: clean(input.seriesTag, 40)?.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "") || null,
   };
 }
 
@@ -441,6 +444,7 @@ export type PairView = {
   wildcard: boolean;
   /** False while the partner was named and has not opened the link. */
   claimed: boolean;
+  checkedIn: boolean;
 };
 export type CategoryView = { category: CompetitionCategory; entered: PairView[]; waiting: PairView[] };
 export type CompetitionPage = { competition: Competition; organizerName: string; categories: CategoryView[]; pairs: number };
@@ -471,6 +475,7 @@ export async function competitionPage(db: Db, c: Competition): Promise<Competiti
     seed: r.pair.seed,
     wildcard: r.pair.wildcard,
     claimed: !r.pair.claimToken,
+    checkedIn: r.pair.checkedInAt !== null,
   });
   return {
     competition: c,

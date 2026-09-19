@@ -45,10 +45,12 @@ export const competitions = pgTable(
     /** The day's window for play, "HH:MM" local. */
     dayStart: text("day_start"),
     dayEnd: text("day_end"),
+    /** Competitions with the same tag are editions of one series; the ranking across them adds up. */
+    seriesTag: text("series_tag"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("competitions_slug_idx").on(t.slug), index("competitions_organizer_idx").on(t.organizerPlayerId), index("competitions_dates_idx").on(t.status, t.endsOn)],
+  (t) => [uniqueIndex("competitions_slug_idx").on(t.slug), index("competitions_organizer_idx").on(t.organizerPlayerId), index("competitions_dates_idx").on(t.status, t.endsOn), index("competitions_series_idx").on(t.seriesTag)],
 );
 
 export const competitionCategories = pgTable(

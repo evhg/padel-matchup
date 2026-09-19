@@ -120,14 +120,17 @@ export async function moveMatch(db: Db, input: { matchId: string; organizerPlaye
 
 export type PlayRow = CompetitionMatch & { categoryName: string; aName: string | null; bName: string | null; aPlayers: string[]; bPlayers: string[] };
 
-/** The matches with a time, soonest first, with names: the order of play for the page, the TV and the notices. */
-export async function orderOfPlay(db: Db, competitionId: string): Promise<PlayRow[]> {
+/**
+ * The matches with a time, soonest first, with names: the order of play for the page, the TV and
+ * the notices. With `all`, every match of the competition, the timed ones first: the results file.
+ */
+export async function orderOfPlay(db: Db, competitionId: string, o: { all?: boolean } = {}): Promise<PlayRow[]> {
   const rows = await db
     .select({ m: competitionMatches, categoryName: competitionCategories.name })
     .from(competitionMatches)
     .innerJoin(competitionCategories, eq(competitionCategories.id, competitionMatches.categoryId))
-    .where(and(eq(competitionMatches.competitionId, competitionId), isNotNull(competitionMatches.scheduledAt)))
-    .orderBy(asc(competitionMatches.scheduledAt), asc(competitionMatches.courtName));
+    .where(o.all ? eq(competitionMatches.competitionId, competitionId) : and(eq(competitionMatches.competitionId, competitionId), isNotNull(competitionMatches.scheduledAt)))
+    .orderBy(asc(competitionMatches.scheduledAt), asc(competitionMatches.courtName), asc(competitionMatches.phase), asc(competitionMatches.round), asc(competitionMatches.position));
   if (rows.length === 0) return [];
   const p1 = alias(players, "p1");
   const p2 = alias(players, "p2");

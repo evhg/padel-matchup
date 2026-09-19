@@ -106,8 +106,10 @@ describe("the plan", () => {
     const easy = planDraw(entrants(4), { ...cfg, format: "knockout", maxPairs: 4, qualifyingSpots: 2, consolation: false });
     expect(easy.matches.filter((m) => m.phase === "qualifying")).toHaveLength(0);
     expect(easy.matches.filter((m) => m.phase === "main" && m.round === 1).every((m) => m.pairA && m.pairB)).toBe(true);
-    // Past the field with no qualifying: out.
-    expect(planDraw(entrants(9), cfg).out).toHaveLength(1);
+    // Past the field with no qualifying: out — and it is the waiting-list pair, never one of the field.
+    const nine = entrants(9).map((e) => (e.id === "p9" ? { ...e, tier: 1 as const } : e));
+    expect(planDraw(nine, cfg).out).toEqual(["p9"]);
+    expect(planDraw(nine, { ...cfg, format: "knockout", maxPairs: 4, qualifyingSpots: 2 }).qualifying).toContain("p9");
   });
 
   it("refuses settings that make no sense", () => {

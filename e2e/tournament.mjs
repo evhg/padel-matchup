@@ -206,6 +206,14 @@ try {
   const tvText = (await tv.innerText()).toLowerCase();
   check("the live screen shows both courts with a next match each", tvText.includes("court 1") && tvText.includes("court 2") && tvText.includes("next") && (await cal.getByTestId("tv-courts").count()) === 1);
   await shot(cal, "tournament-tv");
+
+  // 15. The extras: the results as a file, and the desk's check-in on a pair.
+  const csv = await (await cal.request.get(`${BASE}/t/phuket-open/results.csv`)).text();
+  check("the results file has a header and the played match", csv.startsWith("Category,Phase,Round") && /6-4|4-6/.test(csv));
+  await org.reload();
+  await org.locator('[data-testid^="checkin-"]').first().click();
+  await org.getByText("Checked in").first().waitFor({ timeout: 20000 });
+  check("the desk checked a pair in", true);
 } catch (e) {
   await crashed(browser, results, e);
 }

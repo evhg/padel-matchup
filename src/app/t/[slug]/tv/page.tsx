@@ -55,6 +55,11 @@ export default async function TvPage({ params }: Props) {
                   <div className="mt-1 text-sm text-muted">
                     {court.now.categoryName} · {time(court.now.scheduledAt)}
                   </div>
+                  {court.now.streamUrl && (
+                    <a href={court.now.streamUrl} target="_blank" rel="noopener noreferrer" className="btn-primary mt-2 inline-block">
+                      ▶ {t("tournament.watchLive")}
+                    </a>
+                  )}
                 </div>
               ) : (
                 <div className="mt-1 text-2xl font-bold text-faint">{t("tournament.tvFree")}</div>

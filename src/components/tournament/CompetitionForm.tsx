@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { createCompetitionAction, updateCompetitionAction } from "@/actions/competitions";
 
 export type CityOption = { slug: string; name: string; tz: string };
-export type CompetitionValues = { name: string; startsOn: string; endsOn: string; venueName: string; city: string; entryNote: string };
+export type CompetitionValues = { name: string; startsOn: string; endsOn: string; venueName: string; city: string; entryNote: string; seriesTag: string };
 
 /**
  * The competition's details: on /t/new it creates and opens the manage screen; on the manage
@@ -19,7 +19,7 @@ export function CompetitionForm({ hasIdentity, cities, listed = [], initial, slu
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [organizerName, setOrganizerName] = useState("");
-  const [v, setV] = useState<CompetitionValues>(initial ?? { name: "", startsOn: "", endsOn: "", venueName: "", city: "", entryNote: "" });
+  const [v, setV] = useState<CompetitionValues>(initial ?? { name: "", startsOn: "", endsOn: "", venueName: "", city: "", entryNote: "", seriesTag: "" });
   const set = (patch: Partial<CompetitionValues>) => setV((s) => ({ ...s, ...patch }));
   const typed = v.venueName.trim().toLowerCase();
   const suggestions = typed.length < 1 || listed.some((n) => n.toLowerCase() === typed) ? [] : listed.filter((n) => n.toLowerCase().includes(typed)).slice(0, 6);
@@ -30,7 +30,7 @@ export function CompetitionForm({ hasIdentity, cities, listed = [], initial, slu
     setError(null);
     setSaved(false);
     start(async () => {
-      const fields = { name: v.name, startsOn: v.startsOn, endsOn: v.endsOn || v.startsOn, venueName: v.venueName || null, city: v.city || null, entryNote: v.entryNote || null, tz: tzOf() };
+      const fields = { name: v.name, startsOn: v.startsOn, endsOn: v.endsOn || v.startsOn, venueName: v.venueName || null, city: v.city || null, entryNote: v.entryNote || null, seriesTag: v.seriesTag || null, tz: tzOf() };
       const r = slug ? await updateCompetitionAction(slug, fields) : await createCompetitionAction({ ...fields, organizerName: hasIdentity ? undefined : organizerName });
       if (!r) return; // the create redirected
       if (r.ok) {
@@ -97,6 +97,13 @@ export function CompetitionForm({ hasIdentity, cities, listed = [], initial, slu
           <textarea className="input mt-1 min-h-20" value={v.entryNote} maxLength={400} rows={3} onChange={(e) => set({ entryNote: e.target.value })} />
         </label>
         <span className="mt-1 block text-xs text-muted">{t("tournament.noteHelp")}</span>
+      </div>
+      <div>
+        <label className="block">
+          <span className="text-sm font-bold">{t("tournament.seriesTag")}</span>
+          <input className="input mt-1" value={v.seriesTag} maxLength={40} autoComplete="off" onChange={(e) => set({ seriesTag: e.target.value })} />
+        </label>
+        <span className="mt-1 block text-xs text-muted">{t("tournament.seriesTagHelp")}</span>
       </div>
       {error && <p className="text-sm font-semibold text-warn">{error}</p>}
       {saved && <p className="text-sm font-semibold text-ok">{t("tournament.saved")}</p>}
