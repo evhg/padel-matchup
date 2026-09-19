@@ -11,7 +11,7 @@ import type { WrapNote } from "./wrap";
 export async function deliverWrap(p: Player, n: WrapNote): Promise<void> {
   if (emailEnabled() && p.email && p.emailNotifications) {
     const { html, text } = layout({ heading: n.heading, body: n.body, cta: { label: n.open, url: n.url }, footer: n.footer, eventUrl: n.url, openLabel: n.open, footerLink: { label: n.optOut, url: `${baseUrl()}${optOutPath(p.email)}` } });
-    await sendEmail({ to: p.email, subject: n.subject, html, text }).catch(() => undefined);
+    await sendEmail({ to: p.email, subject: n.subject, html, text, files: n.attachment ? [n.attachment] : undefined }).catch(() => undefined);
   }
   if (telegramEnabled() && p.telegramId) {
     await sendMessage(p.telegramId, `<b>${esc(n.heading)}</b>\n${esc(n.body)}`, { silent: true, keyboard: { inline_keyboard: [[{ text: n.open, url: n.url }]] } }).catch(() => undefined);

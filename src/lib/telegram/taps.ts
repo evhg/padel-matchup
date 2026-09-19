@@ -1,6 +1,7 @@
 import type { Db } from "@/db";
 import type { Coach, Player } from "@/db/schema";
-import { acceptOffer as _unused, epochMin, fromEpochMin, joinWaitlist, requestOrBook, weekStartOf } from "@/lib/coach/chains";
+import { acceptOffer as _unused, epochMin, fromEpochMin, joinWaitlist, monthRange, requestOrBook, weekStartOf } from "@/lib/coach/chains";
+import { coachStatement, statementText } from "@/lib/coach/statement";
 import { notifyLessonBooked, notifyPackageTaken, notifyRequest } from "@/lib/coach/notify";
 import { coachBotLocale, coachStrings, dayOnlyLabel, whenLabel, type CoachBotLocale, type CoachBotStrings } from "@/lib/coach/strings";
 import { baseUrl } from "@/lib/config";
@@ -389,8 +390,9 @@ async function packageMade(db: Db, coach: Coach, sid: string, input: { size: num
 export async function tapMoney(db: Db, coach: Coach, s: CoachBotStrings, locale: string, chatId: number): Promise<string> {
   const rows = await owedToCoach(db, coach.id, 30);
   const pkgs = (await listStudents(db, coach.id)).filter((x) => x.activePackage && !x.activePackage.paidAt && x.activePackage.amount);
+  const statements = [{ text: s.tapStatementThis, callback_data: "kw:0" }, { text: s.tapStatementLast, callback_data: "kw:1" }];
   if (rows.length === 0 && pkgs.length === 0) {
-    await sendMessage(chatId, esc(s.tapMoneyNone), { silent: true });
+    await sendMessage(chatId, esc(s.tapMoneyNone), { silent: true, keyboard: kb([statements]) });
     return "coach:tap:money_none";
   }
   const lines = [
@@ -401,8 +403,21 @@ export async function tapMoney(db: Db, coach: Coach, s: CoachBotStrings, locale:
     ...pkgs.slice(0, 6).map((x) => [{ text: `✓ ${s.paid}: ${x.player.displayName} · ${money(x.activePackage!.amount!, coach.currency)}`, callback_data: `cp:${x.activePackage!.id}` }]),
     ...rows.slice(0, 8).map((r) => [{ text: `✓ ${s.paid}: ${r.name} · ${whenLabel(r.startsAt, coach.tz, locale)}`, callback_data: `cq:${r.lessonId}` }]),
   ];
+  buttons.push(statements);
   await sendMessage(chatId, esc(s.owes(lines.join("\n"))), { silent: true, keyboard: kb(buttons) });
   return "coach:tap:money";
+}
+
+/** The month as an accountant wants it, in the chat: this month so far, or the one before. */
+async function statementMessage(db: Db, coach: Coach, monthsBack: number, s: CoachBotStrings, locale: string, chatId: number): Promise<string> {
+  const now = new Date();
+  const thisMonth = monthRange(coach.tz, now);
+  const month = monthsBack === 0 ? thisMonth : monthRange(coach.tz, new Date(thisMonth.from.getTime() - 1));
+  const st = await coachStatement(db, coach, month.from, month.to);
+  const title = s.tapStatementTitle(new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: coach.tz }).format(month.from));
+  const labels = { student: "", done: s.stDone, noShows: s.stNoShows, late: s.stLate, comped: s.stComped, lessonsPaid: s.stPaid, lessonsUnpaid: s.stUnpaid, packages: s.stPackages, packagesPaid: s.stPaid, packagesUnpaid: s.stUnpaid, total: s.stTotal };
+  await sendMessage(chatId, esc(statementText(st, title, labels, (n) => money(n, coach.currency))), { silent: true });
+  return "coach:tap:statement";
 }
 
 /** "⚙️ Settings": the book's rules with a button per value; the figures stay one typed line. */
@@ -688,7 +703,7 @@ async function takePackage(db: Db, player: Player, coach: Coach, offerId: string
 // ------------------------------------------------------------------ callbacks
 
 /** Every tap this module answers. Free-form after the prefix; each branch reads its own segments. */
-export const TAP_CALLBACK = /^(kb|kd|kt|kh|ky|kn|ko|kx|kz|km|kl|kq|kf|ks|kp|ke|kk|kv|kg|sb|sd|st|sh|sy|sw|sa|sm|sk):/;
+export const TAP_CALLBACK = /^(kb|kd|kt|kh|ky|kn|ko|kx|kz|km|kl|kq|kf|ks|kp|ke|kk|kv|kg|kw|sb|sd|st|sh|sy|sw|sa|sm|sk):/;
 
 export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise<string | null> {
   const data = cb.data ?? "";
@@ -847,6 +862,8 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
         if (!day) return "coach:tap:none";
         return seg[1] ? blockIt(db, coach, day, seg[1], s, locale, chatId, editId) : blockWhat(coach, day, s, locale, chatId, editId);
       }
+      case "kw":
+        return statementMessage(db, coach, seg[0] === "1" ? 1 : 0, s, locale, chatId);
       case "kv":
         return settingsKeypad(db, coach, player, seg[0], (seg[1] ?? "").replace(/\D/g, ""), seg[2] === "ok", s, locale, chatId, editId);
       case "kg":

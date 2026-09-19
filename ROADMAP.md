@@ -138,6 +138,14 @@ Everything in this list is live. The README describes each in detail.
   and added in the chat. The one typed thing left is a new student's name, as a forced reply whose
   prompt carries its own context. The one-line grammar stays for a coach who likes it.
 
+- **The month as a file.** A coach's accountant wants a line per student, not a chat. The monthly
+  wrap now carries `statement-<month>.csv`: each student's lessons done, no-shows, late cancellations
+  counted, lessons on the house, what the lessons and the packages of the month came to and how much
+  of that is paid, and a totals line, in the coach's language. The same file is on the students
+  screen for this month and last month (`/coach/statement.csv?month=`), and in the chat under 💰
+  Money as two buttons that send the month as text. Comped lessons count as done and owe nothing; a
+  package counts in the month it was started, at the price agreed.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a

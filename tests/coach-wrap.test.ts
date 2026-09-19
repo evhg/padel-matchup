@@ -74,6 +74,15 @@ describe("the monthly wrap", () => {
     expect(sent.coaches).toBe(1);
     expect(sent.clubs).toBe(1);
     const toAna = delivered.find((d) => d.to.id === anaPlayer.id)!;
+    // The accountant's copy rides along: the month's statement as a file, one line per student, the totals last.
+    expect(toAna.note.attachment?.filename).toBe("statement-2026-09.csv");
+    const csv = toAna.note.attachment!.content.split("\n");
+    expect(csv[0]).toMatch(/^wrap\.stStudent \{\},wrap\.stDone \{\},/);
+    expect(csv).toHaveLength(5); // header, Leo, Mia (by name), totals, and the trailing newline
+    expect(csv[1]).toMatch(/^Leo,1,1,/);
+    expect(csv[2]).toMatch(/^Mia,8,0,/);
+    expect(csv[3]).toMatch(/^wrap\.stTotal \{\},9,1,/);
+    expect(toAna.note.body).toContain("wrap.stAttached");
     expect(toAna.note.body).toContain('"done":9');
     expect(toAna.note.body).toContain('"students":2');
     expect(toAna.note.body).toContain('"left":10');

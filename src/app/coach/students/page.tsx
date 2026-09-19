@@ -51,6 +51,7 @@ export default async function CoachStudentsPage() {
         <CoachStudents
           handle={coach.handle}
           studentUrl={studentLink(baseUrl(), coach.handle, invite)}
+          months={{ thisMonth: month.label, lastMonth: monthRange(coach.tz, new Date(month.from.getTime() - 1)).label }}
           unpaid={unpaidLessons.map((l) => ({ lessonId: l.lessonId, studentPlayerId: l.studentPlayerId, label: whenLabel(l.startsAt, coach.tz, locale), amount: l.amount, claimed: Boolean(l.claimedAt), hasSlip: l.hasSlip }))}
           coachName={coach.displayName}
           currency={coach.currency}

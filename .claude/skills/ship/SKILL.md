@@ -189,6 +189,11 @@ Wall clock first, credits second. What actually moved it, measured:
   blocks and turns a three-key change into fifty-seven changed lines; a hand-rolled comma fix corrupted
   `en.json` once. Use `node scripts/i18n.mjs add <dotted.key> "<en>" "<ru>" "<es>"` — one line per file,
   refuses to overwrite, and proves the three locales still carry the same keys.
+- **A section on one line takes its keys by hand, and the loop must not stop there.** `wrap` in
+  `messages/*.json` is a single line, so the script refuses (`found no section 'wrap' … written over
+  several lines`) and a shell loop chained with `&&` exited before the other keys were added. Add
+  such keys with a string insert before that line's closing `},` (json.dumps each value, then
+  `json.load` the file to prove it), and run the script's keys after, one command each.
 - **A line that recurs in a file is not an anchor.** `const t = await getTranslations("coach")` appears
   in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
   and the page did not compile. Anchor on a neighbouring line unique to the function (the one after
