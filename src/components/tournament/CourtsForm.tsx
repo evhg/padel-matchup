@@ -2,28 +2,36 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { makeScheduleAction, setCourtsAction } from "@/actions/competitions";
 
-/** The courts by name and the day's window; then one button gives every match a court and a time. */
+/**
+ * The courts by name and the day's window; then one button gives every match a court and a time.
+ * The fields are uncontrolled on purpose: this page is long, and text typed before React has
+ * hydrated it would be wiped by a controlled input's first render.
+ */
 export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { slug: string; courtNames: string[]; dayStart: string; dayEnd: string; hasDraw: boolean }) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [text, setText] = useState(courtNames.join("\n"));
-  const [from, setFrom] = useState(dayStart);
-  const [to, setTo] = useState(dayEnd);
+  const names = useRef<HTMLTextAreaElement>(null);
+  const from = useRef<HTMLInputElement>(null);
+  const to = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const names = text
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const read = () => ({
+    courtNames: (names.current?.value ?? "")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    dayStart: from.current?.value || dayStart,
+    dayEnd: to.current?.value || dayEnd,
+  });
   const save = () =>
     start(async () => {
       setError(null);
       setNote(null);
-      const r = await setCourtsAction(slug, { courtNames: names, dayStart: from, dayEnd: to });
+      const r = await setCourtsAction(slug, read());
       if (r.ok) {
         setNote(t("tournament.saved"));
         router.refresh();
@@ -34,17 +42,17 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
       <h2 className="text-lg font-extrabold">{t("tournament.courts")}</h2>
       <label className="block">
         <span className="text-sm font-bold">{t("tournament.courts")}</span>
-        <textarea className="input mt-1 min-h-20" value={text} rows={3} onChange={(e) => setText(e.target.value)} aria-label={t("tournament.courts")} />
+        <textarea ref={names} className="input mt-1 min-h-20" defaultValue={courtNames.join("\n")} rows={3} aria-label={t("tournament.courts")} />
       </label>
       <span className="-mt-2 text-xs text-muted">{t("tournament.courtsHelp")}</span>
       <div className="flex flex-wrap items-end gap-3">
         <label className="block">
           <span className="text-sm font-bold">{t("tournament.dayStart")}</span>
-          <input className="input mt-1" type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input ref={from} className="input mt-1" type="time" defaultValue={dayStart} />
         </label>
         <label className="block">
           <span className="text-sm font-bold">{t("tournament.dayEnd")}</span>
-          <input className="input mt-1" type="time" value={to} onChange={(e) => setTo(e.target.value)} />
+          <input ref={to} className="input mt-1" type="time" defaultValue={dayEnd} />
         </label>
         <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={save}>
           {t("common.save")}
@@ -55,12 +63,14 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
         <button
           type="button"
           className="btn-primary btn-sm"
-          disabled={pending || names.length === 0}
+          disabled={pending}
           onClick={() =>
             start(async () => {
               setError(null);
               setNote(null);
-              const saved = await setCourtsAction(slug, { courtNames: names, dayStart: from, dayEnd: to });
+              const fields = read();
+              if (fields.courtNames.length === 0) return setError(t("tournament.scheduleNeedsCourts"));
+              const saved = await setCourtsAction(slug, fields);
               if (!saved.ok) return setError(t("common.somethingWrong"));
               const r = await makeScheduleAction(slug);
               if (r.ok) {

@@ -170,7 +170,9 @@ try {
   check("a walkover is recorded", true);
   await shot(org, "tournament-draw-manage");
 
-  // 12. Courts and times: two courts, nine to nine, and every match of the draw gets a slot.
+  // 12. Courts and times: two courts, nine to nine, and every match of the draw gets a slot. A fresh page
+  // first: a fill during the walkover's pending refresh was lost once.
+  await org.reload();
   const courts = org.getByTestId("courts-form");
   await courts.getByLabel("Courts").fill("Court 1\nCourt 2");
   await courts.getByRole("button", { name: "Make the schedule" }).click();
