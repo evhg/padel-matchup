@@ -158,7 +158,8 @@ try {
   // 11. The organiser's table counts the played match, and a walkover is one tap.
   await org.reload();
   const calRow = org.locator("tr").filter({ hasText: "Cal & Dee" });
-  check("the group table counts Cal's win", (await calRow.innerText()).includes("6-4"));
+  // "6-4" is A then B in the match's own order; Cal's pair is either side, so the table reads 6-4 or 4-6.
+  check("the group table counts Cal's played match", /6-4|4-6/.test(await calRow.innerText()));
   // The desk's forms wait behind a tap each, so thirty matches do not open thirty forms.
   check("the desk shows no open score form until asked", (await org.locator('[data-testid^="score-"]').count()) === 0);
   await org.getByRole("button", { name: "Score", exact: true }).first().click();
