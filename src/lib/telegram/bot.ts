@@ -15,6 +15,7 @@ import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
 import { continueScoreReply, SCORE_TRAILER } from "./tournament";
 import { handlePlayerCallback, playerMenu, playerMenuWord, PLAYER_CALLBACK } from "./player";
+import { continuePartnerReply, PARTNER_TRAILER, tournamentsInChat } from "./competitions";
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
 import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
@@ -68,6 +69,11 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     const scored = await continueScoreReply(db, msg, await findOrCreateTelegramPlayer(db, from));
     if (scored) return scored;
   }
+  // A partner's name in reply to a tournament category's prompt enters the pair, before the score reader.
+  if (isPrivate && !cmd && msg.reply_to_message?.text && PARTNER_TRAILER.test(msg.reply_to_message.text)) {
+    const entered = await continuePartnerReply(db, msg, chat, await findOrCreateTelegramPlayer(db, from));
+    if (entered) return entered;
+  }
   // A player's keyboard button ("Find a match", "When I want to play"): a door, before anything reads the text.
   if (isPrivate && !cmd && msg.text && !msg.reply_to_message) {
     const word = playerMenuWord(msg.text);
@@ -99,7 +105,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       return "card";
     }
     if (cmd.command === "lang") {
-      const next: BotLocale = cmd.args.trim().toLowerCase().startsWith("ru") ? "ru" : "en";
+      const next: BotLocale = botLocale(cmd.args.trim());
       await db.update(telegramChats).set({ locale: next }).where(eq(telegramChats.chatId, chat.chatId));
       await sendMessage(chat.chatId, strings(next).langSet, { silent: true });
       return "lang";
@@ -108,6 +114,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     if (ROLE_COMMANDS.has(cmd.command) && isPrivate) return roleCommand(db, msg, chat, from, cmd.command);
     if (cmd.command === "want") return wantCommand(db, msg, chat, from, cmd.args);
     if (cmd.command === "coach" && isPrivate) return coachCommand(db, chat, from);
+    if (cmd.command === "tournaments" && isPrivate) return tournamentsInChat(db, chat, s, locale);
     if (cmd.command === "help" || cmd.command === "start") return startCommand(db, chat, from, cmd, isPrivate);
     return "ignored";
   }

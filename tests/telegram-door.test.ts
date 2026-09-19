@@ -70,7 +70,7 @@ describe("the player's door", () => {
     const menu = last();
     expect(JSON.stringify(menu.body.reply_markup)).toContain("Find a match");
     expect(JSON.stringify(menu.body.reply_markup)).toContain("When I want to play");
-    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).toEqual(["games", "new", "want", "coach", "help"]);
+    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).toEqual(["games", "new", "want", "tournaments", "coach", "help"]);
     // No city known for this chat yet: the cities as buttons.
     calls = [];
     expect(await text(2, ana, "🔎 Find a match")).toBe("player:find:city");

@@ -19,6 +19,7 @@ import { gamesFromChat } from "./handlers/games";
 import { startGuidedNew } from "./handlers/new";
 import { findOrCreateTelegramPlayer, linkTelegram } from "./identity";
 import { sendRoleMenu } from "./coach";
+import { competitionCallback, tournamentsInChat } from "./competitions";
 
 /**
  * The plain player's side of the bot as buttons. A coach and a student had a keyboard; a player had
@@ -28,13 +29,13 @@ import { sendRoleMenu } from "./coach";
  * tournament partner's claim, and the "get this on Telegram" line in every email.
  */
 
-export type PlayerWord = "find" | "mine" | "new" | "want" | "coach" | "help";
-export const PLAYER_CALLBACK = /^(pg|pw):/;
-const LOCALES: BotLocale[] = ["en", "ru"];
+export type PlayerWord = "find" | "mine" | "new" | "want" | "tournaments" | "coach" | "help";
+export const PLAYER_CALLBACK = /^(pg|pw|pt|pe):/;
+const LOCALES: BotLocale[] = ["en", "ru", "es"];
 const strip = (label: string) => label.replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLowerCase();
 
 export function playerKeyboard(s: BotStrings): ReplyKeyboard {
-  return { keyboard: [[{ text: s.menuFind }, { text: s.menuMine }], [{ text: s.menuNew }, { text: s.menuWant }], [{ text: s.menuCoach }, { text: s.menuHelp }]], is_persistent: true, resize_keyboard: true, input_field_placeholder: s.menuPlaceholderPlayer };
+  return { keyboard: [[{ text: s.menuFind }, { text: s.menuMine }], [{ text: s.menuNew }, { text: s.menuWant }], [{ text: s.menuTournaments }, { text: s.menuCoach }, { text: s.menuHelp }]], is_persistent: true, resize_keyboard: true, input_field_placeholder: s.menuPlaceholderPlayer };
 }
 
 /** A tapped label, in either language, as the door it opens; null for ordinary text. */
@@ -48,6 +49,7 @@ export function playerMenuWord(text: string): PlayerWord | null {
       [s.menuMine, "mine"],
       [s.menuNew, "new"],
       [s.menuWant, "want"],
+      [s.menuTournaments, "tournaments"],
       [s.menuCoach, "coach"],
       [s.menuHelp, "help"],
     ];
@@ -57,22 +59,33 @@ export function playerMenuWord(text: string): PlayerWord | null {
 }
 
 /** The player's commands for the "/" menu, in the chat's language. */
-const playerCommands = (locale: BotLocale) =>
-  locale === "ru"
-    ? [
-        { command: "games", description: "Открытые матчи рядом" },
-        { command: "new", description: "Новый матч" },
-        { command: "want", description: "Когда хочу играть" },
-        { command: "coach", description: "Мой тренер / моя книга" },
-        { command: "help", description: "Что я умею" },
-      ]
-    : [
-        { command: "games", description: "Open matches near you" },
-        { command: "new", description: "A new match" },
-        { command: "want", description: "When I want to play" },
-        { command: "coach", description: "My coach / my book" },
-        { command: "help", description: "What I do" },
-      ];
+const PLAYER_COMMANDS: Record<BotLocale, { command: string; description: string }[]> = {
+  en: [
+    { command: "games", description: "Open matches near you" },
+    { command: "new", description: "A new match" },
+    { command: "want", description: "When I want to play" },
+    { command: "tournaments", description: "Open tournaments" },
+    { command: "coach", description: "My coach / my book" },
+    { command: "help", description: "What I do" },
+  ],
+  ru: [
+    { command: "games", description: "Открытые матчи рядом" },
+    { command: "new", description: "Новый матч" },
+    { command: "want", description: "Когда хочу играть" },
+    { command: "tournaments", description: "Открытые турниры" },
+    { command: "coach", description: "Мой тренер / моя книга" },
+    { command: "help", description: "Что я умею" },
+  ],
+  es: [
+    { command: "games", description: "Partidos abiertos cerca" },
+    { command: "new", description: "Un partido nuevo" },
+    { command: "want", description: "Cuándo quiero jugar" },
+    { command: "tournaments", description: "Torneos abiertos" },
+    { command: "coach", description: "Mi entrenador / mi agenda" },
+    { command: "help", description: "Qué hago" },
+  ],
+};
+const playerCommands = (locale: BotLocale) => PLAYER_COMMANDS[locale];
 
 /** The keyboard and the commands for a plain player; the intro line says what the buttons do. */
 export async function sendPlayerMenu(chatId: number, locale: BotLocale, o: { intro?: string } = {}): Promise<void> {
@@ -110,6 +123,8 @@ export async function playerMenu(db: Db, msg: TgMessage, chat: TelegramChat, fro
     case "want":
       await sendMessage(chat.chatId, esc(s.wantDay), { keyboard: dayKeyboard(locale, s), silent: true });
       return "player:want:day";
+    case "tournaments":
+      return tournamentsInChat(db, chat, s, locale);
     case "coach":
       return coachCommand(db, chat, from);
     case "help":
@@ -151,6 +166,7 @@ export async function handlePlayerCallback(db: Db, cb: NonNullable<TgUpdate["cal
   const s = strings(locale);
   const chatId = cb.message?.chat.id ?? chat.chatId;
   const ack = (text?: string) => answerCallbackQuery(cb.id, text).catch(() => undefined);
+  if (data.startsWith("pt:") || data.startsWith("pe:")) return competitionCallback(db, cb, data, chat, s, locale);
   const games = data.match(/^pg:([a-z-]{2,30})$/);
   if (games) {
     const city = cityBySlug(games[1]);

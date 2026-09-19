@@ -101,6 +101,13 @@ try {
   check("an hour button asks for the place", hourTap.json?.outcome === "player:want:place", JSON.stringify(hourTap.json));
   const placeTap = await hook({ update_id: 65, callback_query: { id: "cbpw3", from: ivan, message: { message_id: 65, date: 0, chat: dm }, data: "pw:p:x:x:c:phuket" } });
   check("a place button saves the want", placeTap.json?.outcome === "player:want:saved", JSON.stringify(placeTap.json));
+  // Tournaments as taps, and the card's third language.
+  const tTap = await hook({ update_id: 66, message: { message_id: 66, date: 0, chat: dm, from: ivan, text: "🏆 Турниры" } });
+  check("the Tournaments button lists the open ones or says there are none", /^player:tournaments:(none|\d+)$/.test(tTap.json?.outcome ?? ""), JSON.stringify(tTap.json));
+  const langEs = await hook({ update_id: 67, message: { message_id: 67, date: 0, chat: dm, from: ivan, text: "/lang es" } });
+  check("/lang es is a language the private chat can take", langEs.json?.outcome === "lang", JSON.stringify(langEs.json));
+  const langRu = await hook({ update_id: 68, message: { message_id: 68, date: 0, chat: dm, from: ivan, text: "/lang ru" } });
+  check("/lang ru puts it back", langRu.json?.outcome === "lang", JSON.stringify(langRu.json));
   // Inline mode: the exact code gives that card; a chosen result is remembered; a tap under it joins.
   const iq = await hook({ update_id: 30, inline_query: { id: "iq1", from: ivan, query: code, offset: "" } });
   check("@bot CODE answers the inline query with that one card", iq.json?.outcome === "inline:1", JSON.stringify(iq.json));

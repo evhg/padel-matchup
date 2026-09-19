@@ -205,6 +205,17 @@ Everything in this list is live. The README describes each in detail.
   foot of every email to a player who has no Telegram yet, which binds their account when tapped.
   Someone whose coach or student days are over gets the player's keyboard, not an empty one.
 
+- **The inside of the bot, after the door.** The card in the chats speaks Spanish as well as English
+  and Russian: every string of it, on Telegram, Discord and LINE, and `/lang es` sets it. A match with
+  a map link carries a Map button under its card. The serious tournament is in the chat: a
+  Tournaments button lists the open competitions, one tap opens the competition's card with its
+  categories and counts, another opens a category's door, the partner's name typed in reply enters
+  the pair, and the partner's one-tap claim link comes straight back. The coach's setup in the chat
+  goes on past the hours where it used to stop: the price on the keypad, then how students pay —
+  a PromptPay number on the keypad, "at the club" in one tap, or later. What a student owes comes to
+  them as the coach's PromptPay QR with that sum in it, sent as a photo under the Pay tap, with
+  "I paid" under it.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a
@@ -301,9 +312,11 @@ linked and four have an email address.
    until somebody is using it, because there is nothing to translate *for* yet.
 
    The numbers, since they were once given wrongly as one number. The card in a chat is its own set
-   of **216 strings**, and it has two languages, English and Russian — not three. The **1,456**
-   strings are the website, which has three. So Thai in a LINE chat is 216 strings and Thai on the
-   website is 1,456, and neither of them is what stops LINE going live: the Official Account is.
+   of **143 strings** in `src/lib/telegram/card.ts`, in three languages since 19 September 2026
+   (Spanish came with the inside of the bot, above); the coach's assistant has its own set, also in
+   three. The **1,456** strings are the website, which has three. So Thai in a LINE chat is 143 strings
+   and Thai on the website is 1,456, and neither of them is what stops LINE going live: the Official
+   Account is.
 3. **The serious tournament: run one for real.** All five steps are under Built. What is left is
    not code: an organiser (the Thai Padel Series, or Erik's next Open) runs a weekend on it, and what
    they trip on comes back here. Formerly listed here: the big-event extras — a stream link on a match or a

@@ -47,7 +47,7 @@ import {
 } from "@/lib/domain/coaching";
 import { isDomainError } from "@/lib/domain/errors";
 import { coachCommands, coachKeyboard, menuWord, studentCommands, studentKeyboard } from "@/lib/coach/menu";
-import { agendaButtons, tapBlockDays, tapBookWho, tapCancelList, tapMoney, tapMoveList, tapSettings, tapStudentBook, tapStudentMove, tapStudentPay, tapStudents } from "./taps";
+import { agendaButtons, tapBlockDays, tapBookWho, tapCancelList, tapMoney, tapMoveList, tapSettings, tapSetupPrice, tapStudentBook, tapStudentMove, tapStudentPay, tapStudents } from "./taps";
 import { answerCallbackQuery, editMessageText, esc, pinChatMessage, sendMessage, sendPhoto, setChatCommands, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser, unpinAllChatMessages } from "./api";
 
 /**
@@ -699,6 +699,8 @@ async function setupStep(db: Db, player: Player, id: string, extra: string | und
   const link = studentLink(baseUrl(), coach.handle, await inviteCode(db, coach));
   await edit(s.setupDone(link), null);
   await sendRoleMenu(db, player, chatId, { pin: false });
+  // The walk goes on with the two figures the web walk asks next: the price, then how students pay.
+  await tapSetupPrice(chatId, s);
   return "coach:setup:done";
 }
 
@@ -869,7 +871,8 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
     }
     await notifyPaidClaimed(db, { coach: owner, student: player, lesson }).catch(() => undefined);
     await answerCallbackQuery(cb.id, s.claimSent);
-    await editMessageText(chatId, messageId, esc(s.claimSent), null).catch(() => undefined);
+    // Under the QR photo the text is a caption, which editMessageText cannot touch; the toast has said it.
+    if (!(cb.message as { photo?: unknown }).photo) await editMessageText(chatId, messageId, esc(s.claimSent), null).catch(() => undefined);
     return "student:claim";
   }
   const mine = (await studentCoaches(db, player.id)).filter((x) => x.status === "accepted");
