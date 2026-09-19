@@ -159,6 +159,9 @@ try {
   await org.reload();
   const calRow = org.locator("tr").filter({ hasText: "Cal & Dee" });
   check("the group table counts Cal's win", (await calRow.innerText()).includes("6-4"));
+  // The desk's forms wait behind a tap each, so thirty matches do not open thirty forms.
+  check("the desk shows no open score form until asked", (await org.locator('[data-testid^="score-"]').count()) === 0);
+  await org.getByRole("button", { name: "Score", exact: true }).first().click();
   const openForm = org.locator('[data-testid^="score-"]').first();
   await openForm.getByRole("button", { name: /Walkover to/ }).first().click();
   await org.getByText("w/o").first().waitFor({ timeout: 20000 });

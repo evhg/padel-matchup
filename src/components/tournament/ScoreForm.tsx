@@ -12,7 +12,8 @@ import { enterScoreAction, walkoverAction } from "@/actions/competitions";
 export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aName, bName }: { slug: string; matchId: string; rule: string; ruleLabel: string; organizer: boolean; done: boolean; aName: string; bName: string }) {
   const t = useTranslations();
   const router = useRouter();
-  const [open, setOpen] = useState(!done);
+  // A player's own match opens ready to score; the organiser's desk lists thirty matches, so each one waits for a tap.
+  const [open, setOpen] = useState(!done && !organizer);
   const [text, setText] = useState("");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
