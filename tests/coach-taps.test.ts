@@ -324,8 +324,10 @@ describe("the student books, moves, pays and takes a package with taps", () => {
   });
 
   it("shows what is owed with 'I paid' per lesson, and takes a package from the page in one tap once the old one is used up", async () => {
-    expect(await say(studentChat, tgStudent, "💳 Pay & package")).toBe("student:tap:pay");
+    // The coach takes PromptPay and something is owed: the list rides as the caption of the QR photo with the sum in it.
+    expect(await say(studentChat, tgStudent, "💳 Pay & package")).toBe("student:tap:pay_qr");
     expect(last().text).toMatch(/With Olga/);
+    expect(String(calls.findLast((c) => c.method === "sendPhoto")?.body.photo)).toMatch(/\/pay\/owed\//);
     // The packages already held keep the offer off the screen; close them and the offer appears.
     await db.update(lessonPackages).set({ closedAt: new Date() }).where(eq(lessonPackages.studentPlayerId, studentId));
     await say(studentChat, tgStudent, "💳 Pay & package");

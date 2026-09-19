@@ -545,7 +545,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await send(720, "/start")).toBe("private_start");
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("Find a match");
     expect(sent("deleteMyCommands")).toHaveLength(0);
-    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).toEqual(["games", "new", "want", "coach", "help"]);
+    expect((sent("setMyCommands").at(-1)!.body.commands as { command: string }[]).map((c) => c.command)).toEqual(["games", "new", "want", "tournaments", "coach", "help"]);
     const [me] = await db.select().from(players).where(eq(players.telegramId, 93));
     await createCoach(db, { playerId: me.id, displayName: "Olga", clubNames: "Warehaus", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok" });
     calls = [];

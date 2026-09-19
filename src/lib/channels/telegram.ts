@@ -14,7 +14,7 @@ type TgCard = Card<TelegramCard>;
 
 const GROUP_TYPES = new Set(["group", "supergroup"]);
 const DAY_MS = 24 * 60 * 60 * 1000;
-export const chatLocale = (chat: TelegramChat | null, fallback?: string | null): BotLocale => (chat ? (chat.locale === "ru" ? "ru" : "en") : botLocale(fallback));
+export const chatLocale = (chat: TelegramChat | null, fallback?: string | null): BotLocale => botLocale(chat ? chat.locale : fallback);
 export const renderHash = (text: string, keyboard: unknown) => createHash("sha256").update(text).update(JSON.stringify(keyboard)).digest("hex");
 export const telegramRoom = (chat: TelegramChat): TgRoom => ({ id: String(chat.chatId), locale: chatLocale(chat), groupId: chat.groupId, raw: chat });
 const cardOf = (c: TelegramCard): TgCard => ({ id: c.id, kind: c.kind, messageId: c.messageId, rendered: c.rendered, completeNotedAt: c.completeNotedAt, raw: c });
@@ -90,7 +90,7 @@ export const telegramChannel: CardChannel<TelegramPayload, TelegramChat, Telegra
     let edits = 0;
     const inline = await db.select().from(telegramInlineCards).where(eq(telegramInlineCards.eventId, detail.event.id)).limit(200);
     for (const c of inline) {
-      const { text, keyboard } = renderCard(detail, baseUrl(), c.locale === "ru" ? "ru" : "en", now);
+      const { text, keyboard } = renderCard(detail, baseUrl(), botLocale(c.locale), now);
       const hash = renderHash(text, keyboard);
       if (hash === c.rendered) continue;
       if (editOk(await editInlineMessageText(c.inlineMessageId, text, keyboard))) {

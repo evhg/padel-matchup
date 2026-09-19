@@ -465,8 +465,10 @@ export async function tapSettings(db: Db, coach: Coach, player: Player, s: Coach
   return "coach:tap:settings";
 }
 
-/** The figures in settings, one keypad each. `kv:<field>:<digits>` and `:ok` to save. */
+/** The figures in settings, one keypad each. `kv:<field>:<digits>` and `:ok` to save. `ps` and `pq` are the setup's price and PromptPay: the same figures, with the next step under them. */
 const FIELDS: Record<string, { label: (s: CoachBotStrings) => string; patch: (n: number) => Parameters<typeof updateCoach>[2] }> = {
+  ps: { label: (s) => s.labPrice, patch: (n) => ({ priceSingle: n || null }) },
+  pq: { label: (s) => s.labPromptpay, patch: () => ({}) },
   p1: { label: (s) => s.labPrice, patch: (n) => ({ priceSingle: n || null }) },
   p2: { label: (s) => s.tapPairEach, patch: (n) => ({ priceTwo: n || null }) },
   s1: { label: (s) => s.tapSecondOne, patch: (n) => ({ priceSecondSingle: n || null }) },
@@ -475,23 +477,35 @@ const FIELDS: Record<string, { label: (s: CoachBotStrings) => string; patch: (n:
   pp: { label: (s) => s.labPromptpay, patch: () => ({}) },
 };
 
-async function settingsKeypad(db: Db, coach: Coach, player: Player, field: string, digits: string, done: boolean, s: CoachBotStrings, locale: string, chatId: number, editId: number): Promise<string> {
+async function settingsKeypad(db: Db, coach: Coach, player: Player, field: string, digits: string, done: boolean, s: CoachBotStrings, locale: string, chatId: number, editId: number | null): Promise<string> {
   const f = FIELDS[field];
   if (!f) return "coach:tap:none";
+  const promptpay = field === "pp" || field === "pq";
   if (done) {
     // PromptPay is digits too, but ten to thirteen of them and never a sum: it keeps its own shape.
-    if (field === "pp") await updateCoach(db, coach.id, { promptpayId: digits });
+    if (promptpay) await updateCoach(db, coach.id, { promptpayId: digits || null });
     else await updateCoach(db, coach.id, f.patch(Number(digits)));
     const fresh = (await getCoachForActor(db, player.id))?.coach ?? coach;
+    // The setup's price saved: how students pay comes next, unless the coach said already.
+    if (field === "ps" && !fresh.promptpayId && !fresh.payAtClub && !fresh.payLink) return settingsKeypad(db, fresh, player, "pq", "", false, s, locale, chatId, editId);
     await tapSettings(db, fresh, player, s, locale, chatId, editId);
     return `coach:set:${field}`;
   }
   const prefix = `kv:${field}:`;
-  const wide = field === "pp" ? digits.slice(0, 13) : digits;
+  const wide = promptpay ? digits.slice(0, 13) : digits;
   const pad = keypad(prefix, wide, s);
-  if (field === "pp") for (const row of pad.inline_keyboard) for (const b of row) if (b.callback_data && !b.callback_data.endsWith(":ok")) b.callback_data = `${prefix}${(b.callback_data.slice(prefix.length) + "").slice(0, 13)}`;
-  await put(chatId, editId, s.tapEnter(f.label(s), wide), pad);
-  return "coach:tap:keypad";
+  if (promptpay) for (const row of pad.inline_keyboard) for (const b of row) if (b.callback_data && !b.callback_data.endsWith(":ok")) b.callback_data = `${prefix}${(b.callback_data.slice(prefix.length) + "").slice(0, 13)}`;
+  // In the setup the keypad says why it asks, and the other answers sit under it.
+  if (field === "pq") pad.inline_keyboard.push([{ text: s.tapPayAtClub, callback_data: "ke:club:1" }], [{ text: s.tapLater, callback_data: "ke:show" }]);
+  const heading = field === "ps" ? `${s.setupPrice}\n${s.tapEnter(f.label(s), wide)}` : field === "pq" ? `${s.setupPay}\n${s.tapEnter(f.label(s), wide)}` : s.tapEnter(f.label(s), wide);
+  await put(chatId, editId, heading, pad);
+  return field === "ps" || field === "pq" ? `coach:setup:${field === "ps" ? "price" : "pay"}` : "coach:tap:keypad";
+}
+
+/** The setup's next step after the hours: the price of a lesson, on the keypad, as a new message under the menu. */
+export async function tapSetupPrice(chatId: number, s: CoachBotStrings): Promise<string> {
+  await put(chatId, null, `${s.setupPrice}\n${s.tapEnter(s.labPrice, "")}`, keypad("kv:ps:", "", s));
+  return "coach:setup:price";
 }
 
 /** The packages on the coach's page, managed in the chat: a list with ✕ on each, and a new one in four taps and a keypad. */
@@ -646,20 +660,30 @@ export async function tapStudentPay(db: Db, player: Player, s: CoachBotStrings, 
     await sendMessage(chatId, esc(s.notStudent), { silent: true });
     return "student:none";
   }
-  const lines: string[] = [];
-  const rows: { text: string; callback_data: string }[][] = [];
+  let photos = 0;
   for (const m of mine) {
     const owed = await owedBy(db, m.coach, player.id);
-    lines.push(s.left(m.coach.displayName, pkgText(s, m.activePackage)));
+    const lines: string[] = [s.left(m.coach.displayName, pkgText(s, m.activePackage))];
+    const rows: { text: string; callback_data: string }[][] = [];
     for (const p of owed.packages) lines.push(s.youOweLine(money(p.amount, owed.currency), `${s.tapPay} · ${p.size}`, false));
     for (const l of owed.lessons) {
       lines.push(s.youOweLine(money(l.amount, owed.currency), whenLabel(l.startsAt, m.coach.tz, locale), l.claimedAt !== null));
       if (!l.claimedAt) rows.push([{ text: `${s.iPaid} · ${whenLabel(l.startsAt, m.coach.tz, locale)}`, callback_data: `lp:${l.id}` }]);
     }
     if (!m.activePackage && (await listOffers(db, m.coach.id)).length) rows.push([{ text: `${s.tapTakePackage} · ${m.coach.displayName}`, callback_data: `sk:${packId(m.coach.id)}` }]);
+    const text = lines.join("\n");
+    // What is still to pay, as the coach's PromptPay QR with that sum in it: the student scans it from the chat.
+    const due = owed.lessons.filter((l) => !l.claimedAt).reduce((a, l) => a + l.amount, 0) + owed.packages.reduce((a, p) => a + p.amount, 0);
+    if (due > 0 && (m.coach.promptpayId || m.coach.qrAssetId)) {
+      const photo = await sendPhoto(chatId, `${baseUrl()}/c/${m.coach.handle}/pay/owed/${player.id}`, esc(text).slice(0, 1000), { silent: true, keyboard: rows.length ? kb(rows) : undefined });
+      if (photo.ok) {
+        photos++;
+        continue;
+      }
+    }
+    await sendMessage(chatId, esc(text), { silent: true, keyboard: rows.length ? kb(rows) : null });
   }
-  await sendMessage(chatId, esc(lines.join("\n")), { silent: true, keyboard: rows.length ? kb(rows) : null });
-  return "student:tap:pay";
+  return photos ? "student:tap:pay_qr" : "student:tap:pay";
 }
 
 async function packagesFor(db: Db, coach: Coach, s: CoachBotStrings, chatId: number, editId: number | null): Promise<string> {
@@ -876,6 +900,7 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
         else if (key === "hours" && (val === "mornings" || val === "afternoons" || val === "both")) await updateCoach(db, coach.id, { hours: presetHours(val) });
         else if (key === "cutoff" && Number.isFinite(Number(val))) await updateCoach(db, coach.id, { cutoffHours: Number(val) });
         else if (key === "passes" && Number.isFinite(Number(val))) await updateCoach(db, coach.id, { latePasses: Number(val) });
+        else if (key === "club") await updateCoach(db, coach.id, { payAtClub: val === "1" });
         else return "coach:tap:none";
         const fresh = (await getCoachForActor(db, player.id))?.coach ?? coach;
         await tapSettings(db, fresh, player, s, locale, chatId, editId);

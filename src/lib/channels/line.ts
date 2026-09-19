@@ -19,7 +19,7 @@ export type LinePayload = { messages: LineMessage[] };
 type LnRoom = Room<LineRoom>;
 type LnCard = Card<LineCard>;
 
-export const roomLocale = (r: LineRoom | null, fallback?: string | null): BotLocale => (r ? (r.locale === "ru" ? "ru" : "en") : botLocale(fallback));
+export const roomLocale = (r: LineRoom | null, fallback?: string | null): BotLocale => botLocale(r ? r.locale : fallback);
 export const lineRoomOf = (room: LineRoom): LnRoom => ({ id: room.roomId, locale: roomLocale(room), groupId: room.groupId, raw: room });
 const cardOf = (c: LineCard): LnCard => ({ id: c.id, kind: c.kind, messageId: c.messageId, rendered: c.rendered, completeNotedAt: c.completeNotedAt, raw: c });
 

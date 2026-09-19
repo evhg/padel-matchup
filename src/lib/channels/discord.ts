@@ -12,7 +12,7 @@ export type DiscordPayload = Pick<DiscordCardPayload, "embeds" | "components">;
 type DcRoom = Room<DiscordChannel>;
 type DcCard = Card<DiscordCard>;
 
-export const channelLocale = (c: DiscordChannel | null, fallback?: string | null): BotLocale => (c ? (c.locale === "ru" ? "ru" : "en") : botLocale(fallback));
+export const channelLocale = (c: DiscordChannel | null, fallback?: string | null): BotLocale => botLocale(c ? c.locale : fallback);
 export const discordRoom = (channel: DiscordChannel): DcRoom => ({ id: channel.channelId, locale: channelLocale(channel), groupId: channel.groupId, raw: channel });
 const cardOf = (c: DiscordCard): DcCard => ({ id: c.id, kind: c.kind, messageId: c.messageId, rendered: c.rendered, completeNotedAt: c.completeNotedAt, raw: c });
 
