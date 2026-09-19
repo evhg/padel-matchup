@@ -190,7 +190,9 @@ try {
   await move.getByLabel("Move").fill(`${inDays(31)}T15:30`);
   await move.getByRole("button", { name: "Move", exact: true }).click();
   await move.waitFor({ state: "detached", timeout: 20000 });
-  check("a match moved to Court 2 at 15:30 the next day", (await org.getByTestId("order-of-play").innerText()).includes("15:30"));
+  // The form closes on the action's answer; the order of play follows on the refresh, so wait for the time itself.
+  await org.getByTestId("order-of-play").getByText("15:30").first().waitFor({ timeout: 20000 });
+  check("a match moved to Court 2 at 15:30 the next day", true);
 } catch (e) {
   await crashed(browser, results, e);
 }
