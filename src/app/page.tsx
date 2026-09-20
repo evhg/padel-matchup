@@ -27,18 +27,27 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
             </div>
           ))}
         </section>
-        <Link href="/americano" prefetch={false} className="mt-2 self-start px-1 text-sm link">
-          {t("landing.americanoLink")}
-        </Link>
-        <Link href="/coaches?s=landing" prefetch={false} className="self-start px-1 text-sm link">
-          {t("landing.coachesLink")}
-        </Link>
-        <Link href="/t" prefetch={false} className="self-start px-1 text-sm link" data-testid="landing-tournaments">
-          {t("landing.tournamentLink")}
-        </Link>
-        <Link href="/clubs" prefetch={false} className="self-start px-1 text-sm link" data-testid="landing-clubs">
-          {t("landing.clubsLink")}
-        </Link>
+        {/* The other four people this is for, one door each: a tile with a name and the one line that
+            says who it is for. Four lines of links at the bottom of the page were a footer, not a door. */}
+        <section className="mt-6" aria-label={t("landing.doorsTitle")} data-testid="landing-doors">
+          <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-faint">{t("landing.doorsTitle")}</h2>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {[
+              { href: "/coaches?s=landing", icon: "🎾", title: t("common.coaches"), line: t("landing.doorCoaches"), testId: "landing-coaches" },
+              { href: "/t", icon: "🏆", title: t("common.tournaments"), line: t("landing.doorTournaments"), testId: "landing-tournaments" },
+              { href: "/clubs", icon: "🏟", title: t("common.clubs"), line: t("landing.doorClubs"), testId: "landing-clubs" },
+              { href: "/americano", icon: "🔀", title: t("landing.americanoTitle"), line: t("landing.doorAmericano"), testId: "landing-americano" },
+            ].map((d) => (
+              <Link key={d.href} href={d.href} prefetch={false} className="flex flex-col gap-1 rounded-2xl border border-line bg-white px-4 py-3 transition hover:border-ink/30" data-testid={d.testId}>
+                <span className="text-xl" aria-hidden>
+                  {d.icon}
+                </span>
+                <span className="font-extrabold leading-tight">{d.title}</span>
+                <span className="text-xs leading-snug text-muted">{d.line}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
       <Footer spacious />
     </>

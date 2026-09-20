@@ -7,6 +7,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
+import { countryName } from "@/lib/domain/countries";
 import { CLUB_LIMITS, listLiveClubs } from "@/lib/domain/clubs";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +22,17 @@ export async function generateMetadata(): Promise<Metadata> {
 /** /clubs: what a club page is, the founding offer, the live clubs by city, the claim button. */
 export default async function ClubsPage() {
   const db = await getDb();
-  const [t, clubs] = await Promise.all([getTranslations(), listLiveClubs(db)]);
+  const [t, locale, clubs] = await Promise.all([getTranslations(), getLocale(), listLiveClubs(db)]);
   const byCity = new Map<string, typeof clubs>();
   for (const c of clubs) {
     const key = c.city ?? "other";
     byCity.set(key, [...(byCity.get(key) ?? []), c]);
   }
+  // A club anywhere: the ones outside the two cities with pages, by country in the reader's language,
+  // each row naming its place. Clubs that named no country close the list.
+  const byCountry = new Map<string, typeof clubs>();
+  for (const c of byCity.get("other") ?? []) byCountry.set(c.country ?? "", [...(byCountry.get(c.country ?? "") ?? []), c]);
+  const countries = [...byCountry.entries()].map(([code, list]) => ({ code, name: code ? countryName(code, locale) : t("club.elsewhere"), list })).sort((a, b) => (a.code === "" ? 1 : b.code === "" ? -1 : a.name.localeCompare(b.name, locale)));
   return (
     <>
       <Header />
@@ -55,9 +61,8 @@ export default async function ClubsPage() {
           </div>
         </section>
 
-        {[...CITIES.map((c) => ({ key: c.slug, name: c.name, href: `/${c.slug}` })), { key: "other", name: t("club.cityOther"), href: null }].map(({ key, name, href }) => {
+        {CITIES.map((c) => ({ key: c.slug, name: c.name, href: `/${c.slug}` })).map(({ key, name, href }) => {
           const list = byCity.get(key) ?? [];
-          if (key === "other" && list.length === 0) return null;
           return (
             <section key={key} className="card">
               <div className="flex items-center justify-between gap-2">
@@ -80,6 +85,16 @@ export default async function ClubsPage() {
             </section>
           );
         })}
+        {countries.map(({ code, name, list }) => (
+          <section key={code || "elsewhere"} className="card" data-testid="clubs-country">
+            <h2 className="text-lg font-extrabold">{t("club.inCity", { city: name })}</h2>
+            <ul className="mt-3 flex flex-col gap-2">
+              {list.map((c) => (
+                <ClubRow key={c.slug} club={c} />
+              ))}
+            </ul>
+          </section>
+        ))}
       </main>
       <Footer />
     </>

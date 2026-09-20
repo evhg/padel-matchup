@@ -6,9 +6,14 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { refreshClubAvailability } from "@/lib/booking/availability";
 import { isValidTimeZone } from "@/lib/dates";
-import { CLUB_LIMITS, claimClub, getClubByToken, updateClub } from "@/lib/domain/clubs";
+import { emailEnabled } from "@/lib/config";
+import type { Club } from "@/db/schema";
+import { CLAIM_ROLES, CLUB_LIMITS, claimClub, claimEmailForCode, getClubByToken, isClubLive, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { getSessionPlayer } from "@/lib/session";
+import { consumeEmailCode, issueEmailCode } from "@/lib/domain/identity";
+import { sendClaimCodeEmail } from "@/lib/notify";
 import { replaceCourts } from "@/lib/domain/courts";
-import { askOwnerAboutClub } from "@/lib/telegram/clubs";
+import { askOwnerAboutClub, tellOwnerClaimVerified } from "@/lib/telegram/clubs";
 import { ActionFailure, assertRate, requirePlayer, runA, type ActionResult } from "./shared";
 
 const url = z.string().max(500).optional();
@@ -24,9 +29,13 @@ const claimSchema = z.object({
   courtsOutdoor: z.coerce.number().int().min(0).max(64).optional().nullable(),
   about: z.string().max(CLUB_LIMITS.aboutMax).optional(),
   city: z.string().max(40).optional(),
+  place: z.string().max(60).optional(),
+  country: z.string().length(2).optional(),
   opensAt: z.string().max(5).optional(),
   closesAt: z.string().max(5).optional(),
   tz: z.string().max(64).optional(),
+  claimRole: z.enum(CLAIM_ROLES).optional(),
+  claimContact: z.string().max(120).optional(),
 });
 export type ClaimClubInput = z.infer<typeof claimSchema>;
 
@@ -39,6 +48,8 @@ const updateSchema = z.object({
   courtsOutdoor: z.coerce.number().int().min(0).max(64).optional().nullable(),
   about: z.string().max(CLUB_LIMITS.aboutMax).optional(),
   city: z.string().max(40).optional(),
+  place: z.string().max(60).optional(),
+  country: z.string().length(2).optional(),
   opensAt: z.string().max(5).optional(),
   closesAt: z.string().max(5).optional(),
   availabilityUrl: url,
@@ -47,20 +58,65 @@ const updateSchema = z.object({
 export type UpdateClubInput = z.infer<typeof updateSchema>;
 
 /** Self-serve claim; the owner gets one Telegram message with Approve and Reject. */
-export async function claimClubAction(raw: ClaimClubInput): Promise<ActionResult<{ slug: string; token: string }>> {
+/**
+ * A work email at the club's own domain gets a 6-digit code at once; the address it went to comes
+ * back so the screen can ask for the code. Null when the contact proves nothing by itself, or email is off.
+ */
+async function sendClaimCode(db: Awaited<ReturnType<typeof getDb>>, club: Club, locale: string | null | undefined): Promise<string | null> {
+  const email = claimEmailForCode(club);
+  if (!email || !emailEnabled()) return null;
+  const issued = await issueEmailCode(db, email);
+  if (!issued) return null;
+  const sent = await sendClaimCodeEmail(issued.email, issued.code, club.name, locale);
+  return sent ? email : null;
+}
+
+export async function claimClubAction(raw: ClaimClubInput): Promise<ActionResult<{ slug: string; token: string; codeSentTo: string | null }>> {
   return runA(async () => {
     const input = claimSchema.parse(raw);
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
     await assertRate(db, "club_claim", me.id, CLUB_LIMITS.claimsPerPlayerPerDay);
-    const club = await claimClub(db, { name: input.clubName, playerId: me.id, tz: input.tz && isValidTimeZone(input.tz) ? input.tz : null, website: input.website, bookingUrl: input.bookingUrl, mapUrl: input.mapUrl, courts: input.courts, courtsIndoor: input.courtsIndoor, courtsOutdoor: input.courtsOutdoor, opensAt: input.opensAt, closesAt: input.closesAt, about: input.about, city: input.city });
+    const club = await claimClub(db, { name: input.clubName, playerId: me.id, place: input.place, country: input.country, claimRole: input.claimRole, claimContact: input.claimContact, tz: input.tz && isValidTimeZone(input.tz) ? input.tz : null, website: input.website, bookingUrl: input.bookingUrl, mapUrl: input.mapUrl, courts: input.courts, courtsIndoor: input.courtsIndoor, courtsOutdoor: input.courtsOutdoor, opensAt: input.opensAt, closesAt: input.closesAt, about: input.about, city: input.city });
     after(async () => {
       await askOwnerAboutClub(db, club, me);
     });
     revalidatePath(`/v/${club.slug}`);
     revalidatePath("/clubs");
     revalidatePath("/me");
-    return { slug: club.slug, token: club.manageToken };
+    const codeSentTo = await sendClaimCode(db, club, me.locale);
+    return { slug: club.slug, token: club.manageToken, codeSentTo };
+  });
+}
+
+/** A new code to the same work email, from the done screen or the manage page. */
+export async function sendClaimCodeAction(token: string): Promise<ActionResult<{ sentTo: string | null }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const club = await getClubByToken(db, token);
+    if (!club) throw new ActionFailure("not_found");
+    if (club.claimVerifiedAt) return { sentTo: null };
+    await assertRate(db, "claim_code", club.slug, 6);
+    // The manage link works without a session; the code's language then follows the site's default.
+    const me = await getSessionPlayer(db);
+    return { sentTo: await sendClaimCode(db, club, me?.locale) };
+  });
+}
+
+/** The code typed back: right, and the claim is confirmed by the club's own mail; the owner hears it. */
+export async function confirmClaimCodeAction(token: string, code: string): Promise<ActionResult<{ verified: boolean }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const club = await getClubByToken(db, token);
+    if (!club) throw new ActionFailure("not_found");
+    if (club.claimVerifiedAt) return { verified: true };
+    const email = claimEmailForCode(club);
+    if (!email) throw new ActionFailure("invalid");
+    await consumeEmailCode(db, email, String(code ?? "").trim());
+    const row = await markClaimVerified(db, club.slug);
+    if (row && !isClubLive(row)) after(() => tellOwnerClaimVerified(row, email));
+    revalidatePath(`/v/${club.slug}/manage/${token}`);
+    return { verified: true };
   });
 }
 

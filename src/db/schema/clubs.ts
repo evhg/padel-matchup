@@ -56,6 +56,15 @@ export const clubs = pgTable(
     manageToken: text("manage_token").notNull(),
     claimedBy: uuid("claimed_by").references(() => players.id, { onDelete: "set null" }),
     claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * The claim's check. Who the claimant says they are at the club (owner, manager, staff, coach) and
+     * how the club can confirm it: a work email or the club's phone. A work email at the club's own
+     * domain is confirmed by a 6-digit code (`claim_verified_at`); anything else the owner checks by
+     * hand before the tap that makes the page live. Nothing of a pending claim shows to anyone else.
+     */
+    claimRole: text("claim_role"),
+    claimContact: text("claim_contact"),
+    claimVerifiedAt: timestamp("claim_verified_at", { withTimezone: true }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     /** One of the first clubs in its city: everything stays free for good. */

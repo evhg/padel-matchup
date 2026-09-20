@@ -1,6 +1,23 @@
 {
-  "wa": {"handoff": "Coger sitio dentro de WhatsApp", "handoffHelp": "Pega esto en tu grupo en lugar del enlace de arriba. Al tocarlo se abre un chat con nosotros y pueden coger sitio sin salir de WhatsApp.", "copy": "Copiar la línea de WhatsApp"},
-  "want": {"title": "¿Cuándo quieres jugar?", "sub": "Dilo una vez. Cuando aparezca un partido que encaje, te avisamos — y una plaza que se libere te llega primero.", "anyDay": "Cualquier día", "anyTime": "Cualquier hora", "place": "Pista o ciudad", "placeHelp": "Una pista donde alguien juega, o una ciudad: Rawai Padel, Phuket, Singapur.", "add": "Guardar", "remove": "Quitar", "none": "Todavía no has dicho cuándo quieres jugar.", "unknownPlace": "Esa pista aún no nos suena. Prueba con la ciudad.", "tooMany": "Diez es el máximo a la vez. Quita una primero.", "at": "en"},
+  "wa": {
+    "handoff": "Coger sitio dentro de WhatsApp",
+    "handoffHelp": "Pega esto en tu grupo en lugar del enlace de arriba. Al tocarlo se abre un chat con nosotros y pueden coger sitio sin salir de WhatsApp.",
+    "copy": "Copiar la línea de WhatsApp"
+  },
+  "want": {
+    "title": "¿Cuándo quieres jugar?",
+    "sub": "Dilo una vez. Cuando aparezca un partido que encaje, te avisamos — y una plaza que se libere te llega primero.",
+    "anyDay": "Cualquier día",
+    "anyTime": "Cualquier hora",
+    "place": "Pista o ciudad",
+    "placeHelp": "Una pista donde alguien juega, o una ciudad: Rawai Padel, Phuket, Singapur.",
+    "add": "Guardar",
+    "remove": "Quitar",
+    "none": "Todavía no has dicho cuándo quieres jugar.",
+    "unknownPlace": "Esa pista aún no nos suena. Prueba con la ciudad.",
+    "tooMany": "Diez es el máximo a la vez. Quita una primero.",
+    "at": "en"
+  },
   "common": {
     "appName": "Kicksmash",
     "tagline": "Pádel en un enlace. Sin app, sin cuenta.",
@@ -19,13 +36,13 @@
     "organizer": "organizador",
     "language": "Idioma",
     "myMatches": "Mis partidos",
-    "assistant": "Asistente",
+    "assistant": "Mi asistente",
     "newMatch": "Nuevo partido",
     "home": "Inicio",
     "working": "Un momento…",
     "somethingWrong": "Algo ha fallado. Inténtalo de nuevo.",
-    "club": "Club",
-    "series": "Serie",
+    "club": "Mi club",
+    "series": "Mi serie",
     "more": "Más",
     "coaches": "Entrenadores",
     "clubs": "Clubes",
@@ -78,12 +95,14 @@
     "step3": "Los jugadores se apuntan con un toque. Listo.",
     "formTitle": "Monta un partido en 10 segundos",
     "formSub": "Elige una hora, consigue un enlace, compártelo. Los jugadores se apuntan con un toque. Sin app, sin registro.",
-    "americanoLink": "¿Organizas un americano? Generador de cuadros gratis →",
-    "coachesLink": "¿Entrenas pádel? Tus alumnos reservan solos →",
     "metaTitle": "Pádel en un enlace",
     "metaDescription": "Crea un partido de pádel o un torneo americano, comparte un enlace corto por WhatsApp o Telegram y tus amigos se apuntan con un toque. Sin app ni cuentas. Invitaciones de calendario, recordatorios, resultados, niveles.",
-    "tournamentLink": "¿Organizas un torneo con categorías y cuadro? Gratis, desde el móvil →",
-    "clubsLink": "¿Llevas un club? Reclama tu página: partidos, ranking, póster, botón de reserva →"
+    "doorsTitle": "También en Kicksmash",
+    "americanoTitle": "Americano",
+    "doorCoaches": "¿Entrenas pádel? Tus alumnos reservan solos",
+    "doorTournaments": "¿Organizas un torneo con categorías y cuadro? Gratis, desde el móvil",
+    "doorClubs": "¿Llevas un club? Reclama tu página: partidos, ranking, póster, botón de reserva",
+    "doorAmericano": "¿Organizas un americano? Generador de cuadros gratis"
   },
   "create": {
     "title": "Nuevo partido",
@@ -426,8 +445,16 @@
   },
   "email": {
     "telegramLine": "Recíbelo en Telegram: un toque, y tus partidos, recordatorios y resultados llegan al chat.",
-    "clubMatch": {"subject": "{club}: partido el {day}", "heading": "Nuevo en {club}", "body": "{club} ha puesto un partido el {day} a las {time}. {spots} Toca para coger sitio."},
-    "wanted": {"subject": "Un partido el {day}, donde pediste jugar", "heading": "El partido que pediste", "body": "Dijiste que querías jugar sobre esta hora en {venue}. Hay un partido el {day} a las {time}. {spots} Toca para ocupar una plaza. Para dejar de recibirlos, quita la petición en tu página."},
+    "clubMatch": {
+      "subject": "{club}: partido el {day}",
+      "heading": "Nuevo en {club}",
+      "body": "{club} ha puesto un partido el {day} a las {time}. {spots} Toca para coger sitio."
+    },
+    "wanted": {
+      "subject": "Un partido el {day}, donde pediste jugar",
+      "heading": "El partido que pediste",
+      "body": "Dijiste que querías jugar sobre esta hora en {venue}. Hay un partido el {day} a las {time}. {spots} Toca para ocupar una plaza. Para dejar de recibirlos, quita la petición en tu página."
+    },
     "openMatch": "Abrir el partido",
     "footer": "Enviado por {app} porque añadiste tu email. Gestiona todo desde la página del partido.",
     "when": "Cuándo",
@@ -527,6 +554,12 @@
       "heading": "Tu partido ha terminado",
       "body": "Pádel {day} a las {time} en {venue}. Cualquier jugador puede meter el resultado; un toque y el historial de todos queda al día. Este es el único recordatorio.",
       "cta": "Meter el resultado"
+    },
+    "claimCode": {
+      "subject": "{code} es tu código para {club}",
+      "heading": "Tu código para {club}",
+      "body": "Introduce este código en la pantalla de la solicitud o en tu página de gestión. Confirma tu correo de trabajo en {club}. Caduca en 10 minutos.",
+      "footer": "Si no reclamaste una página de club, ignora este mensaje."
     }
   },
   "errors": {
@@ -721,7 +754,27 @@
       "declinedBody": "{verifier} no confirmó tu nivel esta vez. Juega con esa persona y vuelve a pedirlo, o pregunta a otro entrenador."
     }
   },
-  "wrap": {"coachSubject": "{month}: {done, plural, one {# clase} other {# clases}} contigo", "coachBody": "{done, plural, =0 {Ninguna clase} one {# clase} other {# clases}} con {students, plural, one {# alumno} other {# alumnos}}, {noShows, plural, =0 {sin ausencias} one {# ausencia} other {# ausencias}}. {packages, plural, =0 {Ningún bono nuevo} one {# bono nuevo} other {# bonos nuevos}}; {left, plural, =0 {nada} one {# clase} other {# clases}} por usar en los abiertos.{busiest, select, none {} other { Día más ocupado: {busiest}.}}", "coachInvite": "Si esto te ahorró tiempo, un entrenador que conozcas lo tiene igual en un minuto: {url}", "clubSubject": "{month} en la página de {club}: {matches, plural, one {# partido} other {# partidos}}", "clubBody": "{matches, plural, one {# partido} other {# partidos}} en tu página, {filled} de {seats} plazas ocupadas ({rate}%), {players, plural, one {# jugador} other {# jugadores}}.{busiest, select, none {} other { Franja más popular: {busiest}.}}", "open": "Abrir", "footer": "{app} lo envía en los primeros días del mes. No hay nada que hacer ni que responder.", "stStudent": "Alumno", "stDone": "Clases dadas", "stNoShows": "Ausencias", "stLate": "Cancelaciones tardías", "stComped": "Invitación", "stLessonsPaid": "Clases pagadas", "stLessonsUnpaid": "Clases sin pagar", "stPackages": "Paquetes iniciados", "stPackagesPaid": "Paquetes pagados", "stPackagesUnpaid": "Paquetes sin pagar", "stTotal": "Total", "stAttached": "El extracto del mes va adjunto: una línea por alumno, se abre en una hoja de cálculo."},
+  "wrap": {
+    "coachSubject": "{month}: {done, plural, one {# clase} other {# clases}} contigo",
+    "coachBody": "{done, plural, =0 {Ninguna clase} one {# clase} other {# clases}} con {students, plural, one {# alumno} other {# alumnos}}, {noShows, plural, =0 {sin ausencias} one {# ausencia} other {# ausencias}}. {packages, plural, =0 {Ningún bono nuevo} one {# bono nuevo} other {# bonos nuevos}}; {left, plural, =0 {nada} one {# clase} other {# clases}} por usar en los abiertos.{busiest, select, none {} other { Día más ocupado: {busiest}.}}",
+    "coachInvite": "Si esto te ahorró tiempo, un entrenador que conozcas lo tiene igual en un minuto: {url}",
+    "clubSubject": "{month} en la página de {club}: {matches, plural, one {# partido} other {# partidos}}",
+    "clubBody": "{matches, plural, one {# partido} other {# partidos}} en tu página, {filled} de {seats} plazas ocupadas ({rate}%), {players, plural, one {# jugador} other {# jugadores}}.{busiest, select, none {} other { Franja más popular: {busiest}.}}",
+    "open": "Abrir",
+    "footer": "{app} lo envía en los primeros días del mes. No hay nada que hacer ni que responder.",
+    "stStudent": "Alumno",
+    "stDone": "Clases dadas",
+    "stNoShows": "Ausencias",
+    "stLate": "Cancelaciones tardías",
+    "stComped": "Invitación",
+    "stLessonsPaid": "Clases pagadas",
+    "stLessonsUnpaid": "Clases sin pagar",
+    "stPackages": "Paquetes iniciados",
+    "stPackagesPaid": "Paquetes pagados",
+    "stPackagesUnpaid": "Paquetes sin pagar",
+    "stTotal": "Total",
+    "stAttached": "El extracto del mes va adjunto: una línea por alumno, se abre en una hoja de cálculo."
+  },
   "level": {
     "label": "Nivel",
     "any": "Cualquier nivel",
@@ -971,8 +1024,49 @@
     "metaDescription": "La escala de niveles de pádel explicada: qué significa de 0 a 7, cómo la mueven los resultados, qué es un nivel confirmado y cómo funcionan los rangos en un partido."
   },
   "club": {
-    "coaching": {"title": "Clases en tus pistas", "help": "Los entrenadores que dan clase aquí y las clases de los últimos siete días. Tú lo ves; no hay nada que aprobar, y por Kicksmash no pasa dinero.", "none": "Ningún entrenador ha nombrado tu club todavía.", "week": "{lessons, plural, one {# clase} other {# clases}} · {students, plural, one {# alumno} other {# alumnos}}", "quiet": "Sin clases en los últimos siete días"},
-    "week": {"title": "Esta semana", "help": "El programa del club. Toca un partido para apuntarte o borrarte; el club solo mira.", "none": "—", "todayTitle": "Hoy en {club}", "todayEmpty": "Hoy no hay nada.", "nobodyYet": "Nadie todavía", "waiting": "{count} en espera", "seePublic": "La semana como la ven los jugadores →", "editorTitle": "Tu semana", "editorHelp": "Añade los sociales, americanos y noches por nivel que se repiten cada semana. Cada uno se convierte en un partido en tu página con {days} días de antelación; los jugadores se apuntan y se borran solos. Tú solo miras.", "players": "{count} jugadores", "paused": "en pausa", "nextUp": "próximo: {code}", "pause": "Pausar", "resume": "Reanudar", "remove": "Quitar", "removeConfirm": "¿Quitar este hueco? Los partidos que ya están en la página se quedan.", "weekday": "Día", "time": "Hora", "capacity": "Jugadores", "format": "Formato", "levelLabel": "Nivel", "titleLabel": "Nombre (opcional)", "titlePlaceholder": "Social femenino", "add": "Añadir a la semana", "added": "Añadido. El primer partido aparece en tu página {days} días antes de empezar.", "tzMissing": "Tu página aún no tiene zona horaria, así que la semana no puede crear partidos.", "tzUse": "Usar la zona horaria de este dispositivo: {tz}", "kind": {"match": "Partido", "americano": "Americano", "mexicano": "Mexicano", "king": "Rey de la pista"}},
+    "coaching": {
+      "title": "Clases en tus pistas",
+      "help": "Los entrenadores que dan clase aquí y las clases de los últimos siete días. Tú lo ves; no hay nada que aprobar, y por Kicksmash no pasa dinero.",
+      "none": "Ningún entrenador ha nombrado tu club todavía.",
+      "week": "{lessons, plural, one {# clase} other {# clases}} · {students, plural, one {# alumno} other {# alumnos}}",
+      "quiet": "Sin clases en los últimos siete días"
+    },
+    "week": {
+      "title": "Esta semana",
+      "help": "El programa del club. Toca un partido para apuntarte o borrarte; el club solo mira.",
+      "none": "—",
+      "todayTitle": "Hoy en {club}",
+      "todayEmpty": "Hoy no hay nada.",
+      "nobodyYet": "Nadie todavía",
+      "waiting": "{count} en espera",
+      "seePublic": "La semana como la ven los jugadores →",
+      "editorTitle": "Tu semana",
+      "editorHelp": "Añade los sociales, americanos y noches por nivel que se repiten cada semana. Cada uno se convierte en un partido en tu página con {days} días de antelación; los jugadores se apuntan y se borran solos. Tú solo miras.",
+      "players": "{count} jugadores",
+      "paused": "en pausa",
+      "nextUp": "próximo: {code}",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "remove": "Quitar",
+      "removeConfirm": "¿Quitar este hueco? Los partidos que ya están en la página se quedan.",
+      "weekday": "Día",
+      "time": "Hora",
+      "capacity": "Jugadores",
+      "format": "Formato",
+      "levelLabel": "Nivel",
+      "titleLabel": "Nombre (opcional)",
+      "titlePlaceholder": "Social femenino",
+      "add": "Añadir a la semana",
+      "added": "Añadido. El primer partido aparece en tu página {days} días antes de empezar.",
+      "tzMissing": "Tu página aún no tiene zona horaria, así que la semana no puede crear partidos.",
+      "tzUse": "Usar la zona horaria de este dispositivo: {tz}",
+      "kind": {
+        "match": "Partido",
+        "americano": "Americano",
+        "mexicano": "Mexicano",
+        "king": "Rey de la pista"
+      }
+    },
     "title": "Clubes",
     "eyebrow": "Clubes",
     "sub": "La página de un club en Kicksmash: partidos abiertos, ranking del club, un póster para las pistas, botón de reserva y pistas libres cuando el club comparte su calendario. Gratis para los clubes, para siempre.",
@@ -982,7 +1076,7 @@
     "foundingLeft": "{count, plural, =0 {No quedan plazas de fundador en {city}} one {Queda # plaza de fundador en {city}} other {Quedan # plazas de fundador en {city}}}",
     "claimCta": "Reclama tu club",
     "claimTitle": "Reclamar la página de un club",
-    "claimSub": "Para quienes gestionan el club. Lleva un minuto; revisamos cada solicitud una vez.",
+    "claimSub": "Para quienes gestionan el club. Lleva un minuto. Confirmamos cada solicitud con el club una vez, por tu correo de trabajo o por una llamada, y después la página se publica.",
     "ownerName": "Tu nombre",
     "clubName": "Nombre del club",
     "clubNameHelp": "Exactamente como lo escriben los jugadores al crear un partido, para que la página y sus partidos coincidan.",
@@ -1005,7 +1099,7 @@
     "feedJson": "Lista JSON de huecos libres",
     "submit": "Reclamar esta página",
     "claimed": "Solicitud recibida",
-    "claimedHelp": "Abajo está tu enlace de gestión; guárdalo, también aparece en Mis partidos. Revisamos cada solicitud una vez y después los datos se publican en la página del club.",
+    "claimedHelp": "Abajo está tu enlace de gestión; guárdalo, también aparece en Mis partidos. Confirmamos la solicitud con el contacto que diste, normalmente en un día; te avisamos por Telegram o correo y la página se publica.",
     "manageLink": "Enlace de gestión",
     "manageTitle": "Gestionar {club}",
     "statusPending": "Pendiente de nuestra revisión",
@@ -1061,7 +1155,31 @@
     "courtsSaved": "{count, plural, =0 {Sin pistas} one {# pista guardada} other {# pistas guardadas}}",
     "courtNameTwice": "Dos pistas tienen el mismo nombre. Dale a cada una el suyo.",
     "courtsNone": "Aún no hay pistas. Numéralas con un toque, o añádelas una a una.",
-    "saveCourts": "Guardar pistas"
+    "saveCourts": "Guardar pistas",
+    "walkYou": "Tú",
+    "role": "Tu papel en el club",
+    "role_owner": "Propietario",
+    "role_manager": "Gerente",
+    "role_staff": "Personal",
+    "role_coach": "Entrenador",
+    "contact": "¿Cómo lo confirmamos?",
+    "contactPlaceholder": "tu@club.com o el teléfono del club",
+    "contactHelp": "Un correo de trabajo en el dominio del club se confirma con un código al momento. Todo lo demás lo comprobamos a mano, normalmente en un día.",
+    "attest": "Al reclamar, confirmas que trabajas en {club} y puedes gestionar su página.",
+    "claimedHelpCode": "Enviamos un código de 6 cifras a tu correo de trabajo. Introdúcelo abajo y la solicitud queda confirmada; después la página se publica.",
+    "claimedHelpVerified": "Tu correo de trabajo está confirmado. La página se publica tras nuestro único toque, normalmente en un día; te avisamos por Telegram o correo.",
+    "codeTitle": "Confirma tu correo de trabajo",
+    "codeSentTo": "Código enviado a {email}",
+    "codeLabel": "Código de 6 cifras",
+    "codeConfirm": "Confirmar",
+    "codeConfirmed": "Correo de trabajo confirmado. La página se publica tras nuestro único toque.",
+    "codeWrong": "Ese código no es correcto o ha caducado. Envía uno nuevo.",
+    "codeAgain": "Enviar un código nuevo",
+    "country": "País",
+    "placePlaceholder": "Kuala Lumpur, Moscú, Phuket…",
+    "elsewhere": "Otros lugares",
+    "freeUnknownOwner": "Las pistas libres aparecen aquí cuando compartes tu calendario de reservas.",
+    "shareFeed": "Compartirlo"
   },
   "passport": {
     "title": "Pasaporte",
@@ -1138,7 +1256,10 @@
     "tryAgain": "Escribirlo de otra forma"
   },
   "coach": {
-    "invite": {"title": "¿Conoces a otro entrenador? Envíale esto", "text": "Llevo mis clases con un asistente en Kicksmash: los alumnos reservan horas disponibles ellos mismos, los bonos se cuentan solos, mi calendario sigue siendo mío. Gratis, un minuto: {url}"},
+    "invite": {
+      "title": "¿Conoces a otro entrenador? Envíale esto",
+      "text": "Llevo mis clases con un asistente en Kicksmash: los alumnos reservan horas disponibles ellos mismos, los bonos se cuentan solos, mi calendario sigue siendo mío. Gratis, un minuto: {url}"
+    },
     "eyebrow": "Entrenador",
     "how": "Cómo funciona",
     "minutes": "{n} min",
@@ -1171,7 +1292,11 @@
       "botTitle": "Tu asistente en Telegram",
       "botHelp": "Abre el bot una vez desde este teléfono. Desde entonces «anna vie 15» reserva, «mañana» muestra el día, y tus alumnos le escriben y reciben respuesta mientras entrenas.",
       "badPayLink": "El enlace debe empezar por https://.",
-      "preset": {"mornings": "Mañanas", "afternoons": "Tardes", "both": "Mañanas y tardes"},
+      "preset": {
+        "mornings": "Mañanas",
+        "afternoons": "Tardes",
+        "both": "Mañanas y tardes"
+      },
       "presetBack": "Las mismas horas todos los días",
       "custom": "Distinto cada día",
       "clubPicked": "Elegido de la lista, así el club puede verte.",

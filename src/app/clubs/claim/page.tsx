@@ -4,7 +4,6 @@ import { ClubClaimForm } from "@/components/ClubClaimForm";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
-import { CITIES } from "@/lib/domain/cities";
 import { listClubsForPicking } from "@/lib/domain/clubs";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -15,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("club.claimTitle"), robots: { index: false, follow: true } };
 }
 
-/** /clubs/claim?name=…: the self-serve claim as a walk of three steps, ending on the poster and the week. */
+/** /clubs/claim?name=…: the self-serve claim as a walk of four steps, ending on the poster, the week and the claim's own check. */
 export default async function ClaimClubPage({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
   const sp = await searchParams;
   const db = await getDb();
@@ -33,7 +32,7 @@ export default async function ClaimClubPage({ searchParams }: { searchParams: Pr
           <p className="mt-2 text-sm text-muted">{t("club.claimSub")}</p>
           <p className="mt-2 text-sm text-muted">{t("club.foundingBody")}</p>
         </section>
-        <ClubClaimForm initialName={(sp.name ?? "").slice(0, 80)} hasIdentity={Boolean(me)} cities={CITIES.map((c) => ({ slug: c.slug, name: c.name }))} base={baseUrl()} listed={listed} />
+        <ClubClaimForm initialName={(sp.name ?? "").slice(0, 80)} hasIdentity={Boolean(me)} base={baseUrl()} listed={listed} />
       </main>
       <Footer />
     </>

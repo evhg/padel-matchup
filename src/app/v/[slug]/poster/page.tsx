@@ -8,11 +8,14 @@ import { getDb } from "@/db";
 import { APP_NAME, baseUrl, shortHost } from "@/lib/config";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { getClub } from "@/lib/domain/clubs";
+import { getSessionPlayerId } from "@/lib/session";
 
-/** The board of a claimed club that has no match yet: its name, nothing on it. */
+/** The board of a claimed club that has no match yet: its name, nothing on it. Before the check, only for the person who claimed it. */
 async function claimedBoard(db: Awaited<ReturnType<typeof getDb>>, slug: string) {
   const club = await getClub(db, slug);
-  return club && !club.rejectedAt ? { slug, name: club.name, mapUrl: club.mapUrl, events: [] } : null;
+  if (!club || club.rejectedAt) return null;
+  if (!club.approvedAt && (!club.claimedBy || club.claimedBy !== (await getSessionPlayerId()))) return null;
+  return { slug, name: club.name, mapUrl: club.mapUrl, events: [] };
 }
 
 export const dynamic = "force-dynamic";

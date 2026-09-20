@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
@@ -32,11 +33,11 @@ export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "cour
 }
 
 /** Today's free courts from the club's own feed: a row of time chips, or one honest line. */
-export async function FreeCourts({ club, now = new Date() }: { club: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind" | "tz">; now?: Date }) {
+export async function FreeCourts({ club, now = new Date(), whenUnconfigured }: { club: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind" | "tz">; now?: Date; /** What to show while the club shares no feed; the manage page puts the way to share it here. */ whenUnconfigured?: ReactNode }) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const a = club.availability;
   const configured = Boolean(club.availabilityUrl && club.availabilityKind);
-  if (!configured) return <p className="text-sm text-muted">{t("club.freeUnknown")}</p>;
+  if (!configured) return <>{whenUnconfigured ?? <p className="text-sm text-muted">{t("club.freeUnknown")}</p>}</>;
   if (!a || a.error) return <p className="text-sm text-muted">{t("club.freeError")}</p>;
   const slots = a.slots.filter((s) => new Date(s.end) > now);
   const hours = freeCourtHours(club, now) ?? 0;
@@ -74,6 +75,7 @@ export async function ClubRow({ club, now = new Date() }: { club: Club; now?: Da
         </Link>
         <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
           {club.founding && <span>🌱 {t("club.foundingBadge")}</span>}
+          {club.province && !club.city && <span>📍 {club.province}</span>}
           {club.courts ? <span>{t("club.courtsCount", { count: club.courts })}</span> : null}
           {hours != null && <span className={hours > 0 ? "text-ok" : ""}>{hours > 0 ? t("club.freeHours", { count: hours }) : t("club.freeNone")}</span>}
         </div>

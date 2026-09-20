@@ -6,7 +6,8 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeSlotsFromBookings, localDay, parseDuration, parseFreeJson, parseIcs, refreshAllAvailability, refreshClubAvailability } from "@/lib/booking/availability";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { CLUB_LIMITS, claimClub, cleanClubInput, clubStatus, decideClub, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, updateClub } from "@/lib/domain/clubs";
+import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { claimCheckLine } from "@/lib/telegram/clubs";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { askOwnerAboutClub } from "@/lib/telegram/clubs";
 import { createTestDb, makePlayer } from "./helpers/db";
@@ -255,5 +256,57 @@ describe("clubs (db)", () => {
     expect(await getClubByToken(db, rows[0]!.manageToken)).toMatchObject({ slug: slugs[0] });
     const [row] = await db.select().from(clubs).where(eq(clubs.slug, slugs[0]));
     expect(row.city).toBe("singapore");
+  });
+});
+
+/** A club anywhere, and the claim's check: what the row keeps, what a work email proves, what a phone number does not. */
+describe("the club's place and the claim's check", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => ({ db, close } = await createTestDb()));
+  afterAll(() => close());
+
+  it("keeps the place and the country, and the city page follows when the place names one", async () => {
+    const aiman = await makePlayer(db, "Aiman");
+    const kl = await claimClub(db, { name: "KL Padel Arena", playerId: aiman.id, place: "Kuala Lumpur", country: "MY", tz: "Asia/Kuala_Lumpur" });
+    expect(kl).toMatchObject({ city: null, province: "Kuala Lumpur", country: "MY" });
+    const nok = await makePlayer(db, "Nok");
+    const rawai = await claimClub(db, { name: "Rawai Social Club", playerId: nok.id, place: "Rawai, Phuket", tz: "Asia/Bangkok" });
+    expect(rawai).toMatchObject({ city: "phuket", province: "Rawai, Phuket", country: "TH" });
+    // No country typed: the browser's zone says which; a wrong code is dropped.
+    const olga = await makePlayer(db, "Olga");
+    const msk = await claimClub(db, { name: "Moscow Padel", playerId: olga.id, place: "Москва", country: "Russia", tz: "Europe/Moscow" });
+    expect(msk).toMatchObject({ city: null, province: "Москва", country: "RU" });
+  });
+
+  it("keeps the role and the contact, proves a work email at the club's own domain and nothing else, and marks the claim once", async () => {
+    const pim = await makePlayer(db, "Pim");
+    const club = await claimClub(db, { name: "Chiang Mai Padel", playerId: pim.id, tz: "Asia/Bangkok", website: "https://www.cmpadel.com", bookingUrl: "https://playtomic.io/cm", claimRole: "manager", claimContact: "Pim@CMPadel.com" });
+    expect(club.claimRole).toBe("manager");
+    expect(club.claimContact).toBe("Pim@CMPadel.com");
+    expect(club.claimVerifiedAt).toBeNull();
+    expect(claimEmailForCode(club)).toBe("pim@cmpadel.com");
+    expect(claimEmailForCode({ ...club, claimContact: "pim@gmail.com" })).toBeNull();
+    expect(claimEmailForCode({ ...club, claimContact: "+66 81 234 5678" })).toBeNull();
+    expect(claimEmailForCode({ ...club, claimContact: null })).toBeNull();
+    // A platform's booking page is not the club's domain; the club's own booking page is.
+    expect(claimEmailForCode({ claimContact: "a@playtomic.io", website: null, bookingUrl: "https://playtomic.io/cm", bookingPlatform: "playtomic" })).toBeNull();
+    expect(claimEmailForCode({ claimContact: "a@book.cmpadel.com", website: null, bookingUrl: "https://cmpadel.com/book", bookingPlatform: null })).toBe("a@book.cmpadel.com");
+    // The owner's message says what the check has.
+    expect(claimCheckLine(club)).toContain("Manager");
+    expect(claimCheckLine(club)).toContain("code sent");
+    expect(claimCheckLine({ ...club, claimContact: "+66 81 234 5678" })).toContain("check by hand");
+    const marked = await markClaimVerified(db, club.slug);
+    expect(marked?.claimVerifiedAt).toBeInstanceOf(Date);
+    expect(await markClaimVerified(db, club.slug)).toBeNull();
+    expect(claimCheckLine(marked!)).toContain("confirmed");
+    // The same person claiming again keeps the check; a word that is not a role is dropped.
+    const again = await claimClub(db, { name: "Chiang Mai Padel", playerId: pim.id, claimRole: "president" });
+    expect(again.claimRole).toBe("manager");
+    expect(again.claimContact).toBe("Pim@CMPadel.com");
+    expect(again.claimVerifiedAt).not.toBeNull();
+    // A new contact starts the proof again.
+    const moved = await claimClub(db, { name: "Chiang Mai Padel", playerId: pim.id, claimContact: "pim@gmail.com" });
+    expect(moved.claimVerifiedAt).toBeNull();
   });
 });

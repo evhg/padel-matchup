@@ -491,3 +491,19 @@ export async function sendEmailCode(email: string, code: string, localeLike: str
   });
   return sendEmail({ to: email, subject: t("email.code.subject", { code }), html, text });
 }
+
+/** The claim's code: to a work email at the club's own domain, so the address itself is the proof. */
+export async function sendClaimCodeEmail(email: string, code: string, club: string, localeLike: string | null | undefined): Promise<boolean> {
+  if (!emailEnabled()) return false;
+  const { t } = await translatorFor(localeLike);
+  const base = baseUrl();
+  const { html, text } = layout({
+    heading: t("email.claimCode.heading", { club }),
+    body: t("email.claimCode.body", { club }),
+    meta: [{ label: t("email.code.codeLabel"), value: code }],
+    footer: t("email.claimCode.footer"),
+    eventUrl: `${base}/clubs`,
+    openLabel: t("common.clubs"),
+  });
+  return sendEmail({ to: email, subject: t("email.claimCode.subject", { code, club }), html, text });
+}

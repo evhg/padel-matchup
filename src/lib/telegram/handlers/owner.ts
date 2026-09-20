@@ -1,6 +1,9 @@
 import type { Db } from "@/db";
 import { baseUrl } from "@/lib/config";
+import { tell } from "@/lib/coach/notify";
 import { decideClub, getClubByToken } from "@/lib/domain/clubs";
+import { getPlayer } from "@/lib/domain/players";
+import { claimDecisionText } from "../clubs";
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 import { approveOutreach, skipOutreach } from "@/lib/outreach/desk";
@@ -48,6 +51,10 @@ async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_que
   }
   const text = action === "ca" ? `✅ Live${row.founding ? " · founding club" : ""}: ${row.name}` : `❌ Not approved: ${row.name}`;
   await answerCallbackQuery(cb.id, text.slice(0, 190));
+  // The claimant hears the answer where they are: Telegram, else email, else push. A claim that goes
+  // quiet after the tap was the walk's finding.
+  const claimant = row.claimedBy ? await getPlayer(db, row.claimedBy) : null;
+  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca"), { inline_keyboard: [[{ text: action === "ca" ? "Open the page" : "GitHub Discussions", url: action === "ca" ? `${baseUrl()}/v/${row.slug}` : "https://github.com/evhg/padel-matchup/discussions" }]] }).catch(() => undefined);
   if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(text), { inline_keyboard: [[{ text: "Open page", url: `${baseUrl()}/v/${row.slug}` }]] });
   return action === "ca" ? "club:approved" : "club:rejected";
 }

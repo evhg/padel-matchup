@@ -16,8 +16,9 @@ import { calendarTitle } from "@/lib/calendar";
 import { getLocale } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
-import { CITIES, cityBySlug } from "@/lib/domain/cities";
-import { clubStatus, getClubByToken } from "@/lib/domain/clubs";
+import { cityBySlug } from "@/lib/domain/cities";
+import { claimEmailForCode, clubStatus, getClubByToken } from "@/lib/domain/clubs";
+import { ClaimCodeForm } from "@/components/ClaimCodeForm";
 import { listCourts } from "@/lib/domain/courts";
 import { coachingAtClub } from "@/lib/domain/coaching";
 
@@ -63,11 +64,15 @@ export default async function ClubManagePage({ params }: Props) {
             </Link>
           </div>
           {status === "rejected" && <p className="mt-2 text-sm text-muted">{t("club.statusRejectedHelp")}</p>}
-          {status === "pending" && <p className="mt-2 text-sm text-muted">{t("club.claimedHelp")}</p>}
+          {status === "pending" && <p className="mt-2 text-sm text-muted">{t(club.claimVerifiedAt ? "club.claimedHelpVerified" : claimEmailForCode(club) ? "club.claimedHelpCode" : "club.claimedHelp")}</p>}
+          {status === "pending" && claimEmailForCode(club) && (
+            <div className="mt-3">
+              <ClaimCodeForm token={token} email={claimEmailForCode(club)!} initialConfirmed={Boolean(club.claimVerifiedAt)} />
+            </div>
+          )}
         </section>
         <ClubManageForm
           token={token}
-          cities={CITIES.map((c) => ({ slug: c.slug, name: c.name }))}
           initial={{
             website: club.website ?? "",
             bookingUrl: club.bookingUrl ?? "",
@@ -76,7 +81,8 @@ export default async function ClubManagePage({ params }: Props) {
             courtsIndoor: club.courtsIndoor === null ? "" : String(club.courtsIndoor),
             courtsOutdoor: club.courtsOutdoor === null ? "" : String(club.courtsOutdoor),
             about: club.about ?? "",
-            city: club.city ?? "",
+            place: club.province ?? (club.city ? (cityBySlug(club.city)?.name ?? "") : ""),
+            country: club.country ?? "",
             opensAt: club.opensAt ?? "",
             closesAt: club.closesAt ?? "",
             availabilityUrl: club.availabilityUrl ?? "",
@@ -152,7 +158,18 @@ export default async function ClubManagePage({ params }: Props) {
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("club.freeToday")}</h2>
           <div className="mt-2">
-            <FreeCourts club={club} />
+            {/* The club reads its own page here: the line says where to share the calendar, not that somebody else should. */}
+            <FreeCourts
+              club={club}
+              whenUnconfigured={
+                <p className="text-sm text-muted">
+                  {t("club.freeUnknownOwner")}{" "}
+                  <a href="#feed" className="link">
+                    {t("club.shareFeed")} →
+                  </a>
+                </p>
+              }
+            />
           </div>
         </section>
       </main>
