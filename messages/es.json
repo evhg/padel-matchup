@@ -1360,7 +1360,8 @@
       "offerValid": "Válido, días",
       "offerAdd": "Añadir un bono",
       "offerRemove": "Quitar",
-      "persons": "{n, plural, one {# persona} other {# personas}}"
+      "persons": "{n, plural, one {# persona} other {# personas}}",
+      "notifyWaiting": "{channels}: listos, a la espera de sus cuentas. Hasta entonces también sirve un correo que leas más tarde."
     },
     "done": {
       "title": "Tu asistente está listo",
@@ -1773,7 +1774,20 @@
     "coachQuestion": "¿Entrenas en {city}?",
     "coachHelp": "Configura tu agenda en seis pasos: los alumnos reservan las horas libres, los bonos se cuentan solos, tu calendario sigue siendo tuyo. Aparecer en la lista es opcional.",
     "coachMore": "Qué reciben los entrenadores →",
-    "coachCta": "Configurar mi agenda"
+    "coachCta": "Configurar mi agenda",
+    "wantTitle": "¿Buscas entrenador en {city}?",
+    "wantHelp": "Di tu nivel y cuándo puedes. El primer entrenador que se liste aquí sabrá de ti, y tú de él.",
+    "wantName": "Tu nombre",
+    "wantLevel": "Tu nivel",
+    "wantWhen": "Cuándo",
+    "wantWhenPlaceholder": "tardes, fines de semana",
+    "wantCta": "Avísame cuando haya un entrenador",
+    "wantSending": "Guardando…",
+    "wantDone": "Anotado. Te avisamos cuando un entrenador se liste en {city}.",
+    "wantWaiting": "{count, plural, one {# persona aquí pidió un entrenador.} other {# personas aquí pidieron un entrenador.}}",
+    "wantReach": "Solo podemos avisarte con un correo o Telegram registrado.",
+    "wantReachLink": "Añádelo en Mis partidos",
+    "wantFailed": "No se guardó. Inténtalo de nuevo."
   },
   "moments": {
     "title": "Tus momentos",
@@ -2007,7 +2021,25 @@
     "rankingPodiums": "Podios",
     "rankingEditions": "Ediciones",
     "luckyLoser": "{name} ocupan el lugar de una pareja retirada.",
-    "claimTelegram": "O en Telegram: tu pareja lo toca, y las horas de los partidos llegan a su chat."
+    "claimTelegram": "O en Telegram: tu pareja lo toca, y las horas de los partidos llegan a su chat.",
+    "strip": {
+      "title": "Cómo va un fin de semana",
+      "entries": "Inscripciones",
+      "draw": "Cuadro",
+      "courts": "Pistas y horas",
+      "live": "En directo",
+      "results": "Resultados",
+      "pairs": "{count, plural, one {# pareja} other {# parejas}}",
+      "courtsCount": "{count, plural, one {# pista} other {# pistas}}",
+      "allDone": "Todo hecho. El archivo de resultados y el ranking llevan el fin de semana adelante.",
+      "hint": {
+        "entries": "Inscribe parejas en el mostrador, o comparte la página y se inscriben solas.",
+        "draw": "Haz el cuadro de cada categoría y publícalo.",
+        "courts": "Nombra las pistas y la ventana del día; cada partido recibe pista y hora.",
+        "live": "Los resultados llegan de los jugadores o del mostrador; la pantalla y la página los siguen.",
+        "results": "El archivo de resultados y el podio de cada categoría."
+      }
+    }
   },
   "series": {
     "eyebrow": "Serie",

@@ -113,9 +113,11 @@ try {
 
   // ---- Simplified create screen ----
   await p.goto(`${BASE}/`);
-  check("create screen is quiet: presets, listing and booking link behind More options", (await p.getByRole("button", { name: "Gold", exact: true }).count()) === 0 && (await p.getByText("Court booking link").count()) === 0 && (await p.getByText(/Any level · Waitlist/).count()) === 1);
+  check("create screen is quiet: presets, listing and booking link behind More options", (await p.getByRole("button", { name: "Gold", exact: true }).count()) === 0 && (await p.getByText("Court booking link").count()) === 0 && /any level/i.test(await p.getByTestId("level-chip").innerText()));
   await p.getByRole("button", { name: /More options/ }).click();
-  check("More options reveals them", (await p.getByRole("button", { name: "Gold", exact: true }).count()) === 1 && (await p.getByText("Court booking link").count()) === 1);
+  check("More options reveals the listing and the booking link; the level has its own chip", (await p.getByRole("button", { name: "Gold", exact: true }).count()) === 0 && (await p.getByText("Court booking link").count()) === 1);
+  await p.getByTestId("level-chip").click();
+  check("the level chip reveals the presets", (await p.getByRole("button", { name: "Gold", exact: true }).count()) === 1);
   await shot(p, "a3-create-more");
 } catch (e) {
   await crashed(browser, results, e);

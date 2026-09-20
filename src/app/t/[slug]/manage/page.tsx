@@ -7,6 +7,7 @@ import { CompetitionForm } from "@/components/tournament/CompetitionForm";
 import { CourtsForm } from "@/components/tournament/CourtsForm";
 import { DrawControls } from "@/components/tournament/DrawControls";
 import { OrderOfPlay } from "@/components/tournament/OrderOfPlay";
+import { WeekendStrip, type Stage } from "@/components/tournament/WeekendStrip";
 import { DrawView } from "@/components/tournament/DrawView";
 import { ManagePanel } from "@/components/tournament/ManagePanel";
 import { getDb } from "@/db";
@@ -15,6 +16,7 @@ import { listClubsForPicking } from "@/lib/domain/clubs";
 import { competitionDraws } from "@/lib/domain/competitionDraw";
 import { COURTS, orderOfPlay } from "@/lib/domain/competitionSchedule";
 import { competitionPage, getCompetition, isOrganizer } from "@/lib/domain/competitions";
+import { utcToZonedParts } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,20 @@ export default async function ManageTournamentPage({ params }: Props) {
   const [t, page, clubs] = await Promise.all([getTranslations(), competitionPage(db, c), listClubsForPicking(db)]);
   const draws = await competitionDraws(db, c.id, page.categories.map((k) => k.category));
   const play = await orderOfPlay(db, c.id);
+  // How a weekend runs, read off the data: pairs entered, every category with pairs drawn and
+  // published, courts named and every match given a time, the days of play, the days after.
+  const entered = page.categories.reduce((n, k) => n + k.entered.length, 0);
+  const withPairs = page.categories.filter((k) => k.entered.length > 0);
+  const published = withPairs.filter((k) => k.category.drawStatus === "published" || k.category.drawStatus === "done");
+  const today = utcToZonedParts(new Date(), c.tz).date;
+  const over = today > c.endsOn;
+  const stages: Stage[] = [
+    { key: "entries", href: "#entries", done: entered > 0, count: t("tournament.strip.pairs", { count: entered }) },
+    { key: "draw", href: "#draw", done: withPairs.length > 0 && published.length === withPairs.length, count: page.categories.length ? `${published.length}/${page.categories.length}` : null },
+    { key: "courts", href: "#courts", done: (c.courtNames?.length ?? 0) > 0 && play.length > 0, count: c.courtNames?.length ? t("tournament.strip.courtsCount", { count: c.courtNames.length }) : null },
+    { key: "live", href: `/t/${c.slug}/tv`, done: over },
+    { key: "results", href: `/t/${c.slug}/results.csv`, done: over },
+  ];
   return (
     <>
       <Header />
@@ -49,6 +65,8 @@ export default async function ManageTournamentPage({ params }: Props) {
             {t("tournament.open")}
           </Link>
         </section>
+        <WeekendStrip stages={stages} />
+        <div id="entries" className="flex flex-col gap-4">
         <ManagePanel
           slug={c.slug}
           status={c.status}
@@ -63,12 +81,15 @@ export default async function ManageTournamentPage({ params }: Props) {
             waiting: k.waiting.map((p) => ({ id: p.id, p1: p.p1.name, p2: p.p2.name, paid: p.paid, claimed: p.claimed, position: p.position, seed: p.seed, wildcard: p.wildcard, checkedIn: p.checkedIn })),
           }))}
         />
-        <CourtsForm slug={c.slug} courtNames={c.courtNames ?? []} dayStart={c.dayStart ?? COURTS.defaultStart} dayEnd={c.dayEnd ?? COURTS.defaultEnd} hasDraw={draws.size > 0} />
+        </div>
+        <div id="courts">
+          <CourtsForm slug={c.slug} courtNames={c.courtNames ?? []} dayStart={c.dayStart ?? COURTS.defaultStart} dayEnd={c.dayEnd ?? COURTS.defaultEnd} hasDraw={draws.size > 0} />
+        </div>
         {play.length > 0 && <OrderOfPlay rows={play} tz={c.tz} />}
-        {page.categories.map(({ category }) => {
+        {page.categories.map(({ category }, i) => {
           const view = draws.get(category.id);
           return (
-            <section key={category.id} className="flex flex-col gap-4">
+            <section key={category.id} id={i === 0 ? "draw" : undefined} className="flex flex-col gap-4">
               <DrawControls
                 slug={c.slug}
                 categoryId={category.id}

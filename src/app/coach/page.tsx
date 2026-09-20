@@ -24,6 +24,11 @@ import { telegramBotUsername } from "@/lib/telegram/api";
 import { CoachNotify } from "@/components/coach/CoachNotify";
 import { reachFor } from "@/lib/coach/reach";
 import { emailEnabled } from "@/lib/config";
+import { lineEnabled } from "@/lib/line/api";
+import { whatsappEnabled } from "@/lib/whatsapp/api";
+
+/** The channels built and waiting on their accounts, named on the channel step. Empty once they are live. */
+const waitingChannels = () => [lineEnabled() ? null : "LINE", whatsappEnabled() ? null : "WhatsApp"].filter((x): x is string => Boolean(x));
 import { playerHasPush } from "@/lib/domain/push";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 
@@ -83,6 +88,7 @@ export default async function CoachPage({ searchParams }: Props) {
           emailEnabled={emailEnabled()}
           vapidPublicKey={vapidPublicKey()}
           pushSubscribed={hasPush}
+          waitingChannels={waitingChannels()}
         />
       </>,
     );
@@ -106,6 +112,7 @@ export default async function CoachPage({ searchParams }: Props) {
           emailEnabled={emailEnabled()}
           vapidPublicKey={vapidPublicKey()}
           pushSubscribed={false}
+          waiting={waitingChannels()}
           gate
         />
       </>,

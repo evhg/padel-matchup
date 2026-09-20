@@ -10,7 +10,7 @@ import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, pres
 export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
 export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
 import { nextOccurrence } from "@/lib/dates";
-import { rangeText } from "@/lib/levelText";
+import { rangeChip, rangeText } from "@/lib/levelText";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
 
@@ -111,7 +111,10 @@ export function EventFields({
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
   // "More" opens by itself only when something non-default is already set (editing a match).
-  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed" || hasRange({ min: values.levelMin, max: values.levelMax })));
+  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed"));
+  // The level sits one tap from the form, behind its own chip: "looking for a fourth" carries the one
+  // fact the fourth needs. The presets stay folded (rule 1); the chip reads what is set.
+  const [levelOpen, setLevelOpen] = useState(false);
   const range = { min: values.levelMin, max: values.levelMax };
   const preset = presetFor(range);
   const [customOpen, setCustomOpen] = useState(preset === "custom");
@@ -131,7 +134,6 @@ export function EventFields({
   };
 
   const summary = [
-    hasRange(range) ? rangeText(t, range) : t("level.any"),
     values.whenFull === "closed" ? t("create.whenFullClosed") : t("create.whenFullWaitlist"),
     values.venueName.trim() ? (values.publicListing ? t("venue.listedShort") : t("venue.notListedShort")) : null,
     values.bookingUrl ? t("create.bookingSet") : null,
@@ -285,18 +287,15 @@ export function EventFields({
       )}
 
 
-      <div className="border-t border-line pt-4">
-        <button type="button" className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
-          <span className="min-w-0">
-            <span className="block text-sm font-bold">{t("create.more")}</span>
-            <span className="block truncate text-xs text-muted">{summary}</span>
-          </span>
-          <span className={`shrink-0 text-faint transition ${moreOpen ? "rotate-180" : ""}`} aria-hidden>
+      <div>
+        <button type="button" className="chip-muted hover:bg-line" aria-expanded={levelOpen} onClick={() => setLevelOpen((o) => !o)} data-testid="level-chip">
+          🎚️ {rangeChip(t, range) ?? t("level.any")}{" "}
+          <span className={`inline-block transition ${levelOpen ? "rotate-180" : ""}`} aria-hidden>
             ⌄
           </span>
         </button>
-        {moreOpen && (
-          <div className="mt-5 flex flex-col gap-5 animate-pop">
+        {levelOpen && (
+          <div className="mt-3 animate-pop">
       <div>
         <label className="label">{t("level.label")}</label>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t("level.label")}>
@@ -348,6 +347,21 @@ export function EventFields({
           </div>
         )}
       </div>
+          </div>
+        )}
+      </div>
+      <div className="border-t border-line pt-4">
+        <button type="button" className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold">{t("create.more")}</span>
+            <span className="block truncate text-xs text-muted">{summary}</span>
+          </span>
+          <span className={`shrink-0 text-faint transition ${moreOpen ? "rotate-180" : ""}`} aria-hidden>
+            ⌄
+          </span>
+        </button>
+        {moreOpen && (
+          <div className="mt-5 flex flex-col gap-5 animate-pop">
       <div>
         <label className="label">{t("create.whenFull")}</label>
         <div className="segment">

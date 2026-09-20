@@ -1360,7 +1360,8 @@
       "offerValid": "Valid, days",
       "offerAdd": "Add a package",
       "offerRemove": "Remove",
-      "persons": "{n, plural, one {# person} other {# persons}}"
+      "persons": "{n, plural, one {# person} other {# persons}}",
+      "notifyWaiting": "{channels}: built, waiting on their accounts. Until then an email you read later works too."
     },
     "done": {
       "title": "Your assistant is ready",
@@ -1773,7 +1774,20 @@
     "coachQuestion": "Do you coach in {city}?",
     "coachHelp": "Set up your lessons in six steps: students book free times themselves, packages count themselves, your calendar stays yours. Listing is optional.",
     "coachMore": "What coaches get →",
-    "coachCta": "Set up your lessons"
+    "coachCta": "Set up your lessons",
+    "wantTitle": "Looking for a coach in {city}?",
+    "wantHelp": "Say your level and when you can. The first coach who lists here hears about you, and you hear about them.",
+    "wantName": "Your name",
+    "wantLevel": "Your level",
+    "wantWhen": "When",
+    "wantWhenPlaceholder": "evenings, weekends",
+    "wantCta": "Tell me when a coach lists",
+    "wantSending": "Saving…",
+    "wantDone": "Noted. You hear from us when a coach lists in {city}.",
+    "wantWaiting": "{count, plural, one {# person here asked for a coach.} other {# people here asked for a coach.}}",
+    "wantReach": "We can only reach you with an email or Telegram on file.",
+    "wantReachLink": "Add one on My matches",
+    "wantFailed": "That did not save. Try again."
   },
   "moments": {
     "title": "Your moments",
@@ -2007,7 +2021,25 @@
     "rankingPodiums": "Podiums",
     "rankingEditions": "Editions",
     "luckyLoser": "{name} take the place of a pair that withdrew.",
-    "claimTelegram": "Or in Telegram: your partner taps this, and the match times come to their chat."
+    "claimTelegram": "Or in Telegram: your partner taps this, and the match times come to their chat.",
+    "strip": {
+      "title": "How a weekend runs",
+      "entries": "Entries",
+      "draw": "Draw",
+      "courts": "Courts & times",
+      "live": "Live",
+      "results": "Results",
+      "pairs": "{count, plural, one {# pair} other {# pairs}}",
+      "courtsCount": "{count, plural, one {# court} other {# courts}}",
+      "allDone": "All done. The results file and the ranking carry the weekend on.",
+      "hint": {
+        "entries": "Enter pairs at the desk, or share the page and pairs enter themselves.",
+        "draw": "Make the draw for each category and publish it.",
+        "courts": "Name the courts and the day's window; every match gets a court and a time.",
+        "live": "Scores come in from the players or the desk; the screen and the page follow.",
+        "results": "The results file, and the podium for each category."
+      }
+    }
   },
   "series": {
     "eyebrow": "Series",
