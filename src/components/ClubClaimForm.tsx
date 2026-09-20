@@ -9,14 +9,27 @@ type City = { slug: string; name: string };
 /** A club Kicksmash already lists and nobody has claimed: the owner picks it rather than retyping it. */
 export type ListedClub = { name: string; country: string | null; province: string | null };
 
-/** The claim in one screen; success shows the manage link once (it is also on My matches). */
+type Step = "club" | "courts" | "links";
+const STEPS: Step[] = ["club", "courts", "links"];
+
+/**
+ * The claim as a walk, like the coach's: the club, then its courts and hours, then the links, and
+ * the claim itself on the last step. It used to be one screen of eleven fields, which is a form,
+ * and a form is where a club owner on a phone stops. Done, the screen carries what makes the page
+ * work from day one: the manage link (also on My matches), the poster to print for the courts, and
+ * the week to fill with the socials that repeat.
+ */
 export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed = [] }: { initialName: string; hasIdentity: boolean; cities: City[]; base: string; listed?: ListedClub[] }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
+  const [step, setStep] = useState<Step>("club");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ slug: string; token: string } | null>(null);
-  const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", courtsIndoor: "", courtsOutdoor: "", about: "", city: "" });
+  const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", courtsIndoor: "", courtsOutdoor: "", opensAt: "", closesAt: "", about: "", city: "" });
   const set = (patch: Partial<typeof v>) => setV((s) => ({ ...s, ...patch }));
+  const index = STEPS.indexOf(step);
+  const goNext = () => setStep(STEPS[Math.min(STEPS.length - 1, index + 1)]);
+  const goBack = () => setStep(STEPS[Math.max(0, index - 1)]);
   // Picking the club Kicksmash already lists claims that page, with its matches and its court counts
   // on it. Typing a near-miss opens an empty second one, so the list is offered from the first letter.
   const typed = v.clubName.trim().toLowerCase();
@@ -25,16 +38,35 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
   if (done) {
     const manage = `${base}/v/${done.slug}/manage/${done.token}`;
     return (
-      <section className="card flex flex-col gap-3">
-        <h2 className="text-xl font-extrabold">{t("club.claimed")}</h2>
-        <p className="text-sm text-muted">{t("club.claimedHelp")}</p>
+      <section className="card flex flex-col gap-4" data-testid="claim-done">
+        <div>
+          <h2 className="text-xl font-extrabold">{t("club.claimed")}</h2>
+          <p className="mt-1 text-sm text-muted">{t("club.claimedHelp")}</p>
+        </div>
         <div className="rounded-2xl bg-bg px-4 py-3">
           <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("club.manageLink")}</div>
           <div className="mt-1 break-all font-mono text-sm">{manage}</div>
+          <div className="mt-2">
+            <CopyButton value={manage} label={t("common.copy")} copiedLabel={t("common.copied")} className="btn-secondary btn-sm" />
+          </div>
         </div>
+        <p className="text-sm font-bold">{t("club.walkDoneNext")}</p>
+        <a href={`/v/${done.slug}/poster`} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3 hover:border-ink/30" data-testid="claim-poster">
+          <span>
+            <span className="block font-bold">🖨 {t("club.walkPosterTitle")}</span>
+            <span className="block text-xs text-muted">{t("club.walkPosterHelp", { club: v.clubName })}</span>
+          </span>
+          <span aria-hidden>→</span>
+        </a>
+        <a href={`${manage}#week`} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3 hover:border-ink/30" data-testid="claim-week">
+          <span>
+            <span className="block font-bold">📅 {t("club.walkWeekTitle")}</span>
+            <span className="block text-xs text-muted">{t("club.walkWeekHelp")}</span>
+          </span>
+          <span aria-hidden>→</span>
+        </a>
         <div className="flex flex-wrap gap-2">
-          <CopyButton value={manage} label={t("common.copy")} copiedLabel={t("common.copied")} className="btn-primary" />
-          <a href={manage} className="btn-secondary">
+          <a href={manage} className="btn-primary">
             {t("club.manageTitle", { club: v.clubName })}
           </a>
           <a href={`/v/${done.slug}`} className="btn-ghost">
@@ -45,8 +77,7 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
     );
   }
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = () => {
     setError(null);
     start(async () => {
       const r = await claimClubAction({
@@ -58,6 +89,8 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
         courts: v.courts ? Number(v.courts) : null,
         courtsIndoor: v.courtsIndoor === "" ? null : Number(v.courtsIndoor),
         courtsOutdoor: v.courtsOutdoor === "" ? null : Number(v.courtsOutdoor),
+        opensAt: v.opensAt || undefined,
+        closesAt: v.closesAt || undefined,
         about: v.about || undefined,
         city: v.city || undefined,
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -67,85 +100,129 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
     });
   };
 
+  const stepTitle = step === "club" ? t("club.walkClub") : step === "courts" ? t("club.walkCourts") : t("club.walkLinks");
   return (
-    <form onSubmit={submit} className="card flex flex-col gap-4">
-      {!hasIdentity && (
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.ownerName")}</span>
-          <input className="input mt-1" value={v.name} maxLength={60} required onChange={(e) => set({ name: e.target.value })} autoComplete="given-name" />
-        </label>
+    <form
+      className="card flex flex-col gap-4"
+      data-testid={`claim-${step}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (step === "links") submit();
+        else goNext();
+      }}
+    >
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider text-faint">{t("club.walkStep", { n: index + 1, total: STEPS.length })}</p>
+        <h2 className="mt-1 text-xl font-extrabold">{stepTitle}</h2>
+      </div>
+
+      {step === "club" && (
+        <>
+          {!hasIdentity && (
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.ownerName")}</span>
+              <input className="input mt-1" value={v.name} maxLength={60} required onChange={(e) => set({ name: e.target.value })} autoComplete="given-name" />
+            </label>
+          )}
+          <label className="block">
+            <span className="text-sm font-bold">{t("club.clubName")}</span>
+            <input className="input mt-1" value={v.clubName} maxLength={80} minLength={2} required autoComplete="off" onChange={(e) => set({ clubName: e.target.value })} />
+            {suggestions.length > 0 && (
+              <ul className="mt-1 overflow-hidden rounded-2xl border border-line">
+                {suggestions.map((c) => (
+                  <li key={c.name}>
+                    <button type="button" className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left hover:bg-bg" onClick={() => set({ clubName: c.name })}>
+                      <span className="font-semibold">{c.name}</span>
+                      <span className="text-xs text-muted">{[c.province, c.country].filter(Boolean).join(", ")}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <span className="mt-1 block text-xs text-muted">{t("club.clubNameHelp")}</span>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.city")}</span>
+              <select className="input mt-1" value={v.city} onChange={(e) => set({ city: e.target.value })}>
+                <option value="">{t("club.cityOther")}</option>
+                {cities.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.mapUrl")}</span>
+              <input className="input mt-1" type="url" inputMode="url" placeholder="https://maps…" value={v.mapUrl} maxLength={500} onChange={(e) => set({ mapUrl: e.target.value })} />
+            </label>
+          </div>
+        </>
       )}
-      <label className="block">
-        <span className="text-sm font-bold">{t("club.clubName")}</span>
-        <input className="input mt-1" value={v.clubName} maxLength={80} minLength={2} required autoComplete="off" onChange={(e) => set({ clubName: e.target.value })} />
-        {suggestions.length > 0 && (
-          <ul className="mt-1 overflow-hidden rounded-2xl border border-line">
-            {suggestions.map((c) => (
-              <li key={c.name}>
-                <button type="button" className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left hover:bg-bg" onClick={() => set({ clubName: c.name })}>
-                  <span className="font-semibold">{c.name}</span>
-                  <span className="text-xs text-muted">{[c.province, c.country].filter(Boolean).join(", ")}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+
+      {step === "courts" && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.courts")}</span>
+              <input className="input mt-1" type="number" inputMode="numeric" min={1} max={64} value={v.courts} onChange={(e) => set({ courts: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.courtsIndoor")}</span>
+              <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsIndoor} onChange={(e) => set({ courtsIndoor: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.courtsOutdoor")}</span>
+              <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsOutdoor} onChange={(e) => set({ courtsOutdoor: e.target.value })} />
+            </label>
+          </div>
+          <span className="-mt-3 block text-xs text-muted">{t("club.courtsSplitHelp")}</span>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.opensAt")}</span>
+              <input className="input mt-1" type="time" value={v.opensAt} onChange={(e) => set({ opensAt: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.closesAt")}</span>
+              <input className="input mt-1" type="time" value={v.closesAt} onChange={(e) => set({ closesAt: e.target.value })} />
+            </label>
+          </div>
+          <label className="block">
+            <span className="text-sm font-bold">
+              {t("club.about")} <span className="font-normal">({t("common.optional")})</span>
+            </span>
+            <textarea className="input mt-1 min-h-20" value={v.about} maxLength={400} onChange={(e) => set({ about: e.target.value })} />
+            <span className="mt-1 block text-xs text-muted">{t("club.aboutHelp")}</span>
+          </label>
+        </>
+      )}
+
+      {step === "links" && (
+        <>
+          <label className="block">
+            <span className="text-sm font-bold">{t("club.bookingUrl")}</span>
+            <input className="input mt-1" type="url" inputMode="url" placeholder="https://" value={v.bookingUrl} maxLength={500} onChange={(e) => set({ bookingUrl: e.target.value })} />
+            <span className="mt-1 block text-xs text-muted">{t("club.bookingUrlHelp")}</span>
+          </label>
+          <label className="block">
+            <span className="text-sm font-bold">{t("club.website")}</span>
+            <input className="input mt-1" type="url" inputMode="url" placeholder="https://" value={v.website} maxLength={500} onChange={(e) => set({ website: e.target.value })} />
+          </label>
+          {error && <p className="text-sm font-bold text-warn">{error}</p>}
+        </>
+      )}
+
+      <div className="flex gap-2">
+        {index > 0 && (
+          <button type="button" className="btn-ghost" onClick={goBack}>
+            {t("common.back")}
+          </button>
         )}
-        <span className="mt-1 block text-xs text-muted">{t("club.clubNameHelp")}</span>
-      </label>
-      <label className="block">
-        <span className="text-sm font-bold">{t("club.bookingUrl")}</span>
-        <input className="input mt-1" type="url" inputMode="url" placeholder="https://" value={v.bookingUrl} maxLength={500} onChange={(e) => set({ bookingUrl: e.target.value })} />
-        <span className="mt-1 block text-xs text-muted">{t("club.bookingUrlHelp")}</span>
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.website")}</span>
-          <input className="input mt-1" type="url" inputMode="url" placeholder="https://" value={v.website} maxLength={500} onChange={(e) => set({ website: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.courts")}</span>
-          <input className="input mt-1" type="number" inputMode="numeric" min={1} max={64} value={v.courts} onChange={(e) => set({ courts: e.target.value })} />
-        </label>
+        <button type="submit" className="btn-primary flex-1" disabled={pending}>
+          {pending ? t("common.working") : step === "links" ? t("club.submit") : t("club.walkNext")}
+        </button>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.courtsIndoor")}</span>
-          <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsIndoor} onChange={(e) => set({ courtsIndoor: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.courtsOutdoor")}</span>
-          <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsOutdoor} onChange={(e) => set({ courtsOutdoor: e.target.value })} />
-        </label>
-      </div>
-      <span className="-mt-3 block text-xs text-muted">{t("club.courtsSplitHelp")}</span>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.mapUrl")}</span>
-          <input className="input mt-1" type="url" inputMode="url" placeholder="https://maps…" value={v.mapUrl} maxLength={500} onChange={(e) => set({ mapUrl: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className="text-sm font-bold">{t("club.city")}</span>
-          <select className="input mt-1" value={v.city} onChange={(e) => set({ city: e.target.value })}>
-            <option value="">{t("club.cityOther")}</option>
-            {cities.map((c) => (
-              <option key={c.slug} value={c.slug}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label className="block">
-        <span className="text-sm font-bold">
-          {t("club.about")} <span className="font-normal">({t("common.optional")})</span>
-        </span>
-        <textarea className="input mt-1 min-h-20" value={v.about} maxLength={400} onChange={(e) => set({ about: e.target.value })} />
-        <span className="mt-1 block text-xs text-muted">{t("club.aboutHelp")}</span>
-      </label>
-      {error && <p className="text-sm font-bold text-warn">{error}</p>}
-      <button type="submit" className="btn-primary w-full" disabled={pending}>
-        {pending ? t("common.working") : t("club.submit")}
-      </button>
     </form>
   );
 }

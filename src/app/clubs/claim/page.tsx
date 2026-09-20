@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("club.claimTitle"), robots: { index: false, follow: true } };
 }
 
-/** /clubs/claim?name=…: the self-serve claim, one screen. */
+/** /clubs/claim?name=…: the self-serve claim as a walk of three steps, ending on the poster and the week. */
 export default async function ClaimClubPage({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
   const sp = await searchParams;
   const db = await getDb();

@@ -1039,7 +1039,17 @@
     "courtsOutdoor": "Exteriores",
     "courtsSplitHelp": "Del total. Déjalo vacío si no lo sabes.",
     "courtsIndoorCount": "{count} cubiertas",
-    "courtsOutdoorCount": "{count} exteriores"
+    "courtsOutdoorCount": "{count} exteriores",
+    "walkStep": "Paso {n} de {total}",
+    "walkNext": "Siguiente",
+    "walkClub": "El club",
+    "walkCourts": "Las pistas y el horario",
+    "walkLinks": "Los enlaces",
+    "walkDoneNext": "Dos cosas hacen que la página funcione desde el primer día:",
+    "walkPosterTitle": "Imprime el póster",
+    "walkPosterHelp": "Un QR junto a las pistas: quien lo escanee ve los partidos abiertos en {club} y se apunta con un nombre.",
+    "walkWeekTitle": "Configura tu semana",
+    "walkWeekHelp": "Los sociales, americanos y noches por nivel que se repiten. Cada uno es un partido en tu página; los jugadores se apuntan solos."
   },
   "passport": {
     "title": "Pasaporte",

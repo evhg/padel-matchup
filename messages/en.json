@@ -1039,7 +1039,17 @@
     "courtsOutdoor": "Outdoor",
     "courtsSplitHelp": "Of the total. Leave empty if you do not know.",
     "courtsIndoorCount": "{count} indoor",
-    "courtsOutdoorCount": "{count} outdoor"
+    "courtsOutdoorCount": "{count} outdoor",
+    "walkStep": "Step {n} of {total}",
+    "walkNext": "Next",
+    "walkClub": "The club",
+    "walkCourts": "The courts and the hours",
+    "walkLinks": "The links",
+    "walkDoneNext": "Two things make the page work from day one:",
+    "walkPosterTitle": "Print the poster",
+    "walkPosterHelp": "A QR by the courts: whoever scans it sees the open matches at {club} and joins with a name.",
+    "walkWeekTitle": "Set up your week",
+    "walkWeekHelp": "The socials, americanos and level nights that repeat. Each becomes a match on your page; players sign up themselves."
   },
   "passport": {
     "title": "Passport",

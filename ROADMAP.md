@@ -224,6 +224,13 @@ Everything in this list is live. The README describes each in detail.
   the claim and on the manage page; the club page and the API say "4 courts · 3 indoor · 1 outdoor".
   Court names and numbers wait for the courts model (item 4 below).
 
+- **The club's walk.** The claim was one screen of eleven fields. It is three steps now, like the
+  coach's: the club (name, city, map), the courts and the hours (total, indoor, outdoor, opening
+  hours, a line about the club), the links (booking page, website), and the claim itself on the last
+  button. Done, the screen carries what makes the page work from day one: the manage link, the
+  poster to print for the courts, and the week to fill with the socials that repeat. The check by
+  the owner is unchanged.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a
