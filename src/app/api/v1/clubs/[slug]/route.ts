@@ -3,6 +3,7 @@ import { READ_CACHE, withApi } from "@/lib/api/route";
 import { clubToPublic } from "@/lib/api/serialize";
 import { baseUrl } from "@/lib/config";
 import { getLiveClub } from "@/lib/domain/clubs";
+import { listCourts } from "@/lib/domain/courts";
 import { isValidVenueSlug, venueSlug } from "@/lib/domain/venueBoard";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     const slug = isValidVenueSlug(raw) ? raw : venueSlug(decodeURIComponent(raw));
     const club = slug ? await getLiveClub(db, slug) : null;
     if (!club) throw new ApiError(404, "not_found", `No club page "${raw}" is live on Kicksmash.`, "Clubs claim their page at /clubs/claim; the board at /api/v1/boards/{slug} exists for any venue with a match.");
-    return json(clubToPublic(club, baseUrl()), { cache: READ_CACHE });
+    return json(clubToPublic(club, baseUrl(), (await listCourts(db, club.slug)).map((c) => c.name)), { cache: READ_CACHE });
   });
 }
 

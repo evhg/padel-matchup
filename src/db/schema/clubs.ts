@@ -72,6 +72,33 @@ export const clubs = pgTable(
 
 export type Club = typeof clubs.$inferSelect;
 
+// ---------------------------------------------------------------------------
+// club_courts — the club's courts one by one, as the club names them. A match names one of them in
+// `events.court`; the three counts on `clubs` are kept in step from these rows, so every reader of
+// the counts (the badge, the API, the picker) stays right without learning this table.
+// ---------------------------------------------------------------------------
+export const clubCourts = pgTable(
+  "club_courts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clubSlug: text("club_slug")
+      .notNull()
+      .references(() => clubs.slug, { onDelete: "cascade" }),
+    /** "Court 1", "Centre", "Pista 3": what the club calls it, and what a match at the club names. */
+    name: text("name").notNull(),
+    /** Its number when the club numbers them ("Court 3" → 3); null for a court with only a name. */
+    number: integer("number"),
+    /** indoor | outdoor; null when the club has not said. */
+    kind: text("kind"),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("club_courts_club_idx").on(t.clubSlug, t.position), uniqueIndex("club_courts_name_idx").on(t.clubSlug, t.name)],
+);
+
+export type ClubCourt = typeof clubCourts.$inferSelect;
+export type CourtKind = "indoor" | "outdoor";
+
 export const clubSlots = pgTable(
   "club_slots",
   {

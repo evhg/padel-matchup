@@ -10,6 +10,7 @@ import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, venueInCity } from "./cities";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { courtNamesBySlug } from "./courts";
 import { isValidVenueSlug, venueSlug } from "./venueBoard";
 
 /**
@@ -116,7 +117,7 @@ export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> 
  * them. `slug` is the club's own address when the pick is a listed club, so a match made here lands
  * on that club's page rather than on a second one made from its name.
  */
-export type PickableVenue = { name: string; slug: string | null; mapUrl: string | null; country: string | null; province: string | null; courts: number | null; where: "yours" | "here" | "nearby" | "elsewhere" };
+export type PickableVenue = { name: string; slug: string | null; mapUrl: string | null; country: string | null; province: string | null; courts: number | null; /** The club's courts by name when it listed them; the form offers these instead of 1…n. */ courtNames: string[]; where: "yours" | "here" | "nearby" | "elsewhere" };
 
 /**
  * Where to find a club on a map when nobody has published a link for it: a search for the club by
@@ -184,7 +185,7 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
     if (seen.has(key)) continue;
     seen.add(key);
     // Their own name for it, not the directory's: it is what their matches already say.
-    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, where: "yours" });
+    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, courtNames: [], where: "yours" });
   }
   const here: PickableVenue[] = [];
   const nearby: PickableVenue[] = [];
@@ -197,9 +198,13 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
     // slug we already keep. Either is a far finer signal than the time zone, which cannot tell one
     // Thai province from another.
     const bucket = same(city, province) || same(city, c.city) ? here : tz && c.tz === tz ? nearby : elsewhere;
-    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere" });
+    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, courtNames: [], where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere" });
   }
-  return [...out, ...here, ...nearby, ...elsewhere];
+  const all = [...out, ...here, ...nearby, ...elsewhere];
+  // The courts by name, one read for every listed club that has rows (few do), so the form can offer "Centre" rather than 1…n.
+  const names = await courtNamesBySlug(db, all.flatMap((v) => (v.slug ? [v.slug] : [])));
+  for (const v of all) if (v.slug && names.has(v.slug)) v.courtNames = names.get(v.slug)!;
+  return all;
 }
 
 export async function listClubsClaimedBy(db: Db, playerId: string): Promise<Club[]> {

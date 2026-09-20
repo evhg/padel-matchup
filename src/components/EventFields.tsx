@@ -95,12 +95,18 @@ export function EventFields({
   const courtNumbers = useMemo(() => {
     if (typingCourt) return null;
     const picked = venues.find((v) => v.name.trim().toLowerCase() === values.venueName.trim().toLowerCase());
+    // The club's own names when it listed its courts ("Centre", "Court 3"); the count as 1…n otherwise.
+    const named = picked?.courtNames ?? [];
+    if (named.length > 0 && named.length <= 24) {
+      if (values.court && !named.includes(values.court)) return null;
+      return named;
+    }
     const n = picked?.courts ?? null;
     // A count nobody published, or one too large to read as a list, leaves the field as free text.
     if (!n || n < 1 || n > 24) return null;
     // A court already named something else (an older match, or "Centre court") keeps its text box.
     if (values.court && !Array.from({ length: n }, (_, i) => String(i + 1)).includes(values.court)) return null;
-    return Array.from({ length: n }, (_, i) => i + 1);
+    return Array.from({ length: n }, (_, i) => String(i + 1));
   }, [venues, values.venueName, values.court, typingCourt]);
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
@@ -213,7 +219,7 @@ export function EventFields({
           >
             <option value="">{t("create.courtNone")}</option>
             {courtNumbers.map((n) => (
-              <option key={n} value={String(n)}>
+              <option key={n} value={n}>
                 {n}
               </option>
             ))}

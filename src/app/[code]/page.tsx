@@ -477,7 +477,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               cost: ev.cost ?? "",
               payNote: ev.payNote ?? "",
             }}
-            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts }))}
+            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }))}
             creatorEmail={creator.email}
             creatorNotify={creator.emailNotifications}
             emailEnabled={emailEnabled()}

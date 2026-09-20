@@ -1049,7 +1049,17 @@
     "walkPosterTitle": "Imprime el póster",
     "walkPosterHelp": "Un QR junto a las pistas: quien lo escanee ve los partidos abiertos en {club} y se apunta con un nombre.",
     "walkWeekTitle": "Configura tu semana",
-    "walkWeekHelp": "Los sociales, americanos y noches por nivel que se repiten. Cada uno es un partido en tu página; los jugadores se apuntan solos."
+    "walkWeekHelp": "Los sociales, americanos y noches por nivel que se repiten. Cada uno es un partido en tu página; los jugadores se apuntan solos.",
+    "courtsTitle": "Pistas",
+    "courtsEditorHelp": "Nombra cada pista y di si es cubierta o exterior. Los jugadores eligen una al crear un partido aquí, y las cifras de tu página siguen la lista.",
+    "courtName": "Nombre de la pista",
+    "courtKind": "Cubierta o exterior",
+    "courtWord": "Pista",
+    "addCourt": "Añadir pista",
+    "numberCourts": "Numerarlas de 1 a {n}",
+    "courtsSaved": "{count, plural, =0 {Sin pistas} one {# pista guardada} other {# pistas guardadas}}",
+    "courtNameTwice": "Dos pistas tienen el mismo nombre. Dale a cada una el suyo.",
+    "courtsNone": "Aún no hay pistas. Numéralas con un toque, o añádelas una a una."
   },
   "passport": {
     "title": "Pasaporte",
