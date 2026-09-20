@@ -102,7 +102,11 @@
     "doorCoaches": "¿Entrenas pádel? Tus alumnos reservan solos",
     "doorTournaments": "¿Organizas un torneo con categorías y cuadro? Gratis, desde el móvil",
     "doorClubs": "¿Llevas un club? Reclama tu página: partidos, ranking, póster, botón de reserva",
-    "doorAmericano": "¿Organizas un americano? Generador de cuadros gratis"
+    "doorAmericano": "¿Organizas un americano? Generador de cuadros gratis",
+    "fromGeneratorTitle": "Tu americano, en vivo",
+    "fromGeneratorSub": "Elige una hora y comparte un enlace. Los resultados, la tabla y los avisos se ocupan solos.",
+    "carriedTitle": "{count, plural, one {# jugador de tu cuadro} other {# jugadores de tu cuadro}}",
+    "carriedHelp": "Cada uno ocupa una plaza y recibe un enlace para reenviar. Puedes cambiar la lista después."
   },
   "create": {
     "title": "Nuevo partido",

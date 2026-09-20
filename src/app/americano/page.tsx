@@ -3,6 +3,7 @@ import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AmericanoGenerator } from "@/components/AmericanoGenerator";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 
 // Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
@@ -46,6 +47,7 @@ export default async function AmericanoPage() {
             {t("levels.eyebrow")}
           </Link>
         </p>
+        <FeedbackInline variant="card" signedInVia="none" />
         <details className="card no-print text-sm">
           <summary className="cursor-pointer list-none font-extrabold">{t("americano.title")} · ?</summary>
           <p className="mt-2 text-muted">{t("americano.howItWorks")}</p>

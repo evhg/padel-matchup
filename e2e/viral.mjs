@@ -28,8 +28,9 @@ try {
   await p.getByText("Round 7").waitFor({ timeout: 10000 });
   check("7 rounds generated, not 8", (await p.getByText("Round 8").count()) === 0 && (await p.getByText("Court 2").count()) === 7);
   await shot(p, "v1-generator");
-  const live = p.getByRole("link", { name: /Run it live on Kicksmash/ });
-  check("live CTA prefills a tournament of 8", (await live.getAttribute("href")) === "/?type=tournament&capacity=8");
+  const live = p.getByTestId("gen-live");
+  check("live CTA prefills a tournament of 8 and is counted", (await live.getAttribute("href")) === "/?type=tournament&capacity=8&s=gen");
+  check("the generator has a way to say what should change", (await p.getByRole("heading", { name: /Tell us what should change/ }).count()) === 1);
 
   // ---- Names path: 5 names → 1 court, one sits out each round ----
   await p.getByLabel("Names (optional, one per line)").fill("Ana\nBo\nCy\nDi\nEd");
@@ -37,12 +38,26 @@ try {
   await p.getByRole("button", { name: "Generate schedule" }).click();
   await p.getByText("Round 5").waitFor({ timeout: 10000 });
   check("sit-outs listed by name", (await p.getByText(/Sitting out: (Ana|Bo|Cy|Di|Ed)/).count()) === 5);
-  check("live CTA rounds the field up to fours", (await live.getAttribute("href")) === "/?type=tournament&capacity=8");
+  check("live CTA rounds the field up to fours and carries the five names", (await live.getAttribute("href")) === "/?type=tournament&capacity=8&s=gen&names=Ana%2CBo%2CCy%2CDi%2CEd");
 
-  // ---- Prefill on the landing page ----
+  // ---- Prefill on the landing page: it says what arrived, and the players come with it ----
   await p.goto(`${BASE}/?type=tournament&capacity=12`);
   check("landing prefilled as a 12-player tournament", (await p.locator('button[aria-pressed="true"]', { hasText: "Tournament" }).count()) === 1 && (await p.locator("main select").first().inputValue()) === "12");
+  check("the prefilled page says it is the americano, not 'set up a match'", (await p.getByRole("heading", { name: "Your americano, live" }).count()) === 1);
   check("landing links to the generator", (await p.getByRole("link", { name: /schedule generator/ }).count()) === 1);
+  // The whole hand-off: the generator's five names become five seated players with links to pass on.
+  await p.goto(`${BASE}/?type=tournament&capacity=8&s=gen&names=Ana%2CBo%2CCy%2CDi%2CEd`);
+  check("the carried players are named before anything is typed", (await p.getByTestId("carried-players").innerText()).includes("Ana · Bo · Cy · Di · Ed"));
+  await p.getByPlaceholder("e.g. Alex").fill("Ana");
+  await p.getByRole("button", { name: "Create & get the link" }).click();
+  await p.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const genCode = p.url().split("/").slice(-2)[0];
+  await p.goto(`${BASE}/${genCode}`);
+  const rows = await p.locator("main li").allInnerTexts();
+  // Ana holds her own spot; the four others are reserved, each with a link to pass on, and three spots stay open.
+  const reserved = ["Bo", "Cy", "Di", "Ed"].every((x) => rows.some((r) => r.includes(`Reserved for ${x}`)));
+  const anaOnce = rows.filter((r) => /\bAna\b/.test(r)).length === 1;
+  check("the four carried players are seated with invite links, and Ana is not seated twice", reserved && anaOnce && (await p.getByText("3 spots left").count()) === 1, JSON.stringify(rows.slice(0, 6)).slice(0, 220));
 
   // ---- Result card ----
   await p.goto(`${BASE}/PAST`);

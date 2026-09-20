@@ -330,6 +330,14 @@ Everything in this list is live. The README describes each in detail.
   their accounts, and says an email read later works meanwhile. On a phone under 380 px with one role
   door out, the brand's mark stands alone rather than "Kick…".
 
+- **The americano generator, end to end (20 September 2026).** "Run it live" used to hand over a
+  count and nothing else: the person landed on a page headed "Set up a match in 10 seconds", which
+  reads as a tap that did nothing, and the eight names they had just typed were gone. The names now
+  travel with the tap and take reserved spots with invite links (`seatNames`, capped at 24 carried);
+  the page says "Your americano, live" and lists who came with it; the link carries `s=gen` so the
+  door can be counted at last; a pasted list is capped at 64 names, which stops a 200-name paste
+  freezing the browser; and both generator pages carry the feedback door they never had.
+
 - **The owner's nine answers (20 September 2026).** Asked one by one, with the case for and against
   each. A claim whose work email is confirmed by the code goes live at once; the owner's first message
   is edited to say so and loses its buttons, a second one carries Reject. Ten founding places in every

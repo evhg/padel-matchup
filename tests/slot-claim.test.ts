@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { joinEvent, leaveEvent, removeFromSlot, reserveSlot } from "@/lib/domain/slots";
+import { joinEvent, leaveEvent, removeFromSlot, reserveSlot, SEAT_NAMES_MAX, seatNames } from "@/lib/domain/slots";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -126,5 +126,47 @@ describe("slot claiming", () => {
     const ev = await createEvent(db, { creatorPlayerId: creator.id, type: "match", startsAt: new Date(Date.now() - 5 * HOUR), tz: "UTC", venueName: "X", whenFull: "waitlist" });
     const p = await makePlayer(db, "Late");
     await expect(joinEvent(db, { eventId: ev.id, playerId: p.id })).rejects.toMatchObject({ code: "past" });
+  });
+});
+
+/** The americano generator's players, seated the moment the tournament exists. */
+describe("seating the names carried from the generator", () => {
+  const tournament = async (organiser: string, capacity = 8) => {
+    const org = await makePlayer(db, organiser);
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "tournament", capacity, startsAt: new Date(Date.now() + HOUR), tz: "Asia/Bangkok", venueName: null, whenFull: "waitlist" });
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    return { org, ev };
+  };
+  /** The carried players, in the order they took their spots. The organiser's own row carries a player, not a name. */
+  const seatedNames = async (eventId: string) =>
+    (await db.select().from(slots).where(eq(slots.eventId, eventId)).orderBy(asc(slots.position))).filter((r) => r.invitedName).map((r) => r.invitedName);
+
+  it("seats each name in order, passes over the organiser's own name once, and stops when the field is full", async () => {
+    const { org, ev } = await tournament("Ana");
+    // Ana typed herself into the list. She holds a spot already, so her name is hers, not a ninth player.
+    const seated = await seatNames(db, { eventId: ev.id, actorPlayerId: org.id, names: ["Bo", " ana ", "Cy", "", "Di", "Ed", "Fi", "Gi", "Hu", "Iv"], skipName: "Ana" });
+    const named = await seatedNames(ev.id);
+    // Eight spots, the organiser in one: seven names fitted and "Iv" found none.
+    expect(named).toEqual(["Bo", "Cy", "Di", "Ed", "Fi", "Gi", "Hu"]);
+    // The organiser keeps the first spot, as a player rather than a reserved name.
+    expect((await db.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.position, 1))))[0].playerId).toBe(org.id);
+    expect(seated).toBe(7);
+    // Every carried player keeps a link to pass on.
+    const rows = await db.select().from(slots).where(eq(slots.eventId, ev.id));
+    expect(rows.filter((r) => r.kind === "reserved" && r.inviteCode).length).toBe(7);
+    expect(SEAT_NAMES_MAX).toBe(24);
+  });
+
+  it("seats a second Ana when the name repeats, because only the first one is the organiser's", async () => {
+    const { org, ev } = await tournament("Ana");
+    await seatNames(db, { eventId: ev.id, actorPlayerId: org.id, names: ["Ana", "Ana", "Bo"], skipName: "Ana" });
+    // The first Ana is the organiser's own row; the second is a different player of the same name.
+    expect(await seatedNames(ev.id)).toEqual(["Ana", "Bo"]);
+  });
+
+  it("carries at most twenty-four names, whatever the list holds", async () => {
+    const { org, ev } = await tournament("Org", 64);
+    const many = Array.from({ length: 40 }, (_, i) => `P${i + 1}`);
+    expect(await seatNames(db, { eventId: ev.id, actorPlayerId: org.id, names: many, skipName: "Org" })).toBe(SEAT_NAMES_MAX);
   });
 });

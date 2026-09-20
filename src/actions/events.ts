@@ -21,6 +21,8 @@ import { LIMITS } from "@/lib/domain/ratelimit";
 
 const createSchema = z.object({
   name: z.string().optional(),
+  /** Players carried from the americano generator; seated as reserved spots on create. */
+  names: z.array(z.string().max(60)).max(64).optional(),
   type: z.enum(["match", "tournament"]),
   title: z.string().max(80).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -111,6 +113,12 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       const joined = await joinEvent(db, { eventId: ev.id, playerId: me.id }).catch(() => null);
       // The organizer's own calendar entry: the same invite every player gets, the moment the match exists.
       if (joined?.outcome === "joined") after(() => sendCalendarInvite(db, ev, me));
+    }
+    // The americano generator's players: each takes a spot with a link to pass on, so a rotation
+    // built for eight named people does not ask for those eight names a second time.
+    if (input.names?.length) {
+      const { seatNames } = await import("@/lib/domain/slots");
+      await seatNames(db, { eventId: ev.id, actorPlayerId: me.id, names: input.names, skipName: me.displayName }).catch(() => 0);
     }
     code = ev.code;
     return { code: ev.code };

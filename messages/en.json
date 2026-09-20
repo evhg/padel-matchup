@@ -102,7 +102,11 @@
     "doorCoaches": "Padel coach? Your students book themselves",
     "doorTournaments": "Running a tournament with categories and a draw? Free, from a phone",
     "doorClubs": "Run a club? Claim your page: matches, ranking, poster, booking button",
-    "doorAmericano": "Running an americano? Free schedule generator"
+    "doorAmericano": "Running an americano? Free schedule generator",
+    "fromGeneratorTitle": "Your americano, live",
+    "fromGeneratorSub": "Pick a time and share one link. Scores, standings and reminders look after themselves.",
+    "carriedTitle": "{count, plural, one {# player from your schedule} other {# players from your schedule}}",
+    "carriedHelp": "Each one takes a spot and gets a link to pass on. You can change the list afterwards."
   },
   "create": {
     "title": "New match",
