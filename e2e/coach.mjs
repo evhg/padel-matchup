@@ -473,6 +473,8 @@ try {
   check("the coach page carries the quiet door for a visitor who is nobody here", (await wrong.getByTestId("own-book").getAttribute("href")) === "/coaches?s=coachpage");
   await ivan.goto(`${BASE}/c/${handle}`);
   check("and never offers it to the coach's own student", (await ivan.getByTestId("own-book").count()) === 0);
+  // Her own page names no city: Warehaus is no club row here, and a time zone is not a city (Bangkok shares Asia/Bangkok with Phuket). The city list, which is the city, still says Phuket below.
+  check("the coach's own page carries the founding badge without a city", (await ivan.getByText(/Founding coach/).count()) === 1 && (await ivan.getByText("Founding coach · Phuket").count()) === 0);
   await ivan.goto(`${BASE}/coaches/phuket`);
   check("the first coach in the city carries the founding badge", (await ivan.getByText("Founding coach · Phuket").count()) >= 1);
   await ivan.goto(`${BASE}/`);

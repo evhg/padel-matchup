@@ -7,6 +7,13 @@ import { QrPanel } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { APP_NAME, baseUrl, shortHost } from "@/lib/config";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
+import { getClub } from "@/lib/domain/clubs";
+
+/** The board of a claimed club that has no match yet: its name, nothing on it. */
+async function claimedBoard(db: Awaited<ReturnType<typeof getDb>>, slug: string) {
+  const club = await getClub(db, slug);
+  return club && !club.rejectedAt ? { slug, name: club.name, mapUrl: club.mapUrl, events: [] } : null;
+}
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -22,7 +29,8 @@ export default async function PosterPage({ params }: Props) {
   const { slug } = await params;
   if (!isValidVenueSlug(slug)) notFound();
   const db = await getDb();
-  const board = await getVenueBoard(db, slug);
+  // A claimed club prints its poster before its first match and before the check: the QR points at the board either way.
+  const board = (await getVenueBoard(db, slug)) ?? (await claimedBoard(db, slug));
   if (!board) notFound();
   const t = await getTranslations();
   const url = `${baseUrl()}/v/${slug}`;

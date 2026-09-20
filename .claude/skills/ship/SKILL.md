@@ -441,6 +441,10 @@ Wall clock first, credits second. What actually moved it, measured:
   and a grep for `✗` found nothing — so a real failure in the coach suite was read as "passes on its
   own, the gate's run was a race". The suite name is `coach`, no extension. Quote the `N/N checks
   passed` and `1/1 suites passed` lines, never the exit code; a zero on the left is a run of nothing.
+- **A control that hides on phones needs its own opener in the suite.** The language toggle became
+  one pill on a phone, and three suites that clicked `ru` by role on an iPhone viewport hung on a
+  hidden button and said only "timeout". `switchLang` in `e2e/lib.mjs` taps the pill first; use it,
+  and give the next collapsing control the same kind of helper in the same change.
 
 ### The bot as buttons
 

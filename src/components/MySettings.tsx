@@ -28,9 +28,8 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
   const hasPush = await playerHasPush(db, player.id);
   return (
     <>
-      <section className="card">
-        <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
-      </section>
+      {/* The toggle draws its own card: a phone that cannot do push sees no card, not an empty one. */}
+      <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />
       <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />
       <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
       <section className="card">

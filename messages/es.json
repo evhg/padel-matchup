@@ -888,7 +888,8 @@
     "notListedShort": "No está en el tablón",
     "coaches": "Entrenadores aquí",
     "coachesHelp": "Entrenadores que nombraron este club y eligieron aparecer.",
-    "coachHere": "¿Entrenas en {venue}? Crea tu agenda →"
+    "coachHere": "¿Entrenas en {venue}? Crea tu agenda →",
+    "listNow": "Mostrar en el tablón de {venue}"
   },
   "ranking": {
     "title": "Ranking",
@@ -1478,7 +1479,8 @@
       "lessonTwo": "Clases de {a} o {b} minutos",
       "noGap": "Sin hueco de {minutes} minutos el {day}",
       "from": "desde {amount}",
-      "eachPaysLine": "Cada uno paga {amount}"
+      "eachPaysLine": "Cada uno paga {amount}",
+      "foundingPlain": "Entrenador fundador"
     },
     "me": {
       "title": "Tus clases",

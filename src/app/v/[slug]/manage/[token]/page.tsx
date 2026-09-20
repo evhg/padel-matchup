@@ -83,7 +83,7 @@ export default async function ClubManagePage({ params }: Props) {
             availabilityKind: club.availabilityKind ?? "ics_bookings",
           }}
         />
-        <ClubCourtsEditor token={token} initial={courts.map((c) => ({ name: c.name, kind: (c.kind ?? "") as "indoor" | "outdoor" | "" }))} total={club.courts} courtWord={t("club.courtWord")} />
+        <ClubCourtsEditor token={token} initial={courts.map((c) => ({ name: c.name, kind: (c.kind ?? "") as "indoor" | "outdoor" | "" }))} total={club.courts} indoor={club.courtsIndoor} outdoor={club.courtsOutdoor} courtWord={t("club.courtWord")} />
         <section className="card" data-testid="club-day">
           <h2 className="text-lg font-extrabold">{t("club.week.todayTitle", { club: club.name })}</h2>
           {day.events.length === 0 ? (

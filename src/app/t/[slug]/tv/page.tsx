@@ -56,7 +56,7 @@ export default async function TvPage({ params }: Props) {
                     {court.now.categoryName} · {time(court.now.scheduledAt)}
                   </div>
                   {court.now.streamUrl && (
-                    <a href={court.now.streamUrl} target="_blank" rel="noopener noreferrer" className="btn-primary mt-2 inline-block">
+                    <a href={court.now.streamUrl} target="_blank" rel="noopener noreferrer" className="btn-primary mt-2">
                       ▶ {t("tournament.watchLive")}
                     </a>
                   )}

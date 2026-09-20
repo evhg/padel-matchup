@@ -294,7 +294,8 @@ export async function enterPair(db: Db, input: EnterInput): Promise<Entered> {
   } else {
     const found = await partnerByName(db, c.id, player.id, input.partner.name, input.locale);
     partner = found.partner;
-    token = found.fresh ? claimToken() : null;
+    // The organiser's desk vouches for both names: no link to confirm, no "not confirmed yet" on the poster.
+    token = found.fresh && !input.byOrganizer ? claimToken() : null;
   }
   if (partner.id === player.id) throw new DomainError("invalid", "same_player");
   for (const p of [player, partner]) {

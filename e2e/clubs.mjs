@@ -96,16 +96,18 @@ try {
   // ---- The club watches: one slot on the week, the hourly job makes the match, players see it ----
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the manage page shows today's view and the week editor", (await page.getByTestId("club-day").count()) === 1 && (await page.getByTestId("club-week-editor").count()) === 1);
-  // The courts one by one: numbered in one tap from the count, the first one renamed and marked indoor, saved as a set.
+  // The courts one by one: numbered in one tap from the count, with the split the claim typed (three indoor, one outdoor)
+  // already on the rows; the first one renamed, saved as a set.
   check("the courts editor starts empty with the one-tap numbering", (await page.getByTestId("club-courts-editor").count()) === 1 && (await page.getByTestId("number-courts").count()) === 1);
   await page.getByTestId("number-courts").click();
+  check("numbering keeps the split the claim typed: three indoor, one outdoor", (await page.getByLabel("Indoor or outdoor").nth(2).inputValue()) === "indoor" && (await page.getByLabel("Indoor or outdoor").nth(3).inputValue()) === "outdoor");
   const firstCourt = page.getByLabel("Court name").first();
   await firstCourt.fill("Centre");
   await page.getByLabel("Indoor or outdoor").first().selectOption("indoor");
   await page.getByTestId("save-courts").click();
   await page.getByText("4 courts saved").waitFor({ timeout: 20000 });
   await page.goto(`${BASE}/v/${SLUG}`);
-  check("the club page lists the courts by name, the badge follows the rows", (await page.getByTestId("club-courts").getByText("Centre").count()) === 1 && (await page.getByTestId("club-courts").locator("li").count()) === 4 && (await page.getByText("4 courts · 1 indoor · 0 outdoor").count()) === 1);
+  check("the club page lists the courts by name, the badge follows the rows", (await page.getByTestId("club-courts").getByText("Centre").count()) === 1 && (await page.getByTestId("club-courts").locator("li").count()) === 4 && (await page.getByText("4 courts · 3 indoor · 1 outdoor").count()) === 1);
   const withCourts = await (await fetch(`${BASE}/api/v1/clubs/${SLUG}`)).json();
   check("the API carries the court names", JSON.stringify(withCourts.courtNames) === JSON.stringify(["Centre", "Court 2", "Court 3", "Court 4"]), JSON.stringify(withCourts.courtNames));
   // The match form at this club offers those names instead of 1…n.

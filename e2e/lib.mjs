@@ -21,6 +21,12 @@ export const launch = () => chromium.launch({ executablePath: chromiumPath(), he
 export const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Europe/Madrid", reducedMotion: "reduce" };
 
 /** Screenshots are optional: set SHOTS=<dir> to keep them. */
+/** Switches the page's language through the header toggle. On a phone the toggle is one pill; the tap on it opens the other two. */
+export async function switchLang(page, l) {
+  const target = page.getByRole("button", { name: l, exact: true });
+  if (!(await target.isVisible())) await page.locator('[aria-label="Language"] button[aria-pressed="true"]').click();
+  await target.click();
+}
 export const shot = (page, name) => (SHOTS ? page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true }) : Promise.resolve());
 
 export function makeCheck(results) {

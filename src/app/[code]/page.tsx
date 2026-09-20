@@ -26,6 +26,7 @@ import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, QrPanel, ShareButtons } from "@/components/ShareSheet";
+import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
@@ -285,6 +286,8 @@ export default async function EventPage({ params, searchParams }: Props) {
                 📍 {t("venue.listed", { venue: ev.venueName })}
               </Link>
             )}
+            {/* The organiser's one tap onto the venue's board; the switch that takes it off again stays in More options. */}
+            {viewer.isCreator && !ev.publicListing && ev.venueSlug && ev.venueName && !cancelled && !over && <ListOnBoard code={code} venue={ev.venueName} />}
           </div>
           <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{title}</h1>
           <div className="mt-4 flex items-end gap-3">

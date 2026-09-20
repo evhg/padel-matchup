@@ -3,7 +3,8 @@
 **Read [AGENTS.md](AGENTS.md) before changing anything.** It has the code map, the twelve rules that
 reviews enforce, and the two recipes ("Adding a feature", "Adding a channel"). Then:
 `docs/DECIDING.md` says whether a request should be built at all, `docs/VISION.md` says who it is for,
-`ROADMAP.md` says what is built and what is next, `docs/OPERATING.md` has the ceilings we live under.
+`ROADMAP.md` says what is built and what is next, `docs/OPERATING.md` has the ceilings we live under,
+`docs/JOURNEYS.md` says what each stakeholder meets on the way in.
 
 **Load the `ship` skill** (`.claude/skills/ship/`) before the first commit of any change. It is the
 sequence from branch to merged — the gate, the suite map, the migration rule, what only the owner can

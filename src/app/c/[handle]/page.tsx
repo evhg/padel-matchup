@@ -10,8 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn, sameHoursEveryDay } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, busyBetween, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
-import { CITIES } from "@/lib/domain/cities";
+import { acceptByInvite, activePackage, busyBetween, coachCity, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { notifyStudentJoined } from "@/lib/coach/notify";
@@ -45,7 +44,8 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const db = await getDb();
   const coach = await getCoachByHandle(db, handle.toLowerCase());
   if (!coach) notFound();
-  const foundingCity = isFoundingCoach(coach) ? (CITIES.find((c) => c.tz === coach.tz)?.name ?? null) : null;
+  const founding = isFoundingCoach(coach);
+  const foundingCity = founding ? ((await coachCity(db, coach))?.name ?? null) : null;
   const [t, locale, me] = await Promise.all([getTranslations("coach"), getLocale(), getSessionPlayer(db)]);
   const now = new Date();
   // The coach, or one of their managers, opening their own student link: the page as students see it, never a form to join oneself.
@@ -123,7 +123,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
         {coach.isPublic && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
         <section className="card">
           <span className="chip-muted">🎾 {t("page.coach")}</span>
-          {foundingCity && <span className="chip-muted ml-2">🏅 {t("page.founding", { city: foundingCity })}</span>}
+          {founding && <span className="chip-muted ml-2">🏅 {foundingCity ? t("page.founding", { city: foundingCity }) : t("page.foundingPlain")}</span>}
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{coach.displayName}</h1>
           <p className="mt-1 text-sm text-muted">
             {/* "at Warehaus" was a word. The club's page lists its coaches and its open matches, and nothing led there. */}
