@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { FreeCourts } from "@/components/ClubBits";
+import { ClubCourtsEditor } from "@/components/ClubCourtsEditor";
 import { ClubManageForm } from "@/components/ClubManageForm";
 import { ClubTimezoneFix } from "@/components/ClubTimezoneFix";
 import { ClubWeekEditor } from "@/components/ClubWeekEditor";
@@ -17,6 +18,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { clubStatus, getClubByToken } from "@/lib/domain/clubs";
+import { listCourts } from "@/lib/domain/courts";
 import { coachingAtClub } from "@/lib/domain/coaching";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,7 @@ export default async function ClubManagePage({ params }: Props) {
   const now = new Date();
   // The day as staff need it, and the week as the club set it. Sequential reads (rule 8).
   const day = await clubDay(db, club, now);
+  const courts = await listCourts(db, club.slug);
   const slots = await listClubSlots(db, club.slug);
   const nextBySlot = await upcomingBySlot(db, club.slug, now);
   const checks = await listLevelChecks(db, { clubSlug: club.slug });
@@ -80,6 +83,7 @@ export default async function ClubManagePage({ params }: Props) {
             availabilityKind: club.availabilityKind ?? "ics_bookings",
           }}
         />
+        <ClubCourtsEditor token={token} initial={courts.map((c) => ({ name: c.name, kind: (c.kind ?? "") as "indoor" | "outdoor" | "" }))} total={club.courts} courtWord={t("club.courtWord")} />
         <section className="card" data-testid="club-day">
           <h2 className="text-lg font-extrabold">{t("club.week.todayTitle", { club: club.name })}</h2>
           {day.events.length === 0 ? (
@@ -96,6 +100,7 @@ export default async function ClubManagePage({ params }: Props) {
                         {calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}
                       </Link>
                       {level && <span className="chip-muted">{level}</span>}
+                      {ev.court && <span className="chip-muted">{/^\d+$/.test(ev.court) ? t("event.courtNumber", { n: ev.court }) : ev.court}</span>}
                       <span className={`ml-auto shrink-0 text-sm font-bold tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
                         {occupied}/{ev.capacity}
                       </span>

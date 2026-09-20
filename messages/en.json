@@ -1049,7 +1049,18 @@
     "walkPosterTitle": "Print the poster",
     "walkPosterHelp": "A QR by the courts: whoever scans it sees the open matches at {club} and joins with a name.",
     "walkWeekTitle": "Set up your week",
-    "walkWeekHelp": "The socials, americanos and level nights that repeat. Each becomes a match on your page; players sign up themselves."
+    "walkWeekHelp": "The socials, americanos and level nights that repeat. Each becomes a match on your page; players sign up themselves.",
+    "courtsTitle": "Courts",
+    "courtsEditorHelp": "Name each court and say indoor or outdoor. Players pick one when they create a match here, and the counts on your page follow.",
+    "courtName": "Court name",
+    "courtKind": "Indoor or outdoor",
+    "courtWord": "Court",
+    "addCourt": "Add a court",
+    "numberCourts": "Number them 1 to {n}",
+    "courtsSaved": "{count, plural, =0 {No courts listed} one {# court saved} other {# courts saved}}",
+    "courtNameTwice": "Two courts have the same name. Give each one its own.",
+    "courtsNone": "No courts listed yet. Number them in one tap, or add them one by one.",
+    "saveCourts": "Save courts"
   },
   "passport": {
     "title": "Passport",

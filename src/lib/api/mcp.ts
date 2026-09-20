@@ -6,6 +6,7 @@ import { getGroupByCode, getGroupDetail, getGroupById } from "@/lib/domain/group
 import { getEventByCode } from "@/lib/domain/queries";
 import { getVenueBoard, isValidVenueSlug, venueSlug } from "@/lib/domain/venueBoard";
 import { getLiveClub, listLiveClubs } from "@/lib/domain/clubs";
+import { courtNamesBySlug, listCourts } from "@/lib/domain/courts";
 import { llmsFullTxt, llmsTxt, VALUE_PROP } from "./docs";
 import { ApiError } from "./http";
 import { createApiKey } from "./keys";
@@ -121,10 +122,11 @@ const TOOLS: Tool[] = [
       if (name) {
         const slug = isValidVenueSlug(name) ? name : venueSlug(name);
         const club = slug ? await getLiveClub(db, slug) : null;
-        return club ? { clubs: [clubToPublic(club, base)] } : { clubs: [], note: `No live club page called "${name}". Clubs claim their page at ${base}/clubs/claim; the venue board (find_matches) works for any venue with a match.` };
+        return club ? { clubs: [clubToPublic(club, base, (await listCourts(db, club.slug)).map((c) => c.name))] } : { clubs: [], note: `No live club page called "${name}". Clubs claim their page at ${base}/clubs/claim; the venue board (find_matches) works for any venue with a match.` };
       }
       const clubs = await listLiveClubs(db, city ?? null);
-      return { clubs: clubs.map((c) => clubToPublic(c, base)), note: clubs.length ? undefined : `No club has claimed its page${city ? ` in ${city}` : ""} yet. The first ten per city become founding clubs: ${base}/clubs.` };
+      const names = await courtNamesBySlug(db, clubs.map((c) => c.slug));
+      return { clubs: clubs.map((c) => clubToPublic(c, base, names.get(c.slug))), note: clubs.length ? undefined : `No club has claimed its page${city ? ` in ${city}` : ""} yet. The first ten per city become founding clubs: ${base}/clubs.` };
     },
   },
   {

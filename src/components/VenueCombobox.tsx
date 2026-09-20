@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
 
-export type VenueOption = { name: string; mapUrl: string | null; where?: "yours" | "here" | "nearby" | "elsewhere"; country?: string | null; province?: string | null; courts?: number | null };
+export type VenueOption = { name: string; mapUrl: string | null; where?: "yours" | "here" | "nearby" | "elsewhere"; country?: string | null; province?: string | null; courts?: number | null; /** The club's courts by name, when it listed them. */ courtNames?: string[] };
 
 /** Before a letter is typed the list is a glance, not a directory; typing one opens it up. */
 const SHOWN_AT_REST = 6;

@@ -11,6 +11,7 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
 import { getClub, isClubLive } from "@/lib/domain/clubs";
+import { listCourts } from "@/lib/domain/courts";
 import { coachesAtClub } from "@/lib/domain/coaching";
 import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
 import { zonedTimeToUtc } from "@/lib/dates";
@@ -42,6 +43,7 @@ export default async function VenueBoardPage({ params }: Props) {
   const [boardRow, clubRow] = await Promise.all([getVenueBoard(db, slug), getClub(db, slug)]);
   // A live club page stands even before its first match; an unclaimed venue needs one.
   const club = isClubLive(clubRow) ? clubRow : null;
+  const courts = club ? await listCourts(db, club.slug) : [];
   if (!boardRow && !club) notFound();
   const board = boardRow ?? { slug, name: club!.name, mapUrl: club!.mapUrl, events: [] };
   const mapUrl = club?.mapUrl ?? board.mapUrl;
@@ -65,6 +67,16 @@ export default async function VenueBoardPage({ params }: Props) {
           {club && (
             <div className="mt-3">
               <ClubBadges club={club} />
+              {courts.length > 0 && (
+                <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="club-courts" aria-label={t("club.courtsTitle")}>
+                  {courts.map((c) => (
+                    <li key={c.id} className="rounded-lg border border-line px-2 py-0.5 text-xs">
+                      {c.name}
+                      {c.kind && <span className="text-faint"> · {c.kind === "indoor" ? t("club.courtsIndoor") : t("club.courtsOutdoor")}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">

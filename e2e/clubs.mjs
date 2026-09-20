@@ -88,7 +88,7 @@ try {
 
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   await page.getByLabel("Booking page").fill("https://playtomic.io/kata-center");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("Saved").waitFor({ timeout: 15000 });
   const after = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
   check("edits through the manage link go live at once", after.booking?.platform === "playtomic");
@@ -96,6 +96,23 @@ try {
   // ---- The club watches: one slot on the week, the hourly job makes the match, players see it ----
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the manage page shows today's view and the week editor", (await page.getByTestId("club-day").count()) === 1 && (await page.getByTestId("club-week-editor").count()) === 1);
+  // The courts one by one: numbered in one tap from the count, the first one renamed and marked indoor, saved as a set.
+  check("the courts editor starts empty with the one-tap numbering", (await page.getByTestId("club-courts-editor").count()) === 1 && (await page.getByTestId("number-courts").count()) === 1);
+  await page.getByTestId("number-courts").click();
+  const firstCourt = page.getByLabel("Court name").first();
+  await firstCourt.fill("Centre");
+  await page.getByLabel("Indoor or outdoor").first().selectOption("indoor");
+  await page.getByTestId("save-courts").click();
+  await page.getByText("4 courts saved").waitFor({ timeout: 20000 });
+  await page.goto(`${BASE}/v/${SLUG}`);
+  check("the club page lists the courts by name, the badge follows the rows", (await page.getByTestId("club-courts").getByText("Centre").count()) === 1 && (await page.getByTestId("club-courts").locator("li").count()) === 4 && (await page.getByText("4 courts · 1 indoor · 0 outdoor").count()) === 1);
+  const withCourts = await (await fetch(`${BASE}/api/v1/clubs/${SLUG}`)).json();
+  check("the API carries the court names", JSON.stringify(withCourts.courtNames) === JSON.stringify(["Centre", "Court 2", "Court 3", "Court 4"]), JSON.stringify(withCourts.courtNames));
+  // The match form at this club offers those names instead of 1…n.
+  await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
+  check("the match form offers the club's courts by name", (await page.locator("select option", { hasText: "Centre" }).count()) === 1);
+  // Back on the manage page, where the rest of the suite stands.
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
 
   // ---- and it watches the coaching too ----
   // The real bug this replaces: a coach's clubs were free text, so the two coaches in production had
@@ -129,7 +146,7 @@ try {
   check("the walk refuses to finish while the assistant has no way to reach the coach", (await nok.getByTestId("notify-none").count()) === 1);
   const nokEmail = nok.getByTestId("notify-email");
   await nokEmail.locator('input[type="email"]').fill("nok@example.test");
-  await nokEmail.getByRole("button", { name: "Save" }).click();
+  await nokEmail.getByRole("button", { name: "Save", exact: true }).click();
   await nok.getByTestId("notify-done").click();
   await nok.getByTestId("setup-link").waitFor({ timeout: 20000 });
   await nok.getByTestId("setup-finish").click();

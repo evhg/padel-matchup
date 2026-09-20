@@ -231,6 +231,14 @@ Everything in this list is live. The README describes each in detail.
   poster to print for the courts, and the week to fill with the socials that repeat. The check by
   the owner is unchanged.
 
+- **The courts model, first half.** A club's courts are rows now (`club_courts`, migration 0057):
+  a name, a number read from the name, indoor or outdoor. The manage page has the editor: number
+  them in one tap from the count, rename, mark, save as a set; the three counts on the club follow
+  the rows, so the badge, the API and the picker read one column each and never join the table.
+  The club page lists the courts; the API carries their names; a match created at the club picks
+  a court by its real name instead of 1…n, and the club's day view names the court each match is
+  on. The second half — a court as capacity a person can hold, with lessons on it — is item 4 below.
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a
@@ -337,9 +345,10 @@ linked and four have an email address.
    they trip on comes back here. Formerly listed here: the big-event extras — a stream link on a match or a
    court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a
    lucky loser, a results file, a ranking across editions.
-4. **Courts as capacity, then a court a person can hold.** Light booking for a club with no system:
-   matches and lessons occupy a court, a person holds one with a name and a cancellation rule. No payment
-   passes through Kicksmash.
+4. **Courts as capacity, then a court a person can hold.** The rows exist (`club_courts`, under Built)
+   and a match names one. What is left: lessons on a court, the hour-by-hour view of what is busy,
+   and a person holding a court with a name and a cancellation rule. No payment passes through
+   Kicksmash.
 5. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
 6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.

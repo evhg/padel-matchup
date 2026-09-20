@@ -7,6 +7,7 @@ import { getDb } from "@/db";
 import { refreshClubAvailability } from "@/lib/booking/availability";
 import { isValidTimeZone } from "@/lib/dates";
 import { CLUB_LIMITS, claimClub, getClubByToken, updateClub } from "@/lib/domain/clubs";
+import { replaceCourts } from "@/lib/domain/courts";
 import { askOwnerAboutClub } from "@/lib/telegram/clubs";
 import { ActionFailure, assertRate, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -80,6 +81,22 @@ export async function updateClubAction(token: string, raw: UpdateClubInput): Pro
     revalidatePath(`/v/${club.slug}/manage/${token}`);
     revalidatePath("/clubs");
     return { slots, feedError };
+  });
+}
+
+const courtsSchema = z.array(z.object({ name: z.string().max(40), kind: z.enum(["indoor", "outdoor"]).nullable().optional(), number: z.coerce.number().int().min(1).max(999).nullable().optional() })).max(64);
+
+/** The club's courts as a set, through the manage link; the three counts follow the rows. */
+export async function setClubCourtsAction(token: string, raw: unknown): Promise<ActionResult<{ courts: { name: string; kind: string | null }[]; total: number | null }>> {
+  return runA(async () => {
+    const input = courtsSchema.parse(raw);
+    const db = await getDb();
+    const r = await replaceCourts(db, token, input);
+    if (!r) throw new ActionFailure("not_found");
+    revalidatePath(`/v/${r.club.slug}`);
+    revalidatePath(`/v/${r.club.slug}/manage/${token}`);
+    revalidatePath("/");
+    return { courts: r.courts.map((c) => ({ name: c.name, kind: c.kind })), total: r.club.courts };
   });
 }
 
