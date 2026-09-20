@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 import { getLocale } from "next-intl/server";
@@ -11,6 +12,7 @@ import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
+import { countCoachWants, recordCoachWant, tellCoachListed } from "@/lib/domain/coachWants";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -21,7 +23,7 @@ import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlis
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
 import { pingIndexNow } from "@/lib/indexnow";
 import { getSessionPlayer } from "@/lib/session";
-import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, requirePlayer, runA, type ActionResult } from "./shared";
 
 
 /** The coach's book: every action here is one tap on a coach screen or a student screen. */
@@ -141,7 +143,7 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
     const hours: Hours = parsed.hours;
     if (!LESSON_MINUTES.includes(input.lessonMinutes as (typeof LESSON_MINUTES)[number])) throw new DomainError("invalid", "minutes");
     if (!isValidTimeZone(input.tz)) throw new DomainError("invalid", "tz");
-    await updateCoach(db, coach.id, {
+    const updated = await updateCoach(db, coach.id, {
       displayName: input.displayName,
       clubNames: input.clubs.split(/[,;\n]+/),
       lessonMinutes: input.lessonMinutes,
@@ -165,6 +167,8 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       tz: input.tz,
     });
     await saveOffers(db, coach.id, input.offers ?? []);
+    // Listed for the first time: the people who asked for a coach in this city hear it, after the response.
+    if (updated.isPublic && !coach.isPublic) after(() => tellCoachListed(db, updated));
     revalidateCoach(coach.handle);
     // Search engines hear about a listed page the moment it changes (or is unlisted: they drop it).
     if (Boolean(input.isPublic) || coach.isPublic) void pingIndexNow([`/c/${coach.handle}`, `/ru/c/${coach.handle}`, `/es/c/${coach.handle}`], { db }).catch(() => undefined);
@@ -843,5 +847,18 @@ export async function claimManagerAction(code: string, name?: string | null): Pr
     if (coach.playerId !== me.id) await notifyManagerJoined(db, coach, me).catch(() => undefined);
     revalidateCoach(coach.handle);
     return { handle: coach.handle };
+  });
+}
+
+/** "I want a coach in {city}": one row per person per city; the first coach who lists there hears it, and so do they. */
+export async function wantCoachAction(input: { city: string; level: number | null; when: string; name?: string }): Promise<ActionResult<{ waiting: number }>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await requirePlayer(db, input.name);
+    await assertRate(db, "coach_want", me.id, 5);
+    const city = String(input.city ?? "").toLowerCase();
+    await recordCoachWant(db, { playerId: me.id, citySlug: city, level: typeof input.level === "number" ? input.level : null, whenNote: String(input.when ?? "") });
+    revalidatePath(`/coaches/${city}`);
+    return { waiting: await countCoachWants(db, city) };
   });
 }

@@ -40,7 +40,7 @@ const ORDER = [1, 2, 3, 4, 5, 6, 0];
  * And the walk used to end on a Done button while the link that makes any of this matter sat on a
  * screen the coach had not seen. It ends on the link now.
  */
-export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = null, botUrl = null, existing = false, studentUrl = null, email = null, emailEnabled = false, vapidPublicKey = null, pushSubscribed = false }: { initialClubs?: string; /** Live clubs, for picking a real one instead of typing a name a club can never match. */ clubOptions?: ClubOption[]; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the price. */ existing?: boolean; /** The invite link to hand students, once the book exists. */ studentUrl?: string | null; /** The address already on file, for the channel step. */ email?: string | null; emailEnabled?: boolean; vapidPublicKey?: string | null; pushSubscribed?: boolean }) {
+export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = null, botUrl = null, existing = false, studentUrl = null, email = null, emailEnabled = false, vapidPublicKey = null, pushSubscribed = false, waitingChannels = [] }: { initialClubs?: string; /** Live clubs, for picking a real one instead of typing a name a club can never match. */ clubOptions?: ClubOption[]; botUsername?: string | null; /** The bot deep link with this coach's ticket, minted on the server so the button is live at once. */ botUrl?: string | null; /** The assistant already exists (the walk resumed after the third step): start at the price. */ existing?: boolean; /** The invite link to hand students, once the book exists. */ studentUrl?: string | null; /** The address already on file, for the channel step. */ email?: string | null; emailEnabled?: boolean; vapidPublicKey?: string | null; pushSubscribed?: boolean; /** Channels built but off on this deployment, named on the channel step. */ waitingChannels?: string[] }) {
   const t = useTranslations("coach");
   const locale = useLocale();
   const router = useRouter();
@@ -393,7 +393,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
       )}
 
       {step === "notify" && (
-        <CoachNotify botUsername={botUsername} botUrl={botUrl} email={email} emailEnabled={emailEnabled} vapidPublicKey={vapidPublicKey} pushSubscribed={pushSubscribed} onReady={goNext} />
+        <CoachNotify botUsername={botUsername} botUrl={botUrl} email={email} emailEnabled={emailEnabled} vapidPublicKey={vapidPublicKey} pushSubscribed={pushSubscribed} waiting={waitingChannels} onReady={goNext} />
       )}
 
       {step === "link" && (

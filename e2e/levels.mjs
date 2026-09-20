@@ -18,8 +18,8 @@ try {
   const org = await newPage();
   await org.goto(BASE + "/");
   await org.getByPlaceholder("e.g. Alex").fill("Olga");
-  check("level presets stay behind More options until asked", (await org.getByRole("button", { name: "Gold", exact: true }).count()) === 0);
-  await org.getByRole("button", { name: /More options/ }).click();
+  check("level presets stay behind the level chip until asked", (await org.getByRole("button", { name: "Gold", exact: true }).count()) === 0 && /any level/i.test(await org.getByTestId("level-chip").innerText()));
+  await org.getByTestId("level-chip").click();
   await org.getByRole("button", { name: "Gold", exact: true }).click();
   check("gold preset explains the range and asks the organizer's level", (await org.getByText("3.0–4.5. Players outside can ask to join").count()) > 0 && (await org.getByLabel("Your level").count()) === 1);
   await org.getByLabel("Your level").selectOption({ label: "3.5" });
@@ -111,6 +111,8 @@ try {
   // ---- Organizer can switch the range off later ----
   await org.goto(`${BASE}/${code}`);
   await org.getByRole("button", { name: "Edit match" }).click();
+  // The presets sit behind the chip on the edit form too: the chip reads the range, one tap opens them.
+  await org.getByTestId("level-chip").click();
   await org.getByRole("button", { name: "Any level", exact: true }).click();
   await org.getByRole("button", { name: "Save changes" }).click();
   await org.getByText("Gold · 3.0–4.5").waitFor({ state: "detached", timeout: 20000 }).catch(() => undefined);

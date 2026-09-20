@@ -1,4 +1,5 @@
-import { date, index, pgTable, smallint, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { date, index, pgTable, real, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { players } from "./players";
 
 /**
  * What a player wants, so the app stops waiting for somebody else to post it.
@@ -43,3 +44,31 @@ export const demandSignals = pgTable(
 
 /** A want as the app reads it back. */
 export type DemandSignal = typeof demandSignals.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// coach_wants — "I want a coach in this city". One row per person per city: the level and a few
+// words on when. It counts on the coaches' door, hears the first coach who lists there, and dies
+// after three months. The other half of the coaches' directory: demand, where the list is supply.
+// ---------------------------------------------------------------------------
+export const coachWants = pgTable(
+  "coach_wants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** A city with a page (phuket, singapore): the coaches' list it belongs under. */
+    citySlug: text("city_slug").notNull(),
+    /** 0 to 7 in halves, or null when they did not say. */
+    level: real("level"),
+    /** "evenings, weekends": free words, at most eighty characters. */
+    whenNote: text("when_note"),
+    /** The last time a listing was put in front of this want: one want does not hear every coach every day. */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("coach_wants_player_city_idx").on(t.playerId, t.citySlug), index("coach_wants_city_idx").on(t.citySlug, t.expiresAt)],
+);
+
+export type CoachWant = typeof coachWants.$inferSelect;

@@ -477,6 +477,14 @@ try {
   check("the coach's own page carries the founding badge without a city", (await ivan.getByText(/Founding coach/).count()) === 1 && (await ivan.getByText("Founding coach · Phuket").count()) === 0);
   await ivan.goto(`${BASE}/coaches/phuket`);
   check("the first coach in the city carries the founding badge", (await ivan.getByText("Founding coach · Phuket").count()) >= 1);
+  // The other half of the list: Ivan says he wants a coach here, with his level and when.
+  const want = ivan.getByTestId("want-coach");
+  check("the city list carries the door for somebody who wants a coach", (await want.count()) === 1);
+  await want.getByRole("combobox").selectOption({ label: "2.0" });
+  await want.getByLabel("When").fill("evenings");
+  await want.getByTestId("want-coach-send").click();
+  await ivan.getByTestId("want-coach-done").waitFor({ timeout: 20000 });
+  check("the want is noted, and the coaches' door counts it", (await ivan.getByText(/You hear from us when a coach lists in Phuket/).count()) === 1 && (await ivan.getByTestId("coach-waiting").count()) === 1);
   await ivan.goto(`${BASE}/`);
   check("the landing page has one quiet line for coaches", (await ivan.getByRole("link", { name: /Padel coach\? Your students book themselves/ }).count()) === 1);
   const front = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());

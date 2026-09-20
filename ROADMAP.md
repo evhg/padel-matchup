@@ -222,7 +222,7 @@ Everything in this list is live. The README describes each in detail.
   header carries a small More menu for everyone with Coaches, Clubs and Tournaments; the role
   doors sit outside it as before. A club sets its indoor and outdoor courts beside the total, on
   the claim and on the manage page; the club page and the API say "4 courts · 3 indoor · 1 outdoor".
-  Court names and numbers wait for the courts model (item 5 below).
+  Court names and numbers wait for the courts model (item 4 below).
 
 - **The club's walk.** The claim was one screen of eleven fields. It is three steps now, like the
   coach's: the club (name, city, map), the courts and the hours (total, indoor, outdoor, opening
@@ -237,7 +237,7 @@ Everything in this list is live. The README describes each in detail.
   the rows, so the badge, the API and the picker read one column each and never join the table.
   The club page lists the courts; the API carries their names; a match created at the club picks
   a court by its real name instead of 1…n, and the club's day view names the court each match is
-  on. The second half — a court as capacity a person can hold, with lessons on it — is item 5 below.
+  on. The second half — a court as capacity a person can hold, with lessons on it — is item 4 below.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
@@ -319,6 +319,17 @@ Everything in this list is live. The README describes each in detail.
   courts line on the manage page says where to share the calendar and opens it; the landing page's
   four doors are tiles with a name and one line each, not four links at the foot of the page.
 
+- **The five things the walks put on the list, built (20 September 2026, migration 0059).** The
+  organiser's desk opens on "how a weekend runs": entries, the draw, courts and times, live, results,
+  each a link to where it happens, the done ones ticked, the next one lit, one line under the row
+  saying what it takes. A city's coach list carries "I want a coach": a level and a few words on
+  when, one row per person per city (`coach_wants`), counted on the coaches' door, told to the first
+  coach who lists there and telling them, expired after three months. The level sits one tap from the
+  match form behind its own chip, presets still folded (rule 1), so "looking for a fourth" carries the
+  one fact the fourth needs. The coach's channel step names LINE and WhatsApp as built and waiting on
+  their accounts, and says an email read later works meanwhile. On a phone under 380 px with one role
+  door out, the brand's mark stands alone rather than "Kick…".
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -366,23 +377,18 @@ linked and four have an email address.
    three. The **1,456** strings are the website, which has three. So Thai in a LINE chat is 143 strings
    and Thai on the website is 1,456, and neither of them is what stops LINE going live: the Official
    Account is.
-3. **What the five walks put on the list** (`docs/JOURNEYS.md`, in this order): the desk's "how a
-   weekend runs" strip for the organiser; "I want a coach" on a city's coach list, a door onto the
-   demand table; the level chip out of More options on the create form; the coach's channel step
-   naming what it waits for where neither Telegram nor an email is there; the brand under two doors
-   on a narrow phone. Small, and each one a stop a real person made.
-4. **The serious tournament: run one for real.** All five steps are under Built. What is left is
+3. **The serious tournament: run one for real.** All five steps are under Built. What is left is
    not code: an organiser (the Thai Padel Series, or Erik's next Open) runs a weekend on it, and what
    they trip on comes back here. Formerly listed here: the big-event extras — a stream link on a match or a
    court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a
    lucky loser, a results file, a ranking across editions.
-5. **Courts as capacity, then a court a person can hold.** The rows exist (`club_courts`, under Built)
+4. **Courts as capacity, then a court a person can hold.** The rows exist (`club_courts`, under Built)
    and a match names one. What is left: lessons on a court, the hour-by-hour view of what is busy,
    and a person holding a court with a name and a cancellation rule. No payment passes through
    Kicksmash.
-6. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
+5. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-7. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
+6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
 
 ## Deliberately not
 

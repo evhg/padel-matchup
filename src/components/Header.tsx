@@ -17,6 +17,9 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
   // round trip on a render, and none at all for a visitor we have never met or on a minimal header.
   const playerId = minimal ? null : await getSessionPlayerId();
   const roles = playerId ? await rolesFor(await getDb(), playerId) : NO_ROLES;
+  // One role door beside My matches is the widest the header gets (several roles fold into the menu).
+  // Under 380 px that door, the menu and the language pill leave the word no room: the mark stands alone.
+  const oneRoleDoor = (roles.coach ? 1 : 0) + roles.clubs.length + roles.series.length === 1;
   return (
     <header className="mx-auto flex w-full max-w-xl items-center justify-between px-4 pt-4 pb-2">
       {/* The brand yields first: a long club name in a door must shorten the word Kicksmash, never
@@ -26,7 +29,7 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
         <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-ink">
           <span className="h-4 w-4 rounded-full bg-accent" />
         </span>
-        <span className="truncate">{APP_NAME}</span>
+        <span className={`truncate ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
         {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments") }} />}

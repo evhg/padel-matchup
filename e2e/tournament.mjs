@@ -35,6 +35,8 @@ try {
   await org.getByRole("button", { name: "Create the tournament" }).click();
   await org.waitForURL(/\/t\/phuket-open\/manage$/, { timeout: 30000 });
   check("competition created and its manage screen opened", true, org.url());
+  // The desk opens on how a weekend runs: five stages, entries lit, nothing ticked.
+  check("the desk says how a weekend runs, entries first", (await org.getByTestId("weekend-strip").count()) === 1 && (await org.locator('li [data-testid^="stage-"]').count()) === 5 && (await org.getByTestId("stage-entries").getAttribute("aria-current")) === "step" && (await org.getByTestId("stage-hint").innerText()).includes("Enter pairs"));
   await shot(org, "tournament-manage-empty");
 
   // 2. Two categories: Gold with a band and a field of 8, Mixed with the default.
@@ -181,6 +183,8 @@ try {
   await courts.getByRole("button", { name: "Make the schedule" }).click();
   await courts.getByText(/given a court and a time/).waitFor({ timeout: 30000 });
   check("the schedule is made", (await courts.innerText()).includes("given a court and a time"));
+  await org.reload();
+  check("the strip ticks entries, the draw and the courts, and lights live", (await org.getByTestId("stage-entries").getAttribute("data-done")) === "1" && (await org.getByTestId("stage-draw").getAttribute("data-done")) === "1" && (await org.getByTestId("stage-courts").getAttribute("data-done")) === "1" && (await org.getByTestId("stage-live").getAttribute("aria-current")) === "step");
   await cal.reload();
   const play = cal.getByTestId("order-of-play");
   check("the public page carries the order of play by day with courts and times", (await play.count()) === 1 && (await play.innerText()).includes("Court 1") && (await play.innerText()).includes("Court 2") && (await cal.locator('[data-testid="match-when"]').count()) > 0);

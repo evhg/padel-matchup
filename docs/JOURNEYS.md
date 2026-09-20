@@ -143,18 +143,23 @@ courts by name.
 match form at her club offering her courts by name. The approval: one tap by the owner in Telegram,
 and the badge on her page.
 
-## Next, in the order they matter
+## What the walks put on the list, built the same day, in this order
 
 1. **The desk's "how a weekend runs" strip** (Erik). Entries → draw → courts and times → live →
    results, each a link, the done ones ticked, the next one lit. The organiser then has the order
-   without a manual, and the desk stops being a set of tools.
+   without a manual, and the desk stops being a set of tools. **Built:** `WeekendStrip` at the top of
+   the desk, read off the data.
 2. **"I want a coach" on a city's coach list** (Ana). One line under the list, empty or not: a name,
-   a level, when. It records a want and tells the first coach who lists in that city. The demand
-   table already carries a city and a level; this is a door onto it.
+   a level, when. It records a want and tells the first coach who lists in that city. **Built:** its
+   own table (`coach_wants`: the match wants carry no level), the count on the coaches' door, the
+   first coach who lists told how many were waiting, and they told about the coach.
 3. **The level out of More options** (Tom). A level chip on the create form ("any level ▾"), one tap
-   to a range, so "looking for a 4th" carries the one fact the fourth needs.
+   to a range, so "looking for a 4th" carries the one fact the fourth needs. **Built:** the chip
+   above More options; the presets stay folded behind it.
 4. **The coach's channel step says what it waits for** (Nok). Where neither Telegram nor an email is
    there, the step names LINE and WhatsApp as the channels that are built and waiting on their
-   accounts, and lets her pass with the email she will read later.
+   accounts, and lets her pass with the email she will read later. **Built:** one line under the
+   question, gone once the accounts exist.
 5. **The brand under two doors.** A coach with two doors still pushes "Kicksmash" to a word on a
-   narrow phone. The mark alone under 360 px is the likely answer; not decided.
+   narrow phone. **Built:** the header shows one role door at most (several fold into the menu), so
+   the case is one door on a phone under 380 px: the mark stands alone there.

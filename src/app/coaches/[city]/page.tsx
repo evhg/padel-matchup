@@ -6,7 +6,10 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
+import { WantCoachForm } from "@/components/WantCoachForm";
+import { countCoachWants } from "@/lib/domain/coachWants";
 import { isFoundingCoach, listPublicCoaches } from "@/lib/domain/coaching";
+import { getSessionPlayer } from "@/lib/session";
 import { localeAlternates } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +33,9 @@ export default async function CoachesInCityPage({ params }: Props) {
   if (!city) notFound();
   const db = await getDb();
   const [t, tCoach, coaches] = await Promise.all([getTranslations("coaches"), getTranslations("coach"), listPublicCoaches(db, city.tz)]);
+  // The other half of the list: who is asking. Two bounded reads, sequential (rule 8).
+  const me = await getSessionPlayer(db);
+  const waiting = await countCoachWants(db, city.slug);
   const base = baseUrl();
   const languageName = (code: string) => (code === "ru" ? "Русский" : code === "es" ? "Español" : "English");
   const jsonLd = {
@@ -73,9 +79,11 @@ export default async function CoachesInCityPage({ params }: Props) {
             ))}
           </ul>
         )}
+        <WantCoachForm citySlug={city.slug} cityName={city.name} hasIdentity={Boolean(me)} reachable={Boolean(me?.email || me?.telegramId)} waiting={waiting} />
         <section className="card">
           <p className="text-sm font-bold">{t("coachQuestion", { city: city.name })}</p>
           <p className="mt-1 text-xs text-muted">{t("coachHelp")}</p>
+          {waiting > 0 && <p className="mt-1 text-xs font-bold" data-testid="coach-waiting">{t("wantWaiting", { count: waiting })}</p>}
           <Link href="/coach?s=citylist" prefetch={false} className="btn-ghost mt-3 w-full">
             {t("coachCta")}
           </Link>

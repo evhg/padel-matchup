@@ -414,6 +414,13 @@
       "when": 1789897351263,
       "tag": "0058_clammy_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1789899002926,
+      "tag": "0059_green_alex_power",
+      "breakpoints": true
     }
   ]
 }

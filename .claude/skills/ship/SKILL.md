@@ -445,6 +445,13 @@ Wall clock first, credits second. What actually moved it, measured:
   one pill on a phone, and three suites that clicked `ru` by role on an iPhone viewport hung on a
   hidden button and said only "timeout". `switchLang` in `e2e/lib.mjs` taps the pill first; use it,
   and give the next collapsing control the same kind of helper in the same change.
+- **`scripts/i18n.mjs add` needs the section to exist.** `email.claimCode.subject` failed with "has no
+  section" and, under `set -e`, took the rest of the script with it: the edits after that line never
+  ran. A new nested section (`email.claimCode`) is written by hand in all three files first; then the
+  script adds keys under it. Check what the script printed before trusting the edits after it.
+- **A check that pins a heading's whole text breaks when the heading gains a part.** The venue
+  picker's heading became "Thailand · Phuket" once a claim carried a country, and a check on
+  `"Phuket"` exact went red. Match the part the check is about (`/(^|· )Phuket$/`), not the line.
 
 ### The bot as buttons
 

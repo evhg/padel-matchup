@@ -28,6 +28,7 @@ export function CoachNotify({
   vapidPublicKey,
   pushSubscribed,
   gate = false,
+  waiting = [],
   onReady,
 }: {
   botUsername: string | null;
@@ -39,6 +40,8 @@ export function CoachNotify({
   pushSubscribed: boolean;
   /** On the book rather than in the walk: the coach is already set up and this is what stands in the way. */
   gate?: boolean;
+  /** Channels built but off on this deployment (LINE, WhatsApp), named so a coach with neither Telegram nor email knows what is coming and what works meanwhile. */
+  waiting?: string[];
   /** Where Done goes in the walk. Without it, Done reloads, which is what the book wants. */
   onReady?: () => void;
 }) {
@@ -62,6 +65,11 @@ export function CoachNotify({
       <div>
         <h2 className="text-xl font-extrabold tracking-tight">{t(gate ? "setup.notifyGateTitle" : "setup.notifyTitle")}</h2>
         <p className="mt-1 text-sm text-muted">{gate ? t("setup.notifyGateHelp") : t("setup.notifyPick")}</p>
+        {waiting.length > 0 && (
+          <p className="mt-1 text-xs text-muted" data-testid="notify-waiting">
+            {t("setup.notifyWaiting", { channels: waiting.join(" · ") })}
+          </p>
+        )}
       </div>
 
       {botUsername && (
