@@ -171,7 +171,10 @@
     "venueYours": "Where you play",
     "venueOther": "Other courts",
     "courtNone": "Not decided",
-    "courtOther": "Another name"
+    "courtOther": "Another name",
+    "scoreBy": "Score by",
+    "pointsN": "{n} points",
+    "gamesTo": "First to {n} games"
   },
   "share": {
     "title": "Your match is live",
@@ -668,7 +671,11 @@
       "otherSizes": "Other field sizes",
       "players": "{count} players",
       "readyMade": "Ready-made schedules:"
-    }
+    },
+    "colGames": "Games",
+    "enterHelpGames": "Tap a score box to enter each court's games; the side that reached {n} won. Anyone in the tournament can fill in or correct scores until the organizer finalizes.",
+    "gamesRange": "A side wins at {n} games; the other side has fewer.",
+    "gamesRule": "Matches are first to {n} games. The table ranks by matches won, then by games difference."
   },
   "calendar": {
     "title": "Add to calendar",

@@ -69,7 +69,7 @@ try {
   await org.getByRole("button", { name: /^Tournament/ }).click();
   check("tournament shows the three formats with americano selected", (await org.getByRole("button", { name: "Americano", exact: true }).getAttribute("aria-pressed")) === "true" && (await org.getByRole("button", { name: "King of the court", exact: true }).count()) === 1);
   await org.getByRole("button", { name: "Mexicano", exact: true }).click();
-  check("mexicano explains itself and sets 24 points", (await org.getByText(/courts follow the standings/).count()) > 0 && (await org.locator("select").filter({ has: org.locator('option[value="21"]') }).inputValue()) === "24");
+  check("mexicano explains itself and sets 24 points", (await org.getByText(/courts follow the standings/).count()) > 0 && (await org.locator("select").filter({ has: org.locator('option[value="p:21"]') }).inputValue()) === "p:24");
   await org.getByLabel("Players").selectOption("8");
   await org.getByPlaceholder("Court TBD · or pick a club").fill("Club Mex");
   await shot(org, "f1-create-mexicano");
@@ -190,6 +190,29 @@ try {
   check("sitemap lists the city pages", sitemap.includes("/phuket") && sitemap.includes("/singapore"));
   const pub = await api(`/api/v1/matches/${king}`);
   check("public match shape carries the format", pub.json?.format === "king");
+  // ---- First to N games: the other way a social tournament scores (the owner's note of 20 September) ----
+  await org.goto(BASE + "/");
+  await org.getByRole("button", { name: /^Tournament/ }).click();
+  await org.getByLabel("Score by").selectOption("g:4");
+  await org.getByLabel("Players").selectOption("4");
+  await org.getByPlaceholder("Court TBD · or pick a club").fill("Club Games");
+  await org.getByRole("button", { name: "Create & get the link" }).click();
+  await org.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const gm = org.url().split("/").slice(-2)[0];
+  await fillUntilFull(gm, "Gm", key);
+  await org.goto(`${BASE}/${gm}`);
+  check("the panel keeps first to four games", (await org.getByLabel("Score by").inputValue()) === "g:4");
+  await org.getByRole("button", { name: "Generate round 1" }).click();
+  await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
+  await org.locator('input[aria-label="A"]').nth(0).fill("5");
+  await org.locator('input[aria-label="B"]').nth(0).fill("2");
+  await org.locator('input[aria-label="B"]').nth(0).blur();
+  await org.getByText(/wins at 4 games/).waitFor({ timeout: 15000 });
+  check("five games in a first-to-four match is refused with the rule", true);
+  await org.locator('input[aria-label="A"]').nth(0).fill("4");
+  await org.locator('input[aria-label="A"]').nth(0).blur();
+  await org.getByText("✓ Saved").first().waitFor({ timeout: 15000 });
+  check("the games table ranks by matches won", (await org.locator("section#score th").filter({ hasText: "Games" }).count()) === 1 && (await org.locator("section#score tbody tr").first().locator("td").nth(4).innerText()) === "1" && (await org.locator("section#score tbody tr").first().locator("td").nth(2).innerText()) === "4");
 } finally {
   await browser.close();
 }

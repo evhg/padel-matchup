@@ -342,6 +342,13 @@ Everything in this list is live. The README describes each in detail.
   is named as such on the owner's message, with the website as a button. The Russian and Spanish text
   ships as written, to be read by the first coaches who use it.
 
+- **Social tournaments score by games too (20 September 2026, migration 0060).** "First to 4 games"
+  beside points per match, the owner's note: one select, "Score by", on the create form and the
+  panel (free, 16/21/24/32 points, first to 4/6/8 games). A games match is a race: a side wins at N
+  and the other has fewer, both sides typed, a 3–2 the bell stopped still a win; the table then ranks
+  by matches won, then games difference. Editions of a series and "play again" carry it; the API
+  takes `gamesTo`.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

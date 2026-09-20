@@ -101,6 +101,22 @@ describe("americano standings", () => {
     expect(by.p04).toMatchObject({ points: 20, rank: 3 });
     expect(rows.map((r) => r.playerId)).toEqual(["p01", "p02", "p03", "p04"]);
   });
+  it("ranks by matches won when the scoring is first to N games, then by games difference", () => {
+    const rows = computeStandings(
+      players,
+      [
+        { a1: "p01", a2: "p02", b1: "p03", b2: "p04", sideA: 4, sideB: 3 },
+        { a1: "p01", a2: "p03", b1: "p02", b2: "p04", sideA: 1, sideB: 4 },
+      ],
+      { byWins: true },
+    );
+    const by = Object.fromEntries(rows.map((r) => [r.playerId, r]));
+    // p02 won twice; p01 and p04 once each, p04 with the better difference; p03 never.
+    expect(rows.map((r) => r.playerId)).toEqual(["p02", "p04", "p01", "p03"]);
+    expect(by.p02).toMatchObject({ wins: 2, points: 8, rank: 1 });
+    expect(by.p04).toMatchObject({ wins: 1, diff: 2, rank: 2 });
+    expect(by.p01).toMatchObject({ wins: 1, diff: -2, rank: 3 });
+  });
   it("includes players with no matches yet at zero", () => {
     const rows = computeStandings(["x", "y"], []);
     expect(rows.map((r) => [r.playerId, r.points, r.rank])).toEqual([

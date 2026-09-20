@@ -377,6 +377,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             started={started}
             cancelled={cancelled}
             pointsPerMatch={ev.pointsPerMatch}
+            gamesTo={ev.gamesTo}
             courtNames={ev.courtNames ?? null}
             rotationLength={tstate.rotationLength}
             participantCount={namedSlots.length}
@@ -470,6 +471,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               whenFull: ev.whenFull,
               courts: ev.courts,
               pointsPerMatch: ev.pointsPerMatch,
+              gamesTo: ev.gamesTo,
               levelMin: ev.levelMin,
               levelMax: ev.levelMax,
               levelVerifiedOnly: ev.levelVerifiedOnly,

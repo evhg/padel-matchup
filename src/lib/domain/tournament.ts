@@ -78,7 +78,7 @@ export async function getTournamentState(db: Db, ev: Event, participantIds: stri
   return {
     format,
     rounds,
-    standings: format === "king" ? computeKingStandings([...ids], rounds) : computeStandings([...ids], all),
+    standings: format === "king" ? computeKingStandings([...ids], rounds) : computeStandings([...ids], all, { byWins: Boolean(ev.gamesTo) }),
     participantIds,
     maxCourts: maxCourtsFor(participantIds.length),
     scoredMatches: all.filter((m) => m.sideA != null && m.sideB != null).length,
@@ -88,7 +88,7 @@ export async function getTournamentState(db: Db, ev: Event, participantIds: stri
 
 export async function setTournamentSettings(
   db: Db,
-  input: { eventId: string; actorPlayerId: string | null; courts?: number | null; pointsPerMatch?: number | null; courtNames?: string[] | null; format?: TournamentFormat },
+  input: { eventId: string; actorPlayerId: string | null; courts?: number | null; pointsPerMatch?: number | null; /** First to N games; setting it clears the points and the other way round: one way to score at a time. */ gamesTo?: number | null; courtNames?: string[] | null; format?: TournamentFormat },
 ): Promise<Event> {
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
@@ -107,6 +107,12 @@ export async function setTournamentSettings(
     if (input.pointsPerMatch !== undefined) {
       if (input.pointsPerMatch !== null && (!Number.isInteger(input.pointsPerMatch) || input.pointsPerMatch < 4 || input.pointsPerMatch > 99)) throw new DomainError("invalid", "points");
       set.pointsPerMatch = input.pointsPerMatch;
+      if (input.pointsPerMatch !== null) set.gamesTo = null;
+    }
+    if (input.gamesTo !== undefined) {
+      if (input.gamesTo !== null && (!Number.isInteger(input.gamesTo) || input.gamesTo < 2 || input.gamesTo > 12)) throw new DomainError("invalid", "games");
+      set.gamesTo = input.gamesTo;
+      if (input.gamesTo !== null) set.pointsPerMatch = null;
     }
     if (input.courtNames !== undefined) {
       if (input.courtNames === null) set.courtNames = null;
@@ -225,6 +231,8 @@ export async function saveTournamentMatchScore(
     const sideA = clean(input.sideA);
     const sideB = clean(input.sideB);
     if ((sideA === null) !== (sideB === null)) throw new DomainError("invalid", "both_sides");
+    // First to N games: a side wins at N and the other has fewer. A match the bell stopped (3–2) still counts as a win for the side ahead.
+    if (ev.gamesTo && sideA !== null && sideB !== null && (sideA > ev.gamesTo || sideB > ev.gamesTo || (sideA === ev.gamesTo && sideB === ev.gamesTo))) throw new DomainError("invalid", "games_range");
     const [updated] = await tx
       .update(tournamentMatches)
       .set({ sideA, sideB, enteredByPlayerId: input.playerId, updatedAt: now })

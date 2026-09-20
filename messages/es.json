@@ -171,7 +171,10 @@
     "venueYours": "Donde juegas",
     "venueOther": "Otras canchas",
     "courtNone": "Sin decidir",
-    "courtOther": "Otro nombre"
+    "courtOther": "Otro nombre",
+    "scoreBy": "Puntuación",
+    "pointsN": "{n} puntos",
+    "gamesTo": "Primero a {n} juegos"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -668,7 +671,11 @@
       "otherSizes": "Otros tamaños",
       "players": "{count} jugadores",
       "readyMade": "Cuadros listos:"
-    }
+    },
+    "colGames": "Juegos",
+    "enterHelpGames": "Toca una casilla para introducir los juegos de cada pista; el lado que llegó a {n} ganó. Cualquiera del torneo puede introducir o corregir resultados hasta que el organizador cierre.",
+    "gamesRange": "Un lado gana con {n} juegos; el otro tiene menos.",
+    "gamesRule": "Los partidos son al primero que llega a {n} juegos. La tabla ordena por partidos ganados y luego por diferencia de juegos."
   },
   "calendar": {
     "title": "Añadir al calendario",
