@@ -26,7 +26,10 @@
     "somethingWrong": "Algo ha fallado. Inténtalo de nuevo.",
     "club": "Club",
     "series": "Serie",
-    "more": "Más"
+    "more": "Más",
+    "coaches": "Entrenadores",
+    "clubs": "Clubes",
+    "tournaments": "Torneos"
   },
   "identity": {
     "whatsYourName": "¿Cómo te llamas?",
@@ -78,7 +81,9 @@
     "americanoLink": "¿Organizas un americano? Generador de cuadros gratis →",
     "coachesLink": "¿Entrenas pádel? Tus alumnos reservan solos →",
     "metaTitle": "Pádel en un enlace",
-    "metaDescription": "Crea un partido de pádel o un torneo americano, comparte un enlace corto por WhatsApp o Telegram y tus amigos se apuntan con un toque. Sin app ni cuentas. Invitaciones de calendario, recordatorios, resultados, niveles."
+    "metaDescription": "Crea un partido de pádel o un torneo americano, comparte un enlace corto por WhatsApp o Telegram y tus amigos se apuntan con un toque. Sin app ni cuentas. Invitaciones de calendario, recordatorios, resultados, niveles.",
+    "tournamentLink": "¿Organizas un torneo con categorías y cuadro? Gratis, desde el móvil →",
+    "clubsLink": "¿Llevas un club? Reclama tu página: partidos, ranking, póster, botón de reserva →"
   },
   "create": {
     "title": "Nuevo partido",
@@ -1029,7 +1034,12 @@
     "noClubs": "Ningún club ha reclamado su página aquí todavía.",
     "metaDescription": "Clubes de pádel en Kicksmash: partidos abiertos, rankings, pósteres, botones de reserva y pistas libres. Los clubes reclaman su página gratis; los diez primeros de cada ciudad son fundadores.",
     "seeAll": "Todos los clubes",
-    "openPage": "Abrir la página del club"
+    "openPage": "Abrir la página del club",
+    "courtsIndoor": "Cubiertas",
+    "courtsOutdoor": "Exteriores",
+    "courtsSplitHelp": "Del total. Déjalo vacío si no lo sabes.",
+    "courtsIndoorCount": "{count} cubiertas",
+    "courtsOutdoorCount": "{count} exteriores"
   },
   "passport": {
     "title": "Pasaporte",

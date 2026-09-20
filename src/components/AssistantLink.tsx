@@ -17,48 +17,73 @@ import type { RoleSet } from "@/lib/domain/roles";
 
 const chip = "btn-ghost btn-xs";
 
-type Door = { key: string; href: string; label: string; kind: "coach" | "club" | "series"; testId: string };
+type Door = { key: string; href: string; label: string; kind: "coach" | "club" | "series" | "public"; testId: string };
+export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; coaches: string; clubs: string; tournaments: string };
 
-export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?: "play" | "coach" | "club" | "series"; labels: { myMatches: string; assistant: string; club: string; series: string; more: string } }) {
+/**
+ * The public doors every visitor gets, in the More menu: the coaches' directory, the clubs' page
+ * with the claim, the tournaments. They used to be reachable only by URL or from a city page, which
+ * is how a club owner or a serious organiser arrived on kicksma.sh and saw only the match form.
+ */
+const publicDoors = (labels: NavLabels): Door[] => [
+  { key: "coaches", href: "/coaches", label: labels.coaches, kind: "public", testId: "nav-coaches" },
+  { key: "clubs", href: "/clubs", label: labels.clubs, kind: "public", testId: "nav-clubs" },
+  { key: "tournaments", href: "/t", label: labels.tournaments, kind: "public", testId: "nav-tournaments" },
+];
+
+export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?: "play" | "coach" | "club" | "series"; labels: NavLabels }) {
   const doors: Door[] = [];
   if (roles.coach) doors.push({ key: "coach", href: "/coach", label: `🎾 ${labels.assistant}`, kind: "coach", testId: "assistant-link" });
   for (const c of roles.clubs) doors.push({ key: `club-${c.slug}`, href: `/v/${c.slug}`, label: roles.clubs.length === 1 ? labels.club : c.name, kind: "club", testId: "nav-club" });
   for (const s of roles.series) doors.push({ key: `series-${s.slug}`, href: `/s/${s.slug}`, label: roles.series.length === 1 ? labels.series : s.name, kind: "series", testId: "nav-series" });
 
+  const link = (d: Door) => (
+    <Link key={d.key} href={d.href} prefetch={false} className={chip} data-testid={d.testId}>
+      {d.label}
+    </Link>
+  );
   const play = (
     <Link href="/me" prefetch={false} className={chip} data-testid="nav-play">
       {labels.myMatches}
     </Link>
   );
-
-  // A player, and anyone we have never met: exactly what the header always showed.
-  if (doors.length === 0) return play;
-
-  // One other role: show whichever of the two this screen is not.
-  if (doors.length === 1) {
-    const d = doors[0];
-    if (current === d.kind) return play;
-    return (
-      <Link href={d.href} prefetch={false} className={chip} data-testid={d.testId}>
-        {d.label}
-      </Link>
-    );
-  }
-
-  // Several: one word, and the doors underneath it.
-  return (
+  // The menu is one short glyph, so the header keeps its one word beside it on a phone. Inside: the
+  // way to My matches when this is not it, every role door not shown outside, then the public three.
+  const more = (inside: React.ReactNode[]) => (
     <details className="relative">
-      <summary className={`${chip} list-none cursor-pointer`} data-testid="nav-more">
-        {labels.more}
+      <summary className={`${chip} list-none cursor-pointer`} data-testid="nav-more" aria-label={labels.more} title={labels.more}>
+        ⋯
       </summary>
       <div className="absolute right-0 z-20 mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-line bg-white p-2 shadow-lg">
-        {current !== "play" && play}
-        {doors.map((d) => (
-          <Link key={d.key} href={d.href} prefetch={false} className={chip} data-testid={d.testId}>
-            {d.label}
-          </Link>
-        ))}
+        {inside}
+        <div className="my-1 border-t border-line" />
+        {publicDoors(labels).map(link)}
       </div>
     </details>
   );
+
+  // A player, and anyone we have never met: My matches, and the menu with the public doors.
+  if (doors.length === 0)
+    return (
+      <>
+        {play}
+        {more([])}
+      </>
+    );
+
+  // One other role: outside, whichever of the two this screen is not; the other one waits in the menu.
+  if (doors.length === 1) {
+    const d = doors[0];
+    const outside = current === d.kind ? play : link(d);
+    const inside = current === d.kind ? [] : current === "play" ? [] : [play];
+    return (
+      <>
+        {outside}
+        {more(inside)}
+      </>
+    );
+  }
+
+  // Several roles: the menu alone, with every door in it.
+  return more([...(current !== "play" ? [play] : []), ...doors.map(link)]);
 }

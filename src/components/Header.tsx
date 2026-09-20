@@ -29,7 +29,7 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
         <span className="truncate">{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
-        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more") }} />}
+        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments") }} />}
         <LocaleToggle />
       </div>
     </header>

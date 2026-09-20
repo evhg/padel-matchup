@@ -70,6 +70,8 @@ export default async function ClubManagePage({ params }: Props) {
             bookingUrl: club.bookingUrl ?? "",
             mapUrl: club.mapUrl ?? "",
             courts: club.courts ? String(club.courts) : "",
+            courtsIndoor: club.courtsIndoor === null ? "" : String(club.courtsIndoor),
+            courtsOutdoor: club.courtsOutdoor === null ? "" : String(club.courtsOutdoor),
             about: club.about ?? "",
             city: club.city ?? "",
             opensAt: club.opensAt ?? "",

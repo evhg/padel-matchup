@@ -30,6 +30,8 @@ try {
   await page.getByLabel("Your name").fill("Nok");
   await page.getByLabel("Booking page").fill("https://www.matchi.se/facilities/kata");
   await page.getByRole("spinbutton", { name: /Courts/ }).fill("4");
+  await page.getByRole("spinbutton", { name: "Indoor" }).fill("3");
+  await page.getByRole("spinbutton", { name: "Outdoor" }).fill("1");
   await page.getByLabel("City").selectOption("phuket");
   await page.getByLabel(/About the club/).fill("Four courts under a roof, ten minutes from Kata beach.");
   await page.getByRole("button", { name: "Claim this page" }).click();
@@ -53,6 +55,7 @@ try {
 
   await page.goto(`${BASE}/v/${SLUG}`);
   check("live: booking button, managed badge, founding badge, about text", (await page.getByRole("link", { name: "Book on MATCHi" }).count()) === 1 && (await page.getByText("Managed by the club").count()) === 1 && (await page.getByText("Founding club").count()) === 1 && (await page.getByText(/ten minutes from Kata beach/).count()) === 1);
+  check("the courts badge carries the indoor and outdoor split", (await page.getByText("4 courts · 3 indoor · 1 outdoor").count()) === 1);
   await shot(page, "c2-club-page");
   await page.goto(`${BASE}/phuket`);
   check("the city page lists the club with its booking button", (await page.getByRole("link", { name: CLUB }).count()) >= 1 && (await page.getByRole("link", { name: "Book on MATCHi" }).count()) >= 1);
@@ -67,7 +70,7 @@ try {
   check("picking it fills the venue", (await page.getByLabel(/Venue/).inputValue()) === CLUB);
 
   const api = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
-  check("the API shows the club without anything private", api.booking?.platform === "matchi" && api.founding === true && api.courts === 4 && !JSON.stringify(api).includes(token));
+  check("the API shows the club without anything private", api.booking?.platform === "matchi" && api.founding === true && api.courts === 4 && api.courtsIndoor === 3 && api.courtsOutdoor === 1 && !JSON.stringify(api).includes(token));
   const list = await fetch(`${BASE}/api/v1/clubs?city=phuket`).then((r) => r.json());
   check("the city list carries it", Array.isArray(list.clubs) && list.clubs.some((c) => c.slug === SLUG));
   const missing = await fetch(`${BASE}/api/v1/clubs/nowhere-club`);

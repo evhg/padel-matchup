@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { refreshClubAction, updateClubAction } from "@/actions/clubs";
 
 type City = { slug: string; name: string };
-export type ClubFormValues = { website: string; bookingUrl: string; mapUrl: string; courts: string; about: string; city: string; opensAt: string; closesAt: string; availabilityUrl: string; availabilityKind: string };
+export type ClubFormValues = { website: string; bookingUrl: string; mapUrl: string; courts: string; courtsIndoor: string; courtsOutdoor: string; about: string; city: string; opensAt: string; closesAt: string; availabilityUrl: string; availabilityKind: string };
 
 /** Everything a club can change, one screen; the feed section folds because most clubs skip it. */
 export function ClubManageForm({ token, initial, cities }: { token: string; initial: ClubFormValues; cities: City[] }) {
@@ -27,6 +27,8 @@ export function ClubManageForm({ token, initial, cities }: { token: string; init
         bookingUrl: v.bookingUrl || undefined,
         mapUrl: v.mapUrl || undefined,
         courts: v.courts ? Number(v.courts) : null,
+        courtsIndoor: v.courtsIndoor === "" ? null : Number(v.courtsIndoor),
+        courtsOutdoor: v.courtsOutdoor === "" ? null : Number(v.courtsOutdoor),
         about: v.about || undefined,
         city: v.city || undefined,
         opensAt: v.opensAt || undefined,
@@ -65,6 +67,17 @@ export function ClubManageForm({ token, initial, cities }: { token: string; init
           <span className="text-sm font-bold">{t("club.courts")}</span>
           <input className="input mt-1" type="number" inputMode="numeric" min={1} max={64} value={v.courts} onChange={(e) => set({ courts: e.target.value })} />
         </label>
+        <label className="block">
+          <span className="text-sm font-bold">{t("club.courtsIndoor")}</span>
+          <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsIndoor} onChange={(e) => set({ courtsIndoor: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="text-sm font-bold">{t("club.courtsOutdoor")}</span>
+          <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsOutdoor} onChange={(e) => set({ courtsOutdoor: e.target.value })} />
+        </label>
+      </div>
+      <span className="-mt-3 block text-xs text-muted">{t("club.courtsSplitHelp")}</span>
+      <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm font-bold">{t("club.opensAt")}</span>
           <input className="input mt-1" type="time" value={v.opensAt} onChange={(e) => set({ opensAt: e.target.value })} />
