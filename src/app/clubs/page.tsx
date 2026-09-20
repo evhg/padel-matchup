@@ -33,6 +33,19 @@ export default async function ClubsPage() {
   const byCountry = new Map<string, typeof clubs>();
   for (const c of byCity.get("other") ?? []) byCountry.set(c.country ?? "", [...(byCountry.get(c.country ?? "") ?? []), c]);
   const countries = [...byCountry.entries()].map(([code, list]) => ({ code, name: code ? countryName(code, locale) : t("club.elsewhere"), list })).sort((a, b) => (a.code === "" ? 1 : b.code === "" ? -1 : a.name.localeCompare(b.name, locale)));
+  // Ten founding places in every city: for the places outside the two city pages, the count by the
+  // place as typed, from the live clubs on this page (no second read).
+  const placesLeft = (list: typeof clubs) => {
+    const taken = new Map<string, { name: string; n: number }>();
+    for (const c of list) {
+      const k = (c.province ?? "").trim().toLowerCase();
+      if (!k) continue;
+      const cur = taken.get(k) ?? { name: c.province!.trim(), n: 0 };
+      if (c.founding) cur.n++;
+      taken.set(k, cur);
+    }
+    return [...taken.values()].map((p) => ({ name: p.name, left: Math.max(0, CLUB_LIMITS.foundingPerCity - p.n) }));
+  };
   return (
     <>
       <Header />
@@ -88,6 +101,15 @@ export default async function ClubsPage() {
         {countries.map(({ code, name, list }) => (
           <section key={code || "elsewhere"} className="card" data-testid="clubs-country">
             <h2 className="text-lg font-extrabold">{t("club.inCity", { city: name })}</h2>
+            {code && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {placesLeft(list).map((p) => (
+                  <span key={p.name} className="chip-muted">
+                    {t("club.foundingLeft", { count: p.left, city: p.name })}
+                  </span>
+                ))}
+              </div>
+            )}
             <ul className="mt-3 flex flex-col gap-2">
               {list.map((c) => (
                 <ClubRow key={c.slug} club={c} />

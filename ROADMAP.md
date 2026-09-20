@@ -330,6 +330,18 @@ Everything in this list is live. The README describes each in detail.
   their accounts, and says an email read later works meanwhile. On a phone under 380 px with one role
   door out, the brand's mark stands alone rather than "Kick…".
 
+- **The owner's nine answers (20 September 2026).** Asked one by one, with the case for and against
+  each. A claim whose work email is confirmed by the code goes live at once; the owner's first message
+  is edited to say so and loses its buttons, a second one carries Reject. Ten founding places in every
+  city: a city with a page by its slug, any other by its country and the place as typed, so Kuala
+  Lumpur and kuala lumpur are one place and Penang is another. The count on a city's coaches door
+  shows from three people up. A coach want lives ninety days, one listing tells twenty, and a person
+  hears about one coach every three days at most. The level presets stay folded behind the chip. The
+  chat's setup-done message keeps the bare page link and adds the line that points to the invite link
+  on the students screen. The public mail domains never get a code; a Facebook or Instagram website
+  is named as such on the owner's message, with the website as a button. The Russian and Spanish text
+  ships as written, to be read by the first coaches who use it.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

@@ -32,7 +32,7 @@ export function WantCoachForm({ citySlug, cityName, hasIdentity, reachable, wait
     return (
       <section className="card" data-testid="want-coach-done">
         <p className="font-bold">✓ {t("wantDone", { city: cityName })}</p>
-        {done.waiting > 1 && <p className="mt-1 text-sm text-muted">{t("wantWaiting", { count: done.waiting - 1 })}</p>}
+        {done.waiting > 0 && <p className="mt-1 text-sm text-muted">{t("wantWaiting", { count: done.waiting })}</p>}
         {!reachable && (
           <p className="mt-2 text-sm text-muted">
             {t("wantReach")}{" "}

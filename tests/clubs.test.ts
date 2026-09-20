@@ -6,7 +6,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeSlotsFromBookings, localDay, parseDuration, parseFreeJson, parseIcs, refreshAllAvailability, refreshClubAvailability } from "@/lib/booking/availability";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, markClaimVerified, updateClub } from "@/lib/domain/clubs";
 import { claimCheckLine } from "@/lib/telegram/clubs";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { askOwnerAboutClub } from "@/lib/telegram/clubs";
@@ -308,5 +308,35 @@ describe("the club's place and the claim's check", () => {
     // A new contact starts the proof again.
     const moved = await claimClub(db, { name: "Chiang Mai Padel", playerId: pim.id, claimContact: "pim@gmail.com" });
     expect(moved.claimVerifiedAt).toBeNull();
+  });
+});
+
+/** Ten founding places in every city: a city page by its slug, any other place by its country and the text as typed. */
+describe("founding places everywhere", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => ({ db, close } = await createTestDb()));
+  afterAll(() => close());
+
+  it("counts Kuala Lumpur and kuala lumpur as one place, ten places deep, and gives a club with no place none", async () => {
+    const rows = [];
+    for (let i = 0; i < CLUB_LIMITS.foundingPerCity + 1; i++) {
+      const p = await makePlayer(db, `KL owner ${i}`);
+      const c = await claimClub(db, { name: `KL Padel ${i}`, playerId: p.id, place: i % 2 ? "kuala lumpur" : "Kuala Lumpur", country: "MY", tz: "Asia/Kuala_Lumpur" });
+      rows.push(await decideClub(db, c.slug, true));
+    }
+    expect(rows.filter((r) => r!.founding)).toHaveLength(CLUB_LIMITS.foundingPerCity);
+    expect(rows.at(-1)!.founding).toBe(false);
+    expect(await foundingPlacesLeft(db, rows[0]!)).toBe(0);
+    // Another place in the same country starts its own ten.
+    const q = await makePlayer(db, "Penang owner");
+    const penang = await decideClub(db, (await claimClub(db, { name: "Penang Padel", playerId: q.id, place: "Penang", country: "MY", tz: "Asia/Kuala_Lumpur" })).slug, true);
+    expect(penang!.founding).toBe(true);
+    expect(await foundingPlacesLeft(db, penang!)).toBe(CLUB_LIMITS.foundingPerCity - 1);
+    // No place named: no key, no badge.
+    const r = await makePlayer(db, "Nowhere owner");
+    const nowhere = await claimClub(db, { name: "Somewhere Padel", playerId: r.id });
+    expect(foundingKey({ city: null, country: nowhere.country, province: nowhere.province })).toBeNull();
+    expect((await decideClub(db, nowhere.slug, true))!.founding).toBe(false);
   });
 });

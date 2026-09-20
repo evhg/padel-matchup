@@ -217,6 +217,8 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
           <h1 className="text-2xl font-extrabold tracking-tight">🎾 {t("done.title")}</h1>
           <p className="mt-3 text-sm font-bold">{t("done.link")}</p>
           <p className="mt-1 break-all font-mono text-sm">{url}</p>
+          {/* The bare link is the one for Instagram; the students they already have take the invite link, which seats them without asking (the owner's decision). */}
+          <p className="mt-1 text-xs text-muted">{t("done.inviteHint")}</p>
           <p className="mt-4 text-sm font-bold">{t("done.forward")}</p>
           <div className="mt-2">
             <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
