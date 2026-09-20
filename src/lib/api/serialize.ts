@@ -172,6 +172,9 @@ export type PublicClub = {
   name: string;
   url: string;
   city: string | null;
+  /** The place as the club named it, and its country as ISO 3166-1 alpha-2; null when the club said neither. */
+  country: string | null;
+  province: string | null;
   mapUrl: string | null;
   website: string | null;
   booking: { url: string; platform: string | null; platformName: string | null } | null;
@@ -199,6 +202,8 @@ export function clubToPublic(c: Club, base: string, courtNames?: string[]): Publ
     name: c.name,
     url: `${base}/v/${c.slug}`,
     city: c.city,
+    country: c.country,
+    province: c.province,
     mapUrl: c.mapUrl,
     website: c.website,
     booking: c.bookingUrl ? { url: c.bookingUrl, platform: platform?.id ?? null, platformName: platform?.name ?? null } : null,

@@ -1,32 +1,42 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
-import { claimClubAction } from "@/actions/clubs";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { claimClubAction, type ClaimClubInput } from "@/actions/clubs";
+import { ClaimCodeForm } from "@/components/ClaimCodeForm";
 import { CopyButton } from "@/components/ShareSheet";
+import { CLAIM_ROLES } from "@/lib/domain/claimRoles";
+import { COUNTRIES, countryName, countryOfTz } from "@/lib/domain/countries";
 
-type City = { slug: string; name: string };
 /** A club Kicksmash already lists and nobody has claimed: the owner picks it rather than retyping it. */
 export type ListedClub = { name: string; country: string | null; province: string | null };
 
-type Step = "club" | "courts" | "links";
-const STEPS: Step[] = ["club", "courts", "links"];
+type Step = "club" | "courts" | "links" | "you";
+const STEPS: Step[] = ["club", "courts", "links", "you"];
 
 /**
- * The claim as a walk, like the coach's: the club, then its courts and hours, then the links, and
- * the claim itself on the last step. It used to be one screen of eleven fields, which is a form,
- * and a form is where a club owner on a phone stops. Done, the screen carries what makes the page
- * work from day one: the manage link (also on My matches), the poster to print for the courts, and
- * the week to fill with the socials that repeat.
+ * The claim as a walk, like the coach's: the club, then its courts and hours, then the links, then
+ * who the claimant is and how the club can confirm it, with the claim itself on that last step. It
+ * used to be one screen of eleven fields, which is a form, and a form is where a club owner on a
+ * phone stops. Done, the screen carries what makes the page work from day one: the manage link
+ * (also on My matches), the poster to print for the courts, the week to fill with the socials that
+ * repeat, and, when the contact was a work email at the club's own domain, the code that confirms it.
  */
-export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed = [] }: { initialName: string; hasIdentity: boolean; cities: City[]; base: string; listed?: ListedClub[] }) {
+export function ClubClaimForm({ initialName, hasIdentity, base, listed = [] }: { initialName: string; hasIdentity: boolean; base: string; listed?: ListedClub[] }) {
   const t = useTranslations();
+  const locale = useLocale();
   const [pending, start] = useTransition();
   const [step, setStep] = useState<Step>("club");
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ slug: string; token: string } | null>(null);
-  const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", courtsIndoor: "", courtsOutdoor: "", opensAt: "", closesAt: "", about: "", city: "" });
+  const [done, setDone] = useState<{ slug: string; token: string; codeSentTo: string | null } | null>(null);
+  const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", courtsIndoor: "", courtsOutdoor: "", opensAt: "", closesAt: "", about: "", place: "", country: "", claimRole: "", claimContact: "" });
   const set = (patch: Partial<typeof v>) => setV((s) => ({ ...s, ...patch }));
+  // The browser's time zone guesses the country once; the person corrects it if it is wrong.
+  useEffect(() => {
+    const c = countryOfTz(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    if (c) setV((s) => (s.country ? s : { ...s, country: c }));
+  }, []);
+  const countries = useMemo(() => COUNTRIES.map((code) => ({ code, name: countryName(code, locale) })).sort((a, b) => a.name.localeCompare(b.name, locale)), [locale]);
   const index = STEPS.indexOf(step);
   const goNext = () => setStep(STEPS[Math.min(STEPS.length - 1, index + 1)]);
   const goBack = () => setStep(STEPS[Math.max(0, index - 1)]);
@@ -41,8 +51,9 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
       <section className="card flex flex-col gap-4" data-testid="claim-done">
         <div>
           <h2 className="text-xl font-extrabold">{t("club.claimed")}</h2>
-          <p className="mt-1 text-sm text-muted">{t("club.claimedHelp")}</p>
+          <p className="mt-1 text-sm text-muted">{t(done.codeSentTo ? "club.claimedHelpCode" : "club.claimedHelp")}</p>
         </div>
+        {done.codeSentTo && <ClaimCodeForm token={done.token} email={done.codeSentTo} />}
         <div className="rounded-2xl bg-bg px-4 py-3">
           <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("club.manageLink")}</div>
           <div className="mt-1 break-all font-mono text-sm">{manage}</div>
@@ -92,7 +103,10 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
         opensAt: v.opensAt || undefined,
         closesAt: v.closesAt || undefined,
         about: v.about || undefined,
-        city: v.city || undefined,
+        place: v.place.trim() || undefined,
+        country: v.country || undefined,
+        claimRole: (v.claimRole || undefined) as ClaimClubInput["claimRole"],
+        claimContact: v.claimContact.trim() || undefined,
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       if (r.ok) setDone(r.data);
@@ -100,14 +114,14 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
     });
   };
 
-  const stepTitle = step === "club" ? t("club.walkClub") : step === "courts" ? t("club.walkCourts") : t("club.walkLinks");
+  const stepTitle = step === "club" ? t("club.walkClub") : step === "courts" ? t("club.walkCourts") : step === "links" ? t("club.walkLinks") : t("club.walkYou");
   return (
     <form
       className="card flex flex-col gap-4"
       data-testid={`claim-${step}`}
       onSubmit={(e) => {
         e.preventDefault();
-        if (step === "links") submit();
+        if (step === "you") submit();
         else goNext();
       }}
     >
@@ -144,20 +158,24 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-sm font-bold">{t("club.city")}</span>
-              <select className="input mt-1" value={v.city} onChange={(e) => set({ city: e.target.value })}>
-                <option value="">{t("club.cityOther")}</option>
-                {cities.map((c) => (
-                  <option key={c.slug} value={c.slug}>
+              <input className="input mt-1" value={v.place} maxLength={60} required placeholder={t("club.placePlaceholder")} autoComplete="address-level2" onChange={(e) => set({ place: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold">{t("club.country")}</span>
+              <select className="input mt-1" value={v.country} onChange={(e) => set({ country: e.target.value })}>
+                <option value="">—</option>
+                {countries.map((c) => (
+                  <option key={c.code} value={c.code}>
                     {c.name}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="block">
-              <span className="text-sm font-bold">{t("club.mapUrl")}</span>
-              <input className="input mt-1" type="url" inputMode="url" placeholder="https://maps…" value={v.mapUrl} maxLength={500} onChange={(e) => set({ mapUrl: e.target.value })} />
-            </label>
           </div>
+          <label className="block">
+            <span className="text-sm font-bold">{t("club.mapUrl")}</span>
+            <input className="input mt-1" type="url" inputMode="url" placeholder="https://maps…" value={v.mapUrl} maxLength={500} onChange={(e) => set({ mapUrl: e.target.value })} />
+          </label>
         </>
       )}
 
@@ -209,6 +227,27 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
             <span className="text-sm font-bold">{t("club.website")}</span>
             <input className="input mt-1" type="url" inputMode="url" placeholder="https://" value={v.website} maxLength={500} onChange={(e) => set({ website: e.target.value })} />
           </label>
+        </>
+      )}
+
+      {step === "you" && (
+        <>
+          <div>
+            <span className="text-sm font-bold">{t("club.role")}</span>
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={t("club.role")}>
+              {CLAIM_ROLES.map((r) => (
+                <button key={r} type="button" aria-pressed={v.claimRole === r} onClick={() => set({ claimRole: r })} className={`min-h-10 rounded-xl px-3 text-sm font-bold transition ${v.claimRole === r ? "bg-ink text-white" : "border border-line hover:border-ink/30"}`}>
+                  {t(`club.role_${r}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="block">
+            <span className="text-sm font-bold">{t("club.contact")}</span>
+            <input className="input mt-1" value={v.claimContact} maxLength={120} required placeholder={t("club.contactPlaceholder")} autoComplete="off" onChange={(e) => set({ claimContact: e.target.value })} />
+            <span className="mt-1 block text-xs text-muted">{t("club.contactHelp")}</span>
+          </label>
+          <p className="text-xs text-muted">{t("club.attest", { club: v.clubName })}</p>
           {error && <p className="text-sm font-bold text-warn">{error}</p>}
         </>
       )}
@@ -219,8 +258,8 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
             {t("common.back")}
           </button>
         )}
-        <button type="submit" className="btn-primary flex-1" disabled={pending}>
-          {pending ? t("common.working") : step === "links" ? t("club.submit") : t("club.walkNext")}
+        <button type="submit" className="btn-primary flex-1" disabled={pending || (step === "you" && !v.claimRole)}>
+          {pending ? t("common.working") : step === "you" ? t("club.submit") : t("club.walkNext")}
         </button>
       </div>
     </form>

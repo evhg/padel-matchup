@@ -1,19 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { refreshClubAction, updateClubAction } from "@/actions/clubs";
+import { COUNTRIES, countryName } from "@/lib/domain/countries";
 
-type City = { slug: string; name: string };
-export type ClubFormValues = { website: string; bookingUrl: string; mapUrl: string; courts: string; courtsIndoor: string; courtsOutdoor: string; about: string; city: string; opensAt: string; closesAt: string; availabilityUrl: string; availabilityKind: string };
+export type ClubFormValues = { website: string; bookingUrl: string; mapUrl: string; courts: string; courtsIndoor: string; courtsOutdoor: string; about: string; place: string; country: string; opensAt: string; closesAt: string; availabilityUrl: string; availabilityKind: string };
 
 /** Everything a club can change, one screen; the feed section folds because most clubs skip it. */
-export function ClubManageForm({ token, initial, cities }: { token: string; initial: ClubFormValues; cities: City[] }) {
+export function ClubManageForm({ token, initial }: { token: string; initial: ClubFormValues }) {
   const t = useTranslations();
+  const locale = useLocale();
+  const countries = useMemo(() => COUNTRIES.map((code) => ({ code, name: countryName(code, locale) })).sort((a, b) => a.name.localeCompare(b.name, locale)), [locale]);
   const [pending, start] = useTransition();
   const [v, setV] = useState(initial);
   const [note, setNote] = useState<string | null>(null);
   const [feedOpen, setFeedOpen] = useState(Boolean(initial.availabilityUrl));
+  // "Share it" under the free courts on the same page lands here with #feed: the section opens itself.
+  useEffect(() => {
+    if (window.location.hash === "#feed") setFeedOpen(true);
+  }, []);
   const set = (patch: Partial<ClubFormValues>) => setV((s) => ({ ...s, ...patch }));
 
   const feedNote = (r: { slots: number | null; feedError: string | null }) => (r.feedError ? `${t("club.freeError")} (${r.feedError})` : r.slots != null ? t("club.freeHours", { count: r.slots }) : null);
@@ -30,7 +36,8 @@ export function ClubManageForm({ token, initial, cities }: { token: string; init
         courtsIndoor: v.courtsIndoor === "" ? null : Number(v.courtsIndoor),
         courtsOutdoor: v.courtsOutdoor === "" ? null : Number(v.courtsOutdoor),
         about: v.about || undefined,
-        city: v.city || undefined,
+        place: v.place || undefined,
+        country: v.country || undefined,
         opensAt: v.opensAt || undefined,
         closesAt: v.closesAt || undefined,
         availabilityUrl: feedOpen ? v.availabilityUrl || undefined : undefined,
@@ -87,23 +94,29 @@ export function ClubManageForm({ token, initial, cities }: { token: string; init
           <input className="input mt-1" type="time" value={v.closesAt} onChange={(e) => set({ closesAt: e.target.value })} />
         </label>
       </div>
-      <label className="block">
-        <span className="text-sm font-bold">{t("club.city")}</span>
-        <select className="input mt-1" value={v.city} onChange={(e) => set({ city: e.target.value })}>
-          <option value="">{t("club.cityOther")}</option>
-          {cities.map((c) => (
-            <option key={c.slug} value={c.slug}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-sm font-bold">{t("club.city")}</span>
+          <input className="input mt-1" value={v.place} maxLength={60} placeholder={t("club.placePlaceholder")} autoComplete="address-level2" onChange={(e) => set({ place: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="text-sm font-bold">{t("club.country")}</span>
+          <select className="input mt-1" value={v.country} onChange={(e) => set({ country: e.target.value })}>
+            <option value="">—</option>
+            {countries.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <label className="block">
         <span className="text-sm font-bold">{t("club.about")}</span>
         <textarea className="input mt-1 min-h-20" value={v.about} maxLength={400} onChange={(e) => set({ about: e.target.value })} />
       </label>
 
-      <div className="rounded-2xl border border-line">
+      <div className="rounded-2xl border border-line" id="feed">
         <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setFeedOpen((o) => !o)} aria-expanded={feedOpen}>
           <span className="text-sm font-bold">{t("club.feed")}</span>
           <span className="text-faint">{feedOpen ? "−" : "+"}</span>

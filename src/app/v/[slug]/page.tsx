@@ -11,6 +11,7 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
 import { getClub, isClubLive } from "@/lib/domain/clubs";
+import { getSessionPlayerId } from "@/lib/session";
 import { listCourts } from "@/lib/domain/courts";
 import { coachesAtClub } from "@/lib/domain/coaching";
 import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
@@ -44,9 +45,11 @@ export default async function VenueBoardPage({ params }: Props) {
   // A live club page stands even before its first match; an unclaimed venue needs one.
   const club = isClubLive(clubRow) ? clubRow : null;
   const courts = club ? await listCourts(db, club.slug) : [];
-  // A claimed club whose check is still to come has a page too: the board, empty, under its name. The
-  // owner who just claimed it opens it from the done screen, and "Link not found" is not an answer.
-  const known = club ?? (clubRow && !clubRow.rejectedAt ? clubRow : null);
+  // A claimed club whose check is still to come has a page too, for the person who claimed it: the
+  // board, empty, under its name, opened from the done screen. To anybody else nothing of a pending
+  // claim shows: a stranger's wrong map link must not stand on a club's page before the check.
+  const pending = clubRow && !club && !clubRow.rejectedAt ? clubRow : null;
+  const known = club ?? (pending?.claimedBy && pending.claimedBy === (await getSessionPlayerId()) ? pending : null);
   if (!boardRow && !known) notFound();
   const board = boardRow ?? { slug, name: known!.name, mapUrl: known!.mapUrl, events: [] };
   const mapUrl = club?.mapUrl ?? board.mapUrl;

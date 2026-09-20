@@ -407,6 +407,13 @@
       "when": 1789883414384,
       "tag": "0057_skinny_charles_xavier",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1789897351263,
+      "tag": "0058_clammy_sprite",
+      "breakpoints": true
     }
   ]
 }

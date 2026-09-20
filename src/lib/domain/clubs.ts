@@ -7,7 +7,10 @@ import type { Db } from "@/db";
 import { clubs, coaches, events, venues, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
-import { CITIES, cityBySlug, venueInCity } from "./cities";
+import { CITIES, cityBySlug, cityInText, venueInCity } from "./cities";
+import { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
+import { countryOfTz, isCountryCode } from "./countries";
+import { normalizeEmail } from "./players";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { courtNamesBySlug } from "./courts";
@@ -30,6 +33,9 @@ export type ClubInput = {
   courtsOutdoor?: unknown;
   about?: unknown;
   city?: unknown;
+  /** The place as a person there names it ("Kuala Lumpur"), and the country as ISO 3166-1 alpha-2 ("MY"). */
+  place?: unknown;
+  country?: unknown;
   opensAt?: unknown;
   closesAt?: unknown;
   availabilityUrl?: unknown;
@@ -40,7 +46,7 @@ const HHMM = /^([01]?\d|2[0-4]):[0-5]\d$/;
 const text = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 
 /** Normalises the free-form fields a club may set. Unknown or invalid values become null, never errors. */
-export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" | "bookingUrl" | "bookingPlatform" | "mapUrl" | "courts" | "courtsIndoor" | "courtsOutdoor" | "about" | "city" | "opensAt" | "closesAt" | "availabilityUrl" | "availabilityKind">> {
+export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" | "bookingUrl" | "bookingPlatform" | "mapUrl" | "courts" | "courtsIndoor" | "courtsOutdoor" | "about" | "city" | "country" | "province" | "opensAt" | "closesAt" | "availabilityUrl" | "availabilityKind">> {
   const out: ReturnType<typeof cleanClubInput> = {};
   if ("website" in input) out.website = cleanUrl(input.website);
   if ("bookingUrl" in input) {
@@ -63,6 +69,12 @@ export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" |
   if ("courtsOutdoor" in input) out.courtsOutdoor = split(input.courtsOutdoor);
   if ("about" in input) out.about = text(input.about, CLUB_LIMITS.aboutMax);
   if ("city" in input) out.city = typeof input.city === "string" && cityBySlug(input.city) ? input.city : null;
+  // A club anywhere: the place is free text, and when it names a city with a page, the page follows.
+  if ("place" in input) {
+    out.province = text(input.place, 60);
+    out.city = out.province ? (cityInText(out.province)?.slug ?? null) : null;
+  }
+  if ("country" in input) out.country = isCountryCode(input.country) ? input.country : null;
   if ("opensAt" in input) out.opensAt = typeof input.opensAt === "string" && HHMM.test(input.opensAt.trim()) ? input.opensAt.trim().padStart(5, "0") : null;
   if ("closesAt" in input) out.closesAt = typeof input.closesAt === "string" && HHMM.test(input.closesAt.trim()) ? input.closesAt.trim().padStart(5, "0") : null;
   if ("availabilityUrl" in input) out.availabilityUrl = cleanUrl(input.availabilityUrl);
@@ -251,7 +263,10 @@ export function guessCity(slug: string | null, tz: string | null | undefined): s
   return CITIES.find((c) => venueInCity(c, slug, tz))?.slug ?? null;
 }
 
-export type ClaimInput = ClubInput & { name: string; playerId: string; tz?: string | null };
+export type ClaimInput = ClubInput & { name: string; playerId: string; tz?: string | null; /** The claim's check: who they are at the club, and a work email or the club's phone. */ claimRole?: unknown; claimContact?: unknown };
+
+export { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
+const cleanRole = (v: unknown): ClaimRole | null => (typeof v === "string" && (CLAIM_ROLES as readonly string[]).includes(v) ? (v as ClaimRole) : null);
 
 /** The unclaimed listing for a name, whatever slug it was listed under. */
 async function listedClubByName(db: Db, name: string): Promise<Club | null> {
@@ -283,12 +298,19 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   if (existing && !existing.rejectedAt && existing.claimedBy !== null && existing.claimedBy !== input.playerId) throw new DomainError("forbidden", "already_claimed");
   const fields = cleanClubInput(input);
   const city = fields.city ?? guessCity(slug, input.tz ?? existing?.tz) ?? existing?.city ?? null;
+  const country = fields.country ?? countryOfTz(input.tz ?? existing?.tz) ?? existing?.country ?? null;
+  const province = fields.province ?? existing?.province ?? (city ? (cityBySlug(city)?.name ?? null) : null);
+  // The same person claiming again keeps what the check already has; anybody else starts the check from nothing.
+  const same = existing?.claimedBy === input.playerId;
+  const claimRole = cleanRole(input.claimRole) ?? (same ? existing.claimRole : null);
+  const claimContact = text(input.claimContact, 120) ?? (same ? existing.claimContact : null);
+  const claimVerifiedAt = same && existing.claimContact === claimContact ? existing.claimVerifiedAt : null;
   // No zone from the browser: the city's zone will do, and the week can make matches from the first hour.
   const tz = input.tz ?? existing?.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
   // A claimed row is a claim, whatever it was before. The directory's own fields (country, province,
   // the court counts) are left alone: they are still true, and the owner edits them through the
   // manage link like everything else.
-  const values = { ...fields, city, name, tz, source: "claim", claimedBy: input.playerId, claimedAt: new Date(), rejectedAt: null, approvedAt: existing?.claimedBy === input.playerId ? existing.approvedAt : null, updatedAt: new Date() };
+  const values = { ...fields, city, country, province, name, tz, source: "claim", claimedBy: input.playerId, claimedAt: new Date(), claimRole, claimContact, claimVerifiedAt, rejectedAt: null, approvedAt: same ? existing.approvedAt : null, updatedAt: new Date() };
   if (existing) {
     const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning();
     return row;
@@ -335,6 +357,37 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
   // A live club page is news for the search engines that speak IndexNow.
   await pingIndexNow([`/v/${slug}`, ...locales.map((l) => localePath("/clubs", l))], { db });
   return row;
+}
+
+/** Mail domains anybody can have: an address there proves nothing about the club. */
+const PUBLIC_MAIL = new Set(["gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "yahoo.es", "ymail.com", "hotmail.com", "hotmail.co.uk", "hotmail.es", "outlook.com", "outlook.es", "live.com", "msn.com", "icloud.com", "me.com", "mac.com", "aol.com", "mail.ru", "yandex.ru", "yandex.com", "bk.ru", "list.ru", "inbox.ru", "rambler.ru", "proton.me", "protonmail.com", "pm.me", "gmx.com", "gmx.de", "web.de", "qq.com", "163.com", "126.com", "naver.com", "daum.net"]);
+const hostOf = (u: string | null | undefined): string | null => {
+  if (!u) return null;
+  try {
+    return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The work email the claim can prove by itself: the contact is an email at the club's own domain —
+ * its website, or its booking page when that is the club's own and not a platform's. A code to that
+ * address confirms the person is inside the club; a public mailbox or a phone number confirms
+ * nothing, and those the owner checks by hand.
+ */
+export function claimEmailForCode(c: Pick<Club, "claimContact" | "website" | "bookingUrl" | "bookingPlatform">): string | null {
+  const email = normalizeEmail(c.claimContact);
+  const domain = email?.split("@")[1];
+  if (!email || !domain || PUBLIC_MAIL.has(domain)) return null;
+  const hosts = [hostOf(c.website), c.bookingPlatform ? null : hostOf(c.bookingUrl)].filter((h): h is string => Boolean(h));
+  return hosts.some((h) => h === domain || h.endsWith(`.${domain}`) || domain.endsWith(`.${h}`)) ? email : null;
+}
+
+/** The code came back right: the claim is confirmed by the club's own mail. Once; a second code changes nothing. */
+export async function markClaimVerified(db: Db, slug: string, now = new Date()): Promise<Club | null> {
+  const [row] = await db.update(clubs).set({ claimVerifiedAt: now, updatedAt: now }).where(and(eq(clubs.slug, slug), isNull(clubs.claimVerifiedAt))).returning();
+  return row ?? null;
 }
 
 export async function setClubNotifyMessage(db: Db, slug: string, messageId: number | null): Promise<void> {

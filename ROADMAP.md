@@ -305,6 +305,20 @@ Everything in this list is live. The README describes each in detail.
   entries at a tournament no longer marked "not confirmed yet"; the tournament buttons centred on a
   laptop. What the walks put on the list is item 3 under Next.
 
+- **The claim's check, and a club anywhere (20 September 2026).** A claim used to be a name and a
+  tap: anybody could ask, and the owner's Approve was the whole review, with nothing to go on but the
+  links. The claim now ends on a fourth step, "You": the role at the club and a work contact. A work
+  email at the club's own domain gets a 6-digit code on the spot and the claim confirms itself; a
+  phone number or a public mailbox the owner checks by hand, and the Telegram message says which case
+  it is. The claimant hears the decision where they are (Telegram, else email, else push). Nothing of
+  a pending claim shows to anybody but its claimant. The city was a list of two; it is a place typed
+  as a person there would name it, with the country beside it (guessed from the browser's zone, named
+  in the reader's language), so a club in Kuala Lumpur or Moscow claims its page like one in Phuket,
+  and `/clubs` lists it under its country. Also that day: the header's doors read "My matches",
+  "My assistant", "My club", "My series", so "Club" beside "Clubs" stops meaning two things; the free
+  courts line on the manage page says where to share the calendar and opens it; the landing page's
+  four doors are tiles with a name and one line each, not four links at the foot of the page.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

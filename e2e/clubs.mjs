@@ -1,6 +1,9 @@
 // Clubs: the claim in the browser, the owner's approval through the Telegram callback, the club page,
 // the city page, the public API and My matches.
 import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { existsSync, readFileSync } from "node:fs";
+/** Every email the build wrote instead of sending, oldest first. */
+const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
 
 const browser = await launch();
 const results = [];
@@ -28,9 +31,10 @@ try {
   await page.waitForURL(/\/clubs\/claim\?name=/);
   check("the claim form is prefilled with the club name", (await page.getByLabel("Club name").inputValue()) === CLUB);
   // The claim is a walk: the club, the courts and hours, the links; the claim itself is the last button.
-  check("the walk starts on the club", (await page.getByTestId("claim-club").count()) === 1 && (await page.getByText("Step 1 of 3").count()) === 1);
+  check("the walk starts on the club", (await page.getByTestId("claim-club").count()) === 1 && (await page.getByText("Step 1 of 4").count()) === 1);
   await page.getByLabel("Your name").fill("Nok");
-  await page.getByLabel("City").selectOption("phuket");
+  await page.getByLabel("City").fill("Phuket");
+  await page.getByLabel("Country").selectOption("TH");
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByTestId("claim-courts").waitFor();
   await page.getByRole("spinbutton", { name: /Courts/ }).fill("4");
@@ -39,10 +43,26 @@ try {
   await page.getByLabel(/About the club/).fill("Four courts under a roof, ten minutes from Kata beach.");
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByTestId("claim-links").waitFor();
-  check("the last step has a way back and the claim button", (await page.getByRole("button", { name: "Back" }).count()) === 1 && (await page.getByRole("button", { name: "Claim this page" }).count()) === 1);
   await page.getByLabel("Booking page").fill("https://www.matchi.se/facilities/kata");
+  await page.getByLabel("Website").fill("https://kata-padel.com");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByTestId("claim-you").waitFor();
+  // The claim's check: who they are and how the club can confirm it. A work email at the club's own
+  // domain gets a code; the code goes back; the claim is confirmed by itself before the owner's tap.
+  check("the last step asks who they are and how to confirm it, with a way back and the claim button", (await page.getByRole("button", { name: "Back" }).count()) === 1 && (await page.getByRole("button", { name: "Claim this page" }).count()) === 1 && (await page.getByRole("button", { name: "Manager" }).count()) === 1);
+  check("the claim button waits for a role", await page.getByRole("button", { name: "Claim this page" }).isDisabled());
+  await page.getByRole("button", { name: "Manager" }).click();
+  await page.getByLabel("How can we confirm it?").fill("nok@kata-padel.com");
   await page.getByRole("button", { name: "Claim this page" }).click();
   await page.getByText("Claim received").waitFor({ timeout: 20000 });
+  check("the done screen asks for the code sent to the work email", (await page.getByTestId("claim-code").count()) === 1 && (await page.getByText("Code sent to nok@kata-padel.com").count()) === 1);
+  const claimMail = mails().reverse().find((m) => JSON.stringify(m).includes("nok@kata-padel.com"));
+  const claimCode = claimMail?.subject?.match(/\d{6}/)?.[0] ?? "";
+  check("the code email went to the work email and names the club", /^\d{6}$/.test(claimCode) && /Kata Padel Center/.test(claimMail?.subject ?? ""), JSON.stringify(claimMail?.subject));
+  await page.getByLabel("6-digit code").fill(claimCode);
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByTestId("claim-verified").waitFor({ timeout: 20000 });
+  check("the work email is confirmed on the screen", (await page.getByText(/Work email confirmed/).count()) === 1);
   check("done: the poster and the week are the next two taps", (await page.getByTestId("claim-poster").getAttribute("href")) === `/v/${SLUG}/poster` && /\/manage\/[A-Za-z0-9_-]{24}#week$/.test((await page.getByTestId("claim-week").getAttribute("href")) ?? ""));
   const manage = (await page.locator("text=/\\/v\\/kata-padel-center\\/manage\\//").first().textContent())?.trim() ?? "";
   const token = manage.split("/manage/")[1];
@@ -52,7 +72,7 @@ try {
   await page.goto(`${BASE}/v/${SLUG}`);
   check("pending: the page hides the claim row and shows no club details yet", (await page.getByText("Is this your club?").count()) === 0 && (await page.getByText("Managed by the club").count()) === 0);
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
-  check("the manage page shows the pending status", (await page.getByText("Waiting for our check").count()) === 1);
+  check("the manage page shows the pending status and the confirmed work email", (await page.getByText("Waiting for our check").count()) === 1 && (await page.getByTestId("claim-verified").count()) === 1);
   await page.goto(`${BASE}/me`);
   check("My matches lists the club", (await page.getByText("Your clubs").count()) === 1 && (await page.getByText(CLUB).count()) >= 1);
 
@@ -73,12 +93,13 @@ try {
   await page.goto(`${BASE}/new`);
   await page.getByLabel(/Venue/).click();
   // The list is the point of the directory: a club is picked under the place it is in, not typed.
-  check("the create form offers the club under its province", (await page.getByText("Phuket", { exact: true }).count()) >= 1 && (await page.getByRole("button", { name: CLUB }).count()) === 1);
+  // The heading names the country now that a claim carries one: "Thailand · Phuket".
+  check("the create form offers the club under its country and province", (await page.getByText(/(^|· )Phuket$/).count()) >= 1 && (await page.getByRole("button", { name: CLUB }).count()) === 1);
   await page.getByRole("button", { name: CLUB }).click();
   check("picking it fills the venue", (await page.getByLabel(/Venue/).inputValue()) === CLUB);
 
   const api = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
-  check("the API shows the club without anything private", api.booking?.platform === "matchi" && api.founding === true && api.courts === 4 && api.courtsIndoor === 3 && api.courtsOutdoor === 1 && !JSON.stringify(api).includes(token));
+  check("the API shows the club without anything private", api.booking?.platform === "matchi" && api.founding === true && api.courts === 4 && api.courtsIndoor === 3 && api.courtsOutdoor === 1 && api.country === "TH" && api.province === "Phuket" && !JSON.stringify(api).includes(token));
   const list = await fetch(`${BASE}/api/v1/clubs?city=phuket`).then((r) => r.json());
   check("the city list carries it", Array.isArray(list.clubs) && list.clubs.some((c) => c.slug === SLUG));
   const missing = await fetch(`${BASE}/api/v1/clubs/nowhere-club`);
