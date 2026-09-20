@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { subscribePushAction, unsubscribePushAction } from "@/actions/push";
 
 type Status = "hidden" | "denied" | "off" | "on" | "working";
@@ -25,7 +25,7 @@ async function registration(): Promise<ServiceWorkerRegistration> {
  * nothing is shown: the calendar invite above already carries the reminder,
  * and we never send anyone on a detour.
  */
-export function PushToggle({ vapidPublicKey, subscribed, compact = false, labels }: { vapidPublicKey: string | null; subscribed: boolean; compact?: boolean; /** The words for the button and the on-state. Default: the match reminder. A coach's channel screen says something else. */ labels?: { enable: string; on: string } }) {
+export function PushToggle({ vapidPublicKey, subscribed, compact = false, card = false, labels }: { vapidPublicKey: string | null; subscribed: boolean; compact?: boolean; /** Draw the card here rather than around the component: a phone that cannot do push then sees no card at all instead of an empty one (My matches showed one on an iPhone). */ card?: boolean; /** The words for the button and the on-state. Default: the match reminder. A coach's channel screen says something else. */ labels?: { enable: string; on: string } }) {
   const t = useTranslations();
   const [status, setStatus] = useState<Status>("hidden");
   const [error, setError] = useState<string | null>(null);
@@ -95,24 +95,25 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false, labels
   };
 
   if (status === "hidden") return null;
-  if (status === "denied") return <p className="text-sm text-muted">🔕 {t("push.denied")}</p>;
+  const wrap = (node: ReactNode) => (card ? <section className="card">{node}</section> : node);
+  if (status === "denied") return wrap(<p className="text-sm text-muted">🔕 {t("push.denied")}</p>);
   if (status === "on") {
-    return (
+    return wrap(
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-semibold text-ok">🔔 {labels?.on ?? t("push.on")}</span>
         <button type="button" className="shrink-0 text-xs link text-muted" onClick={disable}>
           {t("push.off")}
         </button>
-      </div>
+      </div>,
     );
   }
-  return (
+  return wrap(
     <div>
       <button type="button" className={`btn-secondary ${compact ? "btn-sm" : "w-full"}`} disabled={status === "working"} onClick={enable}>
         {status === "working" ? t("common.working") : `🔔 ${labels?.enable ?? t("push.enable")}`}
       </button>
       {!compact && <p className="mt-1 text-xs text-faint">{t("push.enableHelp")}</p>}
       {error && <p className="mt-1 text-sm font-semibold text-danger">{error}</p>}
-    </div>
+    </div>,
   );
 }

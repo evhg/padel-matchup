@@ -86,11 +86,7 @@ export default async function SharePage({ params }: Props) {
           {t(isTournament ? "share.openTournament" : "share.openMatch")} →
         </Link>
 
-        {viewer.player && pushEnabled() && (
-          <section className="card">
-            <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
-          </section>
-        )}
+        {viewer.player && pushEnabled() && <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />}
         <HomeScreenPrompt personalPath={token ? personalPath(token) : null} installed={Boolean(viewer.player?.homescreenAt)} />
 
         {emailEnabled() && (

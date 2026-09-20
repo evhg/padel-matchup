@@ -1,6 +1,6 @@
 // Americano tournament journey on a fresh local server (see e2e/run.mjs):
 // create with names, invite, generate rounds, enter scores, standings, clone, locale switch.
-import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, launch, makeCheck, shot, switchLang } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
 const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Asia/Bangkok" };
@@ -131,7 +131,7 @@ try {
 
   // Locale switch timing
   const t0 = Date.now();
-  await a.getByRole("button", { name: "ru", exact: true }).click();
+  await switchLang(a, "ru");
   await a.getByText("Американо").first().waitFor({ timeout: 20000 });
   check("locale switch", true, `${Date.now() - t0}ms`);
   await shot(a, "t4-ru");

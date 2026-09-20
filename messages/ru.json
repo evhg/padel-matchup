@@ -888,7 +888,8 @@
     "notListedShort": "Не на доске клуба",
     "coaches": "Тренеры здесь",
     "coachesHelp": "Тренеры, указавшие этот клуб и открывшие свою страницу.",
-    "coachHere": "Тренируете в {venue}? Создайте книгу записи →"
+    "coachHere": "Тренируете в {venue}? Создайте книгу записи →",
+    "listNow": "Показать на доске {venue}"
   },
   "ranking": {
     "title": "Рейтинг",
@@ -1478,7 +1479,8 @@
       "lessonTwo": "Занятия по {a} или {b} минут",
       "noGap": "Нет окна на {minutes} минут: {day}",
       "from": "от {amount}",
-      "eachPaysLine": "Каждый платит {amount}"
+      "eachPaysLine": "Каждый платит {amount}",
+      "foundingPlain": "Первый тренер"
     },
     "me": {
       "title": "Ваши занятия",

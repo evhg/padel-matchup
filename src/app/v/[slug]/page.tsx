@@ -44,8 +44,11 @@ export default async function VenueBoardPage({ params }: Props) {
   // A live club page stands even before its first match; an unclaimed venue needs one.
   const club = isClubLive(clubRow) ? clubRow : null;
   const courts = club ? await listCourts(db, club.slug) : [];
-  if (!boardRow && !club) notFound();
-  const board = boardRow ?? { slug, name: club!.name, mapUrl: club!.mapUrl, events: [] };
+  // A claimed club whose check is still to come has a page too: the board, empty, under its name. The
+  // owner who just claimed it opens it from the done screen, and "Link not found" is not an answer.
+  const known = club ?? (clubRow && !clubRow.rejectedAt ? clubRow : null);
+  if (!boardRow && !known) notFound();
+  const board = boardRow ?? { slug, name: known!.name, mapUrl: known!.mapUrl, events: [] };
   const mapUrl = club?.mapUrl ?? board.mapUrl;
   const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, slug).catch(() => [])]);
   // A live club with a programme shows its week, day by day; matches beyond the week stay in the list below.

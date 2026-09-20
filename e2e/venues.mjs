@@ -64,6 +64,12 @@ try {
   await guest.getByRole("link", { name: "Organize one here" }).click();
   await guest.waitForURL(/\/\?venue=/, { timeout: 20000 });
   check("create form prefilled with the venue and the listing on", (await guest.getByPlaceholder("Court TBD · or pick a club").inputValue()) === "Riverside Padel" && (await guest.getByRole("checkbox").isChecked()));
+  // One tap puts Walt's match on the board from its own page: no Edit match, no More options.
+  await other.goto(`${BASE}/${code2}`);
+  await other.getByTestId("list-on-board").click();
+  await other.getByRole("link", { name: /On the Riverside Padel board/ }).waitFor({ timeout: 20000 });
+  await guest.goto(`${BASE}/v/riverside-padel`);
+  check("one tap on the match page puts it on the board", (await guest.locator(`a[href='/${code2}']`).count()) === 1 && (await other.getByTestId("list-on-board").count()) === 0);
   await guest.goto(`${BASE}/v/no-such-venue`);
   check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
 } catch (e) {

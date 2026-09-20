@@ -45,7 +45,7 @@ export default async function ManageTournamentPage({ params }: Props) {
         <section className="card">
           <span className="chip-muted">🏆 {t("tournament.manage")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{c.name}</h1>
-          <Link href={`/t/${c.slug}`} prefetch={false} className="btn-ghost btn-sm mt-3 inline-block">
+          <Link href={`/t/${c.slug}`} prefetch={false} className="btn-ghost btn-sm mt-3">
             {t("tournament.open")}
           </Link>
         </section>

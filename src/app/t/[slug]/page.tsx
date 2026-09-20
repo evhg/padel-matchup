@@ -102,22 +102,22 @@ export default async function TournamentPage({ params, searchParams }: Props) {
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             {organizer && (
-              <Link href={`/t/${c.slug}/manage`} prefetch={false} className="btn-ghost btn-sm inline-block" data-testid="manage-link">
+              <Link href={`/t/${c.slug}/manage`} prefetch={false} className="btn-ghost btn-sm" data-testid="manage-link">
                 {t("tournament.manage")}
               </Link>
             )}
             {play.length > 0 && (
-              <Link href={`/t/${c.slug}/tv`} prefetch={false} className="btn-ghost btn-sm inline-block" data-testid="tv-link">
+              <Link href={`/t/${c.slug}/tv`} prefetch={false} className="btn-ghost btn-sm" data-testid="tv-link">
                 📺 {t("tournament.tvOpen")}
               </Link>
             )}
             {play.length > 0 && (
-              <a href={`/t/${c.slug}/results.csv`} className="btn-ghost btn-sm inline-block" data-testid="results-link">
+              <a href={`/t/${c.slug}/results.csv`} className="btn-ghost btn-sm" data-testid="results-link">
                 {t("tournament.resultsFile")}
               </a>
             )}
             {c.seriesTag && (
-              <Link href={`/t/series/${encodeURIComponent(c.seriesTag)}`} prefetch={false} className="btn-ghost btn-sm inline-block" data-testid="ranking-link">
+              <Link href={`/t/series/${encodeURIComponent(c.seriesTag)}`} prefetch={false} className="btn-ghost btn-sm" data-testid="ranking-link">
                 {t("tournament.ranking")}
               </Link>
             )}

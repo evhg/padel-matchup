@@ -888,7 +888,8 @@
     "notListedShort": "Not on the venue board",
     "coaches": "Coaches here",
     "coachesHelp": "Coaches who named this club and chose to be listed.",
-    "coachHere": "Coach at {venue}? Set up your lessons →"
+    "coachHere": "Coach at {venue}? Set up your lessons →",
+    "listNow": "Show on the {venue} board"
   },
   "ranking": {
     "title": "Ranking",
@@ -1478,7 +1479,8 @@
       "lessonTwo": "{a}- or {b}-minute lessons",
       "noGap": "No {minutes}-minute gap on {day}",
       "from": "from {amount}",
-      "eachPaysLine": "Each pays {amount}"
+      "eachPaysLine": "Each pays {amount}",
+      "foundingPlain": "Founding coach"
     },
     "me": {
       "title": "Your lessons",

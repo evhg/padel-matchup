@@ -41,7 +41,7 @@ export default async function TournamentsPage() {
           <span className="chip-muted">🏆 {t("tournament.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("tournament.listTitle")}</h1>
           <p className="mt-2 text-sm text-muted">{t("tournament.listSub")}</p>
-          <Link href="/t/new" prefetch={false} className="btn-primary mt-3 inline-block" data-testid="new-tournament">
+          <Link href="/t/new" prefetch={false} className="btn-primary mt-3" data-testid="new-tournament">
             {t("tournament.newButton")}
           </Link>
         </section>

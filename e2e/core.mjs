@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -251,11 +251,11 @@ try {
 
   // ---- RU toggle ----
   await a.goto(`${BASE}/PLAY`);
-  await a.getByRole("button", { name: "ru", exact: true }).click();
+  await switchLang(a, "ru");
   await a.getByText("Организатор").first().waitFor({ timeout: 20000 });
   await shot(a, "12-event-ru");
   check("RU renders", true);
-  await a.getByRole("button", { name: "en", exact: true }).click();
+  await switchLang(a, "en");
   await a.getByText("Organized by").first().waitFor({ timeout: 20000 });
 
   // ---- Waitlist: PLAY is full (Alex, Maria, Jordi-invited, Dana) ----
@@ -313,7 +313,7 @@ try {
   await a.locator("#feedback-text").waitFor({ timeout: 10000 });
   check("feedback opens in place on the match page", a.url() === urlBefore && (await a.locator("#feedback-text").count()) === 1);
   await a.goto(`${BASE}/me`);
-  await a.getByRole("button", { name: "es", exact: true }).click();
+  await switchLang(a, "es");
   await a.getByText("Mis partidos").first().waitFor({ timeout: 20000 });
   check("Spanish locale switch", true);
   await shot(a, "20-me-es");

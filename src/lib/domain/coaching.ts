@@ -2,11 +2,11 @@ import { transliterate } from "@/lib/translit";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { newCoachCode } from "@/lib/codes";
-import { coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
+import { clubs, coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { venueSlug, venueSlugFor } from "./venueBoard";
-import { cityOf } from "./cities";
+import { CITIES, cityInText, cityOf, type City } from "./cities";
 import { channelOf, recordFact } from "./facts";
 import { createPlayer } from "./players";
 
@@ -1406,6 +1406,28 @@ export async function listedCount(db: Db, tz: string): Promise<number> {
 }
 /** The badge shows while the book is listed in the city the place was earned in; the place itself is never taken back. */
 export const isFoundingCoach = (coach: Pick<Coach, "foundingAt" | "foundingTz" | "tz" | "isPublic" | "archivedAt">): boolean => Boolean(coach.foundingAt) && coach.foundingTz === coach.tz && coach.isPublic && !coach.archivedAt;
+
+/**
+ * The city a listed coach's clubs put them in, for the badge on their own page. A time zone is not a
+ * city: Bangkok and Phuket share Asia/Bangkok, and the badge once read "Phuket" on a Bangkok coach's
+ * page. So the clubs decide — a slug the city knows, else the city the club's row names, else the one
+ * city whose zone is its own (Singapore). Null when nothing says, and the badge then names no city.
+ * One bounded read by primary key, and only for a founding coach.
+ */
+export async function coachCity(db: Db, coach: Pick<Coach, "tz" | "clubSlugs">): Promise<City | null> {
+  for (const slug of coach.clubSlugs) {
+    const c = cityOf(coach.tz, slug);
+    if (c) return c;
+  }
+  if (coach.clubSlugs.length) {
+    const rows = await db.select({ city: clubs.city }).from(clubs).where(inArray(clubs.slug, coach.clubSlugs));
+    for (const r of rows) {
+      const c = r.city ? cityInText(r.city) : null;
+      if (c && c.tz === coach.tz) return c;
+    }
+  }
+  return CITIES.find((c) => c.tz === coach.tz && c.needles.length === 0) ?? null;
+}
 
 /**
  * Listed coaches whose clubs include this one: the club page's "coaches here".

@@ -11,7 +11,7 @@ type Row = { name: string; kind: "indoor" | "outdoor" | "" };
  * the list from the count the club typed, so six courts are six rows in one tap. The counts on the
  * page follow the rows.
  */
-export function ClubCourtsEditor({ token, initial, total, courtWord }: { token: string; initial: Row[]; total: number | null; courtWord: string }) {
+export function ClubCourtsEditor({ token, initial, total, indoor = null, outdoor = null, courtWord }: { token: string; initial: Row[]; total: number | null; /** The split the club typed on the claim: "Number them" marks the first `indoor` rows indoor and the next `outdoor` rows outdoor, so a 4 and a 2 typed once are not asked again. */ indoor?: number | null; outdoor?: number | null; courtWord: string }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
   const [rows, setRows] = useState<Row[]>(initial);
@@ -19,7 +19,10 @@ export function ClubCourtsEditor({ token, initial, total, courtWord }: { token: 
   const set = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const remove = (i: number) => setRows((rs) => rs.filter((_, j) => j !== i));
   const add = () => setRows((rs) => (rs.length >= 64 ? rs : [...rs, { name: `${courtWord} ${rs.length + 1}`, kind: "" }]));
-  const number = () => setRows(Array.from({ length: Math.min(64, Math.max(1, total ?? 4)) }, (_, i) => ({ name: `${courtWord} ${i + 1}`, kind: initial[i]?.kind ?? "" })));
+  const typed = total ?? (indoor ?? 0) + (outdoor ?? 0);
+  const count = Math.min(64, Math.max(1, typed || 4));
+  const kindAt = (i: number): Row["kind"] => (indoor != null || outdoor != null ? (i < (indoor ?? 0) ? "indoor" : i < (indoor ?? 0) + (outdoor ?? 0) ? "outdoor" : "") : (initial[i]?.kind ?? ""));
+  const number = () => setRows(Array.from({ length: count }, (_, i) => ({ name: `${courtWord} ${i + 1}`, kind: kindAt(i) })));
   const save = () => {
     setNote(null);
     start(async () => {
@@ -55,7 +58,7 @@ export function ClubCourtsEditor({ token, initial, total, courtWord }: { token: 
         </button>
         {rows.length === 0 && (
           <button type="button" className="btn-ghost btn-sm" onClick={number} data-testid="number-courts">
-            {t("club.numberCourts", { n: Math.min(64, Math.max(1, total ?? 4)) })}
+            {t("club.numberCourts", { n: count })}
           </button>
         )}
         <button type="button" className="btn-primary btn-sm ml-auto" onClick={save} disabled={pending} data-testid="save-courts">
