@@ -59,7 +59,7 @@ export function ClubCourtsEditor({ token, initial, total, courtWord }: { token: 
           </button>
         )}
         <button type="button" className="btn-primary btn-sm ml-auto" onClick={save} disabled={pending} data-testid="save-courts">
-          {pending ? t("common.saving") : t("common.save")}
+          {pending ? t("common.saving") : t("club.saveCourts")}
         </button>
       </div>
       {note && <p className="text-sm font-semibold text-muted">{note}</p>}

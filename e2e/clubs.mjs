@@ -88,7 +88,7 @@ try {
 
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   await page.getByLabel("Booking page").fill("https://playtomic.io/kata-center");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("Saved").waitFor({ timeout: 15000 });
   const after = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
   check("edits through the manage link go live at once", after.booking?.platform === "playtomic");
@@ -111,6 +111,8 @@ try {
   // The match form at this club offers those names instead of 1…n.
   await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
   check("the match form offers the club's courts by name", (await page.locator("select option", { hasText: "Centre" }).count()) === 1);
+  // Back on the manage page, where the rest of the suite stands.
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
 
   // ---- and it watches the coaching too ----
   // The real bug this replaces: a coach's clubs were free text, so the two coaches in production had
@@ -144,7 +146,7 @@ try {
   check("the walk refuses to finish while the assistant has no way to reach the coach", (await nok.getByTestId("notify-none").count()) === 1);
   const nokEmail = nok.getByTestId("notify-email");
   await nokEmail.locator('input[type="email"]').fill("nok@example.test");
-  await nokEmail.getByRole("button", { name: "Save" }).click();
+  await nokEmail.getByRole("button", { name: "Save", exact: true }).click();
   await nok.getByTestId("notify-done").click();
   await nok.getByTestId("setup-link").waitFor({ timeout: 20000 });
   await nok.getByTestId("setup-finish").click();

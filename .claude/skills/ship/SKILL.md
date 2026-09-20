@@ -183,6 +183,17 @@ Wall clock first, credits second. What actually moved it, measured:
 - **Do the cheap true thing before the expensive one.** Counting rows in production took one query and
   changed what was worth building next more than an hour of reasoning would have.
 
+### The push and the gate
+
+- **Read `GATE_EXIT=` before the push, in a separate command.** A push chained after the gate in one
+  shell line (`... ; git push`) went out on a red gate: the exit line was printed, nobody had read
+  it. The gate's log is read first, the push is its own command, every time.
+- **A new button on a page an old suite already clicks needs a name of its own.** A second "Save"
+  on the club's manage page made `getByRole("button", { name: "Save" })` match two elements and the
+  clubs suite failed on a line the change never touched. Before adding a button, grep the suites
+  for the page's existing button names; give the new one its own words ("Save courts"), and make
+  the old locator `exact: true` where the new name still contains the old word.
+
 ### Editing that keeps going wrong
 
 - **Never round-trip `messages/*.json`.** Loading and re-serialising reformats the compact single-line

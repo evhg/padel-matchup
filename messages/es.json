@@ -1059,7 +1059,8 @@
     "numberCourts": "Numerarlas de 1 a {n}",
     "courtsSaved": "{count, plural, =0 {Sin pistas} one {# pista guardada} other {# pistas guardadas}}",
     "courtNameTwice": "Dos pistas tienen el mismo nombre. Dale a cada una el suyo.",
-    "courtsNone": "Aún no hay pistas. Numéralas con un toque, o añádelas una a una."
+    "courtsNone": "Aún no hay pistas. Numéralas con un toque, o añádelas una a una.",
+    "saveCourts": "Guardar pistas"
   },
   "passport": {
     "title": "Pasaporte",
