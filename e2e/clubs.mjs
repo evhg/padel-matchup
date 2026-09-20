@@ -27,15 +27,23 @@ try {
   await page.getByText("Is this your club?").click();
   await page.waitForURL(/\/clubs\/claim\?name=/);
   check("the claim form is prefilled with the club name", (await page.getByLabel("Club name").inputValue()) === CLUB);
+  // The claim is a walk: the club, the courts and hours, the links; the claim itself is the last button.
+  check("the walk starts on the club", (await page.getByTestId("claim-club").count()) === 1 && (await page.getByText("Step 1 of 3").count()) === 1);
   await page.getByLabel("Your name").fill("Nok");
-  await page.getByLabel("Booking page").fill("https://www.matchi.se/facilities/kata");
+  await page.getByLabel("City").selectOption("phuket");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByTestId("claim-courts").waitFor();
   await page.getByRole("spinbutton", { name: /Courts/ }).fill("4");
   await page.getByRole("spinbutton", { name: "Indoor" }).fill("3");
   await page.getByRole("spinbutton", { name: "Outdoor" }).fill("1");
-  await page.getByLabel("City").selectOption("phuket");
   await page.getByLabel(/About the club/).fill("Four courts under a roof, ten minutes from Kata beach.");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByTestId("claim-links").waitFor();
+  check("the last step has a way back and the claim button", (await page.getByRole("button", { name: "Back" }).count()) === 1 && (await page.getByRole("button", { name: "Claim this page" }).count()) === 1);
+  await page.getByLabel("Booking page").fill("https://www.matchi.se/facilities/kata");
   await page.getByRole("button", { name: "Claim this page" }).click();
   await page.getByText("Claim received").waitFor({ timeout: 20000 });
+  check("done: the poster and the week are the next two taps", (await page.getByTestId("claim-poster").getAttribute("href")) === `/v/${SLUG}/poster` && /\/manage\/[A-Za-z0-9_-]{24}#week$/.test((await page.getByTestId("claim-week").getAttribute("href")) ?? ""));
   const manage = (await page.locator("text=/\\/v\\/kata-padel-center\\/manage\\//").first().textContent())?.trim() ?? "";
   const token = manage.split("/manage/")[1];
   check("the manage link is shown once", /^[A-Za-z0-9_-]{24}$/.test(token ?? ""), manage);

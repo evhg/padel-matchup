@@ -1039,7 +1039,17 @@
     "courtsOutdoor": "Открытые",
     "courtsSplitHelp": "Из общего числа. Оставьте пустым, если не знаете.",
     "courtsIndoorCount": "{count} крытых",
-    "courtsOutdoorCount": "{count} открытых"
+    "courtsOutdoorCount": "{count} открытых",
+    "walkStep": "Шаг {n} из {total}",
+    "walkNext": "Дальше",
+    "walkClub": "Клуб",
+    "walkCourts": "Корты и часы работы",
+    "walkLinks": "Ссылки",
+    "walkDoneNext": "Две вещи, с которыми страница работает с первого дня:",
+    "walkPosterTitle": "Распечатайте постер",
+    "walkPosterHelp": "QR у кортов: кто отсканирует, увидит открытые матчи в {club} и запишется по имени.",
+    "walkWeekTitle": "Настройте неделю",
+    "walkWeekHelp": "Регулярные соушлы, американо и вечера по уровню. Каждый становится матчем на вашей странице; игроки записываются сами."
   },
   "passport": {
     "title": "Паспорт",

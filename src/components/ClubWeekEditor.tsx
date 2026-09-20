@@ -80,7 +80,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   };
 
   return (
-    <section className="card" data-testid="club-week-editor">
+    <section className="card" id="week" data-testid="club-week-editor">
       <h2 className="text-lg font-extrabold">{t("club.week.editorTitle")}</h2>
       <p className="mt-1 text-sm text-muted">{t("club.week.editorHelp", { days: leadDays })}</p>
       {slots.length > 0 && (
