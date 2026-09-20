@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
 import type { TournamentFormat } from "@/db/schema";
-import { POINTS_PRESETS } from "@/lib/domain/americano";
+import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import { FORMATS } from "@/lib/domain/formats";
 import { FORMAT_KEYS } from "./EventFields";
 import { PlayAgainButton } from "./PlayAgainButton";
@@ -22,6 +22,7 @@ export function AmericanoPanel({
   started,
   cancelled,
   pointsPerMatch,
+  gamesTo,
   participantCount,
   capacity,
   rounds,
@@ -39,6 +40,8 @@ export function AmericanoPanel({
   started: boolean;
   cancelled: boolean;
   pointsPerMatch: number | null;
+  /** First to N games instead of points; the table then ranks by matches won. */
+  gamesTo: number | null;
   /** Named roster spots: joined, confirmed and reserved-not-yet-accepted. */
   participantCount: number;
   capacity: number;
@@ -91,7 +94,12 @@ export function AmericanoPanel({
       <button type="button" className="mt-1 text-left text-sm link" onClick={() => setHelp((h) => !h)}>
         {help ? "−" : "?"} {t("create.typeTournament")}
       </button>
-      {help && <p className="mt-1 text-sm text-muted">{howItWorks}</p>}
+      {help && (
+        <p className="mt-1 text-sm text-muted">
+          {howItWorks}
+          {gamesTo ? ` ${t("americano.gamesRule", { n: gamesTo })}` : ""}
+        </p>
+      )}
 
       {isCreator && !locked && !cancelled && rounds.length === 0 && (
         <div className="mt-4">
@@ -109,12 +117,25 @@ export function AmericanoPanel({
       {isCreator && !locked && !cancelled && (
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="label">{t("americano.pointsPerMatch")}</span>
-            <select className="input" value={pointsPerMatch ?? ""} disabled={pending} onChange={(e) => run(() => setTournamentSettingsAction(code, { pointsPerMatch: e.target.value ? Number(e.target.value) : null }))}>
+            <span className="label">{t("create.scoreBy")}</span>
+            <select
+              className="input"
+              value={gamesTo ? `g:${gamesTo}` : pointsPerMatch ? `p:${pointsPerMatch}` : ""}
+              disabled={pending}
+              onChange={(e) => {
+                const v = e.target.value;
+                run(() => setTournamentSettingsAction(code, v.startsWith("g:") ? { gamesTo: Number(v.slice(2)) } : v.startsWith("p:") ? { pointsPerMatch: Number(v.slice(2)) } : { pointsPerMatch: null, gamesTo: null }));
+              }}
+            >
               <option value="">{t("americano.free")}</option>
               {POINTS_PRESETS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
+                <option key={`p${n}`} value={`p:${n}`}>
+                  {t("create.pointsN", { n })}
+                </option>
+              ))}
+              {GAMES_PRESETS.map((n) => (
+                <option key={`g${n}`} value={`g:${n}`}>
+                  {t("create.gamesTo", { n })}
                 </option>
               ))}
             </select>
@@ -169,7 +190,7 @@ export function AmericanoPanel({
               <tr className="text-left text-xs font-bold uppercase tracking-wider text-faint">
                 <th className="w-8 py-1">#</th>
                 <th className="py-1">&nbsp;</th>
-                <th className="py-1 text-right">{t("americano.pts")}</th>
+                <th className="py-1 text-right">{gamesTo ? t("americano.colGames") : t("americano.pts")}</th>
                 <th className="w-9 py-1 text-right">{t("americano.colPlayed")}</th>
                 <th className="w-9 py-1 text-right">{t("americano.colWins")}</th>
                 <th className="w-12 py-1 text-right">{t("americano.colDiff")}</th>
@@ -196,7 +217,7 @@ export function AmericanoPanel({
       )}
 
       {rounds.length === 0 && !isCreator && <p className="mt-4 text-sm text-muted">{t("americano.noRounds")}</p>}
-      {rounds.length > 0 && canScore && !locked && <p className="mt-3 text-xs text-faint">{t("americano.enterHelp")}</p>}
+      {rounds.length > 0 && canScore && !locked && <p className="mt-3 text-xs text-faint">{gamesTo ? t("americano.enterHelpGames", { n: gamesTo }) : t("americano.enterHelp")}</p>}
 
       <div className="mt-4 flex flex-col gap-4">
         {[...rounds].reverse().map((r) => (
@@ -218,7 +239,7 @@ export function AmericanoPanel({
             </div>
             <div className="mt-2 flex flex-col gap-2">
               {r.matches.map((m) => (
-                <MatchRow key={m.id} code={code} match={m} courtLabel={courtLabel(m.court)} editable={canScore && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} />
+                <MatchRow key={m.id} code={code} match={m} courtLabel={courtLabel(m.court)} editable={canScore && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} gamesTo={gamesTo} />
               ))}
             </div>
             {r.resting.length > 0 && <p className="mt-2 text-xs text-muted">{t("americano.resting", { names: r.resting.join(", ") })}</p>}
@@ -278,11 +299,11 @@ export function AmericanoPanel({
   );
 }
 
-function MatchRow({ code, match, courtLabel, editable, pointsPerMatch }: { code: string; match: PanelMatch; courtLabel: string; editable: boolean; pointsPerMatch: number | null }) {
+function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }: { code: string; match: PanelMatch; courtLabel: string; editable: boolean; pointsPerMatch: number | null; gamesTo: number | null }) {
   const t = useTranslations();
   const [a, setA] = useState<string>(match.sideA == null ? "" : String(match.sideA));
   const [b, setB] = useState<string>(match.sideB == null ? "" : String(match.sideB));
-  const [state, setState] = useState<"idle" | "saving" | "saved" | "incomplete" | "error">("idle");
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "incomplete" | "games" | "error">("idle");
   const dirty = a !== (match.sideA == null ? "" : String(match.sideA)) || b !== (match.sideB == null ? "" : String(match.sideB));
   const [, start] = useTransition();
   const aWon = match.sideA != null && match.sideB != null && match.sideA > match.sideB;
@@ -298,15 +319,15 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch }: { code:
     setState("saving");
     start(async () => {
       const r = await saveTournamentMatchAction(code, match.id, a === "" ? null : Number(a), b === "" ? null : Number(b));
-      setState(r.ok ? "saved" : "error");
+      setState(r.ok ? "saved" : !r.ok && r.error === "invalid" && r.detail === "games_range" ? "games" : "error");
       if (r.ok) setTimeout(() => setState("idle"), 1500);
     });
   };
   const onOther = (setMine: (v: string) => void, v: string) => {
     setMine(v);
     setState("idle");
-    // Fixed-points format: typing one side fills the other.
-    if (pointsPerMatch && v !== "" && Number(v) <= pointsPerMatch) {
+    // Fixed-points format: typing one side fills the other. Games are a race: both sides are typed.
+    if (pointsPerMatch && !gamesTo && v !== "" && Number(v) <= pointsPerMatch) {
       const other = String(pointsPerMatch - Number(v));
       if (setMine === setA) setB(other);
       else setA(other);
@@ -344,6 +365,7 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch }: { code:
           {state === "saving" && <span className="text-muted">…</span>}
           {state === "saved" && <span className="text-ok">✓ {t("americano.saved")}</span>}
           {state === "incomplete" && <span className="text-muted">{t("americano.completeScore")}</span>}
+          {state === "games" && <span className="text-danger">{t("americano.gamesRange", { n: gamesTo ?? 0 })}</span>}
           {state === "error" && <span className="text-danger">{t("errors.generic")}</span>}
           {state === "idle" && dirty && (
             <button type="button" className="link" onMouseDown={(e) => e.preventDefault()} onClick={save}>

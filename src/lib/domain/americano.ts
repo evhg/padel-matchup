@@ -211,7 +211,12 @@ export type StandingRow = {
 };
 
 /** Points scored, then point difference, then wins. Equal on all three → shared rank. */
-export function computeStandings(playerIds: readonly string[], matches: readonly MatchRef[]): StandingRow[] {
+/**
+ * The table. By points (the americano way: most points wins) unless the tournament scores by games,
+ * "first to 4": then by matches won, then games difference, then games won, because a 4–3 and a 4–0
+ * are the same win and the games only break ties.
+ */
+export function computeStandings(playerIds: readonly string[], matches: readonly MatchRef[], o: { byWins?: boolean } = {}): StandingRow[] {
   const rows = new Map<string, StandingRow>();
   const row = (p: string) => {
     let r = rows.get(p);
@@ -238,7 +243,7 @@ export function computeStandings(playerIds: readonly string[], matches: readonly
     apply(m.b1, m.sideB, m.sideA);
     apply(m.b2, m.sideB, m.sideA);
   }
-  const sorted = [...rows.values()].sort((x, y) => y.points - x.points || y.diff - x.diff || y.wins - x.wins || x.playerId.localeCompare(y.playerId));
+  const sorted = [...rows.values()].sort((x, y) => (o.byWins ? y.wins - x.wins || y.diff - x.diff || y.points - x.points : y.points - x.points || y.diff - x.diff || y.wins - x.wins) || x.playerId.localeCompare(y.playerId));
   let prev: StandingRow | null = null;
   sorted.forEach((r, i) => {
     r.rank = prev && prev.points === r.points && prev.diff === r.diff && prev.wins === r.wins ? prev.rank : i + 1;
@@ -249,3 +254,5 @@ export function computeStandings(playerIds: readonly string[], matches: readonly
 
 /** Suggested points-per-match presets (classic americano formats). */
 export const POINTS_PRESETS = [16, 21, 24, 32] as const;
+/** "First to N games", the other way a social tournament scores. */
+export const GAMES_PRESETS = [4, 6, 8] as const;

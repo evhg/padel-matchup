@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { POINTS_PRESETS } from "@/lib/domain/americano";
+import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import type { TournamentFormat } from "@/db/schema";
 import { DEFAULT_POINTS, FORMATS } from "@/lib/domain/formats";
 import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, presetFor, rangeFor, type PresetKey } from "@/lib/domain/levels";
@@ -28,6 +28,8 @@ export type EventFormValues = {
   whenFull: "waitlist" | "closed";
   courts: number | null;
   pointsPerMatch: number | null;
+  /** First to N games instead of points: the other way social tournaments score. */
+  gamesTo: number | null;
   /** Tournament format. */
   format: TournamentFormat;
   /** Level range; both null = open to everyone. */
@@ -244,7 +246,7 @@ export function EventFields({
                     key={f}
                     type="button"
                     aria-pressed={values.format === f}
-                    onClick={() => onChange({ format: f, pointsPerMatch: values.pointsPerMatch == null || values.pointsPerMatch === DEFAULT_POINTS[values.format] ? DEFAULT_POINTS[f] : values.pointsPerMatch })}
+                    onClick={() => onChange({ format: f, pointsPerMatch: values.gamesTo ? null : values.pointsPerMatch == null || values.pointsPerMatch === DEFAULT_POINTS[values.format] ? DEFAULT_POINTS[f] : values.pointsPerMatch })}
                     className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${values.format === f ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}
                   >
                     {t(FORMAT_KEYS[f])}
@@ -271,12 +273,26 @@ export function EventFields({
               </select>
             </div>
             <div>
-              <label className="label">{t("create.pointsPerMatch")}</label>
-              <select className="input px-3" value={values.pointsPerMatch ?? ""} onChange={(e) => onChange({ pointsPerMatch: e.target.value ? Number(e.target.value) : null })}>
+              <label className="label">{t("create.scoreBy")}</label>
+              {/* One way to score at a time: points per match, or first to N games (the other popular way). */}
+              <select
+                className="input px-3"
+                aria-label={t("create.scoreBy")}
+                value={values.gamesTo ? `g:${values.gamesTo}` : values.pointsPerMatch ? `p:${values.pointsPerMatch}` : ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  onChange(v.startsWith("g:") ? { gamesTo: Number(v.slice(2)), pointsPerMatch: null } : v.startsWith("p:") ? { pointsPerMatch: Number(v.slice(2)), gamesTo: null } : { pointsPerMatch: null, gamesTo: null });
+                }}
+              >
                 <option value="">{t("create.pointsFree")}</option>
                 {POINTS_PRESETS.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
+                  <option key={`p${n}`} value={`p:${n}`}>
+                    {t("create.pointsN", { n })}
+                  </option>
+                ))}
+                {GAMES_PRESETS.map((n) => (
+                  <option key={`g${n}`} value={`g:${n}`}>
+                    {t("create.gamesTo", { n })}
                   </option>
                 ))}
               </select>

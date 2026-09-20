@@ -52,6 +52,8 @@ export const events = pgTable(
     courts: integer("courts"),
     /** Americano: points per match (e.g. 16, 21, 24, 32); null → free scoring. */
     pointsPerMatch: integer("points_per_match"),
+    /** The other way social tournaments score: first to N games (4, 6, 8). With it the table ranks by matches won; points_per_match is then null. */
+    gamesTo: integer("games_to"),
     /** Tournament: final standings snapshot (ordered player ids) written on finalize. */
     standings: jsonb("standings").$type<string[]>(),
     /** Tournament: organizer-given court names by index (court 1 = [0]); null/empty entry = "Court n". */
@@ -368,6 +370,7 @@ export const series = pgTable(
     capacity: integer("capacity").notNull(),
     courts: integer("courts"),
     pointsPerMatch: integer("points_per_match"),
+    gamesTo: integer("games_to"),
     courtNames: jsonb("court_names").$type<string[]>(),
     levelMin: real("level_min"),
     levelMax: real("level_max"),

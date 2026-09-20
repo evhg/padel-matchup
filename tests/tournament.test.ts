@@ -29,6 +29,24 @@ async function tournamentWith(n: number, startsAt = new Date(Date.now() - HOUR))
 }
 
 describe("americano engine (db)", () => {
+  it("scores first to N games: the target clears the points, a side wins at N with the other below, the table ranks by wins", async () => {
+    const { creator, ev, players } = await tournamentWith(4);
+    expect((await setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, pointsPerMatch: 24 })).pointsPerMatch).toBe(24);
+    const games = await setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, gamesTo: 4 });
+    expect(games).toMatchObject({ gamesTo: 4, pointsPerMatch: null });
+    await expect(setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, gamesTo: 1 })).rejects.toMatchObject({ code: "invalid", message: "games" });
+    const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    const m = r1.matches[0];
+    await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: m.id, sideA: 4, sideB: 4, playerId: creator.id, isCreator: true })).rejects.toMatchObject({ code: "invalid", message: "games_range" });
+    await expect(saveTournamentMatchScore(db, { eventId: ev.id, matchId: m.id, sideA: 5, sideB: 2, playerId: creator.id, isCreator: true })).rejects.toMatchObject({ code: "invalid", message: "games_range" });
+    await saveTournamentMatchScore(db, { eventId: ev.id, matchId: m.id, sideA: 4, sideB: 2, playerId: creator.id, isCreator: true });
+    const state = await getTournamentState(db, games, players.map((p) => p.id));
+    expect(state.standings[0]).toMatchObject({ wins: 1, points: 4, rank: 1 });
+    expect(state.standings.filter((s) => s.wins === 1)).toHaveLength(2);
+    // Points back on: the target goes.
+    expect((await setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, pointsPerMatch: 16 })).gamesTo).toBeNull();
+  });
+
   it("generates rounds from the roster, scores matches, computes standings, finalizes", async () => {
     const { creator, ev, players } = await tournamentWith(8);
     await setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, courts: 2, pointsPerMatch: 24 });
