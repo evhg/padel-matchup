@@ -25,6 +25,8 @@ export type ClubInput = {
   bookingUrl?: unknown;
   mapUrl?: unknown;
   courts?: unknown;
+  courtsIndoor?: unknown;
+  courtsOutdoor?: unknown;
   about?: unknown;
   city?: unknown;
   opensAt?: unknown;
@@ -37,7 +39,7 @@ const HHMM = /^([01]?\d|2[0-4]):[0-5]\d$/;
 const text = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 
 /** Normalises the free-form fields a club may set. Unknown or invalid values become null, never errors. */
-export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" | "bookingUrl" | "bookingPlatform" | "mapUrl" | "courts" | "about" | "city" | "opensAt" | "closesAt" | "availabilityUrl" | "availabilityKind">> {
+export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" | "bookingUrl" | "bookingPlatform" | "mapUrl" | "courts" | "courtsIndoor" | "courtsOutdoor" | "about" | "city" | "opensAt" | "closesAt" | "availabilityUrl" | "availabilityKind">> {
   const out: ReturnType<typeof cleanClubInput> = {};
   if ("website" in input) out.website = cleanUrl(input.website);
   if ("bookingUrl" in input) {
@@ -49,6 +51,15 @@ export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" |
     const n = Number(input.courts);
     out.courts = Number.isInteger(n) && n >= 1 && n <= 64 ? n : null;
   }
+  // The split of the total: an indoor court in Bangkok in April is a different thing from an outdoor
+  // one. Zero is an answer ("no indoor courts"); an empty field is not, and stays unknown.
+  const split = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 0 && n <= 64 ? n : null;
+  };
+  if ("courtsIndoor" in input) out.courtsIndoor = split(input.courtsIndoor);
+  if ("courtsOutdoor" in input) out.courtsOutdoor = split(input.courtsOutdoor);
   if ("about" in input) out.about = text(input.about, CLUB_LIMITS.aboutMax);
   if ("city" in input) out.city = typeof input.city === "string" && cityBySlug(input.city) ? input.city : null;
   if ("opensAt" in input) out.opensAt = typeof input.opensAt === "string" && HHMM.test(input.opensAt.trim()) ? input.opensAt.trim().padStart(5, "0") : null;

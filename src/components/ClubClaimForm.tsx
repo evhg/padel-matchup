@@ -15,7 +15,7 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ slug: string; token: string } | null>(null);
-  const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", about: "", city: "" });
+  const [v, setV] = useState({ name: "", clubName: initialName, website: "", bookingUrl: "", mapUrl: "", courts: "", courtsIndoor: "", courtsOutdoor: "", about: "", city: "" });
   const set = (patch: Partial<typeof v>) => setV((s) => ({ ...s, ...patch }));
   // Picking the club Kicksmash already lists claims that page, with its matches and its court counts
   // on it. Typing a near-miss opens an empty second one, so the list is offered from the first letter.
@@ -56,6 +56,8 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
         bookingUrl: v.bookingUrl || undefined,
         mapUrl: v.mapUrl || undefined,
         courts: v.courts ? Number(v.courts) : null,
+        courtsIndoor: v.courtsIndoor === "" ? null : Number(v.courtsIndoor),
+        courtsOutdoor: v.courtsOutdoor === "" ? null : Number(v.courtsOutdoor),
         about: v.about || undefined,
         city: v.city || undefined,
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -105,6 +107,17 @@ export function ClubClaimForm({ initialName, hasIdentity, cities, base, listed =
           <input className="input mt-1" type="number" inputMode="numeric" min={1} max={64} value={v.courts} onChange={(e) => set({ courts: e.target.value })} />
         </label>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-sm font-bold">{t("club.courtsIndoor")}</span>
+          <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsIndoor} onChange={(e) => set({ courtsIndoor: e.target.value })} />
+        </label>
+        <label className="block">
+          <span className="text-sm font-bold">{t("club.courtsOutdoor")}</span>
+          <input className="input mt-1" type="number" inputMode="numeric" min={0} max={64} value={v.courtsOutdoor} onChange={(e) => set({ courtsOutdoor: e.target.value })} />
+        </label>
+      </div>
+      <span className="-mt-3 block text-xs text-muted">{t("club.courtsSplitHelp")}</span>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm font-bold">{t("club.mapUrl")}</span>

@@ -176,6 +176,9 @@ export type PublicClub = {
   website: string | null;
   booking: { url: string; platform: string | null; platformName: string | null } | null;
   courts: number | null;
+  /** The split of the total, when the club said; null means unknown, 0 means none. */
+  courtsIndoor: number | null;
+  courtsOutdoor: number | null;
   about: string | null;
   founding: boolean;
   /** Today's free court-hours from the club's own feed, or null when the club shares none. */
@@ -198,6 +201,8 @@ export function clubToPublic(c: Club, base: string): PublicClub {
     website: c.website,
     booking: c.bookingUrl ? { url: c.bookingUrl, platform: platform?.id ?? null, platformName: platform?.name ?? null } : null,
     courts: c.courts,
+    courtsIndoor: c.courtsIndoor,
+    courtsOutdoor: c.courtsOutdoor,
     about: c.about,
     founding: c.founding,
     freeCourts: a ? { day: a.day, tz: a.tz, fetchedAt: a.fetchedAt, slots: a.slots } : null,

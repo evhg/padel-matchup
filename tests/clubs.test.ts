@@ -6,7 +6,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeSlotsFromBookings, localDay, parseDuration, parseFreeJson, parseIcs, refreshAllAvailability, refreshClubAvailability } from "@/lib/booking/availability";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { CLUB_LIMITS, claimClub, clubStatus, decideClub, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, updateClub } from "@/lib/domain/clubs";
+import { CLUB_LIMITS, claimClub, cleanClubInput, clubStatus, decideClub, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, updateClub } from "@/lib/domain/clubs";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { askOwnerAboutClub } from "@/lib/telegram/clubs";
 import { createTestDb, makePlayer } from "./helpers/db";
@@ -135,11 +135,17 @@ describe("clubs (db)", () => {
 
   it("claims, blocks a second claimant, approves with the founding badge, edits by token, rejects", async () => {
     const nok = await makePlayer(db, "Nok");
-    const club = await claimClub(db, { name: "Rawai Padel Club", playerId: nok.id, tz: "Asia/Bangkok", bookingUrl: "https://playtomic.io/rawai", courts: "4", about: "Four panoramic courts by the sea.", website: "rawaipadel.com" });
+    const club = await claimClub(db, { name: "Rawai Padel Club", playerId: nok.id, tz: "Asia/Bangkok", bookingUrl: "https://playtomic.io/rawai", courts: "4", courtsIndoor: "1", courtsOutdoor: 3, about: "Four panoramic courts by the sea.", website: "rawaipadel.com" });
     expect(club.slug).toBe("rawai-padel-club");
     expect(club.city).toBe("phuket");
     expect(club.bookingPlatform).toBe("playtomic");
     expect(club.courts).toBe(4);
+    // The split of the total: strings and numbers alike, zero is an answer, an empty field is not.
+    expect(club.courtsIndoor).toBe(1);
+    expect(club.courtsOutdoor).toBe(3);
+    expect(cleanClubInput({ courtsIndoor: "", courtsOutdoor: 0 })).toEqual({ courtsIndoor: null, courtsOutdoor: 0 });
+    expect(cleanClubInput({ courtsIndoor: 99, courtsOutdoor: "two" })).toEqual({ courtsIndoor: null, courtsOutdoor: null });
+    expect(cleanClubInput({ courts: 4 })).toEqual({ courts: 4 });
     expect(club.website).toBe("https://rawaipadel.com/");
     expect(club.manageToken).toMatch(/^[A-Za-z0-9_-]{24}$/);
     expect(clubStatus(club)).toBe("pending");
@@ -151,6 +157,7 @@ describe("clubs (db)", () => {
     const again = await claimClub(db, { name: "Rawai Padel Club", playerId: nok.id, courts: 5 });
     expect(again.manageToken).toBe(club.manageToken);
     expect(again.courts).toBe(5);
+    expect(again.courtsIndoor).toBe(1);
 
     // The owner is asked on Telegram, then taps Approve.
     expect(await askOwnerAboutClub(db, again, nok)).toBe(true);

@@ -18,13 +18,15 @@ export async function BookingButton({ club, size = "sm" }: { club: Pick<Club, "b
   );
 }
 
-export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "courts"> }) {
+export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "courts" | "courtsIndoor" | "courtsOutdoor"> }) {
   const t = await getTranslations();
+  // The split shows only when the club said: "4 courts · 3 indoor · 1 outdoor". A zero is said too.
+  const split = [club.courtsIndoor !== null ? t("club.courtsIndoorCount", { count: club.courtsIndoor }) : null, club.courtsOutdoor !== null ? t("club.courtsOutdoorCount", { count: club.courtsOutdoor }) : null].filter(Boolean);
   return (
     <div className="flex flex-wrap gap-2">
       <span className="chip-muted">✓ {t("club.managedBy")}</span>
       {club.founding && <span className="chip-muted">🌱 {t("club.foundingBadge")}</span>}
-      {club.courts ? <span className="chip-muted">{t("club.courtsCount", { count: club.courts })}</span> : null}
+      {club.courts ? <span className="chip-muted">{[t("club.courtsCount", { count: club.courts }), ...split].join(" · ")}</span> : null}
     </div>
   );
 }

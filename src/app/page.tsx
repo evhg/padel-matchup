@@ -33,6 +33,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
         <Link href="/coaches?s=landing" prefetch={false} className="self-start px-1 text-sm link">
           {t("landing.coachesLink")}
         </Link>
+        <Link href="/t" prefetch={false} className="self-start px-1 text-sm link" data-testid="landing-tournaments">
+          {t("landing.tournamentLink")}
+        </Link>
+        <Link href="/clubs" prefetch={false} className="self-start px-1 text-sm link" data-testid="landing-clubs">
+          {t("landing.clubsLink")}
+        </Link>
       </main>
       <Footer spacious />
     </>

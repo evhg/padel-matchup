@@ -19,6 +19,8 @@ const claimSchema = z.object({
   bookingUrl: url,
   mapUrl: url,
   courts: z.coerce.number().int().min(1).max(64).optional().nullable(),
+  courtsIndoor: z.coerce.number().int().min(0).max(64).optional().nullable(),
+  courtsOutdoor: z.coerce.number().int().min(0).max(64).optional().nullable(),
   about: z.string().max(CLUB_LIMITS.aboutMax).optional(),
   city: z.string().max(40).optional(),
   tz: z.string().max(64).optional(),
@@ -30,6 +32,8 @@ const updateSchema = z.object({
   bookingUrl: url,
   mapUrl: url,
   courts: z.coerce.number().int().min(1).max(64).optional().nullable(),
+  courtsIndoor: z.coerce.number().int().min(0).max(64).optional().nullable(),
+  courtsOutdoor: z.coerce.number().int().min(0).max(64).optional().nullable(),
   about: z.string().max(CLUB_LIMITS.aboutMax).optional(),
   city: z.string().max(40).optional(),
   opensAt: z.string().max(5).optional(),
@@ -46,7 +50,7 @@ export async function claimClubAction(raw: ClaimClubInput): Promise<ActionResult
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
     await assertRate(db, "club_claim", me.id, CLUB_LIMITS.claimsPerPlayerPerDay);
-    const club = await claimClub(db, { name: input.clubName, playerId: me.id, tz: input.tz && isValidTimeZone(input.tz) ? input.tz : null, website: input.website, bookingUrl: input.bookingUrl, mapUrl: input.mapUrl, courts: input.courts, about: input.about, city: input.city });
+    const club = await claimClub(db, { name: input.clubName, playerId: me.id, tz: input.tz && isValidTimeZone(input.tz) ? input.tz : null, website: input.website, bookingUrl: input.bookingUrl, mapUrl: input.mapUrl, courts: input.courts, courtsIndoor: input.courtsIndoor, courtsOutdoor: input.courtsOutdoor, about: input.about, city: input.city });
     after(async () => {
       await askOwnerAboutClub(db, club, me);
     });

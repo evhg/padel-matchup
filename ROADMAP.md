@@ -216,6 +216,14 @@ Everything in this list is live. The README describes each in detail.
   them as the coach's PromptPay QR with that sum in it, sent as a photo under the Pay tap, with
   "I paid" under it.
 
+- **Doors for the organiser and the club.** The landing page had links for the informal organiser
+  and the coach; the serious organiser and the club owner arrived and saw only the match form.
+  Two more links now sit under those two: the tournaments, and the club page with the claim. The
+  header carries a small More menu for everyone with Coaches, Clubs and Tournaments; the role
+  doors sit outside it as before. A club sets its indoor and outdoor courts beside the total, on
+  the claim and on the manage page; the club page and the API say "4 courts · 3 indoor · 1 outdoor".
+  Court names and numbers wait for the courts model (item 4 below).
+
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
   the channel step, "remind me 1 hour before each match" on the push switch, and "This phone" on a

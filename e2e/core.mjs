@@ -26,6 +26,9 @@ try {
   await backIn.click();
   check("opening it asks for the email, in place", await a.getByPlaceholder("you@example.com").isVisible());
   check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
+  // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
+  check("the landing page links to the tournaments and to the clubs", (await a.getByTestId("landing-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("landing-clubs").getAttribute("href")) === "/clubs");
+  check("the header's More menu holds the three public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
   await a.goto(BASE + "/PLAY");
   const story = await fetch(BASE + "/PLAY/story");
   check("story image renders as a 9:16 PNG", story.status === 200 && (story.headers.get("content-type") || "").startsWith("image/png"), `${story.status} ${story.headers.get("content-type")}`);

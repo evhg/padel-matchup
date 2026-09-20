@@ -26,7 +26,10 @@
     "somethingWrong": "Something went wrong. Please try again.",
     "club": "Club",
     "series": "Series",
-    "more": "More"
+    "more": "More",
+    "coaches": "Coaches",
+    "clubs": "Clubs",
+    "tournaments": "Tournaments"
   },
   "identity": {
     "whatsYourName": "What's your name?",
@@ -78,7 +81,9 @@
     "americanoLink": "Running an americano? Free schedule generator →",
     "coachesLink": "Padel coach? Your students book themselves →",
     "metaTitle": "Padel in one link",
-    "metaDescription": "Create a padel match or americano tournament, share one short link on WhatsApp or Telegram, friends tap to join. No app, no accounts. Calendar invites, reminders, scores, levels."
+    "metaDescription": "Create a padel match or americano tournament, share one short link on WhatsApp or Telegram, friends tap to join. No app, no accounts. Calendar invites, reminders, scores, levels.",
+    "tournamentLink": "Running a tournament with categories and a draw? Free, from a phone →",
+    "clubsLink": "Run a club? Claim your page: matches, ranking, poster, booking button →"
   },
   "create": {
     "title": "New match",
@@ -1029,7 +1034,12 @@
     "noClubs": "No club has claimed its page here yet.",
     "metaDescription": "Padel clubs on Kicksmash: open matches, rankings, posters, booking buttons and free courts. Clubs claim their page for free; the first ten in each city are founding clubs.",
     "seeAll": "All clubs",
-    "openPage": "Open the club page"
+    "openPage": "Open the club page",
+    "courtsIndoor": "Indoor",
+    "courtsOutdoor": "Outdoor",
+    "courtsSplitHelp": "Of the total. Leave empty if you do not know.",
+    "courtsIndoorCount": "{count} indoor",
+    "courtsOutdoorCount": "{count} outdoor"
   },
   "passport": {
     "title": "Passport",
