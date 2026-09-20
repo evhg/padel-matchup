@@ -21,6 +21,7 @@ export function CreateEventForm({
   initialValues,
   telegramTicket,
   discordTicket,
+  carriedNames = [],
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
@@ -43,6 +44,8 @@ export function CreateEventForm({
   telegramTicket?: string;
   /** Same for the Discord bot's /new. */
   discordTicket?: string;
+  /** Players carried from the americano generator: each takes a reserved spot the moment the match exists. */
+  carriedNames?: string[];
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
@@ -132,6 +135,7 @@ export function CreateEventForm({
         groupCode,
         telegramTicket,
         discordTicket,
+        names: carriedNames.length ? carriedNames : undefined,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl || undefined,
         cost: values.cost || undefined,

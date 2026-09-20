@@ -3,6 +3,7 @@ import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
 import { buildHistory, mulberry32, rotationLength, scheduleRound, type RoundRef } from "@/lib/domain/americano";
@@ -61,7 +62,7 @@ export default async function AmericanoStaticPage({ params }: Props) {
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("americano.static.title", { players: n })}</h1>
           <p className="mt-2 text-sm text-muted">{t("americano.static.sub", { players: n, courts, rounds: total })}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href={`/?type=tournament&capacity=${n}`} prefetch={false} className="btn-primary">
+            <Link href={`/?type=tournament&capacity=${n}&s=gen`} prefetch={false} className="btn-primary" data-testid="gen-live">
               {t("americano.gen.live")}
             </Link>
             <Link href="/americano" prefetch={false} className="btn-secondary">
@@ -98,6 +99,8 @@ export default async function AmericanoStaticPage({ params }: Props) {
             </div>
           </section>
         ))}
+
+        <FeedbackInline variant="card" signedInVia="none" />
 
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("americano.static.otherSizes")}</h2>

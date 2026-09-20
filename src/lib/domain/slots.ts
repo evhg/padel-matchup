@@ -178,6 +178,40 @@ export async function removeFromSlot(
 }
 
 /** Creator reserves a roster slot by name; returns the slot with its personal invite code. */
+/** At most this many names travel from the americano generator into a new tournament. */
+export const SEAT_NAMES_MAX = 24;
+
+/**
+ * Seats a list of names in a new event, each in the next free spot, as reserved invites — the same
+ * row the organiser's "reserve for someone" makes, so each one keeps a link to pass on.
+ *
+ * It exists for the americano generator. Somebody types eight names, builds the rotation, taps "run
+ * it live", and those eight must not be typed a second time. `skipName` is the organiser's own name:
+ * they are seated already, so their name in the list is theirs, not a ninth player.
+ *
+ * Bounded by the free spots and by SEAT_NAMES_MAX. A name that finds no spot is dropped rather than
+ * failing the create, because the tournament itself is what the person asked for.
+ */
+export async function seatNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; skipName?: string | null; now?: Date }): Promise<number> {
+  const skip = normalizeName(input.skipName ?? "").toLowerCase();
+  let skipped = false;
+  let seated = 0;
+  for (const raw of input.names.slice(0, SEAT_NAMES_MAX)) {
+    const name = normalizeName(raw);
+    if (!name) continue;
+    // The organiser's own name, once. The rest of the list is other people.
+    if (!skipped && skip && name.toLowerCase() === skip) {
+      skipped = true;
+      continue;
+    }
+    // One short transaction each, sequential (rule 8). A full event ends the loop.
+    const done = await reserveSlot(db, { eventId: input.eventId, actorPlayerId: input.actorPlayerId, name, now: input.now }).catch(() => null);
+    if (!done) break;
+    seated++;
+  }
+  return seated;
+}
+
 export async function reserveSlot(
   db: Db,
   input: { eventId: string; actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; now?: Date },

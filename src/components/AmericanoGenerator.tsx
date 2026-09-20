@@ -17,7 +17,9 @@ export function AmericanoGenerator() {
   const [seed, setSeed] = useState(1);
   const [rounds, setRounds] = useState<Round[] | null>(null);
 
-  const names = useMemo(() => namesText.split("\n").map((s) => s.trim()).filter(Boolean), [namesText]);
+  // Sixty-four is the field the engine and the form both stop at. Without this cap a pasted club
+  // list of two hundred names built two hundred players' rounds in the browser and froze the page.
+  const names = useMemo(() => namesText.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 64), [namesText]);
   const n = names.length >= 4 ? names.length : Math.min(64, Math.max(4, Math.round(count) || 4));
   const maxCourts = maxCourtsFor(n);
   const courts = Math.min(maxCourts, Math.max(1, courtsInput ?? maxCourts));
@@ -126,7 +128,9 @@ export function AmericanoGenerator() {
           <section className="card no-print bg-accent-soft border-accent">
             <div className="font-extrabold">{t("americano.gen.live")}</div>
             <p className="mt-1 text-sm text-muted">{t("americano.gen.liveHelp")}</p>
-            <Link href={`/?type=tournament&capacity=${capacity}`} prefetch={false} className="btn-primary mt-3 w-full">
+            {/* The names go with it, so eight people are typed once and not twice; s=gen is how the
+                tap is counted, which nothing did before. */}
+            <Link href={`/?type=tournament&capacity=${capacity}&s=gen${names.length >= 4 ? `&names=${encodeURIComponent(names.join(","))}` : ""}`} prefetch={false} className="btn-primary mt-3 w-full" data-testid="gen-live">
               {t("americano.gen.live")} →
             </Link>
           </section>
