@@ -12,7 +12,7 @@ import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
-import { countCoachWants, recordCoachWant, tellCoachListed } from "@/lib/domain/coachWants";
+import { countCoachWants, recordCoachWant, shownCount, tellCoachListed } from "@/lib/domain/coachWants";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
 import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvUrl, type ImportOutcome, type ImportRow } from "@/lib/coach/import";
@@ -859,6 +859,6 @@ export async function wantCoachAction(input: { city: string; level: number | nul
     const city = String(input.city ?? "").toLowerCase();
     await recordCoachWant(db, { playerId: me.id, citySlug: city, level: typeof input.level === "number" ? input.level : null, whenNote: String(input.when ?? "") });
     revalidatePath(`/coaches/${city}`);
-    return { waiting: await countCoachWants(db, city) };
+    return { waiting: shownCount(await countCoachWants(db, city)) };
   });
 }

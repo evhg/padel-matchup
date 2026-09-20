@@ -69,17 +69,18 @@ try {
   check("the manage link is shown once", /^[A-Za-z0-9_-]{24}$/.test(token ?? ""), manage);
   await shot(page, "c1-claimed");
 
+  // The work email made the page live by itself (the owner's decision): no waiting, no claim row.
   await page.goto(`${BASE}/v/${SLUG}`);
-  check("pending: the page hides the claim row and shows no club details yet", (await page.getByText("Is this your club?").count()) === 0 && (await page.getByText("Managed by the club").count()) === 0);
+  check("live at once by the work email: the managed badge is up and the claim row is gone", (await page.getByText("Is this your club?").count()) === 0 && (await page.getByText("Managed by the club").count()) === 1);
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
-  check("the manage page shows the pending status and the confirmed work email", (await page.getByText("Waiting for our check").count()) === 1 && (await page.getByTestId("claim-verified").count()) === 1);
+  check("the manage page shows the live status", (await page.getByText("✓ Live").count()) === 1 && (await page.getByText("Waiting for our check").count()) === 0);
   await page.goto(`${BASE}/me`);
   check("My matches lists the club", (await page.getByText("Your clubs").count()) === 1 && (await page.getByText(CLUB).count()) >= 1);
 
   const stranger = await hook({ update_id: 91, callback_query: { id: "x1", from: { id: 1, first_name: "Eve" }, data: `ca:${token}` } });
   check("a stranger's tap does nothing", stranger.outcome === "club:not_owner");
   const approved = await hook({ update_id: 92, callback_query: { id: "x2", from: { id: OWNER, first_name: "Owner" }, message: { message_id: 5, date: 0, chat: { id: OWNER, type: "private" } }, data: `ca:${token}` } });
-  check("the owner's tap approves the club", approved.outcome === "club:approved", JSON.stringify(approved));
+  check("the owner's tap on a page already live changes nothing and says approved", approved.outcome === "club:approved", JSON.stringify(approved));
 
   await page.goto(`${BASE}/v/${SLUG}`);
   check("live: booking button, managed badge, founding badge, about text", (await page.getByRole("link", { name: "Book on MATCHi" }).count()) === 1 && (await page.getByText("Managed by the club").count()) === 1 && (await page.getByText("Founding club").count()) === 1 && (await page.getByText(/ten minutes from Kata beach/).count()) === 1);

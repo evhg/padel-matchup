@@ -20,8 +20,12 @@ import { getPlayer } from "./players";
 export const COACH_WANT_TTL_MS = 90 * 24 * 3600_000;
 /** How many wanters one listing tells; a city with more is a city with a second coach soon. */
 export const COACH_WANT_FANOUT_MAX = 20;
-/** A want told about one coach is not told about the next for a week. */
-export const COACH_WANT_QUIET_MS = 7 * 24 * 3600_000;
+/** A want told about one coach is not told about the next for three days (the owner's number). */
+export const COACH_WANT_QUIET_MS = 3 * 24 * 3600_000;
+/** The count on the coaches' door shows from this many people up: "1 person asked" reads as weak (the owner's number). */
+export const COACH_WANT_SHOW_FROM = 3;
+/** The count as the door shows it: the number, or nothing while it is small. */
+export const shownCount = (n: number): number => (n >= COACH_WANT_SHOW_FROM ? n : 0);
 
 export type CoachWantInput = { playerId: string; citySlug: string; level?: number | null; whenNote?: string | null };
 

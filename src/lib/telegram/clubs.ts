@@ -5,7 +5,7 @@ import { baseUrl } from "@/lib/config";
 import { cityBySlug } from "@/lib/domain/cities";
 import { claimEmailForCode, setClubNotifyMessage } from "@/lib/domain/clubs";
 import { ownerTelegramId } from "@/lib/listen/tick";
-import { esc, sendMessage, telegramEnabled } from "./api";
+import { editMessageText, esc, sendMessage, telegramEnabled } from "./api";
 
 /**
  * A club claim reaches the owner as one Telegram message with Approve and Reject. The message
@@ -14,12 +14,23 @@ import { esc, sendMessage, telegramEnabled } from "./api";
  * formality; a phone number or a public mailbox means the owner checks by hand first.
  */
 const ROLE_WORD: Record<string, string> = { owner: "Owner", manager: "Manager", staff: "Staff", coach: "Coach" };
+const hostOf = (u: string | null | undefined): string | null => {
+  if (!u) return null;
+  try {
+    return new URL(u).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+};
+/** The website as a button when it is a link Telegram accepts, so the hand-check is one tap. */
+const websiteButton = (club: Pick<Club, "website">) => (club.website && /^https?:\/\//i.test(club.website) ? [{ text: "Website", url: club.website }] : []);
 
 /** One line on the check, for the owner. */
 export function claimCheckLine(club: Pick<Club, "claimRole" | "claimContact" | "claimVerifiedAt" | "website" | "bookingUrl" | "bookingPlatform">): string {
   if (!club.claimRole && !club.claimContact) return "👤 No role or contact given (claimed before the check existed): check by hand.";
   const who = [club.claimRole ? ROLE_WORD[club.claimRole] ?? club.claimRole : null, club.claimContact ? esc(club.claimContact) : null].filter(Boolean).join(" · ");
-  const proof = club.claimVerifiedAt ? "✅ work email at the club's domain confirmed" : claimEmailForCode(club) ? "✉️ code sent to the work email, not confirmed yet" : "⚠️ not verifiable by mail: check by hand (call the club, or its public page)";
+  const social = /(^|\.)(facebook\.com|fb\.com|instagram\.com)$/i.test(hostOf(club.website) ?? "");
+  const proof = club.claimVerifiedAt ? "✅ work email at the club's domain confirmed" : claimEmailForCode(club) ? "✉️ code sent to the work email, not confirmed yet" : social ? "⚠️ not verifiable by mail: the website is a Facebook or Instagram page — open it (button below) and check by hand" : "⚠️ not verifiable by mail: check by hand (call the club, or its public page)";
   return `👤 ${who}\n${proof}`;
 }
 
@@ -50,7 +61,7 @@ export async function askOwnerAboutClub(db: Db, club: Club, claimant: Player): P
           { text: "✅ Approve", callback_data: `ca:${club.manageToken}` },
           { text: "❌ Reject", callback_data: `cr:${club.manageToken}` },
         ],
-        [{ text: "Open page", url: `${baseUrl()}/v/${club.slug}` }],
+        [{ text: "Open page", url: `${baseUrl()}/v/${club.slug}` }, ...websiteButton(club)],
       ],
     },
   });
@@ -58,11 +69,20 @@ export async function askOwnerAboutClub(db: Db, club: Club, claimant: Player): P
   return res.ok;
 }
 
-/** The code came back right after the first message went out: one more line for the owner. */
-export async function tellOwnerClaimVerified(club: Club, email: string): Promise<void> {
+/**
+ * The code came back right and the page went live by itself. The first message is edited to say so
+ * and loses its buttons (a stale Approve reads as a choice); a second message buzzes the owner and
+ * carries Reject, one tap to take the page down. Both, by the owner's decision.
+ */
+export async function tellOwnerClaimLive(club: Club, email: string): Promise<void> {
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return;
-  await sendMessage(owner, `✅ <b>Work email confirmed</b> · ${esc(club.name)}\n${esc(email)} is at the club's own domain. Approve on the claim message above.`).catch(() => undefined);
+  const page = { text: "Open page", url: `${baseUrl()}/v/${club.slug}` };
+  if (club.notifyMessageId) await editMessageText(owner, club.notifyMessageId, `✅ <b>Live by its work email</b> · ${esc(club.name)}${club.founding ? " · founding club" : ""}\n${esc(email)} is at the club's own domain.`, { inline_keyboard: [[page]] }).catch(() => undefined);
+  const res = await sendMessage(owner, `✅ <b>Live by its work email</b> · ${esc(club.name)}${club.founding ? " · founding club" : ""}\n${esc(email)} is at the club's own domain, so the page went live without a tap. Reject takes it down.`, {
+    keyboard: { inline_keyboard: [[{ text: "❌ Reject", callback_data: `cr:${club.manageToken}` }], [page]] },
+  }).catch(() => null);
+  void res;
 }
 
 /** What the claimant hears when the owner decides, in their language. */

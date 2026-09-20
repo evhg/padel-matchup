@@ -7,7 +7,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { WantCoachForm } from "@/components/WantCoachForm";
-import { countCoachWants } from "@/lib/domain/coachWants";
+import { countCoachWants, shownCount } from "@/lib/domain/coachWants";
 import { isFoundingCoach, listPublicCoaches } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 import { localeAlternates } from "@/lib/seo";
@@ -35,7 +35,7 @@ export default async function CoachesInCityPage({ params }: Props) {
   const [t, tCoach, coaches] = await Promise.all([getTranslations("coaches"), getTranslations("coach"), listPublicCoaches(db, city.tz)]);
   // The other half of the list: who is asking. Two bounded reads, sequential (rule 8).
   const me = await getSessionPlayer(db);
-  const waiting = await countCoachWants(db, city.slug);
+  const waiting = shownCount(await countCoachWants(db, city.slug));
   const base = baseUrl();
   const languageName = (code: string) => (code === "ru" ? "Русский" : code === "es" ? "Español" : "English");
   const jsonLd = {

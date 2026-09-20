@@ -8,12 +8,14 @@ import { refreshClubAvailability } from "@/lib/booking/availability";
 import { isValidTimeZone } from "@/lib/dates";
 import { emailEnabled } from "@/lib/config";
 import type { Club } from "@/db/schema";
-import { CLAIM_ROLES, CLUB_LIMITS, claimClub, claimEmailForCode, getClubByToken, isClubLive, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { CLAIM_ROLES, CLUB_LIMITS, claimClub, claimEmailForCode, decideClub, getClubByToken, isClubLive, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { getPlayer } from "@/lib/domain/players";
+import { tell } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
 import { consumeEmailCode, issueEmailCode } from "@/lib/domain/identity";
 import { sendClaimCodeEmail } from "@/lib/notify";
 import { replaceCourts } from "@/lib/domain/courts";
-import { askOwnerAboutClub, tellOwnerClaimVerified } from "@/lib/telegram/clubs";
+import { askOwnerAboutClub, claimDecisionText, tellOwnerClaimLive } from "@/lib/telegram/clubs";
 import { ActionFailure, assertRate, requirePlayer, runA, type ActionResult } from "./shared";
 
 const url = z.string().max(500).optional();
@@ -103,22 +105,38 @@ export async function sendClaimCodeAction(token: string): Promise<ActionResult<{
   });
 }
 
-/** The code typed back: right, and the claim is confirmed by the club's own mail; the owner hears it. */
-export async function confirmClaimCodeAction(token: string, code: string): Promise<ActionResult<{ verified: boolean }>> {
+/**
+ * The code typed back right: the claim is confirmed by the club's own mail, and the page goes live
+ * at once (the owner's decision of 20 September 2026). The owner's first message is edited to say so
+ * and loses its buttons; a second message carries Reject, one tap to take the page down again. The
+ * claimant hears that the page is live.
+ */
+export async function confirmClaimCodeAction(token: string, code: string): Promise<ActionResult<{ verified: boolean; live: boolean }>> {
   return runA(async () => {
     const db = await getDb();
     const club = await getClubByToken(db, token);
     if (!club) throw new ActionFailure("not_found");
-    if (club.claimVerifiedAt) return { verified: true };
+    if (club.claimVerifiedAt) return { verified: true, live: isClubLive(club) };
     const email = claimEmailForCode(club);
     if (!email) throw new ActionFailure("invalid");
     await consumeEmailCode(db, email, String(code ?? "").trim());
-    const row = await markClaimVerified(db, club.slug);
-    if (row && !isClubLive(row)) after(() => tellOwnerClaimVerified(row, email));
+    const marked = await markClaimVerified(db, club.slug);
+    const live = marked && !isClubLive(marked) ? await decideClub(db, club.slug, true) : marked;
+    if (live) {
+      after(async () => {
+        await tellOwnerClaimLive(live, email);
+        const claimant = live.claimedBy ? await getPlayer(db, live.claimedBy) : null;
+        if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, live, true), { inline_keyboard: [[{ text: "Open the page", url: `${baseUrlOf()}/v/${live.slug}` }]] }).catch(() => undefined);
+      });
+    }
+    revalidatePath(`/v/${club.slug}`);
     revalidatePath(`/v/${club.slug}/manage/${token}`);
-    return { verified: true };
+    revalidatePath("/clubs");
+    revalidatePath("/me");
+    return { verified: true, live: Boolean(live && isClubLive(live)) };
   });
 }
+const baseUrlOf = () => process.env.APP_BASE_URL?.replace(/\/$/, "") ?? "https://kicksma.sh";
 
 export async function updateClubAction(token: string, raw: UpdateClubInput): Promise<ActionResult<{ slots: number | null; feedError: string | null }>> {
   return runA(async () => {

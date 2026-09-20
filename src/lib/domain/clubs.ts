@@ -349,8 +349,12 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
     return row;
   }
   let founding = club.founding;
-  if (!club.approvedAt && club.city) {
-    const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(eq(clubs.city, club.city), eq(clubs.founding, true), isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt)));
+  // Ten founding places in every city (the owner's decision of 20 September 2026): a city with a page
+  // counts by its slug, any other by its country and the place as typed. A club that named no place
+  // takes no place.
+  const key = foundingKey(club);
+  if (!club.approvedAt && key) {
+    const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(key, eq(clubs.founding, true), isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt)));
     founding = Number(n) < CLUB_LIMITS.foundingPerCity;
   }
   const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
@@ -388,6 +392,22 @@ export function claimEmailForCode(c: Pick<Club, "claimContact" | "website" | "bo
 export async function markClaimVerified(db: Db, slug: string, now = new Date()): Promise<Club | null> {
   const [row] = await db.update(clubs).set({ claimVerifiedAt: now, updatedAt: now }).where(and(eq(clubs.slug, slug), isNull(clubs.claimVerifiedAt))).returning();
   return row ?? null;
+}
+
+/** The rows that share a club's founding city: the city page's slug, else the country and the place as typed. Null when the club named no place. */
+export function foundingKey(c: Pick<Club, "city" | "country" | "province">) {
+  if (c.city) return eq(clubs.city, c.city);
+  const place = c.province?.trim().toLowerCase();
+  if (!c.country || !place) return null;
+  return and(isNull(clubs.city), eq(clubs.country, c.country), sql`lower(${clubs.province}) = ${place}`);
+}
+
+/** How many founding places a place still has: ten less the founding clubs live there. */
+export async function foundingPlacesLeft(db: Db, c: Pick<Club, "city" | "country" | "province">): Promise<number | null> {
+  const key = foundingKey(c);
+  if (!key) return null;
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(key, eq(clubs.founding, true), isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt)));
+  return Math.max(0, CLUB_LIMITS.foundingPerCity - Number(n));
 }
 
 export async function setClubNotifyMessage(db: Db, slug: string, messageId: number | null): Promise<void> {

@@ -484,7 +484,8 @@ try {
   await want.getByLabel("When").fill("evenings");
   await want.getByTestId("want-coach-send").click();
   await ivan.getByTestId("want-coach-done").waitFor({ timeout: 20000 });
-  check("the want is noted, and the coaches' door counts it", (await ivan.getByText(/You hear from us when a coach lists in Phuket/).count()) === 1 && (await ivan.getByTestId("coach-waiting").count()) === 1);
+  check("the want is noted, and the coaches' door counts it", (await ivan.getByText(/You hear from us when a coach lists in Phuket/).count()) === 1 && (await ivan.getByTestId("coach-waiting").count()) === 0);
+  // One person is below the three the door shows from; the want is recorded all the same.
   await ivan.goto(`${BASE}/`);
   check("the landing page has one quiet line for coaches", (await ivan.getByRole("link", { name: /Padel coach\? Your students book themselves/ }).count()) === 1);
   const front = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());
