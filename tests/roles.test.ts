@@ -65,6 +65,19 @@ describe("the role set", () => {
     expect(roleCount(roles)).toBe(2);
   });
 
+  it("drops a club whose claim was refused, and keeps the ones that were not", async () => {
+    // A refused claimant kept the club door in the header, and it led to a page that told them the
+    // claim failed and to write on GitHub. They are a player again: the header says My matches.
+    const zoe = await makePlayer(db, "Zoe");
+    await db.insert(clubs).values([
+      { slug: "kamala-padel", name: "Kamala Padel", city: "Phuket", claimedBy: zoe.id, manageToken: "tok-kamala-00000", rejectedAt: new Date("2026-09-20T09:45:00Z") },
+      { slug: "layan-padel", name: "Layan Padel", city: "Phuket", claimedBy: zoe.id, manageToken: "tok-layan-000000" },
+    ]);
+    const roles = await rolesFor(db, zoe.id);
+    expect(roles.clubs).toEqual([{ slug: "layan-padel", name: "Layan Padel" }]);
+    expect(roleCount(roles)).toBe(1);
+  });
+
   it("does not count a student who only asked, or one the coach paused", async () => {
     const asker = await makePlayer(db, "Asker");
     const cp = await makePlayer(db, "Coach Two");

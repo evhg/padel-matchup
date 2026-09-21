@@ -7,6 +7,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
+import { countryName, countryOfTz, noneInCountry, visitorCountry } from "@/lib/domain/countries";
 import { busyForCoaches, coachCardFacts, listPublicCoaches, hasPhoto, NO_BUSY, offersForCoaches, proofForCoaches } from "@/lib/domain/coaching";
 import { localeAlternates } from "@/lib/seo";
 
@@ -38,6 +39,11 @@ export default async function CoachesPage() {
   const hdrs = await headers();
   const hereCity = (hdrs.get("x-vercel-ip-city") ?? "").toLowerCase();
   const hereTz = hdrs.get("x-vercel-ip-timezone") ?? "";
+  // Every coach here teaches in Phuket. A reader anywhere else saw "Padel coaches in Phuket" as the
+  // page's first heading and had nothing to do about it. Name their country, and hold the door open.
+  const here = visitorCountry(hdrs.get("x-vercel-ip-country"), hereTz);
+  const hereName = here ? countryName(here, locale) : null;
+  const hereEmpty = noneInCountry(coaches.map((c) => countryOfTz(c.tz)), here);
   const sections = CITIES.map((city) => ({ city, list: coaches.filter((c) => c.tz === city.tz) }))
     .filter((s) => s.list.length > 0)
     .sort((a, b) => Number(decodeURIComponent(b.city.name).toLowerCase() === hereCity || (b.city.tz === hereTz ? 0.5 : 0)) - Number(decodeURIComponent(a.city.name).toLowerCase() === hereCity || (a.city.tz === hereTz ? 0.5 : 0)));
@@ -90,6 +96,7 @@ export default async function CoachesPage() {
 
         {/* The coach's own door: one line, at the foot, where a coach looks and a player does not. */}
         <section className="card">
+          {hereEmpty && hereName && <p className="mb-2 text-sm text-muted" data-testid="coaches-none-here">{t("noneHere", { country: hereName })}</p>}
           <p className="text-sm font-bold">{t("indexForCoaches")}</p>
           <Link href="/coaches/join?s=coachlist" prefetch={false} className="btn-ghost mt-3 w-full">
             {t("coachCta")}

@@ -46,3 +46,38 @@ export function countryName(code: string, locale: string): string {
     return code;
   }
 }
+
+/**
+ * Where the reader is, for the sentence that says whether Kicksmash reaches them.
+ *
+ * Every club on Kicksmash is in Thailand or Singapore and every coach is in Phuket, so a person in
+ * Kuala Lumpur, Berlin, Madrid or Moscow reads two city headings and a search that finds nothing,
+ * and concludes the product is not for their country. The model was already world-wide; the
+ * sentence was missing. The edge names the country from the visitor's address; a time zone answers
+ * when the edge says nothing (local development, a bot, a header the platform did not set).
+ *
+ * The answer stays inside `COUNTRIES`, because that list is what the claim form offers: to tell a
+ * person in a country we cannot yet accept that they may be the first there is a promise we break
+ * on the next screen.
+ */
+export function visitorCountry(headerCountry: string | null | undefined, tz: string | null | undefined): string | null {
+  const code = (headerCountry ?? "").trim().toUpperCase();
+  const known = (c: string | null) => (c && (COUNTRIES as readonly string[]).includes(c) ? c : null);
+  return known(isCountryCode(code) ? code : null) ?? known(countryOfTz(tz));
+}
+
+/** True when the reader's country holds none of these rows, and so deserves the first-one-here line. */
+export const noneInCountry = (rowCountries: readonly (string | null | undefined)[], here: string | null): boolean =>
+  Boolean(here) && !rowCountries.some((c) => c === here);
+
+/** The city the edge reports, readable: the header arrives percent-encoded ("Kuala%20Lumpur"). */
+export function visitorCity(headerCity: string | null | undefined): string | null {
+  const raw = (headerCity ?? "").trim();
+  if (!raw) return null;
+  try {
+    const name = decodeURIComponent(raw).trim();
+    return name && name.length <= 60 ? name : null;
+  } catch {
+    return raw.length <= 60 ? raw : null;
+  }
+}

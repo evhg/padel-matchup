@@ -1121,7 +1121,7 @@
     "statusPending": "Pendiente de nuestra revisión",
     "statusLive": "Publicado",
     "statusRejected": "No aprobado",
-    "statusRejectedHelp": "Esta solicitud no fue aprobada. Si gestionas el club, escríbenos en GitHub Discussions.",
+    "statusRejectedHelp": "No pudimos confirmar que trabajas en este club. Si nos equivocamos, dínoslo y lo miraremos otra vez.",
     "saved": "Guardado",
     "bookOn": "Reservar en {platform}",
     "book": "Reservar pista",
@@ -1139,7 +1139,7 @@
     "isYoursHelp": "Reclama la página: botón de reserva, web, pistas libres, insignia de fundador.",
     "yourClubs": "Tus clubes",
     "yourClubsHelp": "Páginas que gestionas. Los cambios se publican tras nuestra revisión única.",
-    "alreadyClaimed": "Esta página de club ya está reclamada. Si es un error, dínoslo en GitHub Discussions.",
+    "alreadyClaimed": "La página de este club ya está reclamada. Si es un error, dínoslo y lo miraremos.",
     "nameInvalid": "El nombre del club necesita al menos dos caracteres.",
     "inCity": "Clubes en {city}",
     "noClubs": "Ningún club ha reclamado su página aquí todavía.",
@@ -1203,7 +1203,9 @@
     "searchLabel": "Buscar un club",
     "searchPlaceholder": "Club o lugar",
     "searchNone": "Ningún club coincide. Prueba con el lugar en vez del nombre.",
-    "listedHere": "En el directorio"
+    "listedHere": "En el directorio",
+    "noneHere": "Ningún club de {country} tiene página aquí todavía.",
+    "noneHereCta": "Sé el primero. La página del club es gratis, y en cada ciudad esperan diez plazas fundadoras."
   },
   "passport": {
     "title": "Pasaporte",
@@ -1855,7 +1857,8 @@
     "cardFromPackage": "desde {amount} en un bono",
     "cardAsk": "Primero pide ser alumno",
     "cardSince": "En Kicksmash desde {month}",
-    "cardLessonsDone": "{count, plural, one {# clase impartida aquí} other {# clases impartidas aquí}}"
+    "cardLessonsDone": "{count, plural, one {# clase impartida aquí} other {# clases impartidas aquí}}",
+    "noneHere": "Ningún entrenador de {country} se lista aquí todavía."
   },
   "moments": {
     "title": "Tus momentos",
@@ -1932,7 +1935,7 @@
     "endsOn": "Último día",
     "venue": "Club o sede",
     "city": "Ciudad",
-    "cityOther": "Otra",
+    "cityOther": "En otro lugar",
     "note": "Cuota y cómo pagar",
     "noteHelp": "Solo texto: el importe por pareja y dónde se paga. Kicksmash nunca gestiona el dinero.",
     "create": "Crear el torneo",

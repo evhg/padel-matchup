@@ -251,6 +251,19 @@ try {
   check("the API shows Mia seated with her level", ((seated.match ?? seated).players ?? []).some((p) => p.name === "Mia" && p.level === 3.5), JSON.stringify((seated.match ?? seated).players));
   const bad = await fetch(`${BASE}/v/${SLUG}/manage/not-the-token`);
   check("a wrong manage token is 404", bad.status === 404);
+
+  // Every club on Kicksmash is in Thailand or Singapore. A reader anywhere else read two city
+  // headings and nothing addressed to them. The edge names their country; the page answers it.
+  const de = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "DE", "x-vercel-ip-city": "Berlin", "x-vercel-ip-timezone": "Europe/Berlin" } });
+  const lars = await de.newPage();
+  await lars.goto(`${BASE}/clubs`);
+  check("a reader in Germany is told no club there has a page yet", (await lars.getByTestId("clubs-none-here").getByText("No club in Germany has a page here yet.").count()) === 1);
+  check("and is offered the ten founding places in their own city", (await lars.getByTestId("founding-here").getByText(/Berlin/).count()) === 1);
+
+  const th = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "TH", "x-vercel-ip-city": "Phuket", "x-vercel-ip-timezone": "Asia/Bangkok" } });
+  const nok2 = await th.newPage();
+  await nok2.goto(`${BASE}/clubs`);
+  check("a reader in Thailand, where clubs exist, is told nothing of the kind", (await nok2.getByTestId("clubs-none-here").count()) === 0);
 } finally {
   await browser.close();
 }

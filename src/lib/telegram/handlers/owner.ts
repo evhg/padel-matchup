@@ -54,7 +54,10 @@ async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_que
   // The claimant hears the answer where they are: Telegram, else email, else push. A claim that goes
   // quiet after the tap was the walk's finding.
   const claimant = row.claimedBy ? await getPlayer(db, row.claimedBy) : null;
-  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca"), { inline_keyboard: [[{ text: action === "ca" ? "Open the page" : "GitHub Discussions", url: action === "ca" ? `${baseUrl()}/v/${row.slug}` : "https://github.com/evhg/padel-matchup/discussions" }]] }).catch(() => undefined);
+  // A refused claimant used to get one button to GitHub Discussions, where a club manager has no
+  // account. The note that reaches the owner is a page on this site, so that is the button.
+  const door = action === "ca" ? { text: "Open the page", url: `${baseUrl()}/v/${row.slug}` } : { text: "Tell us", url: `${baseUrl()}/feedback?s=clubclaim` };
+  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca"), { inline_keyboard: [[door]] }).catch(() => undefined);
   if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(text), { inline_keyboard: [[{ text: "Open page", url: `${baseUrl()}/v/${row.slug}` }]] });
   return action === "ca" ? "club:approved" : "club:rejected";
 }

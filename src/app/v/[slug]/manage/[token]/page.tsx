@@ -63,7 +63,22 @@ export default async function ClubManagePage({ params }: Props) {
               {t("club.openPage")} →
             </Link>
           </div>
-          {status === "rejected" && <p className="mt-2 text-sm text-muted">{t("club.statusRejectedHelp")}</p>}
+          {status === "rejected" && (
+            /* A refused claim used to end here, on one sentence that sent a club manager to GitHub
+               Discussions. They have no account there and no reason to make one. Two doors instead:
+               the note that reaches the owner, and the way back to the matches they came for. */
+            <div className="mt-2" data-testid="club-rejected">
+              <p className="text-sm text-muted">{t("club.statusRejectedHelp")}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href="/feedback?s=clubclaim" prefetch={false} className="btn-secondary btn-sm">
+                  💬 {t("feedback.title")}
+                </Link>
+                <Link href="/me" prefetch={false} className="btn-ghost btn-sm">
+                  {t("common.myMatches")}
+                </Link>
+              </div>
+            </div>
+          )}
           {status === "pending" && <p className="mt-2 text-sm text-muted">{t(club.claimVerifiedAt ? "club.claimedHelpVerified" : claimEmailForCode(club) ? "club.claimedHelpCode" : "club.claimedHelp")}</p>}
           {status === "pending" && claimEmailForCode(club) && (
             <div className="mt-3">

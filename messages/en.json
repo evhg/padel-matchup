@@ -1121,7 +1121,7 @@
     "statusPending": "Waiting for our check",
     "statusLive": "Live",
     "statusRejected": "Not approved",
-    "statusRejectedHelp": "This claim was not approved. If you run the club, write to us in GitHub Discussions.",
+    "statusRejectedHelp": "We could not confirm that you work at this club. If we got that wrong, tell us and we will look at it again.",
     "saved": "Saved",
     "bookOn": "Book on {platform}",
     "book": "Book a court",
@@ -1139,7 +1139,7 @@
     "isYoursHelp": "Claim the page: booking button, website, free courts, founding badge.",
     "yourClubs": "Your clubs",
     "yourClubsHelp": "Pages you manage. Changes go live after our one-time check.",
-    "alreadyClaimed": "This club page is already claimed. If that is wrong, say so in GitHub Discussions.",
+    "alreadyClaimed": "This club page is already claimed. If that is wrong, tell us and we will look at it.",
     "nameInvalid": "Give the club a name of at least two characters.",
     "inCity": "Clubs in {city}",
     "noClubs": "No club has claimed its page here yet.",
@@ -1203,7 +1203,9 @@
     "searchLabel": "Find a club",
     "searchPlaceholder": "Club or place",
     "searchNone": "No club here matches that. Try the place instead of the name.",
-    "listedHere": "Listed here"
+    "listedHere": "Listed here",
+    "noneHere": "No club in {country} has a page here yet.",
+    "noneHereCta": "Be the first. A club page is free, and ten founding places wait in every city."
   },
   "passport": {
     "title": "Passport",
@@ -1855,7 +1857,8 @@
     "cardFromPackage": "from {amount} in a package",
     "cardAsk": "Ask to become a student first",
     "cardSince": "On Kicksmash since {month}",
-    "cardLessonsDone": "{count, plural, one {# lesson given here} other {# lessons given here}}"
+    "cardLessonsDone": "{count, plural, one {# lesson given here} other {# lessons given here}}",
+    "noneHere": "No coach in {country} lists here yet."
   },
   "moments": {
     "title": "Your moments",
@@ -1932,7 +1935,7 @@
     "endsOn": "Last day",
     "venue": "Club or venue",
     "city": "City",
-    "cityOther": "Other",
+    "cityOther": "Somewhere else",
     "note": "Entry fee and how to pay",
     "noteHelp": "Text only: the amount per pair and where it goes. Kicksmash never handles the money.",
     "create": "Create the tournament",
