@@ -155,7 +155,7 @@ describe("the player's door", () => {
     expect(await text(31, user(506, "Eve"), `/start claim_${e.claimToken}`)).toBe("claim_bad");
   });
 
-  it("the email's Telegram line: only for a player without Telegram, only when the bot has a username; the tap binds the account, a forged or stale ticket does not", async () => {
+  it("the email's Telegram line: only for a player without Telegram, only where a bot exists; the tap binds the account, a forged or stale ticket does not", async () => {
     const finn = await makePlayer(db, "Finn", { email: "finn@example.com" });
     const line = telegramLine("Get this on Telegram", finn)!;
     expect(line.url).toMatch(/^https:\/\/t\.me\/kicksmash_bot\?start=p_/);
@@ -166,8 +166,16 @@ describe("the player's door", () => {
     expect(html).toContain(`href="${line.url}"`);
     expect(plain).toContain(`Get this on Telegram: ${line.url}`);
     expect(layout({ heading: "H", body: "B", footer: "F", eventUrl: "https://kicksma.sh/x", openLabel: "Open" }).html).not.toContain("t.me");
+    // The line used to disappear when TELEGRAM_BOT_USERNAME was unset. The name now has a default
+    // in config.ts, and what decides whether a bot exists is the token: a deployment that has one
+    // but never set the username used to drop the Telegram line from every email it sent.
     delete process.env.TELEGRAM_BOT_USERNAME;
+    expect(telegramLine("x", finn)?.url).toMatch(/^https:\/\/t\.me\/kicksmash_bot\?start=p_/);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
     expect(telegramLine("x", finn)).toBeUndefined();
+    // The rest of this test still needs a bot (rule 11: a test leaves no global state behind).
+    process.env.TELEGRAM_BOT_TOKEN = token;
     process.env.TELEGRAM_BOT_USERNAME = "kicksmash_bot";
     // The tap: this Telegram account is Finn from now on.
     const payload = new URL(line.url).searchParams.get("start")!;

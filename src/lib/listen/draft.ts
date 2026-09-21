@@ -3,6 +3,7 @@ import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { sql } from "drizzle-orm";
 import { metricsDaily } from "@/db/schema";
 import type { Candidate } from "./parse";
+import { listenModel } from "@/lib/ops/anthropic";
 
 /**
  * Drafting: one model call per candidate, strict JSON out, a daily budget
@@ -10,7 +11,6 @@ import type { Candidate } from "./parse";
  * tone rules live in the prompt and nowhere else.
  */
 export const draftingEnabled = () => Boolean(process.env.ANTHROPIC_API_KEY);
-const model = () => process.env.LISTEN_MODEL || "claude-sonnet-5";
 
 /** Daily ceilings: well under 20 USD a month even on a bad day. */
 export const BUDGET = { draftsPerDay: 40, inputTokensPerDay: 400_000, outputTokensPerDay: 60_000 } as const;
@@ -70,7 +70,7 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: model(), max_tokens: 700, system: o.system ?? SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: listenModel(), max_tokens: 700, system: o.system ?? SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message: string } } | null;

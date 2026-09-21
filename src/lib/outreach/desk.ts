@@ -7,6 +7,7 @@ import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft
 import { stripHtml } from "@/lib/listen/parse";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { listenModel } from "@/lib/ops/anthropic";
 
 /**
  * The press desk. Drafts are written here (by the operator endpoint or the
@@ -272,7 +273,7 @@ export async function draftReplyTo(db: Db, inbound: Outreach, now = new Date(), 
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: process.env.LISTEN_MODEL ?? "claude-sonnet-5", max_tokens: 600, system: REPLY_SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: listenModel(), max_tokens: 600, system: REPLY_SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;

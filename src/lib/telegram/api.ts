@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { TELEGRAM_BOT } from "@/lib/config";
 
 /**
  * Thin Telegram Bot API client. No SDK: one fetch per call, HTML parse mode,
@@ -6,7 +7,15 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
  * Tests stub globalThis.fetch.
  */
 export const telegramEnabled = () => Boolean(process.env.TELEGRAM_BOT_TOKEN);
-export const telegramBotUsername = () => process.env.TELEGRAM_BOT_USERNAME ?? null;
+/**
+ * The bot's public name, or null where there is no bot.
+ *
+ * The name is not a secret — it is printed on the site and in the API's documentation — so it has a
+ * default in `config.ts` rather than living only in a deployment variable. What decides whether a
+ * bot exists at all is the token, not the name: without that gate a deployment with no Telegram
+ * would show "open the bot" buttons that lead nowhere.
+ */
+export const telegramBotUsername = () => (telegramEnabled() ? process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "") || TELEGRAM_BOT : null);
 export const telegramWebhookSecret = () => process.env.TELEGRAM_WEBHOOK_SECRET ?? null;
 const token = () => process.env.TELEGRAM_BOT_TOKEN ?? "";
 /** The numeric bot id (the part of the token before the colon): the sign-in URL needs it, the token never leaves the server. */

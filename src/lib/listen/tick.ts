@@ -7,6 +7,7 @@ import { draftReply, draftingEnabled, withinBudget } from "./draft";
 import { guessLanguage, looksRelevant, type Candidate } from "./parse";
 import { postRedditComment, redditEnabled } from "./reddit";
 import { fetchAll, type FeedSpec } from "./sources";
+import { listenModel } from "@/lib/ops/anthropic";
 
 /**
  * The listening loop, hourly:
@@ -58,7 +59,7 @@ export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof f
         language: draft.language === "other" ? guessLanguage(`${item.title} ${item.body}`) : draft.language,
         draft: draft.reply,
         draftReason: draft.reason,
-        draftModel: process.env.LISTEN_MODEL || "claude-sonnet-5",
+        draftModel: listenModel(),
         draftedAt: now,
       })
       .where(eq(listenItems.id, item.id));
