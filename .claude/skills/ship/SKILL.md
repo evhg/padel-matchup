@@ -241,6 +241,14 @@ Wall clock first, credits second. What actually moved it, measured:
   in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
   and the page did not compile. Anchor on a neighbouring line unique to the function (the one after
   `monthRange`), or on two lines together.
+- **A backtick inside a template literal ends it.** `src/lib/api/docs.ts` is one long template
+  literal, so writing a word in backticks inside it (`` `claimed` ``) closed the string and the
+  typecheck failed twice, four hundred lines further down, on a missing semicolon. The file is
+  documentation for assistants, not Markdown for a reader: use plain words in it.
+- **A default repeated in eight files is not a default.** `process.env.LISTEN_MODEL || "claude-sonnet-5"`
+  is written out in eight files, three with `||` and three with `??`, and the variable is set
+  nowhere — so the model the product uses is eight copies of a literal nobody would grep for.
+  One reader in `src/lib/config.ts`, and every caller takes it from there.
 - **A new `DomainErrorCode` has a second home.** `src/lib/api/http.ts` maps every code to a status and
   is typed `Record<DomainErrorCode, number>`, so adding `already_paid` to the union broke the API until
   the map learned it. Grep `Record<DomainErrorCode` when a code is added.
@@ -405,6 +413,14 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### What the walks keep finding
 
+- **A list that links to sixty-six pages is sixty-six checks, and I made one.** Tier 2 put the
+  listed clubs on `/clubs` and in the sitemap, and I proved it live by opening
+  `/v/destination-padel-club`. That club has a match. The page's guard wanted a venue board, and a
+  board exists only once somebody plays there, so the other **sixty-three of sixty-six answered 404**
+  — every one of them linked from `/clubs` and named in the sitemap. One query
+  (`select count(*) from clubs c left join (select venue_slug, count(*) from events group by 1) e
+  on e.venue_slug = c.slug where e.venue_slug is null`) would have found it in a second. When a
+  change makes many pages, open the one with the least behind it, not the first one in the list.
 - **A screen that makes something a person owns must hand it to them.** The americano generator
   builds a correct schedule — seven rounds, every pair partnering once — and then offers Print,
   Shuffle again, and a bridge to a live match. There is no link, the URL never changes, and closing

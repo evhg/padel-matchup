@@ -3,7 +3,7 @@ import type { Club, Player } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
 import { baseUrl } from "@/lib/config";
 import { cityBySlug } from "@/lib/domain/cities";
-import { claimEmailForCode, setClubNotifyMessage } from "@/lib/domain/clubs";
+import { type ClaimReason, claimEmailForCode, setClubNotifyMessage } from "@/lib/domain/clubs";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { editMessageText, esc, sendMessage, telegramEnabled } from "./api";
 
@@ -34,6 +34,20 @@ export function claimCheckLine(club: Pick<Club, "claimRole" | "claimContact" | "
   return `👤 ${who}\n${proof}`;
 }
 
+
+/**
+ * The refusal reasons as one letter each, because `callback_data` stops at 64 bytes and the manage
+ * token already spends forty of them.
+ */
+export const REASON_CODE: Record<ClaimReason, string> = { unconfirmed: "u", taken: "t", not_a_club: "n", duplicate: "d" };
+export const reasonOfCode = (c: string): ClaimReason | null => (Object.entries(REASON_CODE).find(([, v]) => v === c)?.[0] as ClaimReason | undefined) ?? null;
+
+/** A club a player listed is live already; the owner's only tap is to take it down. */
+const isListing = (club: Pick<Club, "source">) => club.source === "player";
+
+const rejectRow = (token: string, keys: ClaimReason[], label: Record<ClaimReason, string>) => keys.map((k) => ({ text: label[k], callback_data: `cr:${token}:${REASON_CODE[k]}` }));
+const REJECT_LABEL: Record<ClaimReason, string> = { unconfirmed: "❌ Not confirmed", taken: "❌ Someone else runs it", not_a_club: "❌ Not a club", duplicate: "❌ Duplicate" };
+
 export function clubClaimMessage(club: Club, claimant: Player): string {
   const platform = platformById(club.bookingPlatform)?.name;
   const lines = [
@@ -51,20 +65,40 @@ export function clubClaimMessage(club: Club, claimant: Player): string {
   return lines.filter((l): l is string => l != null).join("\n");
 }
 
+/** A player put a club on the map. It is listed already, so the message asks only whether it is real. */
+export function clubListingMessage(club: Club, addedBy: Player): string {
+  const split = [club.courtsIndoor != null ? `${club.courtsIndoor} indoor` : null, club.courtsOutdoor != null ? `${club.courtsOutdoor} outdoor` : null].filter(Boolean).join(" · ");
+  return [
+    `<b>Club listed by a player</b> · ${esc(club.name)}`,
+    [club.province, club.country].filter(Boolean).map((v) => esc(String(v))).join(", ") || null,
+    `By ${esc(addedBy.displayName)}${addedBy.telegramUsername ? ` (@${esc(addedBy.telegramUsername)})` : ""}`,
+    club.courts ? `🎾 ${club.courts} courts${split ? ` (${esc(split)})` : ""}` : null,
+    club.website ? `🌐 ${esc(club.website)}` : null,
+    "",
+    "The page is up already and says no club runs it. Tap only if it should not be there.",
+  ]
+    .filter((l): l is string => l != null)
+    .join("\n");
+}
+
 export async function askOwnerAboutClub(db: Db, club: Club, claimant: Player): Promise<boolean> {
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return false;
-  const res = await sendMessage(owner, clubClaimMessage(club, claimant), {
-    keyboard: {
-      inline_keyboard: [
-        [
-          { text: "✅ Approve", callback_data: `ca:${club.manageToken}` },
-          { text: "❌ Reject", callback_data: `cr:${club.manageToken}` },
+  const page = [{ text: "Open page", url: `${baseUrl()}/v/${club.slug}` }, ...websiteButton(club)];
+  // Each refusal is its own button, so the reason is stored by the same tap that refuses. Before
+  // this, one Reject stored the hour and nothing else, and the claimant heard one sentence that
+  // fitted every case.
+  const keyboard = isListing(club)
+    ? { inline_keyboard: [rejectRow(club.manageToken, ["not_a_club", "duplicate"], REJECT_LABEL), page] }
+    : {
+        inline_keyboard: [
+          [{ text: "✅ Approve", callback_data: `ca:${club.manageToken}` }],
+          rejectRow(club.manageToken, ["unconfirmed", "taken"], REJECT_LABEL),
+          rejectRow(club.manageToken, ["not_a_club", "duplicate"], REJECT_LABEL),
+          page,
         ],
-        [{ text: "Open page", url: `${baseUrl()}/v/${club.slug}` }, ...websiteButton(club)],
-      ],
-    },
-  });
+      };
+  const res = await sendMessage(owner, isListing(club) ? clubListingMessage(club, claimant) : clubClaimMessage(club, claimant), { keyboard });
   if (res.ok) await setClubNotifyMessage(db, club.slug, res.result.message_id);
   return res.ok;
 }
@@ -86,7 +120,7 @@ export async function tellOwnerClaimLive(club: Club, email: string): Promise<voi
 }
 
 /** What the claimant hears when the owner decides, in their language. */
-export function claimDecisionText(locale: string | null | undefined, club: Pick<Club, "name" | "slug" | "manageToken">, approved: boolean): string {
+export function claimDecisionText(locale: string | null | undefined, club: Pick<Club, "name" | "slug" | "manageToken"> & Partial<Pick<Club, "source">>, approved: boolean, reason?: ClaimReason | null): string {
   const base = baseUrl();
   const page = `${base}/v/${club.slug}`;
   const manage = `${base}/v/${club.slug}/manage/${club.manageToken}`;
@@ -99,11 +133,46 @@ export function claimDecisionText(locale: string | null | undefined, club: Pick<
         : `${club.name} is live on Kicksmash\nThe club page is up: ${page}\nManage it: ${manage}`;
   }
   // A club manager has no GitHub account and no reason to make one. The note that reaches the owner
-  // is one tap away on the site, so the message points there and says what we could not confirm.
+  // is one tap away on the site, so the message points there. Each reason says a different thing to
+  // do next, which is why the owner's tap now stores which one it was.
   const say = `${base}/feedback?s=clubclaim`;
-  return l === "ru"
-    ? `${club.name}: заявка не одобрена\nМы не смогли подтвердить, что вы работаете в этом клубе. Если это ошибка, напишите нам, и мы посмотрим ещё раз: ${say}`
-    : l === "es"
-      ? `${club.name}: solicitud no aprobada\nNo pudimos confirmar que trabajas en este club. Si nos equivocamos, dínoslo y lo miraremos otra vez: ${say}`
-      : `${club.name}: the claim was not approved\nWe could not confirm that you work at this club. If we got that wrong, tell us and we will look at it again: ${say}`;
+  // A listing that comes down is not a claim that was refused: the person listed a club for other
+  // people, and never asked to run the page.
+  const listed = "source" in club && (club as { source?: string }).source === "player";
+  const head = listed
+    ? l === "ru"
+      ? `${club.name}: страница снята`
+      : l === "es"
+        ? `${club.name}: la página se ha retirado`
+        : `${club.name}: the page was taken down`
+    : l === "ru"
+      ? `${club.name}: заявка не одобрена`
+      : l === "es"
+        ? `${club.name}: solicitud no aprobada`
+        : `${club.name}: the claim was not approved`;
+  const again = l === "ru" ? `Если это ошибка, напишите нам, и мы посмотрим ещё раз: ${say}` : l === "es" ? `Si nos equivocamos, dínoslo y lo miraremos otra vez: ${say}` : `If we got that wrong, tell us and we will look at it again: ${say}`;
+  const why: Record<ClaimReason, Record<"en" | "ru" | "es", string>> = {
+    unconfirmed: {
+      en: "We could not confirm that you work at this club. A work email at the club's own domain confirms it in one step.",
+      ru: "Мы не смогли подтвердить, что вы работаете в этом клубе. Рабочая почта на домене клуба подтверждает это сразу.",
+      es: "No pudimos confirmar que trabajas en este club. Un correo de trabajo en el dominio del club lo confirma al momento.",
+    },
+    taken: {
+      en: "Somebody at the club already runs this page.",
+      ru: "Страницей уже управляет кто-то из клуба.",
+      es: "Alguien del club ya gestiona esta página.",
+    },
+    not_a_club: {
+      en: "We could not find a padel club by this name.",
+      ru: "Мы не нашли падел-клуб с таким названием.",
+      es: "No encontramos un club de pádel con este nombre.",
+    },
+    duplicate: {
+      en: "This club already has a page on Kicksmash under another name.",
+      ru: "У этого клуба уже есть страница на Kicksmash под другим названием.",
+      es: "Este club ya tiene una página en Kicksmash con otro nombre.",
+    },
+  };
+  const line = why[reason && (reason as string) in why ? (reason as ClaimReason) : "unconfirmed"][l];
+  return `${head}\n${line}\n${again}`;
 }

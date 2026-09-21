@@ -442,6 +442,13 @@
       "when": 1789952809332,
       "tag": "0062_careless_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789981040627,
+      "tag": "0063_cool_master_chief",
+      "breakpoints": true
     }
   ]
 }

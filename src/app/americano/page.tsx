@@ -3,6 +3,7 @@ import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AmericanoGenerator } from "@/components/AmericanoGenerator";
+import { parseGenLink } from "@/lib/domain/americano";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 
@@ -21,8 +22,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** Public, indexable utility page: the same rotation engine the live tournaments use, with a way in. */
-export default async function AmericanoPage() {
-  const t = await getTranslations();
+export default async function AmericanoPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // A shared link opens on the schedule it names, rendered on the server, so the person who receives
+  // it reads the rounds before any JavaScript arrives.
+  const [t, sp] = await Promise.all([getTranslations(), searchParams]);
+  const initial = parseGenLink(sp);
   return (
     <>
       <Header />
@@ -31,7 +35,7 @@ export default async function AmericanoPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">{t("americano.gen.title")}</h1>
           <p className="mt-1 text-muted">{t("americano.gen.sub")}</p>
         </div>
-        <AmericanoGenerator />
+        <AmericanoGenerator initial={initial} />
         <p className="mt-4 text-sm text-muted">
           {t("americano.static.readyMade")}{" "}
           {[8, 12, 16, 20, 24].map((n, i) => (

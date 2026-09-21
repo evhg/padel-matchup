@@ -8,7 +8,7 @@ import { refreshClubAvailability } from "@/lib/booking/availability";
 import { isValidTimeZone } from "@/lib/dates";
 import { emailEnabled } from "@/lib/config";
 import type { Club } from "@/db/schema";
-import { CLAIM_ROLES, CLUB_LIMITS, claimClub, claimEmailForCode, decideClub, getClubByToken, isClubLive, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { CLAIM_ROLES, CLUB_ADD_LIMITS, CLUB_LIMITS, addClub, claimClub, claimEmailForCode, decideClub, getClubByToken, isClubLive, markClaimVerified, updateClub } from "@/lib/domain/clubs";
 import { getPlayer } from "@/lib/domain/players";
 import { tell } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
@@ -88,6 +88,58 @@ export async function claimClubAction(raw: ClaimClubInput): Promise<ActionResult
     revalidatePath("/me");
     const codeSentTo = await sendClaimCode(db, club, me.locale);
     return { slug: club.slug, token: club.manageToken, codeSentTo };
+  });
+}
+
+/**
+ * Anybody lists a club nobody had listed.
+ *
+ * Not a claim: no role, no work address, no owner's tap. The page appears at once and says the club
+ * does not run it, so a player in a country Kicksmash had never reached can put their own club on
+ * the map in a minute. The owner still sees it in Telegram and takes it down with one tap if it is
+ * not a real club. The court split is required, because that is the thing no public source knows.
+ */
+const addSchema = z.object({
+  name: z.string().max(60).optional(),
+  clubName: z.string().min(2).max(80),
+  place: z.string().max(60).optional(),
+  country: z.string().max(2).optional(),
+  city: z.string().max(40).optional().nullable(),
+  courtsIndoor: z.coerce.number().int().min(0).max(64),
+  courtsOutdoor: z.coerce.number().int().min(0).max(64),
+  mapUrl: url,
+  website: url,
+  tz: z.string().max(60).optional(),
+});
+export type AddClubActionInput = z.input<typeof addSchema>;
+
+export async function addClubAction(raw: AddClubActionInput): Promise<ActionResult<{ slug: string }>> {
+  return runA(async () => {
+    const input = addSchema.parse(raw);
+    const db = await getDb();
+    const me = await requirePlayer(db, input.name);
+    await assertRate(db, "club_add", me.id, CLUB_ADD_LIMITS.perPlayerPerDay);
+    const courts = input.courtsIndoor + input.courtsOutdoor;
+    if (courts < 1) throw new ActionFailure("invalid");
+    const club = await addClub(db, {
+      name: input.clubName,
+      playerId: me.id,
+      place: input.place,
+      country: input.country,
+      city: input.city,
+      tz: input.tz && isValidTimeZone(input.tz) ? input.tz : null,
+      courts,
+      courtsIndoor: input.courtsIndoor,
+      courtsOutdoor: input.courtsOutdoor,
+      mapUrl: input.mapUrl,
+      website: input.website,
+    });
+    after(async () => {
+      await askOwnerAboutClub(db, club, me);
+    });
+    revalidatePath(`/v/${club.slug}`);
+    revalidatePath("/clubs");
+    return { slug: club.slug };
   });
 }
 

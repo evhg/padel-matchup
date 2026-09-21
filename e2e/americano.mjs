@@ -136,6 +136,31 @@ try {
   check("locale switch", true, `${Date.now() - t0}ms`);
   await shot(a, "t4-ru");
 
+  // The schedule an organiser can send. It had no address of its own: print, shuffle, or lose it.
+  const gen = await browser.newContext(iphone);
+  const kristina = await gen.newPage();
+  await kristina.goto(`${BASE}/americano`);
+  await kristina.locator("textarea").first().fill(["Kristina", "Pim", "Noi", "Jakob", "Marcus", "Ana", "Tom", "Lena"].join("\n"));
+  await kristina.getByRole("button", { name: "Generate schedule" }).click();
+  await kristina.getByTestId("gen-share").waitFor({ timeout: 15000 });
+  check("the address bar now holds the schedule", /[?&]names=Kristina/.test(kristina.url()) && /[?&]seed=/.test(kristina.url()), kristina.url());
+  const shared = kristina.url();
+  const round1 = await kristina.locator(".card", { hasText: "Round 1" }).first().innerText();
+
+  // What the eight people who get the link see: the same rounds, on the server, before any script.
+  const guest = await browser.newContext({ ...iphone, javaScriptEnabled: false });
+  const pim = await guest.newPage();
+  await pim.goto(shared);
+  check("a shared link opens on the same rounds, with no JavaScript", (await pim.locator(".card", { hasText: "Round 1" }).first().innerText()) === round1, round1.replace(/\n/g, " | ").slice(0, 120));
+  check("and the names are the organiser's, not Player 1", (await pim.getByText("Kristina").count()) >= 1);
+  await guest.close();
+
+  // A stranger's numbers cannot make the browser draw two hundred players' rounds.
+  const wild = await gen.newPage();
+  await wild.goto(`${BASE}/americano?n=9999&courts=99&rounds=9999&seed=-1`);
+  check("a link with impossible numbers still renders a schedule", (await wild.locator(".card", { hasText: "Round 1" }).count()) >= 1);
+  await gen.close();
+
   // Manifest + icons
   const man = await a.request.get(`${BASE}/manifest.webmanifest`);
   check("manifest served", man.status() === 200 && (await man.text()).includes('"display":"standalone"'));

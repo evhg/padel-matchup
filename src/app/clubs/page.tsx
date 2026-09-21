@@ -29,7 +29,10 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
   // was for their country. Name their country, and offer them the first place in it.
   const here = visitorCountry(hdrs.get("x-vercel-ip-country"), hdrs.get("x-vercel-ip-timezone"));
   const hereName = here ? countryName(here, locale) : null;
-  const herePlace = visitorCity(hdrs.get("x-vercel-ip-city"));
+  // The edge names the city for most addresses and not for all. Production showed the country line
+  // with no chip beside it, because this header did not arrive. The country is the truthful
+  // fallback: founding places are counted per place, and their place sits inside their country.
+  const herePlace = visitorCity(hdrs.get("x-vercel-ip-city")) ?? hereName;
   const hereEmpty = noneInCountry(all.map((c) => c.country), here);
   // A club owner's first move is to look for their own club, and there was no box anywhere on the
   // site to type its name into. A form, not a script: it works before the JavaScript arrives.
@@ -86,7 +89,12 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
           <section className="card" data-testid="clubs-none-here">
             <p className="text-sm font-bold">{t("club.noneHere", { country: hereName })}</p>
             <p className="mt-1 text-sm text-muted">{t("club.noneHereCta")}</p>
-            <Link href="/clubs/claim" prefetch={false} className="btn-secondary mt-3 w-full">
+            {/* Two doors, and the wide one first. Anybody may list a club; only the club may claim
+                the page, which is why the claim keeps its own checks and its own button. */}
+            <Link href="/clubs/add" prefetch={false} className="btn-secondary mt-3 w-full" data-testid="clubs-add-door">
+              {t("club.addDoor")}
+            </Link>
+            <Link href="/clubs/claim" prefetch={false} className="btn-ghost mt-2 w-full">
               {t("club.claimCta")}
             </Link>
           </section>
