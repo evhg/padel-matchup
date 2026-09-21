@@ -152,16 +152,21 @@ describe("no Date reaches a raw sql template", () => {
     );
   }
 
-  it("a directory card never puts the lesson length where the price goes", () => {
-    // Live on kicksma.sh for four minutes: a coach with no price got the lesson length in the price
-    // slot, and the line right under it says the lesson length too. The card printed "60-minute
-    // lessons" twice and answered nothing a player asked.
+  it("a directory card's price slot holds a price or nothing at all", () => {
+    // Two goes at this slot went out wrong. First it fell back to the lesson length, which the line
+    // under it already carries, so the card said "60-minute lessons" twice. Then it fell back to
+    // "Price on their page" for coaches whose page had no price either, which sent a reader in a
+    // circle — the thing a student walk quit on. It renders a number now, or nothing.
     const src = readFileSync(root("src/components/coach/CoachListCard.tsx"), "utf8");
-    const from = src.indexOf("tabular-nums");
-    const slot = src.slice(from, src.indexOf("</span>", from));
+    const from = src.indexOf("coach.priceFrom != null ?");
     expect(from).toBeGreaterThan(0);
-    expect(slot).toContain("cardAskPrice");
+    const slot = src.slice(from, src.indexOf("</div>", from));
+    expect(slot).toContain("cardFrom");
+    expect(slot).toContain("cardFromPackage");
     expect(slot).not.toContain("page.lesson");
+    expect(slot).not.toContain("cardAskPrice");
+    // The empty case must be nothing rendered, not another sentence.
+    expect(slot).toContain(": null}");
   });
 
   it("every interpolation inside sql`…` is a column or a plain value, never a time", () => {

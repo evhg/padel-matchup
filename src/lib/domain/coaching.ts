@@ -1473,8 +1473,44 @@ export const priceFrom = (c: Pick<Coach, "priceSingle" | "priceSecondSingle">): 
   return all.length ? Math.min(...all) : null;
 };
 
-/** A coach as a directory card reads them: what a player compares on, with the free hour already worked out. */
-export function coachCardFacts(coach: Coach, free: CoachFree, now = new Date()) {
+/**
+ * The cheapest an hour with this coach can be, bought inside a package. `price` on an offer is the
+ * whole package per person, so the hour is that over its size. A coach who sells packages only had
+ * no price on their card at all, and the card said the price was on their page, where there was
+ * none either.
+ */
+export const packagePriceFrom = (offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[]): { each: number; size: number } | null => {
+  const ones = offers.filter((o) => o.heads === 1 && o.size > 0 && o.price > 0);
+  if (ones.length === 0) return null;
+  const best = ones.reduce((a, b) => (b.price / b.size < a.price / a.size ? b : a));
+  return { each: Math.round(best.price / best.size), size: best.size };
+};
+
+/** Every listed coach's package offers in one query, so a directory of N costs one read (rule 12). */
+export async function offersForCoaches(db: Db, coachIds: string[]): Promise<Map<string, CoachPackageOffer[]>> {
+  const out = new Map<string, CoachPackageOffer[]>();
+  if (coachIds.length === 0) return out;
+  for (const id of coachIds) out.set(id, []);
+  const rows = await db
+    .select()
+    .from(coachPackageOffers)
+    .where(and(inArray(coachPackageOffers.coachId, coachIds), isNull(coachPackageOffers.archivedAt)))
+    .orderBy(asc(coachPackageOffers.position), asc(coachPackageOffers.createdAt));
+  for (const o of rows) out.get(o.coachId)?.push(o);
+  return out;
+}
+
+/**
+ * A coach as a directory card reads them: what a player compares on, with the free hour already
+ * worked out.
+ *
+ * Two of these are claims the coach's own page has to keep. `nextFree` is only true for somebody who
+ * can take that hour, so it is null for a coach who accepts students by hand — their card used to
+ * name an hour their page then refused to show. And a price is a number or it is nothing: the card
+ * never sends a reader somewhere else to find one.
+ */
+export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[] = [], now = new Date()) {
+  const canBookNow = coach.openBooking;
   return {
     handle: coach.handle,
     displayName: coach.displayName,
@@ -1484,9 +1520,11 @@ export function coachCardFacts(coach: Coach, free: CoachFree, now = new Date()) 
     bio: coach.bio,
     founding: isFoundingCoach(coach),
     priceFrom: priceFrom(coach),
+    packageFrom: priceFrom(coach) == null ? packagePriceFrom(offers) : null,
     currency: coach.currency,
-    nextFree: nextFree(coach, free, now)?.toISOString() ?? null,
+    nextFree: canBookNow ? (nextFree(coach, free, now)?.toISOString() ?? null) : null,
     tz: coach.tz,
+    canBookNow,
     openBooking: coach.openBooking,
     levels: { min: coach.teachesLevelMin, max: coach.teachesLevelMax },
   };
