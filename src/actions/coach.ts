@@ -11,7 +11,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, setCoachPhoto, removeCoachPhoto, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
 import { countCoachWants, recordCoachWant, shownCount, tellCoachListed } from "@/lib/domain/coachWants";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
@@ -108,6 +108,8 @@ export async function setupCoachAction(input: { name?: string | null; clubs: str
 
 export type SettingsInput = {
   displayName: string;
+  /** A line in the coach's own words: the only part of their directory card they write themselves. */
+  bio: string;
   clubs: string;
   lessonMinutes: number;
   /** Seven lines, index 0 = Sunday, in the coach's words ("07:00-12:00, 15:00-20:00" or "off"). */
@@ -159,6 +161,7 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       latePasses: input.latePasses,
       minNoticeHours: input.minNoticeHours,
       // Per head, or nothing; updateCoach turns zero and blanks into null.
+      bio: input.bio?.trim().slice(0, 300) || null,
       priceSingle: input.priceSingle,
       priceTwo: input.priceTwo,
       priceThree: input.priceThree,
@@ -195,6 +198,29 @@ export async function uploadQrAction(dataUrl: string): Promise<ActionResult<null
     const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl ?? "");
     if (!m) throw new DomainError("invalid", "mime");
     await setCoachQr(db, coach.id, m[1], m[2]);
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+/** The coach's face. Same shape as the QR upload, a larger ceiling, and it is public. */
+export async function uploadPhotoAction(dataUrl: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl ?? "");
+    if (!m) throw new DomainError("invalid", "mime");
+    await setCoachPhoto(db, coach.id, m[1], m[2]);
+    revalidateCoach(coach.handle);
+    return null;
+  });
+}
+
+export async function removePhotoAction(): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    await removeCoachPhoto(db, coach.id);
     revalidateCoach(coach.handle);
     return null;
   });

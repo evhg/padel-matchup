@@ -1529,7 +1529,17 @@
       "teaches": "Niveles que entrenas",
       "teachesHelp": "Se muestra en tu ficha del directorio, para que un jugador sepa si eres para él. Deja ambos vacíos si aceptas a todos.",
       "approveNew": "Yo confirmo la primera reserva",
-      "approveNewHelp": "Alguien a quien nunca enseñaste elige una hora y tú dices sí o no. Quien ya estuvo en tu lista reserva directamente."
+      "approveNewHelp": "Alguien a quien nunca enseñaste elige una hora y tú dices sí o no. Quien ya estuvo en tu lista reserva directamente.",
+      "photo": "Tu foto",
+      "photoHelp": "Un jugador que elige entrenador busca primero una cara. Aparece en tu página y en tu tarjeta del directorio.",
+      "bio": "Una línea sobre ti",
+      "bioHelp": "A quién entrenas y en qué eres bueno, con tus palabras. Dos frases bastan. Es la única parte de tu tarjeta que escribes tú.",
+      "cardGapTitle": "A tu tarjeta le falta lo que los jugadores comparan",
+      "cardGap": "Estás listado, y un jugador que compara entrenadores ve: {gaps}. Complétalo y tu tarjeta responde en vez de mandarlo a otra parte.",
+      "gapPhoto": "sin foto",
+      "gapBio": "nada con tus palabras",
+      "gapPrice": "sin precio",
+      "gapLevels": "sin niveles"
     },
     "page": {
       "owedTitle": "Por pagar",
@@ -1831,7 +1841,9 @@
     "cardOpenBooking": "Reserva sin pedir permiso",
     "cardBook": "Reservar con {name}",
     "cardFromPackage": "desde {amount} en un bono",
-    "cardAsk": "Primero pide ser alumno"
+    "cardAsk": "Primero pide ser alumno",
+    "cardSince": "En Kicksmash desde {month}",
+    "cardLessonsDone": "{count, plural, one {# clase impartida aquí} other {# clases impartidas aquí}}"
   },
   "moments": {
     "title": "Tus momentos",

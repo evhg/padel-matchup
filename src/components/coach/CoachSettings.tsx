@@ -3,19 +3,19 @@
 import { useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { removeQrAction, saveCoachSettingsAction, uploadQrAction, type SettingsInput } from "@/actions/coach";
-import { LESSON_MINUTES, QR_UPLOAD_MAX_BYTES } from "@/lib/domain/coaching";
+import { removePhotoAction, removeQrAction, saveCoachSettingsAction, uploadPhotoAction, uploadQrAction, type SettingsInput } from "@/actions/coach";
+import { COACH_PHOTO_MAX_BYTES, LESSON_MINUTES, QR_UPLOAD_MAX_BYTES } from "@/lib/domain/coaching";
 import { formatLevel, LEVEL_STEPS } from "@/lib/domain/levels";
 import { HowThisWorks } from "./HowThisWorks";
 import { OffersEditor } from "./OffersEditor";
 import { PromptPayQr } from "./PromptPayQr";
 
-type Props = { initial: SettingsInput; hasQr: boolean; qrUrl: string | null; currency: string };
+type Props = { initial: SettingsInput; hasQr: boolean; qrUrl: string | null; currency: string; hasPhoto: boolean; photoUrl: string };
 
 const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + i))));
 
 /** One form, saved with one button. Words over widgets: hours are typed the way a coach says them. */
-export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
+export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photoUrl }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const locale = useLocale();
@@ -25,7 +25,15 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const days = weekdayNames(locale);
+  // Exactly the four things a player told us they compare on and could not find.
+  const gaps = [
+    !hasPhoto ? t("settings.gapPhoto") : null,
+    !v.bio?.trim() ? t("settings.gapBio") : null,
+    v.priceSingle == null ? t("settings.gapPrice") : null,
+    v.teachesLevelMin == null && v.teachesLevelMax == null ? t("settings.gapLevels") : null,
+  ].filter((x): x is string => Boolean(x));
   const order = [1, 2, 3, 4, 5, 6, 0];
 
   const set = <K extends keyof SettingsInput>(k: K, val: SettingsInput[K]) => setV((s) => ({ ...s, [k]: val }));
@@ -43,6 +51,22 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
       setSaved(true);
       router.refresh();
     });
+  };
+
+  const uploadPhoto = (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > COACH_PHOTO_MAX_BYTES) {
+      setError(t("settings.qrTooBig"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () =>
+      start(async () => {
+        const r = await uploadPhotoAction(String(reader.result));
+        if (!r.ok) setError(t("settings.qrTooBig"));
+        router.refresh();
+      });
+    reader.readAsDataURL(file);
   };
 
   const upload = (file: File | undefined) => {
@@ -206,6 +230,43 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
           {t("settings.whatsapp")}
           <input className="input mt-1" value={v.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} inputMode="tel" placeholder="+66…" maxLength={20} />
           <span className="mt-1 block text-xs font-normal text-muted">{t("settings.whatsappHelp")}</span>
+        </label>
+        {/* A student walk reached the booking button for all three listed coaches and could not
+            answer "is this coach any good" for any of them. This says so, to the one person who
+            can fix it, and only once they are actually listed. */}
+        {v.isPublic && gaps.length > 0 && (
+          <div className="rounded-2xl bg-warn-soft px-4 py-3" data-testid="card-gaps">
+            <p className="text-sm font-extrabold">{t("settings.cardGapTitle")}</p>
+            <p className="mt-1 text-xs text-ink-soft">{t("settings.cardGap", { gaps: gaps.join(", ") })}</p>
+          </div>
+        )}
+        <div>
+          <span className="text-sm font-bold">{t("settings.photo")}</span>
+          <div className="mt-2 flex items-center gap-3">
+            {hasPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoUrl} alt="" width={64} height={64} className="size-16 rounded-full object-cover" data-testid="settings-photo" />
+            ) : (
+              <span aria-hidden className="grid size-16 place-items-center rounded-full bg-bg text-xl font-extrabold text-faint">{(v.displayName || "?").slice(0, 1).toUpperCase()}</span>
+            )}
+            <span className="flex flex-wrap gap-2">
+              <input ref={photoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => uploadPhoto(e.target.files?.[0])} data-testid="photo-input" />
+              <button type="button" className="btn-secondary btn-sm" disabled={pending} onClick={() => photoRef.current?.click()}>
+                {hasPhoto ? tRoot("common.edit") : t("settings.photo")}
+              </button>
+              {hasPhoto && (
+                <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => start(async () => { await removePhotoAction(); router.refresh(); })}>
+                  {tRoot("common.remove")}
+                </button>
+              )}
+            </span>
+          </div>
+          <span className="mt-2 block text-xs text-muted">{t("settings.photoHelp")}</span>
+        </div>
+        <label className="block text-sm font-bold">
+          {t("settings.bio")}
+          <textarea className="input mt-1" rows={3} value={v.bio} onChange={(e) => set("bio", e.target.value)} maxLength={300} data-testid="settings-bio" />
+          <span className="mt-1 block text-xs font-normal text-muted">{t("settings.bioHelp")}</span>
         </label>
         <label className="flex items-center gap-2 text-sm font-bold">
           <input type="checkbox" checked={v.isPublic} onChange={(e) => set("isPublic", e.target.checked)} /> {t("settings.public")}

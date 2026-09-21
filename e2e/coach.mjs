@@ -6,6 +6,8 @@ const browser = await launch();
 const results = [];
 const check = makeCheck(results);
 const TG_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret";
+/** One transparent pixel: the smallest thing that is really a PNG. */
+const PNG_1PX = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 const hook = (update) => fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": TG_SECRET }, body: JSON.stringify(update) }).then((r) => r.json());
 /** What a prompt() answers with. Confirms are accepted either way; a prompt gets this text. */
 const promptText = { value: "" };
@@ -428,6 +430,12 @@ try {
   await olga.getByRole("checkbox", { name: /Listed publicly/ }).check();
   // The browser here runs in UTC; a Phuket coach's phone says Asia/Bangkok, which is what puts her on the Phuket list.
   await olga.getByLabel("Time zone").fill("Asia/Bangkok");
+  // Listed with nothing anybody can compare on. The screen says so, to the one person who can fix it.
+  check("a listed coach is told what their card is missing", (await olga.getByTestId("card-gaps").count()) === 1 && (await olga.getByTestId("card-gaps").innerText()).includes("no photo"));
+  // A face and a line in her own words: a student walk could not tell three real coaches from test data.
+  await olga.getByTestId("photo-input").setInputFiles({ name: "olga.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+  await olga.getByTestId("settings-photo").waitFor({ timeout: 20000 });
+  await olga.getByTestId("settings-bio").fill("Ten years on clay. I am good with a backhand that has given up.");
   // Who she is for: the thing that made three coaches read alike. "Anyone can book" comes later, so
   // the assistant walk below still meets the closed door it was written for.
   await olga.getByTestId("teaches-min").selectOption("2");
@@ -491,6 +499,11 @@ try {
   // A card may only name a free hour a stranger can take. Olga's door is open, so hers names one;
   // with the door shut the same card used to promise an hour her page then refused to show.
   check("an open coach's card names a free hour", (await olgaCard.getByTestId("card-next-free").innerText()).startsWith("Next free:"));
+  // The three things a player said they had nothing of: a face, her own words, and something she
+  // did not type. The last one is what told them the listing was real and not three test rows.
+  check("the card carries a face, her own words and a line she did not write", (await olgaCard.getByTestId("card-photo").count()) === 1 && (await olgaCard.getByTestId("card-bio").innerText()).startsWith("Ten years on clay") && /On Kicksmash since \w+/.test(await olgaCard.getByTestId("card-proof").innerText()));
+  check("her own page carries the same face", (await ivan.goto(`${BASE}/c/${handle}`)) && (await ivan.getByTestId("coach-photo").count()) === 1);
+  await ivan.goto(`${BASE}/coaches`);
   await olga.goto(BASE + "/coach/settings");
   await olga.getByTestId("open-booking").uncheck();
   await olga.getByRole("button", { name: "Save" }).click();

@@ -10,7 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn, sameHoursEveryDay } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, busyBetween, coachCity, DAY_MS, getCoachByHandle, getCoachForActor, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, busyBetween, coachCity, DAY_MS, getCoachByHandle, getCoachForActor, hasPhoto, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { notifyStudentJoined } from "@/lib/coach/notify";
@@ -108,6 +108,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const owed = accepted && me ? await owedBy(db, coach, me.id) : null;
   // The packages on offer: everybody sees the prices, and a student on the list can take one.
   const packageOffers = await listOffers(db, coach.id);
+  const photo = (await hasPhoto(db, [coach.id])).has(coach.id);
   const pay = { promptpay: Boolean(coach.promptpayId), link: coach.payLink || null, atClub: coach.payAtClub };
   const url = `${baseUrl()}/c/${coach.handle}`;
   const jsonLd = {
@@ -129,7 +130,14 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
         <section className="card">
           <span className="chip-muted">🎾 {t("page.coach")}</span>
           {founding && <span className="chip-muted ml-2">🏅 {foundingCity ? t("page.founding", { city: foundingCity }) : t("page.foundingPlain")}</span>}
-          <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{coach.displayName}</h1>
+          {/* A player arriving from a forwarded link had no way to tell this was really their coach. */}
+          <div className="mt-3 flex items-center gap-3">
+            {photo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`/c/${coach.handle}/photo?v=${coach.updatedAt.getTime()}`} alt="" width={64} height={64} className="size-16 shrink-0 rounded-full object-cover" data-testid="coach-photo" />
+            )}
+            <h1 className="min-w-0 text-3xl font-extrabold leading-tight tracking-tight">{coach.displayName}</h1>
+          </div>
           <p className="mt-1 text-sm text-muted">
             {/* "at Warehaus" was a word. The club's page lists its coaches and its open matches, and nothing led there. */}
             {coach.clubNames.length > 0 && (
