@@ -1,5 +1,5 @@
 import { transliterate } from "@/lib/translit";
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { newCoachCode } from "@/lib/codes";
 import { clubs, coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
@@ -1345,6 +1345,76 @@ export async function lowPackages(db: Db, coachId: string, now = new Date()): Pr
 
 export const QR_UPLOAD_MAX_BYTES = 400_000;
 
+// ---------------------------------------------------------------- what a player judges a coach on
+
+/** A face is the heaviest of the three, and a phone photo is bigger than a QR picture. */
+export const COACH_PHOTO_MAX_BYTES = 1_200_000;
+/** Below this, a count says "new" rather than "trusted", so the card says nothing about it. */
+export const PROOF_LESSONS_FROM = 5;
+
+/**
+ * The coach's own photo. It hangs off `coach_assets` by kind rather than a column on `coaches`,
+ * because the QR already proved the table and a face needs no second foreign key.
+ */
+export async function setCoachPhoto(db: Db, coachId: string, mime: string, dataBase64: string): Promise<void> {
+  if (!/^image\/(png|jpeg|webp)$/.test(mime)) throw new DomainError("invalid", "mime");
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(dataBase64) || Buffer.from(dataBase64, "base64").length > COACH_PHOTO_MAX_BYTES) throw new DomainError("invalid", "size");
+  await db.delete(coachAssets).where(and(eq(coachAssets.coachId, coachId), eq(coachAssets.kind, "photo")));
+  await db.insert(coachAssets).values({ coachId, kind: "photo", mime, dataBase64: dataBase64.replace(/\s+/g, "") });
+  await db.update(coaches).set({ updatedAt: new Date() }).where(eq(coaches.id, coachId));
+}
+
+export async function removeCoachPhoto(db: Db, coachId: string): Promise<void> {
+  await db.delete(coachAssets).where(and(eq(coachAssets.coachId, coachId), eq(coachAssets.kind, "photo")));
+  await db.update(coaches).set({ updatedAt: new Date() }).where(eq(coaches.id, coachId));
+}
+
+export async function getCoachPhoto(db: Db, coachId: string): Promise<{ mime: string; bytes: Buffer } | null> {
+  const [row] = await db
+    .select({ mime: coachAssets.mime, data: coachAssets.dataBase64 })
+    .from(coachAssets)
+    .where(and(eq(coachAssets.coachId, coachId), eq(coachAssets.kind, "photo")))
+    .limit(1);
+  return row ? { mime: row.mime, bytes: Buffer.from(row.data, "base64") } : null;
+}
+
+/** Which of these coaches has a face, in one query — never the bytes, a directory only needs the yes. */
+export async function hasPhoto(db: Db, coachIds: string[]): Promise<Set<string>> {
+  if (coachIds.length === 0) return new Set();
+  const rows = await db.select({ coachId: coachAssets.coachId }).from(coachAssets).where(and(inArray(coachAssets.coachId, coachIds), eq(coachAssets.kind, "photo")));
+  return new Set(rows.map((r) => r.coachId));
+}
+
+export type CoachProof = { since: Date; lessonsDone: number };
+
+/**
+ * The part of a card the coach cannot write: how long they have been here, and how many lessons
+ * they have actually given. A student walk could not tell three real coaches from test data, and
+ * nothing a coach types about themselves would have answered that. One query for the whole list.
+ */
+export async function proofForCoaches(db: Db, coaches_: Pick<Coach, "id" | "createdAt">[]): Promise<Map<string, CoachProof>> {
+  const out = new Map<string, CoachProof>();
+  for (const c of coaches_) out.set(c.id, { since: c.createdAt, lessonsDone: 0 });
+  if (coaches_.length === 0) return out;
+  const rows = await db
+    .select({ coachId: lessons.coachId, n: count() })
+    .from(lessons)
+    .where(and(inArray(lessons.coachId, coaches_.map((c) => c.id)), eq(lessons.status, "done")))
+    .groupBy(lessons.coachId);
+  for (const r of rows) {
+    const cur = out.get(r.coachId);
+    if (cur) cur.lessonsDone = Number(r.n);
+  }
+  return out;
+}
+
+/** What the card may say out loud: a count only once it means something. */
+export const proofLine = (p: CoachProof): { since: string; lessonsDone: number | null } => ({
+  since: p.since.toISOString(),
+  lessonsDone: p.lessonsDone >= PROOF_LESSONS_FROM ? p.lessonsDone : null,
+});
+
+
 /** Stores the coach's own payment QR picture (their bank's), replacing any previous one. */
 export async function setCoachQr(db: Db, coachId: string, mime: string, dataBase64: string): Promise<void> {
   if (!/^image\/(png|jpeg|webp)$/.test(mime)) throw new DomainError("invalid", "mime");
@@ -1509,9 +1579,13 @@ export async function offersForCoaches(db: Db, coachIds: string[]): Promise<Map<
  * name an hour their page then refused to show. And a price is a number or it is nothing: the card
  * never sends a reader somewhere else to find one.
  */
-export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[] = [], now = new Date()) {
+export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[] = [], now = new Date(), judge: { photo?: boolean; proof?: CoachProof } = {}) {
   const canBookNow = coach.openBooking;
   return {
+    /** A face, served from `/c/{handle}/photo`. A player could not tell three real coaches from test data. */
+    photo: Boolean(judge.photo),
+    /** The half of the card the coach cannot write. */
+    proof: judge.proof ? proofLine(judge.proof) : null,
     handle: coach.handle,
     displayName: coach.displayName,
     clubNames: coach.clubNames,

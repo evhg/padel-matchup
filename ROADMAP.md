@@ -377,6 +377,21 @@ Everything in this list is live. The README describes each in detail.
   the coach can block a person: no booking, no asking, and the student link stops working for them.
   The row stays, so the lessons they took and anything they owe stay on the book.
 
+- **What a player judges a coach on (21 September 2026).** A stakeholder audit walked six people
+  through the live site. Both students reached the booking button in two taps and neither could
+  decide: the card said the price was on the coach's page and the page had no price, it named a free
+  hour for a coach whose page showed a stranger no hours at all, and no coach had a face, a sentence
+  of their own, or anything to show the three listings were not test rows. The price slot now holds
+  a number or nothing, and takes the hour out of the cheapest package where that is all a coach
+  sells. A free hour is named only for a coach somebody can actually book. Each card carries the
+  coach's photo, their own line, and the one thing they cannot write: the day they arrived and the
+  lessons they have really given, once there are enough to mean anything. The coach's settings
+  screen names what is missing while they are listed without it. Reviews are deliberately not built:
+  they need moderation and a dispute path, and with four lessons ever they would show nothing.
+  Separately, "everything stays free for them" on the coach's door said free was for the first ten,
+  which is the loudest objection in this market printed back at the reader on the page that answers
+  it. Free is unconditional now; the badge is the scarce thing.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

@@ -2,7 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { acceptByInvite, blockTime, bookLesson, busyForCoaches, coachCardFacts, createCoach, nextFree, NO_BUSY, offersForCoaches, openHour, packagePriceFrom, presetHours, priceFrom, requestStudent, saveOffers, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
 import { decideRequest, listOpenRequests, requestOrBook } from "@/lib/coach/chains";
+import { getCoachPhoto, hasPhoto, PROOF_LESSONS_FROM, proofForCoaches, proofLine, removeCoachPhoto, setCoachPhoto } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
+import { eq } from "drizzle-orm";
+import { lessons } from "@/db/schema";
 
 /**
  * The player's side of the directory: what a card says, and whether a stranger can take an hour.
@@ -299,5 +302,93 @@ describe("a card keeps what it promises", () => {
     expect(coachCardFacts(open, NO_BUSY, [], before).nextFree).toBe(at(0).toISOString());
     expect(coachCardFacts(asks, NO_BUSY, [], before).nextFree).toBeNull();
     expect(coachCardFacts(asks, NO_BUSY, [], before).canBookNow).toBe(false);
+  });
+});
+
+/**
+ * What a player judges on. A student walk reached the booking button for three real coaches and
+ * could not answer "is this coach any good" for any of them: no face, no words of their own, and
+ * nothing to say the listing was not three test rows.
+ */
+describe("what a player judges a coach on", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const TZ = "Asia/Bangkok";
+  const monday = new Date("2026-10-05T00:00:00.000Z");
+  const at = (h: number) => new Date(monday.getTime() + h * HOUR);
+  const before = new Date(monday.getTime() - 2 * HOUR);
+  // The smallest real PNG: one transparent pixel.
+  const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+  const aCoach = async (name: string, patch: Parameters<typeof updateCoach>[2] = {}) => {
+    const p = await makePlayer(db, name);
+    const coach = await createCoach(db, { playerId: p.id, displayName: name, tz: TZ, hours: presetHours("mornings") });
+    return Object.keys(patch).length ? updateCoach(db, coach.id, patch) : coach;
+  };
+
+  it("keeps one photo per coach, and gives it back", async () => {
+    const one = await aCoach("Kim");
+    const two = await aCoach("Lou");
+    expect(await hasPhoto(db, [one.id, two.id])).toEqual(new Set());
+
+    await setCoachPhoto(db, one.id, "image/png", PNG);
+    expect([...(await hasPhoto(db, [one.id, two.id]))]).toEqual([one.id]);
+    expect((await getCoachPhoto(db, one.id))?.mime).toBe("image/png");
+
+    // A second upload replaces the first rather than stacking: a coach has one face.
+    await setCoachPhoto(db, one.id, "image/webp", PNG);
+    expect((await getCoachPhoto(db, one.id))?.mime).toBe("image/webp");
+    expect([...(await hasPhoto(db, [one.id]))]).toEqual([one.id]);
+
+    await removeCoachPhoto(db, one.id);
+    expect(await hasPhoto(db, [one.id])).toEqual(new Set());
+    expect(await getCoachPhoto(db, one.id)).toBeNull();
+    // Neither a file that is not an image nor one over the ceiling gets in.
+    await expect(setCoachPhoto(db, one.id, "text/html", PNG)).rejects.toMatchObject({ code: "invalid" });
+    await expect(setCoachPhoto(db, one.id, "image/png", "A".repeat(2_000_000))).rejects.toMatchObject({ code: "invalid" });
+    expect(await hasPhoto(db, [])).toEqual(new Set());
+  });
+
+  it("counts the lessons a coach really gave, and stays quiet until the count means something", async () => {
+    const coach = await aCoach("Mira", { openBooking: true });
+    const quiet = await aCoach("Nils");
+    const student = await makePlayer(db, "Pia");
+    // Four done lessons is "new", not "trusted", so the card says nothing about the number.
+    for (const h of [1, 2, 3, 4]) {
+      const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at(h), byCoach: true, source: "web" }, before);
+      await db.update(lessons).set({ status: "done" }).where(eq(lessons.id, lesson.id));
+    }
+    let proof = await proofForCoaches(db, [coach, quiet]);
+    expect(proof.get(coach.id)!.lessonsDone).toBe(4);
+    expect(proofLine(proof.get(coach.id)!).lessonsDone).toBeNull();
+    // The fifth crosses it.
+    const { lesson } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at(5), byCoach: true, source: "web" }, before);
+    await db.update(lessons).set({ status: "done" }).where(eq(lessons.id, lesson.id));
+    proof = await proofForCoaches(db, [coach, quiet]);
+    expect(proof.get(coach.id)!.lessonsDone).toBe(PROOF_LESSONS_FROM);
+    expect(proofLine(proof.get(coach.id)!).lessonsDone).toBe(5);
+    // A coach who has given none is still in the map, with the day they arrived.
+    expect(proof.get(quiet.id)).toEqual({ since: quiet.createdAt, lessonsDone: 0 });
+    // A cancelled lesson is not a lesson given.
+    const { lesson: gone } = await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at(6), byCoach: true, source: "web" }, before);
+    await db.update(lessons).set({ status: "cancelled" }).where(eq(lessons.id, gone.id));
+    expect((await proofForCoaches(db, [coach])).get(coach.id)!.lessonsDone).toBe(5);
+    expect(await proofForCoaches(db, [])).toEqual(new Map());
+  });
+
+  it("puts the face and the proof on the card, and neither when there is neither", async () => {
+    const coach = await aCoach("Oona", { openBooking: true });
+    const bare = coachCardFacts(coach, NO_BUSY, [], before);
+    expect([bare.photo, bare.proof]).toEqual([false, null]);
+    await setCoachPhoto(db, coach.id, "image/png", PNG);
+    const proof = await proofForCoaches(db, [coach]);
+    const facts = coachCardFacts(coach, NO_BUSY, [], before, { photo: (await hasPhoto(db, [coach.id])).has(coach.id), proof: proof.get(coach.id) });
+    expect(facts.photo).toBe(true);
+    expect(facts.proof).toEqual({ since: coach.createdAt.toISOString(), lessonsDone: null });
   });
 });

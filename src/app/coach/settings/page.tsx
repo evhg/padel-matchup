@@ -11,7 +11,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { listManagers } from "@/lib/coach/chains";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
-import { coachBookContents, formatHoursLine, getCoachForActor, listOffers } from "@/lib/domain/coaching";
+import { coachBookContents, formatHoursLine, getCoachForActor, hasPhoto, listOffers } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export default async function CoachSettingsPage() {
   // Sequential after those two, not alongside them: the pooler stalls on pipelined bursts (rule 8).
   const contents = role === "coach" ? await coachBookContents(db, coach.id) : null;
   const offers = await listOffers(db, coach.id);
+  const photo = (await hasPhoto(db, [coach.id])).has(coach.id);
   return (
     <>
       <Header />
@@ -42,6 +43,8 @@ export default async function CoachSettingsPage() {
           currency={coach.currency}
           hasQr={Boolean(coach.qrAssetId)}
           qrUrl={coach.qrAssetId ? `/c/${coach.handle}/qr` : null}
+          hasPhoto={photo}
+          photoUrl={`/c/${coach.handle}/photo?v=${coach.updatedAt.getTime()}`}
           initial={{
             displayName: coach.displayName,
             clubs: coach.clubNames.join(", "),
@@ -63,6 +66,7 @@ export default async function CoachSettingsPage() {
             payLink: coach.payLink ?? "",
             whatsapp: coach.whatsapp ? `+${coach.whatsapp}` : "",
             isPublic: coach.isPublic,
+            bio: coach.bio ?? "",
             openBooking: coach.openBooking,
             approveNewBookings: coach.approveNewBookings,
             teachesLevelMin: coach.teachesLevelMin,

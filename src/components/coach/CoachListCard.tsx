@@ -25,9 +25,14 @@ export type CoachCardData = {
   /** Anyone may book without asking first. */
   openBooking: boolean;
   levels: { min: number | null; max: number | null };
+  /** A face, served from `/c/{handle}/photo`. */
+  photo: boolean;
+  /** The part of the card the coach cannot write: since when, and lessons actually given. */
+  proof: { since: string; lessonsDone: number | null } | null;
 };
 
 const languageName = (code: string) => (code === "ru" ? "Русский" : code === "es" ? "Español" : "English");
+const formatMonth = (d: Date, locale: string) => new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" }).format(d);
 
 /**
  * One coach in a list. It used to carry a name, a lesson length, a club and a language — and three
@@ -45,7 +50,17 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
         {coach.openBooking && <span className="chip-open">⚡ {t("cardOpenBooking")}</span>}
       </div>
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-xl font-extrabold tracking-tight">{coach.displayName}</h3>
+        <h3 className="flex min-w-0 items-center gap-2 text-xl font-extrabold tracking-tight">
+          {/* A player told us they were "gambling on a profile picture" — and this card did not even
+              have the picture. The initial is a placeholder, never a stock face. */}
+          {coach.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/c/${coach.handle}/photo`} alt="" width={40} height={40} className="size-10 shrink-0 rounded-full object-cover" loading="lazy" data-testid="card-photo" />
+          ) : (
+            <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-bg text-base font-extrabold text-faint">{coach.displayName.slice(0, 1).toUpperCase()}</span>
+          )}
+          <span className="truncate">{coach.displayName}</span>
+        </h3>
         {/* A price is a number or it is nothing. This slot has already printed the lesson length
             twice, and then sent a reader to a page that had no price on it either. If the coach
             sells only packages, the hour inside the cheapest one is a real number, so say that. */}
@@ -70,7 +85,15 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
       <p className={`text-sm font-bold ${free ? "text-ok" : "text-muted"}`} data-testid="card-next-free">
         {!coach.canBookNow ? t("cardAsk") : free ? t("cardNextFree", { when: `${formatEventDay(free, coach.tz, locale)} ${formatEventTime(free, coach.tz, locale)}` }) : t("cardNoFree")}
       </p>
-      {coach.bio && <p className="text-sm">{coach.bio}</p>}
+      {coach.bio && <p className="text-sm" data-testid="card-bio">{coach.bio}</p>}
+      {/* Nothing here is typed by the coach, which is the point: it is the only line on the card a
+          coach cannot dress up, and it was the missing answer to "is this real or three test rows?" */}
+      {coach.proof && (
+        <p className="text-xs text-faint" data-testid="card-proof">
+          {t("cardSince", { month: formatMonth(new Date(coach.proof.since), locale) })}
+          {coach.proof.lessonsDone != null ? ` · ${t("cardLessonsDone", { count: coach.proof.lessonsDone })}` : ""}
+        </p>
+      )}
       <Link href={`/c/${coach.handle}`} prefetch={false} className="btn-secondary w-full">
         {t(coach.openBooking ? "cardBook" : "open", { name: coach.displayName })}
       </Link>

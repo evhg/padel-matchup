@@ -1529,7 +1529,17 @@
       "teaches": "Levels you teach",
       "teachesHelp": "Shown on your card in the directory, so a player knows whether you are for them. Leave both empty if you take everybody.",
       "approveNew": "I answer a first booking myself",
-      "approveNewHelp": "Somebody you never taught picks a time and you say yes or no. Anyone who was on your list before books straight through."
+      "approveNewHelp": "Somebody you never taught picks a time and you say yes or no. Anyone who was on your list before books straight through.",
+      "photo": "Your photo",
+      "photoHelp": "A player picking between coaches looks for a face first. It goes on your page and on your card in the directory.",
+      "bio": "A line about you",
+      "bioHelp": "Who you coach and what you are good at, in your own words. Two sentences is plenty. It is the only part of your card you write yourself.",
+      "cardGapTitle": "Your card is missing what players choose on",
+      "cardGap": "You are listed, and a player comparing coaches sees: {gaps}. Fill those in and your card answers them instead of sending them away.",
+      "gapPhoto": "no photo",
+      "gapBio": "nothing in your own words",
+      "gapPrice": "no price",
+      "gapLevels": "no levels"
     },
     "page": {
       "owedTitle": "To pay",
@@ -1831,7 +1841,9 @@
     "cardOpenBooking": "Book without asking",
     "cardBook": "Book with {name}",
     "cardFromPackage": "from {amount} in a package",
-    "cardAsk": "Ask to become a student first"
+    "cardAsk": "Ask to become a student first",
+    "cardSince": "On Kicksmash since {month}",
+    "cardLessonsDone": "{count, plural, one {# lesson given here} other {# lessons given here}}"
   },
   "moments": {
     "title": "Your moments",
