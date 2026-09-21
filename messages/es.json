@@ -1819,7 +1819,8 @@
     "cardNoFree": "Sin horas libres en las próximas dos semanas.",
     "cardLevels": "Entrena niveles {levels}",
     "cardOpenBooking": "Reserva sin pedir permiso",
-    "cardBook": "Reservar con {name}"
+    "cardBook": "Reservar con {name}",
+    "cardAskPrice": "Precio en su página"
   },
   "moments": {
     "title": "Tus momentos",

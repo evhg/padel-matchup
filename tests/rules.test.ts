@@ -152,6 +152,18 @@ describe("no Date reaches a raw sql template", () => {
     );
   }
 
+  it("a directory card never puts the lesson length where the price goes", () => {
+    // Live on kicksma.sh for four minutes: a coach with no price got the lesson length in the price
+    // slot, and the line right under it says the lesson length too. The card printed "60-minute
+    // lessons" twice and answered nothing a player asked.
+    const src = readFileSync(root("src/components/coach/CoachListCard.tsx"), "utf8");
+    const from = src.indexOf("tabular-nums");
+    const slot = src.slice(from, src.indexOf("</span>", from));
+    expect(from).toBeGreaterThan(0);
+    expect(slot).toContain("cardAskPrice");
+    expect(slot).not.toContain("page.lesson");
+  });
+
   it("every interpolation inside sql`…` is a column or a plain value, never a time", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(root("src"))) {

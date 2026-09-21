@@ -479,6 +479,11 @@ try {
   const olgaCard = ivan.getByTestId("coach-list-card").filter({ hasText: "Olga" });
   check("the player's list carries the coach, and the card answers what a player asks", (await olgaCard.count()) === 1 && (await olgaCard.getByText("from 800 THB").count()) === 1 && (await olgaCard.getByTestId("card-levels").getByText(/2\.0.4\.5/).count()) === 1 && (await olgaCard.getByTestId("card-next-free").getByText(/Next free/).count()) === 1);
   check("and the card says she takes anybody, with a button that says so", (await olgaCard.getByText("Book without asking").count()) === 1 && (await olgaCard.getByRole("link", { name: "Book with Olga" }).count()) === 1);
+  // A priced card says the price where the price goes. It used to fall back to the lesson length
+  // there, which the line below already carries, so an unpriced coach printed it twice and told
+  // nobody anything.
+  const olgaText = await olgaCard.innerText();
+  check("the card says the lesson length once, and never in place of the price", (olgaText.match(/60-minute lessons/g) ?? []).length === 1 && !olgaText.includes("Price on their page"), olgaText.replace(/\n/g, " · "));
   await shot(ivan, "68-coach-directory");
   // The coach's own door is one line at the foot of the list, not the list itself.
   check("the coach's door sits at the foot of the player's list", (await ivan.getByText(/^Padel coach\? Your students book themselves, and your calendar stays yours\.$/).count()) === 1 && (await ivan.getByRole("link", { name: "Set up your lessons" }).getAttribute("href")) === "/coaches/join?s=coachlist");

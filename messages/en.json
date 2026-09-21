@@ -1819,7 +1819,8 @@
     "cardNoFree": "No free hours in the next two weeks.",
     "cardLevels": "Teaches {levels}",
     "cardOpenBooking": "Book without asking",
-    "cardBook": "Book with {name}"
+    "cardBook": "Book with {name}",
+    "cardAskPrice": "Price on their page"
   },
   "moments": {
     "title": "Your moments",

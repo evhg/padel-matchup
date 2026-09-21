@@ -1819,7 +1819,8 @@
     "cardNoFree": "Нет свободных часов в ближайшие две недели.",
     "cardLevels": "Работает с уровнями {levels}",
     "cardOpenBooking": "Запись без запроса",
-    "cardBook": "Записаться к {name}"
+    "cardBook": "Записаться к {name}",
+    "cardAskPrice": "Цена на его странице"
   },
   "moments": {
     "title": "Ваши моменты",
