@@ -90,6 +90,16 @@ try {
   check("the city page lists the club with its booking button", (await page.getByRole("link", { name: CLUB }).count()) >= 1 && (await page.getByRole("link", { name: "Book on MATCHi" }).count()) >= 1);
   await page.goto(`${BASE}/clubs`);
   check("/clubs lists it under Phuket with nine founding places left", (await page.getByRole("link", { name: CLUB }).count()) === 1 && (await page.getByText("9 founding places left in Phuket").count()) === 1);
+  // A club owner's first move is to look for their own club, and there was no box to type it into
+  // on any page of the site. One of them spent seven of his ten minutes proving an absence.
+  await page.getByTestId("club-search").fill(CLUB.slice(0, 6));
+  await page.getByRole("button", { name: "Find a club" }).click();
+  check("the search finds a club by a piece of its name", (await page.getByRole("link", { name: CLUB }).count()) === 1);
+  await page.goto(`${BASE}/clubs?q=zzzznotaclub`);
+  check("and says so plainly when nothing matches", (await page.getByTestId("club-search-none").count()) === 1 && (await page.getByRole("link", { name: CLUB }).count()) === 0);
+  // The URL an owner guesses. It was a 404; a club's page is its board.
+  await page.goto(`${BASE}/clubs/${SLUG}`);
+  check("the URL a club owner guesses lands on the club's page", page.url().endsWith(`/v/${SLUG}`));
 
   await page.goto(`${BASE}/new`);
   await page.getByLabel(/Venue/).click();

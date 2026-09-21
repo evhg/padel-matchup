@@ -8,7 +8,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
 import { countryName } from "@/lib/domain/countries";
-import { CLUB_LIMITS, listLiveClubs } from "@/lib/domain/clubs";
+import { CLUB_LIMITS, listShownClubs } from "@/lib/domain/clubs";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +19,15 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title, description: t("club.metaDescription"), alternates: localeAlternates("/clubs", locale), openGraph: { title, description: t("club.metaDescription"), type: "website", url: `${baseUrl()}/clubs` } };
 }
 
-/** /clubs: what a club page is, the founding offer, the live clubs by city, the claim button. */
-export default async function ClubsPage() {
+/** /clubs: what a club page is, the founding offer, every club we may show, and the claim button. */
+export default async function ClubsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const db = await getDb();
-  const [t, locale, clubs] = await Promise.all([getTranslations(), getLocale(), listLiveClubs(db)]);
+  const [t, locale, all, sp] = await Promise.all([getTranslations(), getLocale(), listShownClubs(db), searchParams]);
+  // A club owner's first move is to look for their own club, and there was no box anywhere on the
+  // site to type its name into. A form, not a script: it works before the JavaScript arrives.
+  const q = (sp.q ?? "").trim().slice(0, 60);
+  const needle = q.toLowerCase();
+  const clubs = needle ? all.filter((c) => [c.name, c.province, c.city].some((f) => f?.toLowerCase().includes(needle))) : all;
   const byCity = new Map<string, typeof clubs>();
   for (const c of clubs) {
     const key = c.city ?? "other";
@@ -57,6 +62,16 @@ export default async function ClubsPage() {
           <Link href="/clubs/claim" prefetch={false} className="btn-primary mt-4 w-full">
             {t("club.claimCta")}
           </Link>
+          <form action="/clubs" method="get" className="mt-4 flex gap-2" role="search">
+            <label className="sr-only" htmlFor="club-q">
+              {t("club.searchLabel")}
+            </label>
+            <input id="club-q" name="q" defaultValue={q} className="input flex-1" placeholder={t("club.searchPlaceholder")} maxLength={60} data-testid="club-search" />
+            <button type="submit" className="btn-secondary shrink-0">
+              {t("club.searchLabel")}
+            </button>
+          </form>
+          {q && clubs.length === 0 && <p className="mt-3 text-sm text-muted" data-testid="club-search-none">{t("club.searchNone")}</p>}
         </section>
 
         <section className="card">

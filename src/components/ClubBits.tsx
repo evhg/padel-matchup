@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
 import { formatEventTime } from "@/lib/dates";
-import { freeCourtHours } from "@/lib/domain/clubs";
+import { isClubLive, freeCourtHours } from "@/lib/domain/clubs";
 
 /** Small server pieces shared by the club page, the city pages and the clubs index. */
 
@@ -75,6 +75,8 @@ export async function ClubRow({ club, now = new Date() }: { club: Club; now?: Da
         </Link>
         <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
           {club.founding && <span>🌱 {t("club.foundingBadge")}</span>}
+          {/* A club nobody has claimed is shown, and says so. The reader is told who stands behind it. */}
+          {!isClubLive(club) && <span className="text-faint">{t("club.notClaimed")}</span>}
           {club.province && !club.city && <span>📍 {club.province}</span>}
           {club.courts ? <span>{t("club.courtsCount", { count: club.courts })}</span> : null}
           {hours != null && <span className={hours > 0 ? "text-ok" : ""}>{hours > 0 ? t("club.freeHours", { count: hours }) : t("club.freeNone")}</span>}

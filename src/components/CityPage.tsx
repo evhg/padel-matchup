@@ -12,14 +12,14 @@ import { getCityBoard } from "@/lib/domain/venueBoard";
 import { listSeries } from "@/lib/domain/series";
 import { rhythmLabel } from "@/lib/seriesText";
 import { ClubRow } from "@/components/ClubBits";
-import { CLUB_LIMITS, listLiveClubs } from "@/lib/domain/clubs";
+import { CLUB_LIMITS, listShownClubs } from "@/lib/domain/clubs";
 import { rangeChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
 
 /** /phuket, /singapore: open matches across the city's clubs, the city ranking, and the pitch in four lines. */
 export async function CityPage({ city }: { city: City }) {
   const db = await getDb();
-  const [t, locale, me, board, ranking, clubs, opens] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listLiveClubs(db, city.slug), listSeries(db, city)]);
+  const [t, locale, me, board, ranking, clubs, opens] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listShownClubs(db, city.slug), listSeries(db, city)]);
   const liveSlugs = new Set(clubs.map((c) => c.slug));
   const otherClubs = board.clubs.filter((c) => !liveSlugs.has(c.slug));
   const foundingLeft = Math.max(0, CLUB_LIMITS.foundingPerCity - clubs.filter((c) => c.founding).length);

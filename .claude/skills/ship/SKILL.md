@@ -123,6 +123,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **Write the regression test with the fix, in the same pull request.** The test that catches a
   notification rendering as its own message key took twenty minutes, and was written after the bug
   rather than with the feature that introduced it.
+- **When you break the guard, check the test fails for the reason you think.** A test for "a rejected
+  club is never shown" set `rejectedAt` *and* flipped `source` to `claim`. Deleting the whole
+  rejection check left all ten tests green: the row was failing the other half of the condition, so
+  the test proved nothing about the line it was written for. A fixture that satisfies two reasons to
+  fail tests neither. Set up the row so the guard under test is the only thing standing between it
+  and the wrong answer, then break the guard and watch that named test go red.
 - **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
   the bug back, watch it catch it, then restore.
 - **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one

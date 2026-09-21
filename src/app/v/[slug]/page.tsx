@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
@@ -10,7 +11,7 @@ import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
-import { getClub, isClubLive } from "@/lib/domain/clubs";
+import { getClub, isClubListed, isClubLive } from "@/lib/domain/clubs";
 import { getSessionPlayerId } from "@/lib/session";
 import { listCourts } from "@/lib/domain/courts";
 import { coachesAtClub } from "@/lib/domain/coaching";
@@ -44,6 +45,11 @@ export default async function VenueBoardPage({ params }: Props) {
   const [boardRow, clubRow] = await Promise.all([getVenueBoard(db, slug), getClub(db, slug)]);
   // A live club page stands even before its first match; an unclaimed venue needs one.
   const club = isClubLive(clubRow) ? clubRow : null;
+  // What we may show about this club, theirs or ours. A club Kicksmash listed from public sources
+  // has a name, a place, a court count and a booking link, and hiding all of it behind a claim that
+  // nobody had made left sixty-six clubs invisible to the very owners who might claim them.
+  const shown = isClubListed(clubRow) ? clubRow! : null;
+  const unclaimed = shown && !club ? shown : null;
   const courts = club ? await listCourts(db, club.slug) : [];
   // A claimed club whose check is still to come has a page too, for the person who claimed it: the
   // board, empty, under its name, opened from the done screen. To anybody else nothing of a pending
@@ -52,7 +58,7 @@ export default async function VenueBoardPage({ params }: Props) {
   const known = club ?? (pending?.claimedBy && pending.claimedBy === (await getSessionPlayerId()) ? pending : null);
   if (!boardRow && !known) notFound();
   const board = boardRow ?? { slug, name: known!.name, mapUrl: known!.mapUrl, events: [] };
-  const mapUrl = club?.mapUrl ?? board.mapUrl;
+  const mapUrl = shown?.mapUrl ?? board.mapUrl;
   const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, slug).catch(() => [])]);
   // A live club with a programme shows its week, day by day; matches beyond the week stay in the list below.
   const programme = club ? await listClubSlots(db, club.slug) : [];
@@ -68,11 +74,11 @@ export default async function VenueBoardPage({ params }: Props) {
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
           <span className="chip-muted">📍 {t("venue.board")}</span>
-          <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("venue.boardTitle", { venue: club?.name ?? board.name })}</h1>
-          <p className="mt-1 text-muted">{club?.about ?? t("venue.boardSub")}</p>
-          {club && (
+          <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("venue.boardTitle", { venue: shown?.name ?? board.name })}</h1>
+          <p className="mt-1 text-muted">{shown?.about ?? t("venue.boardSub")}</p>
+          {shown && (
             <div className="mt-3">
-              <ClubBadges club={club} />
+              <ClubBadges club={shown} />
               {courts.length > 0 && (
                 <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="club-courts" aria-label={t("club.courtsTitle")}>
                   {courts.map((c) => (
@@ -86,9 +92,9 @@ export default async function VenueBoardPage({ params }: Props) {
             </div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
-            {club && <BookingButton club={club} />}
-            {club?.website && (
-              <a href={club.website} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
+            {shown && <BookingButton club={shown} />}
+            {shown?.website && (
+              <a href={shown.website} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
                 🌐 {t("club.website")}
               </a>
             )}
@@ -99,6 +105,22 @@ export default async function VenueBoardPage({ params }: Props) {
             )}
           </div>
         </section>
+        {/* A club listed from public sources says so, on its own page, with both doors: the one that
+            makes it theirs and the one that fixes what is wrong. A directory that sends players
+            without a cut is free marketing; one that is wrong and unanswerable is a nuisance. */}
+        {unclaimed && (
+          <section className="card" data-testid="club-unclaimed">
+            <p className="text-sm text-muted">{t("club.unclaimed")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href={`/clubs/claim?name=${encodeURIComponent(unclaimed.name)}`} prefetch={false} className="btn-secondary btn-sm" data-testid="club-claim-door">
+                {t("club.isThisYours")}
+              </Link>
+            </div>
+            <div className="mt-3">
+              <FeedbackInline variant="line" signedInVia="none" />
+            </div>
+          </section>
+        )}
         {club && (club.availabilityUrl || club.availability) && (
           <section className="card">
             <h2 className="text-lg font-extrabold">{t("club.freeToday")}</h2>
