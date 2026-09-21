@@ -488,6 +488,22 @@ try {
   // The coach's own door is one line at the foot of the list, not the list itself.
   check("the coach's door sits at the foot of the player's list", (await ivan.getByText(/^Padel coach\? Your students book themselves, and your calendar stays yours\.$/).count()) === 1 && (await ivan.getByRole("link", { name: "Set up your lessons" }).getAttribute("href")) === "/coaches/join?s=coachlist");
 
+  // A card may only name a free hour a stranger can take. Olga's door is open, so hers names one;
+  // with the door shut the same card used to promise an hour her page then refused to show.
+  check("an open coach's card names a free hour", (await olgaCard.getByTestId("card-next-free").innerText()).startsWith("Next free:"));
+  await olga.goto(BASE + "/coach/settings");
+  await olga.getByTestId("open-booking").uncheck();
+  await olga.getByRole("button", { name: "Save" }).click();
+  await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+  await ivan.reload();
+  const shutCard = ivan.getByTestId("coach-list-card").filter({ hasText: "Olga" });
+  check("a coach who accepts students by hand asks instead of naming an hour", (await shutCard.getByTestId("card-next-free").innerText()) === "Ask to become a student first" && (await shutCard.getByText("Book without asking").count()) === 0);
+  await olga.goto(BASE + "/coach/settings");
+  await olga.getByTestId("open-booking").check();
+  await olga.getByRole("button", { name: "Save" }).click();
+  await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+  await ivan.reload();
+
   // ---- "Anyone can book": a stranger takes an hour, and the booking is the joining ----
   // The wall was the third click of every walk: three coach cards, then "Ask to become a student",
   // then nothing until a person answered. Nadia has never been here before.
@@ -550,6 +566,10 @@ try {
   // ---- Coaches arrive on their own: every coach-facing page is a door ----
   await ivan.goto(`${BASE}/coaches/join`);
   check("the front door for coaches renders with one button to the book", (await ivan.getByText("Your students book themselves. Your calendar stays yours.").count()) === 1 && (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach");
+  // "everything stays free for them" said the free part was for the first ten only, which is the
+  // coach's loudest objection printed back at them on the page that answers it.
+  const doorText = await ivan.locator("main").innerText();
+  check("the coach's door says free is for every coach, not for the first ten", doorText.includes("free for every coach") && !/free for them/.test(doorText));
   await ivan.goto(`${BASE}/coaches/join?s=invite`);
   check("a tagged front door passes the door on to the setup link", (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach?s=invite");
   // The door is for a visitor who is nobody here. Ivan is a student by now, and offering him his own

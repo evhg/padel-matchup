@@ -9,7 +9,7 @@ import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { CoachListCard } from "@/components/coach/CoachListCard";
 import { WantCoachForm } from "@/components/WantCoachForm";
 import { countCoachWants, shownCount } from "@/lib/domain/coachWants";
-import { busyForCoaches, coachCardFacts, listPublicCoaches, NO_BUSY } from "@/lib/domain/coaching";
+import { busyForCoaches, coachCardFacts, listPublicCoaches, NO_BUSY, offersForCoaches } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 import { localeAlternates } from "@/lib/seo";
 
@@ -39,7 +39,8 @@ export default async function CoachesInCityPage({ params }: Props) {
   const waiting = shownCount(await countCoachWants(db, city.slug));
   // One query for the whole list's busy time, so the free hour on each card costs no extra read (rule 12).
   const now = new Date();
-  const busy = await busyForCoaches(db, coaches.map((c) => c.id), now, new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000));
+  const ids = coaches.map((c) => c.id);
+  const [busy, offers] = await Promise.all([busyForCoaches(db, ids, now, new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)), offersForCoaches(db, ids)]);
   const base = baseUrl();
   const jsonLd = {
     "@context": "https://schema.org",
@@ -65,7 +66,7 @@ export default async function CoachesInCityPage({ params }: Props) {
           <ul className="flex flex-col gap-3" data-testid="coach-list">
             {/* The same card as the index, so a player compares on the same facts wherever they land. */}
             {coaches.map((c) => (
-              <CoachListCard key={c.id} coach={coachCardFacts(c, busy.get(c.id) ?? NO_BUSY, now)} locale={locale} foundingCity={city.name} />
+              <CoachListCard key={c.id} coach={coachCardFacts(c, busy.get(c.id) ?? NO_BUSY, offers.get(c.id) ?? [], now)} locale={locale} foundingCity={city.name} />
             ))}
           </ul>
         )}

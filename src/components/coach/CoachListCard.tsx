@@ -12,12 +12,16 @@ export type CoachCardData = {
   lessonMinutes: number;
   bio: string | null;
   founding: boolean;
-  /** The lowest of the coach's prices, and its currency. Null: this coach sells packages only. */
+  /** The lowest of the coach's single-lesson prices, and its currency. Null: packages only, or none set. */
   priceFrom: number | null;
+  /** Where there is no single price: the cheapest hour inside a package, and that package's size. */
+  packageFrom: { each: number; size: number } | null;
   currency: string;
-  /** The first hour they are free, as an ISO string, or null when nothing opens in a fortnight. */
+  /** The first hour they are free, or null. Null also when a stranger cannot take that hour. */
   nextFree: string | null;
   tz: string;
+  /** A stranger can pick an hour here today. Off: they must ask the coach and be accepted first. */
+  canBookNow: boolean;
   /** Anyone may book without asking first. */
   openBooking: boolean;
   levels: { min: number | null; max: number | null };
@@ -42,11 +46,14 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
       </div>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-xl font-extrabold tracking-tight">{coach.displayName}</h3>
-        {/* A coach with no price used to get the lesson length here, and the line below says the
-            lesson length too — so the card printed "60-minute lessons" twice and answered nothing. */}
-        <span className={`shrink-0 text-sm font-extrabold tabular-nums ${coach.priceFrom == null ? "font-bold text-muted" : ""}`}>
-          {coach.priceFrom != null ? t("cardFrom", { amount: `${coach.priceFrom} ${coach.currency}` }) : t("cardAskPrice")}
-        </span>
+        {/* A price is a number or it is nothing. This slot has already printed the lesson length
+            twice, and then sent a reader to a page that had no price on it either. If the coach
+            sells only packages, the hour inside the cheapest one is a real number, so say that. */}
+        {coach.priceFrom != null ? (
+          <span className="shrink-0 text-sm font-extrabold tabular-nums">{t("cardFrom", { amount: `${coach.priceFrom} ${coach.currency}` })}</span>
+        ) : coach.packageFrom ? (
+          <span className="shrink-0 text-right text-sm font-extrabold tabular-nums">{t("cardFromPackage", { amount: `${coach.packageFrom.each} ${coach.currency}` })}</span>
+        ) : null}
       </div>
       {/* The three lines a player reads before they choose: where, who it is for, and when they are free. */}
       <p className="text-sm text-muted">
@@ -58,8 +65,10 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
           🎚️ {t("cardLevels", { levels: coach.levels.min != null && coach.levels.max != null ? `${formatLevel(coach.levels.min)}–${formatLevel(coach.levels.max)}` : coach.levels.min != null ? `${formatLevel(coach.levels.min)}+` : `≤ ${formatLevel(coach.levels.max!)}` })}
         </p>
       )}
+      {/* Only a coach a stranger can book gets a free hour named here. The card used to promise an
+          hour for a coach whose page then showed a stranger no times at all. */}
       <p className={`text-sm font-bold ${free ? "text-ok" : "text-muted"}`} data-testid="card-next-free">
-        {free ? t("cardNextFree", { when: `${formatEventDay(free, coach.tz, locale)} ${formatEventTime(free, coach.tz, locale)}` }) : t("cardNoFree")}
+        {!coach.canBookNow ? t("cardAsk") : free ? t("cardNextFree", { when: `${formatEventDay(free, coach.tz, locale)} ${formatEventTime(free, coach.tz, locale)}` }) : t("cardNoFree")}
       </p>
       {coach.bio && <p className="text-sm">{coach.bio}</p>}
       <Link href={`/c/${coach.handle}`} prefetch={false} className="btn-secondary w-full">

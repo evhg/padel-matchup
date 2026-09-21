@@ -1083,7 +1083,7 @@
     "eyebrow": "Clubs",
     "sub": "A club page on Kicksmash: open matches, the club ranking, a poster for the courts, a booking button, and free courts when the club shares its calendar. Free for clubs, for good.",
     "founding": "Founding clubs",
-    "foundingBody": "The first ten clubs in each city that claim their page become founding clubs: board and poster, club ranking, website embed and free courts on the page stay free for good, and they get a direct line to what we build next. We ask for honest feedback and a poster by the courts.",
+    "foundingBody": "A club page is free, and stays free. The first ten clubs in each city that claim their page also become founding clubs: a founding badge, and a direct line to what we build next. We ask for honest feedback and a poster by the courts.",
     "foundingBadge": "Founding club",
     "foundingLeft": "{count, plural, =0 {No founding places left in {city}} one {# founding place left in {city}} other {# founding places left in {city}}}",
     "claimCta": "Claim your club",
@@ -1632,7 +1632,8 @@
       "foundingPlain": "Founding coach",
       "openBookingNote": "{name} lets anyone book a free hour. Pick a time and it is yours — no asking, no waiting.",
       "openBookingAskNote": "{name} takes anybody. Pick a free hour and {name} confirms it — usually the same day.",
-      "asked2": "Asked for {when}. {name} answers, and you hear as soon as they do."
+      "asked2": "Asked for {when}. {name} answers, and you hear as soon as they do.",
+      "howConfirm": "Tap a free time and {name} confirms it, usually the same day. Cancel up to {hours} hours before and nothing is charged. After that it uses one of your free late cancellations, and when those run out a late cancellation counts as a lesson taken. A package, if you have one, counts down under each lesson."
     },
     "me": {
       "title": "Your lessons",
@@ -1789,7 +1790,7 @@
     "telegramTitle": "Also from Telegram",
     "telegram": "Type “anna fri 15” and the lesson is booked, with an undo button. Your students write to the bot and get answers in their language while you are on court.",
     "foundingTitle": "Founding coaches",
-    "founding": "The first ten coaches listed in each city carry a founding badge on their page, and everything stays free for them.",
+    "founding": "Kicksmash is free for every coach, and stays free. The first ten listed in each city also carry a founding badge on their page and a direct line to what we build next.",
     "cities": "Coaches already listed:"
   },
   "coaches": {
@@ -1817,7 +1818,7 @@
     "wantFailed": "That did not save. Try again.",
     "indexEyebrow": "Coaches",
     "indexTitle": "Find a padel coach",
-    "indexLead": "Every coach who lists here, with what a lesson costs, when they are next free and the levels they teach. Book a free hour yourself where the coach allows it.",
+    "indexLead": "Every coach who lists here. Compare what they charge, when they are next free and the levels they teach, and book a free hour yourself where the coach allows it.",
     "indexMeta": "Padel coaches on Kicksmash: prices, the next free hour, languages and levels. Book a lesson yourself, no app and no signup.",
     "indexEmpty": "No coach has listed their page yet. Ask for one in your city and the first coach who lists there hears about it.",
     "indexCityMore": "All of them →",
@@ -1829,7 +1830,8 @@
     "cardLevels": "Teaches {levels}",
     "cardOpenBooking": "Book without asking",
     "cardBook": "Book with {name}",
-    "cardAskPrice": "Price on their page"
+    "cardFromPackage": "from {amount} in a package",
+    "cardAsk": "Ask to become a student first"
   },
   "moments": {
     "title": "Your moments",

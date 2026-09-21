@@ -1083,7 +1083,7 @@
     "eyebrow": "Clubes",
     "sub": "La página de un club en Kicksmash: partidos abiertos, ranking del club, un póster para las pistas, botón de reserva y pistas libres cuando el club comparte su calendario. Gratis para los clubes, para siempre.",
     "founding": "Clubes fundadores",
-    "foundingBody": "Los diez primeros clubes de cada ciudad que reclamen su página se convierten en clubes fundadores: tablón y póster, ranking del club, widget para la web y pistas libres en la página siguen siendo gratis para siempre, y tienen línea directa con lo que construimos después. A cambio pedimos opiniones sinceras y un póster junto a las pistas.",
+    "foundingBody": "La página de un club es gratis, y seguirá siéndolo. Los diez primeros clubes de cada ciudad que reclamen su página también se convierten en clubes fundadores: una insignia de fundador y una línea directa con lo que construimos después. Pedimos comentarios honestos y un póster junto a las pistas.",
     "foundingBadge": "Club fundador",
     "foundingLeft": "{count, plural, =0 {No quedan plazas de fundador en {city}} one {Queda # plaza de fundador en {city}} other {Quedan # plazas de fundador en {city}}}",
     "claimCta": "Reclama tu club",
@@ -1632,7 +1632,8 @@
       "foundingPlain": "Entrenador fundador",
       "openBookingNote": "{name} permite reservar una hora libre a cualquiera. Elige una hora y es tuya, sin pedir permiso ni esperar.",
       "openBookingAskNote": "{name} acepta a cualquiera. Elige una hora libre y {name} la confirma, normalmente el mismo día.",
-      "asked2": "Pedido para {when}. {name} responde y te avisamos en cuanto lo haga."
+      "asked2": "Pedido para {when}. {name} responde y te avisamos en cuanto lo haga.",
+      "howConfirm": "Elige una hora libre y {name} la confirma, normalmente el mismo día. Cancela con {hours} horas o más y no se cobra nada. Después usa una de tus cancelaciones tardías gratuitas, y cuando se acaben, una cancelación tardía cuenta como clase. El bono, si tienes uno, descuenta bajo cada clase."
     },
     "me": {
       "title": "Tus clases",
@@ -1789,7 +1790,7 @@
     "telegramTitle": "También desde Telegram",
     "telegram": "Escribe «ana vie 15» y la clase queda reservada, con botón de deshacer. Tus alumnos escriben al bot y reciben respuesta en su idioma mientras estás en la pista.",
     "foundingTitle": "Entrenadores fundadores",
-    "founding": "Los diez primeros entrenadores de cada ciudad llevan una insignia de fundador en su página, y para ellos todo sigue siendo gratis.",
+    "founding": "Kicksmash es gratis para todos los entrenadores, y seguirá siéndolo. Los diez primeros de cada ciudad también llevan una insignia de fundador en su página y una línea directa con lo que construimos después.",
     "cities": "Ya en la lista:"
   },
   "coaches": {
@@ -1817,7 +1818,7 @@
     "wantFailed": "No se guardó. Inténtalo de nuevo.",
     "indexEyebrow": "Entrenadores",
     "indexTitle": "Encuentra un entrenador de pádel",
-    "indexLead": "Todos los entrenadores listados, con el precio de la clase, su próxima hora libre y los niveles que entrenan. Reserva una hora libre tú mismo cuando el entrenador lo permita.",
+    "indexLead": "Todos los entrenadores que se listan aquí. Compara lo que cobran, cuándo tienen su próxima hora libre y los niveles que enseñan, y reserva una hora libre tú mismo donde el entrenador lo permita.",
     "indexMeta": "Entrenadores de pádel en Kicksmash: precios, la próxima hora libre, idiomas y niveles. Reserva tú mismo, sin app y sin registro.",
     "indexEmpty": "Ningún entrenador se ha listado todavía. Pide uno en tu ciudad y el primero que se liste lo sabrá.",
     "indexCityMore": "Todos →",
@@ -1829,7 +1830,8 @@
     "cardLevels": "Entrena niveles {levels}",
     "cardOpenBooking": "Reserva sin pedir permiso",
     "cardBook": "Reservar con {name}",
-    "cardAskPrice": "Precio en su página"
+    "cardFromPackage": "desde {amount} en un bono",
+    "cardAsk": "Primero pide ser alumno"
   },
   "moments": {
     "title": "Tus momentos",

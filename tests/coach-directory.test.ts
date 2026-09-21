@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { acceptByInvite, blockTime, bookLesson, busyForCoaches, coachCardFacts, createCoach, nextFree, NO_BUSY, openHour, presetHours, priceFrom, requestStudent, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
+import { acceptByInvite, blockTime, bookLesson, busyForCoaches, coachCardFacts, createCoach, nextFree, NO_BUSY, offersForCoaches, openHour, packagePriceFrom, presetHours, priceFrom, requestStudent, saveOffers, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
 import { decideRequest, listOpenRequests, requestOrBook } from "@/lib/coach/chains";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
@@ -75,7 +75,7 @@ describe("the coach directory", () => {
 
   it("puts on the card what a player chooses between", async () => {
     const coach = await aCoach("Sofia", { priceSingle: 1200, currency: "thb", teachesLevelMin: 2, teachesLevelMax: 4.5, openBooking: true, bio: "Ten years on clay." });
-    const facts = coachCardFacts(coach, NO_BUSY, before);
+    const facts = coachCardFacts(coach, NO_BUSY, [], before);
     expect(facts).toMatchObject({ handle: coach.handle, displayName: "Sofia", priceFrom: 1200, currency: "THB", openBooking: true, levels: { min: 2, max: 4.5 } });
     expect(facts.nextFree).toBe(at(0).toISOString());
   });
@@ -239,5 +239,65 @@ describe("a first booking the coach answers", () => {
     await expect(acceptByInvite(db, coach.id, kit.id)).rejects.toMatchObject({ code: "blocked" });
     // The row stays, so the lessons they took and anything they owe stay with it.
     expect(await studentStatus(db, coach.id, kit.id)).toBe("blocked");
+  });
+});
+
+/**
+ * What a card may claim. A card is read by somebody deciding, so every line on it has to survive the
+ * tap: a price the coach's page also shows, and a free hour that reader can actually take.
+ */
+describe("a card keeps what it promises", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const TZ = "Asia/Bangkok";
+  const monday = new Date("2026-10-05T00:00:00.000Z");
+  const at = (h: number) => new Date(monday.getTime() + h * HOUR);
+  const before = new Date(monday.getTime() - 2 * HOUR);
+
+  const aCoach = async (name: string, patch: Parameters<typeof updateCoach>[2] = {}) => {
+    const p = await makePlayer(db, name);
+    const coach = await createCoach(db, { playerId: p.id, displayName: name, tz: TZ, hours: presetHours("mornings") });
+    return Object.keys(patch).length ? updateCoach(db, coach.id, patch) : coach;
+  };
+
+  it("takes the hour out of the cheapest package when there is no single price", () => {
+    // 7000 for ten is 700 an hour. 5000 for five is 1000. The cheaper hour wins, not the cheaper box.
+    expect(packagePriceFrom([{ size: 10, price: 7000, heads: 1 }, { size: 5, price: 5000, heads: 1 }])).toEqual({ each: 700, size: 10 });
+    // A package for two is a different thing being sold; it is not this coach's hourly rate.
+    expect(packagePriceFrom([{ size: 10, price: 6000, heads: 2 }])).toBeNull();
+    expect(packagePriceFrom([])).toBeNull();
+  });
+
+  it("shows a package hour to a coach who sells no single lessons, and nothing to a coach with neither", async () => {
+    const packs = await aCoach("Vera", { openBooking: true });
+    await saveOffers(db, packs.id, [{ size: 10, minutes: 60, heads: 1, price: 7000, validDays: 70 }]);
+    const bare = await aCoach("Wim", { openBooking: true });
+    const offers = await offersForCoaches(db, [packs.id, bare.id]);
+
+    const packFacts = coachCardFacts(packs, NO_BUSY, offers.get(packs.id) ?? [], before);
+    expect([packFacts.priceFrom, packFacts.packageFrom]).toEqual([null, { each: 700, size: 10 }]);
+    // A coach with a single price does not also get a package line: one number on the card.
+    const priced = await aCoach("Yuki", { openBooking: true, priceSingle: 1200 });
+    await saveOffers(db, priced.id, [{ size: 10, minutes: 60, heads: 1, price: 7000, validDays: 70 }]);
+    const pricedOffers = await offersForCoaches(db, [priced.id]);
+    const pricedFacts = coachCardFacts(priced, NO_BUSY, pricedOffers.get(priced.id) ?? [], before);
+    expect([pricedFacts.priceFrom, pricedFacts.packageFrom]).toEqual([1200, null]);
+    // Neither: the card says nothing rather than pointing at a page that has nothing either.
+    const bareFacts = coachCardFacts(bare, NO_BUSY, offers.get(bare.id) ?? [], before);
+    expect([bareFacts.priceFrom, bareFacts.packageFrom]).toEqual([null, null]);
+  });
+
+  it("names a free hour only for a coach a stranger can actually book", async () => {
+    const open = await aCoach("Zoe", { openBooking: true });
+    const asks = await aCoach("Abe", { openBooking: false });
+    // Both have the same empty week, so the only difference is whether the door is open.
+    expect(coachCardFacts(open, NO_BUSY, [], before).nextFree).toBe(at(0).toISOString());
+    expect(coachCardFacts(asks, NO_BUSY, [], before).nextFree).toBeNull();
+    expect(coachCardFacts(asks, NO_BUSY, [], before).canBookNow).toBe(false);
   });
 });

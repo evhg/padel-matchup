@@ -638,7 +638,8 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
           <p className="text-xs text-faint">{t("page.payNothingThrough")}</p>
         </section>
       )}
-      <HowThisWorks text={t("page.how", { hours: cutoffHours })} />
+      {/* "It is yours at once" was still printed under a header saying the coach confirms it. */}
+      <HowThisWorks text={openBooking && approveNew && status !== "accepted" ? t("page.howConfirm", { hours: cutoffHours, name: coachName }) : t("page.how", { hours: cutoffHours })} />
 
       {/* Last on the page, the way the one thing you cannot undo is last on My matches. Only somebody
           who is actually on this coach's list sees it. */}
