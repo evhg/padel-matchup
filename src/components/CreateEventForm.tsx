@@ -55,6 +55,8 @@ export function CreateEventForm({
   const mine = venues[0]?.where === "yours" ? venues[0] : null;
   const [values, setValues] = useState<EventFormValues>({
     type: initialType,
+    // The generator hands its field over already filled; a plain create starts empty.
+    haveNames: carriedNames.join("\n"),
     title: "",
     date: initial.date,
     time: initial.time,
@@ -135,7 +137,10 @@ export function CreateEventForm({
         groupCode,
         telegramTicket,
         discordTicket,
-        names: carriedNames.length ? carriedNames : undefined,
+        names: (() => {
+          const typed = values.haveNames.split("\n").map((n) => n.trim()).filter(Boolean);
+          return typed.length ? typed : undefined;
+        })(),
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl || undefined,
         cost: values.cost || undefined,

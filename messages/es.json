@@ -179,7 +179,11 @@
     "courtOther": "Otro nombre",
     "scoreBy": "Puntuación",
     "pointsN": "{n} puntos",
-    "gamesTo": "Primero a {n} juegos"
+    "gamesTo": "Primero a {n} juegos",
+    "tzNearby": "Probables",
+    "tzAll": "Todas las zonas horarias",
+    "haveAlready": "Jugadores que ya tienes",
+    "haveAlreadyHelp": "Un nombre por línea. Cada uno ocupa una plaza y recibe un enlace, así el mensaje que compartes dice cuántos te faltan de verdad."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -1191,7 +1195,15 @@
     "placePlaceholder": "Kuala Lumpur, Moscú, Phuket…",
     "elsewhere": "Otros lugares",
     "freeUnknownOwner": "Las pistas libres aparecen aquí cuando compartes tu calendario de reservas.",
-    "shareFeed": "Compartirlo"
+    "shareFeed": "Compartirlo",
+    "unclaimed": "Kicksmash añadió este club desde fuentes públicas. El club no gestiona esta página, y nada aquí está pagado.",
+    "notClaimed": "Sin reclamar",
+    "isThisYours": "¿Es tu club? Reclama la página",
+    "wrongHere": "¿Algo está mal en esta página?",
+    "searchLabel": "Buscar un club",
+    "searchPlaceholder": "Club o lugar",
+    "searchNone": "Ningún club coincide. Prueba con el lugar en vez del nombre.",
+    "listedHere": "En el directorio"
   },
   "passport": {
     "title": "Pasaporte",

@@ -82,7 +82,19 @@ export function cleanClubInput(input: ClubInput): Partial<Pick<Club, "website" |
   return out;
 }
 
+/** The club runs this page: they claimed it and the claim passed. Everything they manage hangs off this. */
 export const isClubLive = (c: Pick<Club, "approvedAt" | "rejectedAt"> | null | undefined): boolean => Boolean(c?.approvedAt && !c.rejectedAt);
+
+/**
+ * The page may show what we know about this club: it is either theirs, or one Kicksmash listed from
+ * public sources. Not the same as `isClubLive`, and the difference is the whole point — sixty-six
+ * clubs held a name, a province, a court count and a booking link that every page hid behind a
+ * claim that nobody had made, so a club owner looking for their own club found nothing at all and a
+ * player looking for a club found an empty list. A listed club shows its facts and says plainly
+ * that the club does not manage the page.
+ */
+export const isClubListed = (c: Pick<Club, "approvedAt" | "rejectedAt" | "source"> | null | undefined): boolean =>
+  Boolean(c && !c.rejectedAt && (c.approvedAt || c.source === "directory"));
 export const clubStatus = (c: Pick<Club, "approvedAt" | "rejectedAt">): "live" | "pending" | "rejected" => (c.rejectedAt ? "rejected" : c.approvedAt ? "live" : "pending");
 
 export async function getClub(db: Db, slug: string): Promise<Club | null> {
@@ -101,6 +113,20 @@ export async function getClubByToken(db: Db, token: string): Promise<Club | null
   if (!/^[A-Za-z0-9_-]{16,40}$/.test(token)) return null;
   const [c] = await db.select().from(clubs).where(eq(clubs.manageToken, token)).limit(1);
   return c ?? null;
+}
+
+/**
+ * Every club a reader may see, theirs or ours, founding first. `listLiveClubs` is the smaller set a
+ * club actually runs; this is the one a directory page, a city page and the sitemap read.
+ */
+export async function listShownClubs(db: Db, city?: string | null, limit = 400): Promise<Club[]> {
+  const shown = and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), eq(clubs.source, "directory")));
+  return db
+    .select()
+    .from(clubs)
+    .where(city ? and(shown, eq(clubs.city, city)) : shown)
+    .orderBy(desc(clubs.founding), asc(clubs.name))
+    .limit(limit);
 }
 
 export async function listLiveClubs(db: Db, city?: string | null, limit = 200): Promise<Club[]> {

@@ -48,6 +48,11 @@ try {
   // The whole hand-off: the generator's five names become five seated players with links to pass on.
   await p.goto(`${BASE}/?type=tournament&capacity=8&s=gen&names=Ana%2CBo%2CCy%2CDi%2CEd`);
   check("the carried players are named before anything is typed", (await p.getByTestId("carried-players").innerText()).includes("Ana · Bo · Cy · Di · Ed"));
+  // The names ride in the form's own field now, so an organiser who did not come from the generator
+  // can type the people they already have and the link goes out asking for what is really left.
+  // More options opens itself when names arrived, so the field is already on screen: clicking it
+  // here shut the panel and the field went away.
+  check("the carried names arrive in the field an organiser can edit", (await p.getByTestId("have-already").inputValue()) === "Ana\nBo\nCy\nDi\nEd");
   await p.getByPlaceholder("e.g. Alex").fill("Ana");
   await p.getByRole("button", { name: "Create & get the link" }).click();
   // A refused create leaves the form where it is, and a bare waitForURL then dies saying only

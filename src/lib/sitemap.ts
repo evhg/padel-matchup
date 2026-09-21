@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import type { Db } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
-import { listLiveClubs } from "@/lib/domain/clubs";
+import { listShownClubs } from "@/lib/domain/clubs";
 import { listPublicCoaches } from "@/lib/domain/coaching";
 import { listSeries } from "@/lib/domain/series";
 import { answerPath, listPublishedAnswers } from "@/lib/listen/answers";
@@ -22,7 +22,7 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
   if (db) {
     try {
       answerPages = (await listPublishedAnswers(db, 500)).map((a) => ({ url: `${base}${answerPath(a)}`, lastModified: a.publishedAt ?? now, changeFrequency: "monthly" as const, priority: 0.6 }));
-      clubPages = (await listLiveClubs(db)).map((c) => ({ url: `${base}/v/${c.slug}`, lastModified: c.updatedAt, changeFrequency: "daily" as const, priority: 0.7 }));
+      clubPages = (await listShownClubs(db)).map((c) => ({ url: `${base}/v/${c.slug}`, lastModified: c.updatedAt, changeFrequency: "daily" as const, priority: 0.7 }));
       // A listed coach's page exists in every language, each naming the others.
       coachPages = (await listPublicCoaches(db, null, 200, { includeQuiet: true })).flatMap((c) => {
         const path = `/c/${c.handle}`;

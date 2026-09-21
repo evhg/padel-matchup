@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
+import { eq } from "drizzle-orm";
 import { clubs } from "@/db/schema";
-import { claimClub, clubStatus, listClubsForPicking, listLiveClubs } from "@/lib/domain/clubs";
+import { claimClub, clubStatus, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { venueSlug } from "@/lib/domain/venueBoard";
 import { createTestDb, makePlayer } from "./helpers/db";
 
@@ -90,6 +91,34 @@ describe("the club directory in the database", () => {
     expect(await listLiveClubs(db)).toEqual([]);
     // But pickable, which is the whole point of it.
     expect((await listClubsForPicking(db)).map((c) => c.slug)).toEqual(["warehaus"]);
+  });
+
+  it("shows a club nobody has claimed, and never says the club runs it", async () => {
+    // Sixty-six clubs held a name, a province, a court count and a booking link, and every page hid
+    // all of it behind a claim nobody had made — so a club owner hunting for their own club found
+    // nothing, and a player looking for a club found an empty list.
+    await listed("warehaus", "WAREHAUS.club", { city: "phuket", courts: 5 });
+    const own = await listed("baan-padel", "Baan Padel", { province: "Bangkok" });
+    expect(await listLiveClubs(db)).toEqual([]);
+    expect((await listShownClubs(db)).map((c) => c.slug).sort()).toEqual(["baan-padel", "warehaus"]);
+    // Shown is not run-by-anybody: the page reads one to print the facts and the other to decide
+    // what the club manages.
+    expect([isClubListed(own), isClubLive(own)]).toEqual([true, false]);
+    // A city asks for its own, and the one outside it does not come along.
+    expect((await listShownClubs(db, "phuket")).map((c) => c.slug)).toEqual(["warehaus"]);
+  });
+
+  it("stops showing a club whose claim was rejected, even though it is still a directory row", async () => {
+    // The row stays `directory`, so the only thing keeping it off every page is the rejection. An
+    // earlier version of this test also flipped `source`, which made it pass for the wrong reason:
+    // it went green with the rejection check deleted.
+    const row = await listed("ghost-padel", "Ghost Padel");
+    await db.update(clubs).set({ rejectedAt: new Date() }).where(eq(clubs.slug, row.slug));
+    const [after] = await db.select().from(clubs).where(eq(clubs.slug, row.slug));
+    expect(after.source).toBe("directory");
+    expect(isClubListed(after)).toBe(false);
+    expect(await listShownClubs(db)).toEqual([]);
+    expect(await listClubsForPicking(db)).toEqual([]);
   });
 
   it("lets the real owner claim it — the bug that would have made the directory a trap", async () => {

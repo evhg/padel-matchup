@@ -1,5 +1,6 @@
 "use client";
 
+import { CITIES } from "@/lib/domain/cities";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
@@ -16,6 +17,8 @@ import { VenueCombobox, type VenueOption } from "./VenueCombobox";
 
 export type EventFormValues = {
   type: "match" | "tournament";
+  /** People the organiser already has, one per line. Each takes a spot before the link is shared. */
+  haveNames: string;
   title: string;
   date: string;
   time: string;
@@ -58,6 +61,23 @@ function historyChips(patterns: TimePatternInput[], tz: string, locale: string, 
     const next = nextOccurrence(p.dow, p.time, tz, now);
     return { key: `${p.dow}-${p.time}`, ...next, label: label(fmt.format(new Date(`${next.date}T00:00:00Z`)), p.time) };
   });
+}
+
+/**
+ * The zones somebody here is actually likely to want, first. The control was 418 entries in one
+ * alphabetical list starting at Africa/Abidjan with no search, on a phone — a Phuket organiser with
+ * a WhatsApp thread already going scrolled for forty seconds, and called it the place they would
+ * have given up. The phone's own zone, whatever is already set, and the cities this app knows.
+ */
+function likelyZones(current: string): string[] {
+  const here = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch {
+      return "";
+    }
+  })();
+  return [...new Set([current, here, ...CITIES.map((c) => c.tz)].filter(Boolean))];
 }
 
 function timeZones(current: string): string[] {
@@ -111,9 +131,10 @@ export function EventFields({
     return Array.from({ length: n }, (_, i) => String(i + 1));
   }, [venues, values.venueName, values.court, typingCourt]);
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
+  const nearby = useMemo(() => likelyZones(values.tz), [values.tz]);
   const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
   // "More" opens by itself only when something non-default is already set (editing a match).
-  const [moreOpen, setMoreOpen] = useState(Boolean(values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed"));
+  const [moreOpen, setMoreOpen] = useState(Boolean(values.haveNames || values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed"));
   // The level sits one tap from the form, behind its own chip: "looking for a fourth" carries the one
   // fact the fourth needs. The presets stay folded (rule 1); the chip reads what is set.
   const [levelOpen, setLevelOpen] = useState(false);
@@ -192,12 +213,21 @@ export function EventFields({
       <div className="-mt-3 text-sm text-muted">
         {t("create.timezone")}:{" "}
         {tzOpen ? (
-          <select className="input mt-1" value={values.tz} onChange={(e) => onChange({ tz: e.target.value })}>
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z.replace(/_/g, " ")}
-              </option>
-            ))}
+          <select className="input mt-1" value={values.tz} onChange={(e) => onChange({ tz: e.target.value })} data-testid="tz-select">
+            <optgroup label={t("create.tzNearby")}>
+              {nearby.map((z) => (
+                <option key={`near-${z}`} value={z}>
+                  {z.replace(/_/g, " ")}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label={t("create.tzAll")}>
+              {zones.map((z) => (
+                <option key={z} value={z}>
+                  {z.replace(/_/g, " ")}
+                </option>
+              ))}
+            </optgroup>
           </select>
         ) : (
           <button type="button" className="link" onClick={() => setTzOpen(true)}>
@@ -378,6 +408,13 @@ export function EventFields({
         </button>
         {moreOpen && (
           <div className="mt-5 flex flex-col gap-5 animate-pop">
+      {/* An organiser who is three of four shares a link that says "3 spots left", which is true and
+          reads as though nobody is coming. The names go in before the link is ever shared. */}
+      <div>
+        <label className="label">{t("create.haveAlready")}</label>
+        <textarea className="textarea" rows={3} value={values.haveNames} maxLength={600} onChange={(e) => onChange({ haveNames: e.target.value })} data-testid="have-already" />
+        <p className="mt-1 text-xs text-muted">{t("create.haveAlreadyHelp")}</p>
+      </div>
       <div>
         <label className="label">{t("create.whenFull")}</label>
         <div className="segment">

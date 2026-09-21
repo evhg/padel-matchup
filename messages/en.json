@@ -179,7 +179,11 @@
     "courtOther": "Another name",
     "scoreBy": "Score by",
     "pointsN": "{n} points",
-    "gamesTo": "First to {n} games"
+    "gamesTo": "First to {n} games",
+    "tzNearby": "Likely",
+    "tzAll": "All time zones",
+    "haveAlready": "Players you already have",
+    "haveAlreadyHelp": "One name per line. Each takes a spot and gets a link to pass on, so the message you share says how many you really need."
   },
   "share": {
     "title": "Your match is live",
@@ -1191,7 +1195,15 @@
     "placePlaceholder": "Kuala Lumpur, Moscow, Phuket…",
     "elsewhere": "Elsewhere",
     "freeUnknownOwner": "Free courts appear here once you share your bookings calendar.",
-    "shareFeed": "Share it"
+    "shareFeed": "Share it",
+    "unclaimed": "Kicksmash listed this club from public sources. The club does not manage this page, and nothing here is paid for.",
+    "notClaimed": "Not claimed",
+    "isThisYours": "Is this your club? Claim the page",
+    "wrongHere": "Something wrong on this page?",
+    "searchLabel": "Find a club",
+    "searchPlaceholder": "Club or place",
+    "searchNone": "No club here matches that. Try the place instead of the name.",
+    "listedHere": "Listed here"
   },
   "passport": {
     "title": "Passport",

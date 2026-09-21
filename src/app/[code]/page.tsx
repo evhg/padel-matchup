@@ -459,6 +459,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             code={code}
             initial={{
               type: ev.type,
+              // Editing a match that exists: its people are already on the roster below.
+              haveNames: "",
               title: ev.title ?? "",
               date: parts.date,
               time: parts.time,

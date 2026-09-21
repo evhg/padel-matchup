@@ -392,6 +392,19 @@ Everything in this list is live. The README describes each in detail.
   which is the loudest objection in this market printed back at the reader on the page that answers
   it. Free is unconditional now; the badge is the scarce thing.
 
+- **The clubs that were there all along, and three cuts in the organiser's way (21 September 2026).**
+  The audit's club owner spent seven of his ten minutes proving an absence: no search box anywhere
+  on the site, `/clubs` telling him no club had claimed a page, and every URL he guessed a 404. The
+  database held sixty-six clubs with names, provinces, court counts and booking links, and every
+  page hid all of it behind a claim nobody had made. A listed club now shows what we know, says
+  plainly that Kicksmash listed it from public sources and that the club does not manage the page,
+  and carries both doors: the one that makes it theirs and the one that says something is wrong.
+  They are in the city pages and the sitemap. `/clubs/{slug}` lands on the club's page, and `/clubs`
+  has a search box that works without JavaScript. For the organiser: the time zone control put the
+  zones you are likely to want above the other four hundred, and the create form takes the players
+  you already have, so the link that goes to the group asks for the one seat that is really open
+  instead of three.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
