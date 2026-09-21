@@ -78,6 +78,12 @@ export const coaches = pgTable(
      * On, the booking itself puts them on the list.
      */
     openBooking: boolean("open_booking").notNull().default(false),
+    /**
+     * With `open_booking` on: a person the coach has never had books nothing outright. Their pick
+     * becomes a request the coach answers yes or no, the same one an hour outside the week makes.
+     * Somebody who was on the list before still books straight through, and a blocked person cannot.
+     */
+    approveNewBookings: boolean("approve_new_bookings").notNull().default(false),
     /** The levels this coach teaches, 0 to 7 in halves, for the directory card. Both null: they do not say. */
     teachesLevelMin: real("teaches_level_min"),
     teachesLevelMax: real("teaches_level_max"),
@@ -370,6 +376,8 @@ export const lessonRequests = pgTable(
       .references(() => players.id, { onDelete: "cascade" }),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     minutes: integer("minutes").notNull(),
+    /** How many are coming, so the coach answers the lesson the person actually asked for. */
+    heads: integer("heads").notNull().default(1),
     note: text("note"),
     /** open → accepted | declined | expired */
     status: text("status").notNull().default("open"),

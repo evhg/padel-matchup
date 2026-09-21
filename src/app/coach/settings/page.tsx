@@ -64,6 +64,7 @@ export default async function CoachSettingsPage() {
             whatsapp: coach.whatsapp ? `+${coach.whatsapp}` : "",
             isPublic: coach.isPublic,
             openBooking: coach.openBooking,
+            approveNewBookings: coach.approveNewBookings,
             teachesLevelMin: coach.teachesLevelMin,
             teachesLevelMax: coach.teachesLevelMax,
             tz: coach.tz,

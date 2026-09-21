@@ -21,6 +21,8 @@ type Props = {
   status: StudentStatus;
   /** The coach lets anyone book a free hour: the booking itself puts the person on the list, so no asking first. */
   openBooking?: boolean;
+  /** …but the coach answers a first booking themselves, so a newcomer's pick is a request. */
+  approveNew?: boolean;
   slots: Slot[];
   /** In the hours but already booked: tappable for the waitlist. */
   taken?: Slot[];
@@ -56,7 +58,7 @@ type Props = {
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, openBooking = false, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, openBooking = false, approveNew = false, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   // Nobody the coach has accepted yet. `bookLesson` lets exactly these three book when the coach is
@@ -110,7 +112,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
   };
   const groupPrices = Boolean(prices && (longer ? second?.two : prices.two || prices.three || prices.four));
   const money = (n: number) => `${n} ${prices?.currency ?? owed?.currency ?? ""}`.trim();
-  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "too_late", "no_coach", "past", "has_package"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  const errorText = (code: string) => (["slot_taken", "not_student", "blocked", "outside_hours", "too_soon", "too_late", "no_coach", "past", "has_package"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
 
   /** The student takes a package from the page: unpaid, and the ways to pay are on this screen. */
   const takePackage = (o: OfferDTO2) => {
@@ -151,7 +153,9 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
         return;
       }
       const chosen = daySlots.find((s) => s.iso === slot);
-      setNote(t("page.booked", { when: `${dayLabels[day] ?? day} ${chosen?.time ?? ""}` }));
+      const when = `${dayLabels[day] ?? day} ${chosen?.time ?? ""}`;
+      // A coach who answers a first booking themselves turns the pick into a question, not a lesson.
+      setNote(r.data.asked ? t("page.asked2", { when, name: coachName }) : t("page.booked", { when }));
       setSlot(null);
       router.refresh();
     });
@@ -324,7 +328,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
             {guest && openBooking && (
               <>
                 <p className="text-sm text-muted" data-testid="open-booking-note">
-                  {t("page.openBookingNote", { name: coachName })}
+                  {t(approveNew ? "page.openBookingAskNote" : "page.openBookingNote", { name: coachName })}
                 </p>
                 {!signedIn && (
                   <label className="block">

@@ -3,7 +3,7 @@ import type { Db } from "@/db";
 import { newManagerCode } from "@/lib/codes";
 import { coaches, coachManagers, lessonPackages, lessonRequests, lessons, lessonWaitlist, players, type Coach, type Lesson, type LessonPackage, type LessonRequest, type LessonWaitlistRow, type Player } from "@/db/schema";
 import { utcToZonedParts } from "@/lib/dates";
-import { availableSlots, bookLesson, busyBetween, DAY_MS, getPlayerById, HOUR_MS, isPackageOpen, packageLine, studentStatus, withinHours } from "@/lib/domain/coaching";
+import { availableSlots, bookLesson, busyBetween, DAY_MS, getPlayerById, HOUR_MS, isPackageOpen, KNOWN_TO_COACH, MAX_HEADS, NEW_TO_COACH, packageLine, studentStatus, withinHours } from "@/lib/domain/coaching";
 import { DomainError, isDomainError } from "@/lib/domain/errors";
 
 /**
@@ -206,21 +206,42 @@ export async function afterLessonFreed(db: Db, coach: Coach, lesson: Lesson, by:
 
 // ---------------------------------------------------------------- requests outside the hours
 
-/** Books when the rules allow; otherwise a request the coach answers. Never both. */
-export async function requestOrBook(db: Db, coach: Coach, studentPlayerId: string, startsAt: Date, note: string | null, now = new Date()): Promise<{ kind: "booked"; lesson: Lesson; package: LessonPackage | null } | { kind: "requested"; request: LessonRequest }> {
+/**
+ * Books when the rules allow; otherwise a request the coach answers. Never both.
+ *
+ * Two things end here. An hour outside the coach's week, or inside their notice, has always been a
+ * request. So is the first booking of somebody the coach has never had, when they run "anyone can
+ * book" with "I answer the first one" — `bookLesson` says `needs_approval` and the pick becomes the
+ * very same row, with the very same yes-or-no the coach already knows.
+ */
+export async function requestOrBook(
+  db: Db,
+  coach: Coach,
+  studentPlayerId: string,
+  startsAt: Date,
+  note: string | null,
+  now = new Date(),
+  opts: { minutes?: number | null; heads?: number } = {},
+): Promise<{ kind: "booked"; lesson: Lesson; package: LessonPackage | null } | { kind: "requested"; request: LessonRequest }> {
   try {
-    const booked = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: false, source: "web", createdByPlayerId: studentPlayerId, note }, now);
+    const booked = await bookLesson(db, { coach, studentPlayerId, startsAt, byCoach: false, source: "web", createdByPlayerId: studentPlayerId, note, minutes: opts.minutes ?? undefined, heads: opts.heads }, now);
     return { kind: "booked", ...booked };
   } catch (e) {
-    if (!isDomainError(e) || !["outside_hours", "too_soon"].includes(e.code)) throw e;
+    if (!isDomainError(e) || !["outside_hours", "too_soon", "needs_approval"].includes(e.code)) throw e;
   }
-  if ((await studentStatus(db, coach.id, studentPlayerId)) !== "accepted") throw new DomainError("not_student");
+  const status = await studentStatus(db, coach.id, studentPlayerId);
+  // An hour outside the week is a student's ask. A first booking is anybody's, where the coach opened
+  // the door — that is what "anyone can book" means, and the approval is the coach's half of it.
+  const mayAsk = status === "accepted" || (coach.openBooking && (KNOWN_TO_COACH.includes(status) || NEW_TO_COACH.includes(status)));
+  if (!mayAsk) throw new DomainError(status === "blocked" ? "blocked" : "not_student");
   const at = new Date(Math.floor(startsAt.getTime() / 60_000) * 60_000);
   if (at.getTime() <= now.getTime()) throw new DomainError("past");
   if (!(await slotIsFree(db, coach, at, now))) throw new DomainError("slot_taken");
+  const minutes = opts.minutes && (opts.minutes === coach.lessonMinutes || opts.minutes === coach.secondMinutes) ? opts.minutes : coach.lessonMinutes;
+  const heads = Math.min(Math.max(opts.heads ?? 1, 1), MAX_HEADS);
   const [existing] = await db.select().from(lessonRequests).where(and(eq(lessonRequests.coachId, coach.id), eq(lessonRequests.studentPlayerId, studentPlayerId), eq(lessonRequests.startsAt, at), eq(lessonRequests.status, "open"))).limit(1);
   if (existing) return { kind: "requested", request: existing };
-  const [request] = await db.insert(lessonRequests).values({ coachId: coach.id, studentPlayerId, startsAt: at, minutes: coach.lessonMinutes, note: note?.trim().slice(0, 200) || null, status: "open", createdAt: now }).returning();
+  const [request] = await db.insert(lessonRequests).values({ coachId: coach.id, studentPlayerId, startsAt: at, minutes, heads, note: note?.trim().slice(0, 200) || null, status: "open", createdAt: now }).returning();
   return { kind: "requested", request };
 }
 
@@ -254,7 +275,7 @@ export async function decideRequest(db: Db, coach: Coach, requestId: string, acc
   let status: "accepted" | "declined" = accept ? "accepted" : "declined";
   if (accept) {
     try {
-      const booked = await bookLesson(db, { coach, studentPlayerId: request.studentPlayerId, startsAt: request.startsAt, byCoach: true, source: "request", createdByPlayerId: coach.playerId, minutes: request.minutes, note: request.note }, now);
+      const booked = await bookLesson(db, { coach, studentPlayerId: request.studentPlayerId, startsAt: request.startsAt, byCoach: true, source: "request", createdByPlayerId: coach.playerId, minutes: request.minutes, heads: request.heads, note: request.note }, now);
       lesson = booked.lesson;
       pkg = booked.package;
     } catch (e) {

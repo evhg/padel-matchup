@@ -13,6 +13,10 @@ export type DomainErrorCode =
   | "not_participant"
   | "slot_taken"
   | "not_student"
+  // The coach blocked this person. No booking, no asking, and an invite link does not let them in.
+  | "blocked"
+  // The coach takes anybody, but answers a first booking themselves. The caller makes a request.
+  | "needs_approval"
   | "outside_hours"
   | "too_soon"
   // A student moving a lesson that is already inside the coach's cutoff: at that point it is a

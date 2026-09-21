@@ -1485,7 +1485,11 @@
       "statementThis": "este mes",
       "statementLast": "el mes pasado",
       "telegramTitle": "O en Telegram",
-      "telegramHelp": "La misma lista, en un toque: quien lo abra está en tu lista, con los botones bajo el campo de texto."
+      "telegramHelp": "La misma lista, en un toque: quien lo abra está en tu lista, con los botones bajo el campo de texto.",
+      "block": "Bloquear",
+      "unblock": "Desbloquear",
+      "blocked": "Bloqueado",
+      "blockConfirm": "¿Bloquear a {name}? No podrá reservar ni pedir, y tu enlace dejará de funcionar para esa persona. Sus clases y lo que deba se quedan."
     },
     "settings": {
       "title": "Ajustes",
@@ -1523,7 +1527,9 @@
       "openBooking": "Cualquiera puede reservar una hora libre",
       "openBookingHelp": "Desactivado: un alumno nuevo lo pide y tú aceptas antes de que pueda reservar. Activado: elige una hora libre y desde ese momento está en tu lista. Tus horas, tu preaviso y tu norma de cancelación no cambian.",
       "teaches": "Niveles que entrenas",
-      "teachesHelp": "Se muestra en tu ficha del directorio, para que un jugador sepa si eres para él. Deja ambos vacíos si aceptas a todos."
+      "teachesHelp": "Se muestra en tu ficha del directorio, para que un jugador sepa si eres para él. Deja ambos vacíos si aceptas a todos.",
+      "approveNew": "Yo confirmo la primera reserva",
+      "approveNewHelp": "Alguien a quien nunca enseñaste elige una hora y tú dices sí o no. Quien ya estuvo en tu lista reserva directamente."
     },
     "page": {
       "owedTitle": "Por pagar",
@@ -1624,7 +1630,9 @@
       "from": "desde {amount}",
       "eachPaysLine": "Cada uno paga {amount}",
       "foundingPlain": "Entrenador fundador",
-      "openBookingNote": "{name} permite reservar una hora libre a cualquiera. Elige una hora y es tuya, sin pedir permiso ni esperar."
+      "openBookingNote": "{name} permite reservar una hora libre a cualquiera. Elige una hora y es tuya, sin pedir permiso ni esperar.",
+      "openBookingAskNote": "{name} acepta a cualquiera. Elige una hora libre y {name} la confirma, normalmente el mismo día.",
+      "asked2": "Pedido para {when}. {name} responde y te avisamos en cuanto lo haga."
     },
     "me": {
       "title": "Tus clases",
@@ -1644,7 +1652,8 @@
       "no_coach": "Aquí no hay agenda todavía.",
       "past": "Esa hora ya pasó.",
       "already_paid": "Esta clase ya está pagada. Una devolución se hace en el banco, no aquí.",
-      "has_package": "Ya tienes un bono con clases por usar. Úsalo primero."
+      "has_package": "Ya tienes un bono con clases por usar. Úsalo primero.",
+      "blocked": "Este entrenador no acepta reservas tuyas."
     },
     "email": {
       "paidSubject": "{student} dice que pagó",

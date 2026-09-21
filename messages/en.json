@@ -1485,7 +1485,11 @@
       "statementThis": "this month",
       "statementLast": "last month",
       "telegramTitle": "Or in Telegram",
-      "telegramHelp": "The same list, one tap: whoever opens this is on your list, with the buttons under the text field."
+      "telegramHelp": "The same list, one tap: whoever opens this is on your list, with the buttons under the text field.",
+      "block": "Block",
+      "unblock": "Unblock",
+      "blocked": "Blocked",
+      "blockConfirm": "Block {name}? They cannot book, cannot ask, and your student link stops working for them. Their lessons and anything owed stay."
     },
     "settings": {
       "title": "Settings",
@@ -1523,7 +1527,9 @@
       "openBooking": "Anyone can book a free hour",
       "openBookingHelp": "Off: a new student asks and you accept before they can book. On: they pick a free hour and are on your list from that moment. Your hours, your notice and your cancellation rule are unchanged.",
       "teaches": "Levels you teach",
-      "teachesHelp": "Shown on your card in the directory, so a player knows whether you are for them. Leave both empty if you take everybody."
+      "teachesHelp": "Shown on your card in the directory, so a player knows whether you are for them. Leave both empty if you take everybody.",
+      "approveNew": "I answer a first booking myself",
+      "approveNewHelp": "Somebody you never taught picks a time and you say yes or no. Anyone who was on your list before books straight through."
     },
     "page": {
       "owedTitle": "To pay",
@@ -1624,7 +1630,9 @@
       "from": "from {amount}",
       "eachPaysLine": "Each pays {amount}",
       "foundingPlain": "Founding coach",
-      "openBookingNote": "{name} lets anyone book a free hour. Pick a time and it is yours — no asking, no waiting."
+      "openBookingNote": "{name} lets anyone book a free hour. Pick a time and it is yours — no asking, no waiting.",
+      "openBookingAskNote": "{name} takes anybody. Pick a free hour and {name} confirms it — usually the same day.",
+      "asked2": "Asked for {when}. {name} answers, and you hear as soon as they do."
     },
     "me": {
       "title": "Your lessons",
@@ -1644,7 +1652,8 @@
       "no_coach": "No coach page here yet.",
       "past": "That time has passed.",
       "already_paid": "This lesson is already paid. A refund happens at the bank, not here.",
-      "has_package": "You already have a package with lessons left. Use it up first."
+      "has_package": "You already have a package with lessons left. Use it up first.",
+      "blocked": "This coach does not take bookings from you."
     },
     "email": {
       "paidSubject": "{student} says they paid",

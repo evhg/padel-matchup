@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { addPackageAction, addStudentAction, coachSetLessonPaidAction, extendPackageAction, setLessonAmountAction, setPackageAmountAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
+import { addPackageAction, addStudentAction, blockStudentAction, coachSetLessonPaidAction, extendPackageAction, setLessonAmountAction, setPackageAmountAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
 import { HowThisWorks } from "./HowThisWorks";
 import { PromptPayQr } from "./PromptPayQr";
@@ -104,10 +104,11 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
             // The dimming sits on the text, not the row: a dimmed row made "Resume bookings" look disabled.
             <li key={s.playerId} id={`s-${s.playerId}`} className="scroll-mt-24 rounded-2xl border border-line bg-white px-4 py-3 target:ring-2 target:ring-accent" data-testid="student-row">
               <div className="flex items-start justify-between gap-3">
-                <div className={`min-w-0 ${s.status === "paused" || s.status === "left" ? "opacity-60" : ""}`}>
+                <div className={`min-w-0 ${s.status === "paused" || s.status === "left" || s.status === "blocked" ? "opacity-60" : ""}`}>
                   <div className="truncate font-bold">
                     {s.name}
                     {s.status === "paused" && <span className="chip-muted ml-2 align-middle">{t("students.paused")}</span>}
+                    {s.status === "blocked" && <span className="chip-muted ml-2 align-middle">{t("students.blocked")}</span>}
                   </div>
                   <div className="text-xs text-muted">
                     {s.pkg ? pkgLine(s.pkg) : t("noPackage")}
@@ -120,13 +121,34 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                 </div>
                 {/* Somebody who took themselves off the list is not paused by the coach, and offering
                     to pause them would say the coach had done it. Their lessons and anything owed stay. */}
-                {s.status === "left" ? (
-                  <span className="shrink-0 text-xs font-bold text-faint">{t("students.left")}</span>
-                ) : (
-                  <button type="button" className={`${s.status === "paused" ? "btn-secondary" : "btn-ghost"} btn-xs shrink-0`} disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))} data-testid="pause-toggle">
-                    {s.status === "paused" ? t("students.resume") : t("students.pause")}
-                  </button>
-                )}
+                {/* Pause is "not now"; block is "not you". A blocked person cannot book, cannot ask,
+                    and the student link stops working for them, so the only button left is the way back. */}
+                <span className="flex shrink-0 gap-2">
+                  {s.status === "blocked" ? (
+                    <button type="button" className="btn-secondary btn-xs" disabled={pending} onClick={() => act(() => blockStudentAction(s.playerId, false))} data-testid="block-toggle">
+                      {t("students.unblock")}
+                    </button>
+                  ) : (
+                    <>
+                      {s.status === "left" ? (
+                        <span className="self-center text-xs font-bold text-faint">{t("students.left")}</span>
+                      ) : (
+                        <button type="button" className={`${s.status === "paused" ? "btn-secondary" : "btn-ghost"} btn-xs`} disabled={pending} onClick={() => act(() => setStudentStatusAction(s.playerId, s.status === "paused" ? "accepted" : "paused"))} data-testid="pause-toggle">
+                          {s.status === "paused" ? t("students.resume") : t("students.pause")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-ghost btn-xs"
+                        disabled={pending}
+                        onClick={() => confirm(t("students.blockConfirm", { name: s.name })) && act(() => blockStudentAction(s.playerId, true))}
+                        data-testid="block-toggle"
+                      >
+                        {t("students.block")}
+                      </button>
+                    </>
+                  )}
+                </span>
               </div>
               {unpaid.some((u) => u.studentPlayerId === s.playerId) && (
                 <ul className="mt-2 flex flex-col gap-1 rounded-xl bg-bg px-3 py-2 text-xs" data-testid="unpaid-lessons">
