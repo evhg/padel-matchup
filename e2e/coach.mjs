@@ -506,6 +506,47 @@ try {
   await olga.goto(BASE + "/coach/students");
   check("the coach finds the stranger on her list, accepted by the booking itself", (await olga.locator("li", { hasText: "Nadia" }).getByRole("button", { name: /New package/ }).count()) === 1);
 
+  // ---- The coach's half of it: a first booking they answer, and a person they will not take ----
+  await olga.goto(BASE + "/coach/settings");
+  await olga.getByTestId("approve-new").check();
+  await olga.getByRole("button", { name: "Save" }).click();
+  await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+
+  const otto = await newPage();
+  await otto.goto(`${BASE}/c/${handle}`);
+  await otto.getByRole("heading", { name: "Book a lesson" }).waitFor({ timeout: 20000 });
+  check("a newcomer is told the coach confirms it, not that it is theirs", (await otto.getByTestId("open-booking-note").getByText(/confirms it/).count()) === 1);
+  await otto.getByLabel("Your name").fill("Otto");
+  const ottoPicked = await pickFirstFreeTime(otto, otto.locator("main"));
+  check("and still picks from the same free hours", ottoPicked !== "", ottoPicked);
+  await otto.getByRole("button", { name: /^Book / }).click();
+  await otto.getByText(/^Asked for /).waitFor({ timeout: 20000 });
+  check("the pick becomes a question, not a lesson", (await otto.getByText(/Olga answers/).count()) === 1);
+  await shot(otto, "71-first-booking-asked");
+
+  await olga.goto(BASE + "/coach");
+  await olga.getByTestId("coach-requests").waitFor({ timeout: 20000 });
+  check("the coach sees the first booking waiting for her", (await olga.getByTestId("coach-requests").getByText("Otto").count()) >= 1);
+  await olga.getByTestId("coach-requests").getByRole("button", { name: /Yes/ }).click();
+  await olga.getByTestId("coach-requests").waitFor({ state: "detached", timeout: 20000 });
+  await olga.goto(BASE + "/coach/students");
+  check("her yes books it and puts Otto on the list", (await olga.locator("li", { hasText: "Otto" }).getByRole("button", { name: /New package/ }).count()) === 1);
+
+  // Nadia booked before the switch, so she is already a student: no second question for her.
+  await nadia.goto(`${BASE}/c/${handle}`);
+  await nadia.reload();
+  check("somebody already on the list never meets the question", (await nadia.getByTestId("open-booking-note").count()) === 0 && (await nadia.getByRole("heading", { name: "Book a lesson" }).count()) === 1);
+
+  // The block: not "not now" but "not you". The confirm is accepted by the page's dialog handler.
+  await olga.locator("li", { hasText: "Otto" }).getByTestId("block-toggle").click();
+  await olga.locator("li", { hasText: "Otto" }).getByText("Blocked").waitFor({ timeout: 20000 });
+  check("the coach can block a person, and the row stays with their history", (await olga.locator("li", { hasText: "Otto" }).getByRole("button", { name: "Unblock" }).count()) === 1);
+  await otto.goto(`${BASE}/c/${handle}`);
+  check("a blocked person is offered nothing on the coach's page", (await otto.getByRole("heading", { name: "Book a lesson" }).count()) === 0 && (await otto.getByTestId("ask-to-join").count()) === 0);
+  await olga.locator("li", { hasText: "Otto" }).getByTestId("block-toggle").click();
+  await olga.locator("li", { hasText: "Otto" }).getByTestId("pause-toggle").waitFor({ timeout: 20000 });
+  check("and unblocking gives the door back", true);
+
   // ---- Coaches arrive on their own: every coach-facing page is a door ----
   await ivan.goto(`${BASE}/coaches/join`);
   check("the front door for coaches renders with one button to the book", (await ivan.getByText("Your students book themselves. Your calendar stays yours.").count()) === 1 && (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach");

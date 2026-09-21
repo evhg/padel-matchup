@@ -58,7 +58,8 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   let status = me ? await studentStatus(db, coach.id, me.id) : "none";
   if (status === "left") status = "none";
   let justJoined = false;
-  if (invite && me && !owner && status !== "accepted" && status !== "paused") {
+  // A forwarded link does not carry somebody past the coach's block, and it must not throw here either.
+  if (invite && me && !owner && status !== "accepted" && status !== "paused" && status !== "blocked") {
     status = await acceptByInvite(db, coach.id, me.id);
     justJoined = status === "accepted";
     if (justJoined) await notifyStudentJoined(db, coach, me).catch(() => undefined);
@@ -171,6 +172,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             signedIn={Boolean(me)}
             status={status}
             openBooking={coach.openBooking}
+            approveNew={coach.approveNewBookings}
             invite={invite}
             justJoined={justJoined}
             slots={slotDtos}

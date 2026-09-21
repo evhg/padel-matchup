@@ -220,6 +220,17 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
             <span className="mt-0.5 block text-xs font-normal text-muted">{t("settings.openBookingHelp")}</span>
           </span>
         </label>
+        {/* Only under the open door: on its own it would say nothing, because a coach who accepts
+            every student by hand already answers every first booking. */}
+        {v.openBooking && (
+          <label className="flex items-start gap-2 pl-6 text-sm font-bold">
+            <input type="checkbox" className="mt-1" checked={v.approveNewBookings} onChange={(e) => set("approveNewBookings", e.target.checked)} data-testid="approve-new" />
+            <span className="min-w-0">
+              {t("settings.approveNew")}
+              <span className="mt-0.5 block text-xs font-normal text-muted">{t("settings.approveNewHelp")}</span>
+            </span>
+          </label>
+        )}
         <div>
           <span className="text-sm font-bold">{t("settings.teaches")}</span>
           <div className="mt-1 grid grid-cols-2 gap-3">

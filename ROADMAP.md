@@ -367,6 +367,16 @@ Everything in this list is live. The README describes each in detail.
   that moment. The coach's hours, notice and cancellation rule do not change, and a paused student is
   still refused. A whole list reads its diary in three queries, not three per coach.
 
+- **A first booking the coach answers, and a list they will not take (21 September 2026, migration
+  0062).** "Anyone can book" put a stranger on the coach's list the moment they picked an hour, which
+  is right for some coaches and not for others. A second line under it now reads "I answer a first
+  booking myself". With it on, somebody the coach never taught picks a time and the coach says yes or
+  no; the yes books the lesson and puts them on the list. It reuses the request a time outside the
+  week already makes, so the coach answers it in the same place, on the web or in the chat. Anybody
+  who was on the list before books straight through, and never meets the question again. Beside it,
+  the coach can block a person: no booking, no asking, and the student link stops working for them.
+  The row stays, so the lessons they took and anything they owe stay on the book.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

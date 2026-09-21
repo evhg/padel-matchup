@@ -26,7 +26,16 @@ export const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/;
 
 export type Hours = Record<string, [string, string][]>;
 export type HoursPreset = "mornings" | "afternoons" | "both";
-export type StudentStatus = "none" | "requested" | "accepted" | "paused" | "left";
+/**
+ * `blocked` is the coach's own no: this person does not book, does not ask, and an invite link does
+ * not let them in. It is a row that stays, so the lessons they took and anything they owe stay too.
+ */
+export type StudentStatus = "none" | "requested" | "accepted" | "paused" | "left" | "blocked";
+
+/** Somebody the coach never had on the list. With `open_booking` these are the people who may book. */
+export const NEW_TO_COACH: StudentStatus[] = ["none", "requested"];
+/** On the list before, whatever happened since. They never wait for an approval again. */
+export const KNOWN_TO_COACH: StudentStatus[] = ["accepted", "left"];
 export type LessonStatus = "booked" | "done" | "cancelled" | "cancelled_by_student" | "late_cancelled" | "no_show";
 export type CancelOutcome = "refunded" | "free_pass" | "counted" | "none";
 export type Busy = { startsAt: Date; endsAt: Date };
@@ -278,7 +287,7 @@ export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> =
 /** A payment link a student can open: http(s), at least a few characters, no spaces. */
 export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
 
-export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic" | "openBooking" | "teachesLevelMin" | "teachesLevelMax">>;
+export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic" | "openBooking" | "approveNewBookings" | "teachesLevelMin" | "teachesLevelMax">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
   const clean: CoachPatch = { ...patch };
@@ -357,6 +366,8 @@ export async function studentStatus(db: Db, coachId: string, playerId: string): 
 /** A player asks to become a student. Idempotent; a paused or accepted student keeps their status. */
 export async function requestStudent(db: Db, coachId: string, playerId: string): Promise<StudentStatus> {
   const current = await studentStatus(db, coachId, playerId);
+  // The coach's block is the one status asking does not move.
+  if (current === "blocked") throw new DomainError("blocked");
   // Somebody who left can ask again; leaving is not a door that locks behind them.
   if (current !== "none" && current !== "left") return current;
   await db.insert(coachStudents).values({ coachId, playerId, status: "requested" }).onConflictDoNothing();
@@ -421,6 +432,8 @@ export const inviteMatches = (coach: Pick<Coach, "inviteCode">, code: unknown): 
  */
 export async function acceptByInvite(db: Db, coachId: string, playerId: string): Promise<StudentStatus> {
   const current = await studentStatus(db, coachId, playerId);
+  // A forwarded link is not a way back in past the coach's block.
+  if (current === "blocked") throw new DomainError("blocked");
   if (current === "accepted" || current === "paused") return current;
   const mine = await getCoachForActor(db, playerId);
   if (mine?.coach.id === coachId) return current;
@@ -953,12 +966,18 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
   const heads = Math.min(Math.max(input.heads ?? pkg?.heads ?? 1, 1), MAX_HEADS);
   // "Anyone can book": for a coach with `open_booking`, the booking is the joining. Without it a
   // player who found the coach in the directory had to ask, and wait for a person, before any hour
-  // could be taken. A `paused` student is still refused: the coach paused them on purpose.
+  // could be taken. Three rules sit on top of it, in this order:
+  //   blocked        → nobody books, whoever asks and however the coach's door stands.
+  //   paused         → the coach paused them on purpose, so still no.
+  //   new + approval → the coach answers this one themselves; `requestOrBook` makes the request.
+  // Somebody who was on the list before (accepted, or left and come back) never waits for that.
   let joins = false;
+  const status = await studentStatus(db, coach.id, input.studentPlayerId);
+  if (status === "blocked") throw new DomainError("blocked");
   if (!input.byCoach) {
-    const status = await studentStatus(db, coach.id, input.studentPlayerId);
     joins = status !== "accepted";
-    if (joins && !(coach.openBooking && (status === "none" || status === "left" || status === "requested"))) throw new DomainError("not_student");
+    if (joins && !(coach.openBooking && (KNOWN_TO_COACH.includes(status) || NEW_TO_COACH.includes(status)))) throw new DomainError("not_student");
+    if (joins && coach.approveNewBookings && NEW_TO_COACH.includes(status)) throw new DomainError("needs_approval");
     if (startsAt.getTime() < now.getTime() + coach.minNoticeHours * HOUR_MS) throw new DomainError("too_soon");
     if (!withinHours(coach, startsAt, minutes)) throw new DomainError("outside_hours");
   }

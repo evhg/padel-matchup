@@ -133,6 +133,8 @@ export type SettingsInput = {
   isPublic: boolean;
   /** Anyone may book a free hour without asking first. */
   openBooking: boolean;
+  /** …and the coach answers a newcomer's first one. */
+  approveNewBookings: boolean;
   /** The levels this coach teaches, for the directory card. */
   teachesLevelMin: number | null;
   teachesLevelMax: number | null;
@@ -170,6 +172,7 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       whatsapp: input.whatsapp,
       isPublic: Boolean(input.isPublic),
       openBooking: Boolean(input.openBooking),
+      approveNewBookings: Boolean(input.openBooking) && Boolean(input.approveNewBookings),
       teachesLevelMin: input.teachesLevelMin,
       teachesLevelMax: input.teachesLevelMax,
       tz: input.tz,
@@ -582,7 +585,7 @@ export async function savePaymentAction(input: { promptpayId?: string | null; pa
 }
 
 
-export async function studentBookAction(handle: string, startsAt: string, heads?: number, minutes?: number | null, name?: string): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
+export async function studentBookAction(handle: string, startsAt: string, heads?: number, minutes?: number | null, name?: string): Promise<ActionResult<{ lessonId: string | null; startsAt: string; asked: boolean }>> {
   return runA(async () => {
     const db = await getDb();
     const coach = await getCoachByHandle(db, handle);
@@ -596,10 +599,25 @@ export async function studentBookAction(handle: string, startsAt: string, heads?
     if (!coach.openBooking && (await studentStatus(db, coach.id, me.id)) !== "accepted") throw new ActionFailure("not_student");
     // Only a length the coach sells: their usual one, or the second one when they have it.
     const length = minutes != null && (minutes === coach.lessonMinutes || minutes === coach.secondMinutes) ? minutes : undefined;
-    const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id, heads, minutes: length });
-    await notifyLessonBooked(db, { lesson, coach, student: me, pkg, by: "student" }).catch(() => undefined);
+    // Books it, or — when this coach answers a first booking themselves — makes the request they answer.
+    const r = await requestOrBook(db, coach, me.id, at, null, new Date(), { minutes: length, heads });
+    if (r.kind === "booked") await notifyLessonBooked(db, { lesson: r.lesson, coach, student: me, pkg: r.package, by: "student" }).catch(() => undefined);
+    else await notifyRequest(db, coach, me, r.request).catch(() => undefined);
     revalidateCoach(coach.handle);
-    return { lessonId: lesson.id, startsAt: lesson.startsAt.toISOString() };
+    return r.kind === "booked"
+      ? { lessonId: r.lesson.id, startsAt: r.lesson.startsAt.toISOString(), asked: false }
+      : { lessonId: null, startsAt: r.request.startsAt.toISOString(), asked: true };
+  });
+}
+
+/** The coach's block, and the way back off it. A blocked row stays, so the history stays with it. */
+export async function blockStudentAction(playerId: string, blocked: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const { coach } = await requireCoach(db);
+    await setStudentStatus(db, coach.id, playerId, blocked ? "blocked" : "accepted");
+    revalidateCoach(coach.handle);
+    return null;
   });
 }
 

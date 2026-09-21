@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { blockTime, bookLesson, busyForCoaches, coachCardFacts, createCoach, nextFree, NO_BUSY, openHour, presetHours, priceFrom, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
+import { acceptByInvite, blockTime, bookLesson, busyForCoaches, coachCardFacts, createCoach, nextFree, NO_BUSY, openHour, presetHours, priceFrom, requestStudent, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
+import { decideRequest, listOpenRequests, requestOrBook } from "@/lib/coach/chains";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 /**
@@ -153,5 +154,90 @@ describe("booking without asking first", () => {
     await setStudentStatus(db, coach.id, fin.id, "left");
     await bookLesson(db, { coach, studentPlayerId: fin.id, startsAt: at(3), byCoach: false, source: "web" }, before);
     expect(await studentStatus(db, coach.id, fin.id)).toBe("accepted");
+  });
+});
+
+/**
+ * The coach's half of "anyone can book". A person they never had picks an hour and the coach answers
+ * it; somebody who was on the list before never waits again; and a blocked person is out, whatever
+ * door stands open and whatever link they hold.
+ */
+describe("a first booking the coach answers", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const TZ = "Asia/Bangkok";
+  const monday = new Date("2026-10-05T00:00:00.000Z");
+  const at = (h: number) => new Date(monday.getTime() + h * HOUR);
+  const before = new Date(monday.getTime() - 2 * HOUR);
+
+  const aCoach = async (name: string, patch: { openBooking?: boolean; approveNewBookings?: boolean }) => {
+    const p = await makePlayer(db, name);
+    const coach = await createCoach(db, { playerId: p.id, displayName: name, tz: TZ, hours: presetHours("mornings") });
+    return updateCoach(db, coach.id, patch);
+  };
+
+  it("turns a newcomer's pick into a request, and the coach's yes books it", async () => {
+    const coach = await aCoach("Ada", { openBooking: true, approveNewBookings: true });
+    const gil = await makePlayer(db, "Gil");
+    const asked = await requestOrBook(db, coach, gil.id, at(1), null, before, { heads: 2 });
+    expect(asked.kind).toBe("requested");
+    // Nothing booked and nobody joined until the coach answers.
+    expect(await studentStatus(db, coach.id, gil.id)).toBe("none");
+    const open = await listOpenRequests(db, coach.id, before);
+    expect(open.map((r) => r.player.displayName)).toEqual(["Gil"]);
+    expect(open[0].heads).toBe(2);
+
+    const { lesson } = await decideRequest(db, coach, open[0].id, true, before);
+    expect(lesson?.startsAt.toISOString()).toBe(at(1).toISOString());
+    // The coach asked for two, so the lesson is for two, and the yes is also the joining.
+    expect(lesson?.heads).toBe(2);
+    expect(await studentStatus(db, coach.id, gil.id)).toBe("accepted");
+  });
+
+  it("books straight through for somebody who was on the list before", async () => {
+    const coach = await aCoach("Bea", { openBooking: true, approveNewBookings: true });
+    const hana = await makePlayer(db, "Hana");
+    // She took lessons and then removed the coach herself. Coming back is not a first booking.
+    await setStudentStatus(db, coach.id, hana.id, "left");
+    const again = await requestOrBook(db, coach, hana.id, at(1), null, before);
+    expect(again.kind).toBe("booked");
+    expect(await studentStatus(db, coach.id, hana.id)).toBe("accepted");
+  });
+
+  it("the coach's no closes it and leaves nobody on the list", async () => {
+    const coach = await aCoach("Cleo", { openBooking: true, approveNewBookings: true });
+    const ivo = await makePlayer(db, "Ivo");
+    await requestOrBook(db, coach, ivo.id, at(2), null, before);
+    const [open] = await listOpenRequests(db, coach.id, before);
+    const { request, lesson } = await decideRequest(db, coach, open.id, false, before);
+    expect([request.status, lesson]).toEqual(["declined", null]);
+    expect(await studentStatus(db, coach.id, ivo.id)).toBe("none");
+  });
+
+  it("still books at once when the coach did not ask to answer first", async () => {
+    const coach = await aCoach("Dita", { openBooking: true, approveNewBookings: false });
+    const jo = await makePlayer(db, "Jo");
+    const r = await requestOrBook(db, coach, jo.id, at(1), null, before);
+    expect(r.kind).toBe("booked");
+    expect(await studentStatus(db, coach.id, jo.id)).toBe("accepted");
+  });
+
+  it("shuts every door on somebody the coach blocked", async () => {
+    const coach = await aCoach("Elsa", { openBooking: true, approveNewBookings: false });
+    const kit = await makePlayer(db, "Kit");
+    await setStudentStatus(db, coach.id, kit.id, "blocked");
+    // The open door, the ask, the coach's own booking, and the link they were once sent.
+    await expect(bookLesson(db, { coach, studentPlayerId: kit.id, startsAt: at(1), byCoach: false, source: "web" }, before)).rejects.toMatchObject({ code: "blocked" });
+    await expect(bookLesson(db, { coach, studentPlayerId: kit.id, startsAt: at(1), byCoach: true, source: "web" }, before)).rejects.toMatchObject({ code: "blocked" });
+    await expect(requestOrBook(db, coach, kit.id, at(9), null, before)).rejects.toMatchObject({ code: "blocked" });
+    await expect(requestStudent(db, coach.id, kit.id)).rejects.toMatchObject({ code: "blocked" });
+    await expect(acceptByInvite(db, coach.id, kit.id)).rejects.toMatchObject({ code: "blocked" });
+    // The row stays, so the lessons they took and anything they owe stay with it.
+    expect(await studentStatus(db, coach.id, kit.id)).toBe("blocked");
   });
 });

@@ -435,6 +435,13 @@
       "when": 1789918680132,
       "tag": "0061_regular_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789952809332,
+      "tag": "0062_careless_patch",
+      "breakpoints": true
     }
   ]
 }
