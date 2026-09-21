@@ -42,8 +42,10 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
       </div>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-xl font-extrabold tracking-tight">{coach.displayName}</h3>
-        <span className="shrink-0 text-sm font-extrabold tabular-nums">
-          {coach.priceFrom != null ? t("cardFrom", { amount: `${coach.priceFrom} ${coach.currency}` }) : tCoach("page.lesson", { minutes: coach.lessonMinutes })}
+        {/* A coach with no price used to get the lesson length here, and the line below says the
+            lesson length too — so the card printed "60-minute lessons" twice and answered nothing. */}
+        <span className={`shrink-0 text-sm font-extrabold tabular-nums ${coach.priceFrom == null ? "font-bold text-muted" : ""}`}>
+          {coach.priceFrom != null ? t("cardFrom", { amount: `${coach.priceFrom} ${coach.currency}` }) : t("cardAskPrice")}
         </span>
       </div>
       {/* The three lines a player reads before they choose: where, who it is for, and when they are free. */}
