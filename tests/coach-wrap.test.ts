@@ -88,7 +88,7 @@ describe("the monthly wrap", () => {
     expect(toAna.note.body).toContain('"left":10');
     // Nine lessons earned the invitation line.
     expect(toAna.note.body).toContain("wrap.coachInvite");
-    expect(toAna.note.body).toContain("/coaches?s=wrap");
+    expect(toAna.note.body).toContain("/coaches/join?s=wrap");
     expect(toAna.note.url).toBe("https://kicksma.sh/coach");
     const toNok = delivered.find((d) => d.to.id === nok.id)!;
     expect(toNok.note.body).toContain('"filled":9');

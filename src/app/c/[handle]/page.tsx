@@ -67,8 +67,12 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);
   const second = coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? coach.secondMinutes : null;
   const accepted = status === "accepted";
+  // "Anyone can book": a visitor this coach has not accepted still needs the free hours, or the page
+  // offers a booking block with no times in it. The hours only — the waitlist, the requests and what
+  // somebody owes belong to a student who is already on the list.
+  const canBook = accepted || (coach.openBooking && (status === "none" || status === "requested"));
   const [busy, lessons, pkg, waits, requests] = await Promise.all([
-    accepted ? busyBetween(db, coach.id, now, to) : Promise.resolve([]),
+    canBook ? busyBetween(db, coach.id, now, to) : Promise.resolve([]),
     me ? listStudentLessons(db, me.id, new Date(now.getTime() - 2 * 3_600_000)) : Promise.resolve([]),
     me ? activePackage(db, coach.id, me.id, now) : Promise.resolve(null),
     accepted && me ? studentWaitlist(db, coach.id, me.id, now) : Promise.resolve([]),
@@ -77,12 +81,12 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   // Every slot inside the hours, minus the free ones: what a student can wait for.
   // Every hour the coach could teach, free or not: the template plus the dates they opened. Without
   // the openings an hour opened for one date would never show as taken, so nobody could wait for it.
-  const openings = accepted ? await openingsBetween(db, coach.id, now, to) : [];
-  const slots = accepted ? openSlots({ coach, from: now, to, busy, now, openings }) : [];
+  const openings = canBook ? await openingsBetween(db, coach.id, now, to) : [];
+  const slots = canBook ? openSlots({ coach, from: now, to, busy, now, openings }) : [];
   // The second length, when the coach sells one: its own free times, because a 90-minute lesson
   // needs a 90-minute hole. Pure, from the same busy list: no second query.
-  const slotsSecond = accepted && second ? openSlots({ coach, from: now, to, busy, now, openings, minutes: second }) : [];
-  const everySlot = accepted ? openSlots({ coach, from: now, to, busy: [], now, openings }) : [];
+  const slotsSecond = canBook && second ? openSlots({ coach, from: now, to, busy, now, openings, minutes: second }) : [];
+  const everySlot = canBook ? openSlots({ coach, from: now, to, busy: [], now, openings }) : [];
   const freeIso = new Set(slots.map((d) => d.toISOString()));
   const takenSlots = everySlot.filter((d) => !freeIso.has(d.toISOString()));
   const mine = lessons.filter((l) => l.coachId === coach.id);
@@ -166,6 +170,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             coachName={coach.displayName}
             signedIn={Boolean(me)}
             status={status}
+            openBooking={coach.openBooking}
             invite={invite}
             justJoined={justJoined}
             slots={slotDtos}
@@ -188,7 +193,7 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
         {/* Only to a visitor who is nobody here. A student mid-reschedule is not a lead. */}
         {!owner && status === "none" && (
           <p className="text-center text-xs text-faint">
-            <Link href="/coaches?s=coachpage" prefetch={false} className="hover:text-muted" data-testid="own-book">
+            <Link href="/coaches/join?s=coachpage" prefetch={false} className="hover:text-muted" data-testid="own-book">
               {t("page.ownBook")}
             </Link>
           </p>

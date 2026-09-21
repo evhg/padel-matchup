@@ -194,6 +194,21 @@ Wall clock first, credits second. What actually moved it, measured:
   for the page's existing button names; give the new one its own words ("Save courts"), and make
   the old locator `exact: true` where the new name still contains the old word.
 
+- **Every browser suite is one visitor to a rate limit.** All twenty-one reach the server from the
+  same address, so they share one `newid` bucket and `newIdentitiesPerIpPerDay` is 40. The run had
+  crept up on that ceiling for months; adding one player to the coach suite pushed it over, and the
+  suite that failed was `viral`, which the change never touched, on a `waitForURL` whose whole error
+  was the word "timeout". `e2e/lib.mjs` now gives each suite its own `x-forwarded-for`, which is what
+  twenty-one real people look like. Two rules came out of it: a shared counter is shared state, so
+  count it like one; and a wait for a navigation also waits for the error that replaced it — watch
+  both, or the failure cannot say what it was.
+- **A setting a walk switches on stays on for every check after it.** Olga ticked "anyone can book"
+  at the first settings save, and forty lines later the assistant walk — which exists to prove that
+  booking before the coach accepts is refused — got a 201 and then hung waiting for "Waiting for your
+  yes". Nothing was wrong with either half. A browser suite is one long-lived world, so flip a setting
+  at the point the walk needs it, never at the first convenient save, and read what the rest of the
+  file assumes before you tick a box near the top of it.
+
 ### Editing that keeps going wrong
 
 - **Never round-trip `messages/*.json`.** Loading and re-serialising reformats the compact single-line
@@ -268,6 +283,12 @@ Wall clock first, credits second. What actually moved it, measured:
   book a lesson straight back onto the calendar of somebody who had just walked away. When a status says
   "this relationship is over", grep for every place the other side acts, and check each one for the
   branch that trusts the actor instead of the status.
+- **A rule that lets new people act is also a rule about what the page fetches.** `open_booking` let a
+  stranger book, and `bookLesson` accepted them — but `/c/[handle]` read its free hours behind
+  `accepted ? … : []`, four times over, so the new booking block rendered with no times in it and the
+  browser suite hung on a day chip that opened nothing. A server component decides what exists before
+  a component decides what to draw: when a rule widens who may act, grep the page that renders the
+  action for every `status ===` and `accepted ?` and ask each one whether it guards data or a screen.
 - **Dropping a name from a list is not the same as refusing it.** The first fix filtered departed
   students out of the assistant's list — and an unmatched name there makes `addStudentByName` create a
   *new player of that name*, so the coach would have booked a ghost while the real player heard nothing.

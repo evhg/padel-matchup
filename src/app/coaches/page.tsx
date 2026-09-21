@@ -1,85 +1,99 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { CoachListCard } from "@/components/coach/CoachListCard";
 import { Footer, Header } from "@/components/Header";
-import { SourceTag } from "@/components/SourceTag";
+import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
+import { busyForCoaches, coachCardFacts, listPublicCoaches, NO_BUSY } from "@/lib/domain/coaching";
 import { localeAlternates } from "@/lib/seo";
-import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [t, locale] = await Promise.all([getTranslations("coachFront"), getLocale()]);
-  const title = t("metaTitle");
-  const description = t("metaDescription");
+  const [t, locale] = await Promise.all([getTranslations("coaches"), getLocale()]);
+  const title = t("indexTitle");
+  const description = t("indexMeta");
   return { title, description, alternates: localeAlternates("/coaches", locale), openGraph: { title, description, type: "website", url: `${baseUrl()}/coaches` } };
 }
 
-type Props = { searchParams: Promise<{ s?: string | string[] }> };
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * The coach's front door: what changes for them, in their words, and one button.
- * Indexed in three languages; every place a coach can be seen points here, and
- * the door they came through (?s=) is counted when they set up.
+ * The player's list: every listed coach, the city the visitor is in first, and on each card the
+ * things somebody actually chooses between — the price, the next free hour, the languages, the
+ * levels. This page used to be the coach's own front door, so a player who wanted a lesson met a
+ * page selling an assistant to coaches; that door is `/coaches/join` now, one line at the foot.
  */
-export default async function CoachesFrontPage({ searchParams }: Props) {
-  const [t, sp] = await Promise.all([getTranslations("coachFront"), searchParams]);
-  const source = cleanSource(sp.s);
-  const start = source ? `/coach?s=${source}` : "/coach";
+export default async function CoachesPage() {
+  const db = await getDb();
+  const [t, locale, coaches] = await Promise.all([getTranslations("coaches"), getLocale(), listPublicCoaches(db)]);
+  const now = new Date();
+  // One query for the whole list's busy time, not one per coach (rule 12).
+  const busy = await busyForCoaches(db, coaches.map((c) => c.id), now, new Date(now.getTime() + 14 * DAY_MS));
+  // The city the edge reports puts the visitor's own city first; a time zone alone cannot tell Phuket from Bangkok.
+  const hdrs = await headers();
+  const hereCity = (hdrs.get("x-vercel-ip-city") ?? "").toLowerCase();
+  const hereTz = hdrs.get("x-vercel-ip-timezone") ?? "";
+  const sections = CITIES.map((city) => ({ city, list: coaches.filter((c) => c.tz === city.tz) }))
+    .filter((s) => s.list.length > 0)
+    .sort((a, b) => Number(decodeURIComponent(b.city.name).toLowerCase() === hereCity || (b.city.tz === hereTz ? 0.5 : 0)) - Number(decodeURIComponent(a.city.name).toLowerCase() === hereCity || (a.city.tz === hereTz ? 0.5 : 0)));
+  const placed = new Set(sections.flatMap((s) => s.list.map((c) => c.id)));
+  const elsewhere = coaches.filter((c) => !placed.has(c.id));
+  const card = (c: (typeof coaches)[number], cityName: string | null) => <CoachListCard key={c.id} coach={coachCardFacts(c, busy.get(c.id) ?? NO_BUSY, now)} locale={locale} foundingCity={cityName} />;
+  // The same list a search engine reads, in the order a visitor sees it.
   const base = baseUrl();
-  const tiles = ["t1", "t2", "t3", "t4", "t5", "t6"] as const;
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "WebPage",
-    name: t("metaTitle"),
-    description: t("metaDescription"),
-    url: `${base}/coaches`,
-    about: { "@type": "SoftwareApplication", name: "Kicksmash for coaches", applicationCategory: "BusinessApplication", operatingSystem: "Web", offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } },
+    "@type": "ItemList",
+    name: t("indexTitle"),
+    itemListElement: coaches.map((c, i) => ({ "@type": "ListItem", position: i + 1, url: `${base}/c/${c.handle}`, name: c.displayName })),
   };
   return (
     <>
       <Header />
-      <SourceTag source={source} cookie={COACH_SOURCE_COOKIE} />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <section className="card">
-          <span className="chip-muted">🎾 {t("eyebrow")}</span>
-          <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("title")}</h1>
-          <p className="mt-2 text-muted">{t("lead")}</p>
-          <Link href={start} prefetch={false} className="btn-primary mt-4 w-full" data-testid="coach-front-cta">
-            {t("cta")}
-          </Link>
-          <p className="mt-2 text-center text-xs text-muted">{t("ctaHelp")}</p>
+          <span className="chip-muted">🎾 {t("indexEyebrow")}</span>
+          <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("indexTitle")}</h1>
+          <p className="mt-2 text-sm text-muted">{t("indexLead")}</p>
         </section>
-        <section className="grid gap-3">
-          {tiles.map((k) => (
-            <div key={k} className="card">
-              <h2 className="font-extrabold">{t(`${k}Title`)}</h2>
-              <p className="mt-1 text-sm text-ink-soft">{t(k)}</p>
-            </div>
-          ))}
-        </section>
-        <section className="card">
-          <h2 className="font-extrabold">{t("telegramTitle")}</h2>
-          <p className="mt-1 text-sm text-ink-soft">{t("telegram")}</p>
-        </section>
-        <section className="card">
-          <h2 className="font-extrabold">{t("foundingTitle")}</h2>
-          <p className="mt-1 text-sm text-ink-soft">{t("founding")}</p>
-          <p className="mt-3 text-xs text-faint">
-            {t("cities")}{" "}
-            {CITIES.map((c) => (
-              <Link key={c.slug} href={`/coaches/${c.slug}`} prefetch={false} className="mr-3 hover:text-muted">
-                {c.name} →
+
+        {coaches.length === 0 && (
+          <section className="card">
+            <p className="text-sm text-muted">{t("indexEmpty")}</p>
+          </section>
+        )}
+
+        {sections.map(({ city, list }) => (
+          <section key={city.slug} className="flex flex-col gap-3" data-testid="coach-city">
+            <div className="flex items-baseline justify-between gap-3 px-1">
+              <h2 className="text-lg font-extrabold">{t("title", { city: city.name })}</h2>
+              <Link href={`/coaches/${city.slug}`} prefetch={false} className="link text-sm">
+                {t("indexCityMore")}
               </Link>
-            ))}
-          </p>
+            </div>
+            <ul className="flex flex-col gap-3" data-testid="coach-list">{list.map((c) => card(c, city.name))}</ul>
+          </section>
+        ))}
+
+        {elsewhere.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="px-1 text-lg font-extrabold">{t("indexElsewhere")}</h2>
+            <ul className="flex flex-col gap-3">{elsewhere.map((c) => card(c, null))}</ul>
+          </section>
+        )}
+
+        {/* The coach's own door: one line, at the foot, where a coach looks and a player does not. */}
+        <section className="card">
+          <p className="text-sm font-bold">{t("indexForCoaches")}</p>
+          <Link href="/coaches/join?s=coachlist" prefetch={false} className="btn-ghost mt-3 w-full">
+            {t("coachCta")}
+          </Link>
         </section>
-        <Link href={start} prefetch={false} className="btn-secondary w-full">
-          {t("cta")}
-        </Link>
       </main>
       <Footer />
     </>

@@ -19,6 +19,8 @@ type Props = {
   coachName: string;
   signedIn: boolean;
   status: StudentStatus;
+  /** The coach lets anyone book a free hour: the booking itself puts the person on the list, so no asking first. */
+  openBooking?: boolean;
   slots: Slot[];
   /** In the hours but already booked: tappable for the waitlist. */
   taken?: Slot[];
@@ -54,9 +56,12 @@ type Props = {
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, openBooking = false, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
+  // Nobody the coach has accepted yet. `bookLesson` lets exactly these three book when the coach is
+  // open, so the screen shows exactly these three the booking block. `paused` is not one of them.
+  const guest = status === "none" || status === "left" || status === "requested";
   const router = useRouter();
   const [pending, start] = useTransition();
   const [name, setName] = useState("");
@@ -81,7 +86,9 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   const day = days.includes(pickedDay) ? pickedDay : (days[0] ?? "");
   const daySlots = (longer ? slotsSecond : slots).filter((s) => s.day === day);
   // Taken hours are drawn for the usual length only: a longer lesson's "taken" is any shorter hole.
-  const dayTaken = longer ? [] : taken.filter((s) => s.day === day);
+  // A taken hour is tappable to wait for it, which is a student's act: somebody the coach has not
+  // accepted would only meet a refusal. They see the free hours and nothing else.
+  const dayTaken = longer || status !== "accepted" ? [] : taken.filter((s) => s.day === day);
   // Free and taken in one row, in the order the hours come. Taken ones used to be appended after the
   // free ones, so a booked 16:00 sat to the right of a free 19:00 and the row read as nonsense.
   const dayHours = [...daySlots.map((s) => ({ ...s, free: true })), ...dayTaken.map((s) => ({ ...s, free: false }))].sort((a, b) => a.iso.localeCompare(b.iso));
@@ -137,7 +144,8 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
     if (!slot) return;
     setError(null);
     start(async () => {
-      const r = await studentBookAction(handle, slot, heads, length);
+      // With "anyone can book" the booking is also the joining, so a first-timer gives their name here.
+      const r = await studentBookAction(handle, slot, heads, length, signedIn ? undefined : name.trim() || undefined);
       if (!r.ok) {
         setError(errorText(r.error));
         return;
@@ -276,7 +284,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
   return (
     <div className="flex flex-col gap-4">
       <section className="card">
-        {status === "none" && (
+        {status === "none" && !openBooking && (
           <form onSubmit={request} className="flex flex-col gap-3" data-testid={invite ? "invited-join" : "ask-to-join"}>
             {!signedIn && (
               <>
@@ -290,7 +298,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
           </form>
         )}
         {status === "accepted" && justJoined && <p className="mb-3 text-sm font-semibold text-ok">✓ {t("page.invitedSignedIn", { name: coachName })}</p>}
-        {status === "requested" && <p className="text-sm font-semibold">⏳ {t("page.requested", { name: coachName })}</p>}
+        {status === "requested" && !openBooking && <p className="text-sm font-semibold">⏳ {t("page.requested", { name: coachName })}</p>}
         {status === "paused" && <p className="text-sm font-semibold">{t("page.paused", { name: coachName })}</p>}
         {status === "accepted" && offers.length > 0 && (
           <div className="mb-4 flex flex-col gap-2 rounded-2xl bg-ok-soft px-4 py-3" data-testid="offers">
@@ -310,9 +318,22 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
             ))}
           </div>
         )}
-        {status === "accepted" && (
+        {(status === "accepted" || (openBooking && guest)) && (
           <div className="flex flex-col gap-3">
             <h2 className="text-xl font-extrabold tracking-tight">{t("page.book")}</h2>
+            {guest && openBooking && (
+              <>
+                <p className="text-sm text-muted" data-testid="open-booking-note">
+                  {t("page.openBookingNote", { name: coachName })}
+                </p>
+                {!signedIn && (
+                  <label className="block">
+                    <span className="label">{tRoot("identity.yourName")}</span>
+                    <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={tRoot("identity.namePlaceholder")} maxLength={40} autoComplete="given-name" />
+                  </label>
+                )}
+              </>
+            )}
             {days.length === 0 ? (
               <p className="text-sm text-muted">{t("page.noSlots", { name: coachName })}</p>
             ) : (
@@ -388,14 +409,16 @@ export function StudentBooking({ handle, coachName, signedIn, status, slots, tak
                 <button type="button" className="btn-primary w-full" disabled={!slot || pending} onClick={book}>
                   {pending ? "…" : slot ? t("page.confirm", { when: `${dayLabels[day] ?? day} ${daySlots.find((s) => s.iso === slot)?.time ?? ""}` }) : t("page.book")}
                 </button>
-                {weekOf[day] && (
+                {/* Waiting for a week, and asking for an hour outside the week, are a student's acts:
+                    they end in a message from this coach. Somebody not on the list yet books first. */}
+                {weekOf[day] && status === "accepted" && (
                   <button type="button" className="btn-secondary btn-sm max-w-full self-start whitespace-normal py-2 text-left leading-snug" disabled={pending} onClick={() => waitFor(null, weekOf[day], weekOf[day])} data-testid="week-wait">
                     {t("page.weekWait")}
                   </button>
                 )}
               </>
             )}
-            {!asking ? (
+            {status !== "accepted" ? null : !asking ? (
               <button type="button" className="btn-secondary btn-sm max-w-full self-start whitespace-normal py-2 text-left leading-snug" onClick={() => setAsking(true)} data-testid="other-time">
                 {t("page.otherTime")} →
               </button>

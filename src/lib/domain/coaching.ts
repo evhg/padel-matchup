@@ -9,6 +9,7 @@ import { venueSlug, venueSlugFor } from "./venueBoard";
 import { CITIES, cityInText, cityOf, type City } from "./cities";
 import { channelOf, recordFact } from "./facts";
 import { createPlayer } from "./players";
+import { LEVEL_MAX, LEVEL_MIN } from "./levels";
 
 /**
  * A coach's book: students, packages with expiry, lessons, blocks. The rules are the
@@ -277,7 +278,7 @@ export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> =
 /** A payment link a student can open: http(s), at least a few characters, no spaces. */
 export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
 
-export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic">>;
+export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic" | "openBooking" | "teachesLevelMin" | "teachesLevelMax">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
   const clean: CoachPatch = { ...patch };
@@ -294,6 +295,15 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   if (clean.secondMinutes !== undefined) {
     const m = clean.secondMinutes;
     clean.secondMinutes = m != null && LESSON_MINUTES.includes(m as (typeof LESSON_MINUTES)[number]) ? m : null;
+  }
+  // The levels a coach teaches: on the 0-7 scale, in halves, and never back to front. A coach who
+  // types 4 then 2 means 2 to 4, so the card says that rather than "no range".
+  for (const k of ["teachesLevelMin", "teachesLevelMax"] as const) {
+    const v = clean[k];
+    if (v !== undefined) clean[k] = v == null || !Number.isFinite(v) ? null : Math.min(LEVEL_MAX, Math.max(LEVEL_MIN, Math.round(v * 2) / 2));
+  }
+  if (clean.teachesLevelMin != null && clean.teachesLevelMax != null && clean.teachesLevelMin > clean.teachesLevelMax) {
+    [clean.teachesLevelMin, clean.teachesLevelMax] = [clean.teachesLevelMax, clean.teachesLevelMin];
   }
   if (clean.latePasses !== undefined) clean.latePasses = Math.min(5, Math.max(0, Math.round(clean.latePasses)));
   if (clean.minNoticeHours !== undefined) clean.minNoticeHours = Math.min(48, Math.max(0, Math.round(clean.minNoticeHours)));
@@ -941,14 +951,22 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
   const pkg = open && (input.minutes == null || open.minutes == null || open.minutes === input.minutes) ? open : null;
   const minutes = input.minutes ?? pkg?.minutes ?? coach.lessonMinutes;
   const heads = Math.min(Math.max(input.heads ?? pkg?.heads ?? 1, 1), MAX_HEADS);
+  // "Anyone can book": for a coach with `open_booking`, the booking is the joining. Without it a
+  // player who found the coach in the directory had to ask, and wait for a person, before any hour
+  // could be taken. A `paused` student is still refused: the coach paused them on purpose.
+  let joins = false;
   if (!input.byCoach) {
-    if ((await studentStatus(db, coach.id, input.studentPlayerId)) !== "accepted") throw new DomainError("not_student");
+    const status = await studentStatus(db, coach.id, input.studentPlayerId);
+    joins = status !== "accepted";
+    if (joins && !(coach.openBooking && (status === "none" || status === "left" || status === "requested"))) throw new DomainError("not_student");
     if (startsAt.getTime() < now.getTime() + coach.minNoticeHours * HOUR_MS) throw new DomainError("too_soon");
     if (!withinHours(coach, startsAt, minutes)) throw new DomainError("outside_hours");
   }
   const end = new Date(startsAt.getTime() + minutes * 60_000);
   const busy = await busyBetween(db, coach.id, startsAt, end);
   if (busy.some((b) => overlaps(startsAt.getTime(), end.getTime(), b))) throw new DomainError("slot_taken");
+  // Only now, with the hour truly theirs: a refused booking must not leave a student on the list.
+  if (joins) await acceptByInvite(db, coach.id, input.studentPlayerId);
   // What it costs: the price for this many at this length, unless a package pays; plus the extra for
   // an hour outside the week, which a package does not cover. Null when nothing is owed at all.
   const fee = outsideHoursFee(coach, startsAt, minutes);
@@ -1383,6 +1401,76 @@ export async function listPublicCoaches(db: Db, cityTz?: string | null, limit = 
   if (opts.includeQuiet || rows.length === 0) return rows;
   const awake = await awakeAmong(db, rows.map((c) => c.id), opts.now ?? new Date());
   return rows.filter(awake);
+}
+
+/** What a coach's diary already holds, and the extra hours they opened on single dates. */
+export type CoachFree = { busy: Busy[]; openings: Busy[] };
+
+/**
+ * The busy time and the openings of a whole list of coaches in three queries, so a directory of N
+ * coaches costs three reads rather than 3N. `openSlots` is pure and takes both lists, so the free
+ * hour on each card is then arithmetic (rule 12).
+ */
+export async function busyForCoaches(db: Db, coachIds: string[], from: Date, to: Date): Promise<Map<string, CoachFree>> {
+  const out = new Map<string, CoachFree>();
+  if (coachIds.length === 0) return out;
+  for (const id of coachIds) out.set(id, { busy: [], openings: [] });
+  const [ls, bs, os] = await Promise.all([
+    db
+      .select({ coachId: lessons.coachId, startsAt: lessons.startsAt, minutes: lessons.minutes })
+      .from(lessons)
+      .where(and(inArray(lessons.coachId, coachIds), eq(lessons.status, "booked"), gte(lessons.startsAt, new Date(from.getTime() - 4 * HOUR_MS)), lte(lessons.startsAt, to))),
+    db
+      .select({ coachId: coachBlocks.coachId, startsAt: coachBlocks.startsAt, endsAt: coachBlocks.endsAt })
+      .from(coachBlocks)
+      .where(and(inArray(coachBlocks.coachId, coachIds), lt(coachBlocks.startsAt, to), gt(coachBlocks.endsAt, from))),
+    db
+      .select({ coachId: coachOpenings.coachId, startsAt: coachOpenings.startsAt, endsAt: coachOpenings.endsAt })
+      .from(coachOpenings)
+      .where(and(inArray(coachOpenings.coachId, coachIds), lt(coachOpenings.startsAt, to), gt(coachOpenings.endsAt, from))),
+  ]);
+  for (const l of ls) out.get(l.coachId)?.busy.push({ startsAt: l.startsAt, endsAt: new Date(l.startsAt.getTime() + l.minutes * 60_000) });
+  for (const b of bs) out.get(b.coachId)?.busy.push({ startsAt: b.startsAt, endsAt: b.endsAt });
+  // An opening is an hour the coach added outside the weekly template. Drop it and a card says "no
+  // free hour" for a coach who has one, which is the whole point of the column.
+  for (const o of os) out.get(o.coachId)?.openings.push({ startsAt: o.startsAt, endsAt: o.endsAt });
+  return out;
+}
+
+/** The empty diary: a coach the map does not know about is free by their template alone. */
+export const NO_BUSY: CoachFree = { busy: [], openings: [] };
+
+/** The first hour this coach is free, or null when nothing opens in the window. Pure arithmetic over the diary. */
+export function nextFree(coach: Pick<Coach, "hours" | "tz" | "lessonMinutes" | "minNoticeHours">, free: CoachFree, now: Date, days = 14): Date | null {
+  const to = new Date(now.getTime() + days * DAY_MS);
+  return openSlots({ coach, from: now, to, busy: free.busy, openings: free.openings, now })[0] ?? null;
+}
+
+/** The lowest number this coach charges for one person, whatever the length. Null: packages only. */
+export const priceFrom = (c: Pick<Coach, "priceSingle" | "priceSecondSingle">): number | null => {
+  // Only the one-person prices: `priceTwo` and up are the price of a lesson for two or more, so the
+  // smallest of all six would quote a group rate to somebody booking alone.
+  const all = [c.priceSingle, c.priceSecondSingle].filter((n): n is number => typeof n === "number" && n > 0);
+  return all.length ? Math.min(...all) : null;
+};
+
+/** A coach as a directory card reads them: what a player compares on, with the free hour already worked out. */
+export function coachCardFacts(coach: Coach, free: CoachFree, now = new Date()) {
+  return {
+    handle: coach.handle,
+    displayName: coach.displayName,
+    clubNames: coach.clubNames,
+    languages: coach.languages,
+    lessonMinutes: coach.lessonMinutes,
+    bio: coach.bio,
+    founding: isFoundingCoach(coach),
+    priceFrom: priceFrom(coach),
+    currency: coach.currency,
+    nextFree: nextFree(coach, free, now)?.toISOString() ?? null,
+    tz: coach.tz,
+    openBooking: coach.openBooking,
+    levels: { min: coach.teachesLevelMin, max: coach.teachesLevelMax },
+  };
 }
 
 /** The first ten listed coaches of a city carry a founding badge, and everything stays free for them (mirrors founding clubs). */

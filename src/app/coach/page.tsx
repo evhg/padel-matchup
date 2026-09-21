@@ -140,7 +140,7 @@ export default async function CoachPage({ searchParams }: Props) {
         handle={coach.handle}
         coachName={coach.displayName}
         url={`${baseUrl()}/c/${coach.handle}`}
-        inviteUrl={`${baseUrl()}/coaches?s=invite`}
+        inviteUrl={`${baseUrl()}/coaches/join?s=invite`}
         studentUrl={studentLink(baseUrl(), coach.handle, invite)}
         earned={earned}
         lengths={[coach.lessonMinutes, ...(second ? [second] : [])]}

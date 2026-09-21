@@ -1,6 +1,6 @@
 // A coach's book: their students, their packages, the lessons, the hours they block, the queue for a spot.
 import { relations } from "drizzle-orm";
-import { boolean, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import { players } from "./players";
 
 export const coaches = pgTable(
@@ -71,6 +71,16 @@ export const coaches = pgTable(
     whatsapp: text("whatsapp"),
     /** Listed on the public page, city list and sitemap. */
     isPublic: boolean("is_public").notNull().default(true),
+    /**
+     * Anyone may book a free hour without asking first. Off by default, which is how it worked for
+     * everybody until now: a stranger asked, the coach accepted, and only then could they book. A
+     * player who found the coach through the directory waited on a person, which is where they left.
+     * On, the booking itself puts them on the list.
+     */
+    openBooking: boolean("open_booking").notNull().default(false),
+    /** The levels this coach teaches, 0 to 7 in halves, for the directory card. Both null: they do not say. */
+    teachesLevelMin: real("teaches_level_min"),
+    teachesLevelMax: real("teaches_level_max"),
     /** Among the first ten listed coaches of their city when they listed: earned once, never taken back. */
     foundingAt: timestamp("founding_at", { withTimezone: true }),
     /** The city (time zone) the place was earned in; a coach who moves city does not carry it. */
