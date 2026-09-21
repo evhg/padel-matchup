@@ -1,9 +1,9 @@
 import type { Db } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { tell } from "@/lib/coach/notify";
-import { decideClub, getClubByToken } from "@/lib/domain/clubs";
+import { type ClaimReason, decideClub, getClubByToken } from "@/lib/domain/clubs";
 import { getPlayer } from "@/lib/domain/players";
-import { claimDecisionText } from "../clubs";
+import { claimDecisionText, reasonOfCode } from "../clubs";
 import { setAnswerPublished } from "@/lib/listen/answers";
 import { approveItem, ownerTelegramId, skipItem } from "@/lib/listen/tick";
 import { approveOutreach, skipOutreach } from "@/lib/outreach/desk";
@@ -38,26 +38,28 @@ async function handleListenCallback(db: Db, cb: NonNullable<TgUpdate["callback_q
   return `listen:${res.status}`;
 }
 
-async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "ca" | "cr", token: string): Promise<string> {
+async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, action: "ca" | "cr", token: string, reason: ClaimReason | null = null): Promise<string> {
   if (cb.from.id !== ownerTelegramId()) {
     await answerCallbackQuery(cb.id);
     return "club:not_owner";
   }
   const club = await getClubByToken(db, token);
-  const row = club ? await decideClub(db, club.slug, action === "ca") : null;
+  const row = club ? await decideClub(db, club.slug, action === "ca", new Date(), reason) : null;
   if (!row) {
     await answerCallbackQuery(cb.id, "Not found.");
     return "club:noop";
   }
-  const text = action === "ca" ? `✅ Live${row.founding ? " · founding club" : ""}: ${row.name}` : `❌ Not approved: ${row.name}`;
+  const text = action === "ca" ? `✅ Live${row.founding ? " · founding club" : ""}: ${row.name}` : `❌ Not approved${reason ? ` (${reason.replace(/_/g, " ")})` : ""}: ${row.name}`;
   await answerCallbackQuery(cb.id, text.slice(0, 190));
   // The claimant hears the answer where they are: Telegram, else email, else push. A claim that goes
   // quiet after the tap was the walk's finding.
-  const claimant = row.claimedBy ? await getPlayer(db, row.claimedBy) : null;
+  // A club a player listed has no claimant: the person to tell is whoever put it on the map.
+  const tellId = row.claimedBy ?? row.addedBy;
+  const claimant = tellId ? await getPlayer(db, tellId) : null;
   // A refused claimant used to get one button to GitHub Discussions, where a club manager has no
   // account. The note that reaches the owner is a page on this site, so that is the button.
   const door = action === "ca" ? { text: "Open the page", url: `${baseUrl()}/v/${row.slug}` } : { text: "Tell us", url: `${baseUrl()}/feedback?s=clubclaim` };
-  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca"), { inline_keyboard: [[door]] }).catch(() => undefined);
+  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca", reason), { inline_keyboard: [[door]] }).catch(() => undefined);
   if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(text), { inline_keyboard: [[{ text: "Open page", url: `${baseUrl()}/v/${row.slug}` }]] });
   return action === "ca" ? "club:approved" : "club:rejected";
 }
@@ -87,7 +89,9 @@ export async function handleOwnerCallback(db: Db, cb: NonNullable<TgUpdate["call
   if (listen) return handleListenCallback(db, cb, listen[1] as "la" | "ls" | "lu", listen[2]);
   const mail = data.match(/^(oa|os):([0-9a-f-]{36})$/);
   if (mail) return handleOutreachCallback(db, cb, mail[1] as "oa" | "os", mail[2]);
-  const club = data.match(/^(ca|cr):([A-Za-z0-9_-]{16,40})$/);
-  if (club) return handleClubCallback(db, cb, club[1] as "ca" | "cr", club[2]);
+  // A refusal carries its reason as one letter, because callback_data stops at 64 bytes. An older
+  // message with no letter still works and stores no reason, which is what it always did.
+  const club = data.match(/^(ca|cr):([A-Za-z0-9_-]{16,40})(?::([a-z]))?$/);
+  if (club) return handleClubCallback(db, cb, club[1] as "ca" | "cr", club[2], club[3] ? reasonOfCode(club[3]) : null);
   return null;
 }

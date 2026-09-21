@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
@@ -93,8 +93,20 @@ export const isClubLive = (c: Pick<Club, "approvedAt" | "rejectedAt"> | null | u
  * player looking for a club found an empty list. A listed club shows its facts and says plainly
  * that the club does not manage the page.
  */
+/**
+ * A club page nobody runs: Kicksmash listed it from public sources, or a player listed it because
+ * nobody had. Both are shown and both say so; neither claims to be the club's own word.
+ *
+ * This is a named list, and `listedSource` below is the one SQL form of it, because the last time a
+ * `source` value was added three of the four queries that needed it were not updated.
+ */
+export const LISTED_SOURCES = ["directory", "player"] as const;
+
 export const isClubListed = (c: Pick<Club, "approvedAt" | "rejectedAt" | "source"> | null | undefined): boolean =>
-  Boolean(c && !c.rejectedAt && (c.approvedAt || c.source === "directory"));
+  Boolean(c && !c.rejectedAt && (c.approvedAt || (LISTED_SOURCES as readonly string[]).includes(c.source)));
+
+/** The same rule in SQL: this row is ours to show, though no club runs it. */
+const listedSource = () => inArray(clubs.source, LISTED_SOURCES as unknown as string[]);
 export const clubStatus = (c: Pick<Club, "approvedAt" | "rejectedAt">): "live" | "pending" | "rejected" => (c.rejectedAt ? "rejected" : c.approvedAt ? "live" : "pending");
 
 export async function getClub(db: Db, slug: string): Promise<Club | null> {
@@ -109,6 +121,12 @@ export async function getLiveClub(db: Db, slug: string): Promise<Club | null> {
   return isClubLive(c) ? c : null;
 }
 
+/** One club a reader may see: theirs or ours. The API's `include=listed` lookup by slug. */
+export async function getShownClub(db: Db, slug: string): Promise<Club | null> {
+  const row = await getClub(db, slug);
+  return row && isClubListed(row) ? row : null;
+}
+
 export async function getClubByToken(db: Db, token: string): Promise<Club | null> {
   if (!/^[A-Za-z0-9_-]{16,40}$/.test(token)) return null;
   const [c] = await db.select().from(clubs).where(eq(clubs.manageToken, token)).limit(1);
@@ -120,7 +138,7 @@ export async function getClubByToken(db: Db, token: string): Promise<Club | null
  * club actually runs; this is the one a directory page, a city page and the sitemap read.
  */
 export async function listShownClubs(db: Db, city?: string | null, limit = 400): Promise<Club[]> {
-  const shown = and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), eq(clubs.source, "directory")));
+  const shown = and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), listedSource()));
   return db
     .select()
     .from(clubs)
@@ -145,7 +163,7 @@ export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> 
   return db
     .select()
     .from(clubs)
-    .where(and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), eq(clubs.source, "directory"))))
+    .where(and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), listedSource())))
     .orderBy(asc(clubs.country), asc(clubs.province), asc(clubs.name))
     .limit(limit);
 }
@@ -299,7 +317,7 @@ async function listedClubByName(db: Db, name: string): Promise<Club | null> {
   const [c] = await db
     .select()
     .from(clubs)
-    .where(and(eq(clubs.source, "directory"), isNull(clubs.claimedBy), sql`lower(${clubs.name}) = ${name.toLowerCase()}`))
+    .where(and(listedSource(), isNull(clubs.claimedBy), sql`lower(${clubs.name}) = ${name.toLowerCase()}`))
     .limit(1);
   return c ?? null;
 }
@@ -348,6 +366,53 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   return row;
 }
 
+/**
+ * A player lists a club nobody had listed.
+ *
+ * Sixty-six clubs came from public sources, all of them in Thailand or Singapore. A player in Kuala
+ * Lumpur or Madrid had no way to put their own club on the map and no reason to come back. Anybody
+ * may list a club; only an owner or a manager may claim one, and that door is unchanged
+ * (`claimClub`, with its role and its work-address check). Listing sets no `claimedBy` and no
+ * `approvedAt`, so the page says plainly that the club does not run it.
+ *
+ * The court split is the price of the glory: an indoor court in Kuala Lumpur in November is a
+ * different thing from an outdoor one, and no public source says which.
+ */
+export type AddClubInput = ClubInput & { name: string; playerId: string; tz?: string | null };
+
+export async function addClub(db: Db, input: AddClubInput): Promise<Club> {
+  const name = input.name.trim().slice(0, 80);
+  const slug = venueSlug(name);
+  if (!slug || name.length < 2) throw new DomainError("invalid", "club_name");
+  // A club that already has a page, ours or theirs, is not a listing: it is a claim, and the claim
+  // form is the door with the checks on it. A refused row is not in anybody's way and may be listed.
+  const existing = (await listedClubByName(db, name)) ?? (await getClub(db, slug));
+  if (existing && !existing.rejectedAt) throw new DomainError("forbidden", "already_listed");
+  const fields = cleanClubInput(input);
+  const city = fields.city ?? guessCity(slug, input.tz) ?? null;
+  const country = fields.country ?? countryOfTz(input.tz) ?? null;
+  const province = fields.province ?? (city ? (cityBySlug(city)?.name ?? null) : null);
+  const tz = input.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
+  const values = { ...fields, city, country, province, name, tz, source: "player", addedBy: input.playerId, claimedBy: null, approvedAt: null, rejectedAt: null, claimDecision: null, founding: false, updatedAt: new Date() };
+  if (existing) {
+    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, existing.slug)).returning();
+    return row;
+  }
+  const [row] = await db
+    .insert(clubs)
+    .values({ slug, manageToken: newToken(), ...values })
+    .returning();
+  return row;
+}
+
+/** How many clubs this person listed today: the one brake on a page anybody can write to. */
+export async function clubsAddedSince(db: Db, playerId: string, since: Date): Promise<number> {
+  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(eq(clubs.addedBy, playerId), gte(clubs.createdAt, since)));
+  return Number(n);
+}
+
+export const CLUB_ADD_LIMITS = { perPlayerPerDay: 5 } as const;
+
 /** Edits through the manage link. Name and slug never change (they are the venue's). */
 export async function updateClub(db: Db, token: string, input: ClubInput): Promise<Club | null> {
   const club = await getClubByToken(db, token);
@@ -366,12 +431,25 @@ export async function updateClub(db: Db, token: string, input: ClubInput): Promi
   return row;
 }
 
+/**
+ * Why a claim was refused. A refusal stored the hour and nothing else, so the claimant was told one
+ * sentence that fitted every case and pointed at GitHub Discussions. These four are what the owner
+ * actually decides between, and each one has a different thing for the person to do next.
+ */
+export const CLAIM_REASONS = ["unconfirmed", "taken", "not_a_club", "duplicate"] as const;
+export type ClaimReason = (typeof CLAIM_REASONS)[number];
+export const isClaimReason = (v: unknown): v is ClaimReason => typeof v === "string" && (CLAIM_REASONS as readonly string[]).includes(v);
+
 /** The owner's tap. Approval makes the page live and hands out the founding badge while the city has room. */
-export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date()): Promise<Club | null> {
+export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date(), reason?: ClaimReason | null): Promise<Club | null> {
   const club = await getClub(db, slug);
   if (!club) return null;
   if (!approve) {
-    const [row] = await db.update(clubs).set({ rejectedAt: now, approvedAt: null, founding: false, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
+    const [row] = await db
+      .update(clubs)
+      .set({ rejectedAt: now, approvedAt: null, founding: false, claimDecision: isClaimReason(reason) ? reason : null, updatedAt: now })
+      .where(eq(clubs.slug, slug))
+      .returning();
     return row;
   }
   let founding = club.founding;
@@ -383,7 +461,7 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
     const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(key, eq(clubs.founding, true), isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt)));
     founding = Number(n) < CLUB_LIMITS.foundingPerCity;
   }
-  const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
+  const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, claimDecision: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
   // A live club page is news for the search engines that speak IndexNow.
   await pingIndexNow([`/v/${slug}`, ...locales.map((l) => localePath("/clubs", l))], { db });
   return row;

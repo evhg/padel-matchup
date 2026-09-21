@@ -44,7 +44,9 @@ try {
   await p.goto(`${BASE}/?type=tournament&capacity=12`);
   check("landing prefilled as a 12-player tournament", (await p.locator('button[aria-pressed="true"]', { hasText: "Tournament" }).count()) === 1 && (await p.locator("main select").first().inputValue()) === "12");
   check("the prefilled page says it is the americano, not 'set up a match'", (await p.getByRole("heading", { name: "Your americano, live" }).count()) === 1);
-  check("landing links to the generator", (await p.getByRole("link", { name: /schedule generator/ }).count()) === 1);
+  // By its address, not by its sales line: the tile's words change whenever the two organiser doors
+  // are re-cut, and a marketing sentence is not the contract the landing page owes the generator.
+  check("landing links to the generator", (await p.locator('a[href="/americano"]').count()) >= 1);
   // The whole hand-off: the generator's five names become five seated players with links to pass on.
   await p.goto(`${BASE}/?type=tournament&capacity=8&s=gen&names=Ana%2CBo%2CCy%2CDi%2CEd`);
   check("the carried players are named before anything is typed", (await p.getByTestId("carried-players").innerText()).includes("Ana · Bo · Cy · Di · Ed"));

@@ -100,9 +100,9 @@
     "doorsTitle": "Also on Kicksmash",
     "americanoTitle": "Americano",
     "doorCoaches": "Padel coach? Your students book themselves",
-    "doorTournaments": "Running a tournament with categories and a draw? Free, from a phone",
+    "doorTournaments": "Pairs, categories and a knockout draw. Entry fees and a series ranking.",
     "doorClubs": "Run a club? Claim your page: matches, ranking, poster, booking button",
-    "doorAmericano": "Running an americano? Free schedule generator",
+    "doorAmericano": "Rotating partners, everyone plays everyone. A free schedule, or run it live.",
     "fromGeneratorTitle": "Your americano, live",
     "fromGeneratorSub": "Pick a time and share one link. Scores, standings and reminders look after themselves.",
     "carriedTitle": "{count, plural, one {# player from your schedule} other {# players from your schedule}}",
@@ -662,7 +662,10 @@
       "liveHelp": "Scores from any phone, live standings, calendar invites, reminders.",
       "perfect": "{n} rounds and every pair has partnered exactly once.",
       "partial": "{players} players on {courts} courts: {resting} sit out each round, spread fairly.",
-      "metaDescription": "Free americano padel schedule generator: rotating partners, fair sit-outs, 4 to 64 players, printable. Or run it live with scores and standings."
+      "metaDescription": "Free americano padel schedule generator: rotating partners, fair sit-outs, 4 to 64 players, printable. Or run it live with scores and standings.",
+      "copy": "🔗 Copy the link",
+      "copied": "Copied",
+      "shareHelp": "Anybody with this link sees the same rounds. Nothing is saved on Kicksmash."
     },
     "howItWorksMexicano": "Round 1 is random. From round 2 the courts follow the standings: the top four play on court 1, the next four on court 2, and on each court 1st and 4th play 2nd and 3rd. Enter every score before the next round.",
     "howItWorksKing": "Winners move up a court, losers move down; the top court's winners and the bottom court's losers stay. Partners split every round. Standings follow the court you finish on, winners first. Enter every score before the next round.",
@@ -1205,7 +1208,15 @@
     "searchNone": "No club here matches that. Try the place instead of the name.",
     "listedHere": "Listed here",
     "noneHere": "No club in {country} has a page here yet.",
-    "noneHereCta": "Be the first. A club page is free, and ten founding places wait in every city."
+    "noneHereCta": "Be the first. A club page is free, and ten founding places wait in every city.",
+    "addTitle": "Put a club on the map",
+    "addSub": "Anybody can list a padel club nobody has listed yet. Your name goes on the page.",
+    "addCta": "List this club",
+    "addDoor": "Add the first club here",
+    "addedBy": "Listed by {name}",
+    "addDone": "{club} is on the map. Thank you.",
+    "addLimit": "You listed enough clubs today. Come back tomorrow.",
+    "addTaken": "This club already has a page here."
   },
   "passport": {
     "title": "Passport",

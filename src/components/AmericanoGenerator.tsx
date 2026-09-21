@@ -7,15 +7,45 @@ import { buildHistory, maxCourtsFor, mulberry32, planRound, rotationLength, sche
 
 type Round = { matches: Pairing[]; resting: string[] };
 
-/** Same engine as live tournaments, run in the browser: paste names, get every round, print it or take it live. */
-export function AmericanoGenerator() {
+/** What a link carries. The rounds are a pure function of these five, so nothing is stored. */
+export type GenSetup = { n: number; courts: number; rounds: number; seed: number; names: string[] };
+
+/**
+ * The rounds for a setup. Deterministic: the same five inputs always give the same draw, which is
+ * what makes a link enough and a table unnecessary (rule 12).
+ */
+function build(setup: { n: number; courts: number; roundCount: number; seed: number }): Round[] {
+  const { n, courts, roundCount, seed } = setup;
+  const cycle = rotationLength(n);
+  const exact = Boolean(cycle) && courts === maxCourtsFor(n);
+  const ids = Array.from({ length: n }, (_, i) => `p${i}`);
+  const rng = mulberry32(seed * 7919 + n);
+  const ordered = seededShuffle(ids, mulberry32(seed * 104729 + n));
+  const out: Round[] = [];
+  const refs: RoundRef[] = [];
+  for (let r = 0; r < roundCount; r++) {
+    let plan: Round;
+    if (exact && cycle && r >= cycle) plan = out[r - cycle];
+    else if (exact) plan = scheduleRound(ordered, r, buildHistory(refs), rng);
+    else plan = planRound(ids, courts, buildHistory(refs), rng);
+    out.push(plan);
+    refs.push({ matches: plan.matches.map((m) => ({ a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1], sideA: null, sideB: null })), resting: plan.resting });
+  }
+  return out;
+}
+
+/** Same engine as live tournaments, run in the browser: paste names, get every round, print it, send it or take it live. */
+export function AmericanoGenerator({ initial }: { initial?: GenSetup | null }) {
   const t = useTranslations();
-  const [count, setCount] = useState(8);
-  const [namesText, setNamesText] = useState("");
-  const [courtsInput, setCourtsInput] = useState<number | null>(null);
-  const [roundsInput, setRoundsInput] = useState<number | null>(null);
-  const [seed, setSeed] = useState(1);
-  const [rounds, setRounds] = useState<Round[] | null>(null);
+  const [count, setCount] = useState(initial?.n ?? 8);
+  const [namesText, setNamesText] = useState(initial?.names.join("\n") ?? "");
+  const [courtsInput, setCourtsInput] = useState<number | null>(initial?.courts ?? null);
+  const [roundsInput, setRoundsInput] = useState<number | null>(initial?.rounds ?? null);
+  const [seed, setSeed] = useState(initial?.seed ?? 1);
+  // A link opens on the schedule it names. The same pure function runs here and on every tap below,
+  // so the first paint and a later shuffle cannot disagree.
+  const [rounds, setRounds] = useState<Round[] | null>(initial ? build({ n: initial.n, courts: initial.courts, roundCount: initial.rounds, seed: initial.seed }) : null);
+  const [copied, setCopied] = useState(false);
 
   // Sixty-four is the field the engine and the form both stop at. Without this cap a pasted club
   // list of two hundred names built two hundred players' rounds in the browser and froze the page.
@@ -29,21 +59,31 @@ export function AmericanoGenerator() {
   const playerName = (i: number) => names[i] ?? `${t("americano.gen.players").replace(/s$/, "")} ${i + 1}`;
   const label = (id: string) => playerName(Number(id.slice(1)));
 
+  /** The address of this exact draw. It went in the address bar, so closing the tab stops losing the work. */
+  const linkFor = (s: number) => {
+    const q = new URLSearchParams({ n: String(n), courts: String(courts), rounds: String(roundCount), seed: String(s) });
+    if (names.length >= 4) q.set("names", names.join(","));
+    return `/americano?${q.toString()}`;
+  };
+
   const generate = (s = seed) => {
-    const ids = Array.from({ length: n }, (_, i) => `p${i}`);
-    const rng = mulberry32(s * 7919 + n);
-    const ordered = seededShuffle(ids, mulberry32(s * 104729 + n));
-    const out: Round[] = [];
-    const refs: RoundRef[] = [];
-    for (let r = 0; r < roundCount; r++) {
-      let plan: Round;
-      if (exact && cycle && r >= cycle) plan = out[r - cycle];
-      else if (exact) plan = scheduleRound(ordered, r, buildHistory(refs), rng);
-      else plan = planRound(ids, courts, buildHistory(refs), rng);
-      out.push(plan);
-      refs.push({ matches: plan.matches.map((m) => ({ a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1], sideA: null, sideB: null })), resting: plan.resting });
+    setRounds(build({ n, courts, roundCount, seed: s }));
+    setCopied(false);
+    // replaceState, not push: the back button belongs to the page they arrived from, not to a shuffle.
+    if (typeof window !== "undefined") window.history.replaceState(null, "", linkFor(s));
+  };
+
+  const copy = async () => {
+    if (typeof window === "undefined") return;
+    const url = new URL(linkFor(seed), window.location.origin).toString();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      // No clipboard permission (an insecure origin, an old browser): the address bar already holds
+      // the same link, so say nothing false and leave the button as it was.
+      setCopied(false);
     }
-    setRounds(out);
   };
 
   const capacity = Math.min(64, Math.max(4, Math.ceil(n / 4) * 4));
@@ -103,6 +143,15 @@ export function AmericanoGenerator() {
 
       {rounds && (
         <>
+          {/* The schedule had no address of its own: an organiser could print it or start again, and
+              closing the tab lost the work. The draw is a pure function of five numbers and the
+              names, so the link carries all of them and no row is stored. */}
+          <section className="card no-print" data-testid="gen-share">
+            <button type="button" className="btn-secondary w-full" onClick={copy} data-testid="gen-copy">
+              {copied ? `✓ ${t("americano.gen.copied")}` : t("americano.gen.copy")}
+            </button>
+            <p className="mt-2 text-xs text-muted">{t("americano.gen.shareHelp")}</p>
+          </section>
           <section className="flex flex-col gap-3">
             {rounds.map((r, i) => (
               <div key={i} className="card py-4">

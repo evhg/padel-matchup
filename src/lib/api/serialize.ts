@@ -2,6 +2,7 @@ import type { Coach, Event, Player, Series } from "@/db/schema";
 import type { SeriesPage } from "@/lib/domain/series";
 import { EVENT_DURATION_MS } from "@/lib/config";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
+import { isClubLive } from "@/lib/domain/clubs";
 import type { GroupDetail } from "@/lib/domain/groups";
 import { formatOf } from "@/lib/domain/formats";
 import { hasRange, presetFor } from "@/lib/domain/levels";
@@ -185,6 +186,12 @@ export type PublicClub = {
   /** The courts by name, as the club listed them; empty until it does. */
   courtNames: string[];
   about: string | null;
+  /**
+   * Does a manager run this page? A club that claimed its page and was approved says true. A club
+   * Kicksmash listed from public sources says false: its courts, hours and links are our reading of
+   * what is public, not the club's own word, and they may be out of date.
+   */
+  claimed: boolean;
   founding: boolean;
   /** Today's free court-hours from the club's own feed, or null when the club shares none. */
   freeCourts: { day: string; tz: string; fetchedAt: string; slots: { start: string; end: string; free: number }[] } | null;
@@ -193,7 +200,7 @@ export type PublicClub = {
   calendarUrl: string;
 };
 
-/** A live club: what the club chose to publish, nothing private (the manage token never leaves the server). */
+/** A club page: what the club chose to publish, nothing private (the manage token never leaves the server). */
 export function clubToPublic(c: Club, base: string, courtNames?: string[]): PublicClub {
   const platform = platformById(c.bookingPlatform);
   const a = c.availability && !c.availability.error ? c.availability : null;
@@ -212,6 +219,7 @@ export function clubToPublic(c: Club, base: string, courtNames?: string[]): Publ
     courtsOutdoor: c.courtsOutdoor,
     courtNames: courtNames ?? [],
     about: c.about,
+    claimed: isClubLive(c),
     founding: c.founding,
     freeCourts: a ? { day: a.day, tz: a.tz, fetchedAt: a.fetchedAt, slots: a.slots } : null,
     boardUrl: `${base}/v/${c.slug}`,

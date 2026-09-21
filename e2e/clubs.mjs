@@ -264,6 +264,54 @@ try {
   const nok2 = await th.newPage();
   await nok2.goto(`${BASE}/clubs`);
   check("a reader in Thailand, where clubs exist, is told nothing of the kind", (await nok2.getByTestId("clubs-none-here").count()) === 0);
+
+  // Anybody lists a club nobody had listed. Not a claim: no role, no work address, no owner's tap.
+  check("the country with nothing in it offers the listing door first", (await lars.getByTestId("clubs-add-door").count()) === 1);
+  await lars.getByTestId("clubs-add-door").click();
+  await lars.waitForURL(/\/clubs\/add/);
+  await lars.getByLabel("Your name").fill("Lars");
+  await lars.getByTestId("add-club-name").fill("Padel Kreuzberg");
+  await lars.getByLabel("City").fill("Berlin");
+  await lars.getByLabel("Country").selectOption("DE");
+  await lars.getByTestId("add-indoor").fill("4");
+  await lars.getByTestId("add-outdoor").fill("2");
+  check("the button waits until the courts are counted", (await lars.getByTestId("add-submit").isEnabled()) === true);
+  await lars.getByTestId("add-submit").click();
+  await lars.waitForURL(/\/v\/padel-kreuzberg/, { timeout: 20000 });
+  check("the club has a page at once", (await lars.getByRole("heading", { name: "Padel Kreuzberg" }).count()) >= 1);
+  check("the page says no club runs it", (await lars.getByTestId("club-unclaimed").count()) === 1);
+  check("and names the person who put it on the map", (await lars.getByTestId("club-added-by").getByText("Listed by Lars").count()) === 1);
+  check("the page shows the court split they gave", (await lars.getByText("6 courts").count()) >= 1);
+  await lars.goto(`${BASE}/clubs`);
+  check("Germany is no longer empty, so the line is gone", (await lars.getByTestId("clubs-none-here").count()) === 0);
+  check("and the club is in the German section", (await lars.getByTestId("clubs-country").getByRole("link", { name: "Padel Kreuzberg" }).count()) >= 1);
+
+  // The same club cannot be listed twice; its real manager claims the page instead, keeping one page.
+  const twice = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "DE" } });
+  const bea = await twice.newPage();
+  await bea.goto(`${BASE}/clubs/add`);
+  await bea.getByLabel("Your name").fill("Bea");
+  await bea.getByTestId("add-club-name").fill("Padel Kreuzberg");
+  await bea.getByLabel("City").fill("Berlin");
+  await bea.getByLabel("Country").selectOption("DE");
+  await bea.getByTestId("add-indoor").fill("1");
+  await bea.getByTestId("add-submit").click();
+  // count() does not wait; the answer comes back from a server action, so wait for the line itself.
+  const refused = await bea
+    .getByText("This club already has a page here.")
+    .waitFor({ timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  check("a second listing of the same club is refused", refused, bea.url());
+
+  // The public API: the default answer is unchanged, and include=listed is the one that answers
+  // "where can I play here?" — an assistant was told nobody had claimed a page while /clubs had 40.
+  const claimedOnly = await fetch(`${BASE}/api/v1/clubs`).then((r) => r.json());
+  const withListed = await fetch(`${BASE}/api/v1/clubs?include=listed`).then((r) => r.json());
+  const slugs = (b) => (b.clubs ?? []).map((c) => c.slug);
+  check("the API's default still means clubs that run their own page", !slugs(claimedOnly).includes("padel-kreuzberg") && claimedOnly.include === "claimed", JSON.stringify(slugs(claimedOnly)));
+  check("include=listed adds the club a player listed", slugs(withListed).includes("padel-kreuzberg"), JSON.stringify(slugs(withListed)).slice(0, 200));
+  check("and every row says whether the club runs the page", (withListed.clubs ?? []).find((c) => c.slug === "padel-kreuzberg")?.claimed === false && (withListed.clubs ?? []).every((c) => typeof c.claimed === "boolean"));
 } finally {
   await browser.close();
 }

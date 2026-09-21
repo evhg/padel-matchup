@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
+import { getPlayer } from "@/lib/domain/players";
 import { calendarTitle } from "@/lib/calendar";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
@@ -56,9 +57,16 @@ export default async function VenueBoardPage({ params }: Props) {
   // claim shows: a stranger's wrong map link must not stand on a club's page before the check.
   const pending = clubRow && !club && !clubRow.rejectedAt ? clubRow : null;
   const known = club ?? (pending?.claimedBy && pending.claimedBy === (await getSessionPlayerId()) ? pending : null);
-  if (!boardRow && !known) notFound();
-  const board = boardRow ?? { slug, name: known!.name, mapUrl: known!.mapUrl, events: [] };
+  // A club we list is a page, with or without a match on it yet. Sixty-three of the sixty-six listed
+  // clubs answered 404 here while /clubs linked to every one of them and the sitemap named them all:
+  // the guard asked for a venue board, and a board exists only once somebody plays there.
+  const page = known ?? shown;
+  if (!boardRow && !page) notFound();
+  const board = boardRow ?? { slug, name: page!.name, mapUrl: page!.mapUrl, events: [] };
   const mapUrl = shown?.mapUrl ?? board.mapUrl;
+  // Eternal glory: the person who put this club on the map is named on it. One read, and only when
+  // the page is an unclaimed listing somebody actually listed.
+  const addedByName = unclaimed?.addedBy ? ((await getPlayer(db, unclaimed.addedBy))?.displayName ?? null) : null;
   const [t, locale, coachesHere] = await Promise.all([getTranslations(), getLocale(), coachesAtClub(db, slug).catch(() => [])]);
   // A live club with a programme shows its week, day by day; matches beyond the week stay in the list below.
   const programme = club ? await listClubSlots(db, club.slug) : [];
@@ -111,6 +119,7 @@ export default async function VenueBoardPage({ params }: Props) {
         {unclaimed && (
           <section className="card" data-testid="club-unclaimed">
             <p className="text-sm text-muted">{t("club.unclaimed")}</p>
+            {addedByName && <p className="mt-1 text-sm font-bold" data-testid="club-added-by">{t("club.addedBy", { name: addedByName })}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={`/clubs/claim?name=${encodeURIComponent(unclaimed.name)}`} prefetch={false} className="btn-secondary btn-sm" data-testid="club-claim-door">
                 {t("club.isThisYours")}

@@ -47,9 +47,11 @@ export const clubs = pgTable(
     /**
      * "claim" — somebody claimed this page and it is theirs to manage.
      * "directory" — Kicksmash listed the club from public sources so a player can pick it by name.
+     * "player" — a player listed a club nobody had listed, and said how many courts it has.
      *
-     * A directory row is listed and never says it is managed by anybody: no `claimedBy`, no
-     * `approvedAt`. When its real owner claims it, the row becomes theirs and this becomes "claim".
+     * A "directory" or "player" row is listed and never says it is managed by anybody: no
+     * `claimedBy`, no `approvedAt`. When its real owner claims it, the row becomes theirs and this
+     * becomes "claim". Only an owner or a manager may claim; anybody may list.
      */
     source: text("source").notNull().default("claim"),
     /** The club's private manage link. */
@@ -67,6 +69,18 @@ export const clubs = pgTable(
     claimVerifiedAt: timestamp("claim_verified_at", { withTimezone: true }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    /**
+     * Why the claim was refused, as the owner tapped it. A refusal used to store the hour and
+     * nothing else, so nobody could tell "we could not confirm you work here" from "somebody else
+     * already runs this page", and the claimant was told neither. One of `claimReasons`.
+     */
+    claimDecision: text("claim_decision"),
+    /**
+     * Who first listed this club, when no club page and no directory row existed. Their name goes
+     * on the club page. A club that lists itself has a `claimedBy` instead; the two are different
+     * people and both may be set once the club claims a page a player listed.
+     */
+    addedBy: uuid("added_by").references(() => players.id, { onDelete: "set null" }),
     /** One of the first clubs in its city: everything stays free for good. */
     founding: boolean("founding").notNull().default(false),
     /** The owner's Telegram message asking for approval. */

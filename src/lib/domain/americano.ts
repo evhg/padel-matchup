@@ -256,3 +256,41 @@ export function computeStandings(playerIds: readonly string[], matches: readonly
 export const POINTS_PRESETS = [16, 21, 24, 32] as const;
 /** "First to N games", the other way a social tournament scores. */
 export const GAMES_PRESETS = [4, 6, 8] as const;
+
+/** What a shared generator link carries. The rounds are a pure function of it, so no row is stored. */
+export type GenLink = { n: number; courts: number; rounds: number; seed: number; names: string[] };
+
+/**
+ * Read a shared generator link.
+ *
+ * An organiser built a correct schedule and had no way to send it: the address bar said `/americano`
+ * whatever they typed, so closing the tab lost the work. The draw is deterministic in five inputs,
+ * so the link holds them and the page rebuilds the same rounds. Everything here comes from a
+ * stranger's URL, so every number is clamped to what the engine accepts and the names are cut to
+ * the same sixty-four the form allows — a pasted club list of two hundred froze the browser once.
+ *
+ * Returns null when the link names no schedule, which is the plain `/americano` visit.
+ */
+export function parseGenLink(q: Record<string, string | string[] | undefined>): GenLink | null {
+  const one = (k: string): string | null => {
+    const v = q[k];
+    const s = Array.isArray(v) ? v[0] : v;
+    return typeof s === "string" && s.length <= 2000 ? s : null;
+  };
+  const num = (k: string, lo: number, hi: number): number | null => {
+    const s = one(k);
+    if (s === null || !/^\d{1,4}$/.test(s.trim())) return null;
+    const v = Number(s.trim());
+    return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null;
+  };
+  const names = (one("names") ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 64);
+  // A seed alone is not a schedule, and neither is a name list of three. One of the two must say
+  // how many play, and four is the smallest field the engine builds.
+  const n = names.length >= 4 ? names.length : num("n", 4, 64);
+  if (n === null) return null;
+  const courts = Math.min(maxCourtsFor(n), Math.max(1, num("courts", 1, 16) ?? maxCourtsFor(n)));
+  const cycle = rotationLength(n);
+  const exact = Boolean(cycle) && courts === maxCourtsFor(n);
+  const rounds = num("rounds", 1, 40) ?? (exact ? (cycle as number) : n);
+  return { n, courts, rounds: Math.min(40, Math.max(1, rounds)), seed: num("seed", 1, 9999) ?? 1, names };
+}

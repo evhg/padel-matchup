@@ -5,7 +5,7 @@ import { isDomainError } from "@/lib/domain/errors";
 import { getGroupByCode, getGroupDetail, getGroupById } from "@/lib/domain/groups";
 import { getEventByCode } from "@/lib/domain/queries";
 import { getVenueBoard, isValidVenueSlug, venueSlug } from "@/lib/domain/venueBoard";
-import { getLiveClub, listLiveClubs } from "@/lib/domain/clubs";
+import { getLiveClub, getShownClub, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { courtNamesBySlug, listCourts } from "@/lib/domain/courts";
 import { llmsFullTxt, llmsTxt, VALUE_PROP } from "./docs";
 import { ApiError } from "./http";
@@ -38,7 +38,7 @@ const toSchema = (s: z.ZodType) => {
 
 const codeSchema = z.object({ code: z.string().min(4).max(6).describe("The code from the link.") });
 const venueSchema = z.object({ venue: z.string().min(2).max(80).describe("Venue name or its slug, e.g. 'Padel Indoor BCN' or 'padel-indoor-bcn'.") });
-const clubsSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore"), name: z.string().max(80).optional().describe("One club by name; the slug is derived") });
+const clubsSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore"), name: z.string().max(80).optional().describe("One club by name; the slug is derived"), include: z.enum(["claimed", "listed"]).optional().describe("claimed (default): only clubs that run their own page. listed: also the clubs Kicksmash listed from public sources, each marked claimed:false.") });
 const coachesSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore; omit for every listed coach") });
 const seriesSchema = z.object({ city: z.string().max(40).optional().describe("phuket or singapore; omit for every active series"), slug: z.string().max(60).optional().describe("One series by slug: its next edition and past podiums") });
 const keySchema = z.object({ name: z.string().min(1).max(80).describe("Who or what will use the key."), agent: z.string().max(80).optional().describe("Your name as an assistant, e.g. 'claude'."), email: z.email().optional() });
@@ -113,20 +113,28 @@ const TOOLS: Tool[] = [
   {
     name: "find_clubs",
     title: "Find clubs",
-    description: "Club pages that clubs manage themselves: booking link and platform, courts, today's free courts when the club shares its calendar, founding status. Filter by city (phuket, singapore) or ask for one club by name.",
+    description: "Padel clubs: booking link and platform, courts, today's free courts when the club shares its calendar, founding status. Every row says `claimed`: true when the club runs the page itself, false when Kicksmash listed it from public sources, where the courts and links are our reading and may be out of date. Pass include:'listed' to get both — that is what answers \"where can I play here?\". Filter by city (phuket, singapore) or ask for one club by name.",
     schema: clubsSchema,
     readOnly: true,
     run: async (db, args) => {
-      const { city, name } = clubsSchema.parse(args);
+      const { city, name, include } = clubsSchema.parse(args);
       const base = baseUrl();
+      const listed = include === "listed";
       if (name) {
         const slug = isValidVenueSlug(name) ? name : venueSlug(name);
-        const club = slug ? await getLiveClub(db, slug) : null;
-        return club ? { clubs: [clubToPublic(club, base, (await listCourts(db, club.slug)).map((c) => c.name))] } : { clubs: [], note: `No live club page called "${name}". Clubs claim their page at ${base}/clubs/claim; the venue board (find_matches) works for any venue with a match.` };
+        const club = slug ? await (listed ? getShownClub(db, slug) : getLiveClub(db, slug)) : null;
+        if (club) return { clubs: [clubToPublic(club, base, (await listCourts(db, club.slug)).map((c) => c.name))] };
+        return { clubs: [], note: `No${listed ? "" : " claimed"} club page called "${name}".${listed ? "" : ` Try include:"listed" for the clubs Kicksmash listed from public sources.`} Clubs claim their page at ${base}/clubs/claim; the venue board (find_matches) works for any venue with a match.` };
       }
-      const clubs = await listLiveClubs(db, city ?? null);
+      const clubs = listed ? await listShownClubs(db, city ?? null) : await listLiveClubs(db, city ?? null);
       const names = await courtNamesBySlug(db, clubs.map((c) => c.slug));
-      return { clubs: clubs.map((c) => clubToPublic(c, base, names.get(c.slug))), note: clubs.length ? undefined : `No club has claimed its page${city ? ` in ${city}` : ""} yet. The first ten per city become founding clubs: ${base}/clubs.` };
+      // An empty answer sent an assistant away while the website listed forty clubs in the same city.
+      const note = clubs.length
+        ? undefined
+        : listed
+          ? `Kicksmash lists no club${city ? ` in ${city}` : ""} yet. Anybody can add the first one: ${base}/clubs/add`
+          : `No club has claimed its page${city ? ` in ${city}` : ""} yet. Try include:"listed" for the clubs Kicksmash listed from public sources. The first ten per city become founding clubs: ${base}/clubs.`;
+      return { clubs: clubs.map((c) => clubToPublic(c, base, names.get(c.slug))), note };
     },
   },
   {
