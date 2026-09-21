@@ -10,6 +10,10 @@ import type { Db } from "@/db";
  * which is how a player who had never coached was shown a coach's button: the cookie outlived
  * the role that set it.
  *
+ * A refused claim is not a role. The club door stayed in the header for ever after a rejection,
+ * and it led to a page that said "Not approved" and pointed at GitHub Discussions. The person is
+ * a player again, so the header says My matches and nothing else.
+ *
  * One query, five indexed lookups inside it, a small row back (rule 12). It runs on a page
  * render, so it must stay one round trip: the pooler stalls on pipelined bursts (rule 8), and
  * five separate awaits is exactly that burst.
@@ -64,7 +68,7 @@ export async function rolesFor(db: Db, playerId: string | null | undefined): Pro
         limit 1) as managed_coach,
       coalesce((select json_agg(json_build_object('slug', cl.slug, 'name', cl.name) order by cl.name)
          from clubs cl
-        where cl.claimed_by = ${playerId}), '[]'::json) as clubs,
+        where cl.claimed_by = ${playerId} and cl.rejected_at is null), '[]'::json) as clubs,
       coalesce((select json_agg(json_build_object('slug', s.slug, 'name', s.name) order by s.name)
          from series s
         where s.organizer_player_id = ${playerId} and s.active), '[]'::json) as series,

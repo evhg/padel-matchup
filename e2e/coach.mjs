@@ -614,6 +614,13 @@ try {
   check("the coach page has a Russian URL", (await ivan.getByText("Тренер по паделу").count()) === 1);
 } catch (e) {
   await crashed(browser, results, e);
+  // The coach list's first heading is "Padel coaches in Phuket". A reader elsewhere needs the line
+  // that names their own country, next to the door for coaches.
+  const deCtx = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "DE", "x-vercel-ip-city": "Berlin", "x-vercel-ip-timezone": "Europe/Berlin" } });
+  const lars = await deCtx.newPage();
+  await lars.goto(`${BASE}/coaches`);
+  check("a reader in Germany is told no coach there lists yet", (await lars.getByTestId("coaches-none-here").getByText("No coach in Germany lists here yet.").count()) === 1);
+
 } finally {
   await browser.close();
 }

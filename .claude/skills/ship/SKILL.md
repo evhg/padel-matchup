@@ -226,6 +226,11 @@ Wall clock first, credits second. What actually moved it, measured:
   several lines`) and a shell loop chained with `&&` exited before the other keys were added. Add
   such keys with a string insert before that line's closing `},` (json.dumps each value, then
   `json.load` the file to prove it), and run the script's keys after, one command each.
+- **Changing an existing string means finding it twice: by name and by section.** `cityOther` lives
+  in both `club` and `tournament` in `messages/*.json`, so a line-based edit keyed on the name alone
+  hit two keys and the assertion caught it only because it counted the matches. Anchor on the
+  section's opening line (`"tournament": {`), then take the first matching key after it, and assert
+  the section appears exactly once. `json.loads` the whole file before it touches disk, every time.
 - **The script puts a key after the section's last key, even when that key is a nested object.**
   `email.telegramLine` landed inside `email.scoreNudge` because `scoreNudge` closed the `email`
   section, and the script printed `added … (after "cta")` as if all were well. After every add,
@@ -397,6 +402,33 @@ Wall clock first, credits second. What actually moved it, measured:
   looked right in the code and still ran off the screen, and only the second picture proved it. For
   anything visual, the picture is the check — `SHOTS=<dir> E2E_ONLY=<suite> pnpm e2e`, and remember
   `pnpm e2e` uses the build already on disk, so rebuild first.
+
+### What the walks keep finding
+
+- **A screen that makes something a person owns must hand it to them.** The americano generator
+  builds a correct schedule — seven rounds, every pair partnering once — and then offers Print,
+  Shuffle again, and a bridge to a live match. There is no link, the URL never changes, and closing
+  the tab loses the work. Whenever a screen produces something the person made, ask what they hold
+  when they close the tab; "they can print it" is an answer for one person in ten.
+- **A refused role is still a role until a query says so.** `rolesFor` read `clubs.claimed_by` and
+  nothing else, so a club manager whose claim was refused kept the club door in the header for ever,
+  and it led to a page that said "Not approved". Navigation is a role and belongs in `rolesFor`;
+  the record belongs on `/me`, where "Not approved" is information rather than a door. When a status
+  ends a relationship, grep for every list that still names the person.
+- **A dead end that names a developer's channel is a dead end.** "Write to us in GitHub Discussions"
+  was the whole next step for a refused club manager. They have no account there and no reason to
+  make one. The note that reaches the owner is already a page on this site: point at that.
+- **To test what the edge decides, send the edge's headers.** The country and city branches read
+  `x-vercel-ip-country` and `x-vercel-ip-city`, which no local run sets, so the branch had no test
+  until the browser suite passed them in `extraHTTPHeaders` on a context of its own. Give the branch
+  its own context; putting the header on the shared `iphone` makes every other suite a visitor from
+  that country.
+- **The empty state is the product, before there is a product.** Every club on Kicksmash is in
+  Thailand or Singapore and every coach is in Phuket, so a reader in Kuala Lumpur, Berlin, Madrid or
+  Moscow met two city headings, two founding chips and a search that found nothing. The model was
+  already world-wide — sixty-one countries, clubs grouped by country in the reader's language, a
+  bucket for coaches elsewhere. What was missing was one sentence naming their country. Check the
+  screens of a person the data does not reach yet: they see the product's real scope, not its plan.
 
 ### Two ways a change hangs or bloats
 

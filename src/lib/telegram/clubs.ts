@@ -98,9 +98,12 @@ export function claimDecisionText(locale: string | null | undefined, club: Pick<
         ? `${club.name} ya está en Kicksmash\nLa página del club está publicada: ${page}\nGestión: ${manage}`
         : `${club.name} is live on Kicksmash\nThe club page is up: ${page}\nManage it: ${manage}`;
   }
+  // A club manager has no GitHub account and no reason to make one. The note that reaches the owner
+  // is one tap away on the site, so the message points there and says what we could not confirm.
+  const say = `${base}/feedback?s=clubclaim`;
   return l === "ru"
-    ? `${club.name}: заявка не одобрена\nМы не смогли подтвердить, что вы работаете в клубе. Если это ошибка, напишите нам в GitHub Discussions.`
+    ? `${club.name}: заявка не одобрена\nМы не смогли подтвердить, что вы работаете в этом клубе. Если это ошибка, напишите нам, и мы посмотрим ещё раз: ${say}`
     : l === "es"
-      ? `${club.name}: solicitud no aprobada\nNo pudimos confirmar que trabajas en el club. Si es un error, escríbenos en GitHub Discussions.`
-      : `${club.name}: the claim was not approved\nWe could not confirm that you work at the club. If that is wrong, write to us in GitHub Discussions.`;
+      ? `${club.name}: solicitud no aprobada\nNo pudimos confirmar que trabajas en este club. Si nos equivocamos, dínoslo y lo miraremos otra vez: ${say}`
+      : `${club.name}: the claim was not approved\nWe could not confirm that you work at this club. If we got that wrong, tell us and we will look at it again: ${say}`;
 }

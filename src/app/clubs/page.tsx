@@ -4,10 +4,11 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ClubRow } from "@/components/ClubBits";
 import { Footer, Header } from "@/components/Header";
+import { headers } from "next/headers";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
-import { countryName } from "@/lib/domain/countries";
+import { countryName, noneInCountry, visitorCity, visitorCountry } from "@/lib/domain/countries";
 import { CLUB_LIMITS, listShownClubs } from "@/lib/domain/clubs";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,14 @@ export async function generateMetadata(): Promise<Metadata> {
 /** /clubs: what a club page is, the founding offer, every club we may show, and the claim button. */
 export default async function ClubsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const db = await getDb();
-  const [t, locale, all, sp] = await Promise.all([getTranslations(), getLocale(), listShownClubs(db), searchParams]);
+  const [t, locale, all, sp, hdrs] = await Promise.all([getTranslations(), getLocale(), listShownClubs(db), searchParams, headers()]);
+  // Every club here is in Thailand or Singapore. A reader in Kuala Lumpur, Berlin, Madrid or Moscow
+  // met two city headings and a search that found nothing, and had no reason to believe the product
+  // was for their country. Name their country, and offer them the first place in it.
+  const here = visitorCountry(hdrs.get("x-vercel-ip-country"), hdrs.get("x-vercel-ip-timezone"));
+  const hereName = here ? countryName(here, locale) : null;
+  const herePlace = visitorCity(hdrs.get("x-vercel-ip-city"));
+  const hereEmpty = noneInCountry(all.map((c) => c.country), here);
   // A club owner's first move is to look for their own club, and there was no box anywhere on the
   // site to type its name into. A form, not a script: it works before the JavaScript arrives.
   const q = (sp.q ?? "").trim().slice(0, 60);
@@ -74,10 +82,25 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
           {q && clubs.length === 0 && <p className="mt-3 text-sm text-muted" data-testid="club-search-none">{t("club.searchNone")}</p>}
         </section>
 
+        {hereEmpty && hereName && (
+          <section className="card" data-testid="clubs-none-here">
+            <p className="text-sm font-bold">{t("club.noneHere", { country: hereName })}</p>
+            <p className="mt-1 text-sm text-muted">{t("club.noneHereCta")}</p>
+            <Link href="/clubs/claim" prefetch={false} className="btn-secondary mt-3 w-full">
+              {t("club.claimCta")}
+            </Link>
+          </section>
+        )}
+
         <section className="card">
           <h2 className="text-lg font-extrabold">🌱 {t("club.founding")}</h2>
           <p className="mt-2 text-sm text-muted">{t("club.foundingBody")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
+            {hereEmpty && herePlace && (
+              <span className="chip-muted" data-testid="founding-here">
+                {t("club.foundingLeft", { count: CLUB_LIMITS.foundingPerCity, city: herePlace })}
+              </span>
+            )}
             {CITIES.map((city) => {
               const taken = (byCity.get(city.slug) ?? []).filter((c) => c.founding).length;
               return (
