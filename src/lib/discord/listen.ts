@@ -6,6 +6,7 @@ import { guessLanguage } from "@/lib/listen/parse";
 import { growAnswer } from "@/lib/listen/tick";
 import { TEXT_CHANNEL_TYPES, createMessage, discordApplicationId, discordEnabled, getMessages, listGuildChannels, listGuilds, messageUrl, type DcMessage } from "./api";
 import { upsertChannel } from "./bot";
+import { listenModel } from "@/lib/ops/anthropic";
 
 /**
  * Listening inside the project's own Discord servers. Unlike Reddit or
@@ -72,7 +73,7 @@ export async function answerDiscordQuestion(db: Db, q: DiscordQuestion, now = ne
       language,
       draft: draft?.reply ?? null,
       draftReason: draft?.reason ?? null,
-      draftModel: process.env.LISTEN_MODEL || "claude-sonnet-5",
+      draftModel: listenModel(),
       draftedAt: now,
       lastError: error,
       decidedAt: draft ? now : null,

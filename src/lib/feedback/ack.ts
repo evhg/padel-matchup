@@ -3,6 +3,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft";
 import type { SaidBefore } from "./store";
 import { feedbackLocale, promisesSomething, type FeedbackLocale } from "./strings";
+import { listenModel } from "@/lib/ops/anthropic";
 
 /**
  * The instant reply to a note. Written for that note when the model is
@@ -125,7 +126,7 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: process.env.LISTEN_MODEL ?? "claude-sonnet-5", max_tokens: 220, system: SYSTEM, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: listenModel(), max_tokens: 220, system: SYSTEM, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(12_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;

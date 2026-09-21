@@ -16,6 +16,7 @@ import { metricsDaily } from "@/db/schema";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { draftingEnabled, withinBudget } from "./draft";
 import { ownerTelegramId } from "./tick";
+import { listenModel } from "@/lib/ops/anthropic";
 
 /**
  * Answers: once the owner approved a reply, the same question becomes an
@@ -77,7 +78,7 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: process.env.LISTEN_MODEL || "claude-sonnet-5", max_tokens: 900, system: ANSWER_PROMPT, messages: [{ role: "user", content: `Original question (${item.language ?? "en"}):\n${item.title}\n${item.body.slice(0, 1500)}\n\nApproved reply:\n${item.draft}` }] }),
+      body: JSON.stringify({ model: listenModel(), max_tokens: 900, system: ANSWER_PROMPT, messages: [{ role: "user", content: `Original question (${item.language ?? "en"}):\n${item.title}\n${item.body.slice(0, 1500)}\n\nApproved reply:\n${item.draft}` }] }),
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;

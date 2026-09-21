@@ -245,6 +245,18 @@ Wall clock first, credits second. What actually moved it, measured:
   literal, so writing a word in backticks inside it (`` `claimed` ``) closed the string and the
   typecheck failed twice, four hundred lines further down, on a missing semicolon. The file is
   documentation for assistants, not Markdown for a reader: use plain words in it.
+- **A check nothing runs is not a check.** `scripts/gen-docs.mjs --check` proves every
+  `process.env` the code reads is in `README.md` and `.env.example`, and neither the gate nor CI
+  ever called it. It is a gate step now. Before adding a script that verifies something, add the
+  line that runs it.
+- **A default can make an absent thing look present.** Moving two public names out of the
+  deployment and into `config.ts` broke both in the same way. `telegramBotUsername()` returning a
+  name instead of null would have put "open the bot" buttons on a deployment with no Telegram, and
+  `TELEGRAM_MINIAPP_SLUG` getting a default sent the bot's cards into a Mini App that nobody had
+  created — `tests/telegram.test.ts` caught the second one. The rule both break: a public label may
+  have a default, but whether the thing exists is a different question. A bot follows from its
+  token, so gate the name on `telegramEnabled()`. A Mini App follows from nothing, so it keeps no
+  default at all. Before giving a value a default, ask what a caller does when it is missing.
 - **A default repeated in eight files is not a default.** `process.env.LISTEN_MODEL || "claude-sonnet-5"`
   is written out in eight files, three with `||` and three with `??`, and the variable is set
   nowhere — so the model the product uses is eight copies of a literal nobody would grep for.

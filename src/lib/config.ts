@@ -20,6 +20,20 @@ export function shortHost(): string {
   }
 }
 
+/**
+ * The Telegram bot's public name.
+ *
+ * It is printed on the site and in the API's own documentation, so it is not a secret. It was a
+ * Vercel variable *and* five hard-coded strings in this repository at the same time, and nothing
+ * kept the two in step. The value lives here; the variable still wins, so a rename needs no
+ * deployment, and `tests/config-one-home.test.ts` fails when a hard-coded copy drifts from it.
+ *
+ * `TELEGRAM_MINIAPP_SLUG` deliberately has no default here. A bot follows from its token, but a
+ * Mini App exists only once somebody creates one in BotFather. A default turned "there is no Mini
+ * App" into a link, and the bot's cards started pointing at a page that need not exist.
+ */
+export const TELEGRAM_BOT = "kicksmash_bot";
+
 export const emailEnabled = () => Boolean(process.env.RESEND_API_KEY);
 
 /**

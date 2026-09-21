@@ -29,6 +29,9 @@ fi
 step typecheck pnpm typecheck
 step lint pnpm lint
 step "schema vs migrations" bash scripts/check-migrations.sh
+# The environment table is generated from the code that reads it, and the check that proves so had
+# never been run by anything. Nine variables reached production undocumented before anybody noticed.
+step "environment documented" node scripts/gen-docs.mjs --check
 # One worker, in CI's order. `pnpm test` on its own runs files in parallel and is faster, but files
 # then never share a process, so nothing one file leaves behind can reach the next — which is exactly
 # the failure CI sees and the gate would not. Twenty-odd seconds here buys that whole class of red.
