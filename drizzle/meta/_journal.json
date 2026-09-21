@@ -428,6 +428,13 @@
       "when": 1789905409627,
       "tag": "0060_greedy_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789918680132,
+      "tag": "0061_regular_cannonball",
+      "breakpoints": true
     }
   ]
 }

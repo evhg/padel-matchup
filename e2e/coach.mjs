@@ -428,6 +428,10 @@ try {
   await olga.getByRole("checkbox", { name: /Listed publicly/ }).check();
   // The browser here runs in UTC; a Phuket coach's phone says Asia/Bangkok, which is what puts her on the Phuket list.
   await olga.getByLabel("Time zone").fill("Asia/Bangkok");
+  // Who she is for: the thing that made three coaches read alike. "Anyone can book" comes later, so
+  // the assistant walk below still meets the closed door it was written for.
+  await olga.getByTestId("teaches-min").selectOption("2");
+  await olga.getByTestId("teaches-max").selectOption("4.5");
   await olga.getByRole("button", { name: "Save" }).click();
   await olga.getByText("Saved.").waitFor({ timeout: 20000 });
   const listed = await fetch(`${BASE}/api/v1/coaches?city=phuket`).then((r) => r.json());
@@ -462,15 +466,50 @@ try {
   const llms = await fetch(`${BASE}/llms.txt`).then((r) => r.text());
   check("llms.txt tells assistants about coaches and the tools", llms.includes("/api/v1/coaches") && llms.includes("find_coaches"));
 
-  // ---- Coaches arrive on their own: every coach-facing page is a door ----
+  // Olga opens the door: from here anybody may take a free hour without asking her first.
+  await olga.goto(BASE + "/coach/settings");
+  await olga.getByTestId("open-booking").check();
+  await olga.getByRole("button", { name: "Save" }).click();
+  await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+
+  // ---- The player's list: somebody who wants a lesson, not an assistant ----
+  // `/coaches` used to be the coach's own front door, so a player who typed the word for what they
+  // wanted met a page selling software to coaches. It is the directory now.
   await ivan.goto(`${BASE}/coaches`);
+  const olgaCard = ivan.getByTestId("coach-list-card").filter({ hasText: "Olga" });
+  check("the player's list carries the coach, and the card answers what a player asks", (await olgaCard.count()) === 1 && (await olgaCard.getByText("from 800 THB").count()) === 1 && (await olgaCard.getByTestId("card-levels").getByText(/2\.0.4\.5/).count()) === 1 && (await olgaCard.getByTestId("card-next-free").getByText(/Next free/).count()) === 1);
+  check("and the card says she takes anybody, with a button that says so", (await olgaCard.getByText("Book without asking").count()) === 1 && (await olgaCard.getByRole("link", { name: "Book with Olga" }).count()) === 1);
+  await shot(ivan, "68-coach-directory");
+  // The coach's own door is one line at the foot of the list, not the list itself.
+  check("the coach's door sits at the foot of the player's list", (await ivan.getByText(/^Padel coach\? Your students book themselves, and your calendar stays yours\.$/).count()) === 1 && (await ivan.getByRole("link", { name: "Set up your lessons" }).getAttribute("href")) === "/coaches/join?s=coachlist");
+
+  // ---- "Anyone can book": a stranger takes an hour, and the booking is the joining ----
+  // The wall was the third click of every walk: three coach cards, then "Ask to become a student",
+  // then nothing until a person answered. Nadia has never been here before.
+  const nadia = await newPage();
+  await nadia.goto(`${BASE}/coaches`);
+  await nadia.getByTestId("coach-list-card").filter({ hasText: "Olga" }).getByRole("link", { name: "Book with Olga" }).click();
+  await nadia.getByRole("heading", { name: "Book a lesson" }).waitFor({ timeout: 20000 });
+  check("a visitor who never asked meets the times, not a wall", (await nadia.getByTestId("ask-to-join").count()) === 0 && (await nadia.getByTestId("open-booking-note").count()) === 1);
+  await nadia.getByLabel("Your name").fill("Nadia");
+  const nadiaPicked = await pickFirstFreeTime(nadia, nadia.locator("main"));
+  check("and free times to pick from", nadiaPicked !== "", nadiaPicked);
+  await shot(nadia, "69-open-booking");
+  await nadia.getByRole("button", { name: /^Book / }).click();
+  await nadia.getByText(/^Booked:/).waitFor({ timeout: 20000 });
+  await shot(nadia, "70-open-booking-done");
+  await olga.goto(BASE + "/coach/students");
+  check("the coach finds the stranger on her list, accepted by the booking itself", (await olga.locator("li", { hasText: "Nadia" }).getByRole("button", { name: /New package/ }).count()) === 1);
+
+  // ---- Coaches arrive on their own: every coach-facing page is a door ----
+  await ivan.goto(`${BASE}/coaches/join`);
   check("the front door for coaches renders with one button to the book", (await ivan.getByText("Your students book themselves. Your calendar stays yours.").count()) === 1 && (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach");
-  await ivan.goto(`${BASE}/coaches?s=invite`);
+  await ivan.goto(`${BASE}/coaches/join?s=invite`);
   check("a tagged front door passes the door on to the setup link", (await ivan.getByTestId("coach-front-cta").getAttribute("href")) === "/coach?s=invite");
   // The door is for a visitor who is nobody here. Ivan is a student by now, and offering him his own
   // assistant mid-booking was the thing that made the page feel silly, so both halves are checked.
   await wrong.goto(`${BASE}/c/${handle}`);
-  check("the coach page carries the quiet door for a visitor who is nobody here", (await wrong.getByTestId("own-book").getAttribute("href")) === "/coaches?s=coachpage");
+  check("the coach page carries the quiet door for a visitor who is nobody here", (await wrong.getByTestId("own-book").getAttribute("href")) === "/coaches/join?s=coachpage");
   await ivan.goto(`${BASE}/c/${handle}`);
   check("and never offers it to the coach's own student", (await ivan.getByTestId("own-book").count()) === 0);
   // Her own page names no city: Warehaus is no club row here, and a time zone is not a city (Bangkok shares Asia/Bangkok with Phuket). The city list, which is the city, still says Phuket below.
@@ -487,9 +526,9 @@ try {
   check("the want is noted, and the coaches' door counts it", (await ivan.getByText(/You hear from us when a coach lists in Phuket/).count()) === 1 && (await ivan.getByTestId("coach-waiting").count()) === 0);
   // One person is below the three the door shows from; the want is recorded all the same.
   await ivan.goto(`${BASE}/`);
-  check("the landing page has one quiet line for coaches", (await ivan.getByRole("link", { name: /Padel coach\? Your students book themselves/ }).count()) === 1);
+  check("the landing tile for coaches speaks to the player who wants a lesson", (await ivan.getByTestId("landing-coaches").getByText("Find a coach: prices, free hours, book a lesson").count()) === 1);
   const front = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());
-  check("the front door is in the sitemap in three languages", front.includes("/coaches</loc>") && front.includes("/ru/coaches</loc>") && front.includes("/es/coaches</loc>"));
+  check("both doors are in the sitemap in three languages", front.includes("/coaches</loc>") && front.includes("/ru/coaches</loc>") && front.includes("/es/coaches</loc>") && front.includes("/coaches/join</loc>") && front.includes("/es/coaches/join</loc>"));
 
   // Russian path renders the coach page in Russian (last: it switches Ivan's language).
   await ivan.goto(`${BASE}/ru/c/${handle}`);

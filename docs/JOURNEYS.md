@@ -86,7 +86,13 @@ list.
 - Path 2 ends on "no coaches listed in Singapore yet" and nothing to do about it. She would have
   typed her name and "beginner, evenings" if anything had asked. *Next:* an "I want a coach" line on
   a city's coach list that records the want (`demand` already knows a city and a level) and tells the
-  first coach who lists there.
+  first coach who lists there. **Built.**
+- Path 2, walked again on 20 September with a coach listed: `/coaches` was the coaches' own sales
+  page, so the word she typed took her to software for coaches. Past it, three cards read alike — a
+  name, a lesson length, a club — with no price, no free hour and no level, and each one ended on
+  "Ask to become a student", which waits for a person. **Built:** `/coaches` is the player's
+  directory, the coach's door moved to `/coaches/join`, the card carries the price, the next free
+  hour and the levels, and a coach can let anybody book (migration 0061).
 
 **Moments.** Path 1, all of it: no account, no app, the coach's free times as buttons, her lesson in
 her calendar. Spanish end to end, including the coach's page.

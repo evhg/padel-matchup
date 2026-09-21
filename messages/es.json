@@ -106,7 +106,8 @@
     "fromGeneratorTitle": "Tu americano, en vivo",
     "fromGeneratorSub": "Elige una hora y comparte un enlace. Los resultados, la tabla y los avisos se ocupan solos.",
     "carriedTitle": "{count, plural, one {# jugador de tu cuadro} other {# jugadores de tu cuadro}}",
-    "carriedHelp": "Cada uno ocupa una plaza y recibe un enlace para reenviar. Puedes cambiar la lista después."
+    "carriedHelp": "Cada uno ocupa una plaza y recibe un enlace para reenviar. Puedes cambiar la lista después.",
+    "doorFindCoach": "Encuentra un entrenador: precios, horas libres, reserva una clase"
   },
   "create": {
     "title": "Nuevo partido",
@@ -1518,7 +1519,11 @@
       "deleteHasLessons": "Tienes una clase pendiente. Cancélala primero, para que tu alumno se entere.",
       "deleteFailed": "No ha funcionado. Inténtalo de nuevo.",
       "clubsHelp": "Un club, o varios separados por comas. Con un club cada clase aparece en su página; con varios, ninguna, porque nadie sabe cuál.",
-      "groupPrices": "En grupo, cada persona paga"
+      "groupPrices": "En grupo, cada persona paga",
+      "openBooking": "Cualquiera puede reservar una hora libre",
+      "openBookingHelp": "Desactivado: un alumno nuevo lo pide y tú aceptas antes de que pueda reservar. Activado: elige una hora libre y desde ese momento está en tu lista. Tus horas, tu preaviso y tu norma de cancelación no cambian.",
+      "teaches": "Niveles que entrenas",
+      "teachesHelp": "Se muestra en tu ficha del directorio, para que un jugador sepa si eres para él. Deja ambos vacíos si aceptas a todos."
     },
     "page": {
       "owedTitle": "Por pagar",
@@ -1618,7 +1623,8 @@
       "noGap": "Sin hueco de {minutes} minutos el {day}",
       "from": "desde {amount}",
       "eachPaysLine": "Cada uno paga {amount}",
-      "foundingPlain": "Entrenador fundador"
+      "foundingPlain": "Entrenador fundador",
+      "openBookingNote": "{name} permite reservar una hora libre a cualquiera. Elige una hora y es tuya, sin pedir permiso ni esperar."
     },
     "me": {
       "title": "Tus clases",
@@ -1799,7 +1805,21 @@
     "wantWaiting": "{count, plural, one {# persona aquí pidió un entrenador.} other {# personas aquí pidieron un entrenador.}}",
     "wantReach": "Solo podemos avisarte con un correo o Telegram registrado.",
     "wantReachLink": "Añádelo en Mis partidos",
-    "wantFailed": "No se guardó. Inténtalo de nuevo."
+    "wantFailed": "No se guardó. Inténtalo de nuevo.",
+    "indexEyebrow": "Entrenadores",
+    "indexTitle": "Encuentra un entrenador de pádel",
+    "indexLead": "Todos los entrenadores listados, con el precio de la clase, su próxima hora libre y los niveles que entrenan. Reserva una hora libre tú mismo cuando el entrenador lo permita.",
+    "indexMeta": "Entrenadores de pádel en Kicksmash: precios, la próxima hora libre, idiomas y niveles. Reserva tú mismo, sin app y sin registro.",
+    "indexEmpty": "Ningún entrenador se ha listado todavía. Pide uno en tu ciudad y el primero que se liste lo sabrá.",
+    "indexCityMore": "Todos →",
+    "indexElsewhere": "Otros lugares",
+    "indexForCoaches": "¿Entrenas pádel? Tus alumnos reservan solos y tu calendario sigue siendo tuyo.",
+    "cardFrom": "desde {amount}",
+    "cardNextFree": "Próxima hora libre: {when}",
+    "cardNoFree": "Sin horas libres en las próximas dos semanas.",
+    "cardLevels": "Entrena niveles {levels}",
+    "cardOpenBooking": "Reserva sin pedir permiso",
+    "cardBook": "Reservar con {name}"
   },
   "moments": {
     "title": "Tus momentos",

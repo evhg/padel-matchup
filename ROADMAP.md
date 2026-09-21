@@ -357,6 +357,16 @@ Everything in this list is live. The README describes each in detail.
   by matches won, then games difference. Editions of a series and "play again" carry it; the API
   takes `gamesTo`.
 
+- **A player finds a coach (20 September 2026, migration 0061).** A player who wanted a lesson in
+  Phuket met the coaches' own sales page at `/coaches`, three cards that read alike, and a wall that
+  said "Ask to become a student". Three things changed. `/coaches` is the player's directory now, the
+  visitor's city first, and the coach's front door moved to `/coaches/join`, one line at the foot.
+  Each card carries what somebody chooses between: the price for one person, the first free hour, the
+  levels the coach teaches, the clubs and the languages. And a coach can switch "anyone can book" on:
+  the booking is the joining, so a stranger picks a free hour, types a name and is on the list from
+  that moment. The coach's hours, notice and cancellation rule do not change, and a paused student is
+  still refused. A whole list reads its diary in three queries, not three per coach.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

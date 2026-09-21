@@ -50,7 +50,15 @@ try {
   check("the carried players are named before anything is typed", (await p.getByTestId("carried-players").innerText()).includes("Ana · Bo · Cy · Di · Ed"));
   await p.getByPlaceholder("e.g. Alex").fill("Ana");
   await p.getByRole("button", { name: "Create & get the link" }).click();
-  await p.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  // A refused create leaves the form where it is, and a bare waitForURL then dies saying only
+  // "timeout". Watch both, and let the failure name itself.
+  const share = /\/[^/]{4}\/share$/;
+  const deadline = Date.now() + 30_000;
+  while (!share.test(p.url()) && Date.now() < deadline) {
+    if (await p.getByTestId("create-error").count()) throw new Error(`create refused: ${await p.getByTestId("create-error").innerText()}`);
+    await p.waitForTimeout(250);
+  }
+  if (!share.test(p.url())) throw new Error(`create did not navigate in 30s: still ${p.url()}`);
   const genCode = p.url().split("/").slice(-2)[0];
   await p.goto(`${BASE}/${genCode}`);
   const rows = await p.locator("main li").allInnerTexts();

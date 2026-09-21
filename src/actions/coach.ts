@@ -131,6 +131,11 @@ export type SettingsInput = {
   payLink: string;
   whatsapp: string;
   isPublic: boolean;
+  /** Anyone may book a free hour without asking first. */
+  openBooking: boolean;
+  /** The levels this coach teaches, for the directory card. */
+  teachesLevelMin: number | null;
+  teachesLevelMax: number | null;
   tz: string;
 };
 
@@ -164,6 +169,9 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
       payLink: input.payLink,
       whatsapp: input.whatsapp,
       isPublic: Boolean(input.isPublic),
+      openBooking: Boolean(input.openBooking),
+      teachesLevelMin: input.teachesLevelMin,
+      teachesLevelMax: input.teachesLevelMax,
       tz: input.tz,
     });
     await saveOffers(db, coach.id, input.offers ?? []);
@@ -574,16 +582,18 @@ export async function savePaymentAction(input: { promptpayId?: string | null; pa
 }
 
 
-export async function studentBookAction(handle: string, startsAt: string, heads?: number, minutes?: number | null): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
+export async function studentBookAction(handle: string, startsAt: string, heads?: number, minutes?: number | null, name?: string): Promise<ActionResult<{ lessonId: string; startsAt: string }>> {
   return runA(async () => {
     const db = await getDb();
     const coach = await getCoachByHandle(db, handle);
     if (!coach) throw new ActionFailure("no_coach");
-    const me = await getSessionPlayer(db);
+    // "Anyone can book": a first-timer gives their name with the booking, and the booking is the
+    // joining. Otherwise nothing changes — a session is needed, and only an accepted student may book.
+    const me = coach.openBooking ? await requirePlayer(db, name) : await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     const at = new Date(startsAt);
     if (Number.isNaN(at.getTime())) throw new DomainError("invalid", "time");
-    if ((await studentStatus(db, coach.id, me.id)) !== "accepted") throw new ActionFailure("not_student");
+    if (!coach.openBooking && (await studentStatus(db, coach.id, me.id)) !== "accepted") throw new ActionFailure("not_student");
     // Only a length the coach sells: their usual one, or the second one when they have it.
     const length = minutes != null && (minutes === coach.lessonMinutes || minutes === coach.secondMinutes) ? minutes : undefined;
     const { lesson, package: pkg } = await bookLesson(db, { coach, studentPlayerId: me.id, startsAt: at, byCoach: false, source: "web", createdByPlayerId: me.id, heads, minutes: length });

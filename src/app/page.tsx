@@ -33,7 +33,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
           <h2 className="px-1 text-xs font-bold uppercase tracking-wider text-faint">{t("landing.doorsTitle")}</h2>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {[
-              { href: "/coaches?s=landing", icon: "🎾", title: t("common.coaches"), line: t("landing.doorCoaches"), testId: "landing-coaches" },
+              { href: "/coaches?s=landing", icon: "🎾", title: t("common.coaches"), line: t("landing.doorFindCoach"), testId: "landing-coaches" },
               { href: "/t", icon: "🏆", title: t("common.tournaments"), line: t("landing.doorTournaments"), testId: "landing-tournaments" },
               { href: "/clubs", icon: "🏟", title: t("common.clubs"), line: t("landing.doorClubs"), testId: "landing-clubs" },
               { href: "/americano", icon: "🔀", title: t("landing.americanoTitle"), line: t("landing.doorAmericano"), testId: "landing-americano" },

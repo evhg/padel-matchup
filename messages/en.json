@@ -106,7 +106,8 @@
     "fromGeneratorTitle": "Your americano, live",
     "fromGeneratorSub": "Pick a time and share one link. Scores, standings and reminders look after themselves.",
     "carriedTitle": "{count, plural, one {# player from your schedule} other {# players from your schedule}}",
-    "carriedHelp": "Each one takes a spot and gets a link to pass on. You can change the list afterwards."
+    "carriedHelp": "Each one takes a spot and gets a link to pass on. You can change the list afterwards.",
+    "doorFindCoach": "Find a coach: prices, free hours, book a lesson"
   },
   "create": {
     "title": "New match",
@@ -1518,7 +1519,11 @@
       "deleteHasLessons": "You have a lesson still to come. Cancel it first, so your student is told.",
       "deleteFailed": "That did not work. Try again.",
       "clubsHelp": "One club, or several separated by commas. With one club every lesson lands on that club's page; with several, none does, because nobody can tell which.",
-      "groupPrices": "In a group, each person pays"
+      "groupPrices": "In a group, each person pays",
+      "openBooking": "Anyone can book a free hour",
+      "openBookingHelp": "Off: a new student asks and you accept before they can book. On: they pick a free hour and are on your list from that moment. Your hours, your notice and your cancellation rule are unchanged.",
+      "teaches": "Levels you teach",
+      "teachesHelp": "Shown on your card in the directory, so a player knows whether you are for them. Leave both empty if you take everybody."
     },
     "page": {
       "owedTitle": "To pay",
@@ -1618,7 +1623,8 @@
       "noGap": "No {minutes}-minute gap on {day}",
       "from": "from {amount}",
       "eachPaysLine": "Each pays {amount}",
-      "foundingPlain": "Founding coach"
+      "foundingPlain": "Founding coach",
+      "openBookingNote": "{name} lets anyone book a free hour. Pick a time and it is yours — no asking, no waiting."
     },
     "me": {
       "title": "Your lessons",
@@ -1799,7 +1805,21 @@
     "wantWaiting": "{count, plural, one {# person here asked for a coach.} other {# people here asked for a coach.}}",
     "wantReach": "We can only reach you with an email or Telegram on file.",
     "wantReachLink": "Add one on My matches",
-    "wantFailed": "That did not save. Try again."
+    "wantFailed": "That did not save. Try again.",
+    "indexEyebrow": "Coaches",
+    "indexTitle": "Find a padel coach",
+    "indexLead": "Every coach who lists here, with what a lesson costs, when they are next free and the levels they teach. Book a free hour yourself where the coach allows it.",
+    "indexMeta": "Padel coaches on Kicksmash: prices, the next free hour, languages and levels. Book a lesson yourself, no app and no signup.",
+    "indexEmpty": "No coach has listed their page yet. Ask for one in your city and the first coach who lists there hears about it.",
+    "indexCityMore": "All of them →",
+    "indexElsewhere": "Other places",
+    "indexForCoaches": "Padel coach? Your students book themselves, and your calendar stays yours.",
+    "cardFrom": "from {amount}",
+    "cardNextFree": "Next free: {when}",
+    "cardNoFree": "No free hours in the next two weeks.",
+    "cardLevels": "Teaches {levels}",
+    "cardOpenBooking": "Book without asking",
+    "cardBook": "Book with {name}"
   },
   "moments": {
     "title": "Your moments",

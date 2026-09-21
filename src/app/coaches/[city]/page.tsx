@@ -6,9 +6,10 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
+import { CoachListCard } from "@/components/coach/CoachListCard";
 import { WantCoachForm } from "@/components/WantCoachForm";
 import { countCoachWants, shownCount } from "@/lib/domain/coachWants";
-import { isFoundingCoach, listPublicCoaches } from "@/lib/domain/coaching";
+import { busyForCoaches, coachCardFacts, listPublicCoaches, NO_BUSY } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 import { localeAlternates } from "@/lib/seo";
 
@@ -32,12 +33,14 @@ export default async function CoachesInCityPage({ params }: Props) {
   const city = cityBySlug(slug.toLowerCase());
   if (!city) notFound();
   const db = await getDb();
-  const [t, tCoach, coaches] = await Promise.all([getTranslations("coaches"), getTranslations("coach"), listPublicCoaches(db, city.tz)]);
+  const [t, tCoach, locale, coaches] = await Promise.all([getTranslations("coaches"), getTranslations("coach"), getLocale(), listPublicCoaches(db, city.tz)]);
   // The other half of the list: who is asking. Two bounded reads, sequential (rule 8).
   const me = await getSessionPlayer(db);
   const waiting = shownCount(await countCoachWants(db, city.slug));
+  // One query for the whole list's busy time, so the free hour on each card costs no extra read (rule 12).
+  const now = new Date();
+  const busy = await busyForCoaches(db, coaches.map((c) => c.id), now, new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000));
   const base = baseUrl();
-  const languageName = (code: string) => (code === "ru" ? "Русский" : code === "es" ? "Español" : "English");
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -60,22 +63,9 @@ export default async function CoachesInCityPage({ params }: Props) {
           </section>
         ) : (
           <ul className="flex flex-col gap-3" data-testid="coach-list">
+            {/* The same card as the index, so a player compares on the same facts wherever they land. */}
             {coaches.map((c) => (
-              <li key={c.id} className="card flex flex-col gap-2">
-                {isFoundingCoach(c) && <span className="chip-muted self-start">🏅 {tCoach("page.founding", { city: city.name })}</span>}
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="text-xl font-extrabold tracking-tight">{c.displayName}</h2>
-                  <span className="text-xs text-muted">{tCoach("page.lesson", { minutes: c.lessonMinutes })}</span>
-                </div>
-                <p className="text-sm text-muted">
-                  {c.clubNames.length ? `${tCoach("page.at", { clubs: c.clubNames.join(", ") })} · ` : ""}
-                  {c.languages.map(languageName).join(", ")}
-                </p>
-                {c.bio && <p className="text-sm">{c.bio}</p>}
-                <Link href={`/c/${c.handle}`} prefetch={false} className="btn-secondary w-full">
-                  {t("open", { name: c.displayName })}
-                </Link>
-              </li>
+              <CoachListCard key={c.id} coach={coachCardFacts(c, busy.get(c.id) ?? NO_BUSY, now)} locale={locale} foundingCity={city.name} />
             ))}
           </ul>
         )}

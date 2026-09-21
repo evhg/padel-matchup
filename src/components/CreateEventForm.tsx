@@ -159,7 +159,7 @@ export function CreateEventForm({
       <div className="card">
         <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} />
       </div>
-      {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+      {error && <p className="text-sm font-semibold text-danger" data-testid="create-error">{error}</p>}
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>
         {pending ? t("create.creating") : t("create.submit")}
       </button>

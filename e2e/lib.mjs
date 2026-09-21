@@ -18,7 +18,21 @@ function chromiumPath() {
 
 export const launch = () => chromium.launch({ executablePath: chromiumPath(), headless: true });
 
-export const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Europe/Madrid", reducedMotion: "reduce" };
+/**
+ * One client address per suite. Every browser in the run reaches the same server from 127.0.0.1, so
+ * without this all twenty-one suites share one rate-limit bucket — and `newIdentitiesPerIpPerDay` is
+ * 40. The run had crept up on that ceiling: adding one player to one suite made a *different* suite's
+ * create form answer "too_many" and its walk hang on a navigation that never came. Each suite gets
+ * its own address, which is also what twenty-one real people look like.
+ */
+function suiteIp() {
+  const name = (process.argv[1] ?? "suite").split("/").pop().replace(/\.mjs$/, "");
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 65521;
+  return `10.31.${(h >> 8) & 255}.${(h & 255) || 7}`;
+}
+
+export const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Europe/Madrid", reducedMotion: "reduce", extraHTTPHeaders: { "x-forwarded-for": suiteIp() } };
 
 /** Screenshots are optional: set SHOTS=<dir> to keep them. */
 /** Switches the page's language through the header toggle. On a phone the toggle is one pill; the tap on it opens the other two. */

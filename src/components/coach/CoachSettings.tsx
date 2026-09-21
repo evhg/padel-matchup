@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { removeQrAction, saveCoachSettingsAction, uploadQrAction, type SettingsInput } from "@/actions/coach";
 import { LESSON_MINUTES, QR_UPLOAD_MAX_BYTES } from "@/lib/domain/coaching";
+import { formatLevel, LEVEL_STEPS } from "@/lib/domain/levels";
 import { HowThisWorks } from "./HowThisWorks";
 import { OffersEditor } from "./OffersEditor";
 import { PromptPayQr } from "./PromptPayQr";
@@ -16,6 +17,7 @@ const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new
 /** One form, saved with one button. Words over widgets: hours are typed the way a coach says them. */
 export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
   const t = useTranslations("coach");
+  const tRoot = useTranslations();
   const locale = useLocale();
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -209,6 +211,43 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency }: Props) {
           <input type="checkbox" checked={v.isPublic} onChange={(e) => set("isPublic", e.target.checked)} /> {t("settings.public")}
           <span className="text-xs font-normal text-muted">{t("settings.publicHelp")}</span>
         </label>
+        {/* Without this a player who found the coach in the directory had to ask and wait for a person
+            before any hour could be taken, which is where most of them left. */}
+        <label className="flex items-start gap-2 text-sm font-bold">
+          <input type="checkbox" className="mt-1" checked={v.openBooking} onChange={(e) => set("openBooking", e.target.checked)} data-testid="open-booking" />
+          <span className="min-w-0">
+            {t("settings.openBooking")}
+            <span className="mt-0.5 block text-xs font-normal text-muted">{t("settings.openBookingHelp")}</span>
+          </span>
+        </label>
+        <div>
+          <span className="text-sm font-bold">{t("settings.teaches")}</span>
+          <div className="mt-1 grid grid-cols-2 gap-3">
+            <label className="block text-xs font-bold text-muted">
+              {tRoot("level.from")}
+              <select className="input mt-1" value={v.teachesLevelMin ?? ""} onChange={(e) => set("teachesLevelMin", e.target.value === "" ? null : Number(e.target.value))} data-testid="teaches-min">
+                <option value="">—</option>
+                {LEVEL_STEPS.map((n) => (
+                  <option key={n} value={n}>
+                    {formatLevel(n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-bold text-muted">
+              {tRoot("level.to")}
+              <select className="input mt-1" value={v.teachesLevelMax ?? ""} onChange={(e) => set("teachesLevelMax", e.target.value === "" ? null : Number(e.target.value))} data-testid="teaches-max">
+                <option value="">—</option>
+                {LEVEL_STEPS.map((n) => (
+                  <option key={n} value={n}>
+                    {formatLevel(n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <span className="mt-1 block text-xs text-muted">{t("settings.teachesHelp")}</span>
+        </div>
         <label className="block text-sm font-bold">
           {t("settings.tz")}
           <input className="input mt-1" value={v.tz} onChange={(e) => set("tz", e.target.value)} maxLength={60} />

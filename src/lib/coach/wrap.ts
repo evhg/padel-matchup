@@ -285,7 +285,7 @@ export async function monthlyWraps(
       };
       const invite =
         w.done >= WRAP.inviteAfterLessons
-          ? ` ${t("wrap.coachInvite", { url: `${deps.baseUrl}/coaches?s=wrap` })}`
+          ? ` ${t("wrap.coachInvite", { url: `${deps.baseUrl}/coaches/join?s=wrap` })}`
           : "";
       // The accountant's copy rides along: the same month, one line per student.
       const statement = await coachStatement(db, coach, month.from, month.to);
