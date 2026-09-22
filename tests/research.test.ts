@@ -98,7 +98,7 @@ describe("research queries", () => {
   });
   it("runs never-run queries first, respects intervals, and backs off queries that yield nothing", () => {
     const q = LISTEN_QUERIES[0];
-    const run = (lastRunAt: Date, emptyStreak: number) => ({ key: q.key, lastRunAt, runs: 1, credits: 1, results: 3, newItems: 0, emptyStreak, lastError: null, migrateProbe: null });
+    const run = (lastRunAt: Date, emptyStreak: number) => ({ key: q.key, lastRunAt, runs: 1, credits: 1, results: 3, newItems: 0, emptyStreak, lastError: null });
     expect(dueQueries(NOW, []).length).toBe(QUERIES.length);
     expect(dueQueries(NOW, [run(hours(-1), 0)]).map((x) => x.key)).not.toContain(q.key);
     expect(dueQueries(NOW, [run(hours(-25), 0)]).map((x) => x.key)).toContain(q.key);
@@ -107,7 +107,7 @@ describe("research queries", () => {
     expect(dueQueries(NOW, [run(hours(-25), 1)]).map((x) => x.key)).not.toContain(q.key);
     expect(dueQueries(NOW, [run(hours(-49), 1)]).map((x) => x.key)).toContain(q.key);
     // The most overdue known query comes right after the never-run ones.
-    const others = QUERIES.filter((x) => x.key !== q.key).map((x) => ({ key: x.key, lastRunAt: hours(-1), runs: 1, credits: 1, results: 0, newItems: 0, emptyStreak: 0, lastError: null, migrateProbe: null }));
+    const others = QUERIES.filter((x) => x.key !== q.key).map((x) => ({ key: x.key, lastRunAt: hours(-1), runs: 1, credits: 1, results: 0, newItems: 0, emptyStreak: 0, lastError: null }));
     expect(dueQueries(NOW, [...others, run(hours(-100), 0)])[0].key).toBe(q.key);
   });
 });

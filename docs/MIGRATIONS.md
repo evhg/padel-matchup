@@ -117,29 +117,28 @@ applies each `.sql` file in order and writes its own record of what it applied. 
 the schema, so it cannot drop the security policies. That is the reason `pnpm db:push` is disabled
 and this is not.
 
-### Step 4 — prove it once, with a change that does nothing
+### Step 4 — proved, on 22 September 2026
 
-Do not make the first run a real migration.
+We proved it with a column that does nothing: `research_runs.migrate_probe`, on a table the site
+never reads. Run 7 applied it in 7 seconds. Nobody typed SQL. The migration count went from 62 to
+63, and the column was there. A second pull request then removed it the same way.
 
-1. Claude opens a pull request that adds a harmless column to a table nobody reads.
-2. You merge it.
-3. Watch the **Actions** tab. A run called **Migrate** starts by itself, turns green, and its log
-   ends with `✓ migrations applied`.
-4. Claude checks the column is really there, then opens a second pull request that removes it.
+**It took seven runs, and each failure was worth its cost.** No run before the seventh reached any
+SQL, so the database was never at risk.
 
-If the run fails, nothing has changed in the database. Read the red step in the log, or send it to
-Claude.
+| Run | What failed | What it proved |
+|---|---|---|
+| 1 | The script could not start | The workflow starts by itself |
+| 2 | No route to the address | The script runs and reaches the database |
+| 3 | The same | The new message says the remedy |
+| 4 | The database refused the password | The address is right |
+| 5 | The same, before the secret changed | — |
+| 6 | The secret was not an address at all | The banner catches a bad paste |
+| 7 | **Nothing** | **A migration reaches production on its own** |
 
-**What happened when we tried this.** Four runs, four different faults, and no SQL in any of them.
-
-1. The script could not start. The gate now runs that script on every change.
-2. The address was wrong, because this page named the wrong one.
-3. The same, because the secret still held the old address.
-4. The address was right and the database refused the password.
-
-Every run stopped before any SQL, so the database is exactly as it was. The column from step 4 is
-still waiting. Each run now prints one line that says where it pointed and who it claimed to be. The
-password is never in that line.
+Every fault is now a check. The gate runs the migration script on every change, so fault 1 cannot
+return. Each run prints one line that says where it pointed and who it claimed to be, and describes
+a value it cannot read. The password is never in any of those lines.
 
 ### If a run says the password is refused
 
@@ -152,13 +151,14 @@ old value back to compare.
 Read the password from your password manager and build the address again. Reset it only if it is
 truly lost, and then change `DATABASE_URL` on Vercel in the same sitting.
 
-## What changes afterwards
+## What changed afterwards
 
-- **AGENTS.md rule 7 changes.** It says today that production gets each migration by hand. It would
-  say: production gets each migration from the `migrate` workflow, after Cath approves it.
-- **Claude stops needing write access to the database.** The Supabase connection can then be set to
-  read-only, and Claude keeps only the ability to look at numbers.
-- **The Supabase password can come out of the Claude environment.**
+- **AGENTS.md rules 7 and 10 say the new way.** Production gets each migration from the **Migrate**
+  workflow, after the merge. Done.
+- **The Supabase password is out of the Claude environment.** Done — you removed it.
+- **Claude no longer needs write access to the database.** The Supabase connection can now be set to
+  read-only, and Claude keeps the ability to look at numbers. **This one is still open**, and it is
+  yours: `--read-only` on the Supabase MCP.
 
 ## How to undo it
 

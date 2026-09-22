@@ -1,0 +1,1 @@
+ALTER TABLE "research_runs" DROP COLUMN "migrate_probe";
