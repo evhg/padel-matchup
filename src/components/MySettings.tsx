@@ -60,6 +60,7 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
               emailEnabled
               notifyOn={player.emailNotifications}
               savedText={t("event.emailSavedNoMail")}
+              saveLabel={t("me.saveEmail")}
             />
           </div>
         )}
