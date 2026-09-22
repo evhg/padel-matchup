@@ -68,6 +68,12 @@ through the Supabase MCP before the merge, with `SET LOCAL lock_timeout = '5s'`,
 two Row Level Security statements, and a row in `drizzle.__drizzle_migrations`. `pnpm db:push` is
 disabled because it would drop the policies. This is AGENTS.md rule 7 and it has no exceptions.
 
+**The plan to stop doing this by hand is written down.** `docs/MIGRATIONS.md` is the owner's
+step-by-step for moving migrations to a GitHub Actions workflow that waits for their approval, with
+the reasons and the way back. It is not built. Read it before proposing anything about migrations,
+the Supabase connection's rights, or which credentials a session needs, so the same ground is not
+covered twice.
+
 ## The pull request
 
 One per feature or area. The body says what changed, why, whether anything is product-visible, and
