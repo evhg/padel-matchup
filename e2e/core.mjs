@@ -23,7 +23,8 @@ try {
   // app to find My matches, and it stays shut so it takes nothing from the name field above it.
   // "show the match result card ... as they are being typed in" — the card the crew will see, empty
   // until something is typed, so the first page shows what this is rather than describing it.
-  check("the landing page shows the card, waiting", (await a.getByTestId("card-preview").count()) === 1 && (await a.getByTestId("card-preview").textContent()).includes("--:--"));
+  const firstCard = (await a.getByTestId("card-preview").textContent()) ?? "";
+  check("the landing page shows the card a match will have, four seats and no court yet", firstCard.includes("Court TBD") && firstCard.includes("1/4 players"), firstCard);
   const backIn = a.getByText("Played before? Get your matches back.");
   check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
   await backIn.click();

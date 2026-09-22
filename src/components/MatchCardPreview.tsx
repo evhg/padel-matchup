@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import { MATCH_CAPACITY } from "@/lib/config";
 import { formatEventDay, formatEventTime, isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { venueWithCourt } from "@/lib/labels";
 
@@ -40,10 +41,14 @@ export function MatchCardPreview({
     { venueName: values.venueName.trim() || null, court: values.court.trim() || null },
     { venueTbd: t("og.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) },
   );
+  // A match holds four, whatever the tournament field says: the form sends a capacity only for a
+  // tournament, and the card read "1/8 players" under a match that holds four until a screenshot
+  // showed it. The seats follow the same number.
+  const capacity = values.type === "match" ? MATCH_CAPACITY : values.capacity;
   // The organiser holds a seat, and so does everybody they have already named.
-  const taken = Math.min(values.capacity, 1 + values.haveNames.split("\n").filter((n) => n.trim()).length);
-  const left = Math.max(0, values.capacity - taken);
-  const players = t("og.players", { count: taken, capacity: values.capacity });
+  const taken = Math.min(capacity, 1 + values.haveNames.split("\n").filter((n) => n.trim()).length);
+  const left = Math.max(0, capacity - taken);
+  const players = t("og.players", { count: taken, capacity });
 
   return (
     <div
@@ -78,7 +83,7 @@ export function MatchCardPreview({
             {left > 0 ? `${players} — ${t("og.tapToJoin")}` : players}
           </div>
           <div style={{ display: "flex", gap: share(10) }}>
-            {Array.from({ length: Math.min(values.capacity, 8) }, (_, i) => (
+            {Array.from({ length: Math.min(capacity, 8) }, (_, i) => (
               <div key={i} style={{ width: share(34), height: share(34), borderRadius: "50%", background: i < taken ? "#14161A" : "transparent", border: `${share(4)} solid #14161A` }} />
             ))}
           </div>
