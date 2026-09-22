@@ -41,10 +41,18 @@ You need about ten minutes, once. You never repeat steps 1 and 2.
 1. Open **supabase.com** and sign in.
 2. Click the project **evhg's padel-matchup**.
 3. At the top right, click the green **Connect** button.
-4. A panel opens with several tabs. Choose **Session pooler**. The address ends with **:5432**.
+4. A panel opens with several tabs: Framework, Server, **Direct**, ORM and MCP. Click **Direct**.
+   Inside it, choose **Session pooler**.
 5. Click the copy icon. Copy what the panel shows you. Do not type the example below.
    The address looks like
    `postgresql://postgres.udvtuxaxzfimeoubofdz:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`.
+
+   **Supabase changes this panel from time to time.** Do not trust the tab names. Trust these three
+   tests instead. The address you copy must have all of them:
+
+   - the host ends with **`pooler.supabase.com`**
+   - the port is **`5432`**, not 6543
+   - the user name is **`postgres.udvtuxaxzfimeoubofdz`**, not plain `postgres`
 6. Replace `[YOUR-PASSWORD]` with the database password you chose when you made the project. If you
    do not have it, click **Reset database password** on the same panel and save the new one.
 7. Keep this address in your password manager. Step 2 is the only place it goes.
@@ -113,10 +121,27 @@ Do not make the first run a real migration.
 If the run fails, nothing has changed in the database. Read the red step in the log, or send it to
 Claude.
 
-**What happened when we tried this.** Run 1 failed because the script itself could not start. The
-gate now runs that script on every change, so that cannot happen again. Run 2 failed because this
-page named the wrong address, above. Both runs stopped before any SQL, so the database is exactly as
-it was. The column from step 4 is still waiting.
+**What happened when we tried this.** Four runs, four different faults, and no SQL in any of them.
+
+1. The script could not start. The gate now runs that script on every change.
+2. The address was wrong, because this page named the wrong one.
+3. The same, because the secret still held the old address.
+4. The address was right and the database refused the password.
+
+Every run stopped before any SQL, so the database is exactly as it was. The column from step 4 is
+still waiting. Each run now prints one line that says where it pointed and who it claimed to be. The
+password is never in that line.
+
+### If a run says the password is refused
+
+The address is right. Only the password is wrong.
+
+**Do not reset the database password to fix this.** The live site holds the same password in its own
+`DATABASE_URL` on Vercel. A reset stops the site until you change that too, and you cannot read the
+old value back to compare.
+
+Read the password from your password manager and build the address again. Reset it only if it is
+truly lost, and then change `DATABASE_URL` on Vercel in the same sitting.
 
 ## What changes afterwards
 

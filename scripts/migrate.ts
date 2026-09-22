@@ -4,7 +4,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 import { directDatabaseUrl } from "../src/lib/env";
-import { unreachableHint } from "./unreachable";
+import { banner, connectionHint } from "./connection-hint";
 
 // Everything below sits inside a function on purpose. package.json has no `"type": "module"`, so tsx
 // compiles this file to CommonJS, where a top-level `await` is not a slow path but a build error:
@@ -18,6 +18,9 @@ async function main() {
     process.exit(1);
   }
 
+  // Where this run is actually pointed, before it tries. Never the password.
+  console.log(banner(url));
+
   // `lock_timeout`, in milliseconds, is what the by-hand procedure always set, and the workflow must be at least as
   // careful as a pair of hands: a migration that cannot take its lock inside five seconds gives up
   // instead of queueing behind a live query and blocking every reader behind it.
@@ -29,7 +32,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  const hint = unreachableHint(err);
+  const hint = connectionHint(err);
   if (hint) console.error(hint);
   console.error(err);
   process.exit(1);
