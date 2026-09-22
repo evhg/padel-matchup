@@ -9,15 +9,14 @@ import { getDb } from "@/db";
 import { getPlayer } from "@/lib/domain/players";
 import { calendarTitle } from "@/lib/calendar";
 import { baseUrl } from "@/lib/config";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { addMs, formatEventDay, formatEventTime, isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
 import { getClub, isClubListed, isClubLive } from "@/lib/domain/clubs";
 import { getSessionPlayerId } from "@/lib/session";
-import { listCourts } from "@/lib/domain/courts";
+import { clubBusy, courtDay, courtsInUse, listCourts } from "@/lib/domain/courts";
 import { coachesAtClub } from "@/lib/domain/coaching";
 import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
-import { zonedTimeToUtc } from "@/lib/dates";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { embedHtml } from "@/lib/embed";
 import { rangeChip } from "@/lib/levelText";
@@ -52,6 +51,13 @@ export default async function VenueBoardPage({ params }: Props) {
   const shown = isClubListed(clubRow) ? clubRow! : null;
   const unclaimed = shown && !club ? shown : null;
   const courts = club ? await listCourts(db, club.slug) : [];
+  // Roadmap item 4, the first half: the club has its courts as rows and could not see which of them
+  // were busy. A match already names a court, so the day can be drawn today, from what is there.
+  // Sequential after the courts, not beside them: the pooler stalls on pipelined bursts (rule 8).
+  const clubTz = club?.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
+  const dayFrom = club ? zonedTimeToUtc(utcToZonedParts(new Date(), clubTz).date, "00:00", clubTz) : null;
+  const busy = club && courts.length > 0 && dayFrom ? await clubBusy(db, club.slug, dayFrom, addMs(dayFrom, 24 * 60 * 60 * 1000)) : [];
+  const day = busy.length > 0 ? courtDay(courts.map((c) => c.name), busy) : [];
   // A claimed club whose check is still to come has a page too, for the person who claimed it: the
   // board, empty, under its name, opened from the done screen. To anybody else nothing of a pending
   // claim shows: a stranger's wrong map link must not stand on a club's page before the check.
@@ -136,6 +142,38 @@ export default async function VenueBoardPage({ params }: Props) {
             <div className="mt-2">
               <FreeCourts club={club} />
             </div>
+          </section>
+        )}
+        {day.length > 0 && (
+          <section className="card" data-testid="club-day">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-lg font-extrabold">{t("club.dayTitle")}</h2>
+              {/*
+                Only when one of the club's own courts is busy. A day whose bookings all named no
+                court read "0 of 4 courts busy" beside a booking anybody could see, which is true
+                and reads as a contradiction. Saying nothing is the honest version of not knowing.
+              */}
+              {courtsInUse(day) > 0 && (
+                <span className="text-sm font-semibold text-muted tabular-nums">{t("club.dayInUse", { used: courtsInUse(day), total: courts.length })}</span>
+              )}
+            </div>
+            <ul className="mt-3 flex flex-col divide-y divide-line">
+              {day.map((row) => (
+                <li key={row.name ?? "-"} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2">
+                  <span className={`w-28 shrink-0 text-sm font-extrabold ${row.name ? "" : "text-faint"}`}>{row.name ?? t("club.dayNoCourt")}</span>
+                  {row.blocks.length === 0 ? (
+                    <span className="text-sm text-faint">·</span>
+                  ) : (
+                    row.blocks.map((b, i) => (
+                      <span key={i} className="rounded-lg border border-line px-2 py-0.5 text-xs">
+                        <span className="font-bold tabular-nums">{formatEventTime(b.startsAt, clubTz, locale)}</span>{" "}
+                        <span className="text-muted">{b.title ?? t(b.kind === "lesson" ? "club.dayLesson" : "club.dayMatch")}</span>
+                      </span>
+                    ))
+                  )}
+                </li>
+              ))}
+            </ul>
           </section>
         )}
         {week && (
