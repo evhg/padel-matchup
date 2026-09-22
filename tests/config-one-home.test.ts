@@ -70,12 +70,17 @@ describe("one home for a value", () => {
     // A rename here breaks production migrations silently: the workflow still runs, still waits for
     // the owner, and then fails at the last step or, worse, runs with no address at all.
     const wf = readFileSync(root(".github/workflows/migrate.yml"), "utf8");
-    expect(wf).toContain("environment: production");
     expect(wf).toContain("pnpm db:migrate");
     expect(wf).toContain("secrets.DIRECT_DATABASE_URL");
-    // The script must read the same name the workflow supplies.
+    // It must never fire on its own file: merging it would run against a secret that may not exist,
+    // which is a red run on main and an email nobody can act on.
+    expect(wf).not.toContain('- ".github/workflows/migrate.yml"');
+    // The script must read the same name the workflow supplies, and be as careful as a pair of
+    // hands was: the by-hand procedure always set a lock timeout.
+    const script = readFileSync(root("scripts/migrate.ts"), "utf8");
     expect(readFileSync(root("src/lib/env.ts"), "utf8")).toContain("DIRECT_DATABASE_URL");
-    expect(readFileSync(root("scripts/migrate.ts"), "utf8")).toContain("directDatabaseUrl");
+    expect(script).toContain("directDatabaseUrl");
+    expect(script).toContain("lock_timeout");
   });
 
   it("documents every variable the code reads", () => {

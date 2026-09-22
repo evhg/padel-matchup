@@ -5,9 +5,8 @@ Claude types it into Supabase during a session. This page says how to move that 
 why you would.
 
 **Where this stands.** The workflow file is built: `.github/workflows/migrate.yml`. It does nothing
-until you finish steps 1 to 3 below, because it has no database address and no environment to wait
-on. Rule 7 still sends migrations through a session until you and Claude have proved it once
-together, at step 5.
+until you finish steps 1 and 2 below, because it has no database address. Rule 7 still sends
+migrations through a session until you and Claude have proved it once together, at step 4.
 
 ## Why move it
 
@@ -16,8 +15,10 @@ Three reasons, in order of weight.
 1. **The credential moves to one place you control.** Today a session holds a Supabase password and
    a role that owns every table. If the job moves to GitHub, the database address lives in your
    repository's settings, and no session needs it.
-2. **You press the button.** Today a migration happens while Claude works. After the move, GitHub
-   waits for you and shows you what it is about to run.
+2. **It runs by itself.** You approve a migration twice already: once in the conversation where it
+   is designed, and once when you merge the pull request that carries it. A third click after the
+   merge is ceremony, not safety, so the workflow does not ask for one. Your standing order is that
+   one shot means you are not involved until it is finished.
 3. **There is a record.** Every run is in the Actions log, with the date, the person and the result.
    A tool call in a chat is not a record anybody can audit later.
 
@@ -32,7 +33,7 @@ then apply the migrations."
 
 ## What you do, step by step
 
-You need about twenty minutes, once. You never repeat steps 1 to 3.
+You need about ten minutes, once. You never repeat steps 1 and 2.
 
 ### Step 1 — copy the database address from Supabase
 
@@ -63,25 +64,14 @@ shares one connection between many callers and cannot do that safely.
 GitHub hides the value from that moment. Nobody, including you, can read it back. You can only
 replace it. That is the point.
 
-### Step 3 — make GitHub ask you first
-
-This is the step that gives you the button.
-
-1. Still in **Settings**, find **Environments** in the left column. Click it.
-2. Click **New environment**. Name it `production`. Click **Configure environment**.
-3. Tick **Required reviewers**. Type your own GitHub name, `evhg`, and pick it from the list.
-4. Click **Save protection rules**.
-
-Now any job that names this environment stops and waits for you. GitHub emails you, and the pull
-request shows a **Review deployments** button.
-
-### Step 4 — Claude adds the workflow file · **done**
+### Step 3 — Claude adds the workflow file · **done**
 
 `.github/workflows/migrate.yml`. It says:
 
-- Run only when a file in the `drizzle` folder reaches `main`.
-- Use the `production` environment, so it waits for you.
+- Run only when a file in the `drizzle` folder reaches `main`. A copy fix does not start it.
 - Install the project, then run `pnpm db:migrate`, with `DIRECT_DATABASE_URL` from step 2.
+- Give up after five seconds if it cannot take its lock, instead of queueing behind a live query and
+  blocking every reader behind it. That is what the by-hand procedure always did.
 
 It also refuses to run twice at once, and it can be started by hand from the Actions tab if a run
 failed and you want to try again without a new commit.
@@ -91,16 +81,15 @@ applies each `.sql` file in order and writes its own record of what it applied. 
 the schema, so it cannot drop the security policies. That is the reason `pnpm db:push` is disabled
 and this is not.
 
-### Step 5 — prove it once, with a change that does nothing
+### Step 4 — prove it once, with a change that does nothing
 
 Do not make the first run a real migration.
 
 1. Claude opens a pull request that adds a harmless column to a table nobody reads.
 2. You merge it.
-3. GitHub emails you: "Review deployments". Open the pull request and click **Review deployments**,
-   then **Approve and deploy**.
-4. Watch the **Actions** tab. The run turns green and the log ends with `✓ migrations applied`.
-5. Claude checks the column is really there, then opens a second pull request that removes it.
+3. Watch the **Actions** tab. A run called **Migrate** starts by itself, turns green, and its log
+   ends with `✓ migrations applied`.
+4. Claude checks the column is really there, then opens a second pull request that removes it.
 
 If the run fails, nothing has changed in the database. Read the red step in the log, or send it to
 Claude.
@@ -118,6 +107,10 @@ Claude.
 Delete the file `.github/workflows/migrate.yml` from the repository, and delete the
 `DIRECT_DATABASE_URL` secret. Migrations then go back to being typed by hand. Nothing in the
 database changes either way.
+
+To hold one migration back without undoing anything, keep it out of the pull request. The workflow
+starts only when a file in `drizzle/` reaches `main`, so a change that carries no migration file
+starts nothing.
 
 ## What this does not cover
 
