@@ -14,6 +14,7 @@ import { Footer, Header } from "@/components/Header";
 import { SourceTag } from "@/components/SourceTag";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
+import { ReturningPlayer } from "@/components/ReturningPlayer";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { MatchPayments } from "@/components/MatchPayments";
 import { paymentsFor } from "@/lib/domain/slots";
@@ -414,6 +415,19 @@ export default async function EventPage({ params, searchParams }: Props) {
             </>
           )}
           {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t("event.fullHelp")}</p>}
+          {/*
+            A friend's link opens in WhatsApp's own browser, which has never seen this person: the
+            page asks "What's your name?" and somebody who has played before becomes a second row
+            with none of their matches on it. In one week 29 players arrived and 3 joined anything,
+            and 15 of 55 rows were a name that already existed. The way back in was built — it was
+            just never on the screen every shared link opens. Closed by default, so a real
+            first-timer reads one line and the name field above is untouched.
+          */}
+          {!me && (
+            <div data-testid="event-back-in">
+              <ReturningPlayer collapsed />
+            </div>
+          )}
           {me && me.email && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
             <div className="mt-5 border-t border-line pt-4">
               <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} notifyOn={me.emailNotifications} />

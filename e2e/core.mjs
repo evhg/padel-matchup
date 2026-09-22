@@ -141,8 +141,24 @@ try {
   check("Jordi (live match) sees Happening right now + YOU chip", (await b.getByText("Happening right now").count()) > 0 && (await b.getByText("you", { exact: true }).count()) > 0);
   check("activity: Jordi reads 'Jordi was added by Dana' and 'You confirmed your spot'", (await b.getByText("Jordi was added by Dana").count()) > 0 && (await b.getByText("You confirmed your spot").count()) > 0);
 
+  // A friend's link opens in WhatsApp's own browser, which has never seen this person. The name
+  // field alone makes them a second row with none of their matches on it: in one week 29 players
+  // arrived and 3 joined anything. The way back in existed on the landing page and on My matches,
+  // and not on the one screen every shared link opens.
+  const w = await newPage();
+  await w.goto(`${BASE}/${code}`);
+  const backInHere = w.getByTestId("event-back-in");
+  check(
+    "a stranger on a shared match link is offered a way back in, closed",
+    (await backInHere.count()) === 1 && (await w.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false,
+  );
+  await backInHere.getByText("Have you used Kicksmash before?").click();
+  check("opening it asks for the email, on the match page", await w.getByPlaceholder("you@example.com").isVisible());
+  await w.close();
+
   await a.reload();
   check("creator sees Confirmed chip", (await a.getByText("Confirmed", { exact: true }).count()) > 0);
+  check("somebody the page already knows is not asked whether they have been here before", (await a.getByTestId("event-back-in").count()) === 0);
   check("activity: organizer reads 'You added Jordi' and 'Jordi confirmed their spot'", (await a.getByText("You added Jordi").count()) > 0 && (await a.getByText("Jordi confirmed their spot").count()) > 0 && (await a.getByText(/was invited/).count()) === 0);
 
   // ---- Score entry as creator ----
