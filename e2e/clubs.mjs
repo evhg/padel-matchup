@@ -142,6 +142,10 @@ try {
   check("the club page lists the courts by name, the badge follows the rows", (await page.getByTestId("club-courts").getByText("Centre").count()) === 1 && (await page.getByTestId("club-courts").locator("li").count()) === 4 && (await page.getByText("4 courts · 3 indoor · 1 outdoor").count()) === 1);
   const withCourts = await (await fetch(`${BASE}/api/v1/clubs/${SLUG}`)).json();
   check("the API carries the court names", JSON.stringify(withCourts.courtNames) === JSON.stringify(["Centre", "Court 2", "Court 3", "Court 4"]), JSON.stringify(withCourts.courtNames));
+  // The day grid is quiet when there is nothing on: a club with courts and an empty day reads no
+  // grid at all, rather than an empty one claiming something. The laying-out itself is proven in
+  // tests/court-day.test.ts, where a fixed clock costs nothing.
+  check("a club with nothing on today shows no day grid rather than an empty one", (await page.getByTestId("club-day").count()) === 0);
   // The match form at this club offers those names instead of 1…n.
   await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
   check("the match form offers the club's courts by name", (await page.locator("select option", { hasText: "Centre" }).count()) === 1);

@@ -1,6 +1,7 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import type { Db } from "@/db";
-import { clubCourts, clubs, type Club, type ClubCourt, type CourtKind } from "@/db/schema";
+import { clubCourts, clubs, events, lessons, type Club, type ClubCourt, type CourtKind } from "@/db/schema";
+import { EVENT_DURATION_MS } from "@/lib/config";
 import { DomainError } from "./errors";
 
 /**
@@ -84,4 +85,80 @@ export async function replaceCourts(db: Db, token: string, input: CourtInput[]):
     .where(and(eq(clubs.slug, club.slug)))
     .returning();
   return { club: fresh, courts: await listCourts(db, club.slug) };
+}
+
+// ---------------------------------------------------------------------------
+// A club's day, court by court.
+//
+// The rows above say what a club has. This says what is on them. A match names a court already and,
+// from this change, so does a lesson — so the club's capacity is the two together, in the club's own
+// words, with nothing new for anybody to fill in.
+//
+// The laying-out is pure because the interesting part is the matching: a player may type "3" where
+// the club writes "Court 3". Nothing is invented — a booking that named no court goes in a row of
+// its own rather than onto a court it might not be using.
+// ---------------------------------------------------------------------------
+
+export type BusyKind = "match" | "lesson";
+/** `title` is the match's own; a lesson has none, because a club never reads a student's name. */
+export type Busy = { court: string | null; startsAt: Date; minutes: number; kind: BusyKind; title: string | null };
+export type CourtRow = { name: string | null; blocks: Busy[] };
+
+const nameKey = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, " ");
+
+/** The same court: the same number when both carry one, else the same words. */
+export function sameCourt(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a?.trim() || !b?.trim()) return false;
+  const [na, nb] = [courtNumber(a), courtNumber(b)];
+  if (na !== null && nb !== null) return na === nb;
+  return nameKey(a) === nameKey(b);
+}
+
+/** One row per club court, in the club's order, then one row for whatever named no court of theirs. */
+export function courtDay(courtNames: readonly string[], busy: readonly Busy[]): CourtRow[] {
+  const byTime = (a: Busy, b: Busy) => a.startsAt.getTime() - b.startsAt.getTime() || a.kind.localeCompare(b.kind);
+  const rows: CourtRow[] = courtNames.map((name) => ({ name, blocks: [] }));
+  const loose: Busy[] = [];
+  for (const b of busy) {
+    // The first matching row wins, so a club that typed one court twice never splits its day.
+    const row = rows.find((r) => sameCourt(r.name, b.court));
+    if (row) row.blocks.push(b);
+    else loose.push(b);
+  }
+  for (const row of rows) row.blocks.sort(byTime);
+  if (loose.length > 0) rows.push({ name: null, blocks: loose.sort(byTime) });
+  return rows;
+}
+
+/** How many of the club's own courts have something on them: the one number a club reads first. */
+export const courtsInUse = (rows: readonly CourtRow[]): number => rows.filter((r) => r.name !== null && r.blocks.length > 0).length;
+
+/** The lesson statuses that really put somebody on a court. A cancellation frees it. */
+const ON_COURT = ["booked", "done"] as const;
+
+/**
+ * Everything on a club's courts between two moments: its matches and the lessons taught there.
+ *
+ * Two bounded reads, each on the index that already exists for it — `events_venue_slug_idx` and
+ * `lessons_venue_idx`, both `(venue_slug, starts_at)`. Sequential rather than in parallel, because
+ * the pooler stalls on pipelined bursts (rule 8). Nothing joins per court and nothing scans a table.
+ *
+ * A lesson comes back with no title on purpose. The club watches its courts; it never reads a
+ * student's name.
+ */
+export async function clubBusy(db: Db, clubSlug: string, from: Date, to: Date): Promise<Busy[]> {
+  const played = await db
+    .select({ court: events.court, startsAt: events.startsAt, title: events.title })
+    .from(events)
+    .where(and(eq(events.venueSlug, clubSlug), gte(events.startsAt, from), lt(events.startsAt, to), ne(events.status, "cancelled")));
+  const taught = await db
+    .select({ startsAt: lessons.startsAt, minutes: lessons.minutes })
+    .from(lessons)
+    .where(and(eq(lessons.venueSlug, clubSlug), gte(lessons.startsAt, from), lt(lessons.startsAt, to), inArray(lessons.status, [...ON_COURT])));
+  return [
+    ...played.map((e): Busy => ({ court: e.court, startsAt: e.startsAt, minutes: EVENT_DURATION_MS / 60000, kind: "match", title: e.title })),
+    // A lesson carries a venue but not yet a court, so it lands in the row for what named none. That
+    // is the truth today: the club can see a court is being taught on, not which one.
+    ...taught.map((l): Busy => ({ court: null, startsAt: l.startsAt, minutes: l.minutes, kind: "lesson", title: null })),
+  ];
 }

@@ -1218,7 +1218,12 @@
     "addedBy": "Listed by {name}",
     "addDone": "{club} is on the map. Thank you.",
     "addLimit": "You listed enough clubs today. Come back tomorrow.",
-    "addTaken": "This club already has a page here."
+    "addTaken": "This club already has a page here.",
+    "dayTitle": "Today on court",
+    "dayInUse": "{used} of {total} courts busy",
+    "dayMatch": "Match",
+    "dayLesson": "Lesson",
+    "dayNoCourt": "No court named"
   },
   "passport": {
     "title": "Passport",

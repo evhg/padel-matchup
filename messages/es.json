@@ -1218,7 +1218,12 @@
     "addedBy": "Listado por {name}",
     "addDone": "{club} ya está en el mapa. Gracias.",
     "addLimit": "Ya has listado suficientes clubes hoy. Vuelve mañana.",
-    "addTaken": "Este club ya tiene una página aquí."
+    "addTaken": "Este club ya tiene una página aquí.",
+    "dayTitle": "Hoy en pista",
+    "dayInUse": "{used} de {total} pistas ocupadas",
+    "dayMatch": "Partido",
+    "dayLesson": "Clase",
+    "dayNoCourt": "Sin pista indicada"
   },
   "passport": {
     "title": "Pasaporte",
