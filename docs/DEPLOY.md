@@ -1,5 +1,7 @@
 # Deploying Kicksmash
 
+> Changing the database's shape is a different job with its own page: [MIGRATIONS.md](MIGRATIONS.md).
+
 One Next.js project and one Postgres database. The whole configuration is the environment table in
 [README.md](../README.md#environment-variables), written from the code by `node scripts/gen-docs.mjs`.
 
