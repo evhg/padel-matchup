@@ -130,6 +130,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
   nothing about it. Every entry point the gate does not execute needs one cheap run that proves it
   loads: `scripts/check-migrate-runner.mjs` runs the real `pnpm db:migrate` with the database
   variables blanked and demands the script's own refusal and exit 1. Two seconds.
+- **An address is only right on the machine that will use it.** `docs/MIGRATIONS.md` told the owner to
+  copy Supabase's direct connection, "not Session pooler", with a confident reason: a pooler shares
+  one connection, so it cannot run a migration. That is the *transaction* pooler on port 6543. The
+  *session* pooler on 5432 gives each caller its own connection and is fine. Worse, the direct
+  address carries an IPv6 record only, and a GitHub Actions runner has no IPv6 route, so it could
+  never connect at all. The address was correct from a laptop and unreachable from the one machine
+  that needed it. Before writing an address into a runbook, ask what will dial it and from where.
 - **Ask the database before describing blast radius.** A broken notification string was reported to the
   owner as having reached people's phones. There were zero clubs, so it had reached nobody. One query
   before the sentence.

@@ -4,9 +4,10 @@ A migration is one file of SQL that adds a column or a table. Today it reaches p
 Claude types it into Supabase during a session. This page says how to move that job to GitHub, and
 why you would.
 
-**Where this stands.** The workflow file is built: `.github/workflows/migrate.yml`. It does nothing
-until you finish steps 1 and 2 below, because it has no database address. Rule 7 still sends
-migrations through a session until you and Claude have proved it once together, at step 4.
+**Where this stands.** The workflow file is built: `.github/workflows/migrate.yml`. It starts by
+itself and it runs the right command. Two runs have proved that. Both then failed to reach the
+database, because step 1 below named the wrong address. **Step 1 is the one thing left to do.**
+Rule 7 still sends migrations through a session until a run turns green.
 
 ## Why move it
 
@@ -28,8 +29,8 @@ A workflow is a file in the repository that tells GitHub: "when this happens, ru
 a fresh computer". The project already has two. One runs the tests on every pull request. One checks
 that the site is up.
 
-We would add a third. It says: "when a change to the `drizzle` folder reaches `main`, ask Cath, and
-then apply the migrations."
+We added a third. It says: "when a migration reaches `main`, apply it." It does not ask you first.
+You already approved the migration when you merged it.
 
 ## What you do, step by step
 
@@ -40,26 +41,43 @@ You need about ten minutes, once. You never repeat steps 1 and 2.
 1. Open **supabase.com** and sign in.
 2. Click the project **evhg's padel-matchup**.
 3. At the top right, click the green **Connect** button.
-4. A panel opens with several tabs. Choose the tab that says **Direct connection** — not Transaction
-   pooler, and not Session pooler. The address ends with **:5432**.
-5. Click the copy icon. The address looks like
-   `postgresql://postgres:[YOUR-PASSWORD]@db.udvtuxaxzfimeoubofdz.supabase.co:5432/postgres`.
+4. A panel opens with several tabs. Choose **Session pooler**. The address ends with **:5432**.
+5. Click the copy icon. Copy what the panel shows you. Do not type the example below.
+   The address looks like
+   `postgresql://postgres.udvtuxaxzfimeoubofdz:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`.
 6. Replace `[YOUR-PASSWORD]` with the database password you chose when you made the project. If you
    do not have it, click **Reset database password** on the same panel and save the new one.
 7. Keep this address in your password manager. Step 2 is the only place it goes.
 
-**Why the direct address and not the pooler:** a migration changes the shape of tables. The pooler
-shares one connection between many callers and cannot do that safely.
+**Why the Session pooler.** Supabase offers three addresses. This page told you to copy the wrong
+one, and two runs failed on it. Here is what each one is:
+
+| Address | Port | Can GitHub reach it? | Safe for a migration? |
+|---|---|---|---|
+| Direct connection | 5432 | **No** | Yes |
+| **Session pooler** | 5432 | **Yes** | **Yes** |
+| Transaction pooler | 6543 | Yes | No |
+
+The direct address has an IPv6 number only. A GitHub computer has no IPv6, so it cannot reach it at
+all. Supabase sells an IPv4 add-on that fixes this. It costs money, and you do not need it.
+
+The Session pooler gives each caller its own connection for the length of its work. A migration is
+safe on it. The transaction pooler is the one that shares a connection between callers. That is the
+one a migration must not use, and it is on a different port.
 
 ### Step 2 — give the address to GitHub
+
+You made this secret once already. Now you replace its value.
 
 1. Open **github.com/evhg/padel-matchup**.
 2. Click **Settings** in the row of tabs at the top (the one with the gear, on the far right).
 3. In the left column, find **Secrets and variables**, and click **Actions** under it.
-4. Click the green **New repository secret**.
-5. Name: `DIRECT_DATABASE_URL`. Exactly that, in capitals, with the underscores.
-6. Secret: paste the address from step 1.
-7. Click **Add secret**.
+4. Find `DIRECT_DATABASE_URL` in the list. Click the pencil beside it.
+   If it is not there, click the green **New repository secret** and use that name. Use capitals and
+   the underscores, exactly as written.
+5. Paste the address from step 1 over the old value.
+6. Click **Update secret**.
+7. Tell Claude. Claude starts the workflow again from the Actions tab.
 
 GitHub hides the value from that moment. Nobody, including you, can read it back. You can only
 replace it. That is the point.
@@ -68,7 +86,8 @@ replace it. That is the point.
 
 `.github/workflows/migrate.yml`. It says:
 
-- Run only when a file in the `drizzle` folder reaches `main`. A copy fix does not start it.
+- Run only when a migration reaches `main`, or when the two files that apply one change. A copy fix
+  does not start it.
 - Install the project, then run `pnpm db:migrate`, with `DIRECT_DATABASE_URL` from step 2.
 - Give up after five seconds if it cannot take its lock, instead of queueing behind a live query and
   blocking every reader behind it. That is what the by-hand procedure always did.
@@ -93,6 +112,11 @@ Do not make the first run a real migration.
 
 If the run fails, nothing has changed in the database. Read the red step in the log, or send it to
 Claude.
+
+**What happened when we tried this.** Run 1 failed because the script itself could not start. The
+gate now runs that script on every change, so that cannot happen again. Run 2 failed because this
+page named the wrong address, above. Both runs stopped before any SQL, so the database is exactly as
+it was. The column from step 4 is still waiting.
 
 ## What changes afterwards
 
