@@ -18,12 +18,16 @@ name: Migrate
 on:
   push:
     branches: [main]
-    # Only when a migration is actually part of the change. A copy fix must not wake the owner.
+    # A migration, or a change to the two files that apply one. A copy fix must not wake the owner.
+    #
+    # The runner and this file were out of this list until the first real run failed inside
+    # scripts/migrate.ts. A fix to the thing that applies migrations has to prove itself, and it can
+    # only do that by running: a run with nothing pending applies nothing and takes twenty seconds.
     paths:
       - "drizzle/**"
-  # So a migration that failed, or a change to this file, can be run without an empty commit. This
-  # file is deliberately NOT in `paths`: merging it would fire a run against a secret and an
-  # environment that do not exist yet, which is a red run on main and an email nobody can act on.
+      - "scripts/migrate.ts"
+      - ".github/workflows/migrate.yml"
+  # So a migration that failed can be run again without an empty commit.
   workflow_dispatch:
 
 concurrency:

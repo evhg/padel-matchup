@@ -29,6 +29,10 @@ fi
 step typecheck pnpm typecheck
 step lint pnpm lint
 step "schema vs migrations" bash scripts/check-migrations.sh
+# The migration runner itself. Nothing else executes scripts/migrate.ts, so it reached production
+# unrun and the first Migrate workflow run died inside esbuild, after the merge, with the database
+# untouched. Two seconds proves the file compiles and runs.
+step "migration runner runs" node scripts/check-migrate-runner.mjs
 # The environment table is generated from the code that reads it, and the check that proves so had
 # never been run by anything. Nine variables reached production undocumented before anybody noticed.
 step "environment documented" node scripts/gen-docs.mjs --check

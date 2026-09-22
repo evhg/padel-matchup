@@ -67,20 +67,28 @@ describe("one home for a value", () => {
   });
 
   it("keeps the migrate workflow pointing at the script and the secret it needs", () => {
-    // A rename here breaks production migrations silently: the workflow still runs, still waits for
-    // the owner, and then fails at the last step or, worse, runs with no address at all.
+    // A rename here breaks production migrations silently: the workflow still runs, and then fails at
+    // the last step or, worse, runs with no address at all.
     const wf = readFileSync(root(".github/workflows/migrate.yml"), "utf8");
     expect(wf).toContain("pnpm db:migrate");
     expect(wf).toContain("secrets.DIRECT_DATABASE_URL");
-    // It must never fire on its own file: merging it would run against a secret that may not exist,
-    // which is a red run on main and an email nobody can act on.
-    expect(wf).not.toContain('- ".github/workflows/migrate.yml"');
+    // It fires on a migration, and on the two files that apply one. This line demanded the opposite
+    // until the workflow ran for the first time: the fear was a run against a secret nobody had made
+    // yet. The secret exists now, and that first run failed inside scripts/migrate.ts — so a fix to
+    // the runner has to be able to prove itself, and a run with nothing pending applies nothing.
+    for (const path of ['- "drizzle/**"', '- "scripts/migrate.ts"', '- ".github/workflows/migrate.yml"']) {
+      expect(wf).toContain(path);
+    }
     // The script must read the same name the workflow supplies, and be as careful as a pair of
     // hands was: the by-hand procedure always set a lock timeout.
     const script = readFileSync(root("scripts/migrate.ts"), "utf8");
     expect(readFileSync(root("src/lib/env.ts"), "utf8")).toContain("DIRECT_DATABASE_URL");
     expect(script).toContain("directDatabaseUrl");
     expect(script).toContain("lock_timeout");
+    // And no top-level await. tsx compiles this file to CommonJS, where that is a build error and
+    // esbuild refuses the file before a line of it runs. scripts/check-migrate-runner.mjs proves the
+    // same thing the expensive way, by running the real command.
+    expect(script).not.toMatch(/^await /m);
   });
 
   it("documents every variable the code reads", () => {
