@@ -137,6 +137,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   address carries an IPv6 record only, and a GitHub Actions runner has no IPv6 route, so it could
   never connect at all. The address was correct from a laptop and unreachable from the one machine
   that needed it. Before writing an address into a runbook, ask what will dial it and from where.
+- **A value nobody can read back needs the code to describe it.** Six Migrate runs failed for six
+  reasons, and the last one was a secret that was not a URL at all. Nobody can read a GitHub secret,
+  so every round was a guess about a string. `scripts/connection-hint.ts` now reports the value's
+  shape — its length, what comes before `://`, whether it holds a space or a quote, how many `@` it
+  has — and never one character after `://`, which is where the password lives. Tests prove both
+  halves. When a check depends on a value you cannot see, make the failure describe it.
 - **Ask the database before describing blast radius.** A broken notification string was reported to the
   owner as having reached people's phones. There were zero clubs, so it had reached nobody. One query
   before the sentence.

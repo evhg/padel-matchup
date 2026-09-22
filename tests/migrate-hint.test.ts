@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { banner, connectionHint } from "../scripts/connection-hint";
+import { banner, connectionHint, shapeOf } from "../scripts/connection-hint";
 
 // Four Migrate runs failed for four different reasons, so the words this file produces are the only
 // thing a reader of the log gets. This is the error shape drizzle-orm really throws: its own error,
@@ -60,5 +60,59 @@ describe("banner", () => {
     expect(banner(url)).not.toContain("s3cr3t");
     expect(banner(url)).not.toContain("P%40ss");
     expect(banner("this is not a url at all")).not.toContain("this is not a url");
+  });
+});
+
+// Run 6 failed before the network: the secret held something that is not a URL. Nobody can read a
+// GitHub secret back, so the log is the only way to learn what is wrong with it — and the log must
+// still not reveal it. Every case below is one a person really makes when pasting.
+describe("shapeOf", () => {
+  const good = "postgresql://postgres.abcdefghijklmnop:s3cr3t-P%40ss@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres";
+
+  it("catches the variable name pasted with the value", () => {
+    const said = shapeOf(`DIRECT_DATABASE_URL=${good}`);
+    expect(said).toContain('it starts with "DIRECT_DATABASE_URL=postgresql://"');
+    expect(said).toContain('must start with "postgresql://"');
+  });
+
+  it("catches a command pasted instead of an address", () => {
+    const said = shapeOf(`psql "${good}"`);
+    expect(said).toContain("a quote mark");
+    expect(said).toContain("a space or a line break");
+  });
+
+  it("says so when there is no address at all", () => {
+    expect(shapeOf("psql -h aws-0.pooler.supabase.com -p 5432 -U postgres.abc")).toContain('no "://" at all');
+  });
+
+  it("counts the @ characters, because a raw one in the password breaks the parse", () => {
+    expect(shapeOf("postgresql://user:p@ss@host:5432/postgres")).toContain('it has 2 "@" characters');
+    expect(shapeOf(good)).not.toContain('"@" characters');
+  });
+
+  // The whole point. It describes the value; it never quotes it.
+  it("never reveals anything after the ://", () => {
+    for (const value of [good, `DIRECT_DATABASE_URL=${good}`, "postgresql://user:hunter2@host/db"]) {
+      const said = shapeOf(value);
+      expect(said).not.toContain("hunter2");
+      expect(said).not.toContain("s3cr3t");
+      expect(said).not.toContain("pooler.supabase.com");
+    }
+  });
+
+  // A long or odd prefix is described, not printed, in case the paste is nothing we anticipated.
+  it("describes a long prefix instead of printing it", () => {
+    const said = shapeOf(`${"x".repeat(60)}://host/db`);
+    expect(said).not.toContain("xxxxx");
+    expect(said).toContain("60 characters come before");
+  });
+});
+
+describe("banner on a value it cannot read", () => {
+  it("says what is wrong, and still says nothing secret", () => {
+    const line = banner("DIRECT_DATABASE_URL=postgresql://user:hunter2@host:5432/postgres");
+    expect(line).toContain("cannot be read as an address");
+    expect(line).toContain('it starts with "DIRECT_DATABASE_URL=postgresql://"');
+    expect(line).not.toContain("hunter2");
   });
 });

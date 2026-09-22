@@ -9,6 +9,34 @@
  * are not secret, which is exactly what tells a reader whether they copied the right address.
  */
 
+/**
+ * What a value looks like, when it cannot be read as a URL at all.
+ *
+ * Nothing after "://" is ever included, because the password lives there. The part before it is the
+ * scheme, or whatever came along with the paste — a variable name, a `psql` command — which is the
+ * thing that is usually wrong and is never secret.
+ */
+export function shapeOf(url: string): string {
+  const facts = [`${url.length} characters`];
+  const sep = url.indexOf("://");
+  if (sep === -1) {
+    facts.push('it has no "://" at all, so it is not a connection address');
+  } else {
+    const prefix = url.slice(0, sep);
+    // Print the prefix only when it is short and plainly harmless. Otherwise say how long it is.
+    facts.push(
+      prefix.length <= 40 && /^[A-Za-z0-9_.\-= ]*$/.test(prefix)
+        ? `it starts with "${prefix}://", and it must start with "postgresql://"`
+        : `${prefix.length} characters come before "://", and nothing may come before "postgresql://"`,
+    );
+  }
+  if (/\s/.test(url)) facts.push("it holds a space or a line break");
+  if (/["'`]/.test(url)) facts.push("it holds a quote mark");
+  const ats = (url.match(/@/g) ?? []).length;
+  if (ats !== 1) facts.push(`it has ${ats} "@" characters, and an address has exactly one`);
+  return facts.join("; ");
+}
+
 /** The non-secret half of a connection string: where it points and who it says it is. */
 export function banner(url: string): string {
   try {
@@ -16,8 +44,9 @@ export function banner(url: string): string {
     const database = u.pathname.replace(/^\//, "") || "(none)";
     return `Connecting to ${u.hostname}:${u.port || "5432"} as ${u.username || "(no user)"}, database ${database}.`;
   } catch {
-    // A password with an unescaped character breaks the parse. Say so; do not echo the string.
-    return "Connecting. DIRECT_DATABASE_URL is not a URL this code can read, so check it for a stray character.";
+    // Run 6 died here and the log said only "check it for a stray character", which sent the owner
+    // looking at a value nobody can read back. Say what is wrong with it, without saying what it is.
+    return `DIRECT_DATABASE_URL cannot be read as an address: ${shapeOf(url)}.`;
   }
 }
 
