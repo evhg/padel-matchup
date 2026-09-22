@@ -63,16 +63,18 @@ when it fails, so a push always carries a green typecheck, lint, drift check and
 browser suites are yours to run: the hook cannot afford them on every push.
 
 **When the schema changed**, the gate's drift check fails until the migration exists. Then:
-`pnpm db:generate`, commit `drizzle/`, and apply the SQL to production **by hand** as `postgres`
-through the Supabase MCP before the merge, with `SET LOCAL lock_timeout = '5s'`, the `GRANT` and the
-two Row Level Security statements, and a row in `drizzle.__drizzle_migrations`. `pnpm db:push` is
-disabled because it would drop the policies. This is AGENTS.md rule 7 and it has no exceptions.
+`pnpm db:generate`, and commit `drizzle/`. That is all. **The Migrate workflow applies it to
+production when the pull request merges** — do not apply it by hand, because a migration applied by
+hand is one the workflow then skips, and the two end up disagreeing about what production holds.
+The migration file carries the `GRANT` and the two Row Level Security statements itself, because the
+workflow applies the file and nothing else. `pnpm db:push` stays disabled: drizzle-kit would drop
+the policies. This is AGENTS.md rule 7.
 
-**The plan to stop doing this by hand is written down.** `docs/MIGRATIONS.md` is the owner's
-step-by-step for moving migrations to a GitHub Actions workflow that waits for their approval, with
-the reasons and the way back. It is not built. Read it before proposing anything about migrations,
-the Supabase connection's rights, or which credentials a session needs, so the same ground is not
-covered twice.
+**`docs/MIGRATIONS.md` is the owner's page on all of it**, including step 4, which records the seven
+runs it took to prove the workflow and what each failure taught. Read it before proposing anything
+about migrations, the Supabase connection's rights, or which credentials a session needs. The
+by-hand path through the Supabase MCP survives for reading and for repair, never as the normal way a
+migration lands.
 
 ## The pull request
 

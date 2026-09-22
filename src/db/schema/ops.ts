@@ -205,14 +205,6 @@ export const researchRuns = pgTable("research_runs", {
   /** Consecutive runs that found nothing new; stretches the query's interval. */
   emptyStreak: integer("empty_streak").notNull().default(0),
   lastError: text("last_error"),
-  /**
-   * TEMPORARY, and the pull request that removes it follows this one.
-   *
-   * It exists to prove `.github/workflows/migrate.yml` once, end to end, on a table nothing on the
-   * site reads: the first migration to reach production without a pair of hands should be one that
-   * cannot matter if anything goes wrong. `docs/MIGRATIONS.md`, step 4.
-   */
-  migrateProbe: text("migrate_probe"),
 });
 
 export type ResearchRun = typeof researchRuns.$inferSelect;
