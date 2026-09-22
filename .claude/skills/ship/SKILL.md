@@ -123,6 +123,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
   the failing click. `SHOTS=./shots pnpm e2e`. For anything visual, look first.
 - **Quote the gate's own `EXIT=` line.** A backgrounded gate can exit 0 while the run inside it printed
   `EXIT=1`. Never call a check green from the wrapper's exit code.
+- **A script nothing runs is a script nobody has checked.** `scripts/migrate.ts` passed the typecheck,
+  the lint and the whole gate, and then failed on its first real use: tsx compiles it to CommonJS,
+  where a top-level `await` is a build error, so esbuild refused the file before one line ran. The
+  typecheck reads a file, the build leaves this one out, and no test imports it — so "green" said
+  nothing about it. Every entry point the gate does not execute needs one cheap run that proves it
+  loads: `scripts/check-migrate-runner.mjs` runs the real `pnpm db:migrate` with the database
+  variables blanked and demands the script's own refusal and exit 1. Two seconds.
 - **Ask the database before describing blast radius.** A broken notification string was reported to the
   owner as having reached people's phones. There were zero clubs, so it had reached nobody. One query
   before the sentence.
