@@ -19,8 +19,9 @@ on:
     # Only when a migration is actually part of the change. A copy fix must not wake the owner.
     paths:
       - "drizzle/**"
-      - ".github/workflows/migrate.yml"
-  # So a migration that failed can be run again without an empty commit.
+  # So a migration that failed, or a change to this file, can be run without an empty commit. This
+  # file is deliberately NOT in `paths`: merging it would fire a run against a secret and an
+  # environment that do not exist yet, which is a red run on main and an email nobody can act on.
   workflow_dispatch:
 
 concurrency:
