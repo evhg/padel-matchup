@@ -10,12 +10,12 @@ import { HowThisWorks } from "./HowThisWorks";
 import { OffersEditor } from "./OffersEditor";
 import { PromptPayQr } from "./PromptPayQr";
 
-type Props = { initial: SettingsInput; hasQr: boolean; qrUrl: string | null; currency: string; hasPhoto: boolean; photoUrl: string };
+type Props = { initial: SettingsInput; hasQr: boolean; qrUrl: string | null; currency: string; hasPhoto: boolean; photoUrl: string; /** A package for one person puts a price on the card even with no hourly rate. Read on the server, where the offers are. */ hasPackagePrice?: boolean };
 
 const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + i))));
 
 /** One form, saved with one button. Words over widgets: hours are typed the way a coach says them. */
-export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photoUrl }: Props) {
+export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photoUrl, hasPackagePrice = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const locale = useLocale();
@@ -28,10 +28,13 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
   const photoRef = useRef<HTMLInputElement>(null);
   const days = weekdayNames(locale);
   // Exactly the four things a player told us they compare on and could not find.
+  // The same four `coachCardGaps` names on the server, live as the coach types. The price is asked
+  // of the card, not of one column: a coach who priced only the second person, or who sells a
+  // package and no single hour, has a price on their card, and saying otherwise is a lie about it.
   const gaps = [
     !hasPhoto ? t("settings.gapPhoto") : null,
     !v.bio?.trim() ? t("settings.gapBio") : null,
-    v.priceSingle == null ? t("settings.gapPrice") : null,
+    v.priceSingle == null && v.priceSecondSingle == null && !hasPackagePrice ? t("settings.gapPrice") : null,
     v.teachesLevelMin == null && v.teachesLevelMax == null ? t("settings.gapLevels") : null,
   ].filter((x): x is string => Boolean(x));
   const order = [1, 2, 3, 4, 5, 6, 0];
@@ -133,7 +136,7 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
         </div>
       </section>
 
-      <section className="card flex flex-col gap-4">
+      <section id="price" className="card flex scroll-mt-20 flex-col gap-4">
         {/* The walk asked these; until now nothing let a coach change them afterwards. */}
         <div className="flex gap-2">
           <label className="block flex-1 text-sm font-bold">
@@ -240,7 +243,7 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
             <p className="mt-1 text-xs text-ink-soft">{t("settings.cardGap", { gaps: gaps.join(", ") })}</p>
           </div>
         )}
-        <div>
+        <div id="photo" className="scroll-mt-20">
           <span className="text-sm font-bold">{t("settings.photo")}</span>
           <div className="mt-2 flex items-center gap-3">
             {hasPhoto ? (
@@ -263,7 +266,7 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
           </div>
           <span className="mt-2 block text-xs text-muted">{t("settings.photoHelp")}</span>
         </div>
-        <label className="block text-sm font-bold">
+        <label id="bio" className="block scroll-mt-20 text-sm font-bold">
           {t("settings.bio")}
           <textarea className="input mt-1" rows={3} value={v.bio} onChange={(e) => set("bio", e.target.value)} maxLength={300} data-testid="settings-bio" />
           <span className="mt-1 block text-xs font-normal text-muted">{t("settings.bioHelp")}</span>
@@ -292,7 +295,7 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
             </span>
           </label>
         )}
-        <div>
+        <div id="levels" className="scroll-mt-20">
           <span className="text-sm font-bold">{t("settings.teaches")}</span>
           <div className="mt-1 grid grid-cols-2 gap-3">
             <label className="block text-xs font-bold text-muted">

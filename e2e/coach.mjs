@@ -432,6 +432,20 @@ try {
   await olga.getByLabel("Time zone").fill("Asia/Bangkok");
   // Listed with nothing anybody can compare on. The screen says so, to the one person who can fix it.
   check("a listed coach is told what their card is missing", (await olga.getByTestId("card-gaps").count()) === 1 && (await olga.getByTestId("card-gaps").innerText()).includes("no photo"));
+  // Save the listing on its own, so the next few checks meet her exactly as a real coach is met:
+  // listed, and with the card still empty. That notice lived only in this screen, which a coach
+  // opens once; both live coaches were listed with all four gaps and had never seen it.
+  await olga.getByRole("button", { name: "Save" }).click();
+  await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+  await olga.goto(BASE + "/coach");
+  const gapCard = olga.getByTestId("coach-gaps");
+  check("the coach's book carries the notice, not just the settings screen", (await gapCard.count()) === 1);
+  check("and each gap is its own door to its own field", (await gapCard.getByTestId("gap-photo").getAttribute("href")) === "/coach/settings#photo" && (await gapCard.getByTestId("gap-bio").getAttribute("href")) === "/coach/settings#bio");
+  check("the price she set in the walk is not called a gap", (await gapCard.getByTestId("gap-price").count()) === 0);
+  check("the notice offers her own page, which is what a player sees", (await gapCard.getByTestId("gap-see-page").getAttribute("href")) === `/c/${handle}`);
+  await olga.goto(BASE + "/me");
+  check("My matches says it in one line, where a coach also lands", (await olga.getByTestId("coach-card-gaps").count()) === 1);
+  await olga.goto(BASE + "/coach/settings");
   // A face and a line in her own words: a student walk could not tell three real coaches from test data.
   await olga.getByTestId("photo-input").setInputFiles({ name: "olga.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
   await olga.getByTestId("settings-photo").waitFor({ timeout: 20000 });

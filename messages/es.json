@@ -1444,7 +1444,9 @@
       "slip": "Ver el justificante",
       "undoNoShow": "Sí vino",
       "editAmount": "Cambiar importe",
-      "amountPrompt": "Nuevo importe para {name}, en {currency}. Una propina, un redondeo, tarifa de fin de semana: tu libro, tu cifra."
+      "amountPrompt": "Nuevo importe para {name}, en {currency}. Una propina, un redondeo, tarifa de fin de semana: tu libro, tu cifra.",
+      "gapFix": "Rellenar",
+      "gapSeePage": "Ver tu página como la ve un jugador"
     },
     "book": {
       "student": "Alumno",
@@ -1678,7 +1680,8 @@
       "requested": "pedido enviado; esperando el sí",
       "assistant": "Tu asistente",
       "assistantToday": "{count, plural, =0 {Nada reservado hoy} one {# clase hoy} other {# clases hoy}}",
-      "assistantOpen": "Abrir"
+      "assistantOpen": "Abrir",
+      "gapLine": "A tu ficha le faltan {count, plural, one {# cosa} other {# cosas}} por las que eligen los jugadores"
     },
     "errors": {
       "slot_taken": "Esa hora se acaba de ocupar. Elige otra.",
