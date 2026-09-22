@@ -39,7 +39,12 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
     if (telegramEnabled() && player.telegramId) {
       const locale = botLocale(player.locale);
       const s = strings(locale);
-      const res = await sendMessage(player.telegramId, esc(s.scoreNudge(cardTitle(d, locale))), { silent: true, keyboard: { inline_keyboard: [[{ text: s.resultBtn, callback_data: `r:${ev.code}` }]] } }).catch(() => ({ ok: false as const }));
+      // "add an option to tap Cancelled instead" — a match that did not happen has no score, and the
+      // nudge repeats until somebody answers it. Only the organiser gets the button: cancelling is
+      // theirs on every other screen, and a player who did not turn up must not close everyone's match.
+      const buttons: { text: string; callback_data: string }[] = [{ text: s.resultBtn, callback_data: `r:${ev.code}` }];
+      if (player.id === ev.creatorPlayerId) buttons.push({ text: s.didntPlayBtn, callback_data: `x:${ev.code}` });
+      const res = await sendMessage(player.telegramId, esc(s.scoreNudge(cardTitle(d, locale))), { silent: true, keyboard: { inline_keyboard: [buttons] } }).catch(() => ({ ok: false as const }));
       if (res.ok) {
         // The reply "6-4 6-3" to this message finds the match the same way a reply to the card does.
         await db.insert(telegramCards).values({ eventId: ev.id, chatId: player.telegramId, messageId: res.result.message_id, kind: "nudge" }).onConflictDoNothing().catch(() => undefined);

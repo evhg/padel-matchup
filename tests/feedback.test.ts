@@ -112,6 +112,42 @@ describe("the feedback loop", () => {
     expect((await getFeedback(db, id))?.messagesSent).toBe(FEEDBACK_LIMITS.messagesPerItem);
   });
 
+  /**
+   * Eriik, 22 September: "when I only enter the command /feedback I should be able to enter my
+   * feedback into the next message without having to use the /feedback command." The prompt opens
+   * the reply box and carries the trailer, so the words that come back are the note itself.
+   */
+  it("Telegram: the words typed in reply to the /feedback prompt are the note", async () => {
+    const chat = { id: 770900, type: "private" as const };
+    const ben = { id: 770900, first_name: "Ben", language_code: "en" };
+    const ctx = NO_SIDE_EFFECTS;
+    expect(await handleTelegramUpdate(db, { update_id: 3, message: { message_id: 21, date: 0, chat, from: ben, text: "/feedback" } }, ctx)).toBe("feedback:how");
+    const prompt = tgCalls().at(-1)!;
+    const promptText = String(prompt.body.text);
+    expect(promptText.trimEnd().endsWith("\u21B3 fb")).toBe(true);
+    expect((prompt.body.reply_markup as { force_reply?: boolean }).force_reply).toBe(true);
+
+    const out = await handleTelegramUpdate(
+      db,
+      {
+        update_id: 4,
+        message: {
+          message_id: 22,
+          date: 0,
+          chat,
+          from: ben,
+          text: "the score reminder should let me say we did not play",
+          reply_to_message: { message_id: 21, date: 0, chat, text: promptText, from: { id: 42, is_bot: true, first_name: "bot" } },
+        },
+      },
+      ctx,
+    );
+    expect(out).toMatch(/^feedback:[0-9a-f-]{36}$/);
+    const row = await getFeedback(db, out.slice("feedback:".length));
+    expect(row?.text).toContain("we did not play");
+    expect(row?.source).toBe("telegram");
+  });
+
   it("Discord: the note over the daily cap is not stored and is not thanked", async () => {
     const cap = user(880002, "Cap");
     for (let i = 0; i < FEEDBACK_LIMITS.perPersonPerDay; i++) await createFeedback(db, { source: "discord", text: `note number ${i} about the card`, locale: "en", name: "Cap", context: null, discordChannelId: "1545987795863085099", discordUserId: cap.id });
