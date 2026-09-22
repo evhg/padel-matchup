@@ -1579,6 +1579,36 @@ export async function offersForCoaches(db: Db, coachIds: string[]): Promise<Map<
  * name an hour their page then refused to show. And a price is a number or it is nothing: the card
  * never sends a reader somewhere else to find one.
  */
+/**
+ * What a player compares on and this coach's card does not answer.
+ *
+ * The four were named by players in the walks, and the notice that lists them has existed since
+ * Tier 1 — inside `/coach/settings`, a screen a coach opens once and then never again. Both live
+ * coaches are listed with all four missing. So the rule moves here, and the coach meets it in their
+ * book, where they already are.
+ *
+ * The price is asked of the card, not of one column: a coach who priced only the second person, or
+ * who sells a package and no single hour, has a price on their card, and telling them otherwise is
+ * a lie about their own page. That is why this takes the offers.
+ */
+export type CardGap = "photo" | "bio" | "price" | "levels";
+
+export function coachCardGaps(
+  coach: Pick<Coach, "bio" | "priceSingle" | "priceSecondSingle" | "teachesLevelMin" | "teachesLevelMax">,
+  seen: { photo: boolean; offers?: Pick<CoachPackageOffer, "size" | "price" | "heads">[] },
+): CardGap[] {
+  const hasPrice = priceFrom(coach) !== null || packagePriceFrom(seen.offers ?? []) !== null;
+  const hasLevels = coach.teachesLevelMin != null || coach.teachesLevelMax != null;
+  // The order a player reads the card in, so the list names them in the order they are met.
+  const missing: [boolean, CardGap][] = [
+    [seen.photo, "photo"],
+    [Boolean(coach.bio?.trim()), "bio"],
+    [hasPrice, "price"],
+    [hasLevels, "levels"],
+  ];
+  return missing.filter(([has]) => !has).map(([, gap]) => gap);
+}
+
 export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[] = [], now = new Date(), judge: { photo?: boolean; proof?: CoachProof } = {}) {
   const canBookNow = coach.openBooking;
   return {

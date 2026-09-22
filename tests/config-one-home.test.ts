@@ -66,6 +66,18 @@ describe("one home for a value", () => {
     expect(telegramBotUsername()).toBe("other_bot");
   });
 
+  it("keeps the migrate workflow pointing at the script and the secret it needs", () => {
+    // A rename here breaks production migrations silently: the workflow still runs, still waits for
+    // the owner, and then fails at the last step or, worse, runs with no address at all.
+    const wf = readFileSync(root(".github/workflows/migrate.yml"), "utf8");
+    expect(wf).toContain("environment: production");
+    expect(wf).toContain("pnpm db:migrate");
+    expect(wf).toContain("secrets.DIRECT_DATABASE_URL");
+    // The script must read the same name the workflow supplies.
+    expect(readFileSync(root("src/lib/env.ts"), "utf8")).toContain("DIRECT_DATABASE_URL");
+    expect(readFileSync(root("scripts/migrate.ts"), "utf8")).toContain("directDatabaseUrl");
+  });
+
   it("documents every variable the code reads", () => {
     // The check existed and nothing ran it, which is how nine variables reached production with no
     // line to set. The gate runs it now; this keeps it honest in CI too.

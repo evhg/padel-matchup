@@ -439,6 +439,17 @@ Wall clock first, credits second. What actually moved it, measured:
   (`select count(*) from clubs c left join (select venue_slug, count(*) from events group by 1) e
   on e.venue_slug = c.slug where e.venue_slug is null`) would have found it in a second. When a
   change makes many pages, open the one with the least behind it, not the first one in the list.
+- **A check inserted into a form is a navigation out of it.** Four suite checks went red because a
+  new block landed between `check("Listed publicly")` and the `Save` that would have stored it: the
+  `goto` threw away the tick, the time zone and everything typed after. The failures named the API,
+  the city list and the MCP server — three places that had nothing to do with the change. Before
+  putting a check in the middle of a walk, find the save it sits before. If the check needs the
+  state saved, save it first and say in a comment why that save is there.
+- **The notice a person needs is worth nothing behind a door they open once.** The "your card is
+  missing what players choose on" card shipped with Tier 1 and lived only in `/coach/settings`.
+  Weeks later both live coaches were listed with all four gaps and neither had ever seen it. When a
+  screen exists to change somebody's behaviour, put it where that person already stands, and ask the
+  database afterwards whether anybody acted.
 - **A screen that makes something a person owns must hand it to them.** The americano generator
   builds a correct schedule — seven rounds, every pair partnering once — and then offers Print,
   Shuffle again, and a bridge to a live match. There is no link, the URL never changes, and closing

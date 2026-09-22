@@ -1,0 +1,55 @@
+# Database changes reach production here, not from a session's hands.
+#
+# Before this, AGENTS.md rule 7 sent every migration through a Claude session typing SQL into
+# Supabase. That needed a session to hold a credential owning all 58 tables, it happened whenever
+# Claude worked rather than when the owner chose, and a tool call in a chat is not a record anybody
+# can audit later. docs/MIGRATIONS.md is the owner's page on all of this, and on how to undo it.
+#
+# The `production` environment has the owner as a required reviewer, so this job STOPS and waits for
+# their tap. Nothing touches the database before that.
+#
+# `pnpm db:migrate` applies each generated .sql file in order and writes its own row in
+# drizzle.__drizzle_migrations. It never infers the schema from the code, so it cannot drop the Row
+# Level Security policies. That is exactly why `pnpm db:push` is disabled and this is not.
+name: Migrate
+
+on:
+  push:
+    branches: [main]
+    # Only when a migration is actually part of the change. A copy fix must not wake the owner.
+    paths:
+      - "drizzle/**"
+      - ".github/workflows/migrate.yml"
+  # So a migration that failed can be run again without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  # Never two of these at once: a migration half-applied by two runners is the one thing worse than
+  # a migration that did not run.
+  group: migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply pending migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: What is about to run
+        run: |
+          echo "Migration files in this commit:"
+          git show --stat --oneline HEAD -- drizzle/ || true
+      - name: Apply
+        run: pnpm db:migrate
+        env:
+          # The direct (port 5432) connection. A migration changes the shape of tables, and the
+          # pooler shares one connection between callers, so it cannot do that safely.
+          DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}

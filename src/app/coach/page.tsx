@@ -14,7 +14,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { coachLessonDTO, dayRange, labelsFor, slotDTOs, todayIn } from "@/lib/coach/view";
 import { listOpenRequests, listWaitlist, monthCounts, monthRange } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { busyBetween, DAY_MS, earnedInvite, getCoachForActor, inviteCode, listCoachLessons, listStudents, openingsBetween, openSlots, studentLink } from "@/lib/domain/coaching";
+import { busyBetween, coachCardGaps, DAY_MS, earnedInvite, getCoachForActor, hasPhoto, inviteCode, listCoachLessons, listOffers, listStudents, openingsBetween, openSlots, studentLink } from "@/lib/domain/coaching";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
@@ -123,9 +123,12 @@ export default async function CoachPage({ searchParams }: Props) {
   const from = zonedTimeToUtc(today, "00:00", coach.tz);
   const to = new Date(from.getTime() + 14 * DAY_MS);
   const month = monthRange(coach.tz, now);
-  const [rows, students, busy, requests, waiting, counts, checks, invite] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id }), inviteCode(db, coach)]);
+  const [rows, students, busy, requests, waiting, counts, checks, invite, photos, offers] = await Promise.all([listCoachLessons(db, coach.id, from, to), listStudents(db, coach.id, now), busyBetween(db, coach.id, now, to), listOpenRequests(db, coach.id, now), listWaitlist(db, coach.id, now), monthCounts(db, coach.id, month.from, month.to), listLevelChecks(db, { coachId: coach.id }), inviteCode(db, coach), hasPhoto(db, [coach.id]), listOffers(db, coach.id)]);
   // The invitation to pass the assistant on waits until it has earned it: a few students on the list, or a few lessons done, ever.
   const earned = earnedInvite(students);
+  // The four things a player compares on. The notice lived in the settings screen, which a coach
+  // opens once; both live coaches are listed with all four missing. It belongs where they already are.
+  const gaps = coach.isPublic ? coachCardGaps(coach, { photo: photos.has(coach.id), offers }) : [];
   const monthLabel = new Intl.DateTimeFormat(locale, { month: "long", timeZone: coach.tz }).format(now);
   const labels = labelsFor(days, locale, today, { today: t("today"), tomorrow: t("tomorrow") });
   // The coach may book at short notice: no minimum notice on their own grid.
@@ -155,6 +158,7 @@ export default async function CoachPage({ searchParams }: Props) {
         requests={requests.map((r) => ({ id: r.id, name: r.player.displayName, label: whenLabel(r.startsAt, coach.tz, locale), note: r.note }))}
         waiting={new Set(waiting.map((w) => w.studentPlayerId)).size}
         month={counts.done + counts.noShows > 0 ? { label: monthLabel, done: counts.done, noShows: counts.noShows } : null}
+        gaps={gaps}
         levelChecks={checks.map((c) => ({ id: c.id, name: c.player.displayName, level: c.level, askedAgo: relativeTime(c.createdAt, locale, now) }))}
       />
     </>,

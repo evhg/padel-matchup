@@ -41,10 +41,12 @@ type Props = {
   lengths?: number[];
   /** Free times for the second length: a longer lesson needs a longer hole. */
   slotsSecond?: SlotDTO[];
+  /** What a player compares on and this card does not answer, in the order they read it. */
+  gaps?: ("photo" | "bio" | "price" | "levels")[];
 };
 
 /** The coach's book: today, the next days, one button to book. Three doors to the other screens above it. */
-export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [], slotsSecond = [] }: Props) {
+export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [], slotsSecond = [], gaps = [] }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -210,8 +212,30 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
     </li>
   );
 
+  // Each gap is its own link, straight to the field. The same notice has been in the settings screen
+  // since Tier 1 and both live coaches are listed with all four missing: a coach opens their book,
+  // not their settings.
+  const GAP_FIELD: Record<string, string> = { photo: "photo", bio: "bio", price: "price", levels: "levels" };
+
   return (
     <div className="flex flex-col gap-4">
+      {gaps.length > 0 && (
+        <section className="card border-warn bg-warn-soft" data-testid="coach-gaps">
+          <div className="font-extrabold">{t("settings.cardGapTitle")}</div>
+          <p className="mt-1 text-sm text-ink-soft">{t("settings.cardGap", { gaps: gaps.map((g) => t(`settings.gap${g[0].toUpperCase()}${g.slice(1)}` as "settings.gapPhoto")).join(", ") })}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {gaps.map((g) => (
+              <Link key={g} href={`/coach/settings#${GAP_FIELD[g]}`} prefetch={false} className="btn-secondary btn-sm" data-testid={`gap-${g}`}>
+                {t(`settings.gap${g[0].toUpperCase()}${g.slice(1)}` as "settings.gapPhoto")} · {t("home.gapFix")}
+              </Link>
+            ))}
+          </div>
+          {/* The card itself persuades better than a sentence about it, and this link costs no query. */}
+          <Link href={`/c/${handle}`} prefetch={false} className="link mt-3 inline-block text-sm" data-testid="gap-see-page">
+            {t("home.gapSeePage")} →
+          </Link>
+        </section>
+      )}
       {welcome && (
         <section className="card animate-pop" data-testid="coach-welcome">
           <h1 className="text-2xl font-extrabold tracking-tight">🎾 {t("done.title")}</h1>

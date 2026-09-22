@@ -4,8 +4,10 @@ A migration is one file of SQL that adds a column or a table. Today it reaches p
 Claude types it into Supabase during a session. This page says how to move that job to GitHub, and
 why you would.
 
-Nothing on this page is built yet. It is the plan, written down so that neither of us has to
-remember it.
+**Where this stands.** The workflow file is built: `.github/workflows/migrate.yml`. It does nothing
+until you finish steps 1 to 3 below, because it has no database address and no environment to wait
+on. Rule 7 still sends migrations through a session until you and Claude have proved it once
+together, at step 5.
 
 ## Why move it
 
@@ -73,13 +75,16 @@ This is the step that gives you the button.
 Now any job that names this environment stops and waits for you. GitHub emails you, and the pull
 request shows a **Review deployments** button.
 
-### Step 4 — Claude adds the workflow file
+### Step 4 — Claude adds the workflow file · **done**
 
-This is my part, and it is one file of about twenty lines. It says:
+`.github/workflows/migrate.yml`. It says:
 
 - Run only when a file in the `drizzle` folder reaches `main`.
 - Use the `production` environment, so it waits for you.
 - Install the project, then run `pnpm db:migrate`, with `DIRECT_DATABASE_URL` from step 2.
+
+It also refuses to run twice at once, and it can be started by hand from the Actions tab if a run
+failed and you want to try again without a new commit.
 
 `pnpm db:migrate` already exists and is what the project has always used for a fresh database. It
 applies each `.sql` file in order and writes its own record of what it applied. It never guesses at

@@ -1444,7 +1444,9 @@
       "slip": "See the slip",
       "undoNoShow": "They came after all",
       "editAmount": "Change amount",
-      "amountPrompt": "New amount for {name}, in {currency}. A tip, a rounding, a weekend rate: your book, your number."
+      "amountPrompt": "New amount for {name}, in {currency}. A tip, a rounding, a weekend rate: your book, your number.",
+      "gapFix": "Fill it in",
+      "gapSeePage": "See your page as a player does"
     },
     "book": {
       "student": "Student",
@@ -1678,7 +1680,8 @@
       "requested": "asked to join; waiting for a yes",
       "assistant": "Your assistant",
       "assistantToday": "{count, plural, =0 {Nothing booked today} one {# lesson today} other {# lessons today}}",
-      "assistantOpen": "Open"
+      "assistantOpen": "Open",
+      "gapLine": "Your card is missing {count, plural, one {# thing} other {# things}} players choose on"
     },
     "errors": {
       "slot_taken": "That time just got taken. Pick another.",

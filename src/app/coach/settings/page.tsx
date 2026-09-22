@@ -11,7 +11,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { listManagers } from "@/lib/coach/chains";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
-import { coachBookContents, formatHoursLine, getCoachForActor, hasPhoto, listOffers } from "@/lib/domain/coaching";
+import { coachBookContents, formatHoursLine, getCoachForActor, hasPhoto, listOffers, packagePriceFrom } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +44,7 @@ export default async function CoachSettingsPage() {
           hasQr={Boolean(coach.qrAssetId)}
           qrUrl={coach.qrAssetId ? `/c/${coach.handle}/qr` : null}
           hasPhoto={photo}
+          hasPackagePrice={packagePriceFrom(offers) !== null}
           photoUrl={`/c/${coach.handle}/photo?v=${coach.updatedAt.getTime()}`}
           initial={{
             displayName: coach.displayName,
