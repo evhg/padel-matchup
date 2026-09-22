@@ -17,13 +17,16 @@ import { continueScoreReply, SCORE_TRAILER } from "./tournament";
 import { handlePlayerCallback, playerMenu, playerMenuWord, PLAYER_CALLBACK } from "./player";
 import { continuePartnerReply, PARTNER_TRAILER, tournamentsInChat } from "./competitions";
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
-import { feedbackFromChat, feedbackReply } from "./handlers/feedback";
+import { FEEDBACK_TRAILER, feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
 import { continueGuidedNew, createFromChat, handleGuidedNew, startGuidedNew } from "./handlers/new";
 import { handleWantCallback, wantCommand } from "./handlers/want";
 import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
+import { emitMatchEvent } from "@/lib/api/webhooks";
+import { cancelEvent } from "@/lib/domain/events";
+import { notifyEventCancelled } from "@/lib/notify";
 import { findOrCreateTelegramPlayer } from "./identity";
 import { resolveZone } from "./parse";
 import { postCard, syncTelegram } from "./post";
@@ -68,6 +71,11 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   if (isPrivate && !cmd && msg.reply_to_message?.text && SCORE_TRAILER.test(msg.reply_to_message.text)) {
     const scored = await continueScoreReply(db, msg, await findOrCreateTelegramPlayer(db, from));
     if (scored) return scored;
+  }
+  // The words in reply to the /feedback prompt are the note itself. Before the reply reader further
+  // down, which joins a reply to an *existing* note and would swallow these words into the last one.
+  if (!cmd && msg.text && msg.reply_to_message?.text && FEEDBACK_TRAILER.test(msg.reply_to_message.text)) {
+    return feedbackFromChat(db, msg, chat, from, msg.text, locale, ctx);
   }
   // A partner's name in reply to a tournament category's prompt enters the pair, before the score reader.
   if (isPrivate && !cmd && msg.reply_to_message?.text && PARTNER_TRAILER.test(msg.reply_to_message.text)) {
@@ -185,7 +193,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (owner) return owner;
   const guided = data.match(/^n:([zdtv]):(.+)$/);
   if (guided) return handleGuidedNew(db, cb, guided[1], guided[2], ctx);
-  const m = data.match(/^([jlrwkcg]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
+  const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
   const s = strings(locale);
@@ -210,6 +218,23 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (action === "w") return handleWinner(db, cb, detail, sel ?? "", ctx, locale);
   if (action === "k") return handleConfirm(db, cb, detail, ctx, locale);
   if (action === "g") return handleSameTime(db, cb, detail, locale);
+  // "We didn't play": the organiser answers the score nudge for a match that never happened. Only
+  // theirs — cancelling is the organiser's on every other screen, and a player who did not turn up
+  // must not close everybody else's match.
+  if (action === "x") {
+    const tapper = await findOrCreateTelegramPlayer(db, cb.from);
+    if (tapper.id !== detail.event.creatorPlayerId) {
+      await answerCallbackQuery(cb.id, s.toastNotOrganizer);
+      return "cancel_not_organizer";
+    }
+    const cancelled = await cancelEvent(db, detail.event.id, tapper.id);
+    await answerCallbackQuery(cb.id, s.toastDidntPlay);
+    ctx.afterwards(async () => {
+      await notifyEventCancelled(db, cancelled).catch(() => undefined);
+      await emitMatchEvent(db, "match.cancelled", code).catch(() => undefined);
+    });
+    return `cancelled:${code}`;
+  }
   const player = await findOrCreateTelegramPlayer(db, cb.from);
   let toast: string = s.toastError;
   let outcome = "error";

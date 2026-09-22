@@ -94,6 +94,7 @@ const CONTROLS = {
   k: "k:AAAA", // keep / confirm
   c: "c:AAAA", // cancel
   g: "g:AAAA", // group
+  x: "x:AAAA", // the organiser says the match never happened
   // Creating a match in three taps.
   n: "n:z:phuket",
   // The owner's desk.

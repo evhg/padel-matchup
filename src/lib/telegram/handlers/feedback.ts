@@ -12,6 +12,9 @@ import { findTelegramPlayer } from "../identity";
 
 /** Feedback: /feedback and its words, thanked at once and proposed to the owner; a reply to the thank-you joins the note. */
 
+/** The last line of the "what would you change?" prompt. A reply to it is the note itself. */
+export const FEEDBACK_TRAILER = /↳ fb\s*$/;
+
 /** /feedback and your words: stored, thanked at once; the owner gets the proposal, and the person hears here if something gets built. */
 export
 async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, locale: BotLocale, ctx: OpContext): Promise<string> {
@@ -19,7 +22,14 @@ async function feedbackFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from
   const text = args.trim();
   const isPrivate = msg.chat.type === "private";
   if (text.length < 3) {
-    await sendMessage(chat.chatId, esc(fs.how), { silent: !isPrivate, replyTo: msg.message_id });
+    // "/feedback alone should let me type it in the next message." The trailer is how a reply finds
+    // its way back here, the same way a partner's name and a score already do; force_reply opens the
+    // box so the words are a reply rather than a loose message nothing reads.
+    await sendMessage(chat.chatId, esc(`${fs.how}\n↳ fb`), {
+      silent: !isPrivate,
+      replyTo: msg.message_id,
+      keyboard: { force_reply: true, selective: true, input_field_placeholder: fs.how.slice(0, 60) },
+    });
     return "feedback:how";
   }
   if ((await feedbackCountToday(db, { telegramUserId: from.id })) >= FEEDBACK_LIMITS.perPersonPerDay) return "feedback:too_many";

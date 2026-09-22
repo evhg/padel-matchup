@@ -88,6 +88,48 @@ describe("the nudge is closed by whoever answers it", () => {
     void erik;
   });
 
+  /**
+   * Eriik, 22 September: "after the reminder to enter results, add an option to tap Cancelled
+   * instead." A match that never happened has no score, so the nudge asks a question nobody can
+   * answer. Only the organiser gets the button: cancelling is theirs on every other screen.
+   */
+  it("offers the organiser a way to say the match never happened, and nobody else", async () => {
+    const { past, micky } = await played("e", 9005);
+    await db.update(players).set({ telegramId: 9105 }).where(eq(players.id, micky.id));
+    await db.insert(telegramChats).values({ chatId: 9105, type: "private", locale: "en" }).onConflictDoNothing();
+    calls = [];
+    await nudgeForScore(db, past);
+    const keys = (chatId: number) => {
+      const c = sent("sendMessage").find((x) => x.body.chat_id === chatId)!;
+      return ((c.body.reply_markup as { inline_keyboard: { text: string }[][] }).inline_keyboard[0] ?? []).map((b) => b.text);
+    };
+    expect(keys(9005)).toEqual(["\u{1F3C1} Result", "We didn't play"]);
+    expect(keys(9105)).toEqual(["\u{1F3C1} Result"]);
+  });
+
+  it("the organiser's tap cancels the match, and a player's tap is refused", async () => {
+    const { past, micky } = await played("f", 9006);
+    await db.update(players).set({ telegramId: 9106 }).where(eq(players.id, micky.id));
+    await db.insert(telegramChats).values({ chatId: 9106, type: "private", locale: "en" }).onConflictDoNothing();
+    const tap = (chatId: number) =>
+      handleTelegramUpdate(
+        db,
+        { update_id: 2, callback_query: { id: "cb", from: { id: chatId, first_name: "X", language_code: "en" }, message: { message_id: 1, date: 0, chat: { id: chatId, type: "private" } }, data: `x:${past.code}` } },
+        NO_SIDE_EFFECTS,
+      );
+
+    calls = [];
+    expect(await tap(9106)).toBe("cancel_not_organizer");
+    expect(String(sent("answerCallbackQuery").at(-1)!.body.text)).toContain("Only the organizer");
+    const [untouched] = await db.select().from(events).where(eq(events.id, past.id));
+    expect(untouched.status).toBe("past");
+
+    calls = [];
+    expect(await tap(9006)).toBe(`cancelled:${past.code}`);
+    const [closed] = await db.select().from(events).where(eq(events.id, past.id));
+    expect(closed.status).toBe("cancelled");
+  });
+
   it("tells a tap what actually happened instead of talking about the line-up", async () => {
     const { past, erik, micky } = await played("b", 9002);
     await saveMatchScore(db, { eventId: past.id, playerId: micky.id, isCreator: false, sets: [{ setNumber: 1, sideA: 6, sideB: 1 }, { setNumber: 2, sideA: 6, sideB: 7 }] });
