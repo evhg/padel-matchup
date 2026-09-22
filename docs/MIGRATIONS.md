@@ -84,6 +84,15 @@ You made this secret once already. Now you replace its value.
    If it is not there, click the green **New repository secret** and use that name. Use capitals and
    the underscores, exactly as written.
 5. Paste the address from step 1 over the old value.
+
+   **Paste the address and nothing else.** The box holds the value, not a line of a file. It must
+   start with `postgresql://`. These four pastes all fail, and each one has happened:
+
+   - `DIRECT_DATABASE_URL=postgresql://...` — the name of the variable came with it.
+   - `psql "postgresql://..."` — that is a command, not an address.
+   - `"postgresql://..."` — the quote marks are part of the value.
+   - A password with a `#`, a `/`, a `?` or a space in it. Percent-encode those characters.
+
 6. Click **Update secret**.
 7. Tell Claude. Claude starts the workflow again from the Actions tab.
 
