@@ -373,7 +373,9 @@
     "returningTelegramOnly": "Entra con Telegram y tus partidos llegan a este dispositivo.",
     "returningTelegram": "O, si usaste el bot de Telegram:",
     "firstTimeTitle": "¿Primera vez? Solo tu nombre, nada más.",
-    "pastMore": "Ver {n} más"
+    "pastMore": "Ver {n} más",
+    "emailHelp": "Tu correo es cómo vuelves a entrar en un teléfono nuevo. Los partidos llegan a tu calendario.",
+    "saveEmail": "Guardar correo"
   },
   "notFound": {
     "title": "Enlace no encontrado",

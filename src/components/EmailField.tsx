@@ -20,6 +20,7 @@ export function EmailField({
   notifyOn = true,
   savedText,
   showNotify = true,
+  saveLabel,
 }: {
   initial: string | null;
   mode: "me" | "creator";
@@ -33,6 +34,12 @@ export function EmailField({
   savedText?: string;
   /** The "email me when the line-up changes" switch is a match's; a coach's channel screen has no line-up. */
   showNotify?: boolean;
+  /**
+   * Its own words, for a screen that already has a Save. My matches has one under the level, and a
+   * second plain "Save" made two suites fail on a line neither change touched — one locator scoped
+   * to the level's section, one looking at the whole page.
+   */
+  saveLabel?: string;
 }) {
   const t = useTranslations();
   const [email, setEmail] = useState(initial ?? "");
@@ -148,7 +155,7 @@ export function EmailField({
           }}
         />
         <button type="submit" className="btn-secondary shrink-0" disabled={pending || !email.trim()}>
-          {pending ? "…" : t("common.save")}
+          {pending ? "…" : (saveLabel ?? t("common.save"))}
         </button>
         {initial && (
           <button

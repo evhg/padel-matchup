@@ -7,6 +7,7 @@ import { playerHasPush } from "@/lib/domain/push";
 import { personalPath, personalUrl } from "@/lib/personal";
 import { vapidPublicKey } from "@/lib/push";
 import { telegramBotId } from "@/lib/telegram/api";
+import { EmailField } from "./EmailField";
 import { HomeScreenPrompt } from "./HomeScreenPrompt";
 import { LevelEditor } from "./LevelEditor";
 import { NameEditor } from "./NameEditor";
@@ -40,6 +41,27 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
         {telegramBotId() && (
           <div className="mt-4 border-t border-line pt-4">
             <TelegramLogin botId={telegramBotId()!} linked={player.telegramId != null} linkedUsername={player.telegramUsername} lang={locale} authUrl={`${baseUrl()}/api/telegram/login`} />
+          </div>
+        )}
+        {emailEnabled() && (
+          /*
+            The address was editable on a match page, on the share page and in the coach's walk, and
+            nowhere on the screen called My matches — so "I can't change my email anywhere?" was a
+            fair question and the answer was no. The field carries the match page's promises by
+            default, and neither holds here: there is no match to put in a calendar.
+          */
+          <div className="mt-4 border-t border-line pt-4">
+            <EmailField
+              initial={player.email}
+              mode="me"
+              code=""
+              title={t("event.yourEmail")}
+              help={t("me.emailHelp")}
+              emailEnabled
+              notifyOn={player.emailNotifications}
+              savedText={t("event.emailSavedNoMail")}
+              saveLabel={t("me.saveEmail")}
+            />
           </div>
         )}
         <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
