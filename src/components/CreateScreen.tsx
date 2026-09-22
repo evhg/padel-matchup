@@ -14,7 +14,7 @@ import { SEAT_NAMES_MAX } from "@/lib/domain/slots";
 import type { EventFormValues } from "./EventFields";
 
 /** The create form with its data. Rendered on / and /new. */
-export async function CreateScreen({ heading, sub, prefill }: { heading: string; sub?: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; tg?: string; dc?: string; names?: string } }) {
+export async function CreateScreen({ heading, prefill }: { heading: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; tg?: string; dc?: string; names?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -71,7 +71,7 @@ export async function CreateScreen({ heading, sub, prefill }: { heading: string;
     <>
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">{group && isMember ? t("group.forGroup", { name: group.name }) : fromGenerator ? t("landing.fromGeneratorTitle") : heading}</h1>
-        {sub && !(group && isMember) && <p className="mt-1 text-muted">{fromGenerator ? t("landing.fromGeneratorSub") : sub}</p>}
+        {fromGenerator && !(group && isMember) && <p className="mt-1 text-muted">{t("landing.fromGeneratorSub")}</p>}
         {group && isMember && <p className="mt-1 text-muted">{t("group.nextMatchHelp")}</p>}
       </div>
       {group && !isMember && (

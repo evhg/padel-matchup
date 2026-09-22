@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { FeedbackForm } from "@/components/FeedbackForm";
 
 /** The feedback door where players already are: one quiet line or a small card that opens the form in place. No navigation, no popup. */
-export function FeedbackInline({ signedInVia, variant }: { signedInVia: "telegram" | "none"; variant: "line" | "card" }) {
+export function FeedbackInline({ signedInVia, variant, help }: { signedInVia: "telegram" | "none"; variant: "line" | "card"; help?: string }) {
   const t = useTranslations("feedback");
   const [open, setOpen] = useState(false);
   if (open) {
@@ -22,7 +22,7 @@ export function FeedbackInline({ signedInVia, variant }: { signedInVia: "telegra
         <button type="button" className="text-sm font-bold text-muted underline decoration-dotted underline-offset-4 hover:text-ink" onClick={() => setOpen(true)}>
           💬 {t("title")}
         </button>
-        <span className="mt-1 block text-xs text-faint">{t("lineHelp")}</span>
+        <span className="mt-1 block text-xs text-faint">{help ?? t("lineHelp")}</span>
       </p>
     );
   }

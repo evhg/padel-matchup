@@ -83,7 +83,7 @@
     "sendToEmail": "Enviar",
     "noEmailYet": "Aún no hay email. Añade uno y te enviamos el enlace para que siempre puedas volver a entrar.",
     "emailKeepNote": "Puedes cambiar tu email pero no quitarlo: es tu forma de volver a entrar. La dirección anterior sigue sirviendo para recuperar la cuenta.",
-    "usedBefore": "¿Ya has usado {app}?"
+    "usedBefore": "¿Jugaste antes? Recupera tus partidos."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -94,7 +94,6 @@
     "step2": "Comparte un enlace corto",
     "step3": "Los jugadores se apuntan con un toque. Listo.",
     "formTitle": "Monta un partido en 10 segundos",
-    "formSub": "Elige una hora, consigue un enlace, compártelo. Los jugadores se apuntan con un toque. Sin app, sin registro.",
     "metaTitle": "Pádel en un enlace",
     "metaDescription": "Crea un partido de pádel o un torneo americano, comparte un enlace corto por WhatsApp o Telegram y tus amigos se apuntan con un toque. Sin app ni cuentas. Invitaciones de calendario, recordatorios, resultados, niveles.",
     "doorsTitle": "También en Kicksmash",
@@ -107,7 +106,8 @@
     "fromGeneratorSub": "Elige una hora y comparte un enlace. Los resultados, la tabla y los avisos se ocupan solos.",
     "carriedTitle": "{count, plural, one {# jugador de tu cuadro} other {# jugadores de tu cuadro}}",
     "carriedHelp": "Cada uno ocupa una plaza y recibe un enlace para reenviar. Puedes cambiar la lista después.",
-    "doorFindCoach": "Encuentra un entrenador: precios, horas libres, reserva una clase"
+    "doorFindCoach": "Encuentra un entrenador: precios, horas libres, reserva una clase",
+    "feedbackHelp": "Kicksmash se construye con lo que dicen los jugadores. Di una cosa y sabrás qué cambió."
   },
   "create": {
     "title": "Nuevo partido",

@@ -3,6 +3,7 @@ import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { CreateScreen } from "@/components/CreateScreen";
+import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -18,7 +19,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
-        <CreateScreen heading={t("landing.formTitle")} sub={t("landing.formSub")} prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, tg: sp.tg, dc: sp.dc, names: sp.names }} />
+        <CreateScreen heading={t("landing.formTitle")} prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, tg: sp.tg, dc: sp.dc, names: sp.names }} />
         <section className="mt-6 grid gap-2">
           {[t("landing.step1"), t("landing.step2"), t("landing.step3")].map((s, i) => (
             <div key={i} className="flex items-center gap-3 px-1 text-sm text-muted">
@@ -47,6 +48,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
               </Link>
             ))}
           </div>
+        </section>
+        <section className="mt-8">
+          <FeedbackInline variant="line" signedInVia="none" help={t("landing.feedbackHelp")} />
         </section>
       </main>
       <Footer spacious />

@@ -21,12 +21,18 @@ try {
   check("no quick picks for a first-timer", (await a.getByText("Your usual times").count()) === 0);
   // A new browser knows nobody. Somebody who has played before needs a door here, not a tour of the
   // app to find My matches, and it stays shut so it takes nothing from the name field above it.
-  const backIn = a.getByText("Have you used Kicksmash before?");
+  const backIn = a.getByText("Played before? Get your matches back.");
   check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
   await backIn.click();
   check("opening it asks for the email, in place", await a.getByPlaceholder("you@example.com").isVisible());
   check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
   // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
+  // "there should be a feedback option on the main landing page which explains that kicksmash is a
+  // self-learning app with community feedback." Eight pages carried this door; the busiest did not.
+  check(
+    "the landing page carries the feedback door and says the app is built from what players say",
+    (await a.getByRole("button", { name: /Tell us what should change/ }).count()) === 1 && (await a.getByText(/built from what players say/).count()) === 1,
+  );
   check("the landing page links to the tournaments and to the clubs", (await a.getByTestId("landing-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("landing-clubs").getAttribute("href")) === "/clubs");
   check("the header's More menu holds the three public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
   await a.goto(BASE + "/PLAY");
@@ -152,7 +158,7 @@ try {
     "a stranger on a shared match link is offered a way back in, closed",
     (await backInHere.count()) === 1 && (await w.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false,
   );
-  await backInHere.getByText("Have you used Kicksmash before?").click();
+  await backInHere.getByText("Played before? Get your matches back.").click();
   check("opening it asks for the email, on the match page", await w.getByPlaceholder("you@example.com").isVisible());
   await w.close();
 
