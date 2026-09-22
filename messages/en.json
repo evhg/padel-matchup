@@ -373,7 +373,9 @@
     "returningTelegramOnly": "Sign in with Telegram and your matches come to this device.",
     "returningTelegram": "Or, if you used the Telegram bot:",
     "firstTimeTitle": "First time here? Just your name, that's it.",
-    "pastMore": "Show {n} more"
+    "pastMore": "Show {n} more",
+    "emailHelp": "Your email is how you get back in on a new phone. Matches reach your calendar too.",
+    "saveEmail": "Save email"
   },
   "notFound": {
     "title": "Link not found",
