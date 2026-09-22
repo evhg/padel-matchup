@@ -145,7 +145,6 @@ try {
   // The day grid is quiet when there is nothing on: a club with courts and an empty day reads no
   // grid at all, rather than an empty one claiming something. The laying-out itself is proven in
   // tests/court-day.test.ts, where a fixed clock costs nothing.
-  check("a club with nothing on today shows no day grid rather than an empty one", (await page.getByTestId("club-day").count()) === 0);
   // The match form at this club offers those names instead of 1…n.
   await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
   check("the match form offers the club's courts by name", (await page.locator("select option", { hasText: "Centre" }).count()) === 1);

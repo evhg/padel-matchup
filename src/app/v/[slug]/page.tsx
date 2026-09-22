@@ -148,7 +148,14 @@ export default async function VenueBoardPage({ params }: Props) {
           <section className="card" data-testid="club-day">
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="text-lg font-extrabold">{t("club.dayTitle")}</h2>
-              <span className="text-sm font-semibold text-muted tabular-nums">{t("club.dayInUse", { used: courtsInUse(day), total: courts.length })}</span>
+              {/*
+                Only when one of the club's own courts is busy. A day whose bookings all named no
+                court read "0 of 4 courts busy" beside a booking anybody could see, which is true
+                and reads as a contradiction. Saying nothing is the honest version of not knowing.
+              */}
+              {courtsInUse(day) > 0 && (
+                <span className="text-sm font-semibold text-muted tabular-nums">{t("club.dayInUse", { used: courtsInUse(day), total: courts.length })}</span>
+              )}
             </div>
             <ul className="mt-3 flex flex-col divide-y divide-line">
               {day.map((row) => (
