@@ -4,6 +4,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 import { directDatabaseUrl } from "../src/lib/env";
+import { unreachableHint } from "./unreachable";
 
 // Everything below sits inside a function on purpose. package.json has no `"type": "module"`, so tsx
 // compiles this file to CommonJS, where a top-level `await` is not a slow path but a build error:
@@ -28,6 +29,8 @@ async function main() {
 }
 
 main().catch((err) => {
+  const hint = unreachableHint(err);
+  if (hint) console.error(hint);
   console.error(err);
   process.exit(1);
 });
