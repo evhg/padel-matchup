@@ -11,7 +11,10 @@ if (!url) {
   process.exit(1);
 }
 
-const client = postgres(url, { max: 1, prepare: false });
+// `lock_timeout`, in milliseconds, is what the by-hand procedure always set, and the workflow must be at least as
+// careful as a pair of hands: a migration that cannot take its lock inside five seconds gives up
+// instead of queueing behind a live query and blocking every reader behind it.
+const client = postgres(url, { max: 1, prepare: false, connection: { lock_timeout: 5000 } });
 const db = drizzle(client);
 await migrate(db, { migrationsFolder: "./drizzle" });
 console.log("✓ migrations applied");

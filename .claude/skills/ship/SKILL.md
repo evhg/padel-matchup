@@ -439,6 +439,12 @@ Wall clock first, credits second. What actually moved it, measured:
   (`select count(*) from clubs c left join (select venue_slug, count(*) from events group by 1) e
   on e.venue_slug = c.slug where e.venue_slug is null`) would have found it in a second. When a
   change makes many pages, open the one with the least behind it, not the first one in the list.
+- **The owner's standing order outranks the safe-looking design.** The migrate workflow was built
+  with a required reviewer, so every migration would stop and wait for Cath's tap. She had already
+  written the opposite: one shot means she is not involved until it is finished. The approval she
+  actually gives is the conversation where the migration is designed and the merge that carries it;
+  a third click after the merge is ceremony, not safety. Before adding a human gate, check whether
+  the human already answered somewhere earlier in the pipeline.
 - **A check inserted into a form is a navigation out of it.** Four suite checks went red because a
   new block landed between `check("Listed publicly")` and the `Save` that would have stored it: the
   `goto` threw away the tick, the time zone and everything typed after. The failures named the API,

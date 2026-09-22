@@ -5,8 +5,10 @@
 # Claude worked rather than when the owner chose, and a tool call in a chat is not a record anybody
 # can audit later. docs/MIGRATIONS.md is the owner's page on all of this, and on how to undo it.
 #
-# The `production` environment has the owner as a required reviewer, so this job STOPS and waits for
-# their tap. Nothing touches the database before that.
+# It does NOT wait for a human. The owner's standing order is that one shot means they are not
+# involved until it is finished, and they already approve twice: once in the conversation where the
+# migration is designed, and once by merging the pull request that carries it. A third click after
+# the merge is ceremony, not safety.
 #
 # `pnpm db:migrate` applies each generated .sql file in order and writes its own row in
 # drizzle.__drizzle_migrations. It never infers the schema from the code, so it cannot drop the Row
@@ -35,7 +37,6 @@ jobs:
     name: Apply pending migrations
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
