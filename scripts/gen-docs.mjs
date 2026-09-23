@@ -36,7 +36,7 @@ const VARS = [
   ["DATABASE_URL", "yes", 'Supabase **Transaction pooler** string (port 6543), exactly as Supabase\'s Connect dialog shows it. `POSTGRES_URL` (the Vercel ⇄ Supabase integration) and `SUPABASE_DB_URL` work too. Empty → the embedded PGlite database, for local development only.'],
   ["DATABASE_PASSWORD", "if the URL still says `[YOUR-PASSWORD]`", "Substituted into the URL and percent-encoded for you."],
   ["DIRECT_DATABASE_URL", "no", "Direct (port 5432) URL for `pnpm db:migrate` and `pnpm db:generate`. `POSTGRES_URL_NON_POOLING` works too."],
-  ["AUTO_MIGRATE", "no", "`false` stops the app applying migrations on its first connection. That safety net is for a fresh database only: production gets each migration by hand (AGENTS.md rule 7)."],
+  ["AUTO_MIGRATE", "no", "`false` stops the app applying migrations on its first connection. That safety net is for a fresh database only: production gets each migration from the Migrate workflow (AGENTS.md rule 7)."],
   ["APP_BASE_URL", "no", "Defaults to the Vercel production domain. Set it locally and on other hosts. `NEXT_PUBLIC_APP_BASE_URL` is the browser's copy of the same value."],
   ["SESSION_SECRET", "recommended", "Signs the identity cookie. Without it a stable secret is derived from the database URL."],
   ["CRON_SECRET", "recommended", "Protects `/api/cron/*` and the one-off setup routes. Vercel sends it automatically when set."],

@@ -1,21 +1,19 @@
 # How a database change reaches production
 
-A migration is one file of SQL that adds a column or a table. Today it reaches production because
-Claude types it into Supabase during a session. This page says how to move that job to GitHub, and
-why you would.
+A migration is one file of SQL that adds a column or a table. Since 22 September 2026 it reaches
+production through GitHub: the **Migrate** workflow (`.github/workflows/migrate.yml`) applies it when
+it reaches `main`, and nobody types SQL. Before that, Claude typed each one into Supabase during a
+session. This page says how the move was made, why, and what to do when a run fails.
 
-**Where this stands.** The workflow file is built: `.github/workflows/migrate.yml`. It starts by
-itself and it runs the right command. Two runs have proved that. Both then failed to reach the
-database, because step 1 below named the wrong address. **Step 1 is the one thing left to do.**
-Rule 7 still sends migrations through a session until a run turns green.
+**Where this stands.** Done. Step 4 below records the seven runs it took to prove it.
 
 ## Why move it
 
 Three reasons, in order of weight.
 
-1. **The credential moves to one place you control.** Today a session holds a Supabase password and
-   a role that owns every table. If the job moves to GitHub, the database address lives in your
-   repository's settings, and no session needs it.
+1. **The credential moves to one place you control.** A session used to hold a Supabase password and
+   a role that owns every table. Now the database address lives in your repository's settings, and no
+   session needs it.
 2. **It runs by itself.** You approve a migration twice already: once in the conversation where it
    is designed, and once when you merge the pull request that carries it. A third click after the
    merge is ceremony, not safety, so the workflow does not ask for one. Your standing order is that
@@ -156,9 +154,9 @@ truly lost, and then change `DATABASE_URL` on Vercel in the same sitting.
 - **AGENTS.md rules 7 and 10 say the new way.** Production gets each migration from the **Migrate**
   workflow, after the merge. Done.
 - **The Supabase password is out of the Claude environment.** Done — you removed it.
-- **Claude no longer needs write access to the database.** The Supabase connection can now be set to
-  read-only, and Claude keeps the ability to look at numbers. **This one is still open**, and it is
-  yours: `--read-only` on the Supabase MCP.
+- **Claude no longer needs the Supabase connection at all.** Since 23 September, questions go through
+  the read-only door `/api/admin/sql` (`docs/OPERATING.md`), so the Supabase MCP is needed for neither
+  reading nor migrations. **Setting it to read-only, or removing it, is still open**, and it is yours.
 
 ## How to undo it
 

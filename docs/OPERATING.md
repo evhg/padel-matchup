@@ -80,7 +80,13 @@ The free plan gives a thousand search credits a month. The hourly job spends the
 
 ## Cron jobs
 
-- `kicksmash-sync` (Supabase pg_cron, every 10 min) → `/api/cron/sync`: the coaches' calendars, both ways. Waitlist offers, lapses and lesson reminders ride the 5-minute push job.
+Three jobs run from Supabase `pg_cron` through `pg_net`, and the service board's `pg_cron` row says when each last ran:
+
+- the hourly job → `/api/cron/hourly`. Vercel's own cron also calls it once a day at 07:00 UTC (`vercel.json`), which is all the Hobby plan allows.
+- the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders.
+- `kicksmash-sync`, every 10 minutes → `/api/cron/sync`: the coaches' calendars, both ways.
+
+**The three definitions live only in the database** (`cron.job`), not in this repository (checked 23 September 2026). A new database would not get them from GitHub. That is an open item in `ROADMAP.md`.
 
 ## The Sunday digest, one line to watch
 
@@ -92,22 +98,20 @@ Everything a session needs to continue the work is in the repository and in the 
 session reads this file, `AGENTS.md`, `docs/DECIDING.md` and the plan, and knows what the owner
 and the previous session knew.
 
-**The plan** is the artifact "Kicksmash Open Court Plan" at
-https://claude.ai/code/artifact/00649e1d-fa25-4831-9411-e31c98d1b7d2, and `docs/VISION.md` is the
-same decisions in the repository. The artifact is the record of every decision. Publish a new revision
-once per batch, never per pull request, and always call the Artifact tool's `read` action on that URL
-before publishing, both to learn the current revision number and because a publish that was not built
-on the live version is refused.
+**The plan** is `ROADMAP.md`: what is built, what is next, and the small open items, with
+`docs/VISION.md` for who it is for. The artifact "Kicksmash Open Court Plan"
+(https://claude.ai/code/artifact/00649e1d-fa25-4831-9411-e31c98d1b7d2) holds the decisions up to
+13 September 2026 and has not been revised since; read it for history, not for the state.
 
 **Standing rules from the owner** (in force since 8 to 13 September): optimise for wall clock time first and for credits second, and let every change improve scalability or leave it where it was (13 September; the working version is in `.claude/skills/ship/SKILL.md` and AGENTS.md rule 12). The owner is non-technical
 and only creates accounts, taps approvals and pays; times to the owner in Thailand time; never
-post anywhere public, never email anyone, never spend money, never commit a secret; anything
+post anywhere public, never email anyone except the thank-you a shipped note earns (CLAUDE.md
+order 5) or a message the owner asked for, never spend money, never commit a secret; anything
 outward-facing (press, founding-club emails, Reddit, Hacker News) waits for the owner's tap in
 Telegram; free tiers until fifty emails a day; Porkbun keys stay out of Vercel; personal tokens
 and manage links never in public data; never interpolate a `Date` into a raw `sql` template;
 `pnpm db:push` is disabled (it would drop the RLS policies), migrations go through
-`pnpm db:generate` and are applied to the Supabase project with `SET LOCAL lock_timeout = '5s'`
-plus a row in `drizzle.__drizzle_migrations`; no model identifiers in commits, pull requests or
+`pnpm db:generate` and reach production through the Migrate workflow when they merge; no model identifiers in commits, pull requests or
 code; commits end with the `Co-Authored-By` and `Claude-Session` trailers; three languages with
 identical message keys; a unit test with every change; a browser suite where pages or bots change.
 
@@ -126,7 +130,8 @@ when waiting; end every batch with three lines: what shipped, what is next, what
 `/api/admin/errors`, `/api/admin/services`, `/api/admin/feedback`, `/api/admin/research`,
 `/api/admin/answers` (answer pages, IndexNow on publish), `/api/admin/outreach` (the press desk:
 drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
-Telegram), `/api/admin/metrics`.
+Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, below),
+`/api/admin/merge-players` (below).
 
 ## What the session's environment must hold
 
@@ -185,14 +190,7 @@ refuses any pair two different people could be. Always `dryRun` first. A merge c
 research desk, main CI, deploy), `wait_ci.sh <branch> <sha>`, `deploy-poll.sh <sha> <log>`. They
 read `CRON_SECRET` (or `OPERATOR_TOKEN`) and `VERCEL_TOKEN` from the environment.
 
-**State of play on 12 September:** the product through round eleven is live and reviewed
-(pull requests #1 to #99). The restructure the owner approved on 12 September is four phases in: tests
-that cannot rot with the calendar and rules a machine checks (#95, #96), one append-only fact log (#97),
-one card algorithm with Telegram and Discord as adapters plus the Telegram module split into a router
-and its handlers (#98), and the schema split by domain behind a check that it still agrees with the
-migrations (#99). What remains is the documents and the shipping pipeline. Besides that: the launch calendar runs (press emails on 15 September with the owner's
-tap, Show HN in week three, builders' articles live as answer pages, founding-club drafts queued
-for 6 October, directory texts in `docs/launch/directories.md`); the Russian answer series adds
-three pages a week; the research desk spends Tavily's credits evenly. Open items that need the
-owner: introduce the two pilot coaches, the ten-minute coach setup test, the Phuket field test,
-the taps above.
+**State of play** is `ROADMAP.md`, not this file. A state of play written here on 12 September was
+out of date within a day. Its open items for the owner on that day (the two pilot coaches, the
+ten-minute coach setup test, the Phuket field test) have no later record. The texts for the assistant
+directories are in `docs/launch/directories.md`.

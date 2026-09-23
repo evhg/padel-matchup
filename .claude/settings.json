@@ -17,7 +17,7 @@
     "autoMode": {
       "allow": [
         "$defaults",
-        "Reading this project's own Supabase database through the Supabase MCP tools, and applying the additive migrations and data loads this repository already carries, is how work reaches production here: AGENTS.md rule 7 requires every migration to be applied by hand through that MCP, as postgres, before its pull request merges. Waiting on a person for each of these costs hours of wall clock and buys nothing, because the same statements are in the repository and in the pull request."
+        "Asking production a question through GET https://kicksma.sh/api/admin/sql with the operator bearer in $CRON_SECRET, and calling the other operator endpoints under /api/admin/*, is how a session reads production here (CLAUDE.md order 6): the door is read-only, runs as a role that cannot see a credential, and is in this repository. Migrations reach production through the Migrate workflow when their pull request merges (AGENTS.md rule 7), not through a session."
       ],
       "soft_deny": [
         "$defaults",
@@ -25,7 +25,7 @@
       ],
       "environment": [
         "$defaults",
-        "Kicksmash is a live padel app with real players on it. Its production database is a Supabase project reached only through the Supabase MCP tools — there is no DATABASE_URL in this environment — and `GATE_E2E=auto bash scripts/gate.sh` is what proves a change is sound before it is pushed."
+        "Kicksmash is a live padel app with real players on it. Its production database is a Supabase project; there is no DATABASE_URL in this environment, so a session reads it through /api/admin/sql and never writes to it directly. `GATE_E2E=auto bash scripts/gate.sh` is what proves a change is sound before it is pushed."
       ]
     }
   },

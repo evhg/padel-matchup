@@ -39,7 +39,7 @@ pnpm test        # vitest: slot-claim concurrency, invite transitions, score-loc
 pnpm typecheck
 pnpm lint
 pnpm build
-pnpm e2e         # Playwright journeys (core, americano, levels, viral, groups, venues, agents, formats) against a fresh production build; first time: pnpm exec playwright install chromium
+pnpm e2e         # the sixteen Playwright journeys against a fresh production build (`node scripts/suites.mjs --why` says which a change can break); first time: pnpm exec playwright install chromium
 ```
 
 `pnpm e2e` boots `next start` on port 3001 with a throwaway PGlite database, a dummy Resend key (email UIs on, sends fail harmlessly) and generated VAPID keys, then runs every `e2e/*.mjs` suite. `SHOTS=./shots` keeps full-page screenshots; `PW_CHROMIUM=/path/to/chromium` uses a preinstalled browser. GitHub Actions runs typecheck, lint, vitest on PGlite **and** on a real Postgres service, the build, and the e2e suites on every push and pull request (`.github/workflows/ci.yml`).
@@ -62,7 +62,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `DATABASE_URL` | ✅ | Supabase **Transaction pooler** string (port 6543), exactly as Supabase's Connect dialog shows it. `POSTGRES_URL` (the Vercel ⇄ Supabase integration) and `SUPABASE_DB_URL` work too. Empty → the embedded PGlite database, for local development only. |
 | `DATABASE_PASSWORD` | if the URL still says `[YOUR-PASSWORD]` | Substituted into the URL and percent-encoded for you. |
 | `DIRECT_DATABASE_URL` | no | Direct (port 5432) URL for `pnpm db:migrate` and `pnpm db:generate`. `POSTGRES_URL_NON_POOLING` works too. |
-| `AUTO_MIGRATE` | no | `false` stops the app applying migrations on its first connection. That safety net is for a fresh database only: production gets each migration by hand (AGENTS.md rule 7). |
+| `AUTO_MIGRATE` | no | `false` stops the app applying migrations on its first connection. That safety net is for a fresh database only: production gets each migration from the Migrate workflow (AGENTS.md rule 7). |
 | `APP_BASE_URL` | no | Defaults to the Vercel production domain. Set it locally and on other hosts. `NEXT_PUBLIC_APP_BASE_URL` is the browser's copy of the same value. |
 | `SESSION_SECRET` | recommended | Signs the identity cookie. Without it a stable secret is derived from the database URL. |
 | `CRON_SECRET` | recommended | Protects `/api/cron/*` and the one-off setup routes. Vercel sends it automatically when set. |
@@ -216,5 +216,5 @@ e2e/                     Playwright journeys + runner (pnpm e2e)
 scripts/                 gate.sh (the pre-push gate), check-migrations.sh, gen-docs.mjs (this README's env table)
 ```
 
-Schema changes: edit the file for that domain under `src/db/schema/` → `pnpm db:generate` → commit `drizzle/` → apply
-the SQL to production by hand (AGENTS.md rule 7). `bash scripts/check-migrations.sh` fails when the two disagree.
+Schema changes: edit the file for that domain under `src/db/schema/` → `pnpm db:generate` → commit `drizzle/` → the
+Migrate workflow applies it when it reaches `main` (AGENTS.md rule 7). `bash scripts/check-migrations.sh` fails when the two disagree.
