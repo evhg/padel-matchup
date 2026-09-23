@@ -477,6 +477,13 @@
       "when": 1790143495113,
       "tag": "0067_reader_role",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1790151999204,
+      "tag": "0068_reader_sees_rows",
+      "breakpoints": true
     }
   ]
 }

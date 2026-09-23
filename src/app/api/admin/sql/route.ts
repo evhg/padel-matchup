@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
-import { READER_ROLE } from "@/lib/db/readonly";
+import { readAsReader } from "@/lib/db/readonly";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +21,8 @@ export const dynamic = "force-dynamic";
  *   2. `checkReadQuery`, a pure rule: one statement, and it must read,
  *   3. a Postgres transaction that is `read only` with a statement timeout, so a write is an error
  *      whatever gets past lock 2 and no query can hold a connection open,
- *   4. `set local role kicksmash_reader`, which has `select` on columns and never on a credential.
+ *   4. `set local role kicksmash_reader`, which has `select` on columns and never on a credential,
+ *      and bypasses Row Level Security, or every answer would be zero rows (`readAsReader`).
  *
  * The first version of this file had only the first three, and it was refused. It deserved to be:
  * "read everything" is also "become anyone", because `players.personal_token` signs a person in.
@@ -33,8 +33,6 @@ export const dynamic = "force-dynamic";
  * token. That is the trust the token already carries: /api/admin/feedback returns people's notes
  * and addresses today. Nothing here is logged with its results.
  */
-const rowsOf = (r: unknown): unknown[] => (Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []));
-
 export async function GET(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const q = new URL(req.url).searchParams.get("q") ?? "";
@@ -42,13 +40,7 @@ export async function GET(req: Request) {
   if (!verdict.ok) return NextResponse.json({ error: verdict.reason, limits: READ_QUERY_LIMITS }, { status: 400 });
   const db = await getDb();
   try {
-    const rows = await db.transaction(async (tx) => {
-      await tx.execute(sql.raw(`set transaction read only`));
-      await tx.execute(sql.raw(`set local statement_timeout = ${READ_QUERY_LIMITS.timeoutMs}`));
-      // Last, so nothing above needs the reader's privileges, and local, so it lasts one transaction.
-      await tx.execute(sql.raw(`set local role ${READER_ROLE}`));
-      return rowsOf(await tx.execute(sql.raw(verdict.sql)));
-    });
+    const rows = await readAsReader(db, verdict.sql);
     const capped = rows.length > READ_QUERY_LIMITS.maxRows;
     return NextResponse.json({ ok: true, count: rows.length, capped, rows: capped ? rows.slice(0, READ_QUERY_LIMITS.maxRows) : rows });
   } catch (e) {
