@@ -153,12 +153,27 @@ GitHub cannot stand in for this. A repository secret can be *used* by a workflow
 back through the API — that is the whole point of it — so `DIRECT_DATABASE_URL` reaching the Migrate
 workflow does nothing for a session that needs to ask a question now.
 
-**A read-only query door is not built.** It was designed, written and then held back on
-23 September: an endpoint that runs a caller's SQL hands whoever holds the operator token every row
-in the database, and `players.personal_token` is a sign-in credential, so "read everything" is also
-"become anyone". Three locks made it hard to *write* through and did nothing about that. If it is
-built, it reads through a Postgres role with `select` on a set of views that exclude every token,
-manage code and invite code — not as `postgres`, and not over whole tables.
+**The read-only query door.** `GET /api/admin/sql?q=<one select>` with the operator bearer answers
+rows as JSON, capped at 500.
+
+It was refused once, in the shape "`postgres` runs your select inside a read-only transaction", and
+the refusal was right: `players.personal_token` signs a person in on any device, so "read
+everything" is also "become anyone". It reads through `kicksmash_reader` now — a `nologin` role with
+`select` granted **per column** and never on a token, a manage code, an invite code, a hashed
+one-time code or a push subscription's keys (migration 0067, generated from the schema by
+`src/lib/db/readonly.ts`). A query that names a hidden column is refused by Postgres itself, and so
+is `select *` on a table that has one; the error names the column. Tables with nothing hidden keep
+`select *`.
+
+Four locks, and only the last one matters: the operator token; `checkReadQuery` (one statement, must
+start with `select` or `with`); a `read only` transaction with an eight-second timeout; and
+`set local role`. Filtering the *answer* was considered and is unsound —
+`select to_jsonb(p) from players p` carries the same value under another key, so the stop has to be
+in the database.
+
+`tests/readonly.test.ts` regenerates the grants from the live schema and fails when they differ from
+the migration, and fails again when a new column looks like a credential and is on neither the
+hidden list nor the reviewed-safe list. A new token cannot reach production ungranted or unnoticed.
 
 **Merging duplicate people.** `POST /api/admin/merge-players { into, from[], dryRun }` folds rows
 through the same `mergePlayers` the app uses, behind `safeToMerge` (`src/lib/domain/dupes.ts`), which
