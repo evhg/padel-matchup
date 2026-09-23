@@ -17,6 +17,10 @@ out
 
 # local pglite database (zero-config dev mode)
 .pglite
+# a restored backup, and the backup files themselves: personal data, never committed
+.pglite-backup
+backups/
+*.json.gz
 
 # testing / coverage
 coverage

@@ -444,6 +444,16 @@ Everything in this list is live. The README describes each in detail.
 - **Kicksmash is built by the players on it (23 September 2026).** The feedback card says so, and
   counts the notes that became part of the app once there are three.
 
+- **Everything rebuildable from GitHub, and a session that starts in step (23 September 2026,
+  migration 0069).** The three scheduled jobs (hourly, the five-minute push, the ten-minute calendar
+  sync) lived only in the database, typed by hand with the operator secret in their text. They are
+  in the repository now, and each reads the secret from Supabase Vault when it runs; one operator
+  call gives a new database the secret, and the same call follows a rotation. The nightly backup
+  gained a loader: one night's file into a local database with every credential replaced, push
+  subscriptions dropped and contacts masked, and the backup now says when a table filled its row
+  cap instead of stopping there quietly. A session now opens by saying whether its copy is behind
+  `main`, installing what is missing, and naming any operator variable that is not set.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -544,17 +554,6 @@ the player, and invite them to try it.
    `/api/admin/*`. And move the app's own connection onto the role `kicksmash`: production connects
    as `postgres` today (checked 23 September), which bypasses Row Level Security, so the policies
    keep the Data API out and do not limit the app.
-9. **The `pg_cron` jobs live only in the database.** The hourly job, the five-minute push job and the
-   ten-minute calendar sync are defined in Supabase's `cron.job` and nowhere in this repository, so a
-   new database cannot be rebuilt from GitHub alone. Write them into a migration, with the secret they
-   send read from Supabase's Vault, never from a file. A migration, so the owner's word first.
-10. **Production data on a laptop.** The nightly backup (every table as gzipped JSON, sixty days, in
-   a private repository) has no loader, and it carries live credentials (personal tokens, manage
-   codes) and addresses. A loader that drops `HIDDEN_COLUMNS` and loads one day into a local PGlite
-   gives a developer real data without the keys to anybody's account. Personal data, so the owner's
-   decision. Until then, the read-only door answers questions without a copy. The backup also stops
-   at 50,000 rows a table without saying so: harmless at 48 players, and a scale item long before a
-   million.
 
 ## Deliberately not
 
