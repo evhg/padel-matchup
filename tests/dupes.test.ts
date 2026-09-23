@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeGroups, normalName, pickSurvivor, safeToMerge } from "@/lib/domain/dupes";
+import { mergeGroups, nameIsHere, normalName, pickSurvivor, safeToMerge } from "@/lib/domain/dupes";
 
 /**
  * When two rows are the same person, proven here rather than in production.
@@ -74,6 +74,21 @@ describe("when two rows are the same person", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].into.id).toBe("e5");
     expect(groups[0].from.map((r) => r.id).sort()).toEqual(["e1", "e2", "e3", "e4"]);
+  });
+
+  it("recognises a name that is already in this match, and only that", () => {
+    // Micky was invited to a match on 23 September, the mail never reached her, and the next thing
+    // she does is type "Micky" into the open spot. That is the duplicate, caught before it is made.
+    const here = ["Erik", "Jakob", "Micky"];
+    expect(nameIsHere("Micky", here)).toBe(true);
+    expect(nameIsHere("  micky  ", here)).toBe(true);
+    expect(nameIsHere("Dana", here)).toBe(false);
+    // A prefix is not a person: "Mic" must not accuse anybody while they are still typing.
+    expect(nameIsHere("Mic", here)).toBe(false);
+    expect(nameIsHere("", here)).toBe(false);
+    expect(nameIsHere("M", here)).toBe(false); // one letter matches too much to mean anything
+    expect(nameIsHere("Micky", [])).toBe(false);
+    expect(nameIsHere("Micky", [null, undefined, ""])).toBe(false);
   });
 
   it("leaves two real people alone and takes nobody twice", () => {
