@@ -484,6 +484,13 @@
       "when": 1790151999204,
       "tag": "0068_reader_sees_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1790158701779,
+      "tag": "0069_cron_jobs_in_the_repo",
+      "breakpoints": true
     }
   ]
 }

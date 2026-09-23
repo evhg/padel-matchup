@@ -19,10 +19,18 @@ export const backupConfigured = () => Boolean(process.env.BACKUP_GITHUB_TOKEN &&
 export const BACKUP_TABLES: readonly string[] = (Object.values(schema).filter((t) => is(t, PgTable)) as unknown as Table[]).map((t) => getTableName(t)).sort();
 
 const KEEP_DAYS = 60;
+/** Rows per table in one night's file. Far above today's counts, and said out loud when reached. */
+export const BACKUP_ROW_CAP = 50_000;
+
+/** The tables that filled the cap, so were cut short. A backup that silently drops rows is not one. */
+export const cappedTables = (dump: Record<string, unknown[]>, cap = BACKUP_ROW_CAP): string[] =>
+  Object.entries(dump)
+    .filter(([, rows]) => rows.length >= cap)
+    .map(([name]) => name);
 const rowsOf = (r: unknown): unknown[] => (Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []));
 
 /** Every table, every row (capped per table), as plain JSON. */
-export async function dumpDatabase(db: Db, cap = 50_000): Promise<Record<string, unknown[]>> {
+export async function dumpDatabase(db: Db, cap = BACKUP_ROW_CAP): Promise<Record<string, unknown[]>> {
   const out: Record<string, unknown[]> = {};
   for (const name of BACKUP_TABLES) {
     if (!/^[a-z_]+$/.test(name)) continue;
@@ -31,7 +39,7 @@ export async function dumpDatabase(db: Db, cap = 50_000): Promise<Record<string,
   return out;
 }
 
-export type BackupResult = { status: "skipped" | "already" | "done" | "failed"; path?: string; bytes?: number; pruned?: number; error?: string };
+export type BackupResult = { status: "skipped" | "already" | "done" | "failed"; path?: string; bytes?: number; pruned?: number; capped?: string[]; error?: string };
 
 /** Once a day after 03:00 UTC: dump, gzip, put into the repository, prune files older than KEEP_DAYS. Never throws. */
 export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<BackupResult> {
@@ -44,7 +52,8 @@ export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetc
   const api = (path: string) => `https://api.github.com/repos/${repo}/contents/${path}`;
   try {
     const dump = await dumpDatabase(db);
-    const body = gzipSync(Buffer.from(JSON.stringify({ format: "kicksmash-backup/1", at: now.toISOString(), tables: dump })));
+    const capped = cappedTables(dump);
+    const body = gzipSync(Buffer.from(JSON.stringify({ format: "kicksmash-backup/1", at: now.toISOString(), capped, tables: dump })));
     const path = `backups/${day}.json.gz`;
     const existing = await fetchImpl(api(path), { headers });
     const sha = existing.ok ? ((await existing.json()) as { sha?: string }).sha : undefined;
@@ -52,6 +61,7 @@ export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetc
     if (!put.ok) return { status: "failed", error: `github ${put.status}` };
     await bumpMetric(db, "backup_done", 1, day);
     await bumpMetric(db, "backup_bytes", body.length, day);
+    if (capped.length) await bumpMetric(db, "backup_capped", capped.length, day);
     // Old days go: the repository keeps their history anyway.
     let pruned = 0;
     const cutoff = dayKey(new Date(now.getTime() - KEEP_DAYS * 86_400_000));
@@ -65,7 +75,7 @@ export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetc
         if (del.ok) pruned++;
       }
     }
-    return { status: "done", path, bytes: body.length, pruned };
+    return { status: "done", path, bytes: body.length, pruned, capped };
   } catch (e) {
     return { status: "failed", error: e instanceof Error ? e.message : String(e) };
   }

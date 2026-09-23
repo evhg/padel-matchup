@@ -86,7 +86,16 @@ Three jobs run from Supabase `pg_cron` through `pg_net`, and the service board's
 - the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders.
 - `kicksmash-sync`, every 10 minutes → `/api/cron/sync`: the coaches' calendars, both ways.
 
-**The three definitions live only in the database** (`cron.job`), not in this repository (checked 23 September 2026). A new database would not get them from GitHub. That is an open item in `ROADMAP.md`.
+**The three definitions live in the repository** since migration 0069 (`src/lib/ops/cronJobs.ts`,
+held to the migration by `tests/cron-jobs.test.ts`). Before that they existed only in the database's
+`cron.job`, typed by hand with the secret in each job's text. No job's text holds it now: each reads
+`kicksmash_cron_secret` from Supabase Vault when it runs.
+
+- `GET /api/admin/cron` lists the jobs and how each one's last run went. The read-only door can see
+  them too (`cron.job` without its `command`, and `cron.job_run_details`).
+- `POST /api/admin/cron` stores the app's own `CRON_SECRET` in Vault and schedules the three jobs,
+  replacing any job typed by hand that calls the same routes. Call it once on a new database, and
+  again the day `CRON_SECRET` changes on Vercel, or every job gets `unauthorized` from then on.
 
 ## The Sunday digest, one line to watch
 
@@ -131,7 +140,7 @@ when waiting; end every batch with three lines: what shipped, what is next, what
 `/api/admin/answers` (answer pages, IndexNow on publish), `/api/admin/outreach` (the press desk:
 drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
 Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, below),
-`/api/admin/merge-players` (below).
+`/api/admin/merge-players` (below), `/api/admin/cron` (the scheduled jobs, above).
 
 ## What the session's environment must hold
 
@@ -181,6 +190,13 @@ in the database.
 `tests/readonly.test.ts` regenerates the grants from the live schema and fails when they differ from
 the migration, and fails again when a new column looks like a credential and is on neither the
 hidden list nor the reviewed-safe list. A new token cannot reach production ungranted or unnoticed.
+
+**A backup on a laptop.** Download one night's file (`backups/<day>.json.gz`) from the private
+backup repository, then `pnpm exec tsx scripts/restore-backup.ts <day>.json.gz` and
+`PGLITE_DATA_DIR=.pglite-backup pnpm dev`. Every credential in it is replaced and the push
+subscriptions are dropped, always; addresses, phone numbers and messenger ids are masked unless
+`--keep-contacts`. The file and the folder are personal data, kept out of git by `.gitignore`. A
+table that reached the backup's row cap is named in the file and turns the board's backup row yellow.
 
 **Merging duplicate people.** `POST /api/admin/merge-players { into, from[], dryRun }` folds rows
 through the same `mergePlayers` the app uses, behind `safeToMerge` (`src/lib/domain/dupes.ts`), which

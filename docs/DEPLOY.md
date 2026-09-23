@@ -118,7 +118,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://kicksma.sh/api/cron/hourly
 # → {"ok":true,"transitionedToPast":0,"promotions":0,"inviteReminders":0,"scoreReminders":0,...}
 ```
 
-Hobby plan crons run once a day at best-effort times; Pro runs them on the minute. kicksma.sh runs the frequent jobs from Supabase `pg_cron` instead: the hourly job, the five-minute push job and the ten-minute calendar sync ([OPERATING.md](OPERATING.md#cron-jobs)).
+Hobby plan crons run once a day at best-effort times; Pro runs them on the minute. kicksma.sh runs the frequent jobs from Supabase `pg_cron` instead: the hourly job, the five-minute push job and the ten-minute calendar sync ([OPERATING.md](OPERATING.md#cron-jobs)). Migration 0069 schedules them wherever pg_cron, pg_net and Vault exist; once `CRON_SECRET` is set, `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<your-domain>/api/admin/cron` gives them the secret.
 
 ---
 
