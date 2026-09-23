@@ -49,6 +49,7 @@ export default async function CoachSettingsPage() {
           initial={{
             displayName: coach.displayName,
             clubs: coach.clubNames.join(", "),
+            court: coach.court ?? "",
             lessonMinutes: coach.lessonMinutes,
             hoursLines: Array.from({ length: 7 }, (_, d) => formatHoursLine(coach.hours[String(d)])),
             cutoffHours: coach.cutoffHours,
