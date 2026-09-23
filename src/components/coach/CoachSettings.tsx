@@ -102,6 +102,11 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
           <span className="mt-1 block text-xs font-normal text-muted">{t("settings.clubsHelp")}</span>
         </label>
         <label className="block text-sm font-bold">
+          {t("settings.court")}
+          <input className="input mt-1" data-testid="settings-court" value={v.court} onChange={(e) => set("court", e.target.value)} placeholder={tRoot("create.courtPlaceholder")} maxLength={40} />
+          <span className="mt-1 block text-xs font-normal text-muted">{t("settings.courtHelp")}</span>
+        </label>
+        <label className="block text-sm font-bold">
           {t("settings.length")}
           <select className="input mt-1" value={v.lessonMinutes} onChange={(e) => set("lessonMinutes", Number(e.target.value))}>
             {LESSON_MINUTES.map((m) => (

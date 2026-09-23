@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
 import { PushToggle } from "@/components/PushToggle";
 import { ScrollTop } from "@/components/ScrollTop";
-import { CopyButton, LinkBox, QrPanel, ShareButtons } from "@/components/ShareSheet";
+import { CopyButton, LinkBox, QrFold, ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
@@ -70,7 +70,7 @@ export default async function SharePage({ params }: Props) {
         <LinkBox url={url} display={`${shortHost()}/${code}`} />
         <ShareButtons url={url} text={text} />
         <section className="card">
-          <QrPanel url={url} hint={t("share.qrHint")} />
+          <QrFold url={url} label={t("share.qrHint")} />
         </section>
         <section className="card md:hidden">
           <h2 className="font-extrabold">📸 {t("share.story")}</h2>

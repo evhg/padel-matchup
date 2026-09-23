@@ -90,6 +90,37 @@ describe("what a club can see of the coaching on its courts", () => {
     expect(guessed.lesson.venueSlug).toBeNull();
   });
 
+  it("a lesson carries the coach's court, under the same rule as its club", async () => {
+    // A court name without a club says nothing, so the court follows venue_slug exactly: it is copied
+    // for a coach at one club and dropped for a coach at two. It is the coach's own answer as well —
+    // nothing here reads a court off a match, a name or a habit.
+    const one = await makePlayer(db, "Court Solo");
+    const solo = await createCoach(db, { playerId: one.id, displayName: "Court Solo", tz: TZ, hours: presetHours("both"), clubNames: ["Rawai Padel"] });
+    const student = await makePlayer(db, "Lek");
+    await setStudentStatus(db, solo.id, student.id, "accepted");
+
+    // Until the coach says, a lesson names no court. The club's day then files it under "no court".
+    const unsaid = await bookLesson(db, { coach: solo, studentPlayerId: student.id, startsAt: at(2), byCoach: true }, now);
+    expect(unsaid.lesson.court).toBeNull();
+
+    // The name is cleaned the way a club's own court rows are, so both sides of sameCourt() match.
+    const said = await updateCoach(db, solo.id, { court: "  Court   3  " });
+    expect(said.court).toBe("Court 3");
+    const booked = await bookLesson(db, { coach: said, studentPlayerId: student.id, startsAt: at(4), byCoach: true }, now);
+    expect(booked.lesson.court).toBe("Court 3");
+
+    const two = await makePlayer(db, "Court Both");
+    const roaming = await updateCoach(db, (await createCoach(db, { playerId: two.id, displayName: "Court Both", tz: TZ, hours: presetHours("both"), clubNames: ["Rawai Padel", "Warehaus"] })).id, { court: "Court 3" });
+    await setStudentStatus(db, roaming.id, student.id, "accepted");
+    const guessed = await bookLesson(db, { coach: roaming, studentPlayerId: student.id, startsAt: at(6), byCoach: true }, now);
+    expect(guessed.lesson.venueSlug).toBeNull();
+    expect(guessed.lesson.court).toBeNull();
+
+    // And a blank answer takes the court away again.
+    const cleared = await updateCoach(db, solo.id, { court: "   " });
+    expect(cleared.court).toBeNull();
+  });
+
   it("counts the lessons in the window, names no student, and keeps a quiet coach on the list", async () => {
     const cp = await makePlayer(db, "Busy");
     const coach = await createCoach(db, { playerId: cp.id, displayName: "Busy", tz: TZ, hours: presetHours("both"), clubNames: ["Kathu Padel"] });

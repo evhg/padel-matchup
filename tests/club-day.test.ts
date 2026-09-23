@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubCourts, clubs, events } from "@/db/schema";
 import { clubBusy, courtDay, courtsInUse } from "@/lib/domain/courts";
-import { bookLesson, createCoach, presetHours, setStudentStatus } from "@/lib/domain/coaching";
+import { bookLesson, createCoach, presetHours, setStudentStatus, updateCoach } from "@/lib/domain/coaching";
 import { createEvent } from "@/lib/domain/events";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -71,5 +71,31 @@ describe("a club's day, read from its matches and its lessons", () => {
     const after = await clubBusy(db, SLUG, dayFrom, dayTo);
     expect(after).toHaveLength(2);
     expect(courtsInUse(courtDay(["Centre", "Court 2", "Court 3"], after))).toBe(1);
+  });
+
+  it("puts a lesson on the court the coach teaches on", async () => {
+    // The half the first test leaves open: once the coach answers "Court 3", the club reads that
+    // court as busy rather than reading "no court named" and counting one court fewer than it has.
+    // A club of its own, because the first test's lesson still sits in the window on this Monday.
+    const OTHER = "kathu-padel";
+    await db.insert(clubs).values({ slug: OTHER, name: "Kathu Padel", source: "directory", manageToken: "tok-day-2", country: "TH", province: "Phuket", tz: TZ }).onConflictDoNothing();
+    for (const [i, name] of ["Court 1", "Court 3"].entries()) {
+      await db.insert(clubCourts).values({ clubSlug: OTHER, name, number: i === 0 ? 1 : 3, position: i }).onConflictDoNothing();
+    }
+    const p = await makePlayer(db, "Aor");
+    const made = await createCoach(db, { playerId: p.id, displayName: "Aor", tz: TZ, hours: presetHours("both"), clubNames: ["Kathu Padel"] });
+    const coach = await updateCoach(db, made.id, { court: "Court 3" });
+    const student = await makePlayer(db, "Ben");
+    await setStudentStatus(db, coach.id, student.id, "accepted");
+    await bookLesson(db, { coach, studentPlayerId: student.id, startsAt: at(8), byCoach: true }, at(-2));
+
+    const rows = courtDay(["Court 1", "Court 3"], await clubBusy(db, OTHER, dayFrom, dayTo));
+    // No row for "no court named", because nothing is left unplaced. The first test has that row.
+    expect(rows.map((r) => r.name)).toEqual(["Court 1", "Court 3"]);
+    expect(rows[1].blocks.map((b) => b.kind)).toEqual(["lesson"]);
+    expect(rows[0].blocks).toHaveLength(0);
+    expect(courtsInUse(rows)).toBe(1);
+    // A club still never reads a student's name off its own day.
+    expect(JSON.stringify(rows)).not.toContain("Ben");
   });
 });

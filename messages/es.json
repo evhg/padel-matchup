@@ -1573,7 +1573,9 @@
       "gapPhoto": "sin foto",
       "gapBio": "nada con tus palabras",
       "gapPrice": "sin precio",
-      "gapLevels": "sin niveles"
+      "gapLevels": "sin niveles",
+      "court": "Pista en la que enseñas",
+      "courtHelp": "Opcional. Tu club ve esa pista ocupada. Solo funciona si nombras un club."
     },
     "page": {
       "owedTitle": "Por pagar",

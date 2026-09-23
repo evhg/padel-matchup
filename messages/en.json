@@ -1573,7 +1573,9 @@
       "gapPhoto": "no photo",
       "gapBio": "nothing in your own words",
       "gapPrice": "no price",
-      "gapLevels": "no levels"
+      "gapLevels": "no levels",
+      "court": "Court you teach on",
+      "courtHelp": "Optional. Your club sees that court busy. It works only when you name one club."
     },
     "page": {
       "owedTitle": "To pay",

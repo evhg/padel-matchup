@@ -8,6 +8,12 @@ import { requestRestoreCode, verifyRestoreCode } from "@/actions/identity";
 /**
  * Email → 6-digit code → every identity with that email is merged into one and
  * this device signs in as it.
+ *
+ * It owns no `<form>`, and must not. The landing page puts this inside the create form, and a form
+ * inside a form is invalid HTML: the browser keeps both elements in the DOM, the button stops
+ * reaching its own handler, and "Send code" did nothing at all on the busiest page in the app while
+ * the same component worked on My matches. It is also the hydration mismatch that page reported.
+ * Enter still sends, from the input's own key handler.
  */
 export function RestoreWithEmail({ initialEmail = "", title, compact = false, onRestored }: { initialEmail?: string; title?: string; compact?: boolean; onRestored?: () => void }) {
   const t = useTranslations();
@@ -20,8 +26,7 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
   const [info, setInfo] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const sendCode = (e: React.FormEvent) => {
-    e.preventDefault();
+  const sendCode = () => {
     setError(null);
     setInfo(null);
     if (!email.trim()) return;
@@ -45,8 +50,7 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
     });
   };
 
-  const verify = (e: React.FormEvent) => {
-    e.preventDefault();
+  const verify = () => {
     setError(null);
     if (code.replace(/\D/g, "").length !== 6) return setError(t("identity.codeWrong"));
     start(async () => {
@@ -77,18 +81,33 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
         </div>
       )}
       {step === "email" ? (
-        <form onSubmit={sendCode} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <div className="flex gap-2">
-            <input type="email" inputMode="email" autoComplete="email" className="input" placeholder={t("share.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <button type="submit" className="btn-secondary shrink-0" disabled={pending || !email.trim()}>
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              enterKeyHint="send"
+              className="input"
+              placeholder={t("share.emailPlaceholder")}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  sendCode();
+                }
+              }}
+            />
+            <button type="button" onClick={sendCode} className="btn-secondary shrink-0" disabled={pending || !email.trim()}>
               {pending ? t("identity.sending") : t("identity.sendCode")}
             </button>
           </div>
           {info && <p className="text-sm text-muted">{info}</p>}
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-        </form>
+        </div>
       ) : (
-        <form onSubmit={verify} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <p className="text-sm text-muted">{t("identity.codeSent", { email })}</p>
           <div className="flex gap-2">
             <input
@@ -101,9 +120,16 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
               aria-label={t("identity.codeLabel")}
               value={code}
               autoFocus
+              enterKeyHint="go"
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (code.length === 6) verify();
+                }
+              }}
             />
-            <button type="submit" className="btn-primary shrink-0" disabled={pending || code.length !== 6}>
+            <button type="button" onClick={verify} className="btn-primary shrink-0" disabled={pending || code.length !== 6}>
               {pending ? t("common.working") : t("identity.verify")}
             </button>
           </div>
@@ -119,7 +145,7 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
           >
             {t("identity.changeEmail")}
           </button>
-        </form>
+        </div>
       )}
     </div>
   );

@@ -111,6 +111,8 @@ export type SettingsInput = {
   /** A line in the coach's own words: the only part of their directory card they write themselves. */
   bio: string;
   clubs: string;
+  /** The court this coach teaches on. Blank until they say; only a one-club coach's court is used. */
+  court: string;
   lessonMinutes: number;
   /** Seven lines, index 0 = Sunday, in the coach's words ("07:00-12:00, 15:00-20:00" or "off"). */
   hoursLines: string[];
@@ -155,6 +157,7 @@ export async function saveCoachSettingsAction(input: SettingsInput): Promise<Act
     const updated = await updateCoach(db, coach.id, {
       displayName: input.displayName,
       clubNames: input.clubs.split(/[,;\n]+/),
+      court: input.court,
       lessonMinutes: input.lessonMinutes,
       hours,
       cutoffHours: input.cutoffHours,

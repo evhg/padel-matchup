@@ -159,9 +159,16 @@ try {
   // The walk asked one price; settings used to hide the rest. A pair price, saved here, is what makes
   // the student's "how many are coming" picker appear.
   await olga.getByTestId("settings-priceTwo").fill("500");
+  // The court the coach teaches on. It is what puts a lesson on the club's day, so it has to survive
+  // the round trip: typed here, read back off the same screen, and cleaned on the way through.
+  await olga.getByTestId("settings-court").fill("  Court   3 ");
   await olga.getByRole("button", { name: "Save" }).click();
   await olga.getByText("Saved.").waitFor({ timeout: 20000 });
   check("settings save with a PromptPay number", true);
+  // Read it off a fresh page, not off the state that typed it: only a reload proves the database
+  // holds the court, and holds it cleaned.
+  await olga.reload();
+  check("the court the coach teaches on comes back cleaned", (await olga.getByTestId("settings-court").inputValue()) === "Court 3", await olga.getByTestId("settings-court").inputValue());
   check("settings carry every price the walk asked", (await olga.getByTestId("settings-price-single").inputValue()) === "800" && (await olga.getByTestId("settings-priceTwo").inputValue()) === "500");
   check("the notice chosen in the walk is what settings show", (await olga.getByLabel("Shortest notice for a booking (hours)").inputValue()) === "12");
   await shot(olga, "67-coach-settings-prices");
