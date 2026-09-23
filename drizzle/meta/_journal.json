@@ -526,6 +526,13 @@
       "when": 1790161048371,
       "tag": "0074_reader_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790162798427,
+      "tag": "0075_app_role_grants",
+      "breakpoints": true
     }
   ]
 }

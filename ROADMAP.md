@@ -476,6 +476,12 @@ Everything in this list is live. The README describes each in detail.
   goes, and arriving clears the mark. The service board watches the two rates mail providers judge
   a sender by.
 
+- **The switch to the app's own database role starts from a known place (23 September 2026,
+  migration 0075).** The role `kicksmash` had a policy on every table, but for 50 of them the grant
+  that lets it use the table existed only in production, typed in by hand. The grant is in the
+  repository now, a test fails on any table the role cannot use and on any operator route that does
+  work before it checks the token, and the day's steps are written down.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -546,10 +552,12 @@ Standing order 5 in CLAUDE.md applies to every one that becomes a change: mark i
 the player, and invite them to try it.
 
 1. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
-   Then: rotate `CRON_SECRET`, `RESEND_API_KEY` and `VERCEL_TOKEN`, and review who may call
-   `/api/admin/*`. And move the app's own connection onto the role `kicksmash`: production connects
-   as `postgres` today (checked 23 September), which bypasses Row Level Security, so the policies
-   keep the Data API out and do not limit the app.
+   Then: move the app's own connection onto the role `kicksmash` (production connects as `postgres`
+   today, which bypasses Row Level Security), rotate `CRON_SECRET`, `RESEND_API_KEY` and
+   `VERCEL_TOKEN`, and decide who may call `/api/admin/*`. The steps, in order, are in
+   `docs/OPERATING.md` under "Security at a hundred real players". What can hold until then is held
+   by `tests/security.test.ts`: every operator route checks the token first, and `kicksmash` can use
+   every table.
 
 ## Deliberately not
 
