@@ -73,8 +73,8 @@ the policies. This is AGENTS.md rule 7.
 **`docs/MIGRATIONS.md` is the owner's page on all of it**, including step 4, which records the seven
 runs it took to prove the workflow and what each failure taught. Read it before proposing anything
 about migrations, the Supabase connection's rights, or which credentials a session needs. The
-by-hand path through the Supabase MCP survives for reading and for repair, never as the normal way a
-migration lands.
+by-hand path through the Supabase MCP survives for repair only, never as the normal way a migration
+lands and never for reading: reading goes through `/api/admin/sql` (below).
 
 ## The pull request
 
@@ -234,11 +234,16 @@ Wall clock first, credits second. What actually moved it, measured:
   things this repo starts (`gate.sh`, `vitest`, `next build`, `next start`, `e2e/run.mjs`, and any
   loop you wrote) before calling work finished. Kill by **PID**, never by pattern: `pkill -f
   "next start"` once matched the backgrounding shell's own command line and killed the caller.
-- **Production is reached through the Supabase MCP, and only that.** The Claude Code environment
-  cannot open port 5432 (or 6543) whatever the network policy says, so a direct Postgres URL in the
-  environment does nothing from here: an hour went on proving that, and the owner confirmed it on
-  18 September. Query, migrate and verify through `execute_sql`; do not build or test anything that
-  needs a socket to the database.
+- **Ask production through the read-only query door, in one query.** This container cannot open port
+  5432 (or 6543) whatever the network policy says; an hour went on proving that on 18 September. The
+  Supabase MCP answers, but every `execute_sql` waits for the owner to approve it, and on 23 September
+  a dozen small questions became a dozen interruptions: the owner started denying them and called it
+  the biggest defect of the day, because a session that waits for approval cannot one-shot anything.
+  Ask `GET https://kicksma.sh/api/admin/sql?q=<one select>` with `Authorization: Bearer $CRON_SECRET`
+  (docs/OPERATING.md), through `curl -G --data-urlencode`. Put every question in one query — a `with`
+  of several counts, or one `json_build_object` — never one request per question. The MCP stays for a
+  repair the Migrate workflow cannot make, with the owner's word. A secret works only as `$VAR`: the
+  harness refuses a command that writes one to a file or carries one in its text.
 - **Do the cheap true thing before the expensive one.** Counting rows in production took one query and
   changed what was worth building next more than an hour of reasoning would have.
 

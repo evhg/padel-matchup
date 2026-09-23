@@ -6,7 +6,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
-import { FEEDBACK_LIMITS, cleanFeedbackText, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
+import { FEEDBACK_LIMITS, cleanFeedbackText, countShipped, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback, saidBefore, SHIPPED_FROM, showsShipped } from "@/lib/feedback/store";
 import { feedbackStrings, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
 import { formatProposal, parseProposal, PROPOSAL, proposeToOwner, sweepProposals } from "@/lib/feedback/propose";
@@ -254,6 +254,39 @@ describe("the feedback loop", () => {
   });
 });
 
+
+describe("the app says how much of it players built", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  it("counts only what actually shipped", async () => {
+    expect(await countShipped(db)).toBe(0);
+    const mk = async (text: string, status: string) => {
+      const row = await createFeedback(db, { source: "web", text, locale: "en" });
+      await db.update(feedback).set({ status: status as "shipped" }).where(eq(feedback.id, row.id));
+    };
+    await mk("a shipped one", "shipped");
+    await mk("another shipped one", "shipped");
+    await mk("one that was declined", "declined");
+    await mk("one nobody has read yet", "new");
+    expect(await countShipped(db)).toBe(2);
+    await mk("the third", "shipped");
+    expect(await countShipped(db)).toBe(3);
+  });
+
+  it("says nothing until three, because two is a coincidence", () => {
+    // A claim this small is weaker than saying nothing at all, and this project has a rule for it.
+    expect(showsShipped(0)).toBe(false);
+    expect(showsShipped(1)).toBe(false);
+    expect(showsShipped(2)).toBe(false);
+    expect(showsShipped(SHIPPED_FROM)).toBe(true);
+    expect(showsShipped(16)).toBe(true);
+  });
+});
 
 describe("the instant reply", () => {
   let db: Db;

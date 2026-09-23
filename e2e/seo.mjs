@@ -43,7 +43,8 @@ try {
   check("generator links to the ready-made sizes and the levels page", (await page.getByRole("link", { name: "16", exact: true }).count()) === 1 && (await page.getByRole("link", { name: "Padel levels" }).count()) === 1);
   await page.goto(`${BASE}/americano/12`);
   check("schedule page: live CTA prefills a 12-player tournament and is counted", (await page.getByTestId("gen-live").getAttribute("href")) === "/?type=tournament&capacity=12&s=gen");
-  check("the ready-made schedule has a way to say what should change", (await page.getByRole("heading", { name: /Tell us what should change/ }).count()) === 1);
+  // The card leads with what the app is and keeps the door under it, so this asserts both.
+  check("the ready-made schedule says who builds the app, and offers the door", (await page.getByRole("heading", { name: /built by the players on it/ }).count()) === 1 && (await page.getByRole("button", { name: /Tell us what should change/ }).count()) === 1);
   await shot(page, "s1-americano-12");
   await page.goto(`${BASE}/levels`);
   check("levels page: CTA to set the level", (await page.getByRole("link", { name: "Set your level" }).count()) + (await page.getByRole("link", { name: /Set/ }).count()) > 0);

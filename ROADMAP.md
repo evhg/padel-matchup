@@ -478,6 +478,43 @@ linked and four have an email address.
    integrations, with the player's consent. A match will carry sensor sessions.
 6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
 
+## Open, small, and ready for the next session
+
+Written 23 September 2026 for a clean hand-over. The desk notes are in
+`GET /api/admin/feedback?status=acknowledged`; the first eight characters of each id are given here.
+Standing order 5 in CLAUDE.md applies to every one that becomes a change: mark it `shipped`, thank
+the player, and invite them to try it.
+
+1. **Answer Erik's two email notes (`5ab4c302`, `975a2497`).** "Micky said she didn't get an email" and
+   "the emails weren't sent out?". Resend shows all three messages to Micky on 23 September as
+   `delivered`, so Kicksmash sent them and her mail server took them. The likely place is her spam
+   folder. Reply on the desk with that, and mention that a match now tells everybody it can reach.
+2. **Write to Micky from `claude@kicksma.sh`.** The owner asked for it on 23 September. Say that the
+   messages arrived at her address, ask her to check spam, and ask for any other feedback.
+3. **Answer Erik's question (`dab8c808`).** Saving an email for the calendar invite does not merge
+   anybody's history: a typed address is not a proved one. The code that the "used this before?" line
+   offers does merge, because a code is proof.
+4. **Less text on `/coach` (`e4dfc8ea`, "too much text").** Drop the 43-word paragraph above the three
+   gap buttons (`data-testid="card-gaps"` in `src/components/coach/CoachSettings.tsx`). The buttons say
+   it already. Then thank Erik.
+5. **Bounces and complaints.** The app handles neither of Resend's `email.bounced` and
+   `email.complained`, so a dead address still counts as reachable, and Resend's suppression list
+   refuses each new attempt (nine for one address). The only bounce so far is a test user, so nobody
+   real is affected. The shape: a signed Resend webhook; a hard bounce or a complaint marks the
+   address, a soft bounce only after three in a row; a marked address stops counting as reachable, the
+   organiser sees "did not get it", the player sees "your email bounced" on the next visit; a proved
+   code clears the mark; the service board alerts on the bounce and complaint rates. It needs a column,
+   so it is a migration and the owner's word first.
+6. **The public "asked → shipped" page.** Decided 23 September: it shows a short summary of each note
+   and the change it produced, **never the note's own words**, because a note can be crude, a joke or
+   malicious. The summary is written by the session that marks the note `shipped`. Open for the owner:
+   whether a summary carries the player's first name. It needs a column, so a migration.
+7. **The previous match's photo behind the live card (`d335a162`).** The owner's call: it needs a new
+   public route that serves a player's photo on the landing page.
+8. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
+   Then: rotate `CRON_SECRET`, `RESEND_API_KEY` and `VERCEL_TOKEN`, and review who may call
+   `/api/admin/*`.
+
 ## Deliberately not
 
 - **No accounts, no passwords**, for players, coaches or clubs. A coach is a player with a role.

@@ -65,6 +65,10 @@ try {
   await a.goto(BASE + "/me");
   await shot(a, "04-me");
   check("/me lists PLAY", (await a.content()).includes('href="/PLAY"'));
+  // The feedback card is the app saying what it is, not a suggestion box at the foot of the page.
+  check("the feedback card says the app is built by the players on it", (await a.getByText(/built by the players on it/).count()) === 1);
+  // And it claims no number until three have shipped: on a fresh database that is none at all.
+  check("no count is claimed before three ideas have shipped", (await a.getByTestId("feedback-shipped").count()) === 0);
 
   // ---- Create an event that started 1h ago (score entry open) ----
   await a.goto(BASE + "/new");

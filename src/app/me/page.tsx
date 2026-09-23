@@ -12,6 +12,7 @@ import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
+import { countShipped, showsShipped } from "@/lib/feedback/store";
 import { CoachCard } from "@/components/coach/CoachCard";
 import { getCoachForActor } from "@/lib/domain/coaching";
 import { MomentsStrip } from "@/components/MomentsStrip";
@@ -57,7 +58,7 @@ export default async function MePage({ searchParams }: Props) {
     );
   }
 
-  const [token, myClubs, t, asCoach] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id)]);
+  const [token, myClubs, t, asCoach, shipped] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id), countShipped(db)]);
   // Sequential, not folded into the batch above: the pooler stalls on pipelined bursts (rule 8).
   const wants = (await listWants(db, me.id)).map((w) => ({ id: w.id, weekday: w.weekday, fromTime: w.fromTime, toTime: w.toTime, place: w.venueSlug ?? w.citySlug ?? "" }));
   // Their usual court, offered as the starting value: most people want to play where they already play.
@@ -101,7 +102,7 @@ export default async function MePage({ searchParams }: Props) {
         {/* No "do you coach?" here, and no door for a club or an organiser either. This screen is a
             player's matches; the stakeholders have their own front doors on the landing page, and
             asking a player to become something else is not what they came for. */}
-        <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} />
+        <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} shipped={showsShipped(shipped) ? shipped : undefined} />
         <MySettings player={me} personalToken={token} hasMatches={hasMatches} />
         {/* Last on the page, always: the one action that cannot be undone. */}
         <DeleteAccount />
