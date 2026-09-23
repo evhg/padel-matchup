@@ -201,6 +201,10 @@ table that reached the backup's row cap is named in the file and turns the board
 **Merging duplicate people.** `POST /api/admin/merge-players { into, from[], dryRun }` folds rows
 through the same `mergePlayers` the app uses, behind `safeToMerge` (`src/lib/domain/dupes.ts`), which
 refuses any pair two different people could be. Always `dryRun` first. A merge cannot be undone.
+It moves every row that points at either person, read from the schema's foreign keys
+(`playerReferences` in `src/lib/domain/merge.ts`), and refuses when both rows own a coach page. Before
+23 September 2026 it moved only six tables and the delete took or blanked the rest; the four merges
+of that morning ran on the old code.
 
 **Checks and scripts** in `scripts/ops/`: `prodcheck.sh` (health, errors, services, open notes,
 research desk, main CI, deploy), `wait_ci.sh <branch> <sha>`, `deploy-poll.sh <sha> <log>`. They

@@ -158,6 +158,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
   column is not a check that a query *returns* rows: `tests/readonly.test.ts` now counts players
   through the door's own transaction on a database built from the real migrations. And call a tool
   yourself once before writing the rule that sends somebody else to it.
+- **A delete follows every foreign key, so a merge must move every one first.** `mergePlayers` moved
+  the six tables somebody listed by hand, then deleted the duplicate rows, and the database did the
+  rest: `on delete cascade` took a student's place on a coach's list and their packages, `set null`
+  blanked a note's author. Four merges ran on it the morning it was found, and one answer could not
+  reach Erik. A list of tables written by hand is out of date the day a table is added; read the
+  foreign keys from the schema (`playerReferences`), and before any code deletes a row, ask what else
+  points at it.
 - **Write the regression test with the fix, in the same pull request.** The test that catches a
   notification rendering as its own message key took twenty minutes, and was written after the bug
   rather than with the feature that introduced it.
