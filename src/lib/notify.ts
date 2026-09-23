@@ -23,6 +23,7 @@ import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
 import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
+import { tell } from "@/lib/coach/notify";
 import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
 
@@ -350,15 +351,46 @@ export async function notifyPromotion(db: Db, ev: Event, promotion: Promotion | 
 
 /** Time/venue changed → updated .ics (same UID, bumped SEQUENCE) to everyone with an email. */
 export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
-  if (!emailEnabled()) return;
   const detail = await getEventDetail(db, ev);
-  await Promise.all(
-    participantsWithEmail(detail.roster).map(async (r) => {
-      const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
-      const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
-      await sendEmail({ to: r.email, subject: c.t("email.updated.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(ev, c, { name: r.name, email: r.email }, "REQUEST") } });
-    }),
-  );
+  if (emailEnabled())
+    await Promise.all(
+      participantsWithEmail(detail.roster).map(async (r) => {
+        const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
+        const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
+        await sendEmail({ to: r.email, subject: c.t("email.updated.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(ev, c, { name: r.name, email: r.email }, "REQUEST") } });
+      }),
+    );
+  await tellTheRest(db, ev, detail, "updated");
+}
+
+/**
+ * Everybody on the roster an email cannot reach, told on the channel they do have.
+ *
+ * The match was the last thing here that spoke by email alone. The coach's book learned this once
+ * already — sixteen notices that read `if (p.telegramId)`, so somebody with no address heard
+ * nothing — and `tell()` is the answer it landed on: Telegram, then email, then web push. The
+ * tournament uses it too. "The line-up is complete", "the time moved" and "it is off" did not, so a
+ * player who linked Telegram, or who allowed push, heard nothing at all about their own match.
+ *
+ * Only people with no address. Somebody who turned activity emails off made a choice, and a push
+ * instead of the email they refused is not a fix, it is a way around them.
+ */
+async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupComplete" | "lineupOpen" | "updated" | "cancelled", excludePlayerId?: string | null): Promise<number> {
+  let told = 0;
+  for (const slot of detail.roster) {
+    if (slot.status !== "joined" && slot.status !== "confirmed") continue;
+    // The complement of participantsWithEmail(), read the same way, so nobody is told twice and
+    // nobody falls between the two.
+    if (slot.player?.email || slot.invitedEmail) continue;
+    const player = slot.player;
+    if (!player || (excludePlayerId && player.id === excludePlayerId)) continue;
+    const c = await ctx(db, ev, player.locale, player, detail);
+    const heading = c.t(`push.${key}Title` as "push.lineupCompleteTitle", c.vars);
+    const body = c.t(`push.${key}Body` as "push.lineupCompleteBody", c.vars);
+    await tell(db, player, `${heading}\n${body}`, { inline_keyboard: [[{ text: c.openLabel, url: c.url }]] });
+    told++;
+  }
+  return told;
 }
 
 /**
@@ -377,42 +409,44 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
     .where(eq(events.id, ev.id))
     .returning();
   if (!fresh) return null;
-  if (!emailEnabled()) return fresh;
   const freshDetail = { ...detail, event: fresh };
   const ns = complete ? "email.lineupComplete" : "email.lineupOpen";
-  await Promise.all(
-    participantsWithEmail(detail.roster)
-      .filter((r) => !excludePlayerId || r.playerId !== excludePlayerId)
-      .map(async (r) => {
-        const player = r.playerId ? await getPlayer(db, r.playerId) : null;
-        if (player && !player.emailNotifications) return;
-        const c = await ctx(db, fresh, r.locale, player, freshDetail);
-        const { html, text } = layout({
-          heading: c.t(`${ns}.heading` as "email.lineupComplete.heading", c.vars),
-          body: c.t(`${ns}.body` as "email.lineupComplete.body", c.vars),
-          meta: c.meta,
-          cta: { label: c.openLabel, url: c.url },
-          footer: c.footer,
-          eventUrl: c.url,
-          openLabel: c.openLabel,
-        telegram: c.telegram,
-      });
-        await sendEmail({ to: r.email, subject: c.t(`${ns}.subject` as "email.lineupComplete.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(fresh, c, { name: r.name, email: r.email }, "REQUEST") } });
-      }),
-  );
+  if (emailEnabled())
+    await Promise.all(
+      participantsWithEmail(detail.roster)
+        .filter((r) => !excludePlayerId || r.playerId !== excludePlayerId)
+        .map(async (r) => {
+          const player = r.playerId ? await getPlayer(db, r.playerId) : null;
+          if (player && !player.emailNotifications) return;
+          const c = await ctx(db, fresh, r.locale, player, freshDetail);
+          const { html, text } = layout({
+            heading: c.t(`${ns}.heading` as "email.lineupComplete.heading", c.vars),
+            body: c.t(`${ns}.body` as "email.lineupComplete.body", c.vars),
+            meta: c.meta,
+            cta: { label: c.openLabel, url: c.url },
+            footer: c.footer,
+            eventUrl: c.url,
+            openLabel: c.openLabel,
+            telegram: c.telegram,
+          });
+          await sendEmail({ to: r.email, subject: c.t(`${ns}.subject` as "email.lineupComplete.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(fresh, c, { name: r.name, email: r.email }, "REQUEST") } });
+        }),
+    );
+  await tellTheRest(db, fresh, freshDetail, complete ? "lineupComplete" : "lineupOpen", excludePlayerId);
   return fresh;
 }
 
 export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
-  if (!emailEnabled()) return;
   const detail = await getEventDetail(db, ev);
-  await Promise.all(
-    participantsWithEmail(detail.roster).map(async (r) => {
-      const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
-      const { html, text } = layout({ heading: c.t("email.cancelled.heading"), body: c.t("email.cancelled.body", { ...c.vars, organizer: detail.creator.displayName }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
-      await sendEmail({ to: r.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: r.name, email: r.email }, "CANCEL") } });
-    }),
-  );
+  if (emailEnabled())
+    await Promise.all(
+      participantsWithEmail(detail.roster).map(async (r) => {
+        const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
+        const { html, text } = layout({ heading: c.t("email.cancelled.heading"), body: c.t("email.cancelled.body", { ...c.vars, organizer: detail.creator.displayName }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
+        await sendEmail({ to: r.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: r.name, email: r.email }, "CANCEL") } });
+      }),
+    );
+  await tellTheRest(db, ev, detail, "cancelled");
 }
 
 /** Removed by the organizer → cancel their calendar entry (courtesy). */

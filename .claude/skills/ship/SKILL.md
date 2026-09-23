@@ -164,6 +164,18 @@ learning can be a test, a gate step or a script, make it one and put the story i
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use
   `gt(lessons.startsAt, now)`; `tests/rules.test.ts` now fails on a bare `${now}`-shaped interpolation
   inside a `sql` template, so the gate catches it on the machine that wrote it.
+- **"Everybody was told" means everybody with an address.** Erik asked twice in one hour why the
+  players got no email for his match. The match's notices all ran through `participantsWithEmail`,
+  and six of the fifty-six people in the database have an address at all — so "the line-up is
+  complete", "the time moved" and "it is off" reached almost nobody, silently, for months. The
+  coach's book had already paid for this exact lesson: sixteen notices behind `if (p.telegramId)`,
+  and `tell()` was the answer, because it takes the person and not a channel. When you add or read a
+  notice, ask who on the roster it cannot reach and route them. Never route around somebody who
+  switched a channel off: that is a choice, not a gap.
+- **A commit while a background job holds a file takes the job's version.** A break-and-restore probe
+  had the fix reverted for ninety seconds, and `git commit -a` in that window put the bug back into
+  the branch with an unrelated change. Commit named paths while anything is running, and read
+  `git status` before `-a`.
 
 ### Wall clock
 
