@@ -17,27 +17,40 @@ const env = {
   DATABASE_URL: "",
   POSTGRES_URL: "",
   APP_BASE_URL: BASE,
+  // ---------------------------------------------------------------------------------------------
+  // Every value below is PINNED, never inherited, and that is the whole point.
+  //
+  // Each one is a shared secret: the suites hard-code the other half. series.mjs sends
+  // "Bearer e2e-cron-secret", telegram.mjs signs with "e2e-tg-secret", discord.mjs holds the private
+  // half of the key pair below. Each used to fall back to the test value only when the machine had
+  // none, so the day a real CRON_SECRET appeared in the environment the server took it, the suite
+  // kept sending the test one, and /api/cron/hourly answered `{"error":"unauthorized"}`. Two red
+  // checks named a second edition and a paused series — neither of which had anything to do with
+  // it. That cost a gate run and a bisect to find.
+  //
+  // A test server takes its secrets from the test, or the test is not testing what it thinks.
+  // ---------------------------------------------------------------------------------------------
   // Enables the email UIs; every message is written to this file instead of being sent, so suites can read it.
-  RESEND_API_KEY: process.env.RESEND_API_KEY || "re_dummy_local_only",
+  RESEND_API_KEY: "re_dummy_local_only",
   EMAIL_SINK_FILE: path.join(dataDir, "emails.jsonl"),
-  SESSION_SECRET: process.env.SESSION_SECRET || "e2e-session-secret-not-for-production",
-  CRON_SECRET: process.env.CRON_SECRET || "e2e-cron-secret",
+  SESSION_SECRET: "e2e-session-secret-not-for-production",
+  CRON_SECRET: "e2e-cron-secret",
   // A fake bot: the Bot API answers 401 (or is unreachable) and the code must stay quiet about it.
-  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "1:e2e-fake-token",
-  TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret",
-  TELEGRAM_BOT_USERNAME: process.env.TELEGRAM_BOT_USERNAME || "kicksmash_bot",
+  TELEGRAM_BOT_TOKEN: "1:e2e-fake-token",
+  TELEGRAM_WEBHOOK_SECRET: "e2e-tg-secret",
+  TELEGRAM_BOT_USERNAME: "kicksmash_bot",
   // The owner's Telegram id: club claims and listening drafts are approved from this account.
-  TELEGRAM_OWNER_ID: process.env.TELEGRAM_OWNER_ID || "777001",
+  TELEGRAM_OWNER_ID: "777001",
   // Passport signing pair for these tests only (never used anywhere else).
-  PASSPORT_PRIVATE_KEY: process.env.PASSPORT_PRIVATE_KEY || "8e634fbeffa64d5c4fcbdaa76e1aadaa388eeaa636cd8179f0d858311c321ab7",
-  PASSPORT_PUBLIC_KEY: process.env.PASSPORT_PUBLIC_KEY || "041adb0508a2d16a6e97203251a2a85ce6e30c2fa2ec6498fc1ddec242265447",
+  PASSPORT_PRIVATE_KEY: "8e634fbeffa64d5c4fcbdaa76e1aadaa388eeaa636cd8179f0d858311c321ab7",
+  PASSPORT_PUBLIC_KEY: "041adb0508a2d16a6e97203251a2a85ce6e30c2fa2ec6498fc1ddec242265447",
   // A fake Discord app: the token decodes to a plausible id, the key pair exists only for these tests (private half in e2e/discord.mjs).
-  DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN || "MTU0NTk4ODEzODA1NTIzNzcyMw.e2e.fake-token",
-  DISCORD_PUBLIC_KEY: process.env.DISCORD_PUBLIC_KEY || "7cb05c12c78f756c9e976f772d63dd58a6426129cc2d177f8314a2fce536bb96",
+  DISCORD_BOT_TOKEN: "MTU0NTk4ODEzODA1NTIzNzcyMw.e2e.fake-token",
+  DISCORD_PUBLIC_KEY: "7cb05c12c78f756c9e976f772d63dd58a6426129cc2d177f8314a2fce536bb96",
   // A fake LINE channel, so the webhook is live and its signature can be checked for real. The bot
   // token points at nothing: every outbound call fails, which is exactly what the suites assert on.
-  LINE_CHANNEL_TOKEN: process.env.LINE_CHANNEL_TOKEN || "e2e-line-token",
-  LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET || "e2e-line-secret",
+  LINE_CHANNEL_TOKEN: "e2e-line-token",
+  LINE_CHANNEL_SECRET: "e2e-line-secret",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {

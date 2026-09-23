@@ -30,7 +30,8 @@ try {
   await shot(p, "v1-generator");
   const live = p.getByTestId("gen-live");
   check("live CTA prefills a tournament of 8 and is counted", (await live.getAttribute("href")) === "/?type=tournament&capacity=8&s=gen");
-  check("the generator has a way to say what should change", (await p.getByRole("heading", { name: /Tell us what should change/ }).count()) === 1);
+  // The card leads with what the app is and keeps the door under it, so this asserts both.
+  check("the generator says who builds the app, and offers the door", (await p.getByRole("heading", { name: /built by the players on it/ }).count()) === 1 && (await p.getByRole("button", { name: /Tell us what should change/ }).count()) === 1);
 
   // ---- Names path: 5 names → 1 court, one sits out each round ----
   await p.getByLabel("Names (optional, one per line)").fill("Ana\nBo\nCy\nDi\nEd");
