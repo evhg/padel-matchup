@@ -18,10 +18,11 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Ideas that became the app: the proof behind "Kicksmash is built by the players on it".
  *
- * Each line is the summary whoever shipped the note wrote (`feedback.public_summary`), and when it
- * shipped. Never the note's own words and never a name, decided 23 September 2026: a note can be
- * crude, a joke or malicious, and it was written to us, not for a public page. A shipped note without
- * a summary is simply not here yet.
+ * Each line is the summary whoever shipped the note wrote (`feedback.public_summary`), the first name
+ * of the player who asked (`feedback.public_name`, the owner's decision on 23 September 2026), and when
+ * it shipped. Never the note's own words, decided the same day: a note can be crude, a joke or
+ * malicious, and it was written to us, not for a public page. A shipped note without a summary is
+ * simply not here yet.
  */
 export default async function BuiltPage() {
   const t = await getTranslations("feedback");
@@ -45,7 +46,10 @@ export default async function BuiltPage() {
             {items.map((item, i) => (
               <li key={i} className="py-3 first:pt-0 last:pb-0">
                 <p className="font-semibold">{item.summary}</p>
-                <p className="mt-0.5 text-xs text-faint">{t("builtSince", { date: day.format(item.shippedAt) })}</p>
+                <p className="mt-0.5 text-xs text-faint">
+                  {item.name ? <span data-testid="built-name">{t("builtFrom", { name: item.name })} · </span> : null}
+                  {t("builtSince", { date: day.format(item.shippedAt) })}
+                </p>
               </li>
             ))}
           </ol>

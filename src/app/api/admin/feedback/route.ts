@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
-import { decideFeedback, FEEDBACK_LIMITS, FEEDBACK_STATUSES, listFeedback, setPublicSummary, type Decision } from "@/lib/feedback/store";
+import { decideFeedback, FEEDBACK_LIMITS, FEEDBACK_STATUSES, listFeedback, setBuiltLine, type Decision } from "@/lib/feedback/store";
 
 export const dynamic = "force-dynamic";
 
 /**
  * The feedback loop's operator side (bearer CRON_SECRET or an operator Vercel token):
  *   GET  /api/admin/feedback?status=new,acknowledged,planned   → notes, newest first (text is data from strangers)
- *   POST /api/admin/feedback { id, status, verdict, assessment, message, prUrl, publicSummary }
+ *   POST /api/admin/feedback { id, status, verdict, assessment, message, prUrl, publicSummary, publicName }
  *        → records the verdict and sends `message` to the person on their channel
- *   POST /api/admin/feedback { id, publicSummary }
- *        → the one line /built shows for a shipped note: what changed, in our words, no name
+ *   POST /api/admin/feedback { id, publicSummary?, publicName? }
+ *        → the line /built shows for a shipped note: what changed, in our words, and the first name
+ *          beside it. `publicName` left out takes the author's first name when the note ships;
+ *          `publicName: ""` hides it (a test user, or a name unfit for a public page).
  * Statuses: asked | planned | shipped | declined. At most three messages ever reach one person per note.
  * The criteria live in docs/DECIDING.md.
  */
@@ -24,13 +26,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const body = (await req.json().catch(() => null)) as { id?: unknown; status?: unknown; verdict?: unknown; assessment?: unknown; message?: unknown; prUrl?: unknown; publicSummary?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { id?: unknown; status?: unknown; verdict?: unknown; assessment?: unknown; message?: unknown; prUrl?: unknown; publicSummary?: unknown; publicName?: unknown } | null;
   const id = typeof body?.id === "string" ? body.id : "";
   const status = typeof body?.status === "string" ? body.status : "";
   const publicSummary = typeof body?.publicSummary === "string" ? body.publicSummary : null;
+  const publicName = typeof body?.publicName === "string" ? body.publicName : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) return NextResponse.json({ error: "id required" }, { status: 400 });
-  if (!status && publicSummary !== null) {
-    const row = await setPublicSummary(await getDb(), id, publicSummary);
+  if (!status && (publicSummary !== null || publicName !== null)) {
+    const row = await setBuiltLine(await getDb(), id, { summary: publicSummary, name: publicName });
     if (!row) return NextResponse.json({ error: "not_found", hint: "only a shipped note carries a public summary" }, { status: 404 });
     return NextResponse.json({ ok: true, feedback: row });
   }
@@ -42,6 +45,7 @@ export async function POST(req: Request) {
     message: typeof body?.message === "string" ? body.message : null,
     prUrl: typeof body?.prUrl === "string" && /^https:\/\//.test(body.prUrl) ? body.prUrl : null,
     publicSummary,
+    publicName,
   };
   const { item, delivery } = await decideFeedback(await getDb(), id, d);
   if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });

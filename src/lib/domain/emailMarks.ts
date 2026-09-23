@@ -52,10 +52,17 @@ export function markFromEvent(event: ResendEvent): { addresses: string[]; kind: 
   }
 }
 
+/**
+ * Resend's test addresses (bounced@, complained@, delivered@resend.dev) bounce or complain on purpose.
+ * A mark for one says nothing about a person, and one test turned the board's bounce row yellow.
+ */
+const TEST_DOMAINS = ["resend.dev"];
+const isTestAddress = (address: string) => TEST_DOMAINS.includes(address.split("@")[1] ?? "");
+
 /** Records one event for one address and says whether the address is now marked. */
 export async function recordMark(db: Db, rawAddress: string, kind: MarkKind, reason: string, now = new Date()): Promise<boolean> {
   const address = normalAddress(rawAddress);
-  if (!address.includes("@")) return false;
+  if (!address.includes("@") || isTestAddress(address)) return false;
   const soft = kind === "soft" ? 1 : 0;
   const [row] = await db
     .insert(emailMarks)

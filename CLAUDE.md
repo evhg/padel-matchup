@@ -27,7 +27,8 @@ rather than rediscovering it.
    no codenames.
 5. **A player whose note became a change hears about it, every time.** Mark the note `shipped`, thank
    the player, say what changed, and invite them to try it. Give it its one line for `/built`
-   (`publicSummary`: the change in our words, never theirs, no name). Do not ask the owner first.
+   (`publicSummary`: the change in our words, never theirs). The player's first name shows beside
+   it; send `publicName: ""` for a test user or a name unfit for a public page. Do not ask the owner first.
 6. **Ask production through `/api/admin/sql`, never through the Supabase MCP**, and put the questions in
    one query. Every MCP call waits for the owner's approval, and that breaks rule 3.
 
