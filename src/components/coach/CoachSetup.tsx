@@ -211,8 +211,9 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
       {step === "hours" && (
         <form onSubmit={create} className="flex flex-col gap-4">
           <div>
+            {/* Erik on /coach, 20 September: "too much text, i dont want to read all that". The presets
+                say what they are; how the day grid works is said where the grid is. */}
             <div className="text-sm font-bold">{t("setup.hours")}</div>
-            <p className="mt-1 text-xs text-faint">{t("setup.hoursHelp")}</p>
             <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label={t("setup.hours")} data-testid="hours-presets">
               {(["mornings", "afternoons", "both"] as const).map((p) => (
                 <button key={p} type="button" role="radio" aria-checked={!custom && preset === p} className={chip(!custom && preset === p)} onClick={() => (setCustom(false), setPreset(p))} data-kind="preset" data-preset={p}>
@@ -223,6 +224,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
             <button type="button" className="mt-3 text-xs font-bold text-muted underline underline-offset-4 hover:text-ink" onClick={() => setCustom((c) => !c)} data-testid="hours-custom">
               {custom ? t("setup.presetBack") : t("setup.custom")}
             </button>
+            {custom && <p className="mt-2 text-xs text-faint">{t("setup.hoursHelp")}</p>}
             {custom && (
               <div className="mt-3 grid grid-cols-[4.5rem_1fr_auto_1fr] items-center gap-x-2 gap-y-2" data-testid="hours-grid">
                 {ORDER.map((d) => {
@@ -244,7 +246,6 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
           </div>
           <div>
             <div className="text-sm font-bold">{t("setup.notice")}</div>
-            <p className="mt-1 text-xs text-faint">{t("setup.noticeHelp")}</p>
             <div className="mt-2 flex gap-2" role="radiogroup" aria-label={t("setup.notice")} data-testid="notice-presets">
               {([2, 12, 24] as const).map((h) => (
                 <button key={h} type="button" role="radio" aria-checked={notice === h} className={chip(notice === h)} onClick={() => setNotice(h)} data-notice={h}>
@@ -266,7 +267,6 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
           <p className="text-sm font-semibold text-ok">✓ {t("setup.created")}</p>
           <div>
             <h2 className="text-xl font-extrabold tracking-tight">{t("setup.priceTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("setup.priceHelp")}</p>
           </div>
           <label className="flex items-center gap-2 text-sm font-bold">
             <input type="checkbox" checked={adhoc} onChange={(e) => setAdhoc(e.target.checked)} data-testid="adhoc" />

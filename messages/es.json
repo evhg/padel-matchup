@@ -1310,7 +1310,11 @@
     "tryAgain": "Escribirlo de otra forma",
     "builtTitle": "Kicksmash lo construyen los jugadores que lo usan",
     "builtBody": "Una idea aquí se convierte en la app. Dinos una cosa y, si cambia Kicksmash, lo sabrás.",
-    "builtCount": "{count} ideas de jugadores ya están en la app."
+    "builtCount": "{count} ideas de jugadores ya están en la app.",
+    "builtIntro": "Cada línea de aquí empezó con algo que nos dijo un jugador. Está escrita con nuestras palabras, no las suyas, y sin nombres.",
+    "builtEmpty": "Aquí aún no hay nada. La primera idea puede ser tuya.",
+    "builtSeeAll": "Ver qué cambiaron",
+    "builtSince": "En la app desde el {date}"
   },
   "coach": {
     "invite": {
@@ -1341,7 +1345,7 @@
       "finish": "Listo",
       "hoursHelp": "Toca un día para apagarlo; pon a qué hora empiezas y terminas. Los días partidos (07–12 y 15–20) se escriben en ajustes.",
       "sameAll": "Como el lunes todos los días",
-      "created": "Tu asistente ya existe. Tres toques más lo hacen tuyo; cada uno puede esperar.",
+      "created": "Tu asistente ya existe. Lo demás puede esperar.",
       "calendarTitle": "Tu Google Calendar",
       "calendarHelp": "Las clases aterrizan en él; lo que escribes ahí bloquea tiempo aquí. Comparte el calendario con la dirección de abajo y pega la dirección de tu calendario. Apple u Outlook: un enlace iCal.",
       "payTitle": "Cómo te pagan los alumnos",
@@ -1358,12 +1362,11 @@
       "custom": "Distinto cada día",
       "clubPicked": "Elegido de la lista, así el club puede verte.",
       "priceTitle": "Cuánto cuesta una clase",
-      "priceHelp": "Para una clase suelta, cuando no la paga un bono. Déjalo en blanco si solo vendes bonos.",
       "priceLabel": "Una clase",
       "currency": "Moneda",
       "payHow": "Cómo te pagan los alumnos",
       "payAtClub": "En el club, efectivo o tarjeta",
-      "payNothingThrough": "Nada pasa por Kicksmash. El alumno ve lo que debe y cómo pagarte; tú confirmas cuando llega.",
+      "payNothingThrough": "Nada pasa por Kicksmash.",
       "notifyTitle": "¿Dónde te aviso de las reservas?",
       "notifyHelp": "Abre el bot una vez desde este teléfono y las reservas, cancelaciones y preguntas de tus alumnos llegan ahí mientras entrenas.",
       "notifyEmail": "Mejor por correo",
@@ -1396,7 +1399,6 @@
       "pushOn": "Activado, en este navegador",
       "emailSaved": "Guardado.",
       "notice": "¿Con cuánta antelación pueden reservar?",
-      "noticeHelp": "Un alumno no puede reservar con menos margen. Tú siempre puedes reservar más cerca de la hora.",
       "notice2": "2 horas",
       "notice12": "12 horas",
       "notice24": "Un día",

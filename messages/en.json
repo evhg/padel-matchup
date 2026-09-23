@@ -1310,7 +1310,11 @@
     "tryAgain": "Write it differently",
     "builtTitle": "Kicksmash is built by the players on it",
     "builtBody": "An idea here becomes the app. Say one thing, and if it changes Kicksmash, you hear about it.",
-    "builtCount": "{count} player ideas are in the app already."
+    "builtCount": "{count} player ideas are in the app already.",
+    "builtIntro": "Every line here began as something a player told us. It is written in our words, not theirs, and without names.",
+    "builtEmpty": "Nothing here yet. The first idea could be yours.",
+    "builtSeeAll": "See what they changed",
+    "builtSince": "In the app since {date}"
   },
   "coach": {
     "invite": {
@@ -1341,7 +1345,7 @@
       "finish": "Done",
       "hoursHelp": "Tap a day to switch it off; set when you start and stop. Split days (07–12 and 15–20) can be typed in settings.",
       "sameAll": "Same as Monday every day",
-      "created": "Your assistant exists. Three more taps make it yours; each one can wait.",
+      "created": "Your assistant exists. The rest can wait.",
       "calendarTitle": "Your Google Calendar",
       "calendarHelp": "Lessons land in it; what you write there blocks time here. Share the calendar with the address below, then paste your calendar's address. Apple or Outlook: an iCal link.",
       "payTitle": "How students pay you",
@@ -1358,12 +1362,11 @@
       "custom": "Different each day",
       "clubPicked": "Picked from the list, so the club can see you.",
       "priceTitle": "What a lesson costs",
-      "priceHelp": "For a one-off lesson, when no package pays for it. Leave it blank if you only sell packages.",
       "priceLabel": "One lesson",
       "currency": "Currency",
       "payHow": "How students pay you",
       "payAtClub": "At the club, cash or card",
-      "payNothingThrough": "Nothing passes through Kicksmash. Students see what they owe and how to pay you; you confirm when it lands.",
+      "payNothingThrough": "Nothing passes through Kicksmash.",
       "notifyTitle": "Where should I tell you about bookings?",
       "notifyHelp": "Open the bot once from this phone and your students' bookings, cancellations and questions arrive there while you teach.",
       "notifyEmail": "Email me instead",
@@ -1396,7 +1399,6 @@
       "pushOn": "On, in this browser",
       "emailSaved": "Saved.",
       "notice": "How much notice do you need for a booking?",
-      "noticeHelp": "A student cannot book closer to the hour than this. You can always book closer yourself.",
       "notice2": "2 hours",
       "notice12": "12 hours",
       "notice24": "A day",

@@ -498,6 +498,20 @@
       "when": 1790159635528,
       "tag": "0070_note_author_after_merge",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790160263860,
+      "tag": "0071_feedback_public_summary",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790160275549,
+      "tag": "0072_reader_grants",
+      "breakpoints": true
     }
   ]
 }

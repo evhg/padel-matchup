@@ -295,7 +295,42 @@ export async function deliverToPerson(item: Feedback, text: string, fetchImpl: t
   return { status: "no_channel" };
 }
 
-export type Decision = { status: Exclude<FeedbackStatus, "new" | "acknowledged">; verdict?: string | null; assessment?: string | null; message?: string | null; prUrl?: string | null };
+export type Decision = { status: Exclude<FeedbackStatus, "new" | "acknowledged">; verdict?: string | null; assessment?: string | null; message?: string | null; prUrl?: string | null; publicSummary?: string | null };
+
+/** Long enough for one sentence about a change, short enough that it stays one. */
+export const PUBLIC_SUMMARY_MAX = 200;
+
+/** One line of plain text, or nothing. The page shows it as written, so markup and line breaks go. */
+export function cleanPublicSummary(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, PUBLIC_SUMMARY_MAX);
+  return s.length >= 8 ? s : null;
+}
+
+/** A summary for a note already shipped, without touching its status, its date or its person. */
+export async function setPublicSummary(db: Db, id: string, summary: string | null): Promise<Feedback | null> {
+  const [row] = await db
+    .update(feedback)
+    .set({ publicSummary: cleanPublicSummary(summary) })
+    .where(and(eq(feedback.id, id), eq(feedback.status, "shipped")))
+    .returning();
+  return row ?? null;
+}
+
+export type BuiltItem = { summary: string; shippedAt: Date };
+
+/**
+ * The public page of ideas that became the app (/built): what changed, and when. Only notes marked
+ * shipped with a summary somebody wrote; never the note's own words, never a name.
+ */
+export async function listBuilt(db: Db, limit = 100): Promise<BuiltItem[]> {
+  const rows = await db
+    .select({ summary: feedback.publicSummary, shippedAt: feedback.shippedAt })
+    .from(feedback)
+    .where(and(eq(feedback.status, "shipped"), sql`${feedback.publicSummary} is not null`, sql`${feedback.shippedAt} is not null`))
+    .orderBy(desc(feedback.shippedAt))
+    .limit(limit);
+  return rows.map((r) => ({ summary: r.summary!, shippedAt: r.shippedAt! }));
+}
 
 /** The daily session's verdict: recorded, and the person told, in one call. */
 export async function decideFeedback(db: Db, id: string, d: Decision, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ item: Feedback | null; delivery: Delivery | null }> {
@@ -313,6 +348,8 @@ export async function decideFeedback(db: Db, id: string, d: Decision, now = new 
       verdict: d.verdict?.slice(0, 20) ?? item.verdict,
       assessment: d.assessment?.slice(0, 4000) ?? item.assessment,
       prUrl: d.prUrl?.slice(0, 300) ?? item.prUrl,
+      // Only a shipped note has a line on /built; a summary sent with any other verdict is not kept.
+      publicSummary: d.status === "shipped" && d.publicSummary ? cleanPublicSummary(d.publicSummary) : item.publicSummary,
       shippedAt: d.status === "shipped" ? now : item.shippedAt,
       ...(sent ? { replyText: d.message!.trim().slice(0, FEEDBACK_LIMITS.messageMax), repliedAt: now, messagesSent: sql`${feedback.messagesSent} + 1` } : {}),
     })
@@ -327,7 +364,8 @@ export async function feedbackWeek(db: Db, since: Date): Promise<{ received: num
   const [[r], [s], [d], [w]] = await Promise.all([
     db.select({ n: sql<number>`count(*)` }).from(feedback).where(gte(feedback.createdAt, since)),
     db.select({ n: sql<number>`count(*)` }).from(feedback).where(and(eq(feedback.status, "shipped"), gte(feedback.shippedAt, since))),
-    db.select({ n: sql<number>`count(*)` }).from(feedback).where(and(eq(feedback.status, "declined"), gte(feedback.repliedAt, since), sql`coalesce(${feedback.verdict}, '') <> 'not_feedback'`)),
+    // An answered question is closed as declined with the verdict `answered`: it was not an idea turned down.
+    db.select({ n: sql<number>`count(*)` }).from(feedback).where(and(eq(feedback.status, "declined"), gte(feedback.repliedAt, since), sql`coalesce(${feedback.verdict}, '') not in ('not_feedback', 'answered')`)),
     db.select({ n: sql<number>`count(*)` }).from(feedback).where(inArray(feedback.status, ["new", "acknowledged", "asked", "planned"])),
   ]);
   return { received: Number(r.n), shipped: Number(s.n), declined: Number(d.n), waiting: Number(w.n) };
