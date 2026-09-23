@@ -55,7 +55,7 @@ Thailand, then Singapore. Thai joins English, Russian and Spanish; LINE is the f
 - The channel adapter is shaped for LINE: a card that cannot be edited is re-sent only when the roster changes, replies are free and pushes are budgeted, LINE sign-in joins Telegram sign-in.
 - A coach's clubs become venue slugs instead of free text, so a club can see its coaches without guessing.
 - The schema leaves room for court capacity, court holds and sensor sessions. The serious tournament is a second engine beside the first, not a feature on top of it: the rotation engine splits partners every round, so pairs, categories and (next) the draw phases have their own tables (`competitions`, `competition_categories`, `competition_pairs`; decided 19 September 2026, step 1 built the same day). The draw, the courts and times, the live screen and the big-event extras followed the same day; the engine of the vision's third stakeholder is built end to end.
-- Thai becomes the fourth locale when the LINE channel ships.
+- Thai becomes the fourth locale when somebody uses Kicksmash in Thai. LINE ships in English first (decided 15 September 2026).
 
 ## After the restructure
 
@@ -67,12 +67,13 @@ The first four landed that day and are built: the coach's first week (setup that
 assistant, a price and the payment methods they take, blocking time, a walk that ends on the student
 link); the three messages still reaching the coach's phone (moving a lesson, what is owed and how to pay
 it, one door instead of two for a new student); the events that told nobody (a club's programme match
-announced like any other, a second nudge for a missing score); and drop-out refill. What is left:
+announced like any other, a second nudge for a missing score); and drop-out refill. What was left then, and where each item stands on 23 September 2026 (`ROADMAP.md`
+has the detail):
 
-1. LINE channel with LINE sign-in, and Thai copy.
-2. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts.
-3. The club's view of its coaches, which needs a lesson to carry a venue at all.
-4. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores.
-5. Courts as capacity, then a court a person can take.
-6. Performance analytics by integration, with consent.
-7. WhatsApp, when it allows more than links and previews.
+1. LINE channel with LINE sign-in, and Thai copy. The card in a group chat is **built**, in English; it goes live when a LINE Official Account exists. Thai waits for a Thai user.
+2. Demand signals: "I want to play Tuesday at 14:00 near Rawai", recorded as facts and matched to open matches and quiet courts. **Built.**
+3. The club's view of its coaches. **Built**, and a lesson now carries its court.
+4. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores. **Built**, all five steps; it waits for an organiser to run a weekend on it.
+5. Courts as capacity, then a court a person can take. Courts as capacity **built**; the hold waits for the owner.
+6. Performance analytics by integration, with consent. Not started.
+7. WhatsApp, when it allows more than links and previews. One-to-one **built**, waiting on an account; a bot in a group chat is still impossible.

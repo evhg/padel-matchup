@@ -416,6 +416,34 @@ Everything in this list is live. The README describes each in detail.
   you already have, so the link that goes to the group asks for the one seat that is really open
   instead of three.
 
+- **Migrations reach production without a session (22 September 2026).** The Migrate workflow
+  applies a migration when it reaches `main`, and nobody types SQL into production any more. It took
+  seven runs to prove, and `docs/MIGRATIONS.md` records what each one taught.
+
+- **The way back in, where people land, and a club's day court by court (22–23 September 2026).**
+  The restore by email or Telegram sits on the screen every shared link opens and on the landing
+  page, where it was broken. A lesson names its court (`lessons.court`, copied from the
+  coach), and a club's day shows matches and lessons court by court. The card the crew will see
+  fills in while the match is typed. A match that never happened can say so, and `/feedback` works
+  on its own in the chat.
+
+- **A match tells everybody it can reach (23 September 2026).** Every player with an address or a
+  channel hears about a match, and the tap that cancels one answers on the screen.
+
+- **One person, one row (23 September 2026).** The rule for when two rows are one person
+  (`safeToMerge`: a shared address, a shared Telegram account, or the same name where at most one
+  side can be reached) and the operator's door that applies it. The owner approved each rule with
+  its cost. The match page now recognises a name that is already in the match before it makes a
+  second one. Four merges took production from 56 rows to 48.
+
+- **The operator's read-only window (23 September 2026, migrations 0067 and 0068).**
+  `/api/admin/sql` answers one select as a role that can read no token, manage code or push key.
+  It answered "0" to every count until migration 0068, because of Row Level Security; a test now
+  counts rows through it.
+
+- **Kicksmash is built by the players on it (23 September 2026).** The feedback card says so, and
+  counts the notes that became part of the app once there are three.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -513,7 +541,20 @@ the player, and invite them to try it.
    public route that serves a player's photo on the landing page.
 8. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
    Then: rotate `CRON_SECRET`, `RESEND_API_KEY` and `VERCEL_TOKEN`, and review who may call
-   `/api/admin/*`.
+   `/api/admin/*`. And move the app's own connection onto the role `kicksmash`: production connects
+   as `postgres` today (checked 23 September), which bypasses Row Level Security, so the policies
+   keep the Data API out and do not limit the app.
+9. **The `pg_cron` jobs live only in the database.** The hourly job, the five-minute push job and the
+   ten-minute calendar sync are defined in Supabase's `cron.job` and nowhere in this repository, so a
+   new database cannot be rebuilt from GitHub alone. Write them into a migration, with the secret they
+   send read from Supabase's Vault, never from a file. A migration, so the owner's word first.
+10. **Production data on a laptop.** The nightly backup (every table as gzipped JSON, sixty days, in
+   a private repository) has no loader, and it carries live credentials (personal tokens, manage
+   codes) and addresses. A loader that drops `HIDDEN_COLUMNS` and loads one day into a local PGlite
+   gives a developer real data without the keys to anybody's account. Personal data, so the owner's
+   decision. Until then, the read-only door answers questions without a copy. The backup also stops
+   at 50,000 rows a table without saying so: harmless at 48 players, and a scale item long before a
+   million.
 
 ## Deliberately not
 

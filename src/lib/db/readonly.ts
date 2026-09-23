@@ -115,6 +115,18 @@ export function readerGrantsSql(): string {
   return lines.join("\n--> statement-breakpoint\n") + "\n";
 }
 
+/**
+ * Postgres's own reason for refusing a query. Drizzle wraps the database's error as
+ * "Failed query: <the query>" and keeps the reason in `cause`, so the wrapper's message says nothing
+ * a person can fix and hands the query back. The door answered that way at first.
+ */
+export function refusalOf(e: unknown): string {
+  const cause = (e as { cause?: { message?: unknown } } | null)?.cause?.message;
+  if (typeof cause === "string" && cause) return cause;
+  const message = e instanceof Error ? e.message : "";
+  return message && !message.startsWith("Failed query") ? message : "query failed";
+}
+
 const rowsOf = (r: unknown): unknown[] => (Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []));
 
 /**

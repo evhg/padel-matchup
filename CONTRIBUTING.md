@@ -14,7 +14,7 @@ No accounts or keys are needed. Copy `.env.example` to `.env` only when you want
 ## Before you open a pull request
 
 ```bash
-bash scripts/gate.sh              # typecheck, lint, schema vs migrations, the unit suite (well under a minute)
+bash scripts/gate.sh              # typecheck, lint, schema vs migrations, the unit suite (about two minutes)
 GATE_E2E=core bash scripts/gate.sh   # the same, then a production build and one browser suite
 ```
 
@@ -50,7 +50,7 @@ means a green pull request.
 - **Every string in every locale.** Add the key to `en.json`, `ru.json` and `es.json` in the same PR (machine translation is fine for a first pass, mark it in the PR).
 - **Email is optional.** Any feature must work with `RESEND_API_KEY` unset, and push features with the VAPID keys unset.
 - **No new accounts.** Identity stays cookie + personal link. Do not add passwords or OAuth.
-- **Migrations are additive.** A migration that drops or rewrites data needs a discussion first. Production does **not** apply them automatically: each one is applied by hand before the merge (AGENTS.md rule 7), because the app's own auto-migrate connects as a role that cannot own the Row Level Security statements. `pnpm db:push` is disabled on purpose. `bash scripts/check-migrations.sh` fails when a table in `src/db/schema/` changed without the migration that carries it.
+- **Migrations are additive.** A migration that drops or rewrites data needs a discussion first. Production gets each one from the Migrate workflow when it reaches `main` (AGENTS.md rule 7, `docs/MIGRATIONS.md`); nobody applies one by hand. `pnpm db:push` is disabled on purpose. `bash scripts/check-migrations.sh` fails when a table in `src/db/schema/` changed without the migration that carries it.
 - **Keep the free tiers in mind.** Sequential database queries in server components, small payloads, no polling.
 - **Simplicity budget.** One job per screen, one primary action, at most seven visible controls above the fold on a phone. Anything optional goes behind the single "More options" section with a one-line summary of what is set. Features appear when they can be useful (groups after matches, rankings after results), not before.
 - **Keep the agent surfaces in sync.** A change to the API or the product means updating `src/lib/api/openapi.ts`, `src/lib/api/docs.ts`, the MCP tools in `src/lib/api/mcp.ts`, `/developers` and `skills/kicksmash/SKILL.md` in the same pull request.

@@ -34,7 +34,7 @@ after it is slow.
 
 1. **Start from main.** `git fetch origin main && git checkout -B <working-branch> origin/main`.
    A branch started from a stale main is the one reliable way to make CI pass and main go red.
-2. **Read the rule you are about to change.** `AGENTS.md` has the code map, the eleven rules reviews
+2. **Read the rule you are about to change.** `AGENTS.md` has the code map, the twelve rules reviews
    enforce, and the two recipes: "Adding a feature" and "Adding a channel". `docs/DECIDING.md` says
    whether a request should be built at all; `docs/VISION.md` says who it is for.
 3. **Know what needs the owner.** A migration, anything touching sessions, identity or personal data,

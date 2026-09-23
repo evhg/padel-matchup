@@ -10,7 +10,7 @@ Please do **not** open a public issue. Email the address shown on https://kicksm
 - steps to reproduce,
 - the impact you believe it has.
 
-You will get a reply within a few days. Fixes ship as soon as they are ready; there is no bounty program, but credit is given in the changelog if you want it.
+You will get a reply within a few days. Fixes ship as soon as they are ready; there is no bounty program, but credit is given in the pull request that fixes it, if you want it.
 
 ## What is in scope
 
@@ -27,7 +27,7 @@ You will get a reply within a few days. Fixes ship as soon as they are ready; th
 
 ## Built-in protections
 
-- Every table has Row Level Security on with a single policy for the app's own database role, so Supabase's Data API exposes nothing with the project's publishable key. A new table gets both statements in the same migration, and `pnpm db:push` is disabled because it would drop the policies.
+- Every table has Row Level Security on with a single policy for the role `kicksmash`, so Supabase's Data API exposes nothing with the project's publishable key. A new table gets both statements in the same migration, and `pnpm db:push` is disabled because it would drop the policies.
 - Per-IP and per-player rate limits on identity creation, match creation, joins, invitations, email changes and code requests.
 - HMAC-signed unsubscribe links; a one-tap opt-out list that organizer-initiated email respects.
 - httpOnly, signed session cookie; personal tokens are 12 random characters with the previous token honored after rotation.

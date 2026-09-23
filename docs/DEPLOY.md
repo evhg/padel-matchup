@@ -38,7 +38,7 @@ Cron runs daily at 07:00 UTC out of the box, which is what Vercel's Hobby plan a
    ```
 4. Sanity check: `pnpm dev` now says nothing about PGlite and `/api/health` reports `"database":"connected"`.
 
-No Supabase Auth and no storage is used, only Postgres, and the app connects as its own role `kicksmash`. Row Level Security **is** on, on every table, with one policy for that role, because Supabase serves the `public` schema through its Data API and nothing should be readable with the project's publishable key (AGENTS.md rule 10).
+No Supabase Auth and no storage is used, only Postgres. The app connects as the user in `DATABASE_URL`, which is `postgres` with the string Supabase shows. Row Level Security **is** on, on every table, with one policy for the role `kicksmash`, because Supabase serves the `public` schema through its Data API and nothing should be readable with the project's publishable key (AGENTS.md rule 10).
 
 ### 2. Resend (≈ 15 min incl. DNS)
 
@@ -77,7 +77,7 @@ pnpm dlx vercel --prod                # first production deploy
 
 Token flow for CI / headless machines: create a token at https://vercel.com/account/tokens and use `vercel --token $VERCEL_TOKEN --prod --yes`.
 
-Build settings need no changes (`pnpm build`, Node 20+). The migration is **not** run at build time — run `pnpm db:migrate` locally whenever `drizzle/` changes.
+Build settings need no changes (`pnpm build`, Node 20+). The migration is **not** run at build time. On kicksma.sh the Migrate workflow applies each new migration when it reaches `main` ([MIGRATIONS.md](MIGRATIONS.md)); on your own copy, give that workflow a `DIRECT_DATABASE_URL` secret or run `pnpm db:migrate` yourself.
 
 ### 4. Custom domain `kicksma.sh` at Porkbun (≈ 10 min + DNS propagation)
 
@@ -118,7 +118,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://kicksma.sh/api/cron/hourly
 # → {"ok":true,"transitionedToPast":0,"promotions":0,"inviteReminders":0,"scoreReminders":0,...}
 ```
 
-Hobby plan crons run once a day at best-effort times; Pro runs them on the minute.
+Hobby plan crons run once a day at best-effort times; Pro runs them on the minute. kicksma.sh runs the frequent jobs from Supabase `pg_cron` instead: the hourly job, the five-minute push job and the ten-minute calendar sync ([OPERATING.md](OPERATING.md#cron-jobs)).
 
 ---
 

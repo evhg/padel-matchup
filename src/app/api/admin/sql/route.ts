@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
-import { readAsReader } from "@/lib/db/readonly";
+import { readAsReader, refusalOf } from "@/lib/db/readonly";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, count: rows.length, capped, rows: capped ? rows.slice(0, READ_QUERY_LIMITS.maxRows) : rows });
   } catch (e) {
     // The database's own words, which is what makes a refused query fixable. Never the query back.
-    return NextResponse.json({ error: e instanceof Error ? e.message : "query failed" }, { status: 400 });
+    return NextResponse.json({ error: refusalOf(e) }, { status: 400 });
   }
 }
