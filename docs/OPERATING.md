@@ -16,8 +16,11 @@ records the outcome with `POST /api/admin/feedback` (`shipped` with a thank-you 
 change, or `declined` with the rule, kindly; a question that needed only an answer is `declined` with
 the verdict `answered`, which the Sunday digest does not count as a refusal). A shipped note also takes
 `publicSummary`: one line for `/built`, the public page of ideas that became the app, in our words and
-never the note's own, and with no name, because a note can be crude, a joke or malicious. The same
-call with only `{ id, publicSummary }` adds the line to a note shipped before. Nothing is built from a
+never the note's own, because a note can be crude, a joke or malicious. Beside it `/built` shows the
+first name of the player who asked (the owner's decision, 23 September 2026), taken from their name
+on Kicksmash when the note ships; `publicName: ""` hides it for a test user or a name unfit for a
+public page, and `publicName: "Erik"` sets it. The same call with only `{ id, publicSummary }` or
+`{ id, publicName }` changes the line of a note shipped before. Nothing is built from a
 note without the owner's word.
 
 ## When an error appears

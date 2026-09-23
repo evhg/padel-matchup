@@ -462,11 +462,11 @@ Everything in this list is live. The README describes each in detail.
 
 - **Ideas that became the app, a quieter coach setup, and last match's photo on the first page
   (23 September 2026, migrations 0071 and 0072).** `/built` lists what players' notes changed, one
-  line each, written by whoever shipped it: never the note's words and never a name, because a note
-  can be crude, a joke or malicious. The feedback card's count links to it. The coach setup lost its
-  help sentences where the choices already say it, after "too much text, I don't want to read all
-  that". The card on the first page, which fills in as a match is typed, now sits on the photo of
-  the viewer's last match, served from `/{code}/photo`.
+  line each, written by whoever shipped it: never the note's words, because a note can be crude, a
+  joke or malicious, and at first no name (see below). The feedback card's count links to it. The
+  coach setup lost its help sentences where the choices already say it, after "too much text, I
+  don't want to read all that". The card on the first page, which fills in as a match is typed, now
+  sits on the photo of the viewer's last match, served from `/{code}/photo`.
 
 - **An address that stops working stops being written to (23 September 2026, migrations 0073 and
   0074).** Resend's bounces and complaints arrive on the signed webhook that already carried mail to
@@ -481,6 +481,12 @@ Everything in this list is live. The README describes each in detail.
   that lets it use the table existed only in production, typed in by hand. The grant is in the
   repository now, a test fails on any table the role cannot use and on any operator route that does
   work before it checks the token, and the day's steps are written down.
+
+- **A first name beside each idea on `/built` (23 September 2026, migrations 0076 to 0078).** The
+  owner asked for it the same day. The name is the player's name on Kicksmash, the one a match page
+  already shows, stored when the note ships; never what the note typed. The desk can hide it for a
+  test user or a name unfit for a public page. The same change stops Resend's test addresses from
+  marking anything: one test bounce had turned the service board's bounce row yellow.
 
 ## Next, in order
 

@@ -1315,10 +1315,11 @@
     "builtTitle": "Kicksmash is built by the players on it",
     "builtBody": "An idea here becomes the app. Say one thing, and if it changes Kicksmash, you hear about it.",
     "builtCount": "{count} player ideas are in the app already.",
-    "builtIntro": "Every line here began as something a player told us. It is written in our words, not theirs, and without names.",
+    "builtIntro": "Every line here began as something a player told us. We write the line in our words, beside the first name of the player who asked.",
     "builtEmpty": "Nothing here yet. The first idea could be yours.",
     "builtSeeAll": "See what they changed",
-    "builtSince": "In the app since {date}"
+    "builtSince": "In the app since {date}",
+    "builtFrom": "{name}'s idea"
   },
   "coach": {
     "invite": {

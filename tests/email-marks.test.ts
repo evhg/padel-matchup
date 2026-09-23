@@ -46,6 +46,13 @@ describe("marking an address", () => {
     expect(await marksSince(db, at(1))).toEqual({ bounced: 2, complained: 1 });
   });
 
+  it("does not mark Resend's own test addresses, which bounce on purpose", async () => {
+    const { db } = await createTestDb();
+    expect(await recordMark(db, "bounced@resend.dev", "hard", "Permanent", at(23))).toBe(false);
+    expect(await recordMark(db, "Complained@Resend.dev", "complaint", "marked as spam", at(23))).toBe(false);
+    expect(await db.select().from(emailMarks)).toEqual([]);
+  });
+
   it("clears on proof, and on consent for everything but an address that does not exist", async () => {
     const { db } = await createTestDb();
     await recordMark(db, "gone@example.com", "hard", "Permanent", at(17));

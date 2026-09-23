@@ -295,7 +295,7 @@ export async function deliverToPerson(item: Feedback, text: string, fetchImpl: t
   return { status: "no_channel" };
 }
 
-export type Decision = { status: Exclude<FeedbackStatus, "new" | "acknowledged">; verdict?: string | null; assessment?: string | null; message?: string | null; prUrl?: string | null; publicSummary?: string | null };
+export type Decision = { status: Exclude<FeedbackStatus, "new" | "acknowledged">; verdict?: string | null; assessment?: string | null; message?: string | null; prUrl?: string | null; publicSummary?: string | null; publicName?: string | null };
 
 /** Long enough for one sentence about a change, short enough that it stays one. */
 export const PUBLIC_SUMMARY_MAX = 200;
@@ -306,30 +306,56 @@ export function cleanPublicSummary(raw: string | null | undefined): string | nul
   return s.length >= 8 ? s : null;
 }
 
-/** A summary for a note already shipped, without touching its status, its date or its person. */
-export async function setPublicSummary(db: Db, id: string, summary: string | null): Promise<Feedback | null> {
+/**
+ * One first name, or nothing: the first word of a name, letters only, capitalised. "dikke henk" gives
+ * "Dikke", which is why the desk can hide a test user's name with an empty string.
+ */
+export function cleanPublicName(raw: string | null | undefined): string | null {
+  const first = (raw ?? "").replace(/<[^>]*>/g, " ").trim().split(/\s+/)[0] ?? "";
+  const s = first.replace(/[^\p{L}\p{M}'’-]/gu, "").slice(0, 20);
+  if (s.replace(/[^\p{L}]/gu, "").length < 2) return null;
+  return s.charAt(0).toLocaleUpperCase() + s.slice(1);
+}
+
+/** The author's first name as Kicksmash shows it on a match page; never what the note itself typed. */
+async function authorFirstName(db: Db, playerId: string | null): Promise<string | null> {
+  if (!playerId) return null;
+  const [p] = await db.select({ name: players.displayName }).from(players).where(eq(players.id, playerId)).limit(1);
+  return cleanPublicName(p?.name);
+}
+
+/**
+ * The line and the name /built shows, for a note already shipped, without touching its status, its
+ * date or its person. A field left out stays as it is; an empty name hides the name.
+ */
+export async function setBuiltLine(db: Db, id: string, line: { summary?: string | null; name?: string | null }): Promise<Feedback | null> {
+  const set: { publicSummary?: string | null; publicName?: string | null } = {};
+  if (typeof line.summary === "string") set.publicSummary = cleanPublicSummary(line.summary);
+  if (typeof line.name === "string") set.publicName = cleanPublicName(line.name);
+  if (!Object.keys(set).length) return null;
   const [row] = await db
     .update(feedback)
-    .set({ publicSummary: cleanPublicSummary(summary) })
+    .set(set)
     .where(and(eq(feedback.id, id), eq(feedback.status, "shipped")))
     .returning();
   return row ?? null;
 }
 
-export type BuiltItem = { summary: string; shippedAt: Date };
+export type BuiltItem = { summary: string; name: string | null; shippedAt: Date };
 
 /**
- * The public page of ideas that became the app (/built): what changed, and when. Only notes marked
- * shipped with a summary somebody wrote; never the note's own words, never a name.
+ * The public page of ideas that became the app (/built): what changed, whose idea it was, and when.
+ * Only notes marked shipped with a summary somebody wrote; never the note's own words. The name is
+ * the first name stored when the note shipped (the owner's decision, 23 September 2026).
  */
 export async function listBuilt(db: Db, limit = 100): Promise<BuiltItem[]> {
   const rows = await db
-    .select({ summary: feedback.publicSummary, shippedAt: feedback.shippedAt })
+    .select({ summary: feedback.publicSummary, name: feedback.publicName, shippedAt: feedback.shippedAt })
     .from(feedback)
     .where(and(eq(feedback.status, "shipped"), sql`${feedback.publicSummary} is not null`, sql`${feedback.shippedAt} is not null`))
     .orderBy(desc(feedback.shippedAt))
     .limit(limit);
-  return rows.map((r) => ({ summary: r.summary!, shippedAt: r.shippedAt! }));
+  return rows.map((r) => ({ summary: r.summary!, name: r.name ?? null, shippedAt: r.shippedAt! }));
 }
 
 /** The daily session's verdict: recorded, and the person told, in one call. */
@@ -341,6 +367,9 @@ export async function decideFeedback(db: Db, id: string, d: Decision, now = new 
     delivery = await deliverToPerson(item, d.message, fetchImpl, db);
   }
   const sent = delivery?.status === "sent";
+  // The name beside the line on /built: the desk's ("" hides it), else the one kept, else the author's.
+  const publicName =
+    d.status !== "shipped" ? item.publicName : typeof d.publicName === "string" ? cleanPublicName(d.publicName) : (item.publicName ?? (await authorFirstName(db, item.playerId)));
   const [row] = await db
     .update(feedback)
     .set({
@@ -350,6 +379,7 @@ export async function decideFeedback(db: Db, id: string, d: Decision, now = new 
       prUrl: d.prUrl?.slice(0, 300) ?? item.prUrl,
       // Only a shipped note has a line on /built; a summary sent with any other verdict is not kept.
       publicSummary: d.status === "shipped" && d.publicSummary ? cleanPublicSummary(d.publicSummary) : item.publicSummary,
+      publicName,
       shippedAt: d.status === "shipped" ? now : item.shippedAt,
       ...(sent ? { replyText: d.message!.trim().slice(0, FEEDBACK_LIMITS.messageMax), repliedAt: now, messagesSent: sql`${feedback.messagesSent} + 1` } : {}),
     })
