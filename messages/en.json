@@ -1307,7 +1307,10 @@
     "viaTelegram": "You signed in with Telegram; if I build anything from this, that is where you hear it.",
     "viaEmail": "If I build anything from this, the note comes to the address you gave.",
     "notFeedback": "That one I cannot act on.",
-    "tryAgain": "Write it differently"
+    "tryAgain": "Write it differently",
+    "builtTitle": "Kicksmash is built by the players on it",
+    "builtBody": "An idea here becomes the app. Say one thing, and if it changes Kicksmash, you hear about it.",
+    "builtCount": "{count} player ideas are in the app already."
   },
   "coach": {
     "invite": {

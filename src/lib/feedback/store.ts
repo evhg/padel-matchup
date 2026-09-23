@@ -130,6 +130,30 @@ export async function saidBefore(db: Db, who: { telegramUserId?: number | null; 
   return { lastReply: rows.find((r) => r.replyText)?.replyText ?? null, notesBefore: rows.length };
 }
 
+/**
+ * How many player ideas are in the app, and when that number is worth showing.
+ *
+ * The claim "Kicksmash is built by the players on it" is worth nothing asserted and a great deal
+ * proved, and the desk already holds the proof: every shipped note carries the pull request that
+ * shipped it. So the screens say the number rather than the adjective.
+ *
+ * From three, never below. Two is a coincidence and one is an anecdote; a number that small makes
+ * the claim weaker than saying nothing, and this project has a rule about counts for that reason.
+ */
+export const SHIPPED_FROM = 3;
+
+export const showsShipped = (n: number): boolean => n >= SHIPPED_FROM;
+
+/**
+ * One indexed count, and only on screens that already talk to the database. The landing page makes
+ * no query at all today — that is why it is fast, and why it carries the words without the number
+ * (rule 12).
+ */
+export async function countShipped(db: Db): Promise<number> {
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(feedback).where(eq(feedback.status, "shipped"));
+  return row?.n ?? 0;
+}
+
 export async function getFeedback(db: Db, id: string): Promise<Feedback | null> {
   const [row] = await db.select().from(feedback).where(eq(feedback.id, id)).limit(1);
   return row ?? null;

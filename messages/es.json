@@ -1307,7 +1307,10 @@
     "viaTelegram": "Entraste con Telegram: si construyo algo a partir de esto, te lo diré allí.",
     "viaEmail": "Si construyo algo a partir de esto, te escribiré a la dirección que dejaste.",
     "notFeedback": "Con eso no puedo hacer nada.",
-    "tryAgain": "Escribirlo de otra forma"
+    "tryAgain": "Escribirlo de otra forma",
+    "builtTitle": "Kicksmash lo construyen los jugadores que lo usan",
+    "builtBody": "Una idea aquí se convierte en la app. Dinos una cosa y, si cambia Kicksmash, lo sabrás.",
+    "builtCount": "{count} ideas de jugadores ya están en la app."
   },
   "coach": {
     "invite": {

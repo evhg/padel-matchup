@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { CoachHome } from "@/components/coach/CoachHome";
 import { CoachSetup } from "@/components/coach/CoachSetup";
 import { FeedbackInline } from "@/components/FeedbackInline";
+import { countShipped, showsShipped } from "@/lib/feedback/store";
 import { Footer, Header } from "@/components/Header";
 import { NameGate } from "@/components/NameGate";
 import { SourceTag } from "@/components/SourceTag";
@@ -45,12 +46,14 @@ type Props = { searchParams: Promise<{ welcome?: string; s?: string | string[]; 
 export default async function CoachPage({ searchParams }: Props) {
   const db = await getDb();
   const [me, t, locale, sp] = await Promise.all([getSessionPlayer(db), getTranslations("coach"), getLocale(), searchParams]);
+  // The shell renders on every branch of this page, so the count is read once, here, beside it.
+  const shippedIdeas = await countShipped(db);
   const shell = (children: React.ReactNode) => (
     <>
       <Header current="coach" />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
         {children}
-        <FeedbackInline variant="card" signedInVia={me?.telegramId ? "telegram" : "none"} />
+        <FeedbackInline variant="card" signedInVia={me?.telegramId ? "telegram" : "none"} shipped={showsShipped(shippedIdeas) ? shippedIdeas : undefined} />
       </main>
       <Footer />
     </>

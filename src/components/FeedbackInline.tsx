@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { FeedbackForm } from "@/components/FeedbackForm";
 
 /** The feedback door where players already are: one quiet line or a small card that opens the form in place. No navigation, no popup. */
-export function FeedbackInline({ signedInVia, variant, help }: { signedInVia: "telegram" | "none"; variant: "line" | "card"; help?: string }) {
+export function FeedbackInline({ signedInVia, variant, help, shipped }: { signedInVia: "telegram" | "none"; variant: "line" | "card"; help?: string; /** Player ideas already in the app. Passed only by a page that reads the database anyway, and only from three. */ shipped?: number }) {
   const t = useTranslations("feedback");
   const [open, setOpen] = useState(false);
   if (open) {
@@ -26,12 +26,19 @@ export function FeedbackInline({ signedInVia, variant, help }: { signedInVia: "t
       </p>
     );
   }
+  // Not a suggestion box at the foot of the page. The app is built out of what people say here, so
+  // the card says that first, and then proves it with the number of ideas that are already in.
   return (
     <section className="card">
-      <h2 className="text-lg font-extrabold">💬 {t("title")}</h2>
-      <p className="mt-1 text-xs text-muted">{t("sub")}</p>
+      <h2 className="text-lg font-extrabold">💬 {t("builtTitle")}</h2>
+      <p className="mt-1 text-sm text-muted">{t("builtBody")}</p>
+      {shipped !== undefined && (
+        <p className="mt-1 text-sm font-bold text-court" data-testid="feedback-shipped">
+          {t("builtCount", { count: shipped })}
+        </p>
+      )}
       <button type="button" className="btn-secondary mt-3 self-start" onClick={() => setOpen(true)}>
-        {t("footerLink")} →
+        {t("title")} →
       </button>
     </section>
   );
