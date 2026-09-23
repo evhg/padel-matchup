@@ -151,6 +151,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **Ask the database before describing blast radius.** A broken notification string was reported to the
   owner as having reached people's phones. There were zero clubs, so it had reached nobody. One query
   before the sentence.
+- **A role under Row Level Security sees no rows, and Postgres does not say so.** The read-only query
+  door shipped with four locks, a test on every column grant, and a production check that the role
+  could not read a token. Nobody ran a count through it. It answered "0 players" while production held
+  48, and a standing order already sent the next session to it. A check that a role *may* read a
+  column is not a check that a query *returns* rows: `tests/readonly.test.ts` now counts players
+  through the door's own transaction on a database built from the real migrations. And call a tool
+  yourself once before writing the rule that sends somebody else to it.
 - **Write the regression test with the fix, in the same pull request.** The test that catches a
   notification rendering as its own message key took twenty minutes, and was written after the bug
   rather than with the feature that introduced it.

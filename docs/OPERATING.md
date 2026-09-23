@@ -163,7 +163,9 @@ everything" is also "become anyone". It reads through `kicksmash_reader` now —
 one-time code or a push subscription's keys (migration 0067, generated from the schema by
 `src/lib/db/readonly.ts`). A query that names a hidden column is refused by Postgres itself, and so
 is `select *` on a table that has one; the error names the column. Tables with nothing hidden keep
-`select *`.
+`select *`. The role also bypasses Row Level Security (migration 0068): every table has it on and no
+policy names the reader, so without that every answer was zero rows, with no error. Rows are not the
+secret; the columns are.
 
 Four locks, and only the last one matters: the operator token; `checkReadQuery` (one statement, must
 start with `select` or `with`); a `read only` transaction with an eight-second timeout; and

@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { bare, checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
-import { HIDDEN_COLUMNS, isHidden, readerGrantsSql, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
+import { HIDDEN_COLUMNS, isHidden, readAsReader, readerGrantsSql, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
+import { createTestDb, makePlayer } from "./helpers/db";
 
 /**
  * The operator's read-only query door, and the role it reads through.
@@ -48,6 +49,49 @@ describe("the reader role sees no credential", () => {
     expect(sql).toContain(`"email"`); // the operator's own endpoints already return addresses
     expect(sql).toContain(`"code"`); // the public share code, which lives in every match URL
     expect(schemaTables().length).toBeGreaterThan(30);
+  });
+});
+
+describe("the reader sees the rows, and still not the tokens", () => {
+  // The door shipped with every lock above in place and answered "0 players" while production held
+  // 48: every table has Row Level Security, no policy names the reader, and Postgres says nothing
+  // when a role may see no rows. Nothing above could catch it, because nothing above read a row.
+  // This runs the door's own transaction against a database built from the real migrations.
+
+  it("counts the players that are there", async () => {
+    const { db } = await createTestDb();
+    await makePlayer(db, "Micky");
+    await makePlayer(db, "Erik");
+    // Without this the test below proves nothing: row security must really be on for the table.
+    const [rls] = await readAsReader(db, "select relrowsecurity as on from pg_class where relname = 'players' and relkind = 'r'");
+    expect(rls).toEqual({ on: true });
+    const [row] = (await readAsReader(db, "select count(*)::int as n from players")) as { n: number }[];
+    expect(row.n).toBe(2);
+    const names = (await readAsReader(db, "select display_name from players order by display_name")) as { display_name: string }[];
+    expect(names.map((r) => r.display_name)).toEqual(["Erik", "Micky"]);
+  });
+
+  // Drizzle wraps the database's error as "Failed query: …" and keeps Postgres's own words in `cause`.
+  const refusal = async (db: Parameters<typeof readAsReader>[0], q: string): Promise<string> => {
+    try {
+      await readAsReader(db, q);
+      return "allowed";
+    } catch (e) {
+      return (e as { cause?: { message?: string } }).cause?.message ?? (e as Error).message;
+    }
+  };
+
+  it("is refused a token by the database, however it asks", async () => {
+    const { db } = await createTestDb();
+    await makePlayer(db, "Micky");
+    expect(await refusal(db, "select personal_token from players")).toMatch(/permission denied/);
+    expect(await refusal(db, "select to_jsonb(p) from players p")).toMatch(/permission denied/);
+    expect(await refusal(db, "select * from players")).toMatch(/permission denied/);
+  });
+
+  it("cannot write, even past the query rule", async () => {
+    const { db } = await createTestDb();
+    expect(await refusal(db, "update players set display_name = 'x'")).toMatch(/read-only|permission denied/);
   });
 });
 

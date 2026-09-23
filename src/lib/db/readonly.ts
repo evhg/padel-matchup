@@ -1,6 +1,8 @@
-import { getTableColumns, getTableName, is, type Table } from "drizzle-orm";
+import { getTableColumns, getTableName, is, sql, type Table } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
+import type { Db } from "@/db";
 import * as schema from "@/db/schema";
+import { READ_QUERY_LIMITS } from "@/lib/api/readQuery";
 
 /**
  * The role the operator's read-only query door reads through, and the columns it may never see.
@@ -21,6 +23,11 @@ import * as schema from "@/db/schema";
  * names one is refused by Postgres, and so is `select *` on a table that has one — with an error
  * naming the column, which is a far better teacher than a silent blank. Tables with nothing hidden
  * keep `select *` working.
+ *
+ * And the role bypasses Row Level Security (migration 0068). Every public table has it on, and no
+ * policy names this role, so without that Postgres answered every question with zero rows and no
+ * error. The door shipped that way and said "0 players" while production held 48. Rows are not the
+ * secret here; the columns are, and the grants above still hold them.
  */
 export const READER_ROLE = "kicksmash_reader";
 
@@ -106,4 +113,21 @@ export function readerGrantsSql(): string {
   // Drizzle's migrator splits a file on this marker, and a `do $$ … $$` block carries its own
   // semicolons, so the marker is the only safe separator.
   return lines.join("\n--> statement-breakpoint\n") + "\n";
+}
+
+const rowsOf = (r: unknown): unknown[] => (Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []));
+
+/**
+ * Runs one query that `checkReadQuery` already let through, as the reader, inside a read-only
+ * transaction with a timeout. Here rather than in the route so a test can run it against a database
+ * that has the real migrations, Row Level Security included.
+ */
+export async function readAsReader(db: Db, query: string): Promise<unknown[]> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql.raw(`set transaction read only`));
+    await tx.execute(sql.raw(`set local statement_timeout = ${READ_QUERY_LIMITS.timeoutMs}`));
+    // Last, so nothing above needs the reader's privileges, and local, so it lasts one transaction.
+    await tx.execute(sql.raw(`set local role ${READER_ROLE}`));
+    return rowsOf(await tx.execute(sql.raw(query)));
+  });
 }
