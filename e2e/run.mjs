@@ -33,6 +33,9 @@ const env = {
   // Enables the email UIs; every message is written to this file instead of being sent, so suites can read it.
   RESEND_API_KEY: "re_dummy_local_only",
   EMAIL_SINK_FILE: path.join(dataDir, "emails.jsonl"),
+  // Signs Resend's webhook events, so a suite can post a bounce the way Resend would. The same value
+  // as RESEND_WEBHOOK_SECRET in e2e/lib.mjs.
+  RESEND_WEBHOOK_SECRET: "whsec_ZTJlLXJlc2VuZC13ZWJob29r",
   SESSION_SECRET: "e2e-session-secret-not-for-production",
   CRON_SECRET: "e2e-cron-secret",
   // A fake bot: the Bot API answers 401 (or is unreachable) and the code must stay quiet about it.

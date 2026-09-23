@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot, switchLang } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, resendEvent, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -376,6 +376,13 @@ try {
   await a.getByText("Mis partidos").first().waitFor({ timeout: 20000 });
   check("Spanish locale switch", true);
   await shot(a, "20-me-es");
+  // Dana's address bounces (src/lib/domain/emailMarks.ts). Late in the suite on purpose: from here
+  // nothing more is mailed to her, and the page where she can fix it says so.
+  // Her address by now is the one she changed it to on My matches, earlier in this suite.
+  const bounce = await resendEvent(a, { type: "email.bounced", data: { email_id: "e2e-bounce", to: ["dana2@example.com"], bounce: { type: "Permanent", subType: "General" } } });
+  check("a signed bounce from Resend marks the address", bounce.status === 200 && bounce.body?.marked === 1, JSON.stringify(bounce));
+  await a.reload();
+  check("My matches says the address stopped working, where it can be fixed", (await a.getByTestId("email-marked").count()) === 1);
   check("delete link is faint and at the bottom", (await a.getByRole("button", { name: "Eliminar mi cuenta" }).count()) === 1);
   await a.getByRole("button", { name: "Eliminar mi cuenta" }).click(); // dialog auto-accepted
   await a.waitForURL((u) => new URL(u).pathname === "/", { timeout: 20000 });

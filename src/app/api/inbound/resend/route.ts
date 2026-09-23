@@ -8,6 +8,7 @@ import { feedbackStrings } from "@/lib/feedback/strings";
 import { guessLanguage } from "@/lib/listen/parse";
 import { draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
 import { verifySvix } from "@/lib/outreach/svix";
+import { markFromEvent, recordMark } from "@/lib/domain/emailMarks";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -31,6 +32,14 @@ export async function POST(req: Request) {
     event = JSON.parse(body) as ReceivedEvent;
   } catch {
     return NextResponse.json({ error: "bad_json" }, { status: 400 });
+  }
+  // An address that stopped working: the same signed webhook carries it (src/lib/domain/emailMarks.ts).
+  const mark = markFromEvent(event as Parameters<typeof markFromEvent>[0]);
+  if (mark) {
+    const db = await getDb();
+    const marked: string[] = [];
+    for (const address of mark.addresses) if (await recordMark(db, address, mark.kind, mark.reason)) marked.push(address);
+    return NextResponse.json({ ok: true, kind: mark.kind, marked: marked.length });
   }
   if (event.type !== "email.received" || !event.data?.email_id) return NextResponse.json({ ok: true, ignored: event.type ?? "unknown" });
   const emailId = event.data.email_id;

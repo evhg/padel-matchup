@@ -203,6 +203,16 @@ subscriptions are dropped, always; addresses, phone numbers and messenger ids ar
 `--keep-contacts`. The file and the folder are personal data, kept out of git by `.gitignore`. A
 table that reached the backup's row cap is named in the file and turns the board's backup row yellow.
 
+**Bounces and complaints.** Resend's webhook (`/api/inbound/resend`, the same one that carries
+mail to `claude@`) also sends `email.bounced` and `email.complained`. A hard bounce or a complaint
+marks the address at once, three soft bounces mark it, and a marked address gets no more mail
+(`sendEmail`), counts as unreachable (a match tells its player on Telegram or by push), shows on the
+player's My matches and beside the name on the organiser's roster. A code the player asks for still
+goes, and typing it back clears the mark; typing the address in again lifts a complaint or soft
+bounces, not a hard one. The board's `email_marks` row turns yellow at 2% bounces or 0.1% complaints
+of the month's mail, red at 4% or 0.3%. The webhook's event list is set in Resend (`GET/PATCH
+https://api.resend.com/webhooks`); if it ever loses the two events, nothing is marked.
+
 **Merging duplicate people.** `POST /api/admin/merge-players { into, from[], dryRun }` folds rows
 through the same `mergePlayers` the app uses, behind `safeToMerge` (`src/lib/domain/dupes.ts`), which
 refuses any pair two different people could be. Always `dryRun` first. A merge cannot be undone.

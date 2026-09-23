@@ -26,6 +26,7 @@ import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
 import { tell } from "@/lib/coach/notify";
 import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
+import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 
 /**
  * All outbound notifications live here. Every function is safe to call when
@@ -377,11 +378,15 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
  */
 async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupComplete" | "lineupOpen" | "updated" | "cancelled", excludePlayerId?: string | null): Promise<number> {
   let told = 0;
+  // An address that bounced or complained is no address: sendEmail refuses it, so its owner is told
+  // here, on the channel they do have (src/lib/domain/emailMarks.ts).
+  const marked = await markedAmong(db, detail.roster.flatMap((s) => [s.player?.email, s.invitedEmail]));
+  const works = (a: string | null | undefined) => Boolean(a) && !marked.has(normalAddress(a));
   for (const slot of detail.roster) {
     if (slot.status !== "joined" && slot.status !== "confirmed") continue;
     // The complement of participantsWithEmail(), read the same way, so nobody is told twice and
     // nobody falls between the two.
-    if (slot.player?.email || slot.invitedEmail) continue;
+    if (works(slot.player?.email) || works(slot.invitedEmail)) continue;
     const player = slot.player;
     if (!player || (excludePlayerId && player.id === excludePlayerId)) continue;
     const c = await ctx(db, ev, player.locale, player, detail);
@@ -523,7 +528,7 @@ export async function sendEmailCode(email: string, code: string, localeLike: str
     eventUrl: `${base}/me`,
     openLabel: t("common.myMatches"),
   });
-  return sendEmail({ to: email, subject: t("email.code.subject", { code }), html, text });
+  return sendEmail({ to: email, subject: t("email.code.subject", { code }), html, text, proof: true });
 }
 
 /** The claim's code: to a work email at the club's own domain, so the address itself is the proof. */
@@ -539,5 +544,5 @@ export async function sendClaimCodeEmail(email: string, code: string, club: stri
     eventUrl: `${base}/clubs`,
     openLabel: t("common.clubs"),
   });
-  return sendEmail({ to: email, subject: t("email.claimCode.subject", { code, club }), html, text });
+  return sendEmail({ to: email, subject: t("email.claimCode.subject", { code, club }), html, text, proof: true });
 }

@@ -51,6 +51,7 @@ import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 import { joinLink } from "@/lib/whatsapp/link";
+import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
 
@@ -96,6 +97,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const cancelled = ev.status === "cancelled";
   const live = !cancelled && started && !over;
   const me = viewer.player;
+  // The organiser sees whose email stopped arriving, beside the name, so they can send the link
+  // another way. One read for the whole roster; nobody else sees it (src/lib/domain/emailMarks.ts).
+  const bounced = viewer.isCreator && emailEnabled() ? await markedAmong(db, [...roster, ...waitlist].flatMap((s) => [s.player?.email, s.invitedEmail])) : new Set<string>();
+  const didBounce = (a: string | null | undefined) => Boolean(a) && bounced.has(normalAddress(a));
   const mySlot = me ? [...roster, ...waitlist].find((s) => s.playerId === me.id) : undefined;
   const isMember = Boolean(mySlot && mySlot.position <= ev.capacity);
   const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
@@ -219,12 +224,19 @@ export default async function EventPage({ params, searchParams }: Props) {
                 {isMe && <span className="chip-open">{t("common.you")}</span>}
                 {isOrganizer && <span className="chip-muted">{t("common.organizer")}</span>}
                 {s.status === "confirmed" && <span className="chip-live">{t("event.confirmed")}</span>}
+                {viewer.isCreator && didBounce(s.player?.email) && (
+                  <span className="chip-danger" data-testid="email-bounced-chip">
+                    {t("creator.emailBounced")}
+                  </span>
+                )}
               </div>
             ) : s.status === "invited" ? (
               <div>
                 <div className="font-bold">{t("event.reservedFor", { name })}</div>
                 <div className="text-xs font-semibold text-warn">
-                  {s.invitedEmail && emailEnabled()
+                  {viewer.isCreator && didBounce(s.invitedEmail)
+                    ? t("creator.inviteBounced")
+                    : s.invitedEmail && emailEnabled()
                     ? viewer.isCreator && s.invitedAt
                       ? s.lastRemindedAt
                         ? t("creator.remindedAgo", { ago: relativeTime(s.lastRemindedAt, locale, now) })

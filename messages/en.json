@@ -324,7 +324,9 @@
     "sendTheirLink": "Send them their personal link",
     "reserveDone": "Done",
     "inviteEmailedAgo": "Invite emailed {ago}",
-    "sameContact": "Same {kind} as {name}. Use that name?"
+    "sameContact": "Same {kind} as {name}. Use that name?",
+    "emailBounced": "Email bounced",
+    "inviteBounced": "The invite email bounced. Send the invite link another way."
   },
   "score": {
     "title": "Score",
@@ -377,7 +379,9 @@
     "firstTimeTitle": "First time here? Just your name, that's it.",
     "pastMore": "Show {n} more",
     "emailHelp": "Your email is how you get back in on a new phone. Matches reach your calendar too.",
-    "saveEmail": "Save email"
+    "saveEmail": "Save email",
+    "emailBounced": "Mail to this address stopped arriving on {date}, so Kicksmash stopped sending it. Check the address, or type another one.",
+    "emailComplained": "An email from Kicksmash was marked as spam on {date}, so we stopped sending them. Save your address again to get them back."
   },
   "notFound": {
     "title": "Link not found",
