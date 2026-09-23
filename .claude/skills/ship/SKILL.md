@@ -158,6 +158,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
   column is not a check that a query *returns* rows: `tests/readonly.test.ts` now counts players
   through the door's own transaction on a database built from the real migrations. And call a tool
   yourself once before writing the rule that sends somebody else to it.
+- **What was typed into production by hand is not in the repository.** The three scheduled jobs lived
+  only in `cron.job`, with the secret in their text, until migration 0069; and 50 of the app role's
+  table grants existed only in production until migration 0075, while every migration file looked
+  complete. A database rebuilt from GitHub would have run no jobs, and `kicksmash` could have used
+  none of those tables. Compare production with a database built from the migrations
+  (`createTestDb()` is one) before calling anything "in the repository", and make the comparison a
+  test: `tests/cron-jobs.test.ts` and `tests/security.test.ts`.
 - **A delete follows every foreign key, so a merge must move every one first.** `mergePlayers` moved
   the six tables somebody listed by hand, then deleted the duplicate rows, and the database did the
   rest: `on delete cascade` took a student's place on a coach's list and their packages, `set null`

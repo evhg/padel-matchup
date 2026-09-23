@@ -229,3 +229,35 @@ read `CRON_SECRET` (or `OPERATOR_TOKEN`) and `VERCEL_TOKEN` from the environment
 out of date within a day. Its open items for the owner on that day (the two pilot coaches, the
 ten-minute coach setup test, the Phuket field test) have no later record. The texts for the assistant
 directories are in `docs/launch/directories.md`.
+
+## Security at a hundred real players
+
+Decided 23 September 2026: no rotation and no hardening before a hundred real players. What is held
+until then, by tests, so that day starts from a known place (`tests/security.test.ts`): every
+handler under `/api/admin` asks for the operator's token on its first line, and the role the app
+was built to run as, `kicksmash`, holds the grant and the policy on every table. Until migration
+0075, 50 of those grants existed only in production, typed in by hand: a database rebuilt from
+GitHub gave the role a policy on each table and no right to use it.
+
+The steps for that day, in this order. Each one that names a dashboard needs the owner's hands.
+
+1. **The app's own database user.** Production's `DATABASE_URL` connects as `postgres`, which
+   bypasses Row Level Security, so today the policies keep Supabase's Data API out and do not limit
+   the app. To run as `kicksmash` instead:
+   - give it a password (`alter role kicksmash login password '…'` in Supabase's SQL editor, the
+     value from a password manager, never in a file or a chat),
+   - `grant kicksmash_reader to kicksmash`, or the read-only door cannot `set role`,
+   - set `AUTO_MIGRATE=false` on Vercel, because `kicksmash` cannot create tables and the Migrate
+     workflow applies migrations anyway,
+   - point `DATABASE_URL` on Vercel at the pooler with the user `kicksmash.<project ref>`, redeploy,
+     and check `/api/health` and one query through `/api/admin/sql`.
+   `/api/admin/cron` stores a secret in Vault and schedules jobs, which `kicksmash` may not do. Run
+   it once as it is before the switch; after the switch it answers with the database's refusal.
+2. **`CRON_SECRET`.** Make a new one (`openssl rand -base64 32`), set it on Vercel and in this
+   environment's variables, redeploy, then `POST /api/admin/cron` so the scheduled jobs send the new
+   one. Until that call, every job gets `unauthorized`, and the board's `pg_cron` row turns red.
+3. **`RESEND_API_KEY`.** A new key in Resend (sending and reading), set on Vercel and here, then
+   delete the old one in Resend.
+4. **`VERCEL_TOKEN`.** A new token in Vercel's account settings, set here, then delete the old one.
+5. **Who may call `/api/admin/*`.** The operator token, or a Vercel token that can read the project
+   (`src/lib/api/secret.ts`). After step 4, decide whether the second door is still wanted.
