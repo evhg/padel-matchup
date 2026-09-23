@@ -26,17 +26,17 @@ try {
   const firstCard = (await a.getByTestId("card-preview").textContent()) ?? "";
   check("the landing page shows the card a match will have, four seats and no court yet", firstCard.includes("Court TBD") && firstCard.includes("1/4 players"), firstCard);
   const backIn = a.getByText("Played before? Get your matches back.");
-  await backIn.click();
-  const nesting = await a.evaluate(() => {
-    const input = document.querySelector('input[placeholder="you@example.com"]');
-    const own = input?.closest("form");
-    const create = document.querySelector('form:has(button[type=submit])');
-    return { hasInput: Boolean(input), sameFormAsCreate: own === create, action: own?.className ?? null };
-  });
-  check("TEMP nesting", false, JSON.stringify(nesting));
   check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
   await backIn.click();
   check("opening it asks for the email, in place", await a.getByPlaceholder("you@example.com").isVisible());
+  // And the button reaches its own handler. It did not: this door renders inside the create form, a
+  // form inside a form is invalid HTML, and "Send code" did nothing at all on the busiest page while
+  // the same component worked on My matches. The answer to an address nobody knows proves it ran.
+  check("nothing on the landing page is nested inside another form", (await a.evaluate(() => [...document.querySelectorAll("form")].some((f) => f.parentElement?.closest("form")))) === false);
+  await a.getByPlaceholder("you@example.com").fill("nobody-here@example.com");
+  await a.getByRole("button", { name: "Send code" }).click();
+  await a.getByText(/We don't know that email yet/).waitFor({ timeout: 20000 });
+  check("the landing page's way back in answers when it is used", (await a.getByText(/We don't know that email yet/).count()) === 1);
   check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
   // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
   // "there should be a feedback option on the main landing page which explains that kicksmash is a
