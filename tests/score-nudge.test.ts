@@ -128,6 +128,14 @@ describe("the nudge is closed by whoever answers it", () => {
     expect(await tap(9006)).toBe(`cancelled:${past.code}`);
     const [closed] = await db.select().from(events).where(eq(events.id, past.id));
     expect(closed.status).toBe("cancelled");
+    // Eriik, 22 September: "when I clicke We didn't play the button doesn't change it remains there."
+    // The toast is gone in two seconds and the message it came from still offered both buttons, so
+    // the tap read as if nothing had happened. The nudge itself says what it did, and keeps no button.
+    const edited = sent("editMessageText").at(-1);
+    expect(edited, "the nudge answers on the screen").toBeTruthy();
+    expect(edited!.body.message_id).toBe(1);
+    expect(String(edited!.body.text)).toContain("marked as not played");
+    expect(edited!.body.reply_markup).toEqual({ inline_keyboard: [] });
   });
 
   it("tells a tap what actually happened instead of talking about the line-up", async () => {

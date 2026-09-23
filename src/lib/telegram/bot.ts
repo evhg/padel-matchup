@@ -9,8 +9,8 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
-import { answerCallbackQuery, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
-import { botLocale, strings, type BotLocale } from "./card";
+import { answerCallbackQuery, editMessageText, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
+import { botLocale, cardTitle, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
 import { continueScoreReply, SCORE_TRAILER } from "./tournament";
@@ -229,9 +229,17 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     }
     const cancelled = await cancelEvent(db, detail.event.id, tapper.id);
     await answerCallbackQuery(cb.id, s.toastDidntPlay);
+    // Eriik: "the button doesn't change, it remains there." A toast is gone in two seconds and the
+    // message it came from still offered both buttons, so the tap looked like it did nothing. The
+    // nudge now says what happened and keeps no button: this match is not going to be played, and a
+    // second tap has nothing left to do. Its own message, because the nudge is a "nudge" card and
+    // syncCards only ever edits a "card".
+    if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(s.didntPlayDone(cardTitle(detail, locale))), null).catch(() => undefined);
     ctx.afterwards(async () => {
       await notifyEventCancelled(db, cancelled).catch(() => undefined);
       await emitMatchEvent(db, "match.cancelled", code).catch(() => undefined);
+      // And the cards in the chats the match was shared to, which still read as if it were on.
+      await syncTelegram(db, code).catch(() => undefined);
     });
     return `cancelled:${code}`;
   }
