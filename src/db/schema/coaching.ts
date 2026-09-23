@@ -20,6 +20,14 @@ export const coaches = pgTable(
     clubSlugs: jsonb("club_slugs").$type<string[]>().notNull().default([]),
     languages: jsonb("languages").$type<string[]>().notNull().default(["en"]),
     lessonMinutes: integer("lesson_minutes").notNull().default(60),
+    /**
+     * The court this coach teaches on, in the club's own words ("Court 3", "Centre").
+     *
+     * It is the coach saying where they are, not a guess: a lesson copies it only when the coach has
+     * one club, the same rule `venue_slug` follows. Null until they say, and a club then reads the
+     * lesson under "no court named" rather than under a court somebody else may be using.
+     */
+    court: text("court"),
     /** Weekly template in the coach's zone: { "1": [["07:00","12:00"],["15:00","20:00"]], … } (0 = Sunday). */
     hours: jsonb("hours").$type<Record<string, [string, string][]>>().notNull().default({}),
     tz: text("tz").notNull(),
@@ -295,6 +303,8 @@ export const lessons = pgTable(
      * else's business is worse than a club reading no number.
      */
     venueSlug: text("venue_slug"),
+    /** Which court, copied from the coach when this was booked. Null when they have not said. */
+    court: text("court"),
   },
   (t) => [index("lessons_coach_time_idx").on(t.coachId, t.startsAt), index("lessons_student_idx").on(t.studentPlayerId, t.startsAt), index("lessons_external_idx").on(t.coachId, t.externalId), index("lessons_venue_idx").on(t.venueSlug, t.startsAt)],
 );

@@ -5,6 +5,7 @@ import { newCoachCode } from "@/lib/codes";
 import { clubs, coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { COURT_LIMITS } from "./courts";
 import { venueSlug, venueSlugFor } from "./venueBoard";
 import { CITIES, cityInText, cityOf, type City } from "./cities";
 import { channelOf, recordFact } from "./facts";
@@ -287,7 +288,7 @@ export const isCoachActor = async (db: Db, playerId: string): Promise<boolean> =
 /** A payment link a student can open: http(s), at least a few characters, no spaces. */
 export const isPayLink = (s: string): boolean => /^https?:\/\/\S{4,200}$/.test(s);
 
-export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic" | "openBooking" | "approveNewBookings" | "teachesLevelMin" | "teachesLevelMax">>;
+export type CoachPatch = Partial<Pick<Coach, "displayName" | "bio" | "clubNames" | "clubSlugs" | "languages" | "lessonMinutes" | "hours" | "tz" | "cutoffHours" | "latePasses" | "minNoticeHours" | "priceSingle" | "priceTwo" | "priceThree" | "priceFour" | "secondMinutes" | "priceSecondSingle" | "priceSecondTwo" | "outsideHoursFee" | "currency" | "payAtClub" | "promptpayId" | "payLink" | "qrAssetId" | "whatsapp" | "isPublic" | "openBooking" | "approveNewBookings" | "teachesLevelMin" | "teachesLevelMax" | "court">>;
 
 export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): Promise<Coach> {
   const clean: CoachPatch = { ...patch };
@@ -346,6 +347,9 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
   if (clean.promptpayId !== undefined) clean.promptpayId = (clean.promptpayId ?? "").replace(/[^\d+]/g, "").slice(0, 20) || null;
   if (clean.payLink !== undefined) clean.payLink = isPayLink((clean.payLink ?? "").trim()) ? (clean.payLink ?? "").trim() : null;
   if (clean.bio !== undefined) clean.bio = (clean.bio ?? "").replace(/\s+/g, " ").trim().slice(0, 240) || null;
+  // The same trim and the same length a club's own court rows take (COURT_LIMITS.nameMax), so the
+  // two sides of the match in `sameCourt` are cleaned the same way.
+  if (clean.court !== undefined) clean.court = (clean.court ?? "").replace(/\s+/g, " ").trim().slice(0, COURT_LIMITS.nameMax) || null;
   if (clean.clubNames !== undefined) clean.clubNames = cleanClubNames(clean.clubNames);
   const [row] = await db
     .update(coaches)
@@ -1012,6 +1016,9 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
       // null: guessing would put this lesson on the other club's page, and a club reading a wrong
       // number about somebody else's business is worse than a club reading no number at all.
       venueSlug: coach.clubSlugs.length === 1 ? coach.clubSlugs[0] : null,
+      // And which court, by the same rule: the coach's own answer, and only where the lesson has a
+      // club to belong to. A court name without a club says nothing to anybody.
+      court: coach.clubSlugs.length === 1 ? (coach.court ?? null) : null,
       createdByPlayerId: input.createdByPlayerId ?? null,
       createdAt: now,
     })

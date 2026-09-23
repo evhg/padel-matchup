@@ -152,13 +152,13 @@ export async function clubBusy(db: Db, clubSlug: string, from: Date, to: Date): 
     .from(events)
     .where(and(eq(events.venueSlug, clubSlug), gte(events.startsAt, from), lt(events.startsAt, to), ne(events.status, "cancelled")));
   const taught = await db
-    .select({ startsAt: lessons.startsAt, minutes: lessons.minutes })
+    .select({ court: lessons.court, startsAt: lessons.startsAt, minutes: lessons.minutes })
     .from(lessons)
     .where(and(eq(lessons.venueSlug, clubSlug), gte(lessons.startsAt, from), lt(lessons.startsAt, to), inArray(lessons.status, [...ON_COURT])));
   return [
     ...played.map((e): Busy => ({ court: e.court, startsAt: e.startsAt, minutes: EVENT_DURATION_MS / 60000, kind: "match", title: e.title })),
-    // A lesson carries a venue but not yet a court, so it lands in the row for what named none. That
-    // is the truth today: the club can see a court is being taught on, not which one.
-    ...taught.map((l): Busy => ({ court: null, startsAt: l.startsAt, minutes: l.minutes, kind: "lesson", title: null })),
+    // A lesson carries the court the coach said they teach on, or none when they have not said. The
+    // row for what named no court is still the honest place for those.
+    ...taught.map((l): Busy => ({ court: l.court, startsAt: l.startsAt, minutes: l.minutes, kind: "lesson", title: null })),
   ];
 }
