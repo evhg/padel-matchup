@@ -1,13 +1,65 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, getTableName, inArray, is, sql, type SQL } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
-import { activity, competitionPairs, competitions, events, players, scores, slots, tournamentMatches, tournamentRounds, venues } from "@/db/schema";
+import * as schema from "@/db/schema";
+import { events, players, slots, tournamentRounds } from "@/db/schema";
 import { DomainError } from "./errors";
 
 /**
- * Folds identities `from` into `into`: events, slots (duplicates in the same
- * event are freed), scores, activity, tournament matches/rounds/standings and
- * venues move over; the sources are deleted. Crypto-free on purpose so slot
- * code (reachable from client bundles) can import it.
+ * Every column in the schema that points at a player, with the other columns of each unique key it
+ * is part of.
+ *
+ * Read from the schema rather than listed by hand, because the hand-written list is how merges lost
+ * data. Until 23 September 2026 `mergePlayers` moved matches, slots, scores, tournaments, activity
+ * and venues, then deleted the old rows, and every other table that points at a player went with
+ * them: a student's place on a coach's list and their lesson packages by `on delete cascade`, their
+ * lessons' student and a note's author blanked by `set null`. Erik's question lost its way back to
+ * him like that, on a morning with four merges in it. A table added next month is moved without
+ * anybody remembering to.
+ */
+export type PlayerReference = { table: string; column: string; uniqueWith: string[][] };
+
+export function playerReferences(): PlayerReference[] {
+  const out: PlayerReference[] = [];
+  for (const t of Object.values(schema)) {
+    if (!is(t, PgTable)) continue;
+    const c = getTableConfig(t);
+    const named = (cols: readonly unknown[]) => cols.map((x) => (x as { name?: unknown }).name);
+    // An index on an expression has no plain column names; it is left out, and a clash on it fails
+    // the merge loudly rather than losing a row quietly.
+    const keys = [
+      ...c.indexes.filter((i) => i.config.unique).map((i) => named(i.config.columns)),
+      ...c.uniqueConstraints.map((u) => named(u.columns)),
+      ...c.primaryKeys.map((p) => named(p.columns)),
+      ...c.columns.filter((col) => col.isUnique || col.primary).map((col) => [col.name]),
+    ].filter((k): k is string[] => k.every((n) => typeof n === "string"));
+    for (const fk of c.foreignKeys) {
+      const ref = fk.reference();
+      if (getTableName(ref.foreignTable) !== "players") continue;
+      for (const col of ref.columns) {
+        out.push({ table: c.name, column: col.name, uniqueWith: keys.filter((k) => k.includes(col.name)).map((k) => k.filter((n) => n !== col.name)) });
+      }
+    }
+  }
+  return out;
+}
+
+/** One row per player, and deleting the source's would take real data with it: both having one is a person to ask, not a merge to run. */
+const REFUSE_WHEN_BOTH = new Set(["coaches"]);
+
+const ident = (s: string) => sql.identifier(s);
+const count = (r: unknown) => (Array.isArray(r) ? r.length : ((r as { rows?: unknown[] }).rows ?? []).length);
+
+/**
+ * Folds identities `from` into `into`, in one transaction, and deletes the sources.
+ *
+ * Three things keep a rule of their own: a seat in a match both already hold (the source's is
+ * freed), and a player id inside a tournament round's resting list or an event's standings (arrays,
+ * not foreign keys). Everything else that points at a player moves, table by table from the schema.
+ * Where a unique key would clash — both in the same group, both students of one coach — the
+ * survivor's row stays and the source's goes. Then the sources are deleted, and the survivor takes
+ * any address or chat account it lacked. Crypto-free on purpose so slot code (reachable from client
+ * bundles) can import it.
  */
 export async function mergePlayers(db: Db, into: string, from: string[]): Promise<void> {
   const sources = [...new Set(from)].filter((id) => id !== into);
@@ -16,8 +68,6 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
     const [target] = await tx.select().from(players).where(eq(players.id, into));
     if (!target) throw new DomainError("not_found");
     const srcRows = await tx.select().from(players).where(inArray(players.id, sources));
-
-    await tx.update(events).set({ creatorPlayerId: into }).where(inArray(events.creatorPlayerId, sources));
 
     const mine = await tx.select({ eventId: slots.eventId }).from(slots).where(eq(slots.playerId, into));
     const mineEvents = new Set(mine.map((m) => m.eventId));
@@ -37,17 +87,6 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
       }
     }
 
-    await tx.update(scores).set({ enteredByPlayerId: into }).where(inArray(scores.enteredByPlayerId, sources));
-    await tx.update(competitions).set({ organizerPlayerId: into }).where(inArray(competitions.organizerPlayerId, sources));
-    await tx.update(competitionPairs).set({ p1PlayerId: into }).where(inArray(competitionPairs.p1PlayerId, sources));
-    await tx.update(competitionPairs).set({ p2PlayerId: into }).where(inArray(competitionPairs.p2PlayerId, sources));
-    await tx.update(competitionPairs).set({ enteredByPlayerId: into }).where(inArray(competitionPairs.enteredByPlayerId, sources));
-    await tx.update(activity).set({ actorPlayerId: into }).where(inArray(activity.actorPlayerId, sources));
-    for (const col of [tournamentMatches.a1, tournamentMatches.a2, tournamentMatches.b1, tournamentMatches.b2] as const) {
-      await tx.update(tournamentMatches).set({ [col.name === "a1" ? "a1" : col.name === "a2" ? "a2" : col.name === "b1" ? "b1" : "b2"]: into } as never).where(inArray(col, sources));
-    }
-    await tx.update(tournamentMatches).set({ enteredByPlayerId: into }).where(inArray(tournamentMatches.enteredByPlayerId, sources));
-
     const rounds = await tx.select({ id: tournamentRounds.id, resting: tournamentRounds.resting }).from(tournamentRounds);
     for (const r of rounds) {
       if (r.resting.some((id) => sources.includes(id))) {
@@ -61,22 +100,40 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
       }
     }
 
-    const myVenues = await tx.select({ name: venues.name }).from(venues).where(eq(venues.creatorPlayerId, into));
-    const names = new Set(myVenues.map((v) => v.name));
-    const theirVenues = await tx.select().from(venues).where(inArray(venues.creatorPlayerId, sources));
-    for (const v of theirVenues) {
-      if (names.has(v.name)) await tx.delete(venues).where(eq(venues.id, v.id));
-      else {
-        await tx.update(venues).set({ creatorPlayerId: into }).where(eq(venues.id, v.id));
-        names.add(v.name);
+    for (const ref of playerReferences()) {
+      const t = ident(ref.table);
+      const c = ident(ref.column);
+      for (const src of sources) {
+        for (const other of ref.uniqueWith) {
+          if (other.length === 0) {
+            // One row per player: the survivor's stays and the source's goes, unless that loses data.
+            const both = count(await tx.execute(sql`select 1 from ${t} a where a.${c} = ${src} and exists (select 1 from ${t} b where b.${c} = ${into})`));
+            if (both && REFUSE_WHEN_BOTH.has(ref.table)) throw new DomainError("invalid");
+            if (both) await tx.execute(sql`delete from ${t} where ${c} = ${src}`);
+            continue;
+          }
+          // Both rows would share this key once moved: keep the survivor's. `=` on purpose, not
+          // `is not distinct from`: a unique key lets two NULLs stand side by side, so they never clash.
+          const same: SQL = sql.join(
+            other.map((k) => sql`b.${ident(k)} = a.${ident(k)}`),
+            sql` and `,
+          );
+          await tx.execute(sql`delete from ${t} a where a.${c} = ${src} and exists (select 1 from ${t} b where b.${c} = ${into} and ${same})`);
+        }
+        await tx.execute(sql`update ${t} set ${c} = ${into} where ${c} = ${src}`);
       }
     }
 
+    // After the sources are gone: a chat account is unique to one row, so the survivor can only take
+    // it once nobody else holds it.
+    const first = <K extends keyof (typeof srcRows)[number]>(k: K) => srcRows.find((s) => s[k] !== null && s[k] !== undefined)?.[k] ?? null;
     const patch: Partial<typeof players.$inferInsert> = {};
-    if (!target.email) patch.email = srcRows.find((s) => s.email)?.email ?? null;
-    if (!target.phone) patch.phone = srcRows.find((s) => s.phone)?.phone ?? null;
-    if (Object.keys(patch).length) await tx.update(players).set(patch).where(eq(players.id, into));
-
+    if (!target.email && first("email")) patch.email = first("email");
+    if (!target.phone && first("phone")) patch.phone = first("phone");
+    if (!target.telegramId && first("telegramId")) patch.telegramId = first("telegramId");
+    if (!target.discordId && first("discordId")) patch.discordId = first("discordId");
+    if (!target.lineId && first("lineId")) patch.lineId = first("lineId");
     await tx.delete(players).where(inArray(players.id, sources));
+    if (Object.keys(patch).length) await tx.update(players).set(patch).where(eq(players.id, into));
   });
 }
