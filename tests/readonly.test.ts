@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { bare, checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
 import { HIDDEN_COLUMNS, isHidden, readAsReader, readerGrantsSql, refusalOf, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
@@ -13,7 +13,15 @@ import { createTestDb, makePlayer } from "./helpers/db";
  * one that actually stops that — the grants — and the second, which keeps a write out of the door.
  */
 
-const MIGRATION = "drizzle/0067_reader_role.sql";
+/**
+ * The newest migration the grants generator wrote. 0067 was the first; every schema change that adds
+ * a column adds another (scripts/reader-grants.ts), and the newest must match the schema as it is.
+ */
+const GRANTS_HEADER = "-- Generated from src/db/schema by src/lib/db/readonly.ts.";
+const MIGRATION = `drizzle/${readdirSync("drizzle")
+  .filter((f) => /^\d{4}_.*\.sql$/.test(f) && readFileSync(`drizzle/${f}`, "utf8").startsWith(GRANTS_HEADER))
+  .sort()
+  .at(-1)}`;
 
 describe("the reader role sees no credential", () => {
   it("grants nothing that is hidden", () => {
@@ -26,7 +34,7 @@ describe("the reader role sees no credential", () => {
   it("the migration on disk is what the live schema generates", () => {
     // The guard that survives this session: add a column and this fails until a new migration grants
     // it, which is the moment somebody decides whether a reader may see it.
-    expect(readFileSync(MIGRATION, "utf8")).toBe(readerGrantsSql());
+    expect(readFileSync(MIGRATION, "utf8"), `regenerate with scripts/reader-grants.ts into a new migration (newest now: ${MIGRATION})`).toBe(readerGrantsSql());
   });
 
   it("every column that looks like a credential was decided, one way or the other", () => {

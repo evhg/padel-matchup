@@ -15,6 +15,7 @@ export function CreateEventForm({
   hasIdentity,
   returning,
   host,
+  photoUrl,
   patterns = [],
   hasLevel = false,
   initialType = "match",
@@ -33,6 +34,8 @@ export function CreateEventForm({
   returning?: React.ReactNode;
   /** The short host the card shows, e.g. "kicksma.sh". Read on the server; there is no env here. */
   host: string;
+  /** The viewer's last match photo, drawn behind the card while they type the next one. */
+  photoUrl?: string;
   /** The organizer's usual weekday/time slots (quick picks + default). */
   patterns?: TimePatternInput[];
   /** The organizer already has a level (a range then doesn't ask for theirs). */
@@ -169,7 +172,7 @@ export function CreateEventForm({
         The card the crew will actually see, filling in as this is typed. It was the one thing the
         first page never showed, and it is the whole product in one picture.
       */}
-      <MatchCardPreview values={values} host={host} />
+      <MatchCardPreview values={values} host={host} photo={photoUrl} />
       <div className="card">
         <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} />
       </div>

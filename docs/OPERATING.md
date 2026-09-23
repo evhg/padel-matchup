@@ -13,7 +13,12 @@ estimate (made without reading the code, and saying so), what it needs and a rec
 The owner answers in a Claude session: "build <id8>" or "skip <id8>". The session then reads the
 note (`GET /api/admin/feedback?status=acknowledged`), builds it through the pipeline below, and
 records the outcome with `POST /api/admin/feedback` (`shipped` with a thank-you that names the
-change, or `declined` with the rule, kindly). Nothing is built from a note without the owner's word.
+change, or `declined` with the rule, kindly; a question that needed only an answer is `declined` with
+the verdict `answered`, which the Sunday digest does not count as a refusal). A shipped note also takes
+`publicSummary`: one line for `/built`, the public page of ideas that became the app, in our words and
+never the note's own, and with no name, because a note can be crude, a joke or malicious. The same
+call with only `{ id, publicSummary }` adds the line to a note shipped before. Nothing is built from a
+note without the owner's word.
 
 ## When an error appears
 

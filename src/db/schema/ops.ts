@@ -178,6 +178,13 @@ export const feedback = pgTable(
     repliedAt: timestamp("replied_at", { withTimezone: true }),
     shippedAt: timestamp("shipped_at", { withTimezone: true }),
     prUrl: text("pr_url"),
+    /**
+     * What this note changed, in a sentence written by whoever marked it shipped, for the public
+     * page of ideas that became the app (/built). Never the note's own words: a note can be crude, a
+     * joke or malicious, and it was written to us, not for a page (decided 23 September 2026). No
+     * name either. Null until somebody writes one, and a note without one is not on the page.
+     */
+    publicSummary: text("public_summary"),
     messagesSent: integer("messages_sent").notNull().default(0),
     /** "coach" when the author runs a lessons book; a coach's note is read first. */
     role: text("role"),

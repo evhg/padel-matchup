@@ -17,9 +17,11 @@ import { venueWithCourt } from "@/lib/labels";
  * step because it reads the same helpers — `venueWithCourt`, `formatEventTime` — rather than its own
  * copy of them, and every size is a share of the card's width, so it is the same card at any size.
  *
- * It carries no photo. A real card can hold one, and the bytes live only inside that match's image;
- * showing one here would mean a new public URL for somebody's photo, which is the owner's call and
- * not a detail of a preview.
+ * Behind it, when the viewer has one, is the court photo of their last match: the rest of Erik's
+ * note ("with my previous match photo as a placeholder"). It needed a public URL per match's photo,
+ * which was the owner's call; the owner said yes on 23 September 2026. The photo is no more public
+ * than it was: the result card anybody with the link can open already carries it. On a photo the
+ * card turns to light words on a dark layer, as the result card does.
  */
 
 /** The card is drawn for 1200px wide; every size here is that measurement as a share of the width. */
@@ -28,9 +30,12 @@ const share = (px: number) => `${((px / 1200) * 100).toFixed(3)}cqw`;
 export function MatchCardPreview({
   values,
   host,
+  photo,
 }: {
   values: { type: "match" | "tournament"; title: string; date: string; time: string; tz: string; venueName: string; court: string; capacity: number; haveNames: string };
   host: string;
+  /** The URL of the viewer's last match photo (`/{code}/photo`), or nothing. */
+  photo?: string;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -49,12 +54,16 @@ export function MatchCardPreview({
   const taken = Math.min(capacity, 1 + values.haveNames.split("\n").filter((n) => n.trim()).length);
   const left = Math.max(0, capacity - taken);
   const players = t("og.players", { count: taken, capacity });
+  const ink = photo ? "#FFFFFF" : "#14161A";
+  const soft = photo ? "rgba(255,255,255,0.82)" : "#5B6470";
+  const ground = photo ? `linear-gradient(rgba(20,22,26,0.55), rgba(20,22,26,0.72)), center / cover no-repeat url("${photo}")` : "#F4F3EE";
 
   return (
     <div
       aria-hidden
       data-testid="card-preview"
-      style={{ containerType: "inline-size", aspectRatio: "1200 / 630", width: "100%", display: "flex", borderRadius: share(24), overflow: "hidden", background: "#F4F3EE", color: "#14161A" }}
+      data-photo={photo ? "yes" : "no"}
+      style={{ containerType: "inline-size", aspectRatio: "1200 / 630", width: "100%", display: "flex", borderRadius: share(24), overflow: "hidden", background: ground, color: ink }}
     >
       <div style={{ width: share(28), background: "#C8F135" }} />
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", padding: `${share(56)} ${share(64)} ${share(48)} ${share(56)}`, flex: 1, minWidth: 0 }}>
@@ -73,18 +82,18 @@ export function MatchCardPreview({
             </div>
             <div style={{ display: "flex", flexDirection: "column", paddingBottom: share(14), minWidth: 0 }}>
               <div style={{ fontSize: share(44), fontWeight: 800, letterSpacing: share(-1), whiteSpace: "nowrap" }}>{when ? formatEventDay(when, tz, locale) : ""}</div>
-              <div style={{ fontSize: share(34), color: "#5B6470", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{venue}</div>
+              <div style={{ fontSize: share(34), color: soft, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{venue}</div>
             </div>
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: share(16) }}>
-          <div style={{ background: "#C8F135", padding: `${share(18)} ${share(30)}`, borderRadius: 999, fontSize: share(34), fontWeight: 800, whiteSpace: "nowrap" }}>
+          <div style={{ background: "#C8F135", color: "#14161A", padding: `${share(18)} ${share(30)}`, borderRadius: 999, fontSize: share(34), fontWeight: 800, whiteSpace: "nowrap" }}>
             {left > 0 ? `${players} — ${t("og.tapToJoin")}` : players}
           </div>
           <div style={{ display: "flex", gap: share(10) }}>
             {Array.from({ length: Math.min(capacity, 8) }, (_, i) => (
-              <div key={i} style={{ width: share(34), height: share(34), borderRadius: "50%", background: i < taken ? "#14161A" : "transparent", border: `${share(4)} solid #14161A` }} />
+              <div key={i} style={{ width: share(34), height: share(34), borderRadius: "50%", background: i < taken ? ink : "transparent", border: `${share(4)} solid ${ink}` }} />
             ))}
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { eventPhotos, events, slots, type EventPhoto } from "@/db/schema";
 import { DomainError } from "@/lib/domain/errors";
@@ -42,3 +42,35 @@ export async function getEventPhoto(db: Db, eventId: string): Promise<EventPhoto
 }
 
 export const photoDataUrl = (p: Pick<EventPhoto, "mime" | "dataBase64">) => `data:${p.mime};base64,${p.dataBase64}`;
+
+/**
+ * The court photo of the last match this person played or organised, for the card on the first page
+ * while they type the next one (Erik, 20 September). One indexed query; the bytes stay behind
+ * `/{code}/photo`, and `version` changes the URL when the photo is replaced.
+ */
+export async function lastMatchPhoto(db: Db, playerId: string): Promise<{ code: string; version: number } | null> {
+  const [row] = await db
+    .select({ code: events.code, at: eventPhotos.createdAt })
+    .from(eventPhotos)
+    .innerJoin(events, eq(events.id, eventPhotos.eventId))
+    .where(
+      or(
+        eq(events.creatorPlayerId, playerId),
+        sql`exists (select 1 from ${slots} where ${slots.eventId} = ${events.id} and ${slots.playerId} = ${playerId} and ${slots.status} in ('joined', 'confirmed'))`,
+      ),
+    )
+    .orderBy(desc(events.startsAt))
+    .limit(1);
+  return row ? { code: row.code, version: row.at.getTime() } : null;
+}
+
+/** A match's court photo by the match's code, for the public route. */
+export async function photoByCode(db: Db, code: string): Promise<EventPhoto | null> {
+  const [row] = await db
+    .select({ photo: eventPhotos })
+    .from(eventPhotos)
+    .innerJoin(events, eq(events.id, eventPhotos.eventId))
+    .where(eq(events.code, code))
+    .limit(1);
+  return row?.photo ?? null;
+}

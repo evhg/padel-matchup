@@ -118,6 +118,15 @@ try {
   check("the share button offers the picture where the phone can share files (hidden where it cannot)", canShareHere ? (await p.getByRole("button", { name: "Share the picture…" }).count()) === 1 : (await p.getByRole("button", { name: "Share the picture…" }).count()) === 0, `navigator.share ${canShareHere ? "present" : "absent"}`);
   check("the uploader can take the photo down", (await p.getByTestId("photo-remove").count()) === 1);
   await shot(p, "v3-card-photo");
+  // Erik, 20 September: the first page's card, over the photo of your last match.
+  const photoRes = await p.request.get(`${BASE}/${mcode}/photo`);
+  check("a match's court photo has its own address, an image", photoRes.status() === 200 && (photoRes.headers()["content-type"] ?? "").startsWith("image/"));
+  await p.goto(`${BASE}/`);
+  const cardPreview = p.getByTestId("card-preview");
+  await cardPreview.waitFor({ timeout: 20000 });
+  check("the first page draws the last match's photo behind the card being typed", (await cardPreview.getAttribute("data-photo")) === "yes" && ((await cardPreview.getAttribute("style")) ?? "").includes(`/${mcode}/photo`));
+  await p.goto(`${BASE}/built`);
+  check("the page of ideas that became the app opens", (await p.getByTestId("built-empty").count()) + (await p.getByTestId("built-list").count()) === 1);
   let momentsSeen = false;
   for (let i = 0; i < 5 && !momentsSeen; i++) {
     await p.goto(`${BASE}/me`);

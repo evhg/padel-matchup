@@ -454,6 +454,20 @@ Everything in this list is live. The README describes each in detail.
   cap instead of stopping there quietly. A session now opens by saying whether its copy is behind
   `main`, installing what is missing, and naming any operator variable that is not set.
 
+- **A merge loses nothing (23 September 2026, migration 0070).** `mergePlayers` moved six tables by
+  hand and let the delete take or blank the rest, so a restore by code could drop a student from a
+  coach's list with their packages, and one of the day's four merges cut Erik's question off from
+  him. It now moves every column that points at a player, read from the schema, and refuses two
+  coach pages.
+
+- **Ideas that became the app, a quieter coach setup, and last match's photo on the first page
+  (23 September 2026, migrations 0071 and 0072).** `/built` lists what players' notes changed, one
+  line each, written by whoever shipped it: never the note's words and never a name, because a note
+  can be crude, a joke or malicious. The feedback card's count links to it. The coach setup lost its
+  help sentences where the choices already say it, after "too much text, I don't want to read all
+  that". The card on the first page, which fills in as a match is typed, now sits on the photo of
+  the viewer's last match, served from `/{code}/photo`.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -523,19 +537,12 @@ Written 23 September 2026 for a clean hand-over. The desk notes are in
 Standing order 5 in CLAUDE.md applies to every one that becomes a change: mark it `shipped`, thank
 the player, and invite them to try it.
 
-1. **Answer Erik's two email notes (`5ab4c302`, `975a2497`).** "Micky said she didn't get an email" and
-   "the emails weren't sent out?". Resend shows all three messages to Micky on 23 September as
-   `delivered`, so Kicksmash sent them and her mail server took them. The likely place is her spam
-   folder. Reply on the desk with that, and mention that a match now tells everybody it can reach.
-2. **Write to Micky from `claude@kicksma.sh`.** The owner asked for it on 23 September. Say that the
-   messages arrived at her address, ask her to check spam, and ask for any other feedback.
-3. **Answer Erik's question (`dab8c808`).** Saving an email for the calendar invite does not merge
-   anybody's history: a typed address is not a proved one. The code that the "used this before?" line
-   offers does merge, because a code is proof.
-4. **Less text on `/coach` (`e4dfc8ea`, "too much text").** Drop the 43-word paragraph above the three
-   gap buttons (`data-testid="card-gaps"` in `src/components/coach/CoachSettings.tsx`). The buttons say
-   it already. Then thank Erik.
-5. **Bounces and complaints.** The app handles neither of Resend's `email.bounced` and
+1. **Deliver Erik's answer (`dab8c808`).** Written and recorded on 23 September, but a merge had
+   blanked the note's author, so it went nowhere (`no_channel`); migration 0070 points the note back at
+   him, then send it again. Saving an email for the calendar invite does not merge anybody's history: a
+   typed address is not a proved one. The code that the "used this before?" line offers does merge,
+   because a code is proof.
+2. **Bounces and complaints.** The app handles neither of Resend's `email.bounced` and
    `email.complained`, so a dead address still counts as reachable, and Resend's suppression list
    refuses each new attempt (nine for one address). The only bounce so far is a test user, so nobody
    real is affected. The shape: a signed Resend webhook; a hard bounce or a complaint marks the
@@ -543,13 +550,7 @@ the player, and invite them to try it.
    organiser sees "did not get it", the player sees "your email bounced" on the next visit; a proved
    code clears the mark; the service board alerts on the bounce and complaint rates. It needs a column,
    so it is a migration and the owner's word first.
-6. **The public "asked → shipped" page.** Decided 23 September: it shows a short summary of each note
-   and the change it produced, **never the note's own words**, because a note can be crude, a joke or
-   malicious. The summary is written by the session that marks the note `shipped`. Open for the owner:
-   whether a summary carries the player's first name. It needs a column, so a migration.
-7. **The previous match's photo behind the live card (`d335a162`).** The owner's call: it needs a new
-   public route that serves a player's photo on the landing page.
-8. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
+3. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
    Then: rotate `CRON_SECRET`, `RESEND_API_KEY` and `VERCEL_TOKEN`, and review who may call
    `/api/admin/*`. And move the app's own connection onto the role `kicksmash`: production connects
    as `postgres` today (checked 23 September), which bypasses Row Level Security, so the policies

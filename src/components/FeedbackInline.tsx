@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import Link from "next/link";
 
 /** The feedback door where players already are: one quiet line or a small card that opens the form in place. No navigation, no popup. */
 export function FeedbackInline({ signedInVia, variant, help, shipped }: { signedInVia: "telegram" | "none"; variant: "line" | "card"; help?: string; /** Player ideas already in the app. Passed only by a page that reads the database anyway, and only from three. */ shipped?: number }) {
@@ -34,7 +35,10 @@ export function FeedbackInline({ signedInVia, variant, help, shipped }: { signed
       <p className="mt-1 text-sm text-muted">{t("builtBody")}</p>
       {shipped !== undefined && (
         <p className="mt-1 text-sm font-bold text-court" data-testid="feedback-shipped">
-          {t("builtCount", { count: shipped })}
+          {t("builtCount", { count: shipped })}{" "}
+          <Link href="/built" prefetch={false} className="underline underline-offset-4" data-testid="feedback-built-link">
+            {t("builtSeeAll")} →
+          </Link>
         </p>
       )}
       <button type="button" className="btn-secondary mt-3 self-start" onClick={() => setOpen(true)}>
