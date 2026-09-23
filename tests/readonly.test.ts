@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { bare, checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
-import { HIDDEN_COLUMNS, isHidden, readAsReader, readerGrantsSql, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
+import { HIDDEN_COLUMNS, isHidden, readAsReader, readerGrantsSql, refusalOf, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 /**
@@ -71,13 +71,13 @@ describe("the reader sees the rows, and still not the tokens", () => {
     expect(names.map((r) => r.display_name)).toEqual(["Erik", "Micky"]);
   });
 
-  // Drizzle wraps the database's error as "Failed query: …" and keeps Postgres's own words in `cause`.
+  // What the route answers with: Postgres's own words, never Drizzle's "Failed query: <the query>".
   const refusal = async (db: Parameters<typeof readAsReader>[0], q: string): Promise<string> => {
     try {
       await readAsReader(db, q);
       return "allowed";
     } catch (e) {
-      return (e as { cause?: { message?: string } }).cause?.message ?? (e as Error).message;
+      return refusalOf(e);
     }
   };
 
@@ -92,6 +92,17 @@ describe("the reader sees the rows, and still not the tokens", () => {
   it("cannot write, even past the query rule", async () => {
     const { db } = await createTestDb();
     expect(await refusal(db, "update players set display_name = 'x'")).toMatch(/read-only|permission denied/);
+  });
+
+  it("says why a query was refused, and never hands the query back", async () => {
+    // The first answer the door gave to a refused query was "Failed query: select … params:", which
+    // repeats the question and says nothing about the reason. Here: a schema the reader has no grant on.
+    const { db } = await createTestDb();
+    const reason = await refusal(db, "select count(*) from drizzle.__drizzle_migrations");
+    expect(reason).toMatch(/permission denied/);
+    expect(reason).not.toMatch(/Failed query|select count/);
+    expect(refusalOf(new Error("Failed query: select 1\nparams: "))).toBe("query failed");
+    expect(refusalOf("not an error")).toBe("query failed");
   });
 });
 
