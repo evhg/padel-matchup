@@ -722,7 +722,15 @@
     "scoreTitle": "🏁 How did it go?",
     "scoreBody": "{venue}. Enter the score; one tap.",
     "wantedTitle": "You asked for this one · {day} {time}",
-    "wantedBody": "{venue} · {spots}. Tap to take a spot."
+    "wantedBody": "{venue} · {spots}. Tap to take a spot.",
+    "lineupCompleteTitle": "✅ The line-up is complete",
+    "lineupCompleteBody": "{day} at {time} · {venue}. {names}.",
+    "lineupOpenTitle": "Somebody left · {day} {time}",
+    "lineupOpenBody": "{venue} · {spots}",
+    "updatedTitle": "The match moved",
+    "updatedBody": "Now {day} at {time} · {venue}.",
+    "cancelledTitle": "The match is off",
+    "cancelledBody": "{day} at {time} · {venue} will not happen."
   },
   "about": {
     "footerLink": "Privacy & terms (short, promise)",

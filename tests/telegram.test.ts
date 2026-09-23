@@ -16,7 +16,7 @@ import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets,
 import { renderCard } from "@/lib/telegram/card";
 import { renderDiscordCard } from "@/lib/discord/card";
 import { matchToPublic } from "@/lib/api/serialize";
-import { notifyCreator } from "@/lib/notify";
+import { notifyCreator, notifyEventCancelled, notifyLineupChange } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
 import { formatEventTime } from "@/lib/dates";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
@@ -341,6 +341,41 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await postTelegramNotice(db, ev.code, "updated")).toEqual({ notes: 0, dms: 0 });
     delete process.env.TELEGRAM_BOT_TOKEN;
     expect(await postTelegramNotice(db, ev.code, "cancelled")).toEqual({ notes: 0, dms: 0 });
+  });
+
+  it("a player with no address hears about their own match on the channel they do have", async () => {
+    // Erik, 23 September, from the match's own page: "the emails werent sent out to the players?" and
+    // then "micky said she didn't get an email". The match spoke by email alone, so anybody who had
+    // given no address heard nothing — not that the line-up was complete, not that it was off.
+    const { org, ev } = await match();
+    const nina = await makePlayer(db, "Nina");
+    await joinEvent(db, { eventId: ev.id, playerId: nina.id });
+    await linkTelegram(db, nina.id, user(77, "Nina"));
+    // Mark gave an address and also linked Telegram. The email carries him, with the calendar entry
+    // that only an email can carry, so nothing is sent to him here. Nobody is told twice.
+    const mark = await makePlayer(db, "Mark");
+    await joinEvent(db, { eventId: ev.id, playerId: mark.id });
+    await linkTelegram(db, mark.id, user(78, "Mark"));
+    await db.update(players).set({ email: "mark@example.com" }).where(eq(players.id, mark.id));
+    const dima = await makePlayer(db, "Dima");
+    await joinEvent(db, { eventId: ev.id, playerId: dima.id });
+
+    calls = [];
+    expect(await notifyLineupChange(db, ev, false)).not.toBeNull();
+    const done = sent("sendMessage").find((c) => c.body.chat_id === 77);
+    expect(done, "the player with no address hears the line-up is complete").toBeTruthy();
+    expect(String(done!.body.text)).toContain("The line-up is complete");
+    expect(String(done!.body.text)).toContain("Rawai Padel Club");
+    expect(sent("sendMessage").some((c) => c.body.chat_id === 78)).toBe(false);
+    // The link in the button signs them in and opens the match, the way every other notice does.
+    expect(JSON.stringify(done!.body.reply_markup)).toMatch(/\/p\/[A-Za-z0-9]{12}\//);
+
+    calls = [];
+    await notifyEventCancelled(db, (await cancelEvent(db, ev.id, org.id)));
+    const off = sent("sendMessage").find((c) => c.body.chat_id === 77);
+    expect(off, "and hears that it is off").toBeTruthy();
+    expect(String(off!.body.text)).toContain("The match is off");
+    expect(sent("sendMessage").some((c) => c.body.chat_id === 78)).toBe(false);
   });
 
   it("an organizer who linked Telegram hears who joined and left, in their language; nobody else does", async () => {

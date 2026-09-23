@@ -722,7 +722,15 @@
     "scoreTitle": "🏁 Как сыграли?",
     "scoreBody": "{venue}. Внесите счёт одним нажатием.",
     "wantedTitle": "Вы просили такое · {day} {time}",
-    "wantedBody": "{venue} · {spots}. Нажмите, чтобы занять место."
+    "wantedBody": "{venue} · {spots}. Нажмите, чтобы занять место.",
+    "lineupCompleteTitle": "✅ Состав собран",
+    "lineupCompleteBody": "{day} в {time} · {venue}. {names}.",
+    "lineupOpenTitle": "Кто-то вышел · {day} {time}",
+    "lineupOpenBody": "{venue} · {spots}",
+    "updatedTitle": "Матч перенесли",
+    "updatedBody": "Теперь {day} в {time} · {venue}.",
+    "cancelledTitle": "Матч отменён",
+    "cancelledBody": "{day} в {time} · {venue} не состоится."
   },
   "about": {
     "footerLink": "Конфиденциальность и правила (коротко, честно)",

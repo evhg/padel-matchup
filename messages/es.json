@@ -722,7 +722,15 @@
     "scoreTitle": "🏁 ¿Cómo fue?",
     "scoreBody": "{venue}. Mete el resultado con un toque.",
     "wantedTitle": "Pediste uno así · {day} {time}",
-    "wantedBody": "{venue} · {spots}. Toca para ocupar una plaza."
+    "wantedBody": "{venue} · {spots}. Toca para ocupar una plaza.",
+    "lineupCompleteTitle": "✅ El equipo está completo",
+    "lineupCompleteBody": "{day} a las {time} · {venue}. {names}.",
+    "lineupOpenTitle": "Alguien se salió · {day} {time}",
+    "lineupOpenBody": "{venue} · {spots}",
+    "updatedTitle": "El partido cambió",
+    "updatedBody": "Ahora {day} a las {time} · {venue}.",
+    "cancelledTitle": "El partido se canceló",
+    "cancelledBody": "{day} a las {time} · {venue} no se jugará."
   },
   "about": {
     "footerLink": "Privacidad y condiciones (breve, prometido)",
