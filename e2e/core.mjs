@@ -26,6 +26,14 @@ try {
   const firstCard = (await a.getByTestId("card-preview").textContent()) ?? "";
   check("the landing page shows the card a match will have, four seats and no court yet", firstCard.includes("Court TBD") && firstCard.includes("1/4 players"), firstCard);
   const backIn = a.getByText("Played before? Get your matches back.");
+  await backIn.click();
+  const nesting = await a.evaluate(() => {
+    const input = document.querySelector('input[placeholder="you@example.com"]');
+    const own = input?.closest("form");
+    const create = document.querySelector('form:has(button[type=submit])');
+    return { hasInput: Boolean(input), sameFormAsCreate: own === create, action: own?.className ?? null };
+  });
+  check("TEMP nesting", false, JSON.stringify(nesting));
   check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
   await backIn.click();
   check("opening it asks for the email, in place", await a.getByPlaceholder("you@example.com").isVisible());

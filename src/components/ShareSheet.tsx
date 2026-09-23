@@ -81,6 +81,26 @@ export function QrPanel({ url, hint }: { url: string; hint?: string }) {
   );
 }
 
+/**
+ * The code, folded away until somebody wants it.
+ *
+ * On a phone the open panel is 220px of square plus its box: a quarter of the screen, for the one
+ * case where two people are standing on the same court. The match page already folded it and the
+ * share screen did not, so this is that shape in one place rather than two that drift.
+ *
+ * The poster keeps the open panel: a printed sheet is the case where the code IS the point.
+ */
+export function QrFold({ url, label }: { url: string; label: string }) {
+  return (
+    <details className="group">
+      <summary className="cursor-pointer list-none text-sm link">QR · {label}</summary>
+      <div className="mt-3">
+        <QrPanel url={url} />
+      </div>
+    </details>
+  );
+}
+
 export function LinkBox({ url, display }: { url: string; display: string }) {
   return (
     <div className="rounded-2xl border-2 border-dashed border-line-strong bg-bg px-4 py-3 text-center">

@@ -26,7 +26,7 @@ import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SeriesDoor } from "@/components/SeriesBits";
-import { CopyButton, QrPanel, ShareButtons } from "@/components/ShareSheet";
+import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { getDb } from "@/db";
@@ -459,12 +459,9 @@ export default async function EventPage({ params, searchParams }: Props) {
                 <CopyButton value={waJoin} label={t("wa.copy")} className="btn-ghost btn-sm mt-2" />
               </div>
             )}
-            <details className="mt-3 group">
-              <summary className="cursor-pointer list-none text-sm link">QR · {t("share.qrHint")}</summary>
-              <div className="mt-3">
-                <QrPanel url={url} />
-              </div>
-            </details>
+            <div className="mt-3">
+              <QrFold url={url} label={t("share.qrHint")} />
+            </div>
           </section>
         )}
 
