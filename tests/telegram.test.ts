@@ -20,6 +20,7 @@ import { notifyCreator, notifyEventCancelled, notifyLineupChange } from "@/lib/n
 import { getEventByCode } from "@/lib/domain/queries";
 import { formatEventTime } from "@/lib/dates";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
+import { recordMark } from "@/lib/domain/emailMarks";
 
 const TOKEN = "123456:TESTTOKEN";
 type Call = { method: string; body: Record<string, unknown> };
@@ -376,6 +377,24 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(off, "and hears that it is off").toBeTruthy();
     expect(String(off!.body.text)).toContain("The match is off");
     expect(sent("sendMessage").some((c) => c.body.chat_id === 78)).toBe(false);
+  });
+
+  it("an address that bounced is no address: its owner hears on Telegram instead", async () => {
+    // The bounce and complaint handling (src/lib/domain/emailMarks.ts): a marked address gets no mail,
+    // so a player who gave one must not fall between the email and the channels they do have.
+    const { ev } = await match();
+    const mark = await makePlayer(db, "Mark");
+    await joinEvent(db, { eventId: ev.id, playerId: mark.id });
+    await linkTelegram(db, mark.id, user(79, "Mark"));
+    await db.update(players).set({ email: "mark.bounced@example.com" }).where(eq(players.id, mark.id));
+    for (const n of ["Nina", "Dima"]) await joinEvent(db, { eventId: ev.id, playerId: (await makePlayer(db, n)).id });
+    await recordMark(db, "mark.bounced@example.com", "hard", "Permanent");
+
+    calls = [];
+    expect(await notifyLineupChange(db, ev, false)).not.toBeNull();
+    const told = sent("sendMessage").find((c) => c.body.chat_id === 79);
+    expect(told, "the player whose email bounced hears the line-up is complete").toBeTruthy();
+    expect(String(told!.body.text)).toContain("The line-up is complete");
   });
 
   it("an organizer who linked Telegram hears who joined and left, in their language; nobody else does", async () => {

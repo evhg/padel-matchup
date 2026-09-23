@@ -468,6 +468,14 @@ Everything in this list is live. The README describes each in detail.
   that". The card on the first page, which fills in as a match is typed, now sits on the photo of
   the viewer's last match, served from `/{code}/photo`.
 
+- **An address that stops working stops being written to (23 September 2026, migrations 0073 and
+  0074).** Resend's bounces and complaints arrive on the signed webhook that already carried mail to
+  `claude@`. A hard bounce or a complaint marks the address at once, three soft bounces mark it; a
+  marked address gets no more mail, the match tells its owner on Telegram or by push instead, the
+  player reads it on My matches and the organiser beside the name. A code the player asks for still
+  goes, and arriving clears the mark. The service board watches the two rates mail providers judge
+  a sender by.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -537,20 +545,7 @@ Written 23 September 2026 for a clean hand-over. The desk notes are in
 Standing order 5 in CLAUDE.md applies to every one that becomes a change: mark it `shipped`, thank
 the player, and invite them to try it.
 
-1. **Deliver Erik's answer (`dab8c808`).** Written and recorded on 23 September, but a merge had
-   blanked the note's author, so it went nowhere (`no_channel`); migration 0070 points the note back at
-   him, then send it again. Saving an email for the calendar invite does not merge anybody's history: a
-   typed address is not a proved one. The code that the "used this before?" line offers does merge,
-   because a code is proof.
-2. **Bounces and complaints.** The app handles neither of Resend's `email.bounced` and
-   `email.complained`, so a dead address still counts as reachable, and Resend's suppression list
-   refuses each new attempt (nine for one address). The only bounce so far is a test user, so nobody
-   real is affected. The shape: a signed Resend webhook; a hard bounce or a complaint marks the
-   address, a soft bounce only after three in a row; a marked address stops counting as reachable, the
-   organiser sees "did not get it", the player sees "your email bounced" on the next visit; a proved
-   code clears the mark; the service board alerts on the bounce and complaint rates. It needs a column,
-   so it is a migration and the owner's word first.
-3. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
+1. **Security, at 100 real players.** Decided 23 September: no rotation and no hardening before that.
    Then: rotate `CRON_SECRET`, `RESEND_API_KEY` and `VERCEL_TOKEN`, and review who may call
    `/api/admin/*`. And move the app's own connection onto the role `kicksmash`: production connects
    as `postgres` today (checked 23 September), which bypasses Row Level Security, so the policies

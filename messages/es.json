@@ -324,7 +324,9 @@
     "sendTheirLink": "Envíale su enlace personal",
     "reserveDone": "Listo",
     "inviteEmailedAgo": "Invitación enviada {ago}",
-    "sameContact": "Mismo {kind} que {name}. ¿Usar ese nombre?"
+    "sameContact": "Mismo {kind} que {name}. ¿Usar ese nombre?",
+    "emailBounced": "El correo rebota",
+    "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma."
   },
   "score": {
     "title": "Resultado",
@@ -377,7 +379,9 @@
     "firstTimeTitle": "¿Primera vez? Solo tu nombre, nada más.",
     "pastMore": "Ver {n} más",
     "emailHelp": "Tu correo es cómo vuelves a entrar en un teléfono nuevo. Los partidos llegan a tu calendario.",
-    "saveEmail": "Guardar correo"
+    "saveEmail": "Guardar correo",
+    "emailBounced": "El correo a esta dirección dejó de llegar el {date}, así que Kicksmash dejó de enviarlo. Revisa la dirección o escribe otra.",
+    "emailComplained": "El {date} un correo de Kicksmash se marcó como spam, así que dejamos de enviarlos. Guarda tu dirección de nuevo para volver a recibirlos."
   },
   "notFound": {
     "title": "Enlace no encontrado",

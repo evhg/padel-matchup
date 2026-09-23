@@ -18,6 +18,7 @@ import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, setSessionPla
 import { ActionFailure, assertRate, clientIp, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { removeOptOut } from "@/lib/domain/optouts";
+import { liftOnConsent } from "@/lib/domain/emailMarks";
 
 export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
 
@@ -60,6 +61,9 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
     const others = normalized ? (await playersWithEmail(db, normalized)).filter((o) => o.id !== me.id) : [];
     if (normalized && normalized !== me.email) await assertRate(db, "email", me.id, LIMITS.emailChangesPerPlayerPerDay);
     const { player: p, changed, kept } = await changePlayerEmail(db, me.id, normalized);
+    // Typing an address in, new or the same one again, is asking for mail: a complaint or a run of
+    // soft bounces on it is lifted (src/lib/domain/emailMarks.ts).
+    if (normalized) await liftOnConsent(db, normalized);
     if (changed) {
       // Adding your own address is explicit consent: lift any earlier "never email me".
       await removeOptOut(db, p.email);

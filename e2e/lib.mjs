@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { chromium } from "playwright";
+import { createHmac } from "node:crypto";
 
 export const BASE = process.env.BASE ?? "http://localhost:3001";
 const SHOTS = process.env.SHOTS;
@@ -95,4 +96,18 @@ export function lessonDay(now = new Date()) {
     if (dow >= 1 && dow <= 5) return { offset, date: d.toISOString().slice(0, 10), en: words.en[dow], ru: words.ru[dow], es: words.es[dow] };
   }
   throw new Error("unreachable: five weekdays in any six days");
+}
+
+/** The webhook secret e2e/run.mjs gives the server: "e2e-resend-webhook", base64, the way Resend writes one. */
+export const RESEND_WEBHOOK_SECRET = "whsec_ZTJlLXJlc2VuZC13ZWJob29r";
+
+/** Posts an event to the Resend webhook, signed the way Resend signs it (src/lib/outreach/svix.ts). */
+export async function resendEvent(page, event) {
+  const body = JSON.stringify(event);
+  const id = `e2e-${Math.random().toString(36).slice(2, 10)}`;
+  const ts = String(Math.floor(Date.now() / 1000));
+  const key = Buffer.from(RESEND_WEBHOOK_SECRET.replace(/^whsec_/, ""), "base64");
+  const signature = `v1,${createHmac("sha256", key).update(`${id}.${ts}.${body}`).digest("base64")}`;
+  const res = await page.request.post(`${BASE}/api/inbound/resend`, { data: body, headers: { "content-type": "application/json", "svix-id": id, "svix-timestamp": ts, "svix-signature": signature } });
+  return { status: res.status(), body: await res.json().catch(() => null) };
 }

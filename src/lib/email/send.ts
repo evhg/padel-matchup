@@ -19,6 +19,11 @@ export type OutgoingEmail = {
   ics?: { content: string; method: "REQUEST" | "CANCEL" };
   /** Any other file: the month's statement, for one. UTF-8 text, base64-encoded here. */
   files?: { filename: string; content: string; contentType: string }[];
+  /**
+   * A code the person asked for. It goes even to a marked address, because a code arriving is the
+   * only proof that a marked address works again (`clearMark` when it is typed back).
+   */
+  proof?: boolean;
 };
 
 /**
@@ -31,6 +36,15 @@ let warnedSink = false;
 export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
   const r = resend();
   if (!r) return false;
+  // An address that bounced hard, complained, or kept bouncing is not written to again until a code
+  // proves it works (src/lib/domain/emailMarks.ts). Resend would refuse it anyway; asking first
+  // keeps the attempt out of the sender's reputation and lets the caller use another channel.
+  try {
+    const [{ getDb }, { markedAmong }] = await Promise.all([import("@/db"), import("@/lib/domain/emailMarks")]);
+    if (!msg.proof && (await markedAmong(await getDb(), [msg.to])).size) return false;
+  } catch {
+    /* a check that cannot run must not stop the mail */
+  }
   // A file sink for local and CI runs only: on Vercel a stray variable must not swallow real mail, and the log says it was ignored.
   if (process.env.EMAIL_SINK_FILE) {
     if (!onVercel()) return sink(msg);

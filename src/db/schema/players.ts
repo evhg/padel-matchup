@@ -110,6 +110,25 @@ export const emailOptOuts = pgTable("email_opt_outs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * An address that bounced or complained, from Resend's webhook (src/lib/domain/emailMarks.ts).
+ *
+ * A fact about an address, not about a person: keyed by the lower-cased address, so a player who
+ * types a new one starts clean and two rows sharing a dead one both stop. `marked_at` set means stop
+ * sending: at once for a hard bounce or a complaint, after three soft bounces for a full mailbox.
+ * A code that arrives at the address proves it works again and deletes the row.
+ */
+export const emailMarks = pgTable("email_marks", {
+  address: text("address").primaryKey(),
+  /** hard | soft | complaint — the strongest seen so far. */
+  kind: text("kind").notNull(),
+  softCount: integer("soft_count").notNull().default(0),
+  reason: text("reason"),
+  markedAt: timestamp("marked_at", { withTimezone: true }),
+  firstAt: timestamp("first_at", { withTimezone: true }).notNull().defaultNow(),
+  lastAt: timestamp("last_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Web Push subscriptions (one per browser/home-screen app, many per player). */
 export const pushSubscriptions = pgTable(
   "push_subscriptions",

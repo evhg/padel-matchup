@@ -2,6 +2,7 @@ import { and, gte, inArray, like, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
 import { BACKUP_ROW_CAP } from "@/lib/backup";
+import { marksSince } from "@/lib/domain/emailMarks";
 import { emailEnabled } from "@/lib/config";
 import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
@@ -134,6 +135,13 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   // Mail
   push({ key: "resend_month", name: "Resend, this month", role: "outbound email", used: emailEnabled() ? (month.emails_sent ?? 0) : null, limit: CEILINGS.resendPerMonth, usage: emailEnabled() ? `${fmt(month.emails_sent ?? 0)} sent` : "off", ceiling: `${fmt(CEILINGS.resendPerMonth)} / month`, note: "Free plan. Paid tiers only past fifty emails a day, by decision.", state: emailEnabled() ? undefined : "off" });
   push({ key: "resend_day", name: "Resend, today", role: "outbound email", used: emailEnabled() ? (day.emails_sent ?? 0) : null, limit: CEILINGS.resendPerDay, usage: emailEnabled() ? `${fmt(day.emails_sent ?? 0)} sent` : "off", ceiling: `${CEILINGS.resendPerDay} / day`, note: "Inbound mail (claude@, feedback@) arrives through the Resend webhook and has no ceiling.", state: emailEnabled() ? undefined : "off" });
+  // Bounces and complaints this month against what was sent: the two rates a mail provider judges a
+  // sender by. A marked address is not written to again (src/lib/domain/emailMarks.ts).
+  const marks = await marksSince(db, new Date(`${since}T00:00:00Z`));
+  const sentMonth = month.emails_sent ?? 0;
+  const bounceRate = sentMonth ? marks.bounced / sentMonth : 0;
+  const complaintRate = sentMonth ? marks.complained / sentMonth : 0;
+  push({ key: "email_marks", name: "Bounces and complaints", role: "addresses that stopped working", used: null, limit: null, usage: `${marks.bounced} bounced · ${marks.complained} complained · of ${fmt(sentMonth)} sent this month`, ceiling: "bounces under 4% · complaints under 0.3%", note: "A marked address gets no more mail until a code proves it works. Gmail and Yahoo slow a sender whose complaints reach 0.3%.", state: !emailEnabled() ? "off" : complaintRate >= 0.003 || bounceRate >= 0.04 ? "alert" : complaintRate >= 0.001 || bounceRate >= 0.02 ? "warn" : "ok" });
 
   // Chat platforms
   const tgOn = Boolean(process.env.TELEGRAM_BOT_TOKEN);

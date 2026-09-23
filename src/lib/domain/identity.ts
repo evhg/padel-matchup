@@ -7,6 +7,7 @@ import { CODE_ALPHABET } from "@/lib/codes";
 import { DomainError } from "./errors";
 import { mergePlayers } from "./merge";
 import { normalizeEmail } from "./players";
+import { clearMark } from "./emailMarks";
 
 /**
  * Cross-device identity without accounts:
@@ -142,6 +143,8 @@ export async function consumeEmailCode(db: Db, rawEmail: string, code: string, n
     throw new DomainError("invalid", "code_wrong");
   }
   await db.update(emailCodes).set({ consumedAt: now }).where(and(eq(emailCodes.email, email), isNull(emailCodes.consumedAt)));
+  // The code came through, so the address works: a bounce or a complaint on it is over.
+  await clearMark(db, email);
   return email;
 }
 

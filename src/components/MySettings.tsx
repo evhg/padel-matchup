@@ -15,6 +15,7 @@ import { PersonalLinkCard } from "./PersonalLinkCard";
 import { PushToggle } from "./PushToggle";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { TelegramLogin } from "./TelegramLogin";
+import { markOf } from "@/lib/domain/emailMarks";
 
 /**
  * Everything a player sets rather than reads: reminders, the link that is their way back in, the
@@ -27,6 +28,9 @@ import { TelegramLogin } from "./TelegramLogin";
 export async function MySettings({ player, personalToken, hasMatches }: { player: Player; personalToken: string; hasMatches: boolean }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
   const hasPush = await playerHasPush(db, player.id);
+  // Mail to this address stopped arriving: the one place the person can fix it is here, so it says so here.
+  const mark = emailEnabled() && player.email ? await markOf(db, player.email) : null;
+  const markedOn = mark ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: "UTC" }).format(mark.markedAt) : "";
   return (
     <>
       {/* The toggle draws its own card: a phone that cannot do push sees no card, not an empty one. */}
@@ -51,6 +55,11 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
             default, and neither holds here: there is no match to put in a calendar.
           */
           <div className="mt-4 border-t border-line pt-4">
+            {mark && (
+              <p className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm font-semibold" data-testid="email-marked">
+                {mark.kind === "complaint" ? t("me.emailComplained", { date: markedOn }) : t("me.emailBounced", { date: markedOn })}
+              </p>
+            )}
             <EmailField
               initial={player.email}
               mode="me"
