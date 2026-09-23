@@ -25,6 +25,12 @@ import type { Player } from "@/db/schema";
  *   - Automatically, without anybody looking: on a proved email and on a Telegram link, because both
  *     are proof. **Not** on a nightly sweep — a wrong rule running overnight does its damage before
  *     anybody reads the report.
+ *
+ * One line that is not a preference: **an address that was typed is not an address that was proved.**
+ * `same_email` is safe for a merge somebody runs and reads the rows of. Firing it when an email is
+ * merely saved would be an account takeover — type a stranger's address into the email field and
+ * their matches become yours. That is why the automatic path is `restoreByEmail`, which runs only
+ * after a code came back, and why `EmailField` saving an address merges nothing.
  */
 
 export type MergeCandidate = Pick<Player, "id" | "displayName" | "email" | "telegramId">;
@@ -62,6 +68,26 @@ export function safeToMerge(into: MergeCandidate, from: MergeCandidate): MergeVe
   if (into.telegramId && from.telegramId) return { ok: false, reason: "two different Telegram accounts" };
   if (!normalName(into.displayName) || normalName(into.displayName) !== normalName(from.displayName)) return { ok: false, reason: "different names" };
   return { ok: true, rule: "same_name_one_address" };
+}
+
+/**
+ * Does the name somebody is typing already belong to a person in this match?
+ *
+ * The match page is where duplicates are born. A friend's link opens in WhatsApp's or Instagram's
+ * own browser, which has never seen this person; the page asks "What's your name?"; they type the
+ * name they always type, and become a second row with none of their history on it. Micky was invited
+ * to a match by email on 23 September, the mail did not reach her, and the next thing she would have
+ * done is exactly this.
+ *
+ * Compared only against the names already on this match, never against the whole table. Those names
+ * are printed on the page the person is looking at, so recognising one tells them nothing they
+ * cannot already read. Matching against every player would answer "who else uses Kicksmash?" to
+ * anybody with a link, one guess at a time.
+ */
+export function nameIsHere(typed: string, namesHere: readonly (string | null | undefined)[]): boolean {
+  const n = normalName(typed);
+  if (n.length < 2) return false;
+  return namesHere.some((other) => normalName(other) === n);
 }
 
 /**

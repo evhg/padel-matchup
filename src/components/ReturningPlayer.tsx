@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { BackInFold } from "@/components/BackInFold";
 import { RestoreWithEmail } from "@/components/RestoreWithEmail";
 import { TelegramLogin } from "@/components/TelegramLogin";
 import { APP_NAME, baseUrl, emailEnabled } from "@/lib/config";
@@ -42,10 +43,5 @@ export async function ReturningPlayer({ collapsed = false }: { collapsed?: boole
         {body}
       </>
     );
-  return (
-    <details className="mt-3 border-t border-line pt-3">
-      <summary className="cursor-pointer list-none link text-sm font-semibold">{t("identity.usedBefore", { app: APP_NAME })}</summary>
-      {body}
-    </details>
-  );
+  return <BackInFold summary={t("identity.usedBefore", { app: APP_NAME })}>{body}</BackInFold>;
 }

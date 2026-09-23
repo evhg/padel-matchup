@@ -179,7 +179,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
-  const inEventNames = new Set([...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => (s.player?.displayName ?? s.invitedName ?? "").trim().toLowerCase()).filter(Boolean));
+  // The same list twice over: the organiser's suggestions leave these people out, and a stranger
+  // typing one of these names is offered the way back in rather than a second row of their own.
+  const namesHere = [...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
+  const inEventNames = new Set(namesHere.map((n) => n.trim().toLowerCase()));
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
@@ -240,6 +243,7 @@ export default async function EventPage({ params, searchParams }: Props) {
                 hasIdentity={Boolean(me)}
                 rolodex={viewer.isCreator ? rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone })) : []}
                 emailEnabled={emailEnabled()}
+                namesHere={namesHere}
                 levelRange={ranged ? levelRange : null}
                 myLevel={me?.level ?? null}
               />

@@ -174,7 +174,26 @@ try {
   );
   await backInHere.getByText("Played before? Get your matches back.").click();
   check("opening it asks for the email, on the match page", await w.getByPlaceholder("you@example.com").isVisible());
+
   await w.close();
+
+  // The duplicate is born in the open spot, not in the fold. A stranger on the future match — Dana
+  // is its only player — types "Dana", which is what somebody who has played before does on a phone
+  // the page has never seen. A fresh context, so the fold starts closed and the last check means
+  // something.
+  const dup = await newPage();
+  await dup.goto(`${BASE}/${code2}`);
+  await dup.getByRole("button", { name: "Join this match" }).click();
+  const spot = dup.getByTestId("open-spot-name").first();
+  await spot.fill("Someone New");
+  check("a name nobody in this match has is left alone", (await dup.getByTestId("already-here").count()) === 0);
+  await spot.fill("Dana");
+  check("a name already in this match is recognised before it becomes a second row", (await dup.getByTestId("already-here").count()) === 1, (await dup.getByTestId("already-here").textContent().catch(() => "(none)")) ?? "(none)");
+  check("the way back in is still shut until they say it is them", (await dup.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
+  await dup.getByTestId("already-here").getByRole("button").click();
+  check("\"That's me\" opens the way back in, on the spot", await dup.getByPlaceholder("you@example.com").isVisible());
+  await shot(dup, "12b-already-here");
+  await dup.close();
 
   await a.reload();
   check("creator sees Confirmed chip", (await a.getByText("Confirmed", { exact: true }).count()) > 0);

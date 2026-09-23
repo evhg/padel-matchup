@@ -4,7 +4,9 @@ import { useTranslations } from "next-intl";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
+import { requestBackIn } from "./backInBus";
 import { registerJoinHandler } from "./joinBus";
+import { nameIsHere } from "@/lib/domain/dupes";
 import { LevelSelect } from "./LevelSelect";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
@@ -24,6 +26,7 @@ export function OpenSpot({
   hasIdentity,
   rolodex,
   emailEnabled,
+  namesHere = [],
   levelRange = null,
   myLevel = null,
 }: {
@@ -34,6 +37,8 @@ export function OpenSpot({
   hasIdentity: boolean;
   rolodex: RolodexItem[];
   emailEnabled: boolean;
+  /** Everybody already in this match, so a returning player is recognised before they become a second row. */
+  namesHere?: readonly string[];
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
   myLevel?: number | null;
@@ -162,6 +167,7 @@ export function OpenSpot({
           {(mode === "reserve" || !hasIdentity) && (
             <input
               ref={input}
+              data-testid="open-spot-name"
               className="input"
               placeholder={mode === "reserve" ? t("creator.name") : t("identity.namePlaceholder")}
               value={name}
@@ -176,6 +182,21 @@ export function OpenSpot({
             {pending ? t("common.working") : mode === "reserve" ? t("creator.reserveDone") : t("event.joinShort")}
           </button>
         </div>
+        {/*
+          The duplicate is born here. A friend's link opens in WhatsApp's own browser, which has
+          never seen this person; they type the name they always type and become a second row with
+          none of their history on it. If that name is already in this match, say so and offer the
+          door instead — quietly, under the field, with the name field untouched, because a real
+          namesake must still be able to join.
+        */}
+        {mode === "join" && !hasIdentity && nameIsHere(name, namesHere) && (
+          <p data-testid="already-here" className="text-sm text-muted">
+            {t("identity.alreadyHere", { name: name.trim() })}{" "}
+            <button type="button" className="link font-semibold" onClick={() => requestBackIn()}>
+              {t("identity.thatsMe")}
+            </button>
+          </p>
+        )}
         {mode === "reserve" && suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((r) => (

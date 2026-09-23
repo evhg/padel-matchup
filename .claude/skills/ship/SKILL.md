@@ -162,6 +162,10 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and the wrong answer, then break the guard and watch that named test go red.
 - **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
   the bug back, watch it catch it, then restore.
+- **Nothing but the browser step parses `e2e/*.mjs`.** A page named `d` in a file that already
+  declared `d` further down made the whole core suite fail to load — typecheck does not read `.mjs`,
+  lint did not catch the redeclaration, and the gate spent a build and 179 seconds of browser time
+  before saying so. `node --check e2e/<suite>.mjs` costs a second and answers the same question.
 - **A check that a control renders is not a check that it works.** The landing page's "Played before?
   Get your matches back." door was dead for seven days on the busiest page in the app, and two browser
   checks named that exact line the whole time: one counted the element, one clicked it open and read
