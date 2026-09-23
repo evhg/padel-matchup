@@ -237,7 +237,18 @@ Everything in this list is live. The README describes each in detail.
   the rows, so the badge, the API and the picker read one column each and never join the table.
   The club page lists the courts; the API carries their names; a match created at the club picks
   a court by its real name instead of 1…n, and the club's day view names the court each match is
-  on. The second half — a court as capacity a person can hold, with lessons on it — is item 4 below.
+  on. The second half is the entry below.
+
+- **The courts model, second half: capacity.** A club's day (`/v/<slug>`) is a grid of the club's
+  own courts: one row for each court, the matches and the lessons on it, and "3 of 6 courts busy"
+  above. `clubBusy` reads both kinds in one window and `courtDay` lays them out in the club's own
+  order, with a last row for whatever named no court — so nothing is hidden and nothing is guessed.
+  A lesson carries a court since migration 0066: the coach answers "Court you teach on" once, on
+  their settings screen, and each lesson booked after that copies the answer. Only for a coach who
+  names one club, which is the rule `venue_slug` already follows, because a court name without a
+  club says nothing, and a club reading somebody else's court as busy is worse than a club reading
+  none. The court is the coach's own answer and never an inference. A club still reads no student's
+  name off its own day. What is left of item 4 is the hold.
 
 - **The coach's screens say what they do.** Erik's first pass through the coach walk found match
   wording living inside it: "calendar invite on its way" and "email me when the line-up changes" on
@@ -457,10 +468,12 @@ linked and four have an email address.
    they trip on comes back here. Formerly listed here: the big-event extras — a stream link on a match or a
    court ("Watch live"; the organiser streams on YouTube or Twitch, we link), check-in by QR, a
    lucky loser, a results file, a ranking across editions.
-4. **Courts as capacity, then a court a person can hold.** The rows exist (`club_courts`, under Built)
-   and a match names one. What is left: lessons on a court, the hour-by-hour view of what is busy,
-   and a person holding a court with a name and a cancellation rule. No payment passes through
-   Kicksmash.
+4. **A court a person can hold.** The rows exist, a match names a court, a lesson names one, and the
+   club's day shows which courts are busy — all under Built. What is left is the hold itself: a
+   court held in somebody's name for a time, and the rule that says who may give it back and by
+   when. No payment passes through Kicksmash. This one waits for the owner, because a hold is a
+   promise to a person about a physical thing, and the cancellation rule is the club's policy rather
+   than ours to invent.
 5. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
 6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
