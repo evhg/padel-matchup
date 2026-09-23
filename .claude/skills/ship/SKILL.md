@@ -145,6 +145,9 @@ learning can be a test, a gate step or a script, make it one and put the story i
   shape — its length, what comes before `://`, whether it holds a space or a quote, how many `@` it
   has — and never one character after `://`, which is where the password lives. Tests prove both
   halves. When a check depends on a value you cannot see, make the failure describe it.
+- **Count the queries before you fire them.** Twelve small production questions in one session is
+  twelve interruptions for the owner, because each one is a permission prompt on her screen. One query
+  with `json_build_object` answers five questions at once. Batch first, ask once.
 - **Ask the database before describing blast radius.** A broken notification string was reported to the
   owner as having reached people's phones. There were zero clubs, so it had reached nobody. One query
   before the sentence.
@@ -159,6 +162,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and the wrong answer, then break the guard and watch that named test go red.
 - **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
   the bug back, watch it catch it, then restore.
+- **A check that a control renders is not a check that it works.** The landing page's "Played before?
+  Get your matches back." door was dead for seven days on the busiest page in the app, and two browser
+  checks named that exact line the whole time: one counted the element, one clicked it open and read
+  that the input was visible. Neither ever typed an address and pressed the button. Every door gets one
+  check that goes all the way through and waits for the answer the far side sends — an unknown address
+  answering "We don't know that email yet" proves the handler ran; a visible input proves nothing.
 - **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one
   and postgres-js throws `Received an instance of Date`, so the gate goes green and CI's real-Postgres
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use

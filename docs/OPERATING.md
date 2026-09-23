@@ -128,6 +128,42 @@ when waiting; end every batch with three lines: what shipped, what is next, what
 drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
 Telegram), `/api/admin/metrics`.
 
+## What the session's environment must hold
+
+A Claude session in the cloud runs in a fresh container with no socket to the database and no
+credentials of its own. On 23 September 2026 the environment was emptied on my advice — the advice
+was about moving the *migration* secret to GitHub, and it was read as "clear the lot". It cost that
+day's work: the Resend log could not be read, `claude@kicksma.sh` could not send, and every
+production question fell back to a tool that asks the owner to approve it one query at a time.
+
+So this list is the contract. Each name is read straight from the environment by the scripts above;
+none of them is ever written to a file or typed into a command, and the harness refuses a shell
+command that carries a credential in its text, which is why the variable has to exist rather than be
+fetched and pasted.
+
+| Variable | What stops without it |
+| --- | --- |
+| `CRON_SECRET` | every `/api/admin/*` endpoint: the feedback desk, errors, services, metrics, and the read-only query door |
+| `RESEND_API_KEY` | reading whether a message was delivered or bounced; sending as `claude@kicksma.sh` |
+| `VERCEL_TOKEN` | the deploy state at the end of `prodcheck.sh` |
+| `PORKBUN_API_KEY`, `PORKBUN_SECRET_API_KEY` | the Monday domain-expiry check above |
+| `KICKSMASH_BASE` | optional; defaults to `https://kicksma.sh` |
+
+GitHub cannot stand in for this. A repository secret can be *used* by a workflow and never *read*
+back through the API — that is the whole point of it — so `DIRECT_DATABASE_URL` reaching the Migrate
+workflow does nothing for a session that needs to ask a question now.
+
+**A read-only query door is not built.** It was designed, written and then held back on
+23 September: an endpoint that runs a caller's SQL hands whoever holds the operator token every row
+in the database, and `players.personal_token` is a sign-in credential, so "read everything" is also
+"become anyone". Three locks made it hard to *write* through and did nothing about that. If it is
+built, it reads through a Postgres role with `select` on a set of views that exclude every token,
+manage code and invite code — not as `postgres`, and not over whole tables.
+
+**Merging duplicate people.** `POST /api/admin/merge-players { into, from[], dryRun }` folds rows
+through the same `mergePlayers` the app uses, behind `safeToMerge` (`src/lib/domain/dupes.ts`), which
+refuses any pair two different people could be. Always `dryRun` first. A merge cannot be undone.
+
 **Checks and scripts** in `scripts/ops/`: `prodcheck.sh` (health, errors, services, open notes,
 research desk, main CI, deploy), `wait_ci.sh <branch> <sha>`, `deploy-poll.sh <sha> <log>`. They
 read `CRON_SECRET` (or `OPERATOR_TOKEN`) and `VERCEL_TOKEN` from the environment.
