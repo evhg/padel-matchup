@@ -200,7 +200,10 @@ try {
   await cal.reload();
   const play = cal.getByTestId("order-of-play");
   check("the public page carries the order of play by day with courts and times", (await play.count()) === 1 && (await play.innerText()).includes("Court 1") && (await play.innerText()).includes("Court 2") && (await cal.locator('[data-testid="match-when"]').count()) > 0);
-  check("Cal's own matches carry their court and time, and his rows stand out in the order of play", (await myMatches.innerText()).includes("Court") && (await play.locator('[data-mine="1"]').count()) >= 3);
+  // A match already played when the schedule is made keeps no time, so it is not in the order of play:
+  // the marked rows are exactly Cal's matches that have a court and a time.
+  const timed = await myMatches.locator('[data-testid^="my-match-"]').filter({ hasText: "Court" }).count();
+  check("Cal's own matches carry their court and time, and exactly those rows stand out in the order of play", timed >= 1 && (await play.locator('[data-mine="1"]').count()) === timed, `${timed} timed`);
   await shot(cal, "tournament-schedule-public");
   // 13. The organiser moves one match to Court 2 at a time of their choosing.
   await org.reload();
