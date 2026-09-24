@@ -2,14 +2,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { addCategory, createCompetition, enterPair } from "@/lib/domain/competitions";
 import { makeDraw, publishDraw } from "@/lib/domain/competitionDraw";
-import { daysOf, matchRemindersDue, moveMatch, orderOfPlay, scheduleCompetition, setCourts } from "@/lib/domain/competitionSchedule";
+import { daysOf, isDayOfPlay, knockoutFrom, matchRemindersDue, moveMatch, orderOfPlay, scheduleCompetition, setCourts } from "@/lib/domain/competitionSchedule";
 import { DomainError } from "@/lib/domain/errors";
+import { utcToZonedParts } from "@/lib/dates";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 /** Tuesday 8 September 2026, 16:00 in Phuket; the competition is on the weekend of 10–11 October. */
 const NOW = new Date("2026-09-08T09:00:00Z");
 freezeClock(NOW);
+const TZ = "Asia/Bangkok";
+/** The local date a match is played on, where the competition is. */
+const dayOf = (at: Date | null) => (at ? utcToZonedParts(at, TZ).date : null);
+const isKnockout = (m: { phase: string }) => m.phase === "main" || m.phase === "consolation";
 const code = async (p: Promise<unknown>): Promise<string> => {
   try {
     await p;
@@ -41,10 +46,16 @@ describe("courts and times in the database", () => {
     expect(await code(scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: org.id }))).toBe("invalid:no_draw");
     await makeDraw(db, { categoryId: gold.id, organizerPlayerId: org.id, now: NOW });
     await publishDraw(db, { categoryId: gold.id, organizerPlayerId: org.id });
-    const { slots } = await scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: org.id, now: NOW });
+    const { slots, unplaced } = await scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: org.id, now: NOW });
     expect(slots).toHaveLength(18);
+    expect(unplaced).toBe(0);
     const play = await orderOfPlay(db, c.id);
     expect(play).toHaveLength(18);
+    // Two days: the groups on Saturday, the whole knockout, main and consolation, on Sunday from 09:00.
+    expect(knockoutFrom(c)?.toISOString()).toBe("2026-10-11T02:00:00.000Z");
+    expect(play.filter((m) => !isKnockout(m)).every((m) => dayOf(m.scheduledAt) === "2026-10-10")).toBe(true);
+    expect(play.filter(isKnockout).every((m) => dayOf(m.scheduledAt) === "2026-10-11")).toBe(true);
+    expect(Math.min(...play.filter(isKnockout).map((m) => m.scheduledAt!.getTime()))).toBe(new Date("2026-10-11T02:00:00Z").getTime());
     expect(play[0].scheduledAt?.toISOString()).toBe("2026-10-10T02:00:00.000Z"); // 09:00 in Phuket
     expect(play[0].status).toBe("scheduled");
     expect(play[0].aName).toMatch(/ & /);
@@ -69,5 +80,49 @@ describe("courts and times in the database", () => {
     expect(due[0].competition.id).toBe(c.id);
     expect(due[0].category.name).toBe("Gold");
     expect(await matchRemindersDue(db, before)).toEqual([]);
+  });
+
+  it("plays a one-day competition on its day, the knockout after the groups as before", async () => {
+    const org = await makePlayer(db, "Org One");
+    const c = await createCompetition(db, { organizerPlayerId: org.id, name: "One Day Open", tz: TZ, startsOn: "2026-10-17", endsOn: "2026-10-17" });
+    expect(knockoutFrom(c)).toBeNull();
+    const gold = await addCategory(db, { competitionId: c.id, organizerPlayerId: org.id, name: "Gold", maxPairs: 8 });
+    for (let i = 1; i <= 8; i++) {
+      const p = await makePlayer(db, `O${i}`);
+      await enterPair(db, { categoryId: gold.id, playerId: p.id, partner: { name: `OM${i}` }, locale: "en", byOrganizer: true });
+    }
+    await setCourts(db, { competitionId: c.id, organizerPlayerId: org.id, courtNames: ["Court 1", "Court 2"], dayStart: "09:00", dayEnd: "20:00" });
+    await makeDraw(db, { categoryId: gold.id, organizerPlayerId: org.id, now: NOW });
+    await publishDraw(db, { categoryId: gold.id, organizerPlayerId: org.id });
+    const { slots, unplaced } = await scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: org.id, now: NOW });
+    expect(slots).toHaveLength(18);
+    expect(unplaced).toBe(0);
+    const play = await orderOfPlay(db, c.id);
+    expect(play.every((m) => dayOf(m.scheduledAt) === "2026-10-17")).toBe(true);
+    // The first semi-final follows the last group match with the thirty-minute rest, the same Saturday.
+    const lastGroupEnd = Math.max(...play.filter((m) => m.phase === "group").map((m) => m.scheduledAt!.getTime() + 30 * 60_000));
+    const firstKnockout = Math.min(...play.filter(isKnockout).map((m) => m.scheduledAt!.getTime()));
+    expect(firstKnockout).toBe(lastGroupEnd + 30 * 60_000);
+  });
+});
+
+describe("the days of play", () => {
+  // NOW is Tuesday 8 September, 16:00 in Phuket. The public page used to take yesterday in UTC,
+  // 7 September, and so stayed still on a first day and refreshed on the day after the last.
+  const on = (startsOn: string, endsOn: string) => isDayOfPlay({ startsOn, endsOn, tz: TZ });
+
+  it("counts the first day and the last where the competition is played, and not the day after", () => {
+    expect(on("2026-09-08", "2026-09-09")).toBe(true); // the first day
+    expect(on("2026-09-07", "2026-09-08")).toBe(true); // the last day
+    expect(on("2026-09-08", "2026-09-08")).toBe(true); // one day
+    expect(on("2026-09-06", "2026-09-07")).toBe(false); // the day after
+    expect(on("2026-09-09", "2026-09-10")).toBe(false); // tomorrow
+  });
+
+  it("reads the date where the competition is played", () => {
+    // 20:00 UTC is 03:00 on Wednesday in Phuket and 14:00 on Tuesday in Mexico City.
+    const evening = new Date("2026-09-08T20:00:00Z");
+    expect(isDayOfPlay({ startsOn: "2026-09-09", endsOn: "2026-09-10", tz: TZ }, evening)).toBe(true);
+    expect(isDayOfPlay({ startsOn: "2026-09-09", endsOn: "2026-09-10", tz: "America/Mexico_City" }, evening)).toBe(false);
   });
 });

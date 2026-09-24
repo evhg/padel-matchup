@@ -2165,6 +2165,7 @@
     "tvOver": "Así termina el torneo. Gracias por jugar.",
     "scoreYouWin": "Ganáis vosotros.",
     "scoreYouLose": "Ganan {name}, vosotros perdéis.",
+    "scheduleUnplaced": "{count, plural, one {# partido no encontró hueco} other {# partidos no encontraron hueco}}. Añade una pista o alarga el día y vuelve a hacer el horario.",
     "strip": {
       "title": "Cómo va un fin de semana",
       "entries": "Inscripciones",

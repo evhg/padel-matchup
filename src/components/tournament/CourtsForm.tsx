@@ -19,6 +19,8 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
   const to = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A match with no room keeps no time: the organiser has to hear it here, the one place they can act on it.
+  const [unplaced, setUnplaced] = useState(0);
   const read = () => ({
     courtNames: (names.current?.value ?? "")
       .split("\n")
@@ -31,6 +33,7 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
     start(async () => {
       setError(null);
       setNote(null);
+      setUnplaced(0);
       const r = await setCourtsAction(slug, read());
       if (r.ok) {
         setNote(t("tournament.saved"));
@@ -68,6 +71,7 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
             start(async () => {
               setError(null);
               setNote(null);
+              setUnplaced(0);
               const fields = read();
               if (fields.courtNames.length === 0) return setError(t("tournament.scheduleNeedsCourts"));
               const saved = await setCourtsAction(slug, fields);
@@ -75,6 +79,7 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
               const r = await makeScheduleAction(slug);
               if (r.ok) {
                 setNote(t("tournament.scheduled", { count: r.data.count }));
+                setUnplaced(r.data.unplaced);
                 router.refresh();
               } else setError(r.error === "invalid" && r.detail === "courts" ? t("tournament.scheduleNeedsCourts") : r.error === "invalid" && r.detail === "no_draw" ? t("tournament.scheduleNeedsDraw") : t("common.somethingWrong"));
             })
@@ -84,6 +89,11 @@ export function CourtsForm({ slug, courtNames, dayStart, dayEnd, hasDraw }: { sl
         </button>
         {!hasDraw && <span className="text-xs text-muted">{t("tournament.scheduleNeedsDraw")}</span>}
         {note && <span className="text-sm font-semibold text-ok">{note}</span>}
+        {unplaced > 0 && (
+          <span className="text-sm font-semibold text-warn" data-testid="schedule-unplaced">
+            {t("tournament.scheduleUnplaced", { count: unplaced })}
+          </span>
+        )}
         {error && <span className="text-sm font-semibold text-warn">{error}</span>}
       </div>
     </section>

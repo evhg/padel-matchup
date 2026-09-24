@@ -26,6 +26,11 @@ export type ScheduleMatch = {
   minutes: number;
   /** A slot already given (a match played or pinned by the organiser): kept, and everything else fits around it. */
   fixed?: { courtName: string; startsAt: Date } | null;
+  /**
+   * The earliest it may start. A two-day weekend plays the groups on Saturday and the knockout on
+   * Sunday; without this the greedy fill put the final on Saturday at 18:00 (ROADMAP, 23 September 2026).
+   */
+  notBefore?: Date | null;
 };
 
 export type DayWindow = { date: string; start: string; end: string };
@@ -44,6 +49,8 @@ export type ScheduleInput = {
 };
 
 export type Slot = { id: string; courtName: string; startsAt: Date; endsAt: Date };
+/** The slots given, and how many matches still to play found no room in the windows: counted, never dropped in silence. */
+export type Schedule = { slots: Slot[]; unplaced: number };
 
 const MIN = 60_000;
 
@@ -103,18 +110,20 @@ function fitInWindows(at: Date, minutes: number, wins: readonly { from: Date; to
 /**
  * Every match still to play gets a court and a start. Matches already played keep their slot as a
  * constraint on the rest; byes get nothing. A court is a list of busy ranges; a pair and each of
- * its players carry the time they are free again.
+ * its players carry the time they are free again. A match that fits nowhere is counted in
+ * `unplaced`, so the organiser hears it rather than finding a match with no time on the day.
  */
-export function schedule(input: ScheduleInput): Slot[] {
+export function schedule(input: ScheduleInput): Schedule {
   const rest = input.rest ?? 30;
   const step = input.step ?? 10;
   const wins = windows(input.days, input.tz);
-  if (wins.length === 0 || input.courts.length === 0) return [];
   const all = input.matches;
+  if (wins.length === 0 || input.courts.length === 0) return { slots: [], unplaced: all.filter((m) => !m.bye && !m.fixed && !m.over).length };
   const busy = new Map<string, { from: number; to: number }[]>(input.courts.map((c) => [c, []]));
   const freeAt = new Map<string, number>(); // pair or player id → when they are free again
   const endOf = new Map<string, number>(); // match id → when it ends
   const out: Slot[] = [];
+  const noRoom = new Set<string>(); // match ids that fit nowhere
   const who = (pairId: string | null): string[] => (pairId ? [pairId, ...(input.playersOf?.get(pairId) ?? [])] : []);
   const courtFree = (court: string, from: number, to: number) => busy.get(court)!.every((b) => to <= b.from || from >= b.to);
   const take = (m: ScheduleMatch, court: string, from: number) => {
@@ -128,13 +137,21 @@ export function schedule(input: ScheduleInput): Slot[] {
   for (const m of all) if (m.fixed && !m.bye) take(m, m.fixed.courtName, m.fixed.startsAt.getTime());
   for (const m of playingOrder(all)) {
     if (m.bye || m.fixed) continue;
-    let earliest = wins[0].from.getTime();
-    for (const dep of dependencies(m, all)) {
+    let earliest = Math.max(wins[0].from.getTime(), m.notBefore?.getTime() ?? 0);
+    const deps = dependencies(m, all);
+    for (const dep of deps) {
       const end = endOf.get(dep.id);
       if (end !== undefined) earliest = Math.max(earliest, end + rest * MIN);
     }
     for (const id of [...who(m.pairA), ...who(m.pairB)]) earliest = Math.max(earliest, freeAt.get(id) ?? 0);
     if (m.over) continue;
+    // A match built on one with no time has no time either. A dependency with no slot has no end, so
+    // this match used to take the first free court: a consolation final at noon while both of its
+    // semi-finals found no room (the short-day probe, 24 September 2026).
+    if (deps.some((d) => noRoom.has(d.id))) {
+      noRoom.add(m.id);
+      continue;
+    }
     // The earliest slot on any court; ties go to the first court in the list.
     let best: { court: string; at: number } | null = null;
     for (const court of input.courts) {
@@ -149,9 +166,32 @@ export function schedule(input: ScheduleInput): Slot[] {
       }
       if (at && (!best || at.getTime() < best.at)) best = { court, at: at.getTime() };
     }
-    if (!best) continue;
+    if (!best) {
+      noRoom.add(m.id);
+      continue;
+    }
     take(m, best.court, best.at);
     out.push({ id: m.id, courtName: best.court, startsAt: new Date(best.at), endsAt: new Date(best.at + m.minutes * MIN) });
   }
-  return out;
+  return { slots: out, unplaced: noRoom.size };
+}
+
+/** The phases that wait for the last day of a longer weekend. */
+const KNOCKOUT: ReadonlySet<MatchPhase> = new Set(["main", "consolation"]);
+
+/**
+ * `schedule` for a weekend whose knockout waits for its last day, `from` being that day's first
+ * minute (null on one day). Only a category that plays groups or a qualifying first is held back.
+ * A knockout-only one has nothing to play before it: held, it left Saturday empty while Sunday had
+ * no room for its later rounds, and 32 pairs on two courts lost 11 matches (review, 24 September 2026).
+ * The line is a preference, never a cost: when it leaves more matches without room than the plain
+ * fill, the plain fill wins. A qualifying before a big main draw on one court still fits as it did.
+ */
+export function scheduleWeekend(input: ScheduleInput, from: Date | null): Schedule {
+  if (!from) return schedule(input);
+  const early = new Set(input.matches.filter((m) => m.phase === "group" || m.phase === "qualifying").map((m) => m.categoryId));
+  const held = schedule({ ...input, matches: input.matches.map((m) => (KNOCKOUT.has(m.phase) && early.has(m.categoryId) ? { ...m, notBefore: from } : m)) });
+  if (held.unplaced === 0) return held;
+  const plain = schedule(input);
+  return plain.unplaced < held.unplaced ? plain : held;
 }

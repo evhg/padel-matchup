@@ -296,17 +296,17 @@ export async function setCourtsAction(slug: string, input: { courtNames: string[
   });
 }
 
-/** Every match a court and a time, and every player their list. */
-export async function makeScheduleAction(slug: string): Promise<ActionResult<{ count: number }>> {
+/** Every match a court and a time, and every player their list; the organiser hears how many found no room. */
+export async function makeScheduleAction(slug: string): Promise<ActionResult<{ count: number; unplaced: number }>> {
   return runA(async () => {
     const { db, player } = await me();
     const c = await getCompetition(db, slug);
     if (!c) throw new DomainError("not_found");
-    const { slots } = await scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: player.id });
+    const { slots, unplaced } = await scheduleCompetition(db, { competitionId: c.id, organizerPlayerId: player.id });
     const rows = await orderOfPlay(db, c.id);
     await tellSchedule(db, c, rows.filter((r) => slots.some((s) => s.id === r.id))).catch(() => undefined);
     refresh(slug);
-    return { count: slots.length };
+    return { count: slots.length, unplaced };
   });
 }
 

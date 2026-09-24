@@ -14,7 +14,7 @@ import { WithdrawButton } from "@/components/tournament/WithdrawButton";
 import { getDb } from "@/db";
 import { baseUrl, shortHost } from "@/lib/config";
 import { competitionDraws } from "@/lib/domain/competitionDraw";
-import { orderOfPlay } from "@/lib/domain/competitionSchedule";
+import { isDayOfPlay, orderOfPlay } from "@/lib/domain/competitionSchedule";
 import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken, pairSummary } from "@/lib/domain/competitions";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
@@ -55,8 +55,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
   const myPairIds = new Set(mine.map((e) => e.id));
   const play = draws.size > 0 ? await orderOfPlay(db, c.id) : [];
   // During the days of play the page asks again every minute: the tables and the brackets move with the scores.
-  const today = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const live = play.length > 0 && c.startsOn <= today && today <= c.endsOn;
+  const live = play.length > 0 && isDayOfPlay(c);
   const claim = sp.claim ? await pairByClaimToken(db, sp.claim) : null;
   const claimedPair = sp.claimed && me ? await pairSummary(db, sp.claimed) : null;
   const claimed = claimedPair && claimedPair.p2PlayerId === me?.id ? claimedPair : null;
