@@ -9,7 +9,7 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
-import { answerCallbackQuery, editMessageText, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
+import { answerCallbackQuery, editMessageCaption, editMessageText, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
 import { botLocale, cardTitle, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
@@ -234,7 +234,11 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     // nudge now says what happened and keeps no button: this match is not going to be played, and a
     // second tap has nothing left to do. Its own message, because the nudge is a "nudge" card and
     // syncCards only ever edits a "card".
-    if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(s.didntPlayDone(cardTitle(detail, locale))), null).catch(() => undefined);
+    // The nudge is a picture now (it becomes the result card), and a picture has a caption, not a text.
+    if (cb.message) {
+      const said = esc(s.didntPlayDone(cardTitle(detail, locale)));
+      await (cb.message.photo ? editMessageCaption(cb.message.chat.id, cb.message.message_id, said, null) : editMessageText(cb.message.chat.id, cb.message.message_id, said, null)).catch(() => undefined);
+    }
     ctx.afterwards(async () => {
       await notifyEventCancelled(db, cancelled).catch(() => undefined);
       await emitMatchEvent(db, "match.cancelled", code).catch(() => undefined);

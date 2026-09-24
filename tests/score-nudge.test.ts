@@ -5,6 +5,7 @@ import { events, players, telegramCards, telegramChats } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { closeScoreNudges, nudgeForScore, scoreLine } from "@/lib/afterMatch";
 import { createEvent } from "@/lib/domain/events";
+import { setEventPhoto } from "@/lib/domain/photos";
 import { getEventByCode } from "@/lib/domain/queries";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { joinEvent } from "@/lib/domain/slots";
@@ -25,14 +26,18 @@ const TOKEN = "123456:TESTTOKEN";
 type Call = { method: string; body: Record<string, unknown> };
 let calls: Call[] = [];
 let nextMessageId = 500;
+/** Methods Telegram refuses in this test, as it refuses a photo URL it cannot fetch. */
+let refused = new Set<string>();
 const stub = () => {
   calls = [];
+  refused = new Set();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL, init?: RequestInit) => {
       const method = String(url).split("/").pop()!;
       const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
       calls.push({ method, body });
+      if (refused.has(method)) return new Response(JSON.stringify({ ok: false, error_code: 400, description: "Bad Request: wrong file identifier/HTTP URL specified" }), { status: 400, headers: { "content-type": "application/json" } });
       const result = method === "sendMessage" || method === "sendPhoto" ? { message_id: nextMessageId++, chat: { id: body.chat_id } } : true;
       return new Response(JSON.stringify({ ok: true, result }), { status: 200, headers: { "content-type": "application/json" } });
     }),
@@ -65,12 +70,24 @@ describe("the nudge is closed by whoever answers it", () => {
     return { past, erik, micky };
   };
 
-  it("edits the nudge in place, says who answered and with what, and takes the button away", async () => {
+  /**
+   * The owner, 24 September: "when one of the players enters the result, the score nudge received by
+   * all the other players changes into a result card. Changing is not an additional message." Telegram
+   * turns a photo into another photo, never text into a photo, so the nudge is the card still waiting
+   * for its score, and the answer swaps its picture.
+   */
+  it("sends the nudge as the card waiting for its score, and turns that same message into the result", async () => {
     const { past, erik, micky } = await played("a", 9001);
     const nudged = await nudgeForScore(db, past);
     expect(nudged.telegram).toBe(1);
+    expect(sent("sendMessage")).toHaveLength(0);
+    const waiting = sent("sendPhoto").at(-1)!;
+    expect(String(waiting.body.photo)).toContain(`/${past.code}/card/opengraph-image?v=`);
+    expect(String(waiting.body.caption)).toContain("how did it go?");
+    expect(waiting.body.disable_notification).toBe(true);
     const [row] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, past.id));
     expect(row.kind).toBe("nudge");
+    expect(row.rendered).toBeTruthy();
 
     // Nothing to close while the question is unanswered: a quiet bot does not edit for no reason.
     expect(await closeScoreNudges(db, past.code)).toBe(0);
@@ -78,14 +95,67 @@ describe("the nudge is closed by whoever answers it", () => {
     await saveMatchScore(db, { eventId: past.id, playerId: micky.id, isCreator: false, sets: [{ setNumber: 1, sideA: 6, sideB: 1 }] });
     calls = [];
     expect(await closeScoreNudges(db, past.code)).toBe(1);
-    const edit = sent("editMessageText").at(-1)!;
+    // An edit of the message the player already has; nothing new arrives in the chat.
+    expect(sent("sendMessage").length + sent("sendPhoto").length).toBe(0);
+    const edit = sent("editMessageMedia").at(-1)!;
     expect(edit.body.chat_id).toBe(9001);
     expect(edit.body.message_id).toBe(row.messageId);
-    expect(String(edit.body.text)).toContain("Micky a");
+    const media = edit.body.media as { type: string; media: string; caption: string };
+    expect(media.type).toBe("photo");
+    expect(media.media).toContain(`/${past.code}/card/opengraph-image?v=`);
+    expect(media.media, "the result is a new version of the picture, so no cache serves the waiting one").not.toBe(waiting.body.photo);
+    expect(media.caption).toContain("6-1");
+    expect(media.caption).toContain("Entered by Micky a");
+    // The 🏁 and "We didn't play" buttons are what a player taps into a dead end, so they go; the one
+    // left leads to the card's page, where the court photo goes on and the picture goes to WhatsApp.
+    expect(edit.body.reply_markup).toEqual({ inline_keyboard: [[{ text: "📸 Photo & share", url: expect.stringContaining(`/${past.code}/card`) }]] });
+
+    // Asked again with nothing changed, it stays quiet.
+    calls = [];
+    expect(await closeScoreNudges(db, past.code)).toBe(0);
+    expect(calls).toHaveLength(0);
+
+    // A court photo is a new picture: the same message takes it.
+    await setEventPhoto(db, { eventId: past.id, playerId: erik.id, mime: "image/png", dataBase64: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGNgYGD4z8DAwAAABAAC/wKzCgAAAABJRU5ErkJggg==" });
+    expect(await closeScoreNudges(db, past.code)).toBe(1);
+    const withPhoto = sent("editMessageMedia").at(-1)!;
+    expect(withPhoto.body.message_id).toBe(row.messageId);
+    expect((withPhoto.body.media as { media: string }).media).toMatch(/\?v=[^&]+-p/);
+  });
+
+  it("keeps one nudge per chat: the morning's replaces the evening's, and the answer turns that one", async () => {
+    const { past, micky } = await played("g", 9007);
+    await nudgeForScore(db, past);
+    const [first] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, past.id));
+    calls = [];
+    await nudgeForScore(db, past);
+    const rows = await db.select().from(telegramCards).where(eq(telegramCards.eventId, past.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].messageId).not.toBe(first.messageId);
+    // The evening's question goes, so no live 🏁 is left beside the card that becomes the result.
+    expect(sent("deleteMessage").map((c) => c.body)).toEqual([{ chat_id: 9007, message_id: first.messageId }]);
+    await saveMatchScore(db, { eventId: past.id, playerId: micky.id, isCreator: false, sets: [{ setNumber: 1, sideA: 6, sideB: 2 }] });
+    calls = [];
+    expect(await closeScoreNudges(db, past.code)).toBe(1);
+    expect(sent("editMessageMedia").at(-1)!.body.message_id).toBe(rows[0].messageId);
+  });
+
+  it("falls back to the text nudge when Telegram cannot fetch the picture, and closes it as text", async () => {
+    const { past, micky } = await played("h", 9008);
+    refused.add("sendPhoto");
+    expect((await nudgeForScore(db, past)).telegram).toBe(1);
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("how did it go?");
+    const [row] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, past.id));
+    expect(row.rendered).toBeNull();
+    await saveMatchScore(db, { eventId: past.id, playerId: micky.id, isCreator: false, sets: [{ setNumber: 1, sideA: 6, sideB: 1 }] });
+    calls = [];
+    expect(await closeScoreNudges(db, past.code)).toBe(1);
+    expect(sent("editMessageMedia")).toHaveLength(0);
+    const edit = sent("editMessageText").at(-1)!;
+    expect(edit.body.message_id).toBe(row.messageId);
+    expect(String(edit.body.text)).toContain("Micky h");
     expect(String(edit.body.text)).toContain("6-1");
-    // The button is what a player taps into a dead end, so it goes.
     expect((edit.body.reply_markup as { inline_keyboard: unknown[] }).inline_keyboard).toEqual([]);
-    void erik;
   });
 
   /**
@@ -100,7 +170,7 @@ describe("the nudge is closed by whoever answers it", () => {
     calls = [];
     await nudgeForScore(db, past);
     const keys = (chatId: number) => {
-      const c = sent("sendMessage").find((x) => x.body.chat_id === chatId)!;
+      const c = sent("sendPhoto").find((x) => x.body.chat_id === chatId)!;
       return ((c.body.reply_markup as { inline_keyboard: { text: string }[][] }).inline_keyboard[0] ?? []).map((b) => b.text);
     };
     expect(keys(9005)).toEqual(["\u{1F3C1} Result", "We didn't play"]);
@@ -111,10 +181,11 @@ describe("the nudge is closed by whoever answers it", () => {
     const { past, micky } = await played("f", 9006);
     await db.update(players).set({ telegramId: 9106 }).where(eq(players.id, micky.id));
     await db.insert(telegramChats).values({ chatId: 9106, type: "private", locale: "en" }).onConflictDoNothing();
+    // The nudge is a picture, and a picture's words are its caption: editMessageText would be refused.
     const tap = (chatId: number) =>
       handleTelegramUpdate(
         db,
-        { update_id: 2, callback_query: { id: "cb", from: { id: chatId, first_name: "X", language_code: "en" }, message: { message_id: 1, date: 0, chat: { id: chatId, type: "private" } }, data: `x:${past.code}` } },
+        { update_id: 2, callback_query: { id: "cb", from: { id: chatId, first_name: "X", language_code: "en" }, message: { message_id: 1, date: 0, chat: { id: chatId, type: "private" }, photo: [{ file_id: "card" }], caption: "how did it go?" }, data: `x:${past.code}` } },
         NO_SIDE_EFFECTS,
       );
 
@@ -131,10 +202,11 @@ describe("the nudge is closed by whoever answers it", () => {
     // Eriik, 22 September: "when I clicke We didn't play the button doesn't change it remains there."
     // The toast is gone in two seconds and the message it came from still offered both buttons, so
     // the tap read as if nothing had happened. The nudge itself says what it did, and keeps no button.
-    const edited = sent("editMessageText").at(-1);
+    expect(sent("editMessageText")).toHaveLength(0);
+    const edited = sent("editMessageCaption").at(-1);
     expect(edited, "the nudge answers on the screen").toBeTruthy();
     expect(edited!.body.message_id).toBe(1);
-    expect(String(edited!.body.text)).toContain("marked as not played");
+    expect(String(edited!.body.caption)).toContain("marked as not played");
     expect(edited!.body.reply_markup).toEqual({ inline_keyboard: [] });
   });
 

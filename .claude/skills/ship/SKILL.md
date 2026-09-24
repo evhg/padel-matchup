@@ -529,6 +529,11 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### What the walks keep finding
 
+- **A walk runs on a local build, never on production.** The five walks of 21 September signed up as
+  their characters on kicksma.sh and left 25 player rows behind, two of them owners of saved clubs.
+  They then counted as players: "48 players, 42 without a channel" went to the owner when the truth
+  was about 17 people. The harness in the scratchpad (`serve.mjs`, `h.mjs`) serves a local build with
+  the browser suites' settings; a walk that must see production reads it and writes nothing.
 - **A list that links to sixty-six pages is sixty-six checks, and I made one.** Tier 2 put the
   listed clubs on `/clubs` and in the sitemap, and I proved it live by opening
   `/v/destination-padel-club`. That club has a match. The page's guard wanted a venue board, and a
@@ -663,6 +668,12 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### The bot as buttons
 
+- **Telegram swaps a photo for a photo, never text for a photo.** `editMessageMedia` refuses a text
+  message, so the score nudge could not become the result card until it was sent as a picture. A
+  message that may one day carry a picture must be born as one; keep a text fallback for a picture
+  Telegram cannot fetch, and mark which is which (`telegram_cards.rendered` is null for text), so the
+  close edits each the way it can. A tap under a picture edits the caption: `editMessageText` refuses
+  that too.
 - **A reply to a prompt is read before the score reader.** `plainScore` takes any reply to a bot
   message that looks like a score, and "22:30" typed as the time for a lesson looked like one, so the
   tap flow's typed step came back as `score_how`. Anything that reads a reply to one of our prompts
@@ -685,3 +696,8 @@ Ship the document change in the same pull request as the code. Twice in one day 
 `AGENTS.md` described screens that had changed that morning, and the roadmap listed shipped work as
 upcoming. If a change makes a sentence in `ROADMAP.md`, `docs/VISION.md`, `README.md`, `AGENTS.md` or
 `docs/OPERATING.md` untrue, fixing that sentence is part of the change, not follow-up.
+
+A rule in `docs/DECIDING.md` rots the same way. Rule 16 said the score nudge goes "exactly once per
+match" and declined "a second nudge" for eleven days after the morning nudge shipped; the rule a
+reviewer would quote said the opposite of what the cron did. When a change contradicts a rule, the
+rule changes in the same pull request, with the owner's words that moved it.

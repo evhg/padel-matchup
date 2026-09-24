@@ -910,7 +910,8 @@
     "addPhoto": "Add the court photo",
     "photoHelp": "The four of you after the match. The card becomes that photo with the score on it. Yours to post, never asked twice.",
     "photoFailed": "That picture could not be used. Try another one.",
-    "removePhoto": "Remove the photo"
+    "removePhoto": "Remove the photo",
+    "waiting": "Waiting for the score"
   },
   "group": {
     "title": "Group",

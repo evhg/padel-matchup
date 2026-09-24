@@ -77,7 +77,8 @@ try {
 
   // ---- Result card ----
   await p.goto(`${BASE}/PAST`);
-  check("finished match offers Share result", (await p.getByRole("link", { name: /Share result/ }).count()) === 1);
+  // The match page leads with the card once the score is in: the picture, and WhatsApp one tap away (a WhatsApp group only ever gets it by hand).
+  check("finished match shows its result card, with WhatsApp one tap away", (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByTestId("result-card").getByRole("link", { name: /WhatsApp/ }).count()) === 1);
   await p.goto(`${BASE}/PAST/card`);
   await shot(p, "v2-card");
   check("card page shows the image and the result line", (await p.locator('img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByText(/beat|drew|Result/).count()) > 0);
@@ -106,6 +107,8 @@ try {
   await p.getByRole("button", { name: "Save score" }).click();
   await p.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   check("the organizer's score is confirmed at once", true);
+  await p.getByTestId("result-card").waitFor({ timeout: 20000 });
+  check("right after the score the match page offers the court photo on the card", (await p.getByTestId("result-card").getByTestId("photo-add").count()) === 1);
   await p.goto(`${BASE}/${mcode}/card`);
   check("the card page praises the winners and offers the weekly group", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 1);
   const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGNgYGD4z8DAwAAABAAC/wKzCgAAAABJRU5ErkJggg==", "base64");

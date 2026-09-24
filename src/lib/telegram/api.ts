@@ -35,7 +35,7 @@ export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: 
 export type ReplyKeyboard = { keyboard: { text: string }[][]; is_persistent?: boolean; resize_keyboard?: boolean; input_field_placeholder?: string };
 export type TgUser = { id: number; is_bot?: boolean; first_name: string; last_name?: string; username?: string; language_code?: string };
 export type TgChat = { id: number; type: "private" | "group" | "supergroup" | "channel"; title?: string; username?: string };
-export type TgMessage = { message_id: number; date: number; chat: TgChat; from?: TgUser; text?: string; message_thread_id?: number; reply_to_message?: TgMessage; entities?: { type: string; offset: number; length: number; url?: string }[] };
+export type TgMessage = { message_id: number; date: number; chat: TgChat; from?: TgUser; text?: string; caption?: string; photo?: { file_id: string }[]; message_thread_id?: number; reply_to_message?: TgMessage; entities?: { type: string; offset: number; length: number; url?: string }[] };
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
@@ -117,6 +117,25 @@ export function editMessageText(chatId: number, messageId: number, text: string,
   });
 }
 
+/**
+ * Swaps the picture of a photo message, with its caption and buttons: the score nudge becoming the
+ * result card. Telegram turns a photo into another photo this way, never a text message into one,
+ * which is why the nudge is sent as a picture in the first place.
+ */
+export function editMessageMedia(chatId: number, messageId: number, photo: string, caption: string, keyboard?: InlineKeyboard | null) {
+  return tg<TgMessage | true>("editMessageMedia", {
+    chat_id: chatId,
+    message_id: messageId,
+    media: { type: "photo", media: photo, caption, parse_mode: "HTML" },
+    reply_markup: keyboard ?? { inline_keyboard: [] },
+  });
+}
+
+/** The words under a photo message; editMessageText refuses a message that has no text. */
+export function editMessageCaption(chatId: number, messageId: number, caption: string, keyboard?: InlineKeyboard | null) {
+  return tg<TgMessage | true>("editMessageCaption", { chat_id: chatId, message_id: messageId, caption, parse_mode: "HTML", reply_markup: keyboard ?? { inline_keyboard: [] } });
+}
+
 /** Edits a card that was sent through inline mode (no chat id, only the inline message id). */
 export function editInlineMessageText(inlineMessageId: string, text: string, keyboard?: InlineKeyboard | null) {
   return tg<true>("editMessageText", { inline_message_id: inlineMessageId, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: keyboard ?? { inline_keyboard: [] } });
@@ -139,6 +158,7 @@ export function sendPhoto(chatId: number, photo: string, caption: string, o: Sen
     photo,
     caption,
     parse_mode: "HTML",
+    disable_notification: o.silent ?? false,
     ...(o.keyboard ? { reply_markup: o.keyboard } : {}),
     ...(o.replyTo ? { reply_parameters: { message_id: o.replyTo, allow_sending_without_reply: true } } : {}),
     ...(o.threadId ? { message_thread_id: o.threadId } : {}),

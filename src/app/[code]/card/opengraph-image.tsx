@@ -33,7 +33,13 @@ async function fonts() {
   ];
 }
 
-/** Shareable result picture: the score for a match, the top of the table for a tournament. */
+/**
+ * Shareable result picture: the score for a match, the top of the table for a tournament.
+ *
+ * Before the score, the same frame waits for it: the two pairs (or the four names, while nobody has
+ * picked sides) and empty sets. That is the picture the score nudge carries in Telegram, so the
+ * message a player already has turns into the result instead of a second one arriving.
+ */
 export default async function CardImage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const db = await getDb();
@@ -56,7 +62,36 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
   const nameOf = (s: (typeof roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
 
   let body: React.ReactNode;
-  if (ev.type === "match") {
+  const waiting = ev.type === "match" && detail.scores.length === 0;
+  if (waiting) {
+    const seated = roster.filter(isOccupied);
+    const a = seated.filter((s) => s.team === "a").map(nameOf);
+    const b = seated.filter((s) => s.team === "b").map(nameOf);
+    const empty = (
+      <div style={{ display: "flex", gap: 14 }}>
+        {[0, 1].map((i) => (
+          <div key={i} style={{ width: 96, height: 96, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56, fontWeight: 800, background: onPhoto ? "rgba(255,255,255,0.22)" : "#E4E2DA", color: muted }}>
+            –
+          </div>
+        ))}
+      </div>
+    );
+    const side = (label: string) => (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+        <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: -1, color: ink, maxWidth: 720, overflow: "hidden", whiteSpace: "nowrap" }}>{label}</div>
+        {empty}
+      </div>
+    );
+    body =
+      a.length === 2 && b.length === 2 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          {side(a.join(" & "))}
+          {side(b.join(" & "))}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", fontSize: 52, fontWeight: 800, letterSpacing: -1, lineHeight: 1.15, color: ink, maxWidth: 1040 }}>{seated.map(nameOf).join(" · ")}</div>
+      );
+  } else if (ev.type === "match") {
     const r = matchResult(detail.scores, roster.map((s) => ({ team: s.team, status: s.status, name: nameOf(s) })));
     const rowA = r?.hasTeams ? r.a.join(" & ") : t("card.teamA");
     const rowB = r?.hasTeams ? r.b.join(" & ") : t("card.teamB");
@@ -142,7 +177,7 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
           </div>
           {body}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", background: onPhoto ? ACCENT : INK, color: onPhoto ? INK : "#fff", padding: "14px 26px", borderRadius: 999, fontSize: 28, fontWeight: 800 }}>{t("card.result")}</div>
+            <div style={{ display: "flex", background: onPhoto ? ACCENT : INK, color: onPhoto ? INK : "#fff", padding: "14px 26px", borderRadius: 999, fontSize: 28, fontWeight: 800 }}>{waiting ? t("card.waiting") : t("card.result")}</div>
             <div style={{ fontSize: 26, color: muted }}>{`${t("card.poweredBy")} · ${host}`}</div>
           </div>
         </div>

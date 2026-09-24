@@ -910,7 +910,8 @@
     "addPhoto": "Añadir la foto de la pista",
     "photoHelp": "Los cuatro después del partido. La tarjeta pasa a ser esa foto con el resultado encima. Tuya para publicar; no se pide dos veces.",
     "photoFailed": "No se pudo usar esa imagen. Prueba con otra.",
-    "removePhoto": "Quitar la foto"
+    "removePhoto": "Quitar la foto",
+    "waiting": "Esperando el resultado"
   },
   "group": {
     "title": "Grupo",
