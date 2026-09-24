@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { getDb } from "@/db";
-import { reportError } from "@/lib/alerts";
+import { later, reportError } from "@/lib/alerts";
 import type { OpContext } from "@/lib/api/operations";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { lineEnabled, verifySignature, type LineWebhookBody } from "@/lib/line/api";
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   try {
     return Response.json({ ok: true, outcome: await handleLineWebhook(db, body, ctx) });
   } catch (e) {
-    void reportError("server", e instanceof Error ? e : new Error(String(e)));
+    await later(() => reportError("server", e instanceof Error ? e : new Error(String(e))));
     return Response.json({ ok: true, outcome: "error" });
   }
 }

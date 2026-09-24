@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { getDb, type Db } from "@/db";
 import { bumpMetric } from "@/lib/domain/metrics";
+import { later } from "@/lib/alerts";
 import { fail } from "./http";
 import { caller, guard, type Caller } from "./keys";
 import type { OpContext } from "./operations";
@@ -14,8 +15,8 @@ export async function withApi(req: Request, scope: "read" | "write" | "keys" | n
     const db = await getDb();
     const c = await caller(db, req);
     if (scope) await guard(db, c, scope);
-    void bumpMetric(db, "api_calls").catch(() => undefined);
-    if (isAssistantCaller(req, c)) void bumpMetric(db, "api_calls_agent").catch(() => undefined);
+    await later(() => bumpMetric(db, "api_calls"));
+    if (isAssistantCaller(req, c)) await later(() => bumpMetric(db, "api_calls_agent"));
     const ops: OpContext = {
       afterwards: (fn) => after(fn),
       emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "api" })),

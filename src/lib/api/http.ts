@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { reportError } from "@/lib/alerts";
+import { later, reportError } from "@/lib/alerts";
 import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
 
 /** Open by design: any origin may read and write; keys and rate limits do the protecting. */
@@ -76,7 +76,8 @@ export function fail(e: unknown): NextResponse {
     return json(errorBody(422, "invalid_request", `${path}: ${first?.message ?? "invalid"}`, "Compare the request with the OpenAPI document at /api/openapi.json."), { status: 422 });
   }
   if (e instanceof SyntaxError) return json(errorBody(400, "bad_json", "The request body is not valid JSON.", "Send a JSON object with Content-Type: application/json."), { status: 400 });
-  void reportError("server", e);
+  // A synchronous answer cannot wait; later() has handed the report to after() by the time it returns.
+  void later(() => reportError("server", e));
   return json(errorBody(500, "internal", "Something went wrong on our side. It has been counted; try again in a moment."), { status: 500 });
 }
 

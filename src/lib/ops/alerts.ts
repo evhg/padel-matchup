@@ -24,7 +24,7 @@ export async function refreshAnthropicCost(db: Db, now = new Date(), fetchImpl: 
 }
 
 const whatNext: Record<string, string> = {
-  vercel_analytics: "Vercel stops recording page views for the rest of the month; our own counter keeps going and the digest uses it.",
+  vercel_analytics: "After three days of grace Vercel stops recording page views until the next billing cycle, for every project on the account, and bills nothing; our own counter keeps going and the digest uses it.",
   resend_month: "Past the ceiling Resend refuses to send; the rule is to move up only past fifty emails a day, so I will slow the non-essential mail first.",
   resend_day: "Today's remaining mail waits for tomorrow; reminders go by push and Telegram meanwhile.",
   anthropic: "At the cap the feedback replies and drafts stop until the month turns. Raising the cap is your call in the console.",

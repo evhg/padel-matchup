@@ -1,7 +1,7 @@
 import "server-only";
 import { getLocale } from "next-intl/server";
 import { headers } from "next/headers";
-import { reportError } from "@/lib/alerts";
+import { later, reportError } from "@/lib/alerts";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { getDb, type Db } from "@/db";
 import type { Player } from "@/db/schema";
@@ -18,7 +18,7 @@ export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
     return { ok: true, data: await fn() };
   } catch (e) {
     if (isDomainError(e)) return { ok: false, error: e.code, detail: e.message !== e.code ? e.message : undefined };
-    void reportError("server", e);
+    await later(() => reportError("server", e));
     return { ok: false, error: "generic" };
   }
 }
@@ -46,7 +46,7 @@ export async function runA<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   } catch (e) {
     if (e instanceof ActionFailure) return { ok: false, error: e.code };
     if (isDomainError(e)) return { ok: false, error: e.code, detail: e.message !== e.code ? e.message : undefined };
-    void reportError("server", e);
+    await later(() => reportError("server", e));
     return { ok: false, error: "generic" };
   }
 }

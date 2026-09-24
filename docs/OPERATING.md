@@ -73,10 +73,13 @@ agent's branch that nobody opened, so `vercel.json` now sets `git.deploymentEnab
 Actions and never depended on Vercel. Deployments already built stay until they are deleted:
 `DELETE /v13/deployments/{id}` with `VERCEL_TOKEN`, keeping the live production one and a couple of
 rollback targets.
-Vercel Web Analytics: 2,500 events a month (we count page renders ourselves). Past it, Vercel's
-dashboard stops recording until the month turns and nothing else changes: the app keeps its own
-count. It stood at 2,022 on 24 September; at a hundred players it will run out each month, and
-then the choice is between leaving it, turning it off, or a paid plan.
+Vercel Web Analytics: 50,000 events a month on Hobby, and every project on the Vercel account
+shares them. Past the allowance there is a three-day grace period, then Vercel stops recording until
+the next billing cycle. Hobby is never billed for it, and nothing else changes. Source: Vercel's own
+page, `vercel.com/docs/analytics/limits-and-pricing` (updated 25 August 2026, read on 24 September
+2026). Until that day the board assumed 2,500. The board's number is our own estimate: page renders
+counted on the server, crawlers left out, while Vercel counts page views in the browser. It stood at
+2,022 on 24 September, which is 4% of the allowance.
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
@@ -111,7 +114,9 @@ held to the migration by `tests/cron-jobs.test.ts`). Before that they existed on
 
 ## The Sunday digest, one line to watch
 
-`Funnel: visitors → matches → seats → scores → card views` is the week in five numbers: page renders (bots excluded), matches created, joins, matches with a result, result-card renders. A step that does not move for four weeks gets a design change, not a marketing push. The score nudge (every player, once, on their channel) and "same time next week?" exist to move the last three.
+`Funnel: visitors · matches → filled → scores · card views` is the week in five numbers: page renders (bots excluded); the matches that started in the last seven days (tournaments and cancelled matches left out); those that filled, with three or more of the four seats taken; those with a score; result-card renders. The middle three count the same matches, so the line shows where a match is lost. Until 24 September 2026 the middle read matches created, joins and matches with a result, three different sets, and it could not show that 10 of 13 past matches never filled while all 3 that filled got a score. A step that does not move for four weeks gets a design change, not a marketing push. The score nudge (every player, once, on their channel) and "same time next week?" exist to move the last three.
+
+The digest is the first thing the hourly listening step does on a Sunday from 07:00 UTC, and the next hour tries again until it goes. A digest that fails is an error on `/admin` with the path `listen/digest`. Before 24 September 2026 a failure left no trace, and the digest of 20 September never arrived.
 
 ## Handover for a fresh session
 

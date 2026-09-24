@@ -1,5 +1,5 @@
 import { getDb } from "@/db";
-import { reportError } from "@/lib/alerts";
+import { later, reportError } from "@/lib/alerts";
 import { verifySignature, whatsappEnabled, whatsappVerifyToken, type WaUpdate } from "@/lib/whatsapp/api";
 import { handleWhatsappMessage } from "@/lib/whatsapp/bot";
 
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
           outcomes.push(await handleWhatsappMessage(db, msg, contact));
         } catch (e) {
           outcomes.push("error");
-          void reportError("server", e instanceof Error ? e : new Error(String(e)));
+          await later(() => reportError("server", e instanceof Error ? e : new Error(String(e))));
         }
       }
     }

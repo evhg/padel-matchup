@@ -292,11 +292,16 @@ export async function GET(req: Request) {
     summary.errors.push(`metrics: ${String(e)}`);
   }
 
+  // Before the proposals sweep, not after it: the sweep can make five model calls of up to 20 s each,
+  // and a job Vercel stops at 60 s inside it would take every error of this run with it.
   if (summary.errors.length) await reportError("cron", summary.errors.join(" | "));
   try {
     // The safety net for the proposals: a real note the owner never heard about (a failed send, a cut-off background task) goes out now.
     summary.proposals = await sweepProposals(db, now);
   } catch (e) {
+    // Past the run's report, so it is reported on its own. Until 24 September 2026 a failed sweep
+    // reached the response and never the error store.
+    await reportError("cron", e, { path: "proposals/sweep" });
     summary.errors.push(`proposals: ${String(e)}`);
   }
 

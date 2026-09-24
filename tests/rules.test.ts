@@ -36,6 +36,12 @@ function routeFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? routeFiles(path.join(dir, e.name)) : e.name === "route.ts" ? [path.join(dir, e.name)] : []));
 }
 
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? sourceFiles(path.join(dir, e.name)) : e.name.endsWith(".ts") || e.name.endsWith(".tsx") ? [path.join(dir, e.name)] : [],
+  );
+}
+
 describe("the public API is documented", () => {
   it("every route under src/app/api/v1 is an OpenAPI path, and every OpenAPI path is a route", () => {
     const dir = root("src/app/api/v1");
@@ -146,12 +152,6 @@ describe("public shapes", () => {
 describe("no Date reaches a raw sql template", () => {
   const TIMEY = /^(now|today|since|until|from|to|cutoff|deadline|.*[Aa]t|.*Date|.*Time|.*Stamp)$/;
 
-  function sourceFiles(dir: string): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? sourceFiles(path.join(dir, e.name)) : e.name.endsWith(".ts") || e.name.endsWith(".tsx") ? [path.join(dir, e.name)] : [],
-    );
-  }
-
   it("a directory card's price slot holds a price or nothing at all", () => {
     // Two goes at this slot went out wrong. First it fell back to the lesson length, which the line
     // under it already carries, so the card said "60-minute lessons" twice. Then it fell back to
@@ -184,5 +184,42 @@ describe("no Date reaches a raw sql template", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * A counter or an error report nobody waits for is one a serverless function may never finish.
+ *
+ * `void bumpMetric(…)` and `void reportError(…)` let the response go with the write still in flight,
+ * and Vercel may freeze the instance the moment the response is sent: the page view, the API call or
+ * the production error is simply not counted. `later()` in `src/lib/alerts.ts` hands the work to
+ * `after()`, and a cron route, which is its own request, awaits it.
+ */
+describe("work that must outlive the response is handed to after()", () => {
+  it("no bumpMetric or reportError call in src is left floating with void", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(root("src"))) {
+      const lines = readFileSync(file, "utf8").split("\n");
+      lines.forEach((line, i) => {
+        if (/\bvoid\s+(bumpMetric|reportError)\s*\(/.test(line)) offenders.push(`${path.relative(root("."), file)}:${i + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("the cron jobs report every error they record, and none waits behind the proposals sweep", () => {
+    for (const route of ["src/app/api/cron/hourly/route.ts", "src/app/api/cron/push/route.ts"]) {
+      const lines = readFileSync(root(route), "utf8").split("\n");
+      const report = lines.findIndex((l) => l.includes("if (summary.errors.length) await reportError("));
+      expect(report, route).toBeGreaterThan(0);
+      // An error pushed after the run's report reaches the response and never the error store,
+      // unless the line above it reports that error on its own.
+      const unreported = lines.slice(report + 1).flatMap((l, i) => (l.includes("summary.errors.push(") && !lines[report + i].includes("await reportError(") ? [`${route}:${report + i + 2}`] : []));
+      expect(unreported).toEqual([]);
+    }
+    // The sweep can make five model calls of up to 20 s each in a 60-second job. A report behind it is
+    // lost with the whole run when Vercel stops the job there.
+    const hourly = readFileSync(root("src/app/api/cron/hourly/route.ts"), "utf8");
+    expect(hourly.indexOf("if (summary.errors.length) await reportError(")).toBeLessThan(hourly.indexOf("await sweepProposals("));
   });
 });

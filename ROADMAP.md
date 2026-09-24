@@ -555,10 +555,10 @@ reach it; people using the app do.
 
 | Stakeholder | Won when | On 24 September 2026 |
 |---|---|---|
-| Player | the match is played | 19 matches, 3 of them with a score |
+| Player | the match is played | 13 past matches: 3 filled, 3 of 3 scored; 10 never filled |
 | Coach | a student books, moves or cancels, and the coach typed nothing | 2 lessons |
 | Organiser | a weekend of 200 players runs from a phone | a rehearsal only |
-| Club | an off-peak court hour is filled from Kicksmash | 1 club claimed of 67 listed |
+| Club | an off-peak court hour is filled from Kicksmash | 0 live, 66 listed, 1 refused test claim |
 
 What stands between here and there, in order: real use through each loop (a tournament weekend, a
 coach whose students book themselves, a club, crews that enter scores); reach (6 of about 18 people

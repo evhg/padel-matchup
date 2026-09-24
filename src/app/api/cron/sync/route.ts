@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   try {
     results = await syncAllCoachCalendars(db, now);
   } catch (e) {
-    void reportError("cron", e, { path: "/api/cron/sync" });
+    await reportError("cron", e, { path: "/api/cron/sync" });
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
   }
   await setMetric(db, "cron_sync_at", Math.floor(now.getTime() / 1000)).catch(() => undefined);

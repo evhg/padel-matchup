@@ -280,6 +280,15 @@ Wall clock first, credits second. What actually moved it, measured:
   things this repo starts (`gate.sh`, `vitest`, `next build`, `next start`, `e2e/run.mjs`, and any
   loop you wrote) before calling work finished. Kill by **PID**, never by pattern: `pkill -f
   "next start"` once matched the backgrounding shell's own command line and killed the caller.
+  Finding the PIDs has the same trap: `for p in $(pgrep -f "bash scripts/gate.sh")` listed its own
+  shell, whose text holds the pattern, and killed it (exit 144, 24 September 2026). List with a
+  pattern the command cannot match, `ps -eo pid,cmd | grep "[g]ate\.sh"`, and never start a long
+  job with `&` inside a command: the harness backgrounds it and reports its end; `&` hides it.
+- **A worktree inside the repository breaks the build.** A workflow run with worktree isolation left
+  three checkouts under `.claude/worktrees/`, each with `node_modules` linked in, and `next build`
+  died with `Cannot read properties of undefined (reading 'length')` while typecheck, lint and unit
+  passed. `.git/info/exclude` hides them from git and from nothing else. Take the commits out
+  (`git merge --squash wf/<branch>`), then `git worktree remove --force` every one, before the gate.
 - **Ask production through the read-only query door, in one query.** This container cannot open port
   5432 (or 6543) whatever the network policy says; an hour went on proving that on 18 September. The
   Supabase MCP answers, but every `execute_sql` waits for the owner to approve it, and on 23 September
@@ -345,6 +354,12 @@ Wall clock first, credits second. What actually moved it, measured:
   in the query; one script edit wrote `'\s+'`, which a JavaScript template reads as a plain `s`, so
   the same-name match collapsed every letter s instead of the spaces and a test caught it. Use the
   POSIX class (`'[[:space:]]+'`): nothing to escape, nothing to lose.
+- **In a select from one table, drizzle writes the columns bare.** `${events.id}` inside a correlated
+  subquery in `.select({...})` came out as `"id"`, which the subquery read as the seat's own id, so
+  the digest's "filled" step counted no match at all (the unit test caught it). With a join the same
+  column is qualified, which is why `reminders.ts` works. Alias the inner table and name the outer
+  one by hand: `(select count(*) from ${slots} s where s.event_id = ${events}.id)`. `.toSQL()` shows
+  what drizzle actually wrote.
 - **A line that recurs in a file is not an anchor.** `const t = await getTranslations("coach")` appears
   in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
   and the page did not compile. Anchor on a neighbouring line unique to the function (the one after

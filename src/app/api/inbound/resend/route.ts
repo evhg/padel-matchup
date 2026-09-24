@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         await notifyInbound(row);
         await draftReplyTo(db, row);
       } catch (e) {
-        void reportError("server", e, { path: "/api/inbound/resend" });
+        await reportError("server", e, { path: "/api/inbound/resend" });
       }
     };
     // After the response on Vercel; inline where there is no request scope (tests).
@@ -100,7 +100,7 @@ async function feedbackByEmail(db: Awaited<ReturnType<typeof getDb>>, mail: Inbo
         await proposeToOwner(db, row.id).catch(() => undefined);
       }
     } catch (e) {
-      void reportError("server", e, { path: "/api/inbound/resend" });
+      await reportError("server", e, { path: "/api/inbound/resend" });
     }
   };
   try {

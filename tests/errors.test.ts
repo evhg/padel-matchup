@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
-import { describeError, ERROR_ALERTS, fingerprintOf, listErrors, markErrorFixed, normalizeMessage, pruneErrors, recordAndAlert, recordError, topFrame } from "@/lib/alerts";
+import { describeError, ERROR_ALERTS, fingerprintOf, later, listErrors, markErrorFixed, normalizeMessage, pruneErrors, recordAndAlert, recordError, topFrame } from "@/lib/alerts";
 import { createTestDb } from "./helpers/db";
 
 describe("production error store", () => {
@@ -91,6 +91,18 @@ describe("production error store", () => {
       vi.unstubAllGlobals();
       delete process.env.TELEGRAM_OWNER_ID;
     }
+  });
+
+  it("later() outside a request runs the work at once, waits for it, and swallows its failure", async () => {
+    // In a request, after() holds the function open until the work is done. Here there is no request
+    // scope, so after() throws and the work runs in line: the caller's await covers it.
+    let done = false;
+    await later(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      done = true;
+    });
+    expect(done).toBe(true);
+    await expect(later(async () => Promise.reject(new Error("the counter is down")))).resolves.toBeUndefined();
   });
 
   it("rows unseen for 90 days are pruned", async () => {

@@ -35,7 +35,11 @@ export type ServiceRow = {
 export const CEILINGS = {
   vercelBandwidthGb: 100,
   vercelInvocations: 1_000_000,
-  vercelAnalyticsEvents: 2500,
+  // Hobby's Web Analytics allowance, shared by every project on the Vercel account: then a three-day
+  // grace, then collection pauses, and nothing is billed. From vercel.com/docs/analytics/limits-and-pricing
+  // (updated 25 August 2026), read on 24 September 2026. It said 2,500 here until then, and the board
+  // put a month at 80% that was really at 4%.
+  vercelAnalyticsEvents: 50_000,
   supabaseDbBytes: 500 * 1024 * 1024,
   supabaseEgressGb: 5,
   resendPerMonth: 3000,
@@ -123,7 +127,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
 
   // Hosting
   push({ key: "vercel", name: "Vercel", role: "hosting, functions, daily cron", used: null, limit: null, usage: "not exposed on Hobby", ceiling: `${CEILINGS.vercelBandwidthGb} GB · ${fmt(CEILINGS.vercelInvocations)} invocations / month`, note: "Bandwidth and invocations live in the Vercel dashboard. Hobby crons run once a day; pg_cron runs the rest.", link: "https://vercel.com/dashboard/usage", state: "info" });
-  push({ key: "vercel_analytics", name: "Vercel Web Analytics", role: "page views, Web Vitals", used: month.pageviews ?? 0, limit: CEILINGS.vercelAnalyticsEvents, usage: `${fmt(month.pageviews ?? 0)} page renders this month · ${fmt(day.pageviews ?? 0)} today`, ceiling: `${fmt(CEILINGS.vercelAnalyticsEvents)} events / month`, note: "Counted by the app on every page render; the Vercel dashboard stops recording past its ceiling until the month turns." });
+  push({ key: "vercel_analytics", name: "Vercel Web Analytics", role: "page views, Web Vitals", used: month.pageviews ?? 0, limit: CEILINGS.vercelAnalyticsEvents, usage: `${fmt(month.pageviews ?? 0)} page renders this month · ${fmt(day.pageviews ?? 0)} today`, ceiling: `${fmt(CEILINGS.vercelAnalyticsEvents)} events / month`, note: "Our own estimate: page renders counted on the server, crawlers left out; Vercel counts page views in the browser. Every project on the Vercel account shares the allowance. Past it, three days of grace, then Vercel stops recording until the next billing cycle; no bill." });
 
   // Database and jobs
   push({ key: "supabase_db", name: "Supabase Postgres", role: "the database", used: dbBytes, limit: CEILINGS.supabaseDbBytes, usage: mb(dbBytes), ceiling: `${mb(CEILINGS.supabaseDbBytes)} free project`, note: "Daily snapshot by the hourly job.", link: "https://supabase.com/dashboard/project/udvtuxaxzfimeoubofdz/reports" });

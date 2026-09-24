@@ -1,8 +1,8 @@
-import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import { COACH_DOORS } from "@/lib/source";
 import type { Db } from "@/db";
-import { activity, answers, coaches, discordChannels, events, listenItems, players, telegramChats, type Answer, type ListenItem } from "@/db/schema";
-import { listErrors } from "@/lib/alerts";
+import { activity, answers, coaches, discordChannels, events, listenItems, players, scores, slots, telegramChats, type Answer, type ListenItem } from "@/db/schema";
+import { listErrors, reportError } from "@/lib/alerts";
 import { feedbackWeek } from "@/lib/feedback/store";
 import { outreachWeek } from "@/lib/outreach/desk";
 import { searchConsoleEnabled, searchWeek } from "@/lib/search/console";
@@ -150,6 +150,31 @@ export async function setAnswerPublished(db: Db, id: string, on: boolean, now = 
 }
 
 /**
+ * The week's matches as one set, counted in one pass: those that started in the seven days before
+ * `now` (type `match`, not cancelled), those that filled (three or more of the four seats taken,
+ * waitlist left out), and those with a score.
+ *
+ * The funnel used to read matches → seats → scores, where "matches" was every event created that
+ * week, tournaments included, and "seats" counted joins, not matches. It could not say where
+ * matches were lost. Production on 24 September 2026 could: of 13 past matches, 10 never filled,
+ * and all 3 that filled got a score.
+ */
+export async function weekOfMatches(db: Db, since: Date, now: Date): Promise<{ matches: number; filled: number; scored: number }> {
+  // The outer row is named by its table (`${events}.id`): in a select from one table drizzle writes its
+  // columns bare, and a bare "id" inside the subquery is the seat's own id. The first draft of this
+  // counted no filled match at all, and the unit test caught it.
+  const [row] = await db
+    .select({
+      matches: sql<number>`count(*)`,
+      filled: sql<number>`count(*) filter (where (select count(*) from ${slots} s where s.event_id = ${events}.id and s.position <= ${events}.capacity and s.status in ('joined', 'confirmed')) >= 3)`,
+      scored: sql<number>`count(*) filter (where exists (select 1 from ${scores} sc where sc.event_id = ${events}.id))`,
+    })
+    .from(events)
+    .where(and(eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), lt(events.startsAt, now)));
+  return { matches: Number(row?.matches ?? 0), filled: Number(row?.filled ?? 0), scored: Number(row?.scored ?? 0) };
+}
+
+/**
  * Sunday morning, once: what the system did this week and the new answer
  * pages, each with an Unpublish button. Quiet the other six days.
  */
@@ -161,28 +186,28 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const [sent] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.day, day), eq(metricsDaily.key, "listen_digest"))).limit(1);
   if (sent && Number(sent.value) > 0) return false;
   const since = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-  const [[posted], [approvedManual], [matches], [chats], newAnswers, spend] = await Promise.all([
-    db.select({ n: sql<number>`count(*)` }).from(listenItems).where(and(eq(listenItems.status, "posted"), gte(listenItems.postedReplyAt, since))),
-    db.select({ n: sql<number>`count(*)` }).from(listenItems).where(and(eq(listenItems.status, "approved"), gte(listenItems.decidedAt, since))),
-    db.select({ n: sql<number>`count(*)` }).from(events).where(gte(events.createdAt, since)),
-    db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNull(telegramChats.leftAt), sql`${telegramChats.type} <> 'private'`)),
-    db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt), isNull(answers.digestedAt))).orderBy(desc(answers.publishedAt)).limit(10),
-    db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts','errors_server','errors_client','errors_cron','api_calls','api_calls_agent','mcp_calls','research_searches','research_items','research_finds','tavily_calls')`)).groupBy(metricsDaily.key),
-  ]);
+  // One query after another, never six at once: the pool holds five connections, and a sixth query in
+  // flight is pipelined onto a busy one, which the Supabase pooler stalls on (rule 8). A stall here
+  // is a function stopped at sixty seconds, with nothing recorded.
+  const [posted] = await db.select({ n: sql<number>`count(*)` }).from(listenItems).where(and(eq(listenItems.status, "posted"), gte(listenItems.postedReplyAt, since)));
+  const [approvedManual] = await db.select({ n: sql<number>`count(*)` }).from(listenItems).where(and(eq(listenItems.status, "approved"), gte(listenItems.decidedAt, since)));
+  const [matches] = await db.select({ n: sql<number>`count(*)` }).from(events).where(gte(events.createdAt, since));
+  const [chats] = await db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNull(telegramChats.leftAt), sql`${telegramChats.type} <> 'private'`));
+  const newAnswers = await db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt), isNull(answers.digestedAt))).orderBy(desc(answers.publishedAt)).limit(10);
+  const spend = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts','errors_server','errors_client','errors_cron','api_calls','api_calls_agent','mcp_calls','research_searches','research_items','research_finds','tavily_calls')`)).groupBy(metricsDaily.key);
   const spent = Object.fromEntries(spend.map((r) => [r.key, Number(r.total)]));
   const openErrors = await listErrors(db, { since, limit: 5 });
   const mail = await outreachWeek(db, since);
   const notes = await feedbackWeek(db, since);
   const search = searchConsoleEnabled() ? await searchWeek() : null;
   // The numbers that say whether the product works: new people, people joining, matches that ended in a result, clubs.
-  const [[newPlayers], [joins], [results], newClubs, [channels], [newCoaches]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since)),
-    db.select({ n: sql<number>`count(*)` }).from(activity).where(and(eq(activity.verb, "joined"), gte(activity.createdAt, since))),
-    db.select({ n: sql<number>`count(distinct ${activity.eventId})` }).from(activity).where(and(eq(activity.verb, "score_entered"), gte(activity.createdAt, since))),
-    countClubsClaimedSince(db, since),
-    db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt)),
-    db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since)),
-  ]);
+  const [newPlayers] = await db.select({ n: sql<number>`count(*)` }).from(players).where(gte(players.createdAt, since));
+  const [joins] = await db.select({ n: sql<number>`count(*)` }).from(activity).where(and(eq(activity.verb, "joined"), gte(activity.createdAt, since)));
+  const [results] = await db.select({ n: sql<number>`count(distinct ${activity.eventId})` }).from(activity).where(and(eq(activity.verb, "score_entered"), gte(activity.createdAt, since)));
+  const newClubs = await countClubsClaimedSince(db, since);
+  const [channels] = await db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt));
+  const [newCoaches] = await db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since));
+  const played = await weekOfMatches(db, since, now);
   const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`(${metricsDaily.key} in ('pageviews','card_views') or ${metricsDaily.key} like 'join_src_%' or ${metricsDaily.key} like 'coach_src_%')`)).groupBy(metricsDaily.key);
   const funnel = Object.fromEntries(funnelRows.map((r) => [r.key, Number(r.total)]));
   const bySource = funnelRows.filter((r) => r.key.startsWith("join_src_")).map((r) => `${r.key.slice("join_src_".length)} ${Number(r.total)}`).sort();
@@ -196,7 +221,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const lines = [
     "<b>Kicksmash, this week</b>",
     `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,
-    `Funnel: visitors ${funnel.pageviews ?? 0} → matches ${Number(matches.n)} → seats ${Number(joins.n)} → scores ${Number(results.n)} → card views ${funnel.card_views ?? 0}`,
+    `Funnel: visitors ${funnel.pageviews ?? 0} · matches ${played.matches} → filled ${played.filled} → scores ${played.scored} · card views ${funnel.card_views ?? 0}`,
     `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : "none this week (ig, poster, card, moment, podium are the tags)"}`,
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${newClubs}`,
     unlisted.length ? `Played at, not listed: ${unlisted.map((v) => `${esc(v.name)} (${v.matches})`).join(" · ")} — add a club to data/clubs.json, or wait for it to claim its page` : "Played at, not listed: nothing this week; every court people used is a club we know.",
@@ -213,7 +238,13 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     newAnswers.length ? `\nNew answer pages (${newAnswers.length}), each with an Unpublish button below:` : "\nNo new answer pages this week.",
   ];
   const head = await sendMessage(owner, lines.join("\n"), { keyboard: { inline_keyboard: [[{ text: "Listening desk", url: `${baseUrl()}/admin/listen` }]] } });
-  if (!head.ok) return false;
+  if (!head.ok) {
+    // A refusal from Telegram used to end here in silence. The digest of 20 September 2026 never
+    // arrived and left no trace, and this was one of the ways that could happen. Nothing is marked,
+    // so the next hour tries again.
+    await reportError("cron", new Error(`weekly digest not sent: Telegram answered ${head.error_code} ${head.description}`), { path: "listen/digest" });
+    return false;
+  }
   await bumpMetric(db, "listen_digest", 1, day);
   for (const a of newAnswers) {
     const res = await sendMessage(owner, `<b>${esc(a.title)}</b>\n${esc(a.answer.slice(0, 300))}${a.answer.length > 300 ? "…" : ""}`, {
