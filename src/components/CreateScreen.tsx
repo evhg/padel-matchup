@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import { CreateEventForm } from "@/components/CreateEventForm";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
 import { getDb } from "@/db";
-import { shortHost } from "@/lib/config";
 import Link from "next/link";
 import { isValidInviteCode } from "@/lib/codes";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
@@ -13,7 +12,6 @@ import { getPlayerTimePatterns } from "@/lib/domain/queries";
 import { getSessionPlayer } from "@/lib/session";
 import { SEAT_NAMES_MAX } from "@/lib/domain/slots";
 import type { EventFormValues } from "./EventFields";
-import { lastMatchPhoto } from "@/lib/domain/photos";
 
 /** The create form with its data. Rendered on / and /new. */
 export async function CreateScreen({ heading, prefill }: { heading: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; tg?: string; dc?: string; names?: string } }) {
@@ -31,7 +29,6 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
   const headerCity = hdrs.get("x-vercel-ip-city");
   const venues = await venuesForPicking(db, me?.id ?? null, { tz: tzFromHeader ? headerTz : null, city: headerCity ? decodeURIComponent(headerCity) : null });
   const patterns = me ? await getPlayerTimePatterns(db, me.id) : [];
-  const photo = me ? await lastMatchPhoto(db, me.id).catch(() => null) : null;
 
   // From a group page: the group's usual settings prefill the form and every member gets pinged on create.
   const group = prefill?.group && isValidInviteCode(prefill.group) ? await getGroupByCode(db, prefill.group) : null;
@@ -90,7 +87,7 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
           <p className="mt-2 text-xs text-muted">{t("landing.carriedHelp")}</p>
         </section>
       )}
-      <CreateEventForm host={shortHost()} photoUrl={photo ? `/${photo.code}/photo?v=${photo.version}` : undefined} carriedNames={carried} defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }))} hasIdentity={Boolean(me)} returning={returning} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
+      <CreateEventForm carriedNames={carried} defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }))} hasIdentity={Boolean(me)} returning={returning} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
     </>
   );
 }

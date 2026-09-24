@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { createEventAction } from "@/actions/events";
 import { nextOccurrence, tomorrowAt } from "@/lib/dates";
 import { EventFields, type EventFormValues, type TimePatternInput } from "./EventFields";
-import { MatchCardPreview } from "./MatchCardPreview";
 import type { VenueOption } from "./VenueCombobox";
 
 export function CreateEventForm({
@@ -14,8 +13,6 @@ export function CreateEventForm({
   venues,
   hasIdentity,
   returning,
-  host,
-  photoUrl,
   patterns = [],
   hasLevel = false,
   initialType = "match",
@@ -32,10 +29,6 @@ export function CreateEventForm({
   hasIdentity: boolean;
   /** The way back in for somebody who has played before, rendered on the server. Null once they are known. */
   returning?: React.ReactNode;
-  /** The short host the card shows, e.g. "kicksma.sh". Read on the server; there is no env here. */
-  host: string;
-  /** The viewer's last match photo, drawn behind the card while they type the next one. */
-  photoUrl?: string;
   /** The organizer's usual weekday/time slots (quick picks + default). */
   patterns?: TimePatternInput[];
   /** The organizer already has a level (a range then doesn't ask for theirs). */
@@ -168,21 +161,6 @@ export function CreateEventForm({
           {returning}
         </div>
       )}
-      {/*
-        The card the crew will actually see, filling in as this is typed. It was the one thing the
-        first page never showed, and it is the whole product in one picture.
-      */}
-      {/*
-        The card is filled from the form, and the form fills the date from the player's usual slot, so
-        a returning player saw a card for a match that did not exist (dikke henk, "28 Sep", 24
-        September 2026). The line says it is a draft.
-      */}
-      <div className="flex flex-col gap-1.5">
-        <p className="px-1 text-xs font-semibold text-muted" data-testid="card-preview-label">
-          {t("create.previewLabel")}
-        </p>
-        <MatchCardPreview values={values} host={host} photo={photoUrl} />
-      </div>
       <div className="card">
         <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} />
       </div>

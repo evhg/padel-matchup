@@ -185,8 +185,7 @@
     "tzNearby": "Probables",
     "tzAll": "Todas las zonas horarias",
     "haveAlready": "Jugadores que ya tienes",
-    "haveAlreadyHelp": "Un nombre por línea. Cada uno ocupa una plaza y recibe un enlace, así el mensaje que compartes dice cuántos te faltan de verdad.",
-    "previewLabel": "Vista previa: la tarjeta que verá tu grupo. No existe nada hasta que toques «Crear y obtener el enlace»."
+    "haveAlreadyHelp": "Un nombre por línea. Cada uno ocupa una plaza y recibe un enlace, así el mensaje que compartes dice cuántos te faltan de verdad."
   },
   "share": {
     "title": "Tu partido está en marcha",

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { eventPhotos, events, feedback, slots } from "@/db/schema";
+import { feedback } from "@/db/schema";
 import { appendFeedbackReply, cleanPublicName, cleanPublicSummary, createFeedback, decideFeedback, feedbackWeek, listBuilt, setBuiltLine } from "@/lib/feedback/store";
-import { lastMatchPhoto, photoByCode } from "@/lib/domain/photos";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 /**
@@ -13,7 +12,6 @@ import { createTestDb, makePlayer } from "./helpers/db";
  * to us, not for a page). Beside it, the first name of the player who asked (the owner, later the same
  * day), taken from their name on Kicksmash, never from what the note typed.
  *
- * The first page's card draws the court photo of the viewer's last match behind it.
  */
 
 const at = (day: number, hour = 12) => new Date(Date.UTC(2026, 8, day, hour));
@@ -94,27 +92,5 @@ describe("the page of ideas that became the app", () => {
     // The week counts a decision by when its message went out; neither note has a channel here.
     await db.update(feedback).set({ repliedAt: at(22) });
     expect((await feedbackWeek(db, at(20))).declined).toBe(1);
-  });
-});
-
-describe("the photo of the last match, behind the card being typed", () => {
-  it("finds the latest match with a photo that this person played or organised", async () => {
-    const { db } = await createTestDb();
-    const ana = await makePlayer(db, "Ana");
-    const bo = await makePlayer(db, "Bo");
-    const stranger = await makePlayer(db, "Cy");
-    const mk = async (code: string, day: number, creator: string) =>
-      (await db.insert(events).values({ code, manageCode: `${code}mng999`, title: code, startsAt: at(day), tz: "Asia/Bangkok", capacity: 4, creatorPlayerId: creator } as never).returning())[0];
-    const older = await mk("OLD1", 10, ana.id);
-    const newer = await mk("NEW1", 15, bo.id);
-    await db.insert(slots).values({ eventId: newer.id, position: 1, playerId: ana.id, status: "joined", kind: "open" } as never);
-    await db.insert(eventPhotos).values({ eventId: older.id, uploadedByPlayerId: ana.id, mime: "image/png", dataBase64: "iVBORw0KGgo=", createdAt: at(10, 14) });
-    expect((await lastMatchPhoto(db, ana.id))?.code).toBe("OLD1");
-    await db.insert(eventPhotos).values({ eventId: newer.id, uploadedByPlayerId: bo.id, mime: "image/png", dataBase64: "iVBORw0KGgo=", createdAt: at(15, 14) });
-    const latest = await lastMatchPhoto(db, ana.id);
-    expect(latest).toEqual({ code: "NEW1", version: at(15, 14).getTime() });
-    expect(await lastMatchPhoto(db, stranger.id)).toBeNull();
-    expect((await photoByCode(db, "NEW1"))?.mime).toBe("image/png");
-    expect(await photoByCode(db, "NONE")).toBeNull();
   });
 });
