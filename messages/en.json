@@ -185,7 +185,8 @@
     "tzNearby": "Likely",
     "tzAll": "All time zones",
     "haveAlready": "Players you already have",
-    "haveAlreadyHelp": "One name per line. Each takes a spot and gets a link to pass on, so the message you share says how many you really need."
+    "haveAlreadyHelp": "One name per line. Each takes a spot and gets a link to pass on, so the message you share says how many you really need.",
+    "previewLabel": "Preview: the card your crew will see. Nothing exists until you tap “Create & get the link”."
   },
   "share": {
     "title": "Your match is live",

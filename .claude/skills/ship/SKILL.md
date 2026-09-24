@@ -164,7 +164,27 @@ learning can be a test, a gate step or a script, make it one and put the story i
   complete. A database rebuilt from GitHub would have run no jobs, and `kicksmash` could have used
   none of those tables. Compare production with a database built from the migrations
   (`createTestDb()` is one) before calling anything "in the repository", and make the comparison a
-  test: `tests/cron-jobs.test.ts` and `tests/security.test.ts`.
+  test: `tests/cron-jobs.test.ts` and `tests/security.test.ts`. The same holds for the default
+  privileges (what a new table grants, and to whom) and for the login role `kicksmash_agent`: both
+  exist only in production (docs/OPERATING.md, "Security at a hundred real players").
+- **A line in `.claude/settings.json` is not the permission a connector tool runs under here.** The
+  file has allowed `mcp__Supabase__execute_sql` since 7 September, and every call still waited for
+  the owner: in this cloud a connector tool's approval is set on claude.ai, under the connector's
+  tool permissions. Read the file as a wish, and ask what happens. An allow line also covers the
+  whole tool, never one kind of call: `execute_sql` allowed is a `DROP TABLE` allowed, which is why
+  no read-only list can hold it. The owner keeps the two Supabase lines (24 September); they change
+  nothing while the connector asks.
+- **A test of every control is not a rehearsal of the day.** `e2e/tournament.mjs` clicks each part
+  of a tournament once and passed. A weekend played through as its people on a phone (26 pairs, two
+  categories, four courts, a withdrawal, the knockout, the podium; 24 September) found nine things
+  that suite never could: a score typed as "my games first" gave the match to the other pair, a
+  player's own matches sat seven screens down, "to be decided" filled the afternoon, the end of the
+  weekend led with four free courts. Before telling the owner a flow is ready for real people,
+  play it end to end as each of them, look at every screen, and write down what a person trips on.
+- **A draft that looks like a fact misleads.** The first page's card fills in from the form, and the
+  form fills the date from the player's usual slot, so a returning player opened the page and saw
+  a card for a match on 28 September that did not exist. Anything that shows a guess in the shape
+  of a real thing must say it is a draft.
 - **A delete follows every foreign key, so a merge must move every one first.** `mergePlayers` moved
   the six tables somebody listed by hand, then deleted the duplicate rows, and the database did the
   rest: `on delete cascade` took a student's place on a coach's list and their packages, `set null`

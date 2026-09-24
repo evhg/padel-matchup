@@ -2,9 +2,23 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { SKEW_RELOAD_KEY, shouldReloadForSkew } from "@/lib/deploySkew";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
+    // A page from before a deploy asking for code the new deploy no longer has: reload once, log nothing.
+    let last: number | null = null;
+    try {
+      const v = Number(sessionStorage.getItem(SKEW_RELOAD_KEY));
+      last = Number.isFinite(v) && v > 0 ? v : null;
+    } catch {}
+    if (shouldReloadForSkew(error.message, last, Date.now())) {
+      try {
+        sessionStorage.setItem(SKEW_RELOAD_KEY, String(Date.now()));
+      } catch {}
+      location.reload();
+      return;
+    }
     // Count it on /admin; no personal data leaves the browser.
     fetch("/api/client-error", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ digest: error.digest ?? "", message: error.message?.slice(0, 200) ?? "", path: typeof location === "undefined" ? "" : location.pathname.slice(0, 200) }) }).catch(() => {});
   }, [error]);

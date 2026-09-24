@@ -488,6 +488,18 @@ Everything in this list is live. The README describes each in detail.
   test user or a name unfit for a public page. The same change stops Resend's test addresses from
   marking anything: one test bounce had turned the service board's bounce row yellow.
 
+- **A tournament weekend rehearsed, and what a real one would have tripped on (24 September 2026).**
+  26 pairs in two categories, four courts, two days, played through on phones as the organiser and
+  the players. The score form now names the pair whose games come first and says who wins before
+  the save: a player listed second typed his own games first and gave the match away. A player's
+  own matches come first on the page, with the court, the time, the result from their side and the
+  score form; they had been seven screens down. A knockout side says where it comes from ("Winner of
+  group A") instead of "to be decided". The desk says "Change the score" on a match that has one,
+  its pair rows are a third of the height, and the partner's link goes to WhatsApp or Telegram in
+  one tap. When every category has its champions and nothing is left to play, the page and the
+  club's screen lead with them. The card on the first page says it is a preview, and a page from
+  before a deploy reloads once instead of showing an error.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -564,6 +576,19 @@ the player, and invite them to try it.
    `docs/OPERATING.md` under "Security at a hundred real players". What can hold until then is held
    by `tests/security.test.ts`: every operator route checks the token first, and `kicksmash` can use
    every table.
+2. **The knockout on the last day.** A two-day tournament puts every match on the first day, the
+   final at 18:00 included; organisers play the groups on Saturday and the knockout on Sunday. The
+   scheduler takes a "not before" per match easily; the choice needs one column on `competitions`.
+3. **Match times for a player with no channel.** A player who entered on the web without Telegram or
+   an email hears nothing about their court and time; "Your matches" should offer the channel.
+4. **The desk's order after entries close.** The draw's settings sit under every pair; once entries
+   close they belong above them.
+5. **For the owner.** Whether `kicksmash_agent` keeps its login (docs/OPERATING.md). Whether to delete
+   five old `claude/*` branches whose pull requests merged, and `claude/vercel-setup-l1mlxu` (two
+   commits from 3 September, never proposed). Whether to compare the backup of 23 September, 03:00
+   UTC, with production for rows the old merge lost (the backup repository's token is not in this
+   environment). Vercel Web Analytics stood at 2,022 of its 2,500 free events on 24 September; at
+   a hundred players the free ceiling will not hold.
 
 ## Deliberately not
 

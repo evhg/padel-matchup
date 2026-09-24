@@ -242,6 +242,30 @@ was built to run as, `kicksmash`, holds the grant and the policy on every table.
 0075, 50 of those grants existed only in production, typed in by hand: a database rebuilt from
 GitHub gave the role a policy on each table and no right to use it.
 
+**What production holds that the repository does not** (checked 24 September 2026 through the
+read-only door):
+
+- **Default privileges.** A table that `postgres` creates in `public` is granted to `postgres`,
+  `service_role` and `kicksmash` (everything) and to `kicksmash_agent` (select, insert, update),
+  never to `anon` or `authenticated`. That was set by hand; no migration says so. `anon` and
+  `authenticated` hold no privilege on any of the 59 tables, and every table has Row Level Security
+  with the one policy for `kicksmash`.
+- **`kicksmash_agent`.** A role that can log in, bypasses Row Level Security, and can read and write
+  every table, sign-in tokens included. It was made on 16 September on Claude's advice, for a
+  direct connection from a session that the container can never open; nothing has connected as it
+  since. Whether to take its login away (`alter role kicksmash_agent nologin`) is the owner's call.
+- **The Supabase MCP.** `.claude/settings.json` allows `execute_sql` and `apply_migration`, and the
+  owner keeps those lines (24 September). They do not decide anything here: in this cloud the
+  connector's tool permissions on claude.ai do, and they are set to ask. Keep them asking. Reads go
+  through `/api/admin/sql`, and changes through a migration and the Migrate workflow.
+
+**Supabase's Data API change of 30 October 2026** (new tables in `public` no longer granted to the
+Data API by default) changes nothing for Kicksmash: the app never uses the Data API (no
+supabase-js, no REST or GraphQL calls), every migration that adds a table grants it to `kicksmash`
+(AGENTS.md rule 10), and `anon` and `authenticated` already reach no table. Do not add the
+`anon`/`authenticated` grants that the announcement suggests: they would open tables that are
+closed today.
+
 The steps for that day, in this order. Each one that names a dashboard needs the owner's hands.
 
 1. **The app's own database user.** Production's `DATABASE_URL` connects as `postgres`, which
