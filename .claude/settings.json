@@ -12,7 +12,18 @@
       "mcp__github__actions_list",
       "mcp__github__actions_get",
       "mcp__github__create_pull_request",
-      "mcp__github__merge_pull_request"
+      "mcp__github__merge_pull_request",
+      "Bash(pnpm exec tsc --noEmit)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm typecheck)",
+      "mcp__Vercel__list_deployments",
+      "Bash(node scripts/suites.mjs --why)",
+      "Bash(curl -s https://kicksma.sh/api/health)",
+      "mcp__Vercel__list_projects",
+      "mcp__Vercel__search_vercel_documentation",
+      "mcp__Vercel__list_teams",
+      "mcp__github__list_pull_requests"
     ],
     "autoMode": {
       "allow": [
