@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { DeleteAccount } from "@/components/DeleteAccount";
+import { SameNameCard } from "@/components/SameNameCard";
 import { MyMatches } from "@/components/MyMatches";
 import { MySettings } from "@/components/MySettings";
 import { NameGate } from "@/components/NameGate";
@@ -74,6 +75,7 @@ export default async function MePage({ searchParams }: Props) {
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
         {asCoach && <CoachCard db={db} coach={asCoach.coach} />}
         <MyMatches player={me} />
+        <SameNameCard db={db} player={me} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />

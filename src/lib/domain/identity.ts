@@ -6,6 +6,7 @@ import { emailCodes, players, type Player } from "@/db/schema";
 import { CODE_ALPHABET } from "@/lib/codes";
 import { DomainError } from "./errors";
 import { mergePlayers } from "./merge";
+import { foldSameNameRows } from "./sameName";
 import { normalizeEmail } from "./players";
 import { clearMark } from "./emailMarks";
 
@@ -172,6 +173,9 @@ export async function restoreByEmail(db: Db, email: string, currentPlayerId: str
     pool.map((p) => p.id),
   );
   const [updated] = await db.update(players).set({ email, emailVerifiedAt: canonical.emailVerifiedAt ?? now }).where(eq(players.id, canonical.id)).returning();
+  // Proved now: a row of the same name nobody can reach, sharing a match, an organiser or a club,
+  // is theirs too (the owner's option A, 24 September 2026). Never throws.
+  await foldSameNameRows(db, updated.id);
   return updated;
 }
 

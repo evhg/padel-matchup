@@ -19,6 +19,7 @@ import { ActionFailure, assertRate, clientIp, requirePlayer, runA, type ActionRe
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { removeOptOut } from "@/lib/domain/optouts";
 import { liftOnConsent } from "@/lib/domain/emailMarks";
+import { claimSameNameRow } from "@/lib/domain/sameName";
 
 export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
 
@@ -118,6 +119,22 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
     await setSessionPlayer(player.id);
     revalidatePath("/", "layout");
     return pub(player);
+  });
+}
+
+/**
+ * "These are mine" on My matches: folds a row of the same name that nobody can reach into the signed-in
+ * person. Everything the card showed is checked again (`claimSameNameRow`); a row that no longer fits
+ * is refused rather than merged.
+ */
+export async function claimSameNameAction(rowId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    if (!/^[0-9a-f-]{36}$/i.test(rowId ?? "") || !(await claimSameNameRow(db, me.id, rowId))) throw new ActionFailure("invalid");
+    revalidatePath("/me");
+    return null;
   });
 }
 

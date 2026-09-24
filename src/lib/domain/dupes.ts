@@ -26,6 +26,11 @@ import type { Player } from "@/db/schema";
  *     are proof. **Not** on a nightly sweep — a wrong rule running overnight does its damage before
  *     anybody reads the report.
  *
+ * On 24 September 2026 the owner added the case these rules left open: the same name, one side proved,
+ * the other reachable by nothing (option A). It merges automatically at the moment of proof when the
+ * two rows also share a match, an organiser or a club; otherwise the person decides on My matches
+ * with the matches shown. `sameName.ts` holds that guard, and every pair still passes `safeToMerge`.
+ *
  * One line that is not a preference: **an address that was typed is not an address that was proved.**
  * `same_email` is safe for a merge somebody runs and reads the rows of. Firing it when an email is
  * merely saved would be an account takeover — type a stranger's address into the email field and

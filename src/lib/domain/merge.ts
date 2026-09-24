@@ -2,7 +2,7 @@ import { eq, getTableName, inArray, is, sql, type SQL } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import * as schema from "@/db/schema";
-import { events, players, slots, tournamentRounds } from "@/db/schema";
+import { demandSignals, events, players, slots, tournamentRounds } from "@/db/schema";
 import { DomainError } from "./errors";
 
 /**
@@ -53,9 +53,9 @@ const count = (r: unknown) => (Array.isArray(r) ? r.length : ((r as { rows?: unk
 /**
  * Folds identities `from` into `into`, in one transaction, and deletes the sources.
  *
- * Three things keep a rule of their own: a seat in a match both already hold (the source's is
- * freed), and a player id inside a tournament round's resting list or an event's standings (arrays,
- * not foreign keys). Everything else that points at a player moves, table by table from the schema.
+ * Four things keep a rule of their own: a seat in a match both already hold (the source's is
+ * freed), a player id inside a tournament round's resting list or an event's standings (arrays,
+ * not foreign keys), and a want (`demand_signals`, no foreign key either). Everything else that points at a player moves, table by table from the schema.
  * Where a unique key would clash — both in the same group, both students of one coach — the
  * survivor's row stays and the source's goes. Then the sources are deleted, and the survivor takes
  * any address or chat account it lacked. Crypto-free on purpose so slot code (reachable from client
@@ -99,6 +99,10 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
         await tx.update(events).set({ standings: [...new Set(e.standings.map((id) => (sources.includes(id) ? into : id)))] }).where(eq(events.id, e.id));
       }
     }
+
+    // A want points at its player without a foreign key, so the schema read below cannot see it, and
+    // until 24 September a merge left every want of the folded row pointing at a row that was gone.
+    await tx.update(demandSignals).set({ playerId: into }).where(inArray(demandSignals.playerId, sources));
 
     for (const ref of playerReferences()) {
       const t = ident(ref.table);
