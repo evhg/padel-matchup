@@ -39,6 +39,16 @@ import { cardTitle } from "@/lib/telegram/card";
 
 export type NudgeSummary = { players: number; telegram: number; push: number; email: number };
 
+/**
+ * Renders the picture once before Telegram asks for it: every player's message carries the same URL,
+ * so the first render fills the cache and Telegram's fetches are answered from it. Best effort.
+ */
+async function warm(url: string): Promise<void> {
+  await fetch(url, { signal: AbortSignal.timeout(20_000) })
+    .then((r) => r.arrayBuffer())
+    .catch(() => undefined);
+}
+
 export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Promise<NudgeSummary> {
   const d = detail ?? (await getEventDetail(db, ev));
   const players = d.roster.filter((s) => isOccupied(s) && s.player).map((s) => s.player!) as Player[];
@@ -46,6 +56,7 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
   const base = baseUrl();
   const subs = pushEnabled() ? await subscriptionsFor(db, players.map((p) => p.id)) : [];
   const version = telegramEnabled() && players.some((p) => p.telegramId) ? cardVersion(d, await getEventPhotoMeta(db, ev.id).catch(() => null)) : null;
+  if (version) await warm(`${base}${cardImagePath(ev.code, version)}`);
   for (const player of players) {
     let reached = false;
     if (telegramEnabled() && player.telegramId) {
@@ -136,6 +147,7 @@ export async function closeScoreNudges(db: Db, code: string): Promise<number> {
   const base = baseUrl();
   const version = cardVersion(detail, await getEventPhotoMeta(db, detail.event.id).catch(() => null));
   const picture = `${base}${cardImagePath(code, version)}`;
+  if (rows.some((r) => r.rendered !== null && r.rendered !== version)) await warm(picture);
   let closed = 0;
   for (const row of rows) {
     const locale: BotLocale = botLocale(row.locale);
