@@ -529,6 +529,11 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### What the walks keep finding
 
+- **"No match" is a query over every column that points at a player, never a look at one table.**
+  I told the owner jakob2, jakob3, JAkob7, Jakob8 and Mike Movenpick had no match and could go. Each
+  had a seat and up to ten rows in `tournament_matches`: names Jakob gave in his tournament of 4
+  September. The generated query (`playerReferences`, the same list a merge moves) said so in one
+  read. Ask it before saying a row is empty.
 - **A walk runs on a local build, never on production.** The five walks of 21 September signed up as
   their characters on kicksma.sh and left 25 player rows behind, two of them owners of saved clubs.
   They then counted as players: "48 players, 42 without a channel" went to the owner when the truth
