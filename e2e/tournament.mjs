@@ -156,7 +156,10 @@ try {
   await myForm.getByRole("textbox").fill("6-4");
   // The form names the pair whose games come first, and reads the winner back before the save.
   const firstPair = (await myForm.innerText()).match(/([^\n]+?)'s games first/)?.[1];
-  check("the form says whose games come first and who a 6-4 makes the winner", Boolean(firstPair) && (await myForm.getByTestId("score-verdict").innerText()) === `${firstPair} win.`, firstPair);
+  // In his own match the line speaks to Cal: a 6-4 is a win for the pair named first, so it is "You win."
+  // when that pair is his, and a loss in the other pair's name when it is not.
+  const line = await myForm.getByTestId("winner-line").innerText();
+  check("the form says whose games come first and whether a 6-4 wins or loses for Cal", Boolean(firstPair) && (firstPair.startsWith("Cal") ? line === "You win." : line === `${firstPair} win, you lose.`), `${firstPair} / ${line}`);
   await myForm.getByRole("button", { name: "Save the score" }).click();
   await cal.getByText("6-4", { exact: true }).first().waitFor({ timeout: 20000 });
   check("the score is on the page", true);

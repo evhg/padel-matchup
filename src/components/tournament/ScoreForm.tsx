@@ -13,7 +13,7 @@ import { scoreVerdict } from "@/lib/tournamentText";
 /** An example that fits the rule, for the placeholder and the help line (a super set is not three sets). */
 const EXAMPLES: Record<string, string> = { set6tb: "6-4", set9: "9-7", sets2stb: "6-4 3-6 10-8", sets3: "6-4 3-6 7-5" };
 
-export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aName, bName }: { slug: string; matchId: string; rule: string; ruleLabel: string; organizer: boolean; done: boolean; aName: string; bName: string }) {
+export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aName, bName, mySide }: { slug: string; matchId: string; rule: string; ruleLabel: string; organizer: boolean; done: boolean; aName: string; bName: string; /** The viewer's own side, when it is their match: the line then says "you win" or "you lose". */ mySide?: "A" | "B" }) {
   const t = useTranslations();
   const router = useRouter();
   // A player's own match opens ready to score; the organiser's desk lists thirty matches, so each one waits for a tap.
@@ -60,8 +60,10 @@ export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aNa
         {t("tournament.scoreHelpNamed", { name: aName, example })} {ruleLabel}
       </span>
       {verdict && (
-        <p className="text-sm font-bold text-ok" data-testid="score-verdict">
-          {t("tournament.scoreWinner", { name: verdict === "A" ? aName : bName })}
+        // A player thinks "me", not a pair's name: in their own match the line says whether they win,
+        // and a loss stands out, so a score typed the wrong way round is seen before the save.
+        <p className={`text-sm font-bold ${mySide && verdict !== mySide ? "text-warn" : "text-ink"}`} data-testid="winner-line">
+          {mySide ? (verdict === mySide ? t("tournament.scoreYouWin") : t("tournament.scoreYouLose", { name: verdict === "A" ? aName : bName })) : t("tournament.scoreWinner", { name: verdict === "A" ? aName : bName })}
         </p>
       )}
       {organizer && !done && (

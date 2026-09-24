@@ -2155,6 +2155,8 @@
     "statusFinished": "Terminado",
     "partnerShareText": "Nos inscribí en {category}. Toca para confirmar que eres mi pareja:",
     "tvOver": "Así termina el torneo. Gracias por jugar.",
+    "scoreYouWin": "Ganáis vosotros.",
+    "scoreYouLose": "Ganan {name}, vosotros perdéis.",
     "strip": {
       "title": "Cómo va un fin de semana",
       "entries": "Inscripciones",

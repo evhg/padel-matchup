@@ -2155,6 +2155,8 @@
     "statusFinished": "Finished",
     "partnerShareText": "I entered us in {category}. Tap to confirm you're my partner:",
     "tvOver": "That's the tournament. Thank you for playing.",
+    "scoreYouWin": "You win.",
+    "scoreYouLose": "{name} win, you lose.",
     "strip": {
       "title": "How a weekend runs",
       "entries": "Entries",

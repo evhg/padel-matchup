@@ -68,7 +68,7 @@ export async function MyMatches({ draws, myPairIds, slug, tz }: { draws: Map<str
               <div className="text-xs text-muted">
                 {view.category.name} · {label}
               </div>
-              {ready && !over(m) && <ScoreForm slug={slug} matchId={m.id} rule={m.scoring} ruleLabel={t(`tournament.sc_${m.scoring}`)} organizer={false} done={false} aName={m.a!.name} bName={m.b!.name} />}
+              {ready && !over(m) && <ScoreForm slug={slug} matchId={m.id} rule={m.scoring} ruleLabel={t(`tournament.sc_${m.scoring}`)} organizer={false} done={false} aName={m.a!.name} bName={m.b!.name} mySide={side} />}
             </li>
           );
         })}

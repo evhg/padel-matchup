@@ -115,6 +115,7 @@ export default async function TvPage({ params }: Props) {
             </ul>
           )}
         </div>
+        {!board.finished && (
         <div className="card">
           <h2 className="text-lg font-extrabold">{t("tournament.tvUpcoming")}</h2>
           {board.upcoming.length === 0 ? (
@@ -144,6 +145,7 @@ export default async function TvPage({ params }: Props) {
             </div>
           )}
         </div>
+        )}
       </section>
     </main>
   );
