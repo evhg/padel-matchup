@@ -4,12 +4,16 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { enterScoreAction, walkoverAction } from "@/actions/competitions";
+import { scoreVerdict } from "@/lib/tournamentText";
 
 /**
  * The score as people say it, "6-4 3-6 10-8", from the organiser or a player of either pair.
  * The organiser can also give a walkover, and correct a result until the next match has one.
  */
-export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aName, bName }: { slug: string; matchId: string; rule: string; ruleLabel: string; organizer: boolean; done: boolean; aName: string; bName: string }) {
+/** An example that fits the rule, for the placeholder and the help line (a super set is not three sets). */
+const EXAMPLES: Record<string, string> = { set6tb: "6-4", set9: "9-7", sets2stb: "6-4 3-6 10-8", sets3: "6-4 3-6 7-5" };
+
+export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aName, bName, mySide }: { slug: string; matchId: string; rule: string; ruleLabel: string; organizer: boolean; done: boolean; aName: string; bName: string; /** The viewer's own side, when it is their match: the line then says "you win" or "you lose". */ mySide?: "A" | "B" }) {
   const t = useTranslations();
   const router = useRouter();
   // A player's own match opens ready to score; the organiser's desk lists thirty matches, so each one waits for a tap.
@@ -20,12 +24,15 @@ export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aNa
   const fail = (r: { error: string; detail?: string }) =>
     setError(r.error === "locked" ? t("tournament.errLocked") : r.error === "invalid" && r.detail?.startsWith("score_") ? t("tournament.errScore", { rule: ruleLabel }) : r.error === "invalid" && r.detail === "not_published" ? t("tournament.errNotPublished") : t("common.somethingWrong"));
   if (!open) {
+    // A result already in reads "Change the score", so the desk sees at a glance which matches still wait for one.
     return (
       <button type="button" className="btn-ghost btn-sm" onClick={() => setOpen(true)}>
-        {t("tournament.enterScore")}
+        {done ? t("tournament.changeScore") : t("tournament.enterScore")}
       </button>
     );
   }
+  const example = EXAMPLES[rule] ?? "6-4";
+  const verdict = scoreVerdict(rule, text);
   return (
     <form
       className="mt-1 flex flex-col gap-2"
@@ -44,14 +51,21 @@ export function ScoreForm({ slug, matchId, rule, ruleLabel, organizer, done, aNa
       }}
     >
       <div className="flex gap-2">
-        <input className="input min-w-0 flex-1" inputMode="numeric" placeholder={rule === "sets2stb" || rule === "sets3" ? "6-4 3-6 10-8" : rule === "set9" ? "9-7" : "6-4"} value={text} onChange={(e) => setText(e.target.value)} aria-label={t("tournament.enterScore")} />
+        <input className="input min-w-0 flex-1" inputMode="numeric" placeholder={example} value={text} onChange={(e) => setText(e.target.value)} aria-label={t("tournament.enterScore")} />
         <button type="submit" className="btn-primary btn-sm shrink-0" disabled={pending || !text.trim()}>
           {t("tournament.saveScore")}
         </button>
       </div>
       <span className="text-xs text-muted">
-        {t("tournament.scoreHelp")} {ruleLabel}
+        {t("tournament.scoreHelpNamed", { name: aName, example })} {ruleLabel}
       </span>
+      {verdict && (
+        // A player thinks "me", not a pair's name: in their own match the line says whether they win,
+        // and a loss stands out, so a score typed the wrong way round is seen before the save.
+        <p className={`text-sm font-bold ${mySide && verdict !== mySide ? "text-warn" : "text-ink"}`} data-testid="winner-line">
+          {mySide ? (verdict === mySide ? t("tournament.scoreYouWin") : t("tournament.scoreYouLose", { name: verdict === "A" ? aName : bName })) : t("tournament.scoreWinner", { name: verdict === "A" ? aName : bName })}
+        </p>
+      )}
       {organizer && !done && (
         <div className="flex flex-wrap gap-2">
           {(["A", "B"] as const).map((side) => (

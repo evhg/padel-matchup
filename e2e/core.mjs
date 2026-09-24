@@ -25,6 +25,8 @@ try {
   // until something is typed, so the first page shows what this is rather than describing it.
   const firstCard = (await a.getByTestId("card-preview").textContent()) ?? "";
   check("the landing page shows the card a match will have, four seats and no court yet", firstCard.includes("Court TBD") && firstCard.includes("1/4 players"), firstCard);
+  // It is a draft: the date is a guess from the player's usual slot, and a card alone read as a real match.
+  check("the card says it is a preview, and that nothing exists until Create", (await a.getByTestId("card-preview-label").innerText()).includes("Nothing exists until you tap"));
   const backIn = a.getByText("Played before? Get your matches back.");
   check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
   await backIn.click();

@@ -6,6 +6,7 @@ import { whenLabel } from "@/lib/tournamentText";
 import { MoveMatch } from "./MoveMatch";
 import { StreamForm } from "./StreamForm";
 import { ScoreForm } from "./ScoreForm";
+import { sourceName } from "./sourceName";
 
 /** The translator, typed loosely: the typed key union is too deep to pass around, and every key here is proven by the message files. */
 type T = (key: string, values?: Record<string, string | number>) => string;
@@ -15,19 +16,19 @@ const roundName = (t: T, round: number, rounds: number): string => {
   return k.key === "final" ? t("tournament.roundFinal") : k.key === "semi" ? t("tournament.roundSemi") : k.key === "quarter" ? t("tournament.roundQuarter") : t("tournament.roundOf", { n: k.of ?? 0 });
 };
 const over = (m: MatchView) => m.status === "done" || m.status === "walkover";
-const pairLabel = (t: T, p: MatchView["a"], m: MatchView, side: "A" | "B") => {
+const pairLabel = (t: T, p: MatchView["a"], m: MatchView, side: "A" | "B", where: Where) => {
   if (p) return `${p.name}${p.seed ? ` (${p.seed})` : ""}`;
   if (m.bye) return t("tournament.bye");
-  void side;
-  return t("tournament.tbd");
+  // Where the side comes from ("Winner of group A"), not "to be decided".
+  return sourceName(t, side === "A" ? m.sourceA : m.sourceB, where.roundsOf) ?? t("tournament.tbd");
 };
 
-type Where = { tz: string; locale: string; courtNames: string[] };
+type Where = { tz: string; locale: string; courtNames: string[]; roundsOf: (phase: string) => number };
 
 function MatchLine({ t, m, slug, canScore, organizer, ruleLabel, where }: { t: T; m: MatchView; slug: string; canScore: boolean; organizer: boolean; ruleLabel: string; where: Where }) {
   const done = over(m);
-  const a = pairLabel(t, m.a, m, "A");
-  const b = pairLabel(t, m.b, m, "B");
+  const a = pairLabel(t, m.a, m, "A", where);
+  const b = pairLabel(t, m.b, m, "B", where);
   const winA = m.winner === "A";
   const winB = m.winner === "B";
   const ready = Boolean(m.a && m.b) && !m.bye;
@@ -69,7 +70,8 @@ function MatchLine({ t, m, slug, canScore, organizer, ruleLabel, where }: { t: T
 export async function DrawView({ view, slug, myMatchIds = [], organizer = false, tz, courtNames = [] }: { view: View; slug: string; myMatchIds?: string[]; organizer?: boolean; tz: string; courtNames?: string[] }) {
   const [t0, locale] = await Promise.all([getTranslations(), getLocale()]);
   const t = t0 as unknown as T;
-  const where: Where = { tz, locale, courtNames };
+  const roundsOf = (phase: string) => (phase === "main" ? view.main.length : phase === "consolation" ? view.consolation.length : phase === "qualifying" ? view.qualifying.length : 0);
+  const where: Where = { tz, locale, courtNames, roundsOf };
   const mine = new Set(myMatchIds);
   const ruleLabel = (code: string) => t(`tournament.sc_${code}`);
   const rounds = (phase: MatchView[][], title: string, testId: string) =>

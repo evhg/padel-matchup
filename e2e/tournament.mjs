@@ -143,13 +143,23 @@ try {
   await controls.getByRole("button", { name: "Publish the draw" }).waitFor({ state: "detached", timeout: 20000 });
   await cal.reload();
   const mainDraw = cal.getByTestId("main-draw");
-  check("the public page shows the groups and the main draw with its places to be decided", (await cal.getByTestId("group-A").count()) === 1 && (await mainDraw.count()) === 1 && (await mainDraw.innerText()).includes("to be decided"));
+  // A place not decided yet says where it comes from, not "to be decided" (the rehearsal of 24 September 2026).
+  check("the public page shows the groups and the main draw, each place named by where it comes from", (await cal.getByTestId("group-A").count()) === 1 && (await mainDraw.count()) === 1 && (await mainDraw.innerText()).includes("Winner of group A") && !(await mainDraw.innerText()).includes("to be decided"));
   await shot(cal, "tournament-draw-public");
 
-  // 10. Cal scores his own match from the page; a score outside the rule is refused by name.
-  check("Cal sees a score form under his three group matches and nobody else's", (await cal.locator('[data-testid^="score-"]').count()) === 3);
+  // 10. Cal's own matches come first on his page, each with its form; a score outside the rule is refused by name.
+  const myMatches = cal.getByTestId("my-matches");
+  const above = async (a, b) => ((await a.boundingBox())?.y ?? 1e9) < ((await b.boundingBox())?.y ?? -1);
+  check("Your matches lists Cal's three group matches, above the categories", (await myMatches.locator('[data-testid^="my-match-"]').count()) === 3 && (await above(myMatches, category(cal, "Gold"))));
+  check("Cal sees a score form under his three group matches and nobody else's", (await cal.locator('[data-testid^="score-"]').count()) === 3 && (await myMatches.locator('[data-testid^="score-"]').count()) === 3);
   const myForm = cal.locator('[data-testid^="score-"]').first();
   await myForm.getByRole("textbox").fill("6-4");
+  // The form names the pair whose games come first, and reads the winner back before the save.
+  const firstPair = (await myForm.innerText()).match(/([^\n]+?)'s games first/)?.[1];
+  // In his own match the line speaks to Cal: a 6-4 is a win for the pair named first, so it is "You win."
+  // when that pair is his, and a loss in the other pair's name when it is not.
+  const line = await myForm.getByTestId("winner-line").innerText();
+  check("the form says whose games come first and whether a 6-4 wins or loses for Cal", Boolean(firstPair) && (firstPair.startsWith("Cal") ? line === "You win." : line === `${firstPair} win, you lose.`), `${firstPair} / ${line}`);
   await myForm.getByRole("button", { name: "Save the score" }).click();
   await cal.getByText("6-4", { exact: true }).first().waitFor({ timeout: 20000 });
   check("the score is on the page", true);
@@ -173,6 +183,8 @@ try {
   await openForm.getByRole("button", { name: /Walkover to/ }).first().click();
   await org.getByText("w/o").first().waitFor({ timeout: 20000 });
   check("a walkover is recorded", true);
+  await org.reload();
+  check("the desk marks a match with a result 'Change the score', and one without 'Score'", (await org.getByRole("button", { name: "Change the score" }).count()) >= 2 && (await org.getByRole("button", { name: "Score", exact: true }).count()) > 0);
   await shot(org, "tournament-draw-manage");
 
   // 12. Courts and times: two courts, nine to nine, and every match of the draw gets a slot. A fresh page
@@ -188,6 +200,10 @@ try {
   await cal.reload();
   const play = cal.getByTestId("order-of-play");
   check("the public page carries the order of play by day with courts and times", (await play.count()) === 1 && (await play.innerText()).includes("Court 1") && (await play.innerText()).includes("Court 2") && (await cal.locator('[data-testid="match-when"]').count()) > 0);
+  // A match already played when the schedule is made keeps no time, so it is not in the order of play:
+  // the marked rows are exactly Cal's matches that have a court and a time.
+  const timed = await myMatches.locator('[data-testid^="my-match-"]').filter({ hasText: "Court" }).count();
+  check("Cal's own matches carry their court and time, and exactly those rows stand out in the order of play", timed >= 1 && (await play.locator('[data-mine="1"]').count()) === timed, `${timed} timed`);
   await shot(cal, "tournament-schedule-public");
   // 13. The organiser moves one match to Court 2 at a time of their choosing.
   await org.reload();

@@ -11,7 +11,16 @@ import { SCORING, scoringOfMatch } from "./draw";
  */
 
 export type CourtNow = { courtName: string; now: PlayRow | null; next: PlayRow | null };
-export type LiveBoard = { courts: CourtNow[]; latest: PlayRow[]; upcoming: PlayRow[]; champions: { categoryName: string; name: string }[] };
+export type LiveBoard = {
+  courts: CourtNow[];
+  latest: PlayRow[];
+  upcoming: PlayRow[];
+  champions: { categoryName: string; name: string }[];
+  /** Champions crowned and nothing left to play: the screen then leads with them, not four free courts. */
+  finished: boolean;
+  /** Rounds per `<categoryId>:<phase>`, which names a knockout source ("Winner of semi-final 1"). */
+  rounds: Record<string, number>;
+};
 
 const isOver = (m: PlayRow) => m.status === "done" || m.status === "walkover";
 
@@ -44,7 +53,10 @@ export async function liveBoard(db: Db, competitionId: string, courtNames: reado
     const name = final?.winner === "A" ? final.aName : final?.winner === "B" ? final.bName : null;
     if (name) champions.push({ categoryName: c.name, name });
   }
-  return { courts, latest, upcoming, champions };
+  const rounds: Record<string, number> = {};
+  for (const m of rows) rounds[`${m.categoryId}:${m.phase}`] = Math.max(rounds[`${m.categoryId}:${m.phase}`] ?? 0, m.round);
+  const finished = champions.length > 0 && !rows.some((m) => !isOver(m) && !m.bye);
+  return { courts, latest, upcoming, champions, finished, rounds };
 }
 
 export type PodiumAward = { milestone: Milestone; player: Player; place: 1 | 2 | 3; partnerName: string };

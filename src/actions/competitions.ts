@@ -33,6 +33,7 @@ import { luckyLoser, setCheckedIn, setStreamUrl } from "@/lib/domain/competition
 import { advanceCategory } from "@/lib/domain/competitionDraw";
 import { afterResult } from "@/lib/tournament/live";
 import { claimDeepLink } from "@/lib/telegram/deepLinks";
+import { parseSetsText } from "@/lib/tournamentText";
 import { tellDrawPublished, tellMoved, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed, tellSchedule } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
 
@@ -260,13 +261,10 @@ export async function publishDrawAction(slug: string, categoryId: string): Promi
 export async function enterScoreAction(slug: string, matchId: string, text: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, player } = await me();
-    const sets = text
-      .trim()
-      .split(/[\s,;]+/)
-      .filter(Boolean)
-      .map((s) => s.split(/[-:]/).map((n) => Number(n)));
-    if (sets.length === 0 || sets.some((s) => s.length !== 2 || s.some((n) => !Number.isInteger(n) || n < 0))) throw new DomainError("invalid", "score_shape");
-    const m = await enterMatchScore(db, { matchId, actorPlayerId: player.id, scoreA: sets.map((s) => s[0]), scoreB: sets.map((s) => s[1]) });
+    // The same reading as the form's winner line (scoreVerdict), so what it names is what is saved.
+    const sets = parseSetsText(text);
+    if (!sets) throw new DomainError("invalid", "score_shape");
+    const m = await enterMatchScore(db, { matchId, actorPlayerId: player.id, scoreA: sets.a, scoreB: sets.b });
     await afterResult(db, m.categoryId);
     refresh(slug);
     return null;

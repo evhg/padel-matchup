@@ -57,6 +57,7 @@ describe("the tournament live", () => {
 
     // Before play: nothing now, the first matches next. Five past nine: both courts busy.
     const early = await liveBoard(db, c.id, c.courtNames ?? ["Court 1", "Court 2"], categories, new Date("2026-10-10T01:00:00Z"));
+    expect(early.finished).toBe(false);
     expect(early.courts.map((k) => [k.courtName, k.now, k.next?.scheduledAt?.toISOString()])).toEqual([
       ["Court 1", null, "2026-10-10T02:00:00.000Z"],
       ["Court 2", null, "2026-10-10T02:00:00.000Z"],
@@ -98,5 +99,15 @@ describe("the tournament live", () => {
     expect(await awardCompetitionPodium(db, gold.id)).toEqual([]);
     const done = await liveBoard(db, c.id, ["Court 1", "Court 2"], categories.map((k) => ({ ...k, drawStatus: "done" as const })), new Date("2026-10-10T12:00:00Z"));
     expect(done.champions).toEqual([{ categoryName: "Gold", name: expect.stringMatching(/ & /) }]);
+    // Champions, but the consolation still has matches: not over yet. Once they are played the screen
+    // leads with the champions instead of free courts (the rehearsal of 24 September 2026).
+    expect(done.finished).toBe(false);
+    expect(done.rounds[`${gold.id}:main`]).toBeGreaterThan(0);
+    for (let i = 0; i < 4; i++) {
+      const open = (await competitionDraws(db, c.id, categories)).get(gold.id)!.consolation.flat().filter((m) => m.a && m.b && !m.bye && m.status !== "done" && m.status !== "walkover");
+      for (const m of open) await enterMatchScore(db, { matchId: m.id, actorPlayerId: org.id, scoreA: [9], scoreB: [5] });
+    }
+    const over = await liveBoard(db, c.id, ["Court 1", "Court 2"], categories.map((k) => ({ ...k, drawStatus: "done" as const })), new Date("2026-10-10T12:00:00Z"));
+    expect(over.finished).toBe(true);
   });
 });
