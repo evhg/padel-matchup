@@ -519,6 +519,15 @@ Everything in this list is live. The README describes each in detail.
   match page now shows the card under the score, with the court photo button and WhatsApp, Telegram
   and the phone's own share one tap away. `docs/DECIDING.md` rules 5, 16 and 18 say it; rule 16 also
   stopped saying "exactly once", which had not been true since the morning nudge shipped.
+- **Rows nobody will miss go after 14 days (24 September 2026).** Identity is a cookie, so every
+  browser that types a name becomes a player row, and the 21 September walks alone left 25. The
+  owner chose a daily job over a one-off purge: a row goes when it has no contact, no public
+  profile, nothing pointing at it, and is 14 days old; a coach page on which no lesson was ever
+  booked goes with it, a note on the feedback desk keeps it. The keep list is read from the schema,
+  the same one a merge moves, so a new table keeps a row without anybody remembering to. The first
+  run removes one row (Anna, 9 September), and cath's empty coach page once it is 14 days old;
+  Tbone follows on 2 October and the 25 walk rows on 5 October. Five names in Jakob's tournament
+  of 4 September have seats and matches, so they stay.
 
 ## Next, in order
 
