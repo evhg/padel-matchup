@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { enterPairAction, type EnteredView } from "@/actions/competitions";
+import { ShareButtons } from "@/components/ShareSheet";
 
 /**
  * One category's door: a name (when the visitor has none yet), the partner's name, one button.
@@ -16,7 +17,6 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<EnteredView | null>(null);
-  const [copied, setCopied] = useState(false);
   const [yourName, setYourName] = useState("");
   const [partnerName, setPartnerName] = useState("");
 
@@ -28,17 +28,10 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
           <div className="mt-2">
             <div className="text-sm font-bold">{t("tournament.claimLink")}</div>
             <p className="text-xs text-muted">{t("tournament.partnerHelp")}</p>
-            <div className="mt-1 flex items-center gap-2">
-              <input className="input min-w-0 flex-1 text-sm" readOnly value={done.claimLink} onFocus={(e) => e.currentTarget.select()} data-testid="claim-link" />
-              <button
-                type="button"
-                className="btn-ghost btn-sm shrink-0"
-                onClick={() => {
-                  navigator.clipboard?.writeText(done.claimLink!).then(() => setCopied(true)).catch(() => undefined);
-                }}
-              >
-                {copied ? t("common.copied") : t("common.copy")}
-              </button>
+            <input className="input mt-1 w-full text-sm" readOnly value={done.claimLink} onFocus={(e) => e.currentTarget.select()} data-testid="claim-link" />
+            {/* WhatsApp, Telegram or copy: the link goes where the partner already is, in one tap. */}
+            <div className="mt-2">
+              <ShareButtons url={done.claimLink} text={t("tournament.partnerShareText", { category: done.category })} size="sm" />
             </div>
             {done.claimTelegram && (
               <p className="mt-2 text-xs text-muted">

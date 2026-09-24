@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AutoRefresh } from "@/components/tournament/AutoRefresh";
+import { sourceName } from "@/components/tournament/sourceName";
 import { getDb } from "@/db";
 import { utcToZonedParts } from "@/lib/dates";
 import { liveBoard } from "@/lib/domain/competitionLive";
+import type { PlayRow } from "@/lib/domain/competitionSchedule";
 import { categoriesOf, getCompetition } from "@/lib/domain/competitions";
 import { scoreText } from "@/lib/domain/draw";
 
@@ -31,6 +33,9 @@ export default async function TvPage({ params }: Props) {
   const [t, locale, categories] = await Promise.all([getTranslations(), getLocale(), categoriesOf(db, c.id)]);
   const board = await liveBoard(db, c.id, c.courtNames ?? [], categories);
   const time = (d: Date | null) => (d ? utcToZonedParts(d, c.tz).time : "");
+  const loose = t as unknown as (key: string, values?: Record<string, string | number>) => string;
+  // A side not known yet says where it comes from ("Winner of group A"), as on the page.
+  const side = (m: PlayRow, s: "A" | "B") => (s === "A" ? m.aName : m.bName) ?? sourceName(loose, s === "A" ? m.sourceA : m.sourceB, (phase) => board.rounds[`${m.categoryId}:${phase}`] ?? 0) ?? t("tournament.tbd");
   const pair = (name: string | null) => name ?? t("tournament.tbd");
   void locale;
   return (
@@ -40,7 +45,20 @@ export default async function TvPage({ params }: Props) {
         <h1 className="text-4xl font-extrabold tracking-tight">{c.name}</h1>
         <span className="text-xl font-semibold text-muted">{c.venueName ?? ""}</span>
       </header>
-      {board.courts.length === 0 ? (
+      {board.finished ? (
+        // The weekend is over: the champions in the biggest type on the screen, not four free courts.
+        <section className="card mt-8" data-testid="tv-over">
+          <h2 className="text-3xl font-extrabold">🏆 {t("tournament.champion")}</h2>
+          <ul className="mt-3 flex flex-col gap-2 text-3xl" data-testid="tv-champions">
+            {board.champions.map((ch) => (
+              <li key={ch.categoryName}>
+                <span className="text-muted">{ch.categoryName}:</span> <span className="font-extrabold">{ch.name}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-xl text-muted">{t("tournament.tvOver")}</p>
+        </section>
+      ) : board.courts.length === 0 ? (
         <p className="mt-8 text-2xl text-muted">{t("tournament.tvNothing")}</p>
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="tv-courts">
@@ -50,8 +68,8 @@ export default async function TvPage({ params }: Props) {
               <div className="mt-2 text-xs font-bold uppercase tracking-wide text-ok">{t("tournament.tvNow")}</div>
               {court.now ? (
                 <div className="mt-1">
-                  <div className="text-2xl font-extrabold leading-tight">{pair(court.now.aName)}</div>
-                  <div className="text-2xl font-extrabold leading-tight">{pair(court.now.bName)}</div>
+                  <div className="text-2xl font-extrabold leading-tight">{side(court.now, "A")}</div>
+                  <div className="text-2xl font-extrabold leading-tight">{side(court.now, "B")}</div>
                   <div className="mt-1 text-sm text-muted">
                     {court.now.categoryName} · {time(court.now.scheduledAt)}
                   </div>
@@ -67,7 +85,7 @@ export default async function TvPage({ params }: Props) {
               <div className="mt-3 text-xs font-bold uppercase tracking-wide text-muted">{t("tournament.tvNext")}</div>
               {court.next ? (
                 <div className="mt-1 text-lg font-semibold">
-                  {time(court.next.scheduledAt)} · {pair(court.next.aName)} {t("tournament.vs")} {pair(court.next.bName)}
+                  {time(court.next.scheduledAt)} · {side(court.next, "A")} {t("tournament.vs")} {side(court.next, "B")}
                   <span className="text-muted"> · {court.next.categoryName}</span>
                 </div>
               ) : (
@@ -107,13 +125,13 @@ export default async function TvPage({ params }: Props) {
                 <li key={m.id} className="flex items-baseline gap-3 py-2">
                   <div className="w-14 shrink-0 font-extrabold tabular-nums">{time(m.scheduledAt)}</div>
                   <div className="min-w-0 flex-1 truncate">
-                    <span className="font-semibold">{m.courtName}</span> · {pair(m.aName)} {t("tournament.vs")} {pair(m.bName)}
+                    <span className="font-semibold">{m.courtName}</span> · {side(m, "A")} {t("tournament.vs")} {side(m, "B")}
                   </div>
                 </li>
               ))}
             </ul>
           )}
-          {board.champions.length > 0 && (
+          {!board.finished && board.champions.length > 0 && (
             <div className="mt-4" data-testid="tv-champions">
               <h2 className="text-lg font-extrabold">🏆 {t("tournament.champion")}</h2>
               <ul className="mt-1 text-lg">

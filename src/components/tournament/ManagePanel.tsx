@@ -62,23 +62,22 @@ export function ManagePanel({ slug, status, categories }: { slug: string; status
           {[...c.entered, ...c.waiting].length > 0 && (
             <ul className="mt-3 flex flex-col divide-y divide-line">
               {[...c.entered.map((p) => ({ ...p, waiting: false })), ...c.waiting.map((p) => ({ ...p, waiting: true }))].map((p) => (
-                <li key={p.id} className="py-2">
-                  <div className="flex items-baseline gap-2">
-                    <div className="min-w-0 flex-1 truncate font-semibold">
-                      {p.waiting ? `⏳ ` : ""}
-                      {p.p1} & {p.p2}
-                      {!p.claimed && <span className="ml-1 text-xs font-normal text-faint">({t("tournament.unclaimed")})</span>}
-                    </div>
-                    <div className={`shrink-0 text-xs font-bold ${p.paid ? "text-ok" : "text-muted"}`}>
-                      {p.paid ? t("tournament.paid") : t("tournament.notPaid")}
-                      {c.drawStatus !== "none" && p.checkedIn && <span className="ml-2 text-ok">✓ {t("tournament.checkedIn")}</span>}
-                    </div>
+                <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2">
+                  {/*
+                    One line of names, one row of small buttons. The rehearsal of 24 September 2026 had
+                    23 pairs at about 130 pixels each: eight phone screens before the draw's settings.
+                    Paid and checked in read off the buttons themselves, in green.
+                  */}
+                  <div className="min-w-0 flex-1 basis-40 truncate font-semibold">
+                    {p.waiting ? `⏳ ` : ""}
+                    {p.p1} & {p.p2}
+                    {!p.claimed && <span className="ml-1 text-xs font-normal text-faint">({t("tournament.unclaimed")})</span>}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     {c.drawStatus === "none" && (
                       <label className="flex items-center gap-1 text-xs font-bold">
                         {t("tournament.seed")}
-                        <select className="input py-1 text-xs" value={p.seed ?? ""} disabled={pending} aria-label={`${t("tournament.seed")} ${p.p1}`} onChange={(e) => act(() => setPairSeedAction(slug, p.id, e.target.value === "" ? null : Number(e.target.value)))}>
+                        <select className="input min-h-9 w-14 px-2 py-0 text-xs" value={p.seed ?? ""} disabled={pending} aria-label={`${t("tournament.seed")} ${p.p1}`} onChange={(e) => act(() => setPairSeedAction(slug, p.id, e.target.value === "" ? null : Number(e.target.value)))}>
                           <option value="">—</option>
                           {Array.from({ length: Math.min(16, c.maxPairs) }, (_, i) => i + 1).map((n) => (
                             <option key={n} value={n}>
@@ -88,17 +87,23 @@ export function ManagePanel({ slug, status, categories }: { slug: string; status
                         </select>
                       </label>
                     )}
-                    <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => act(() => setPairPaidAction(slug, p.id, !p.paid))}>
-                      {p.paid ? t("tournament.markUnpaid") : t("tournament.markPaid")}
+                    <button type="button" className={`btn-ghost btn-xs ${p.paid ? "text-ok" : ""}`} disabled={pending} onClick={() => act(() => setPairPaidAction(slug, p.id, !p.paid))}>
+                      {p.paid ? (
+                        <>
+                          ✓ <span>{t("tournament.paid")}</span>
+                        </>
+                      ) : (
+                        t("tournament.markPaid")
+                      )}
                     </button>
                     {c.drawStatus !== "none" && (
-                      <button type="button" className="btn-ghost btn-sm" disabled={pending} data-testid={`checkin-${p.id}`} onClick={() => act(() => checkInAction(slug, p.id, !p.checkedIn))}>
-                        {p.checkedIn ? t("tournament.undoCheckIn") : t("tournament.checkIn")}
+                      <button type="button" className={`btn-ghost btn-xs ${p.checkedIn ? "text-ok" : ""}`} disabled={pending} data-testid={`checkin-${p.id}`} onClick={() => act(() => checkInAction(slug, p.id, !p.checkedIn))}>
+                        {p.checkedIn ? `✓ ${t("tournament.checkedIn")}` : t("tournament.checkIn")}
                       </button>
                     )}
                     <button
                       type="button"
-                      className="btn-ghost btn-sm"
+                      className="btn-ghost btn-xs text-muted"
                       disabled={pending}
                       onClick={() => {
                         if (confirm(t("tournament.withdrawConfirm"))) act(() => withdrawPairAction(slug, p.id));

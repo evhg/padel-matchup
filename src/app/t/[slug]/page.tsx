@@ -8,6 +8,7 @@ import { AutoRefresh } from "@/components/tournament/AutoRefresh";
 import { ClaimCard } from "@/components/tournament/ClaimCard";
 import { DrawView } from "@/components/tournament/DrawView";
 import { EnterForm } from "@/components/tournament/EnterForm";
+import { MyMatches } from "@/components/tournament/MyMatches";
 import { OrderOfPlay } from "@/components/tournament/OrderOfPlay";
 import { WithdrawButton } from "@/components/tournament/WithdrawButton";
 import { getDb } from "@/db";
@@ -63,6 +64,9 @@ export default async function TournamentPage({ params, searchParams }: Props) {
   const url = `${baseUrl()}/t/${c.slug}`;
   const days = dayRange(c.startsOn, c.endsOn, locale);
   const byId = new Map(page.categories.flatMap((k) => [...k.entered, ...k.waiting].map((p) => [p.id, { pair: p, category: k.category }] as const)));
+  // The weekend is over when every published draw has its champions: the page then leads with them.
+  const champions = [...draws.values()].filter((v) => v.champion).map((v) => ({ category: v.category.name, name: v.champion!.name, consolation: v.consolationWinner?.name ?? null }));
+  const finished = draws.size > 0 && champions.length === draws.size;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -92,7 +96,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
           <p className="mt-1 text-sm text-muted">{t("tournament.by", { name: page.organizerName })}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className={`chip-muted ${c.status === "open" ? "text-ok" : ""}`} data-testid="status-chip">
-              {c.status === "open" ? t("tournament.statusOpen") : t("tournament.statusClosed")}
+              {finished ? t("tournament.statusFinished") : c.status === "open" ? t("tournament.statusOpen") : t("tournament.statusClosed")}
             </span>
           </div>
           {c.entryNote && (
@@ -138,7 +142,24 @@ export default async function TournamentPage({ params, searchParams }: Props) {
             </section>
           ))}
 
-        {play.length > 0 && <OrderOfPlay rows={play} tz={c.tz} />}
+        {champions.length > 0 && (
+          <section className="card" data-testid="champions">
+            <h2 className="text-lg font-extrabold">🏆 {t("tournament.champion")}</h2>
+            <ul className="mt-2 flex flex-col gap-1">
+              {champions.map((ch) => (
+                <li key={ch.category}>
+                  <span className="text-muted">{ch.category}:</span> <span className="font-extrabold">{ch.name}</span>
+                  {ch.consolation && (
+                    <span className="block text-sm text-muted">
+                      {t("tournament.consolationWinner")}: {ch.consolation}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {draws.size > 0 && myPairIds.size > 0 && <MyMatches draws={draws} myPairIds={myPairIds} slug={c.slug} tz={c.tz} />}
         {mine.length > 0 && (
           <section className="card" data-testid="my-entries">
             <h2 className="text-lg font-extrabold">{t("tournament.yourEntries")}</h2>
@@ -159,8 +180,12 @@ export default async function TournamentPage({ params, searchParams }: Props) {
                       <WithdrawButton slug={c.slug} pairId={e.id} />
                     </div>
                     {e.claimToken && e.p1PlayerId === me?.id && (
-                      <div className="text-xs">
-                        <span className="font-bold">{t("tournament.claimLink")}:</span> <span className="break-all text-muted">{`${baseUrl()}/t/${c.slug}?claim=${e.claimToken}`}</span>
+                      <div className="flex flex-col gap-2 text-xs">
+                        <div>
+                          <span className="font-bold">{t("tournament.claimLink")}:</span> <span className="break-all text-muted">{`${baseUrl()}/t/${c.slug}?claim=${e.claimToken}`}</span>
+                        </div>
+                        {/* Sent where the partner already is: one tap to WhatsApp or Telegram, not copy and switch apps. */}
+                        <ShareButtons url={`${baseUrl()}/t/${c.slug}?claim=${e.claimToken}`} text={t("tournament.partnerShareText", { category: v.category.name })} size="sm" />
                       </div>
                     )}
                   </li>
@@ -169,6 +194,8 @@ export default async function TournamentPage({ params, searchParams }: Props) {
             </ul>
           </section>
         )}
+
+        {play.length > 0 && <OrderOfPlay rows={play} tz={c.tz} myPairIds={[...myPairIds]} />}
 
         {page.categories.length === 0 ? (
           <section className="card">
@@ -218,12 +245,7 @@ export default async function TournamentPage({ params, searchParams }: Props) {
                 )}
                 {c.status === "open" && category.drawStatus === "none" && <EnterForm slug={c.slug} categoryId={category.id} categoryName={category.name} hasIdentity={Boolean(me)} full={full} />}
                 {draws.get(category.id) && (
-                  <DrawView
-                    view={draws.get(category.id)!}
-                    slug={c.slug}
-                    tz={c.tz}
-                    myMatchIds={[...draws.get(category.id)!.groups.flatMap((g) => g.matches), ...draws.get(category.id)!.qualifying.flat(), ...draws.get(category.id)!.main.flat(), ...draws.get(category.id)!.consolation.flat()].filter((m) => (m.pairAId && myPairIds.has(m.pairAId)) || (m.pairBId && myPairIds.has(m.pairBId))).map((m) => m.id)}
-                  />
+                  <DrawView view={draws.get(category.id)!} slug={c.slug} tz={c.tz} />
                 )}
               </section>
             );
