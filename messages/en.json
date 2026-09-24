@@ -381,7 +381,15 @@
     "emailHelp": "Your email is how you get back in on a new phone. Matches reach your calendar too.",
     "saveEmail": "Save email",
     "emailBounced": "Mail to this address stopped arriving on {date}, so Kicksmash stopped sending it. Check the address, or type another one.",
-    "emailComplained": "An email from Kicksmash was marked as spam on {date}, so we stopped sending them. Save your address again to get them back."
+    "emailComplained": "An email from Kicksmash was marked as spam on {date}, so we stopped sending them. Save your address again to get them back.",
+    "sameTitle": "Are these yours?",
+    "sameHelp": "Matches played under the name {name} from a browser that never gave an address. If you played them, add them to your matches.",
+    "sameCount": "{count, plural, one {# match} other {# matches}}",
+    "sameNoVenue": "Place not set",
+    "sameWith": "with {names}",
+    "sameMine": "Yes, these are mine",
+    "sameNotMe": "Not me",
+    "sameFailed": "These could not be added. Reload the page and try again."
   },
   "notFound": {
     "title": "Link not found",

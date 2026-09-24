@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { coachStudents, coaches, feedback, groupMembers, lessonPackages, lessons, players, pushSubscriptions } from "@/db/schema";
+import { coachStudents, coaches, demandSignals, feedback, groupMembers, lessonPackages, lessons, players, pushSubscriptions } from "@/db/schema";
 import { createGroup } from "@/lib/domain/groups";
 import { mergePlayers, playerReferences } from "@/lib/domain/merge";
 import { createTestDb, makePlayer } from "./helpers/db";
@@ -67,6 +67,22 @@ describe("merging two rows of one person", () => {
     await expect(mergePlayers(db, a.id, [b.id])).rejects.toThrow();
     // Nothing moved: the transaction is whole or nothing.
     expect(await db.select().from(players).where(eq(players.id, b.id))).toHaveLength(1);
+  });
+
+  it("moves a want, which points at its player without a foreign key", async () => {
+    // Until 24 September a want stayed behind on the folded row, pointing at a player that was gone,
+    // because the schema read only sees foreign keys.
+    const { db, close } = await createTestDb();
+    try {
+      const keep = await makePlayer(db, "Keep");
+      const dup = await makePlayer(db, "Keep");
+      const [want] = await db.insert(demandSignals).values({ playerId: dup.id, weekday: 2, fromTime: "14:00", toTime: "16:00", expiresAt: new Date(Date.UTC(2026, 9, 24)) }).returning();
+      await mergePlayers(db, keep.id, [dup.id]);
+      const [moved] = await db.select().from(demandSignals).where(eq(demandSignals.id, want.id));
+      expect(moved.playerId).toBe(keep.id);
+    } finally {
+      await close();
+    }
   });
 
   it("knows every table that points at a player, from the schema", () => {

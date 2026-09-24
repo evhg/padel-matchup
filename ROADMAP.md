@@ -528,6 +528,15 @@ Everything in this list is live. The README describes each in detail.
   run removes one row (Anna, 9 September), and cath's empty coach page once it is 14 days old;
   Tbone follows on 2 October and the 25 walk rows on 5 October. Five names in Jakob's tournament
   of 4 September have seats and matches, so they stay.
+- **The same name, one side proved (24 September 2026).** A second browser makes a second row, and
+  the matches played from it never reached the person's own list. The owner chose how far a name may
+  carry a merge (option A). When somebody proves who they are, by a code from their address or by
+  linking Telegram, a row of the same name that nobody can reach is folded in automatically if the
+  two also share a match, an organiser or a club. Otherwise My matches asks "Are these yours?" and
+  shows those matches (the day, the club, who else played), with "Yes, these are mine" and "Not me";
+  "Not me" is remembered in that browser only. A row with an address, a phone, a chat account or a
+  push subscription is never merged by name. A merge now also moves the person's wants, which point
+  at a player without a foreign key and were left behind on the folded row until now.
 
 ## Next, in order
 

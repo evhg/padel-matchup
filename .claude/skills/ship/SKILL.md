@@ -341,6 +341,10 @@ Wall clock first, credits second. What actually moved it, measured:
   prove where it landed: `node -e 'JSON.parse(...).email.telegramLine'` must not be undefined. Move a
   stray key by string edit (the line out of the nested block, then in under the section's opening
   line), never by round-tripping the file.
+- **A backslash in a raw `sql` template is one edit away from gone.** `'\\s+'` in the source is `\s+`
+  in the query; one script edit wrote `'\s+'`, which a JavaScript template reads as a plain `s`, so
+  the same-name match collapsed every letter s instead of the spaces and a test caught it. Use the
+  POSIX class (`'[[:space:]]+'`): nothing to escape, nothing to lose.
 - **A line that recurs in a file is not an anchor.** `const t = await getTranslations("coach")` appears
   in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
   and the page did not compile. Anchor on a neighbouring line unique to the function (the one after

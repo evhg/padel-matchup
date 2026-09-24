@@ -381,7 +381,15 @@
     "emailHelp": "Tu correo es cómo vuelves a entrar en un teléfono nuevo. Los partidos llegan a tu calendario.",
     "saveEmail": "Guardar correo",
     "emailBounced": "El correo a esta dirección dejó de llegar el {date}, así que Kicksmash dejó de enviarlo. Revisa la dirección o escribe otra.",
-    "emailComplained": "El {date} un correo de Kicksmash se marcó como spam, así que dejamos de enviarlos. Guarda tu dirección de nuevo para volver a recibirlos."
+    "emailComplained": "El {date} un correo de Kicksmash se marcó como spam, así que dejamos de enviarlos. Guarda tu dirección de nuevo para volver a recibirlos.",
+    "sameTitle": "¿Son tuyos?",
+    "sameHelp": "Partidos jugados con el nombre {name} desde un navegador que nunca dio una dirección. Si los jugaste tú, añádelos a tus partidos.",
+    "sameCount": "{count, plural, one {# partido} other {# partidos}}",
+    "sameNoVenue": "Lugar sin indicar",
+    "sameWith": "con {names}",
+    "sameMine": "Sí, son míos",
+    "sameNotMe": "No soy yo",
+    "sameFailed": "No se pudieron añadir. Recarga la página e inténtalo de nuevo."
   },
   "notFound": {
     "title": "Enlace no encontrado",

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { players, type Player } from "@/db/schema";
 import { mergePlayers } from "@/lib/domain/merge";
+import { foldSameNameRows } from "@/lib/domain/sameName";
 import { createPlayer } from "@/lib/domain/players";
 import { telegramWebhookSecret, type TgUser } from "./api";
 import { botLocale } from "./card";
@@ -64,5 +65,7 @@ export async function linkTelegram(db: Db, playerId: string, user: TgUser): Prom
     await mergePlayers(db, playerId, [other.id]);
   }
   const [p] = await db.update(players).set({ telegramId: user.id, telegramUsername: user.username ?? null }).where(eq(players.id, playerId)).returning();
+  // A linked Telegram account is proof, as a code from an address is (`foldSameNameRows`). Never throws.
+  await foldSameNameRows(db, p.id);
   return p;
 }
