@@ -7,7 +7,6 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
-import { isOccupied } from "@/lib/domain/events";
 import { suggestGroupName } from "@/lib/domain/groupNames";
 import { weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { praiseLine } from "@/lib/domain/praise";
@@ -17,7 +16,7 @@ import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
 import { saveMatchScore, type SetScore } from "@/lib/domain/scores";
 import { answerCallbackQuery, botDeepLink, editMessageText, esc, sendMessage, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
 import { cardTitle, strings, type BotLocale, type BotStrings } from "../card";
-import { scoreLine } from "@/lib/afterMatch";
+import { playingSeats, scoreFormButton, scoreLine } from "@/lib/afterMatch";
 import { findOrCreateTelegramPlayer } from "../identity";
 import { CODE_RE, codesInText, parseSets } from "../text";
 
@@ -25,8 +24,6 @@ import { CODE_RE, codesInText, parseSets } from "../text";
 
 type Seat = EventDetail["roster"][number];
 const seatName = (x: Seat) => x.player?.displayName ?? x.invitedName ?? "?";
-export
-const playingSeats = (detail: EventDetail): Seat[] => detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x) && x.playerId).sort((a, b) => a.position - b.position);
 /** Both pairs, once they are known (set on the site, or by the first result tap). */
 function teamsOf(detail: EventDetail): { a: Seat[]; b: Seat[] } | null {
   const seats = playingSeats(detail);
@@ -40,7 +37,7 @@ const scoreErrorText = (s: BotStrings, e: unknown) => (isDomainError(e) ? (e.cod
 export
 async function scoreFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, ctx: OpContext): Promise<string> {
   const s = strings(chatLocale(chat));
-  const say = (text: string) => sendMessage(chat.chatId, esc(text), { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null, silent: true });
+  const say = (text: string, keyboard?: InlineKeyboard) => sendMessage(chat.chatId, esc(text), { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null, silent: true, keyboard });
   const sets = parseSets(args);
   const base = baseUrl();
   let code: string | null = codesInText(args, base)[0] ?? args.replace(/\d{1,2}\s*[-:]\s*\d{1,2}/g, " ").match(CODE_RE)?.[1] ?? null;
@@ -54,7 +51,15 @@ async function scoreFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: T
     return "score_how";
   }
   if (!teamsOf(detail)) {
-    await say(s.scoreNoTeams);
+    // Only score entry sets the pairs, so a first bare "6-4 6-3" always stopped here, and with three
+    // seated it could never get past (Erik, 15 September, match 9wjp). In the player's own chat the
+    // answer carries the score form; a group gets the sentence alone, because Telegram takes the
+    // Mini App's web_app button only in a private chat.
+    if (msg.chat.type !== "private") {
+      await say(s.scoreNoTeams);
+      return "score_no_teams";
+    }
+    await say(s.noTeamsPage, { inline_keyboard: [[scoreFormButton(detail.event.code, s.resultBtn)]] });
     return "score_no_teams";
   }
   const player = await findOrCreateTelegramPlayer(db, from);
@@ -99,6 +104,14 @@ async function handleResultPrompt(cb: NonNullable<TgUpdate["callback_query"]>, d
   }
   const seats = playingSeats(detail);
   if (seats.length !== 4) {
+    // "Who won?" pairs four players up, but the match page takes the score from any line-up. In the
+    // player's own chat the tap gets that page's form rather than an alert that ends there; a group
+    // keeps the alert, because Telegram takes the Mini App's web_app button only in a private chat.
+    if (cb.message?.chat.type === "private") {
+      await sendMessage(cb.message.chat.id, esc(s.needFourPage), { keyboard: { inline_keyboard: [[scoreFormButton(ev.code, s.resultBtn)]] }, replyTo: cb.message.message_id, silent: true });
+      await answerCallbackQuery(cb.id);
+      return "result:need_four";
+    }
     await answerCallbackQuery(cb.id, s.needFour, { alert: true });
     return "result:need_four";
   }

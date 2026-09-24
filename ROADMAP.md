@@ -537,6 +537,15 @@ Everything in this list is live. The README describes each in detail.
   "Not me" is remembered in that browser only. A row with an address, a phone, a chat account or a
   push subscription is never merged by name. A merge now also moves the person's wants, which point
   at a player without a foreign key and were left behind on the folded row until now.
+- **Three players can score from Telegram (24 September 2026).** Erik's note of 15 September (match
+  9wjp): with three players seated, the nudge's 🏁 said "the result needs four players", and a bare
+  "6-4 6-3" in reply said "tap 🏁 on the card first", while the web took the score from three. Two of
+  the three scored matches in production had three players. Where the chat cannot finish the result
+  (fewer than four seated, or pairs nobody has set), the 🏁 on the nudge and those two answers in the
+  player's own chat now carry one button to the match page's score form, already signed in through
+  the Mini App: the direct link when the app exists in BotFather, else a web_app button on `/tg`,
+  which every deployment with Telegram has. The button never carries a personal link, because a
+  forwarded message keeps its buttons. A group gets the sentence alone.
 
 ## The finish line
 
@@ -599,9 +608,9 @@ linked and four have an email address.
    until somebody is using it, because there is nothing to translate *for* yet.
 
    The numbers, since they were once given wrongly as one number. The card in a chat is its own set
-   of **143 strings** in `src/lib/telegram/card.ts`, in three languages since 19 September 2026
+   of **151 strings** in `src/lib/telegram/card.ts`, in three languages since 19 September 2026
    (Spanish came with the inside of the bot, above); the coach's assistant has its own set, also in
-   three. The **1,456** strings are the website, which has three. So Thai in a LINE chat is 143 strings
+   three. The **1,456** strings are the website, which has three. So Thai in a LINE chat is 151 strings
    and Thai on the website is 1,456, and neither of them is what stops LINE going live: the Official
    Account is.
 3. **The serious tournament: run one for real.** All five steps are under Built. What is left is

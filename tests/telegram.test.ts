@@ -11,7 +11,7 @@ import { setTournamentLock } from "@/lib/domain/tournament";
 import { bookLesson, createCoach, presetHours, setStudentStatus } from "@/lib/domain/coaching";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { miniAppUrl, telegramBotId, verifyInitData, verifyLoginWidget } from "@/lib/telegram/api";
-import { miniAppNext, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
+import { miniAppNext, miniAppStart, readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
 import { chatTicket, codesInText, handleTelegramUpdate, linkTelegram, parseSets, postCardForTicket, postCardsForGroup, postTelegramNotice, postTelegramResult, refreshStartedCards, sendTelegramReminders, syncTelegram, telegramCreatorNote, verifyChatTicket } from "@/lib/telegram/bot";
 import { renderCard } from "@/lib/telegram/card";
 import { renderDiscordCard } from "@/lib/discord/card";
@@ -105,8 +105,14 @@ describe("telegram signatures and tickets", () => {
   it("the Mini App: where a start parameter leads, and the direct link on cards once the app exists", async () => {
     expect(miniAppNext(null)).toBe("/me");
     expect(miniAppNext("AbCd")).toBe("/AbCd");
-    expect(miniAppNext("r_AbCd")).toBe("/AbCd");
+    // The result lands on the score form: a start parameter cannot carry the "#" itself.
+    expect(miniAppNext("r_AbCd")).toBe("/AbCd#score");
     expect(miniAppNext("../etc")).toBe("/me");
+    // A web_app button gets no start parameter from Telegram, so the shell's own URL carries it; a
+    // direct link's signed one wins, and the menu button's bare /tg still leads to My matches.
+    expect(miniAppStart(undefined, "?startapp=r_AbCd")).toBe("r_AbCd");
+    expect(miniAppStart("WxYz", "?startapp=r_AbCd")).toBe("WxYz");
+    expect(miniAppNext(miniAppStart(undefined, ""))).toBe("/me");
     delete process.env.TELEGRAM_MINIAPP_SLUG;
     expect(miniAppUrl("AbCd")).toBeNull();
     process.env.TELEGRAM_BOT_USERNAME = "kicksmash_bot";

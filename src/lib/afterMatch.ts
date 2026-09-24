@@ -16,7 +16,7 @@ import { pushEnabled, sendPush } from "@/lib/push";
 import { resultSummary } from "@/lib/channels/cards";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion } from "@/lib/resultCard";
-import { deleteMessage, editMessageMedia, editMessageText, esc, sendMessage, sendPhoto, telegramEnabled } from "@/lib/telegram/api";
+import { deleteMessage, editMessageMedia, editMessageText, esc, miniAppUrl, sendMessage, sendPhoto, telegramEnabled, type InlineKeyboard } from "@/lib/telegram/api";
 import type { Awarded } from "@/lib/domain/milestones";
 import { momentLine } from "@/lib/moments";
 import { strings, botLocale, type BotLocale } from "@/lib/telegram/card";
@@ -57,6 +57,10 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
   const subs = pushEnabled() ? await subscriptionsFor(db, players.map((p) => p.id)) : [];
   const version = telegramEnabled() && players.some((p) => p.telegramId) ? cardVersion(d, await getEventPhotoMeta(db, ev.id).catch(() => null)) : null;
   if (version) await warm(`${base}${cardImagePath(ev.code, version)}`);
+  // The chat's own "who won?" pairs four players up and nothing else. Erik, 15 September, match 9wjp:
+  // three were seated, so the 🏁 here could only ever answer "the result needs four players", while
+  // the web took the same score from three. Any other line-up gets the score form behind the 🏁.
+  const chatPairsUp = playingSeats(d).length === 4;
   for (const player of players) {
     let reached = false;
     if (telegramEnabled() && player.telegramId) {
@@ -65,7 +69,7 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
       // "add an option to tap Cancelled instead" — a match that did not happen has no score, and the
       // nudge repeats until somebody answers it. Only the organiser gets the button: cancelling is
       // theirs on every other screen, and a player who did not turn up must not close everyone's match.
-      const buttons: { text: string; callback_data: string }[] = [{ text: s.resultBtn, callback_data: `r:${ev.code}` }];
+      const buttons: InlineKeyboard["inline_keyboard"][number] = [chatPairsUp ? { text: s.resultBtn, callback_data: `r:${ev.code}` } : scoreFormButton(ev.code, s.resultBtn)];
       if (player.id === ev.creatorPlayerId) buttons.push({ text: s.didntPlayBtn, callback_data: `x:${ev.code}` });
       const caption = esc(s.scoreNudge(cardTitle(d, locale)));
       const keyboard = { inline_keyboard: [buttons] };
@@ -182,6 +186,32 @@ export function scoreLine(detail: EventDetail): { who: string | null; score: str
   const by = detail.scores.find((x) => x.enteredByPlayerId)?.enteredByPlayerId ?? null;
   const who = by ? (detail.roster.find((x) => x.playerId === by)?.player?.displayName ?? null) : null;
   return { who, score };
+}
+
+type Seat = EventDetail["roster"][number];
+/** Who played: the seats inside the capacity with a player in them, in seat order. The chat's "who won?" takes exactly four. */
+export const playingSeats = (detail: EventDetail): Seat[] => detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x) && x.playerId).sort((a, b) => a.position - b.position);
+
+/**
+ * The one way on when the chat cannot finish the result itself: fewer than four players seated, or
+ * pairs nobody has set. Every such door used to end in a sentence ("the result needs four players",
+ * "tap 🏁 on the card first") while the match page took the same score. This button opens that page's
+ * score form with the player already signed in.
+ *
+ * It never carries a secret. A message keeps its buttons when it is forwarded, and the nudge is a
+ * picture of the result card that a player may well forward to the crew's group; a personal link in
+ * it would sign the next reader in as this player (`docs/DECIDING.md` rule 7). So the button is the
+ * Mini App, which signs in whoever opens it from Telegram's own initData: the direct link when the
+ * owner has created the app in BotFather, else a web_app button on the `/tg` shell, which needs no
+ * BotFather step (the menu button in `/api/telegram/setup` opens the same page). Telegram passes no
+ * start parameter to a web_app button, so the shell's URL carries it (`miniAppStart`), and `r_`
+ * lands on `#score` (`miniAppNext`). A web_app button works only in a private chat, which is the
+ * only place this one goes.
+ */
+export function scoreFormButton(code: string, label: string): InlineKeyboard["inline_keyboard"][number][number] {
+  const start = `r_${code}`;
+  const app = miniAppUrl(start);
+  return app ? { text: label, url: app } : { text: label, web_app: { url: `${baseUrl()}/tg?startapp=${encodeURIComponent(start)}` } };
 }
 
 /** A moment, once, to the player who earned it: the picture and one button, silent. Web and email players find it on My matches. */

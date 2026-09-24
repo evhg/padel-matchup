@@ -4,12 +4,17 @@ import type { Db } from "@/db";
 import { events, players, telegramCards, telegramChats } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { closeScoreNudges, nudgeForScore, scoreLine } from "@/lib/afterMatch";
+import { baseUrl } from "@/lib/config";
 import { createEvent } from "@/lib/domain/events";
+import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { setEventPhoto } from "@/lib/domain/photos";
 import { getEventByCode } from "@/lib/domain/queries";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { joinEvent } from "@/lib/domain/slots";
+import type { TgChat } from "@/lib/telegram/api";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
+import { miniAppNext, miniAppStart } from "@/lib/telegram/login";
+import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 /**
@@ -243,5 +248,142 @@ describe("the nudge is closed by whoever answers it", () => {
     // A match with no score has no line, so nothing is ever said about one.
     const { past: quiet } = await played("d", 9004);
     expect(scoreLine((await getEventByCode(db, quiet.code))!)).toBeNull();
+  });
+});
+
+/**
+ * Erik, 15 September, match 9wjp: three players seated, and every door in Telegram ended in a
+ * sentence. The nudge's 🏁 said "the result needs four players in the line-up", and a bare "6-4 6-3"
+ * in reply said "tap 🏁 on the card first", which only moves the question, because the chat's "who
+ * won?" takes four. The web took the same score from three: in production two of the three scored
+ * matches had three players, and both got their score there. Where the chat cannot finish the result
+ * itself, the player's own chat now carries one button to that score form, signed in. The button is
+ * the Mini App, never a personal link: the nudge is a picture a player may forward to the group, and a
+ * forwarded message keeps its buttons. A group never gets it, because Telegram takes a web_app button
+ * only in a private chat.
+ */
+describe("where the chat cannot finish the result, the score form is one tap away", () => {
+  // The match starts at 09:00 UTC (16:00 in Bangkok); NOW is three hours later, when the nudge goes.
+  const NOW = new Date("2026-09-15T12:00:00Z");
+  freezeClock(NOW);
+  let db: Db;
+  beforeAll(async () => {
+    ({ db } = await createTestDb());
+  });
+  beforeEach(() => {
+    process.env.TELEGRAM_BOT_TOKEN = TOKEN;
+    // The Mini App follows from nothing: off unless a test creates it.
+    delete process.env.TELEGRAM_MINIAPP_SLUG;
+    stub();
+  });
+
+  /** `count` players in a match that started three hours before NOW; the first organises it and is on Telegram as `chatId`. */
+  const seated = async (tag: string, chatId: number, count: number) => {
+    const people: Awaited<ReturnType<typeof makePlayer>>[] = [];
+    for (let i = 0; i < count; i++) people.push(await makePlayer(db, `P${i} ${tag}`));
+    const [organiser] = people;
+    await db.update(players).set({ telegramId: chatId }).where(eq(players.id, organiser.id));
+    await db.insert(telegramChats).values({ chatId, type: "private", locale: "en" }).onConflictDoNothing();
+    const ev = await createEvent(db, { creatorPlayerId: organiser.id, type: "match", startsAt: new Date(NOW.getTime() + HOUR), tz: "Asia/Bangkok", whenFull: "closed" });
+    for (const p of people) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    const [past] = await db.update(events).set({ startsAt: new Date(NOW.getTime() - 3 * HOUR), status: "past" }).where(eq(events.id, ev.id)).returning();
+    return { past, organiser };
+  };
+  type Button = { text: string; url?: string; callback_data?: string; web_app?: { url: string } };
+  const buttonsOf = (c: Call) => (c.body.reply_markup as { inline_keyboard: Button[][] }).inline_keyboard[0];
+  /** Without the Mini App in BotFather: a web_app button on the `/tg` shell, which signs in from initData. */
+  const formApp = (code: string): Button => ({ text: "\u{1F3C1} Result", web_app: { url: `${baseUrl()}/tg?startapp=r_${code}` } });
+  /** A personal link is `/p/<token>`: it signs in whoever holds it, so no button of these may carry one. */
+  const PERSONAL_LINK = "/p/";
+  const PERSONAL = /\/p\/|#score|startapp/;
+
+  it("three seated: the nudge's 🏁 opens the score form, signed in, instead of the r: tap", async () => {
+    const { past } = await seated("a", 9101, 3);
+    await nudgeForScore(db, past);
+    const buttons = buttonsOf(sent("sendPhoto").at(-1)!);
+    expect(buttons[0]).toEqual(formApp(past.code));
+    expect(JSON.stringify(buttons)).not.toContain(`r:${past.code}`);
+    // The picture is the one a player forwards to the crew's group while it waits for a score, and its
+    // buttons go with it: nothing in it signs anybody in as the organiser.
+    expect(JSON.stringify(calls)).not.toContain(PERSONAL_LINK);
+    // The shell hands the unsigned start parameter on, and the sign-in turns it into the score form.
+    expect(miniAppNext(miniAppStart(undefined, new URL(buttons[0].web_app!.url).search))).toBe(`/${past.code}#score`);
+    // "We didn't play" is still the organiser's, and still a tap.
+    expect(buttons[1]).toEqual({ text: "We didn't play", callback_data: `x:${past.code}` });
+  });
+
+  it("with the Mini App created, the button carries no secret and still lands on the score form", async () => {
+    process.env.TELEGRAM_BOT_USERNAME = "kicksmash_bot";
+    process.env.TELEGRAM_MINIAPP_SLUG = "app";
+    const { past, organiser } = await seated("b", 9102, 3);
+    await nudgeForScore(db, past);
+    const [button] = buttonsOf(sent("sendPhoto").at(-1)!);
+    expect(button).toEqual({ text: "\u{1F3C1} Result", url: `https://t.me/kicksmash_bot/app?startapp=r_${past.code}` });
+    // A forwarded message takes its buttons with it. This one signs in whoever opens it, from
+    // Telegram's own initData, so nothing in it is the organiser's.
+    expect(button.url).not.toContain(await getOrCreatePersonalToken(db, organiser.id));
+    // The Mini App's sign-in hands that start parameter on to the match page's score form.
+    expect(miniAppNext(`r_${past.code}`)).toBe(`/${past.code}#score`);
+  });
+
+  it("four seated: the 🏁 stays the chat's own who-won", async () => {
+    const { past } = await seated("c", 9103, 4);
+    await nudgeForScore(db, past);
+    const [button] = buttonsOf(sent("sendPhoto").at(-1)!);
+    expect(button).toEqual({ text: "\u{1F3C1} Result", callback_data: `r:${past.code}` });
+  });
+
+  it("a bare score in reply to the nudge, with the pairs unknown, answers with the form in the player's own chat", async () => {
+    const { past } = await seated("d", 9104, 3);
+    await nudgeForScore(db, past);
+    const [nudge] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, past.id));
+    const chat: TgChat = { id: 9104, type: "private" };
+    calls = [];
+    const outcome = await handleTelegramUpdate(db, { update_id: 3, message: { message_id: 20, date: 0, chat, from: { id: 9104, first_name: "P0", language_code: "en" }, text: "6-4 6-3", reply_to_message: { message_id: nudge.messageId, date: 0, chat } } }, NO_SIDE_EFFECTS);
+    expect(outcome).toBe("score_no_teams");
+    const answer = sent("sendMessage").at(-1)!;
+    expect(answer.body.chat_id).toBe(9104);
+    expect(String(answer.body.text)).toContain("I don't know the pairs yet");
+    expect(answer.body.reply_markup).toEqual({ inline_keyboard: [[formApp(past.code)]] });
+    expect(JSON.stringify(calls)).not.toContain(PERSONAL_LINK);
+  });
+
+  it("the same reply in a group gets the sentence alone, with no personal link", async () => {
+    const { past } = await seated("e", 9105, 3);
+    const group: TgChat = { id: -1009105, type: "supergroup", title: "Crew" };
+    await db.insert(telegramChats).values({ chatId: group.id, type: group.type, title: group.title, locale: "en" });
+    await db.insert(telegramCards).values({ eventId: past.id, chatId: group.id, messageId: 70, kind: "card" });
+    calls = [];
+    const outcome = await handleTelegramUpdate(db, { update_id: 4, message: { message_id: 71, date: 0, chat: group, from: { id: 9105, first_name: "P0", language_code: "en" }, text: "6-4 6-3", reply_to_message: { message_id: 70, date: 0, chat: group } } }, NO_SIDE_EFFECTS);
+    expect(outcome).toBe("score_no_teams");
+    const answer = sent("sendMessage").at(-1)!;
+    expect(answer.body.chat_id).toBe(group.id);
+    expect(String(answer.body.text)).toContain("Tap \u{1F3C1} Result on the card first");
+    expect(answer.body.reply_markup).toBeUndefined();
+    expect(JSON.stringify(calls)).not.toMatch(PERSONAL);
+  });
+
+  it("a 🏁 tap the chat cannot answer: the form in the player's own chat, the alert alone in a group", async () => {
+    const { past } = await seated("f", 9106, 3);
+    const tap = (chat: TgChat) =>
+      handleTelegramUpdate(db, { update_id: 5, callback_query: { id: "cb", from: { id: 9106, first_name: "P0", language_code: "en" }, message: { message_id: 30, date: 0, chat }, data: `r:${past.code}` } }, NO_SIDE_EFFECTS);
+
+    calls = [];
+    expect(await tap({ id: 9106, type: "private" })).toBe("result:need_four");
+    const form = sent("sendMessage").at(-1)!;
+    expect(form.body.reply_parameters).toMatchObject({ message_id: 30 });
+    expect(String(form.body.text)).toContain("The match page takes any line-up");
+    expect(form.body.reply_markup).toEqual({ inline_keyboard: [[formApp(past.code)]] });
+    expect(JSON.stringify(calls)).not.toContain(PERSONAL_LINK);
+    // The message is the answer; an alert on top of it would be one more thing to dismiss.
+    expect(sent("answerCallbackQuery").at(-1)!.body.text).toBeUndefined();
+
+    const group: TgChat = { id: -1009106, type: "supergroup" };
+    await db.insert(telegramChats).values({ chatId: group.id, type: group.type, locale: "en" });
+    calls = [];
+    expect(await tap(group)).toBe("result:need_four");
+    expect(sent("sendMessage")).toHaveLength(0);
+    expect(String(sent("answerCallbackQuery").at(-1)!.body.text)).toContain("needs four players");
+    expect(JSON.stringify(calls)).not.toMatch(PERSONAL);
   });
 });
