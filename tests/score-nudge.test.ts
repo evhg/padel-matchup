@@ -85,6 +85,11 @@ describe("the nudge is closed by whoever answers it", () => {
     expect(String(waiting.body.photo)).toContain(`/${past.code}/card/opengraph-image?v=`);
     expect(String(waiting.body.caption)).toContain("how did it go?");
     expect(waiting.body.disable_notification).toBe(true);
+    // The picture is rendered once before Telegram asks for it, so a cold render cannot outlast the
+    // send and leave a text fallback behind a picture Telegram delivered after all.
+    const warmed = calls.findIndex((c) => c.method.startsWith("opengraph-image?v="));
+    expect(warmed).toBeGreaterThanOrEqual(0);
+    expect(warmed).toBeLessThan(calls.indexOf(waiting));
     const [row] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, past.id));
     expect(row.kind).toBe("nudge");
     expect(row.rendered).toBeTruthy();

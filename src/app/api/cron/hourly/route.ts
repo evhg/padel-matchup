@@ -65,7 +65,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -163,8 +163,16 @@ export async function GET(req: Request) {
   }
 
   try {
+    // In Telegram a nudge is a picture, and a picture is rendered once per match: about 3 to 6
+    // seconds cold (measured on production, 24 September 2026), against a 60-second job that does
+    // much else. So the nudges get a budget; a match past it is not marked, and goes next hour.
+    const nudgeUntil = Date.now() + 20_000;
     const due = await findScoreRemindersDue(db, now);
     for (const { event } of due) {
+      if (Date.now() > nudgeUntil) {
+        summary.scoreRemindersDeferred++;
+        continue;
+      }
       // The first nudge, two hours after the start, to every player on the channel they have.
       await markScoreReminderSent(db, event.id);
       await nudgeForScore(db, event).catch((e) => summary.errors.push(`nudge ${event.code}: ${String(e)}`));
@@ -174,6 +182,10 @@ export async function GET(req: Request) {
     // and a match with no score moves nobody's level, enters no ranking and records no podium.
     const again = await findSecondScoreRemindersDue(db, now);
     for (const { event } of again) {
+      if (Date.now() > nudgeUntil) {
+        summary.scoreRemindersDeferred++;
+        continue;
+      }
       await markSecondScoreReminderSent(db, event.id, now);
       await nudgeForScore(db, event).catch((e) => summary.errors.push(`nudge2 ${event.code}: ${String(e)}`));
       summary.scoreReminders++;

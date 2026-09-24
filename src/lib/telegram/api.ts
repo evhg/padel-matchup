@@ -61,14 +61,15 @@ async function count(key: "telegram_sent" | "telegram_429"): Promise<void> {
   }
 }
 
-export async function tg<T = unknown>(method: string, body: Record<string, unknown>): Promise<TgResult<T>> {
+/** `timeoutMs`: a picture sent by URL waits while Telegram fetches it from us, so those calls get longer than a text. */
+export async function tg<T = unknown>(method: string, body: Record<string, unknown>, timeoutMs = 10_000): Promise<TgResult<T>> {
   if (!telegramEnabled()) return { ok: false, error_code: 0, description: "telegram disabled" };
   try {
     const res = await fetch(`https://api.telegram.org/bot${token()}/${method}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const json = (await res.json().catch(() => null)) as TgResult<T> | null;
     void count(res.status === 429 || (json && !json.ok && json.error_code === 429) ? "telegram_429" : "telegram_sent");
@@ -123,12 +124,16 @@ export function editMessageText(chatId: number, messageId: number, text: string,
  * which is why the nudge is sent as a picture in the first place.
  */
 export function editMessageMedia(chatId: number, messageId: number, photo: string, caption: string, keyboard?: InlineKeyboard | null) {
-  return tg<TgMessage | true>("editMessageMedia", {
-    chat_id: chatId,
-    message_id: messageId,
-    media: { type: "photo", media: photo, caption, parse_mode: "HTML" },
-    reply_markup: keyboard ?? { inline_keyboard: [] },
-  });
+  return tg<TgMessage | true>(
+    "editMessageMedia",
+    {
+      chat_id: chatId,
+      message_id: messageId,
+      media: { type: "photo", media: photo, caption, parse_mode: "HTML" },
+      reply_markup: keyboard ?? { inline_keyboard: [] },
+    },
+    PHOTO_TIMEOUT_MS,
+  );
 }
 
 /** The words under a photo message; editMessageText refuses a message that has no text. */
@@ -152,6 +157,13 @@ export function answerInlineQuery(id: string, articles: InlineArticle[], o: { ca
   });
 }
 
+/**
+ * A result card with a court photo measured 6.2 seconds to render cold on production (24 September
+ * 2026) and 1.1 MB, and Telegram fetches it before it answers. At ten seconds a slow render timed out
+ * here while Telegram still delivered, and the text fallback then sent the nudge a second time.
+ */
+export const PHOTO_TIMEOUT_MS = 30_000;
+
 export function sendPhoto(chatId: number, photo: string, caption: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendPhoto", {
     chat_id: chatId,
@@ -162,7 +174,7 @@ export function sendPhoto(chatId: number, photo: string, caption: string, o: Sen
     ...(o.keyboard ? { reply_markup: o.keyboard } : {}),
     ...(o.replyTo ? { reply_parameters: { message_id: o.replyTo, allow_sending_without_reply: true } } : {}),
     ...(o.threadId ? { message_thread_id: o.threadId } : {}),
-  });
+  }, PHOTO_TIMEOUT_MS);
 }
 
 export function answerCallbackQuery(id: string, text?: string, o: { alert?: boolean; url?: string } = {}) {
