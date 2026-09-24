@@ -538,6 +538,25 @@ Everything in this list is live. The README describes each in detail.
   push subscription is never merged by name. A merge now also moves the person's wants, which point
   at a player without a foreign key and were left behind on the folded row until now.
 
+## The finish line
+
+Proposed to the owner on 24 September 2026: Kicksmash is finished when each stakeholder in
+`docs/VISION.md` is won for real, and again after that, by the vision's own test. Code alone does not
+reach it; people using the app do.
+
+| Stakeholder | Won when | On 24 September 2026 |
+|---|---|---|
+| Player | the match is played | 19 matches, 3 of them with a score |
+| Coach | a student books, moves or cancels, and the coach typed nothing | 2 lessons |
+| Organiser | a weekend of 200 players runs from a phone | a rehearsal only |
+| Club | an off-peak court hour is filled from Kicksmash | 1 club claimed of 67 listed |
+
+What stands between here and there, in order: real use through each loop (a tournament weekend, a
+coach whose students book themselves, a club, crews that enter scores); reach (6 of about 18 people
+can get a message, and WhatsApp one-to-one waits on the owner's Meta account and number); the
+security steps at 100 real players (`docs/OPERATING.md`). Recommended with it: no new large feature
+until real use asks for one.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
