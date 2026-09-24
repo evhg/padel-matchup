@@ -508,6 +508,17 @@ Everything in this list is live. The README describes each in detail.
   form; `docs/DECIDING.md` rule 1 already said no. The landing page lost a database query with it,
   and `/{code}/photo`, which only it used, is gone. The result card itself is unchanged at
   `/{code}/card`, with the photo, the share buttons and the story picture.
+- **The nudge becomes the result card (24 September 2026).** The owner: "when one of the players
+  enters the result, the score nudge received by all the other players changes into a result card.
+  Changing is not an additional message." In Telegram the nudge is now the card still waiting for its
+  score (the two pairs, or the four names, and empty sets), and the first answer, from any screen,
+  swaps its picture for the result with the winners and one button to the card's page. A court photo
+  added later reaches the same message, and so does a corrected score. The morning's nudge replaces
+  the evening's, so a chat never holds a live "how did it go?" beside the result. Push and email get
+  nothing more: neither can be edited, and a WhatsApp group gets the card by hand. For that hand, the
+  match page now shows the card under the score, with the court photo button and WhatsApp, Telegram
+  and the phone's own share one tap away. `docs/DECIDING.md` rules 5, 16 and 18 say it; rule 16 also
+  stopped saying "exactly once", which had not been true since the morning nudge shipped.
 
 ## Next, in order
 

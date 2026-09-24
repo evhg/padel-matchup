@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getEventPhoto, removeEventPhoto, setEventPhoto } from "@/lib/domain/photos";
 import { DomainError } from "@/lib/domain/errors";
 import { getSessionPlayer } from "@/lib/session";
@@ -15,6 +16,7 @@ export async function addPhotoAction(code: string, dataUrl: string): Promise<Act
     const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl ?? "");
     if (!m) throw new DomainError("invalid", "mime");
     await setEventPhoto(db, { eventId: detail.event.id, playerId: me.id, mime: m[1], dataBase64: m[2] });
+    after(() => refreshCards(code));
     revalidatePath(`/${code}`);
     revalidatePath(`/${code}/card`);
     return null;
@@ -28,8 +30,19 @@ export async function removePhotoAction(code: string): Promise<ActionResult<null
     if (!me) throw new ActionFailure("no_identity");
     if (!(await getEventPhoto(db, detail.event.id))) return null;
     await removeEventPhoto(db, detail.event.id, me.id);
+    after(() => refreshCards(code));
     revalidatePath(`/${code}`);
     revalidatePath(`/${code}/card`);
     return null;
   });
+}
+
+/** The result card in each player's Telegram chat takes the photo too: the same message, a new picture. After the response, so the upload does not wait on Telegram. */
+async function refreshCards(code: string): Promise<void> {
+  try {
+    const [{ getDb }, { closeScoreNudges }] = await Promise.all([import("@/db"), import("@/lib/afterMatch")]);
+    await closeScoreNudges(await getDb(), code);
+  } catch (e) {
+    console.warn("[photos] refreshing the result cards failed", code, e);
+  }
 }

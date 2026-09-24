@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
-import { cleanSource } from "@/lib/source";
+import { cleanSource, taggedUrl } from "@/lib/source";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
 import { CalendarEmail } from "@/components/CalendarEmail";
@@ -35,7 +35,9 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
-import { isClaimable, isOccupied } from "@/lib/domain/events";
+import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
+import { getEventPhotoMeta } from "@/lib/domain/photos";
+import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
@@ -152,6 +154,22 @@ export default async function EventPage({ params, searchParams }: Props) {
   const perm = scorePermission({ event: ev, now, viewerPlayerId: me?.id ?? null, isCreator: viewer.isCreator, participantIds });
   const enteredBy = detail.scores[0]?.enteredByPlayerId ? (participants.find((s) => s.playerId === detail.scores[0].enteredByPlayerId)?.player?.displayName ?? null) : null;
   const showScore = started && !cancelled && ev.type === "match";
+  // After the score, the card itself: the court photo and WhatsApp one tap away. The owner, 24
+  // September: right after the match is when players forward it, and a WhatsApp group only ever gets
+  // it by hand, so the hand has to find it here. One light read, only once a score exists.
+  const result = showScore && detail.scores.length > 0 ? matchLine(t as unknown as (key: string, values?: Record<string, string | number>) => string, detail) : null;
+  const resultPhoto = result ? await getEventPhotoMeta(db, ev.id).catch(() => null) : null;
+  const resultCardUrl = taggedUrl(`${baseUrl()}/${code}/card`, "card");
+  const resultCard = result
+    ? {
+        href: `/${code}/card`,
+        image: cardImagePath(code, cardVersion(detail, resultPhoto)),
+        alt: result.line,
+        shareUrl: resultCardUrl,
+        shareText: t("shareText.result", { line: result.line, day, url: resultCardUrl }),
+        photo: me && (viewer.isCreator || isSeated(detail, me.id)) ? { has: Boolean(resultPhoto), canRemove: Boolean(resultPhoto && (resultPhoto.uploadedByPlayerId === me.id || viewer.isCreator)) } : null,
+      }
+    : null;
   const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
@@ -373,7 +391,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             locked={ev.scoreLockedByCreator}
             enteredBy={enteredBy}
             canPlayAgain={canPlayAgain}
-            cardHref={detail.scores.length > 0 ? `/${code}/card` : undefined}
+            card={resultCard}
           />
         )}
         {seriesRow && (

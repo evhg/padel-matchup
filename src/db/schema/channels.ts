@@ -36,9 +36,9 @@ export const telegramCards = pgTable(
       .notNull()
       .references(() => telegramChats.chatId, { onDelete: "cascade" }),
     messageId: bigint("message_id", { mode: "number" }).notNull(),
-    /** card = the live match card; result = the result picture posted once; feed = the organizer's running message in their private chat. */
+    /** card = the live match card; result = the result picture posted once; feed = the organizer's running message in their private chat; nudge = a player's "how did it go?", which becomes the result card. */
     kind: text("kind").notNull().default("card"),
-    /** card/result: hash of the last rendered text, to skip no-op edits; feed: the JSON array of lines the running message shows. */
+    /** card/result: hash of the last rendered text, to skip no-op edits; feed: the JSON array of lines the running message shows; nudge: the version of the card picture it shows, null for a text nudge. */
     rendered: text("rendered"),
     /** The "line-up complete" note has been posted for this card. */
     completeNotedAt: timestamp("complete_noted_at", { withTimezone: true }),

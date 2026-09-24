@@ -5,10 +5,14 @@ import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { tally } from "@/lib/domain/scores";
+import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton } from "./PlayAgainButton";
+import { ShareButtons } from "./ShareSheet";
 
 type P = { id: string; name: string; team: "a" | "b" | null; level?: number | null };
 type S = { setNumber: number; sideA: number; sideB: number };
+/** The result card as the match page shows it once a score exists; `photo` only for the people in the match. */
+export type ResultCardView = { href: string; image: string; alt: string; shareUrl: string; shareText: string; photo: { has: boolean; canRemove: boolean } | null };
 
 export function ScorePanel({
   code,
@@ -19,7 +23,7 @@ export function ScorePanel({
   locked,
   enteredBy,
   canPlayAgain = false,
-  cardHref,
+  card,
 }: {
   code: string;
   scores: S[];
@@ -30,8 +34,8 @@ export function ScorePanel({
   enteredBy: string | null;
   /** Creator or participant: offer "Play again next week" once a result exists. */
   canPlayAgain?: boolean;
-  /** Link to the shareable result card (once a result exists). */
-  cardHref?: string;
+  /** The shareable result card, once a result exists. */
+  card?: ResultCardView | null;
 }) {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
@@ -105,10 +109,15 @@ export function ScorePanel({
             </div>
           </div>
           {enteredBy && !locked && <p className="mt-3 text-xs text-faint">{t("score.enteredBy", { name: enteredBy })}</p>}
-          {cardHref && (
-            <a href={cardHref} className="btn-ghost btn-sm mt-3">
-              📸 {t("card.share")}
-            </a>
+          {card && (
+            <div className="mt-4 flex flex-col gap-3" data-testid="result-card">
+              <a href={card.href} className="block overflow-hidden rounded-2xl border border-line">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={card.image} alt={card.alt} width={1200} height={630} className="block h-auto w-full" />
+              </a>
+              {card.photo && <PhotoButton code={code} hasPhoto={card.photo.has} canRemove={card.photo.canRemove} />}
+              <ShareButtons url={card.shareUrl} text={card.shareText} imageUrl={card.image} />
+            </div>
           )}
           {canPlayAgain && (
             <div className="mt-4 border-t border-line pt-4">

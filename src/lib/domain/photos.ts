@@ -41,4 +41,10 @@ export async function getEventPhoto(db: Db, eventId: string): Promise<EventPhoto
   return row ?? null;
 }
 
+/** Whether there is a photo, when it came and who added it — without its bytes. The match page asks this on every view of a finished match; the picture itself is only read by the card's image. */
+export async function getEventPhotoMeta(db: Db, eventId: string): Promise<Pick<EventPhoto, "createdAt" | "uploadedByPlayerId"> | null> {
+  const [row] = await db.select({ createdAt: eventPhotos.createdAt, uploadedByPlayerId: eventPhotos.uploadedByPlayerId }).from(eventPhotos).where(eq(eventPhotos.eventId, eventId)).limit(1);
+  return row ?? null;
+}
+
 export const photoDataUrl = (p: Pick<EventPhoto, "mime" | "dataBase64">) => `data:${p.mime};base64,${p.dataBase64}`;

@@ -150,6 +150,10 @@ const STRINGS = {
     scoreNudge: (title: string) => `${title}: how did it go? Reply with the score, like 6-4 6-3, or tap 🏁.`,
     /** Somebody else answered first. Said to a tap that raced the edit, and as the edit itself. */
     scoreAlready: (who: string | null, score: string) => (who ? `${who} already added the score: ${score}` : `The score is already in: ${score}`),
+    /** Under the result card the nudge turned into: who put the score there. */
+    scoreBy: (who: string) => `Entered by ${who}`,
+    /** The one button under that card: its page, where the court photo goes on and the picture goes to WhatsApp. */
+    cardBtn: "📸 Photo & share",
     feedbackAdded: "Added to your note, thank you.",
     toastSaved: "Saved ✅",
     share: "📤 Share",
@@ -301,6 +305,8 @@ const STRINGS = {
     onlyPlayersGroup: "Создать группу могут только игроки этого матча.",
     scoreNudge: (title: string) => `${title}: как сыграли? Ответьте счётом, например 6-4 6-3, или нажмите 🏁.`,
     scoreAlready: (who: string | null, score: string) => (who ? `${who} уже внёс(ла) счёт: ${score}` : `Счёт уже внесён: ${score}`),
+    scoreBy: (who: string) => `Счёт внёс(ла) ${who}`,
+    cardBtn: "📸 Фото и поделиться",
     feedbackAdded: "Добавил к вашей заметке, спасибо.",
     toastSaved: "Сохранено ✅",
     share: "📤 Поделиться",
@@ -453,6 +459,8 @@ const STRINGS = {
     onlyPlayersGroup: "Solo los jugadores de este partido pueden crear el grupo.",
     scoreNudge: (title: string) => `${title}: ¿cómo fue? Responde con el resultado, como 6-4 6-3, o toca 🏁.`,
     scoreAlready: (who: string | null, score: string) => (who ? `${who} ya añadió el resultado: ${score}` : `El resultado ya está: ${score}`),
+    scoreBy: (who: string) => `Anotado por ${who}`,
+    cardBtn: "📸 Foto y compartir",
     feedbackAdded: "Añadido a tu nota, gracias.",
     toastSaved: "Guardado ✅",
     share: "📤 Compartir",

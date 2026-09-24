@@ -13,7 +13,10 @@ import { layout, translatorFor } from "@/lib/email/templates";
 import { venueWithCourt } from "@/lib/labels";
 import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
-import { editMessageText, esc, sendMessage, sendPhoto, telegramEnabled } from "@/lib/telegram/api";
+import { resultSummary } from "@/lib/channels/cards";
+import { getEventPhotoMeta } from "@/lib/domain/photos";
+import { cardImagePath, cardVersion } from "@/lib/resultCard";
+import { deleteMessage, editMessageMedia, editMessageText, esc, sendMessage, sendPhoto, telegramEnabled } from "@/lib/telegram/api";
 import type { Awarded } from "@/lib/domain/milestones";
 import { momentLine } from "@/lib/moments";
 import { strings, botLocale, type BotLocale } from "@/lib/telegram/card";
@@ -21,9 +24,17 @@ import { matchResult } from "@/lib/domain/result";
 import { cardTitle } from "@/lib/telegram/card";
 
 /**
- * After the final point. Every player, not only the organizer, hears once: "how did it go?"
- * on the channel they have (Telegram first, then push, then email). In Telegram the answer
- * is a reply with the score; the message is remembered as a card so the reply finds the match.
+ * After the final point. Every player, not only the organizer, hears "how did it go?" on the channel
+ * they have (Telegram first, then push, then email): two hours after the start, and once more the
+ * next morning if nobody has answered. In Telegram the answer is a reply with the score; the message
+ * is remembered as a card so the reply finds the match.
+ *
+ * In Telegram the nudge is the result card itself, still waiting for its score: the two pairs, the
+ * empty sets. The owner, 24 September: "when one of the players enters the result, the score nudge
+ * received by all the other players changes into a result card. Changing is not an additional
+ * message." Telegram swaps a photo for a photo but never text for a photo, so the nudge is a picture
+ * from the start (`closeScoreNudges` does the swap). A picture Telegram cannot fetch falls back to the
+ * text nudge, which is closed as text.
  */
 
 export type NudgeSummary = { players: number; telegram: number; push: number; email: number };
@@ -34,6 +45,7 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
   const out: NudgeSummary = { players: players.length, telegram: 0, push: 0, email: 0 };
   const base = baseUrl();
   const subs = pushEnabled() ? await subscriptionsFor(db, players.map((p) => p.id)) : [];
+  const version = telegramEnabled() && players.some((p) => p.telegramId) ? cardVersion(d, await getEventPhotoMeta(db, ev.id).catch(() => null)) : null;
   for (const player of players) {
     let reached = false;
     if (telegramEnabled() && player.telegramId) {
@@ -44,10 +56,23 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
       // theirs on every other screen, and a player who did not turn up must not close everyone's match.
       const buttons: { text: string; callback_data: string }[] = [{ text: s.resultBtn, callback_data: `r:${ev.code}` }];
       if (player.id === ev.creatorPlayerId) buttons.push({ text: s.didntPlayBtn, callback_data: `x:${ev.code}` });
-      const res = await sendMessage(player.telegramId, esc(s.scoreNudge(cardTitle(d, locale))), { silent: true, keyboard: { inline_keyboard: [buttons] } }).catch(() => ({ ok: false as const }));
+      const caption = esc(s.scoreNudge(cardTitle(d, locale)));
+      const keyboard = { inline_keyboard: [buttons] };
+      const picture = version ? await sendPhoto(player.telegramId, `${base}${cardImagePath(ev.code, version)}`, caption, { silent: true, keyboard }).catch(() => ({ ok: false as const })) : { ok: false as const };
+      const res = picture.ok ? picture : await sendMessage(player.telegramId, caption, { silent: true, keyboard }).catch(() => ({ ok: false as const }));
       if (res.ok) {
         // The reply "6-4 6-3" to this message finds the match the same way a reply to the card does.
-        await db.insert(telegramCards).values({ eventId: ev.id, chatId: player.telegramId, messageId: res.result.message_id, kind: "nudge" }).onConflictDoNothing().catch(() => undefined);
+        // One nudge per chat: the morning's replaces the evening's, so the chat never holds a stale
+        // "how did it go?" with live buttons beside the one that turns into the result. `rendered` is
+        // the version of the picture the message shows, and null for a text nudge.
+        const [before] = await db.select({ messageId: telegramCards.messageId }).from(telegramCards).where(and(eq(telegramCards.eventId, ev.id), eq(telegramCards.chatId, player.telegramId), eq(telegramCards.kind, "nudge"))).limit(1).catch(() => []);
+        const rendered = picture.ok ? version : null;
+        await db
+          .insert(telegramCards)
+          .values({ eventId: ev.id, chatId: player.telegramId, messageId: res.result.message_id, kind: "nudge", rendered })
+          .onConflictDoUpdate({ target: [telegramCards.eventId, telegramCards.chatId, telegramCards.kind], set: { messageId: res.result.message_id, rendered, updatedAt: new Date() } })
+          .catch(() => undefined);
+        if (before && before.messageId !== res.result.message_id) await deleteMessage(player.telegramId, before.messageId).catch(() => undefined);
         out.telegram++;
         reached = true;
       }
@@ -80,35 +105,54 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
 }
 
 /**
- * The nudge, closed once somebody answers it.
+ * The nudge, closed once somebody answers it: it becomes the result card, in place.
  *
  * "How did it go?" went to every player privately, with a 🏁 button, and then sat there live after
  * one of them entered the score on another screen. A player tapped the stale button and was told
  * "The result needs four players in the line-up" — neither true nor the point. The nudge is a card
- * like any other, so it is edited in place and its button goes (rule 5), and what it says is what
- * actually happened: who answered, and with what.
+ * like any other, so it is edited in place and its buttons go (rule 5), and what it shows is what
+ * actually happened: the result card with the score, the winners, who entered it, and one button to
+ * the card's page, where the court photo goes on and the picture goes to WhatsApp.
+ *
+ * Run again when the score is corrected or a court photo is added: the picture's version changes and
+ * the card follows. An edit, never a new message — the bots stay quiet (rule 5). A nudge that already
+ * shows this version is left alone; a text nudge from before the picture is closed as text.
  *
  * Best effort per message: a chat that blocked the bot, or a message too old to edit, must not stop
- * the rest. Returns how many were closed.
+ * the rest. Returns how many were edited.
  */
 export async function closeScoreNudges(db: Db, code: string): Promise<number> {
   if (!telegramEnabled()) return 0;
   const detail = await getEventByCode(db, code);
   if (!detail || detail.scores.length === 0) return 0;
   const rows = await db
-    .select({ chatId: telegramCards.chatId, messageId: telegramCards.messageId, locale: telegramChats.locale })
+    .select({ id: telegramCards.id, chatId: telegramCards.chatId, messageId: telegramCards.messageId, rendered: telegramCards.rendered, locale: telegramChats.locale })
     .from(telegramCards)
     .innerJoin(telegramChats, eq(telegramChats.chatId, telegramCards.chatId))
     .where(and(eq(telegramCards.eventId, detail.event.id), eq(telegramCards.kind, "nudge")));
   if (rows.length === 0) return 0;
   const line = scoreLine(detail);
   if (!line) return 0;
+  const base = baseUrl();
+  const version = cardVersion(detail, await getEventPhotoMeta(db, detail.event.id).catch(() => null));
+  const picture = `${base}${cardImagePath(code, version)}`;
   let closed = 0;
   for (const row of rows) {
     const locale: BotLocale = botLocale(row.locale);
     const s = strings(locale);
-    const res = await editMessageText(row.chatId, row.messageId, esc(`${cardTitle(detail, locale)} — ${s.scoreAlready(line.who, line.score)}`), null).catch(() => ({ ok: false as const }));
-    if (res.ok) closed++;
+    if (row.rendered === null) {
+      const res = await editMessageText(row.chatId, row.messageId, esc(`${cardTitle(detail, locale)} — ${s.scoreAlready(line.who, line.score)}`), null).catch(() => ({ ok: false as const }));
+      if (res.ok) closed++;
+      continue;
+    }
+    if (row.rendered === version) continue;
+    const summary = resultSummary(detail, locale, base);
+    const caption = [summary?.title ?? cardTitle(detail, locale), line.score, summary?.winners, summary?.winners ? summary.praise : null, line.who ? s.scoreBy(line.who) : null].filter(Boolean).map((x) => esc(String(x))).join("\n");
+    const res = await editMessageMedia(row.chatId, row.messageId, picture, caption, { inline_keyboard: [[{ text: s.cardBtn, url: `${base}/${code}/card` }]] }).catch(() => ({ ok: false as const }));
+    if (res.ok) {
+      await db.update(telegramCards).set({ rendered: version, updatedAt: new Date() }).where(eq(telegramCards.id, row.id)).catch(() => undefined);
+      closed++;
+    }
   }
   // The rows stay: a reply to this message still finds the match, which is how a correction arrives.
   return closed;
