@@ -40,11 +40,26 @@ export function returnToFor(loc: { origin: string; pathname: string }): string {
   return `${loc.origin}${loc.pathname}`;
 }
 
-/** Where the Mini App goes after signing in: the match named in Telegram's start parameter (a code, or r_CODE from a result deep link), else My matches. */
+/**
+ * The start parameter the Mini App opened with. A direct link (t.me/<bot>/<app>?startapp=) has it
+ * signed in initData. A web_app button gets none from Telegram, so the bot writes it into the
+ * shell's own URL as ?startapp= (`scoreFormButton`). Unsigned is fine: `miniAppNext` only ever turns
+ * it into a match page or My matches.
+ */
+export function miniAppStart(signed: string | null | undefined, search: string): string | null {
+  return signed || new URLSearchParams(search).get("startapp");
+}
+
+/**
+ * Where the Mini App goes after signing in: the match named in Telegram's start parameter, else My
+ * matches. r_CODE is the result: it lands on the match page's score form (`#score`, the anchor push
+ * and email open), because a start parameter cannot carry a `#` of its own.
+ */
 export function miniAppNext(startParam: string | null | undefined): string {
   const p = (startParam ?? "").trim();
   if (!p) return "/me";
-  const code = p.startsWith("r_") ? p.slice(2) : p;
-  return /^[A-Za-z0-9]{4}$/.test(code) ? `/${code}` : "/me";
+  const result = p.startsWith("r_");
+  const code = result ? p.slice(2) : p;
+  return /^[A-Za-z0-9]{4}$/.test(code) ? `/${code}${result ? "#score" : ""}` : "/me";
 }
 

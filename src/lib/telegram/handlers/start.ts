@@ -1,5 +1,6 @@
 import type { Db } from "@/db";
 import type { TelegramChat } from "@/db/schema";
+import { playingSeats } from "@/lib/afterMatch";
 import { chatLocale } from "@/lib/channels/telegram";
 import { ticketPlayerId, verifyPlayerTicket } from "@/lib/coach/link";
 import { coachBotLocale, coachStrings } from "@/lib/coach/strings";
@@ -16,7 +17,7 @@ import { coachAssistantMessage, lessonsFor, resolveRole, sendRoleMenu, startCoac
 import { findOrCreateTelegramPlayer, linkTelegram } from "../identity";
 import { sendPlayerMenu, startBind, startClaim, startStudentInvite } from "../player";
 import { postCard } from "../post";
-import { playingSeats, resultPromptKeyboard } from "./result";
+import { resultPromptKeyboard } from "./result";
 
 /** The private chat's doors: /start and its deep links, /help, /coach, and the commands a role adds to the menu. */
 export const ROLE_COMMANDS = new Set(["lessons", "today", "tomorrow", "week", "low"]);
