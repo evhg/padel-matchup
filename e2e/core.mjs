@@ -19,14 +19,11 @@ try {
   await a.goto(BASE + "/");
   await shot(a, "01-landing");
   check("no quick picks for a first-timer", (await a.getByText("Your usual times").count()) === 0);
+  // The first page is the ten-second match and nothing else (the owner, 24 September 2026): the share
+  // card belongs after the match, when every player gets it, not between the name and the time.
+  check("the first page leads with the form, with no card in the way", (await a.getByTestId("card-preview").count()) === 0);
   // A new browser knows nobody. Somebody who has played before needs a door here, not a tour of the
   // app to find My matches, and it stays shut so it takes nothing from the name field above it.
-  // "show the match result card ... as they are being typed in" — the card the crew will see, empty
-  // until something is typed, so the first page shows what this is rather than describing it.
-  const firstCard = (await a.getByTestId("card-preview").textContent()) ?? "";
-  check("the landing page shows the card a match will have, four seats and no court yet", firstCard.includes("Court TBD") && firstCard.includes("1/4 players"), firstCard);
-  // It is a draft: the date is a guess from the player's usual slot, and a card alone read as a real match.
-  check("the card says it is a preview, and that nothing exists until Create", (await a.getByTestId("card-preview-label").innerText()).includes("Nothing exists until you tap"));
   const backIn = a.getByText("Played before? Get your matches back.");
   check("the landing page offers a way back in, closed", (await backIn.count()) === 1 && (await a.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
   await backIn.click();
@@ -84,8 +81,6 @@ try {
   await a.locator("input[type=time]").fill(`${g("hour")}:${g("minute")}`);
   await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
   await a.getByPlaceholder("e.g. 3 or Centre court").fill("3");
-  check("the card fills in as the match is typed", (await a.getByTestId("card-preview").textContent()).includes("Club Padel Test · Court 3"));
-  await shot(a, "05b-card-preview");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code = a.url().split("/").slice(-2)[0];

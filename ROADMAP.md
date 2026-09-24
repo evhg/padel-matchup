@@ -500,6 +500,15 @@ Everything in this list is live. The README describes each in detail.
   club's screen lead with them. The card on the first page says it is a preview, and a page from
   before a deploy reloads once instead of showing an error.
 
+- **The card left the first page (24 September 2026).** The owner's rule: the first page is the
+  ten-second match and nothing else. The card with the court photo exists to be shared in chats and
+  on socials, and the moment for that is right after the match, when every player sees it; it may
+  also be shown where the features are listed, never in the create flow. It had been added on 23
+  September from a note (Erik, 20 September) and sat between the name and the time, repeating the
+  form; `docs/DECIDING.md` rule 1 already said no. The landing page lost a database query with it,
+  and `/{code}/photo`, which only it used, is gone. The result card itself is unchanged at
+  `/{code}/card`, with the photo, the share buttons and the story picture.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**
@@ -583,11 +592,6 @@ the player, and invite them to try it.
    an email hears nothing about their court and time; "Your matches" should offer the channel.
 4. **The desk's order after entries close.** The draw's settings sit under every pair; once entries
    close they belong above them.
-5. **Six old branches on GitHub.** Five belong to merged pull requests; `claude/vercel-setup-l1mlxu`
-   is a stray from 3 September whose four files are all on `main` in later versions. Nothing on any
-   of them is lost by deleting them. A session may push only to its own branch unless the owner
-   says otherwise, so they go when the owner says so.
-
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
 

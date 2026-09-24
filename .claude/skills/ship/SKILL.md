@@ -185,6 +185,11 @@ learning can be a test, a gate step or a script, make it one and put the story i
   form fills the date from the player's usual slot, so a returning player opened the page and saw
   a card for a match on 28 September that did not exist. Anything that shows a guess in the shape
   of a real thing must say it is a draft.
+- **A player's request is measured against the rules like any other.** The card went onto the first
+  page because Erik asked for it there; `docs/DECIDING.md` rule 1 (one job per screen, nothing extra
+  above the fold) already said no, and nobody checked. The owner took it off a day later: the first
+  page is the ten-second match, and the card's job is sharing after the match. Build what a note
+  needs, in the place the rules allow, and say so in the thank-you when it differs from the ask.
 - **A delete follows every foreign key, so a merge must move every one first.** `mergePlayers` moved
   the six tables somebody listed by hand, then deleted the duplicate rows, and the database did the
   rest: `on delete cascade` took a student's place on a coach's list and their packages, `set null`
