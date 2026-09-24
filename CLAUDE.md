@@ -31,6 +31,9 @@ rather than rediscovering it.
    it; send `publicName: ""` for a test user or a name unfit for a public page. Do not ask the owner first.
 6. **Ask production through `/api/admin/sql`, never through the Supabase MCP**, and put the questions in
    one query. Every MCP call waits for the owner's approval, and that breaks rule 3.
+7. **A question for the owner is a decision, set out in full.** Name each option, give its pros and
+   cons, and say which one you recommend and why. A fact is not a decision: report it, do not ask
+   about it. And ask only what is theirs: for anything else, decide and say what you assumed.
 
 ## The one habit underneath all of it
 

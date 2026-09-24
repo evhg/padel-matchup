@@ -73,7 +73,10 @@ agent's branch that nobody opened, so `vercel.json` now sets `git.deploymentEnab
 Actions and never depended on Vercel. Deployments already built stay until they are deleted:
 `DELETE /v13/deployments/{id}` with `VERCEL_TOKEN`, keeping the live production one and a couple of
 rollback targets.
-Vercel Web Analytics: 2,500 events a month (we count page renders ourselves).
+Vercel Web Analytics: 2,500 events a month (we count page renders ourselves). Past it, Vercel's
+dashboard stops recording until the month turns and nothing else changes: the app keeps its own
+count. It stood at 2,022 on 24 September; at a hundred players it will run out each month, and
+then the choice is between leaving it, turning it off, or a paid plan.
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
@@ -253,7 +256,7 @@ read-only door):
 - **`kicksmash_agent`.** A role that can log in, bypasses Row Level Security, and can read and write
   every table, sign-in tokens included. It was made on 16 September on Claude's advice, for a
   direct connection from a session that the container can never open; nothing has connected as it
-  since. Whether to take its login away (`alter role kicksmash_agent nologin`) is the owner's call.
+  since. The owner keeps it (24 September 2026).
 - **The Supabase MCP.** `.claude/settings.json` allows `execute_sql` and `apply_migration`, and the
   owner keeps those lines (24 September). They do not decide anything here: in this cloud the
   connector's tool permissions on claude.ai do, and they are set to ask. Keep them asking. Reads go

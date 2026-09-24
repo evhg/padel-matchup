@@ -583,12 +583,13 @@ the player, and invite them to try it.
    an email hears nothing about their court and time; "Your matches" should offer the channel.
 4. **The desk's order after entries close.** The draw's settings sit under every pair; once entries
    close they belong above them.
-5. **For the owner.** Whether `kicksmash_agent` keeps its login (docs/OPERATING.md). Whether to delete
-   five old `claude/*` branches whose pull requests merged, and `claude/vercel-setup-l1mlxu` (two
-   commits from 3 September, never proposed). Whether to compare the backup of 23 September, 03:00
-   UTC, with production for rows the old merge lost (the backup repository's token is not in this
-   environment). Vercel Web Analytics stood at 2,022 of its 2,500 free events on 24 September; at
-   a hundred players the free ceiling will not hold.
+5. **Six old branches on GitHub.** Five belong to merged pull requests; `claude/vercel-setup-l1mlxu`
+   is a stray from 3 September whose four files are all on `main` in later versions. Nothing on any
+   of them is lost by deleting them. A session may push only to its own branch unless the owner
+   says otherwise, so they go when the owner says so.
+
+Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
+compared with production (rows the old merge dropped that morning stay dropped).
 
 ## Deliberately not
 
