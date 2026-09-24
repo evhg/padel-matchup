@@ -1,10 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { answers, listenItems } from "@/db/schema";
-import { generateAnswer, getPublishedAnswer, listPublishedAnswers, parseGenerated, sendWeeklyDigest, setAnswerPublished } from "@/lib/listen/answers";
-import { approveItem, rememberCandidates } from "@/lib/listen/tick";
-import { createTestDb } from "./helpers/db";
+import { answers, events, listenItems, metricsDaily, scores, slots } from "@/db/schema";
+import { listErrors } from "@/lib/alerts";
+import { createEvent } from "@/lib/domain/events";
+import { generateAnswer, getPublishedAnswer, listPublishedAnswers, parseGenerated, sendWeeklyDigest, setAnswerPublished, weekOfMatches } from "@/lib/listen/answers";
+import { approveItem, listenTick, rememberCandidates } from "@/lib/listen/tick";
+import { freezeClock } from "./helpers/clock";
+import { createTestDb, DAY, makePlayer } from "./helpers/db";
 
 type Call = { url: string; body: Record<string, unknown> | null };
 let calls: Call[] = [];
@@ -111,5 +114,106 @@ describe("answers: pages from approvals, digest once a week (db, stubbed network
     expect(await sendWeeklyDigest(db, new Date("2026-09-06T12:00:00Z"))).toBe(false);
     const digested = await db.select().from(answers);
     expect(digested.filter((a) => a.digestedAt).length).toBe(2);
+  });
+});
+
+describe("the Sunday digest: the week's matches as one set, and a digest that fails leaves a trace", () => {
+  // Sunday 20 September 2026, 09:00 UTC (16:00 in Bangkok): the Sunday whose digest never arrived.
+  const NOW = new Date("2026-09-20T09:00:00Z");
+  freezeClock(NOW);
+  let db: Db;
+  beforeAll(async () => {
+    ({ db } = await createTestDb());
+  });
+  let telegramOk = true;
+  beforeEach(() => {
+    process.env.TELEGRAM_BOT_TOKEN = "1:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+    delete process.env.ANTHROPIC_API_KEY;
+    telegramOk = true;
+    calls = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        const body = init?.body && typeof init.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : null;
+        calls.push({ url, body });
+        if (url.includes("api.telegram.org") && !telegramOk) return new Response(JSON.stringify({ ok: false, error_code: 400, description: "Bad Request: chat not found" }), { status: 400 });
+        if (url.includes("api.telegram.org")) return new Response(JSON.stringify({ ok: true, result: { message_id: 900 + calls.length, chat: { id: body?.chat_id } } }), { status: 200 });
+        return new Response("not found", { status: 404 });
+      }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** A match `daysAgo` before NOW with `seated` seats taken (joined, the last one confirmed). */
+  async function match(daysAgo: number, seated: number, o: { type?: "match" | "tournament"; cancelled?: boolean; scored?: boolean; waitlisted?: number } = {}) {
+    const org = await makePlayer(db, "Org");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: o.type ?? "match", capacity: o.type === "tournament" ? 8 : undefined, startsAt: new Date(NOW.getTime() - daysAgo * DAY), tz: "Asia/Bangkok", venueName: "Digest Padel", whenFull: "waitlist" });
+    for (let pos = 1; pos <= seated; pos++) {
+      const p = await makePlayer(db, `P${pos}`);
+      await db.update(slots).set({ playerId: p.id, status: pos === seated ? "confirmed" : "joined" }).where(and(eq(slots.eventId, ev.id), eq(slots.position, pos)));
+    }
+    // The waitlist sits past the capacity with status joined; it is not a seat.
+    for (let i = 1; i <= (o.waitlisted ?? 0); i++) {
+      const p = await makePlayer(db, `W${i}`);
+      await db.insert(slots).values({ eventId: ev.id, position: ev.capacity + i, kind: "open", status: "joined", playerId: p.id });
+    }
+    if (o.cancelled) await db.update(events).set({ status: "cancelled" }).where(eq(events.id, ev.id));
+    if (o.scored) await db.insert(scores).values({ eventId: ev.id, setNumber: 1, sideA: 6, sideB: 4 });
+    return ev;
+  }
+
+  it("counts the matches that started this week, those that filled, and those with a score", async () => {
+    await match(2, 4, { scored: true }); // filled, scored
+    await match(3, 3); // filled: three of four is enough to find a fourth
+    await match(1, 2, { waitlisted: 2 }); // two seated; the waitlist does not fill it
+    await match(4, 0); // nobody came
+    await match(2, 4, { cancelled: true }); // cancelled: not a match that was played for
+    await match(1, 8, { type: "tournament", scored: true }); // a tournament is not a match
+    await match(8, 4, { scored: true }); // last week
+    await match(-1, 4); // tomorrow: not started yet
+    const since = new Date(NOW.getTime() - 7 * DAY);
+    expect(await weekOfMatches(db, since, NOW)).toEqual({ matches: 4, filled: 2, scored: 1 });
+
+    expect(await sendWeeklyDigest(db, NOW)).toBe(true);
+    const head = String(calls.find((c) => c.url.includes("sendMessage"))?.body?.text);
+    expect(head).toContain("matches 4 → filled 2 → scores 1");
+    expect(head).not.toContain("seats");
+  });
+
+  it("a digest Telegram refuses is reported, and the next hour sends it", async () => {
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, "listen_digest"));
+    telegramOk = false;
+    expect(await sendWeeklyDigest(db, NOW)).toBe(false);
+    const { getDb } = await import("@/db");
+    const recorded = (await listErrors(await getDb(), { includeFixed: true })).filter((e) => e.path === "listen/digest");
+    expect(recorded.map((e) => e.message)).toEqual(["weekly digest not sent: Telegram answered 400 Bad Request: chat not found"]);
+    // Nothing was marked, so the next run is not refused by the once-a-week guard.
+    telegramOk = true;
+    expect(await sendWeeklyDigest(db, new Date(NOW.getTime() + 3600 * 1000))).toBe(true);
+  });
+
+  it("a digest that throws inside the hourly listening step is reported, and the step goes on", async () => {
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, "listen_digest"));
+    // The digest's first read is metrics_daily; no other listening step reads it with drafting off.
+    const broken = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop !== "select") return Reflect.get(target, prop, receiver);
+        return (...args: Parameters<Db["select"]>) => {
+          const q = target.select(...args);
+          const from = (t: Parameters<typeof q.from>[0]) => {
+            if (t === metricsDaily) throw new Error("metrics_daily went away");
+            return q.from(t);
+          };
+          return new Proxy(q, { get: (qt, p, r) => (p === "from" ? from : Reflect.get(qt, p, r)) });
+        };
+      },
+    }) as Db;
+    const summary = await listenTick(broken, NOW, { feeds: [], discord: false });
+    expect(summary).toMatchObject({ feeds: 0, asked: 0 });
+    const { getDb } = await import("@/db");
+    const recorded = (await listErrors(await getDb(), { includeFixed: true })).filter((e) => e.path === "listen/digest");
+    expect(recorded.map((e) => e.message)).toContain("metrics_daily went away");
   });
 });

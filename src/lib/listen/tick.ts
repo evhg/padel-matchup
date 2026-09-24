@@ -8,6 +8,7 @@ import { guessLanguage, looksRelevant, type Candidate } from "./parse";
 import { postRedditComment, redditEnabled } from "./reddit";
 import { fetchAll, type FeedSpec } from "./sources";
 import { listenModel } from "@/lib/ops/anthropic";
+import { reportError } from "@/lib/alerts";
 
 /**
  * The listening loop, hourly:
@@ -185,7 +186,18 @@ export async function listItems(db: Db, statuses: string[] = ["drafted", "approv
 export type ListenSummary = { feeds: number; feedErrors: number; fetched: number; remembered: number; expired: number; drafted: number; relevant: number; draftErrors: number; asked: number; feedErrorDetails?: string[]; discord?: { guilds: number; channels: number; read: number; candidates: number; replied: number; errors: string[] } };
 
 export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly FeedSpec[]; fetchImpl?: typeof fetch; discord?: boolean } = {}): Promise<ListenSummary> {
-  // Our own Discord servers first: replies there need no tap and people are waiting.
+  // The Sunday digest before anything slow. It used to come last, behind the Discord read (15 s),
+  // three feeds (12 s each) and the drafts (25 s, and one model call can overrun that), inside an
+  // hourly job that has 60 s for everything. A job stopped at 60 s records nothing: one way the
+  // digest of 20 September 2026 could vanish without a trace. Once a week the Discord replies below
+  // wait the few seconds it takes. A failure is reported, never swallowed: the next hour tries again.
+  try {
+    const { sendWeeklyDigest } = await import("./answers");
+    await sendWeeklyDigest(db, now);
+  } catch (e) {
+    await reportError("cron", e, { path: "listen/digest" });
+  }
+  // Our own Discord servers next: replies there need no tap and people are waiting.
   let discord: ListenSummary["discord"];
   if (o.discord !== false) {
     try {
@@ -201,12 +213,6 @@ export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly
   const expired = await expireOld(db, now);
   const drafted = await draftPending(db, now, o.fetchImpl);
   const asked = await askOwner(db, now);
-  try {
-    const { sendWeeklyDigest } = await import("./answers");
-    await sendWeeklyDigest(db, now);
-  } catch {
-    // Digest is a nicety; never let it fail the tick.
-  }
   const failed = fetched.filter((f) => f.error);
   return { feeds: fetched.length, feedErrors: failed.length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked, ...(failed.length ? { feedErrorDetails: failed.map((f) => `${f.feed.id}: ${f.error}`) } : {}), ...(discord ? { discord } : {}) };
 }

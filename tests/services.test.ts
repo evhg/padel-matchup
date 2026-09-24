@@ -48,8 +48,9 @@ describe("the service board", () => {
   it("builds one row per service with usage against the ceiling", async () => {
     const now = new Date("2026-09-08T12:00:00Z");
     const today = dayKey(now);
-    await setMetric(db, "pageviews", 1600, today);
-    await setMetric(db, "pageviews", 400, "2026-09-02");
+    // 40,000 of Hobby's 50,000 Web Analytics events: 80%, a warning.
+    await setMetric(db, "pageviews", 32_000, today);
+    await setMetric(db, "pageviews", 8_000, "2026-09-02");
     await setMetric(db, "pageviews", 999, "2026-08-31"); // last month: not counted
     await setMetric(db, "emails_sent", 30, today);
     await setMetric(db, "anthropic_in", 2_000_000, "2026-09-03");
@@ -65,9 +66,12 @@ describe("the service board", () => {
     const board = await serviceBoard(db, now);
     const row = (k: string) => board.rows.find((r) => r.key === k)!;
     expect(board.month).toBe("2026-09");
-    expect(row("vercel_analytics").used).toBe(2000);
+    expect(row("vercel_analytics").used).toBe(40_000);
     expect(row("vercel_analytics").pct).toBe(80);
     expect(row("vercel_analytics").state).toBe("warn");
+    expect(row("vercel_analytics").ceiling).toBe("50,000 events / month");
+    expect(row("vercel_analytics").note).toMatch(/estimate/);
+    expect(row("vercel_analytics").note).toMatch(/Every project on the Vercel account shares/);
     expect(row("supabase_db").pct).toBe(24);
     expect(row("pg_cron").state).toBe("ok");
     // 2M in at $2 + 200k out at $10 = $6 of a $20 cap.
@@ -85,5 +89,18 @@ describe("the service board", () => {
     expect(hot).toContain("vercel_analytics");
     expect(hot).toContain("uptime");
     expect(hot).not.toContain("supabase_db");
+  });
+
+  it("reads a month of real traffic as the few percent of Vercel's allowance it is", async () => {
+    // 2,022 page renders is what the app counted by 24 September 2026. Against the 2,500 the board
+    // used to assume, that was a warning at 81%; against Hobby's real 50,000 it is 4%.
+    const now = new Date("2026-10-24T12:00:00Z");
+    await setMetric(db, "pageviews", 2022, "2026-10-20");
+    const board = await serviceBoard(db, now);
+    const analytics = board.rows.find((r) => r.key === "vercel_analytics")!;
+    expect(analytics.used).toBe(2022);
+    expect(analytics.pct).toBe(4);
+    expect(analytics.state).toBe("ok");
+    expect(boardHighlights(board).map((r) => r.key)).not.toContain("vercel_analytics");
   });
 });

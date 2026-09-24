@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { getDb } from "@/db";
 import type { OpContext } from "@/lib/api/operations";
 import { emitMatchEvent } from "@/lib/api/webhooks";
-import { reportError } from "@/lib/alerts";
+import { later, reportError } from "@/lib/alerts";
 import { telegramEnabled, telegramWebhookSecret, type TgUpdate } from "@/lib/telegram/api";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 
@@ -29,6 +29,6 @@ export async function POST(req: Request) {
     channel: "telegram",
   };
   const outcome = await handleTelegramUpdate(db, update, ctx);
-  if (outcome.startsWith("error:")) void reportError("server", new Error(`telegram update ${update.update_id}: ${outcome}`));
+  if (outcome.startsWith("error:")) await later(() => reportError("server", new Error(`telegram update ${update.update_id}: ${outcome}`)));
   return Response.json({ ok: true, outcome });
 }

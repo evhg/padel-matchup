@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { getDb } from "@/db";
 import type { OpContext } from "@/lib/api/operations";
 import { emitMatchEvent } from "@/lib/api/webhooks";
-import { reportError } from "@/lib/alerts";
+import { later, reportError } from "@/lib/alerts";
 import { discordEnabled, discordPublicKey, verifyInteraction, type DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
 
@@ -31,14 +31,14 @@ export async function POST(req: Request) {
     channel: "discord",
   };
   const handled = await handleInteraction(db, interaction, ctx);
-  if (handled.outcome.startsWith("error:")) void reportError("server", new Error(`discord interaction ${interaction.id}: ${handled.outcome}`));
+  if (handled.outcome.startsWith("error:")) await later(() => reportError("server", new Error(`discord interaction ${interaction.id}: ${handled.outcome}`)));
   if (handled.followUp) {
     const followUp = handled.followUp;
     after(async () => {
       try {
         await followUp();
       } catch (e) {
-        void reportError("server", e instanceof Error ? e : new Error(String(e)));
+        await reportError("server", e instanceof Error ? e : new Error(String(e)));
       }
     });
   }

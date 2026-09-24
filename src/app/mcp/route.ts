@@ -7,6 +7,7 @@ import { handleMcpPost, MCP_PROTOCOL_VERSIONS } from "@/lib/api/mcp";
 import type { OpContext } from "@/lib/api/operations";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { bumpMetric } from "@/lib/domain/metrics";
+import { later } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     const db = await getDb();
     const c = await caller(db, req);
     await guard(db, c, "mcp");
-    void bumpMetric(db, "mcp_calls").catch(() => undefined);
+    await later(() => bumpMetric(db, "mcp_calls"));
     const ctx: OpContext = {
       afterwards: (fn) => after(fn),
       emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "mcp" })),

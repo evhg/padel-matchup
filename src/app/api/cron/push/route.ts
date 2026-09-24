@@ -37,8 +37,8 @@ export async function GET(req: Request) {
   // "About an hour before" reminders on every card channel share this 5-minute tick; cards of matches that just started grow their Result button.
   const reminded: Record<string, number> = { telegram: 0, discord: 0 };
   for (const ch of channels()) {
-    reminded[ch.name] = await sendReminders(ch, db, now).catch((e) => {
-      void reportError("cron", e);
+    reminded[ch.name] = await sendReminders(ch, db, now).catch(async (e) => {
+      await reportError("cron", e);
       return 0;
     });
     if (ch.refreshStarted) await ch.refreshStarted(db, now).catch((e) => reportError("cron", e));
@@ -60,7 +60,7 @@ export async function GET(req: Request) {
     }
     coachTick.requestsExpired = await expireRequests(db, now);
   } catch (e) {
-    void reportError("cron", e, { path: "/api/cron/push" });
+    await reportError("cron", e, { path: "/api/cron/push" });
   }
   // The serious tournament: fifteen minutes before a match, both pairs hear the court.
   try {
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
       if (row) await tellMatchSoon(db, due.competition, row).catch(() => undefined);
     }
   } catch (e) {
-    void reportError("cron", e, { path: "/api/cron/push" });
+    await reportError("cron", e, { path: "/api/cron/push" });
   }
   if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram, discord, coach: coachTick });
 

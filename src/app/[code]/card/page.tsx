@@ -12,6 +12,7 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { bumpMetric } from "@/lib/domain/metrics";
+import { later } from "@/lib/alerts";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { taggedUrl } from "@/lib/source";
@@ -49,7 +50,7 @@ export default async function CardPage({ params }: Props) {
   const participant = Boolean(me && (ev.creatorPlayerId === me.id || isSeated({ roster: detail.roster }, me.id)));
   const nameOf = (s: (typeof detail.roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
   // One count per render: the funnel's last step.
-  void bumpMetric(db, "card_views").catch(() => undefined);
+  await later(() => bumpMetric(db, "card_views"));
   let line: string;
   let praise: string | null = null;
   if (ev.type === "match") {
