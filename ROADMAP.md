@@ -174,7 +174,12 @@ Everything in this list is live. The README describes each in detail.
   never one player on two courts across categories, played matches keeping their slot. Every player
   hears their own list on the channel they have; a match moved by the organiser tells both pairs;
   fifteen minutes before a match, both pairs hear the court (the five-minute push job). The order of
-  play, by day and time with the court, is on the page for the desk and the players.
+  play, by day and time with the court, is on the page for the desk and the players. On a weekend of
+  more than one day, the groups and the qualifying play first and the knockout after them, main draw
+  and consolation, starts on the last day (24 September 2026; before, the final fell on Saturday at
+  18:00). A knockout-only category fills from the first day, and the line gives way when the last
+  day has no room for the knockout. A match that finds no room is counted, and the organiser reads
+  how many under the button.
 
 - **The serious tournament, step 4: live.** The club's screen (`/t/<slug>/tv`): each court's match
   now and next in big type, the latest results, the champions, asked again every thirty seconds.
@@ -642,12 +647,9 @@ the player, and invite them to try it.
    `docs/OPERATING.md` under "Security at a hundred real players". What can hold until then is held
    by `tests/security.test.ts`: every operator route checks the token first, and `kicksmash` can use
    every table.
-2. **The knockout on the last day.** A two-day tournament puts every match on the first day, the
-   final at 18:00 included; organisers play the groups on Saturday and the knockout on Sunday. The
-   scheduler takes a "not before" per match easily; the choice needs one column on `competitions`.
-3. **Match times for a player with no channel.** A player who entered on the web without Telegram or
+2. **Match times for a player with no channel.** A player who entered on the web without Telegram or
    an email hears nothing about their court and time; "Your matches" should offer the channel.
-4. **The desk's order after entries close.** The draw's settings sit under every pair; once entries
+3. **The desk's order after entries close.** The draw's settings sit under every pair; once entries
    close they belong above them.
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).

@@ -2165,6 +2165,7 @@
     "tvOver": "That's the tournament. Thank you for playing.",
     "scoreYouWin": "You win.",
     "scoreYouLose": "{name} win, you lose.",
+    "scheduleUnplaced": "{count, plural, one {# match found no room} other {# matches found no room}}. Add a court or a longer day, then make the schedule again.",
     "strip": {
       "title": "How a weekend runs",
       "entries": "Entries",

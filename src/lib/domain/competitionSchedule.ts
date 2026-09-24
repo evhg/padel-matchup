@@ -2,7 +2,8 @@ import { and, asc, eq, inArray, isNotNull, isNull, lte, gt, ne } from "drizzle-o
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { competitionCategories, competitionMatches, competitionPairs, competitions, players, type Competition, type CompetitionCategory, type CompetitionMatch } from "@/db/schema";
-import { schedule, type DayWindow, type ScheduleMatch, type Slot } from "./courtSchedule";
+import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
+import { scheduleWeekend, type DayWindow, type Schedule, type ScheduleMatch } from "./courtSchedule";
 import { isOrganizer } from "./competitions";
 import { SCORING, scoringOfMatch } from "./draw";
 import { DomainError } from "./errors";
@@ -47,13 +48,33 @@ export function daysOf(c: Pick<Competition, "startsOn" | "endsOn" | "dayStart" |
   return out;
 }
 
+/**
+ * Whether `now` is one of the days of play where the competition is played: the public page then
+ * asks again every minute. The page used to take yesterday's date in UTC, so it stayed still all
+ * of the first day and refreshed all of the day after the last.
+ */
+export function isDayOfPlay(c: Pick<Competition, "startsOn" | "endsOn" | "tz">, now = new Date()): boolean {
+  const today = utcToZonedParts(now, c.tz).date;
+  return c.startsOn <= today && today <= c.endsOn;
+}
+
+/** Where the knockout of a longer weekend starts: the last day's first minute of play. One day of play has no such line. */
+export function knockoutFrom(c: Pick<Competition, "startsOn" | "endsOn" | "dayStart" | "dayEnd" | "tz">): Date | null {
+  const days = daysOf(c);
+  if (days.length < 2) return null;
+  const last = days[days.length - 1];
+  return zonedTimeToUtc(last.date, last.start, c.tz);
+}
+
 const isOver = (m: CompetitionMatch) => m.status === "done" || m.status === "walkover";
 
 /**
  * Every match of every drawn category gets a court and a time, played ones keeping theirs. The
- * whole competition at once, so a player in two categories is never on two courts together.
+ * whole competition at once, so a player in two categories is never on two courts together. On
+ * more than one day the knockout after groups or a qualifying waits for the last one, unless that
+ * costs a match (`scheduleWeekend`); what fits nowhere comes back as `unplaced`.
  */
-export async function scheduleCompetition(db: Db, input: { competitionId: string; organizerPlayerId: string; now?: Date }): Promise<{ slots: Slot[]; matches: CompetitionMatch[] }> {
+export async function scheduleCompetition(db: Db, input: { competitionId: string; organizerPlayerId: string; now?: Date }): Promise<Schedule & { matches: CompetitionMatch[] }> {
   const c = await own(db, input.competitionId, input.organizerPlayerId);
   if (!c.courtNames || c.courtNames.length === 0) throw new DomainError("invalid", "courts");
   const categories = await db
@@ -91,7 +112,7 @@ export async function scheduleCompetition(db: Db, input: { competitionId: string
       minutes: SCORING[scoringOfMatch(m, rounds.get(m.categoryId) ?? 0, byCategory.get(m.categoryId)!)].minutes,
       fixed: isOver(m) && m.scheduledAt && m.courtName ? { courtName: m.courtName, startsAt: m.scheduledAt } : null,
     }));
-  const slots = schedule({ matches: input2, courts: c.courtNames, days: daysOf(c), tz: c.tz, playersOf });
+  const { slots, unplaced } = scheduleWeekend({ matches: input2, courts: c.courtNames, days: daysOf(c), tz: c.tz, playersOf }, knockoutFrom(c));
   for (const s of slots) {
     await db
       .update(competitionMatches)
@@ -99,7 +120,7 @@ export async function scheduleCompetition(db: Db, input: { competitionId: string
       .where(and(eq(competitionMatches.id, s.id), inArray(competitionMatches.status, ["pending", "scheduled"])));
   }
   await bumpMetric(db, "schedule_made");
-  return { slots, matches: await db.select().from(competitionMatches).where(eq(competitionMatches.competitionId, c.id)) };
+  return { slots, unplaced, matches: await db.select().from(competitionMatches).where(eq(competitionMatches.competitionId, c.id)) };
 }
 
 /** One match to another court or time, by the organiser; the reminder is armed again. */
