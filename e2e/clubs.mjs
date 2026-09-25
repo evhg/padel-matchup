@@ -1,6 +1,6 @@
 // Clubs: the claim in the browser, the owner's approval through the Telegram callback, the club page,
 // the city page, the public API and My matches.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, finish, iphone, launch, lessonDay, makeCheck, shot } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 /** Every email the build wrote instead of sending, oldest first. */
 const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -315,6 +315,16 @@ try {
   check("the API's default still means clubs that run their own page", !slugs(claimedOnly).includes("padel-kreuzberg") && claimedOnly.include === "claimed", JSON.stringify(slugs(claimedOnly)));
   check("include=listed adds the club a player listed", slugs(withListed).includes("padel-kreuzberg"), JSON.stringify(slugs(withListed)).slice(0, 200));
   check("and every row says whether the club runs the page", (withListed.clubs ?? []).find((c) => c.slug === "padel-kreuzberg")?.claimed === false && (withListed.clubs ?? []).every((c) => typeof c.claimed === "boolean"));
+
+  // A free court offered to a player who asked for that hour (`offerFreeCourts`) opens the match form
+  // at the club, on the day, at the hour, in the club's zone. This phone is in Madrid: without the
+  // zone from the link, the form would read 14:00 as Madrid's hour, not the club's.
+  const courtPage = await (await browser.newContext(iphone)).newPage();
+  const courtDay = lessonDay().date;
+  await courtPage.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}&date=${courtDay}&time=14:00&tz=Asia%2FBangkok`);
+  await courtPage.waitForLoadState("networkidle");
+  const prefilled = [await courtPage.locator('input[type="date"]').inputValue(), await courtPage.locator('input[type="time"]').inputValue(), await courtPage.getByRole("button", { name: "Asia/Bangkok" }).count()];
+  check("a free court's link fills the day, the hour and the club's zone", JSON.stringify(prefilled) === JSON.stringify([courtDay, "14:00", 1]), JSON.stringify(prefilled));
 } finally {
   await browser.close();
 }

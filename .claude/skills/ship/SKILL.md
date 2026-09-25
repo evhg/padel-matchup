@@ -431,6 +431,13 @@ Wall clock first, credits second. What actually moved it, measured:
   `coach_openings` costs one more indexed read and cannot corrupt a query that predates it. Add the
   column when the existing queries already want both kinds; add the table when they mean the opposite.
 
+- **A write over a shared row must know how to give it back.** `claimClub` wrote `source: "claim"`
+  over the directory's Warehaus row, and the refusal only set `rejected_at`, so one test claim took
+  the busiest club off `/clubs`, the city page, the picker and the claim form for five days. Worse,
+  `listedClub` ignores refused rows, so a tournament typed "WAREHAUS.club" that afternoon landed on a
+  second slug, `warehaus-club`. When a state change hides a row, grep what keys on that row (slug
+  lookups, pickers, the import guard) and decide what the undo restores; `relist` in `decideClub`
+  restores from `data/clubs.json`, and a test holds it to the import script's own statement.
 - **A new status value has two sides, and only one of them checks the status.** `left` closed the web
   door for a player who removes a coach, but the coach's Telegram assistant still recognised the name,
   and `bookLesson` with `byCoach: true` skips the student-status check on purpose — so the coach could

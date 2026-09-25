@@ -4,7 +4,7 @@ import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
-import { clubs, coaches, events, venues, type Club } from "@/db/schema";
+import { clubCourts, clubs, clubSlots, coaches, events, venues, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, cityInText, venueInCity } from "./cities";
@@ -15,6 +15,7 @@ import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { courtNamesBySlug } from "./courts";
 import { isValidVenueSlug, venueSlug } from "./venueBoard";
+import type { DirectoryListing } from "./directory";
 
 /**
  * Clubs: a venue page a club has claimed. The claim is self-serve; the owner
@@ -440,14 +441,84 @@ export const CLAIM_REASONS = ["unconfirmed", "taken", "not_a_club", "duplicate"]
 export type ClaimReason = (typeof CLAIM_REASONS)[number];
 export const isClaimReason = (v: unknown): v is ClaimReason => typeof v === "string" && (CLAIM_REASONS as readonly string[]).includes(v);
 
+/**
+ * The refusals that are about the page rather than the person: no padel club goes by this name, or
+ * the club already has a page under another one. Every other refusal says the claimant is not the
+ * club, and the club is still there.
+ */
+export const UNLISTING_REASONS: readonly ClaimReason[] = ["not_a_club", "duplicate"];
+
+/**
+ * The directory's listing that a claim was made on, or null: the claim made its own row, or the
+ * directory never listed this club. `created_at` before `claimed_at` is what says the row was there
+ * first; a claim that makes its row writes both in the same moment.
+ */
+async function listingUnderClaim(club: Club): Promise<DirectoryListing | null> {
+  if (club.source !== "claim" || club.createdAt.getTime() >= club.claimedAt.getTime()) return null;
+  // Loaded here and nowhere else: the directory file is 23 kB that no page needs to read.
+  const { directoryListing } = await import("./directory");
+  return directoryListing(club.slug);
+}
+
+/**
+ * Everything a claim may have written that a directory row does not have. The listing's own facts come
+ * from the directory; these go back to nothing, whoever typed them.
+ */
+const UNCLAIMED = {
+  mapUrl: null,
+  bookingUrl: null,
+  bookingPlatform: null,
+  opensAt: null,
+  closesAt: null,
+  availabilityUrl: null,
+  availabilityKind: null,
+  availability: null,
+  availabilityAt: null,
+  source: "directory",
+  claimedBy: null,
+  claimRole: null,
+  claimContact: null,
+  claimVerifiedAt: null,
+  approvedAt: null,
+  rejectedAt: null,
+  claimDecision: null,
+  founding: false,
+  notifyMessageId: null,
+  wrapSentFor: null,
+} as const;
+
+/**
+ * A refused claim hands the listing back. The claim wrote `source: "claim"` over the directory's row
+ * and the refusal then hid it, so a club lost its page because somebody who was not the club asked
+ * for it: on 20 September 2026 a test claim took WAREHAUS.club, the court with the most matches in
+ * the app, off every list. Nothing the claimant typed stays (a link on a club page is the thing the
+ * owner's tap guards against), the courts and the week the claim set go with it, and the manage link
+ * is new, because the old one belongs to the claim.
+ */
+async function relist(db: Db, club: Club, listing: DirectoryListing, now: Date): Promise<Club> {
+  return db.transaction(async (tx) => {
+    await tx.delete(clubCourts).where(eq(clubCourts.clubSlug, club.slug));
+    await tx.delete(clubSlots).where(eq(clubSlots.clubSlug, club.slug));
+    const [row] = await tx
+      .update(clubs)
+      .set({ ...listing, ...UNCLAIMED, claimedAt: club.createdAt, manageToken: newToken(), updatedAt: now })
+      .where(eq(clubs.slug, club.slug))
+      .returning();
+    return row;
+  });
+}
+
 /** The owner's tap. Approval makes the page live and hands out the founding badge while the city has room. */
 export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date(), reason?: ClaimReason | null): Promise<Club | null> {
   const club = await getClub(db, slug);
   if (!club) return null;
   if (!approve) {
+    const why = isClaimReason(reason) ? reason : null;
+    const listing = why && UNLISTING_REASONS.includes(why) ? null : await listingUnderClaim(club);
+    if (listing) return relist(db, club, listing, now);
     const [row] = await db
       .update(clubs)
-      .set({ rejectedAt: now, approvedAt: null, founding: false, claimDecision: isClaimReason(reason) ? reason : null, updatedAt: now })
+      .set({ rejectedAt: now, approvedAt: null, founding: false, claimDecision: why, updatedAt: now })
       .where(eq(clubs.slug, slug))
       .returning();
     return row;

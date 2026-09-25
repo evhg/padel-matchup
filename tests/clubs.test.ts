@@ -257,6 +257,22 @@ describe("clubs (db)", () => {
     const [row] = await db.select().from(clubs).where(eq(clubs.slug, slugs[0]));
     expect(row.city).toBe("singapore");
   });
+
+  it("tells the claimant when a refusal hands a listed club back, though the row no longer names them", async () => {
+    // A directory row, listed days before anybody claimed it (production's times for WAREHAUS.club).
+    const listedAt = new Date("2026-09-16T02:21:17.265Z");
+    await db.insert(clubs).values({ slug: "warehaus", name: "WAREHAUS.club", source: "directory", manageToken: "tok-warehaus-directory", country: "TH", province: "Phuket", city: "phuket", tz: "Asia/Bangkok", about: "WAREHAUS.club, Cherngtalay, Thalang.", createdAt: listedAt, claimedAt: listedAt });
+    const erik = await makePlayer(db, "Erik", { telegramId: 5151 });
+    const claim = await claimClub(db, { name: "Warehaus", playerId: erik.id, tz: "Asia/Bangkok", courts: 5 });
+    calls = [];
+    const owner = { id: "c3", from: { id: 4242, first_name: "Owner" }, message: { message_id: 78, date: 0, chat: { id: 4242, type: "private" as const } } };
+    expect(await handleTelegramUpdate(db, { update_id: 3, callback_query: { ...owner, data: `cr:${claim.manageToken}:u` } }, NO_SIDE_EFFECTS)).toBe("club:rejected");
+    // The owner reads that the page is still up; the claimant hears the refusal where they are.
+    expect(String(calls.find((c) => c.url.includes("answerCallbackQuery"))?.body?.text)).toContain("listed again");
+    expect(String(calls.find((c) => c.url.includes("sendMessage") && c.body?.chat_id === 5151)?.body?.text)).toContain("the claim was not approved");
+    const back = (await getClub(db, "warehaus"))!;
+    expect([back.source, back.claimedBy, back.courts]).toEqual(["directory", null, null]);
+  });
 });
 
 /** A club anywhere, and the claim's check: what the row keeps, what a work email proves, what a phone number does not. */

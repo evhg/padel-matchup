@@ -16,7 +16,10 @@
     "none": "Todavía no has dicho cuándo quieres jugar.",
     "unknownPlace": "Esa pista aún no nos suena. Prueba con la ciudad.",
     "tooMany": "Diez es el máximo a la vez. Quita una primero.",
-    "at": "en"
+    "at": "en",
+    "courtTitle": "Hay una pista libre en {club} hoy a las {time}",
+    "courtBody": "Dijiste que querías jugar sobre esta hora en {club}. Reserva la pista con el club, crea el partido aquí y comparte el enlace. Para dejar de recibirlos, quita la petición en tu página.",
+    "courtButton": "Crear el partido"
   },
   "common": {
     "appName": "Kicksmash",
