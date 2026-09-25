@@ -152,9 +152,21 @@ describe("what a player wants", () => {
     await recordWant(db, { playerId: asked.id, venueSlug: ev.venueSlug, weekday: 2, fromTime: "13:00", toTime: "15:00" }, NOW);
     // Nobody is in the crew and nobody is a regular here, so this player is in the list only because
     // they said they wanted exactly this — which is the point of the whole table.
-    const audience = await refillAudience(db, ev, NOW);
+    const audience = await refillAudience(db, ev, NOW, { telegram: false, email: false, push: true });
     expect(audience.map((p) => p.id)).toContain(asked.id);
     expect(audience[0].id).toBe(asked.id);
+  });
+
+  it("keeps a private match's seat from somebody who only asked for the hour: they are a stranger to it", async () => {
+    const { refillAudience } = await import("@/lib/domain/refill");
+    const org = await makePlayer(db, "Organiser H");
+    const asked = await withPush("Asked, a stranger");
+    const ev = await aMatch(org);
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    await recordWant(db, { playerId: asked.id, venueSlug: ev.venueSlug, weekday: 2, fromTime: "13:00", toTime: "15:00" }, NOW);
+    // The want matches: the private match only never hands it the seat.
+    expect((await matchingWants(db, ev, NOW)).some((w) => w.playerId === asked.id)).toBe(true);
+    expect(await refillAudience(db, ev, NOW, { telegram: false, email: false, push: true })).toEqual([]);
   });
 
   it("does not tell somebody it has no way to reach", async () => {

@@ -47,6 +47,8 @@ try {
   await shot(olga, "g1-group");
   check("group page: named as typed, 2 members, admin chip", (await olga.getByRole("heading", { name: "Club Nine" }).count()) === 1 && (await olga.getByText("2 members").count()) > 0 && (await olga.getByText("Admin").count()) === 1);
   check("the original match is listed as upcoming", (await olga.locator("a[href='/" + code + "']").count()) >= 1);
+  // Rule 3: the season table waits for the crew's second scored match; a new crew has none.
+  check("no season table before any result", (await olga.getByTestId("crew-season").count()) === 0);
   await olga.goto(`${BASE}/${code}`);
   check("match now shows its group", (await olga.getByText("Part of Club Nine").count()) === 1 && (await olga.getByRole("button", { name: /Turn this crew/ }).count()) === 0);
 

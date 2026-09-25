@@ -79,3 +79,9 @@ export const REFILL_WINDOW_MS = 48 * 60 * 60 * 1000;
 export const REFILL_MIN_NOTICE_MS = 90 * 60 * 1000;
 /** How many people one freed spot may reach. Filling a court is not running a mailing list. */
 export const REFILL_FANOUT_MAX = 40;
+/**
+ * Of those, how many may go by email. Resend's free tier sends a hundred emails a day
+ * (docs/OPERATING.md), and one freed spot must not spend a tenth of it. The bot and push cost
+ * nothing, so they keep the whole cap; past this, somebody who has only an address is not told.
+ */
+export const REFILL_EMAIL_MAX = 10;

@@ -596,6 +596,25 @@ Everything in this list is live. The README describes each in detail.
   no want hears about the same court twice, and it hears about one court a day; one hourly run sends
   at most twenty. No table and no column. No club in production shares a feed on 25 September, so nobody hears anything until one
   does; one want is waiting, at Warehaus.
+- **The free spot goes to past partners (25 September 2026).** The owner: "the fourth spot offered
+  to past partners and to players who want that time". On 24 September ten of thirteen past matches
+  never got past one or two players, and every match that filled was scored, so a match is lost at
+  filling. The refill notice had reached nobody at all: it went only to a crew or a club's regulars,
+  and only by push, which one player in 46 has. Now the people who played a finished match with
+  somebody in the match in the last 60 days hear too, and a private match with no crew reaches them
+  and nobody else. Each person hears once, on the channel they have: a private Telegram message
+  whose ✅ is the card's own one-tap join, else an email with the match link, else a push. The
+  window (90 minutes to 48 hours), the cap of 40, the level range and one notice per match stay as
+  they were. At most ten of the 40 go by email (`REFILL_EMAIL_MAX`), because Resend's free tier sends
+  a hundred a day. The hourly sweep now also finds a match that enters the window with a spot nobody ever
+  took. `docs/DECIDING.md` rule 5 names the one private message. In production today the past
+  partners a channel reaches are one to four per match.
+- **A season table for each crew (25 September 2026).** The owner asked for "a small season table
+  for each crew". Under the crew's matches, once it has two scored matches in the last 90 days: each
+  member who played, by first name, with played, won and wins in a row, 🔥 from three, most wins
+  first. It counts a match with a score and both pairs set. One bounded read,
+  and a crew with fewer than two matches behind it never makes it. Production's one crew has one
+  scored match, so nobody sees the table yet.
 
 ## The finish line
 

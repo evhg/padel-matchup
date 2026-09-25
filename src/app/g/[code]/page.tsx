@@ -11,6 +11,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidInviteCode } from "@/lib/codes";
 import { baseUrl, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { crewSeasonSeats, SEASON_HOT_STREAK, SEASON_MIN_MATCHES, seasonTable } from "@/lib/domain/crewSeason";
 import { getGroupByCode, getGroupDetail } from "@/lib/domain/groups";
 import { hasRange } from "@/lib/domain/levels";
 import { venueWithCourt } from "@/lib/labels";
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + i))));
 
-/** A crew's home: members, the next matches, one button to create the next one. Anyone with the link can join. */
+/** A crew's home: members, the next matches, one button to create the next one, and under the matches the season once two results are in. Anyone with the link can join. */
 export default async function GroupPage({ params }: Props) {
   const { code } = await params;
   if (!isValidInviteCode(code)) notFound();
@@ -45,6 +46,13 @@ export default async function GroupPage({ params }: Props) {
   const venue = venueWithCourt(group, labelOpts);
   const levelChip = rangeChip(t, { min: group.levelMin, max: group.levelMax });
   const repeats = group.recurDow != null && group.recurTime ? t("group.every", { day: weekdays[group.recurDow], time: group.recurTime }) : t("group.none");
+  // The season table reads the crew's scored matches, and a crew with fewer than two matches behind
+  // it cannot have two scored ones: most crews never pay for the query (rule 12).
+  const now = new Date();
+  const season =
+    detail.past.filter((e) => e.status !== "cancelled").length >= SEASON_MIN_MATCHES
+      ? seasonTable(await crewSeasonSeats(db, group.id, now), detail.members.map((m) => ({ playerId: m.playerId, name: m.player.displayName })), now)
+      : null;
 
   const eventRow = (ev: (typeof detail.upcoming)[number]) => (
     <li key={ev.id}>
@@ -110,6 +118,38 @@ export default async function GroupPage({ params }: Props) {
             <p className="mt-4 text-sm text-muted">{t("group.memberOnly")}</p>
           )}
         </section>
+
+        {season && (
+          <section className="card" data-testid="crew-season">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="text-lg font-extrabold">{t("group.season")}</h2>
+              <span className="text-sm text-muted">{t("group.seasonWindow")}</span>
+            </div>
+            <table className="mt-3 w-full text-sm tabular-nums">
+              <thead>
+                <tr className="text-xs font-bold uppercase text-faint">
+                  <th className="w-full pb-1 text-left font-bold">
+                    <span className="sr-only">{t("group.members")}</span>
+                  </th>
+                  <th className="whitespace-nowrap pb-1 pl-4 text-right font-bold">{t("group.seasonPlayed")}</th>
+                  <th className="whitespace-nowrap pb-1 pl-4 text-right font-bold">{t("group.seasonWon")}</th>
+                  <th className="whitespace-nowrap pb-1 pl-4 text-right font-bold">{t("group.seasonStreak")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {season.map((line) => (
+                  <tr key={line.playerId} className="border-t border-line">
+                    <td className="max-w-0 truncate py-2 font-bold">{line.name}</td>
+                    <td className="py-2 pl-4 text-right">{line.played}</td>
+                    <td className="py-2 pl-4 text-right font-bold">{line.won}</td>
+                    <td className="whitespace-nowrap py-2 pl-4 text-right">{line.streak >= SEASON_HOT_STREAK ? `🔥 ${line.streak}` : line.streak}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-faint">{t("group.seasonHelp")}</p>
+          </section>
+        )}
 
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("group.members")}</h2>

@@ -19,14 +19,16 @@ import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { refillRecipients } from "@/lib/domain/refill";
 import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
 import { claimCourtOffer, COURT_OFFERS, courtOfferLink, courtOffersDue } from "@/lib/domain/courtOffers";
-import { telegramEnabled } from "@/lib/telegram/api";
 import { chatTicket } from "@/lib/telegram/identity";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
 import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
-import { tell } from "@/lib/coach/notify";
+import { channelFor, tell } from "@/lib/coach/notify";
+import { channelsOffered } from "@/lib/coach/reach";
+import { esc, miniAppUrl, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { botLocale, cardTitle, strings as botStrings, whenLine, whereLine } from "@/lib/telegram/card";
 import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
@@ -288,8 +290,7 @@ export async function notifyClubMatch(db: Db, club: { slug: string; name: string
  * one starts from the player: they said what they wanted, and the app is keeping its side of that.
  * Which is why the email says so in as many words, and says how to stop it.
  *
- * Push and email both, unlike the refill. A refill has hours of life in it; a want is about next
- * Tuesday, so an inbox is a perfectly good place for it.
+ * Push and email both: a want is about next Tuesday, so an inbox is a perfectly good place for it.
  */
 export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise<{ emails: number; pushes: number; told: number }> {
   const { players: people, signalIds } = await wantAudience(db, ev, now);
@@ -342,30 +343,54 @@ export async function offerFreeCourts(db: Db, now = new Date(), say: typeof tell
 }
 
 /**
- * A spot opened, and nobody was waiting for it. The crew and the club's regulars are the people who
- * would take it, and until now they were never told: the slot sat open until three players turned up
- * or the match quietly died.
+ * A spot opened, or was never taken, and nobody was waiting for it. The crew, the club's regulars and
+ * the people its players played with are the ones who would take it, and until now they were never
+ * told: the slot sat open until three players turned up or the match quietly died.
  *
- * Push only, and on purpose. This is a notice with a few hours of life in it, to people who chose to
- * receive notifications — an email about a spot tonight arrives after the court has gone. Who hears
- * it, and the once-ever rule, are decided in `refillRecipients`; this only carries the words.
+ * Each person hears once, on the channel they have (`channelFor`): in Telegram a private message whose
+ * ✅ is the same one-tap join the card carries, else an email with the match link, else a push. Who
+ * hears it, and the once-ever rule, are decided in `refillRecipients`; this only carries the words.
  */
-export async function notifyRefill(db: Db, eventId: string, now = new Date()): Promise<{ pushes: number; told: number }> {
-  if (!pushEnabled()) return { pushes: 0, told: 0 };
-  const found = await refillRecipients(db, eventId, now);
-  if (!found) return { pushes: 0, told: 0 };
+export async function notifyRefill(db: Db, eventId: string, now = new Date()): Promise<{ telegram: number; emails: number; pushes: number; told: number }> {
+  const sent = { telegram: 0, emails: 0, pushes: 0, told: 0 };
+  const reach = channelsOffered();
+  if (!reach.telegram && !reach.email && !reach.push) return sent;
+  const found = await refillRecipients(db, eventId, now, reach);
+  if (!found) return sent;
   const { event: ev, players: people } = found;
   const detail = await getEventDetail(db, ev);
-  let pushes = 0;
+  const seated = detail.roster.filter(isOccupied);
+  const left = detail.roster.filter(isClaimable).length;
   for (const p of people) {
+    const via = channelFor(p, reach);
+    if (via === "telegram" && p.telegramId) {
+      const locale = botLocale(p.locale);
+      const s = botStrings(locale);
+      // First names only (rule 7), and the public link: a forwarded message keeps its buttons.
+      const who = seated.map((x) => (x.player?.displayName ?? x.invitedName ?? "").trim().split(/\s+/)[0]).filter(Boolean).join(", ");
+      const text = s.refillOffer(cardTitle(detail, locale), whenLine(detail, locale), whereLine(detail, locale), who, s.spots(left));
+      const keyboard = { inline_keyboard: [[{ text: s.in, callback_data: `j:${ev.code}` }, { text: s.open, url: miniAppUrl(ev.code) ?? eventUrl(baseUrl(), ev.code) }]] };
+      const res = await sendMessage(p.telegramId, esc(text), { keyboard }).catch(() => null);
+      if (res?.ok) sent.telegram++;
+      continue;
+    }
     const c = await ctx(db, ev, p.locale, p, detail);
+    // The push's own two lines: the email is the same notice for somebody with no bot and no device.
+    const title = c.t("push.refillTitle", c.vars);
+    const body = c.t("push.refillBody", c.vars);
+    if (via === "email" && p.email) {
+      const { html, text } = layout({ heading: title, body, meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
+      if (await sendEmail({ to: p.email, subject: title, html, text }).catch(() => false)) sent.emails++;
+      continue;
+    }
     for (const sub of await subscriptionsFor(db, [p.id])) {
-      const r = await sendPush(sub, { title: c.t("push.refillTitle", c.vars), body: c.t("push.refillBody", c.vars), url: c.url, tag: `refill-${ev.code}` });
-      if (r === "sent") pushes++;
+      const r = await sendPush(sub, { title, body, url: c.url, tag: `refill-${ev.code}` });
+      if (r === "sent") sent.pushes++;
       if (r === "gone") await removePushSubscription(db, sub.endpoint);
     }
   }
-  return { pushes, told: people.length };
+  sent.told = people.length;
+  return sent;
 }
 
 /** Handles the fallout of a promotion: promoted player invite + creator notice. */

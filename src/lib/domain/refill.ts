@@ -1,7 +1,8 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, max, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { activity, events, groupMembers, players, pushSubscriptions, slots, type Event, type Player } from "@/db/schema";
-import { REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WINDOW_MS } from "@/lib/config";
+import { EVENT_DURATION_MS, REFILL_EMAIL_MAX, REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WINDOW_MS } from "@/lib/config";
 import { markWantsNotified, matchingWants } from "./demand";
 
 /**
@@ -18,13 +19,16 @@ import { markWantsNotified, matchingWants } from "./demand";
  *   - one notice per match, ever, claimed in the database before anything goes out;
  *   - only inside a window: far enough out that somebody can get there, close enough that the crew
  *     was not going to fill it themselves;
- *   - only to people who already belong to the match's world — its crew, or the club's regulars —
- *     never to a list of everyone;
- *   - only to people the match's level range admits, and who turned push on;
+ *   - only to people who already belong to the match's world — its crew, the club's regulars, or
+ *     the people its players played with in the last sixty days — never to a list of everyone;
+ *   - only to people the match's level range admits, and whom a channel reaches: the bot, an address
+ *     they did not mute, or a device with push on;
  *   - capped, hard (rule 12).
  *
- * A private match with no crew reaches nobody by design: there is no audience, so no notice is sent
- * and none is spent.
+ * A private match with no crew reaches its players' past partners and nobody else: they are the
+ * people who would take the fourth spot (the owner, 25 September 2026). On 24 September ten of
+ * thirteen past matches never got past one or two players, and every match that filled was scored:
+ * a match is lost at filling. Strangers still never hear about a private match.
  */
 
 /** What the decision needs, so the rule can be read and tested without a database. */
@@ -38,10 +42,19 @@ export function isRefillDue(ev: RefillJudgement, openSpots: number, now: Date): 
   return until >= REFILL_MIN_NOTICE_MS && until <= REFILL_WINDOW_MS;
 }
 
-/** A match reaches somebody when it has a crew, or when it is on a club's board for all to see. */
-export function hasRefillAudience(ev: Pick<Event, "groupId" | "publicListing" | "venueSlug">): boolean {
+/**
+ * A match reaches beyond its players' own partners when it has a crew, or when it is on a club's
+ * board for all to see. Without either it is private: only the people its players played with hear.
+ */
+export function reachesBeyondPartners(ev: Pick<Event, "groupId" | "publicListing" | "venueSlug">): boolean {
   return Boolean(ev.groupId) || (ev.publicListing && Boolean(ev.venueSlug));
 }
+
+/** The channels this deployment has (rule 4). The caller says which, because the domain reads no environment. */
+export type RefillReach = { telegram: boolean; email: boolean; push: boolean };
+
+/** What the notice needs about a person: who, the level the range asks about, the language, the channels. */
+export type RefillPerson = Pick<Player, "id" | "displayName" | "locale" | "level" | "telegramId" | "email" | "emailNotifications">;
 
 /** Roster seats nobody holds: empty, or a reserved invitation that was declined. */
 export async function openRosterSpots(db: Db, ev: Pick<Event, "id" | "capacity">): Promise<number> {
@@ -78,17 +91,61 @@ function admits(ev: Pick<Event, "levelMin" | "levelMax">, p: Pick<Player, "level
 const CANDIDATE_MAX = 200;
 /** How far back "plays at that club" reaches. Matches still to come count too: they are the same people. */
 const REGULAR_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+/** How far back "played with somebody in this match" reaches. Only finished matches count: a partner is somebody you played with. */
+export const PARTNER_WINDOW_MS = 60 * 24 * 60 * 60 * 1000;
+/** How many past partners one match reads, the freshest first. Four players' sixty days is rarely more than a few dozen people. */
+const PARTNER_MAX = 100;
+const SEATED = ["joined", "confirmed"] as const;
 
 /**
- * Who to tell, in the order they are told: the crew first, because a spot in their own match is
- * theirs before it is anyone's, then the club's regulars. Out: everybody already in the match, however
+ * The people the players now seated in this match played with: a finished, not cancelled match in the
+ * last sixty days, both in its line-up. The freshest partner first. One query, and every step of it
+ * walks an index: this match's seats, each of its players' seats (`slots_player_idx`), that match by
+ * its key, that match's seats. Only a match makes partners, and only a match looks for them: thirty
+ * people in one americano are not thirty partners.
+ */
+export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capacity">, now: Date): Promise<string[]> {
+  if (ev.type !== "match") return [];
+  const here = alias(slots, "here");
+  const mine = alias(slots, "mine");
+  const theirs = alias(slots, "theirs");
+  const since = new Date(now.getTime() - PARTNER_WINDOW_MS);
+  const finished = new Date(now.getTime() - EVENT_DURATION_MS);
+  const rows = await db
+    .select({ playerId: theirs.playerId })
+    .from(here)
+    .innerJoin(mine, and(eq(mine.playerId, here.playerId), ne(mine.eventId, here.eventId), inArray(mine.status, [...SEATED])))
+    .innerJoin(events, and(eq(events.id, mine.eventId), eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), lte(events.startsAt, finished), lte(mine.position, events.capacity)))
+    .innerJoin(theirs, and(eq(theirs.eventId, events.id), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity), isNotNull(theirs.playerId), ne(theirs.playerId, mine.playerId)))
+    .where(and(eq(here.eventId, ev.id), inArray(here.status, [...SEATED]), lte(here.position, ev.capacity), isNotNull(here.playerId)))
+    .groupBy(theirs.playerId)
+    .orderBy(desc(max(events.startsAt)))
+    .limit(PARTNER_MAX);
+  return rows.map((r) => r.playerId).filter((id): id is string => Boolean(id));
+}
+
+/**
+ * Whether a channel reaches this person on this deployment, in the order `channelFor` in
+ * `src/lib/coach/notify.ts` tries them: the bot, then an address they did not mute, then a device.
+ * The two must agree, or the cap is spent on somebody the sender then cannot reach.
+ */
+function channelOf(p: Pick<Player, "id" | "telegramId" | "email" | "emailNotifications">, reach: RefillReach, devices: Set<string>): "telegram" | "email" | "push" | null {
+  if (reach.telegram && p.telegramId) return "telegram";
+  if (reach.email && p.email && p.emailNotifications) return "email";
+  return reach.push && devices.has(p.id) ? "push" : null;
+}
+
+/**
+ * Who to tell, in the order they are told: whoever asked for this hour, the crew, because a spot in
+ * their own match is theirs before it is anyone's, the players' past partners, then the club's
+ * regulars. A private match skips the first and the last, who are strangers to it. Out: everybody already in the match, however
  * they got there — joined, waiting, invited, or declined, because a declined invitation is an answer;
  * the organiser, who is told about every departure by name; and whoever just left or was taken out,
  * because the seat on offer is the one they gave up.
  *
  * Queries run one after another on purpose: the pooler stalls on pipelined bursts (rule 8).
  */
-export async function refillAudience(db: Db, ev: Event, now: Date): Promise<Player[]> {
+export async function refillAudience(db: Db, ev: Event, now: Date, reach: RefillReach): Promise<RefillPerson[]> {
   const taken = await db
     .select({ playerId: slots.playerId })
     .from(slots)
@@ -117,13 +174,14 @@ export async function refillAudience(db: Db, ev: Event, now: Date): Promise<Play
   // Whoever asked for this hour at this place comes first. A standing want is the strongest signal
   // there is that somebody will take the seat — stronger than belonging to the crew, and far stronger
   // than having played at the club once in three months — and the fan-out is capped, so order decides
-  // who actually hears.
-  const wanted = await matchingWants(db, ev, now);
-  for (const w of wanted) add(w.playerId);
+  // who actually hears. A private match tells nobody who asked: they are strangers to it.
+  if (reachesBeyondPartners(ev)) for (const w of await matchingWants(db, ev, now)) add(w.playerId);
   if (ev.groupId) {
     const crew = await db.select({ playerId: groupMembers.playerId }).from(groupMembers).where(eq(groupMembers.groupId, ev.groupId));
     for (const m of crew) add(m.playerId);
   }
+  // The people its players played with lately. For a private match they are the whole audience.
+  for (const id of await pastPartners(db, ev, now)) add(id);
   if (ev.publicListing && ev.venueSlug) {
     const since = new Date(now.getTime() - REGULAR_WINDOW_MS);
     const regulars = await db
@@ -136,19 +194,28 @@ export async function refillAudience(db: Db, ev: Event, now: Date): Promise<Play
   }
   if (ordered.length === 0) return [];
 
-  // A notice with no channel is not a notice: only people who turned push on are candidates, so the
-  // cap below is spent on people who will actually see it.
-  const subscribed = await db.selectDistinct({ playerId: pushSubscriptions.playerId }).from(pushSubscriptions).where(inArray(pushSubscriptions.playerId, ordered));
-  const reachable = new Set(subscribed.map((r) => r.playerId));
-  const ids = ordered.filter((id) => reachable.has(id));
-  if (ids.length === 0) return [];
-
-  const rows = await db.select().from(players).where(inArray(players.id, ids));
+  // A notice with no channel is not a notice: only people a channel reaches are candidates, so the
+  // cap below is spent on people who will actually see it. Up to two hundred candidates are read, so
+  // only the columns the decision and the notice need, never the whole row.
+  const rows = await db
+    .select({ id: players.id, displayName: players.displayName, locale: players.locale, level: players.level, telegramId: players.telegramId, email: players.email, emailNotifications: players.emailNotifications })
+    .from(players)
+    .where(inArray(players.id, ordered));
+  const devices = new Set<string>();
+  if (reach.push) {
+    const subscribed = await db.selectDistinct({ playerId: pushSubscriptions.playerId }).from(pushSubscriptions).where(inArray(pushSubscriptions.playerId, ordered));
+    for (const r of subscribed) devices.add(r.playerId);
+  }
   const byId = new Map(rows.map((p) => [p.id, p]));
-  const out: Player[] = [];
-  for (const id of ids) {
+  const out: RefillPerson[] = [];
+  let emails = 0;
+  for (const id of ordered) {
     const p = byId.get(id);
-    if (p && admits(ev, p)) out.push(p);
+    const via = p && admits(ev, p) ? channelOf(p, reach, devices) : null;
+    if (!p || !via) continue;
+    // Email is the one channel here a free tier counts (REFILL_EMAIL_MAX).
+    if (via === "email" && emails++ >= REFILL_EMAIL_MAX) continue;
+    out.push(p);
     if (out.length === REFILL_FANOUT_MAX) break;
   }
   return out;
@@ -158,24 +225,26 @@ export async function refillAudience(db: Db, ev: Event, now: Date): Promise<Play
  * The whole decision in one call: is this spot worth telling anyone about, who, and is this notice
  * ours to send. Returns null when the answer is no, so the sender has nothing to decide.
  */
-export async function refillRecipients(db: Db, eventId: string, now: Date): Promise<{ event: Event; players: Player[] } | null> {
+export async function refillRecipients(db: Db, eventId: string, now: Date, reach: RefillReach): Promise<{ event: Event; players: RefillPerson[] } | null> {
   const [ev] = await db.select().from(events).where(eq(events.id, eventId));
-  if (!ev || !hasRefillAudience(ev)) return null;
+  if (!ev) return null;
   if (!isRefillDue(ev, await openRosterSpots(db, ev), now)) return null;
-  const people = await refillAudience(db, ev, now);
+  const people = await refillAudience(db, ev, now, reach);
   if (people.length === 0) return null;
   // Claimed last: a match nobody can be told about keeps its notice for a tick when somebody can be.
   if (!(await claimRefillNotice(db, ev.id, now))) return null;
   // A want answered by this push has had its answer. Without this the hourly sweep would find the
   // same people again and tell them about the same match a second time.
   const told = new Set(people.map((p) => p.id));
-  await markWantsNotified(db, (await matchingWants(db, ev, now)).filter((w) => told.has(w.playerId)).map((w) => w.id), now);
+  if (reachesBeyondPartners(ev)) await markWantsNotified(db, (await matchingWants(db, ev, now)).filter((w) => told.has(w.playerId)).map((w) => w.id), now);
   return { event: ev, players: people };
 }
 
 /**
  * The hourly sweep. A spot opens by more paths than a person tapping "leave" — an organiser removes
- * somebody, an invitation is declined, a tournament shrinks — and this catches every one of them.
+ * somebody, an invitation is declined, a tournament shrinks — and this catches every one of them. It
+ * also catches the commonest open spot of all: the one nobody ever took, in a match that enters the
+ * window with one or two players in it.
  */
 export async function findRefillsDue(db: Db, now: Date): Promise<Event[]> {
   const from = new Date(now.getTime() + REFILL_MIN_NOTICE_MS);
@@ -190,7 +259,12 @@ export async function findRefillsDue(db: Db, now: Date): Promise<Event[]> {
         isNull(events.refillNoticeAt),
         gte(events.startsAt, from),
         lte(events.startsAt, to),
-        or(isNotNull(events.groupId), and(eq(events.publicListing, true), isNotNull(events.venueSlug))),
+        or(
+          isNotNull(events.groupId),
+          and(eq(events.publicListing, true), isNotNull(events.venueSlug)),
+          // A private match reaches its players' past partners, so it has an audience only once somebody sits in it.
+          and(eq(events.type, "match"), sql`exists (select 1 from ${slots} p where p.event_id = ${events.id} and p.player_id is not null and p.status in ('joined', 'confirmed'))`),
+        ),
       ),
     )
     .groupBy(events.id)
