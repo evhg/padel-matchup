@@ -8,6 +8,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { zonedTimeToUtc } from "@/lib/dates";
+import { setBanter } from "@/lib/domain/banter";
 import { cancelEvent, createEvent, duplicateEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { changePlayerEmail } from "@/lib/domain/identity";
@@ -229,6 +230,27 @@ export async function setCreatorEmailNotificationsAction(code: string, on: boole
     const { db, detail } = await requireCreator(code);
     await db.update(players).set({ emailNotifications: Boolean(on) }).where(eq(players.id, detail.event.creatorPlayerId));
     revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
+/**
+ * The organiser's one tap: banter on or off for every match they organise (`docs/DECIDING.md` rule 18).
+ * This match's card and its result picture in the players' chats follow at once, by an edit (rule 5);
+ * the organiser's other matches follow at their next change.
+ */
+export async function setBanterAction(code: string, on: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail } = await requireCreator(code);
+    await setBanter(db, detail.event.creatorPlayerId, Boolean(on));
+    after(async () => {
+      const { channels, syncCards } = await import("@/lib/channels");
+      for (const ch of channels()) await syncCards(ch, db, code).catch(() => 0);
+      const { closeScoreNudges } = await import("@/lib/afterMatch");
+      await closeScoreNudges(db, code).catch(() => 0);
+    });
+    revalidatePath(`/${code}`);
+    revalidatePath(`/${code}/card`);
     return null;
   });
 }

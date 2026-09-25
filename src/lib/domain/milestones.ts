@@ -4,6 +4,7 @@ import { events, milestones, players, slots, type Milestone, type Player } from 
 import { bandOf } from "@/lib/domain/levels";
 import { getPlayerEvents, type MyEvent } from "@/lib/domain/queries";
 import type { LevelChange } from "@/lib/domain/rating";
+import type { Outcome } from "@/lib/domain/scores";
 
 /**
  * Earned moments, and only those: a first win, the tenth and fiftieth match, three wins
@@ -16,6 +17,21 @@ export type MilestoneKind = "first_win" | "matches_10" | "matches_50" | "streak_
 export type Detected = { kind: MilestoneKind; value: string };
 
 const played = (past: MyEvent[]) => past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
+
+/**
+ * Wins in a row at the top of a player's history (newest first). Only decided matches count: a match
+ * without a score, a tournament and a draw are passed over, never a break. The moment "three wins in
+ * a row" and the banter line about a streak (`src/lib/domain/banter.ts`) both read it, so the two can
+ * never disagree about what a streak is.
+ */
+export function winStreak(outcomes: (Outcome | null)[]): number {
+  let n = 0;
+  for (const o of outcomes) {
+    if (o === "won") n++;
+    else if (o === "lost") break;
+  }
+  return n;
+}
 
 /** The moments this finished event earns for one player, given their whole history (newest first). */
 export function detectMilestones(playerId: string, eventId: string, past: MyEvent[], partnersByEvent: Map<string, string[]>, levelChange?: LevelChange | null): Detected[] {
@@ -31,7 +47,7 @@ export function detectMilestones(playerId: string, eventId: string, past: MyEven
   const count = upToHere.filter((m) => m.event.type === "match" ? m.outcome !== null : m.placement !== null || (m.event.standings?.length ?? 0) > 0).length;
   if (count === 10) out.push({ kind: "matches_10", value: "10" });
   if (count === 50) out.push({ kind: "matches_50", value: "50" });
-  if (thisOne.outcome === "won" && decided.length >= 3 && decided.slice(0, 3).every((m) => m.outcome === "won") && !(decided.length >= 4 && decided[3].outcome === "won")) out.push({ kind: "streak_3", value: "3" });
+  if (thisOne.outcome === "won" && winStreak(decided.map((m) => m.outcome)) === 3) out.push({ kind: "streak_3", value: "3" });
   const partners = new Set<string>();
   for (const m of upToHere) for (const p of partnersByEvent.get(m.event.id) ?? []) if (p !== playerId) partners.add(p);
   const partnersBefore = new Set<string>();

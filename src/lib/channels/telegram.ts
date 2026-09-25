@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import { events, telegramCards, telegramChats, telegramInlineCards, type TelegramCard, type TelegramChat } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
-import { editInlineMessageText, editMessageText, editOk, sendMessage, sendPhoto, telegramEnabled, type InlineKeyboard } from "@/lib/telegram/api";
+import { editInlineMessageText, editMessageText, editOk, esc, sendMessage, sendPhoto, telegramEnabled, type InlineKeyboard } from "@/lib/telegram/api";
 import { botLocale, renderCard, strings, type BotLocale } from "@/lib/telegram/card";
 import { syncCards } from "./cards";
 import type { Card, CardChannel, Room } from "./types";
@@ -55,6 +55,7 @@ export const telegramChannel: CardChannel<TelegramPayload, TelegramChat, Telegra
     let caption = summary.title;
     if (summary.score) caption += `\n${summary.score}`;
     if (summary.winners) caption += `\n${summary.winners}\n${summary.praise}`;
+    if (summary.banter) caption += `\n${esc(summary.banter)}`;
     if (summary.podium) caption += `\n${summary.podium}`;
     const keyboard: InlineKeyboard = { inline_keyboard: [[{ text: s.open, url: summary.url }], ...(summary.sameTimeCode ? [[{ text: s.sameTime, callback_data: `g:${summary.sameTimeCode}` }]] : [])] };
     const replyTo = typeof o.replyTo === "number" ? o.replyTo : null;

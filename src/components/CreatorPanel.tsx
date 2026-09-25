@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
-import { cancelEventAction, updateEventAction } from "@/actions/events";
+import { cancelEventAction, setBanterAction, updateEventAction } from "@/actions/events";
 import { EmailField } from "./EmailField";
 import { EventFields, type EventFormValues } from "./EventFields";
 import { CopyButton, ShareButtons } from "./ShareSheet";
@@ -14,6 +14,7 @@ export function CreatorPanel({
   venues,
   creatorEmail,
   creatorNotify,
+  banter: banterInitial,
   emailEnabled,
   manageUrl,
   isCancelled,
@@ -24,6 +25,8 @@ export function CreatorPanel({
   venues: VenueOption[];
   creatorEmail: string | null;
   creatorNotify: boolean;
+  /** Banter on the organiser's matches (`players.banter`): one tap turns it off, one turns it on again. */
+  banter: boolean;
   emailEnabled: boolean;
   manageUrl: string;
   isCancelled: boolean;
@@ -34,6 +37,15 @@ export function CreatorPanel({
   const [editOpen, setEditOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [banter, setBanter] = useState(banterInitial);
+  const toggleBanter = () => {
+    const next = !banter;
+    setBanter(next);
+    start(async () => {
+      const r = await setBanterAction(code, next);
+      if (!r.ok) setBanter(!next);
+    });
+  };
 
   const save = () =>
     start(async () => {
@@ -89,6 +101,26 @@ export function CreatorPanel({
       {emailEnabled && (
         <div className="mt-4 border-t border-line pt-4">
           <EmailField initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help={t("share.emailHelp")} emailEnabled={emailEnabled} notifyOn={creatorNotify} />
+        </div>
+      )}
+
+      {!isCancelled && (
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
+          <div className="min-w-0">
+            <div className="font-bold">{t("creator.banter")}</div>
+            <p className="text-sm text-muted">{t("creator.banterHelp")}</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={banter}
+            aria-label={t("creator.banter")}
+            onClick={toggleBanter}
+            data-testid="banter-switch"
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${banter ? "bg-ink" : "bg-line-strong"}`}
+          >
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${banter ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
         </div>
       )}
 

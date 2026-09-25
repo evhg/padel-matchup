@@ -31,6 +31,8 @@ export type ResultSummary = {
   /** The winners line and the praise line, localised, or null when the teams are unknown or it was a draw. */
   winners: string | null;
   praise: string | null;
+  /** The winners' streak as one banter line (`src/lib/domain/banter.ts`), or null: none, or the organiser switched banter off. */
+  banter: string | null;
   /** A tournament's top three, localised, or null for a match. */
   podium: string | null;
   url: string;

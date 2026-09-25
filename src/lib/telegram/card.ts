@@ -1,5 +1,6 @@
 import { calendarTitle } from "@/lib/calendar";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
@@ -554,6 +555,8 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
   const spotsLeft = Math.max(0, ev.capacity - occupied - seats.filter((x) => x.status === "invited").length);
   const status = cancelled ? `❌ <b>${s.cancelled}</b>` : past ? s.past : complete ? `<b>${s.complete}</b>` : spotsLeft > 0 ? `<b>${s.spots(spotsLeft)}</b>` : ev.whenFull === "waitlist" ? s.full : s.closed;
   lines.push(status);
+  // Banter: the late pull-out that opened this spot, while it is open (set by the card sync alone).
+  if (detail.lateExit && !cancelled && !past && spotsLeft > 0) lines.push(esc(lateExitLine(locale, ev.code, detail.lateExit)));
   const keyboard: InlineKeyboard =
     cancelled || past
       ? { inline_keyboard: resultOpen ? [[{ text: s.resultBtn, callback_data: `r:${ev.code}` }], [{ text: s.open, url }]] : [[{ text: s.open, url }]] }

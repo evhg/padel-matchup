@@ -326,7 +326,9 @@
     "inviteEmailedAgo": "Invite emailed {ago}",
     "sameContact": "Same {kind} as {name}. Use that name?",
     "emailBounced": "Email bounced",
-    "inviteBounced": "The invite email bounced. Send the invite link another way."
+    "inviteBounced": "The invite email bounced. Send the invite link another way.",
+    "banter": "Banter in the chat",
+    "banterHelp": "One playful line from your crew's own matches, like three wins in a row or a third late pull-out. Only in the crew's chat and on the result card, never on a public page."
   },
   "score": {
     "title": "Score",

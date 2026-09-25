@@ -1,0 +1,2 @@
+ALTER TABLE "players" ADD COLUMN "banter" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+CREATE INDEX "activity_left_idx" ON "activity" USING btree ("actor_player_id","created_at") WHERE "activity"."verb" = 'left';

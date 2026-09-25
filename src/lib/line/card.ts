@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
@@ -78,6 +79,8 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
         text(`${s.players} ${occupied}/${ev.capacity}`, { weight: "bold", margin: "md" }),
         ...lines.map((l) => text(l)),
         text(status, { weight: "bold", margin: "md" }),
+        // Banter: the late pull-out that opened this spot, while it is open (set by the card sync alone).
+        ...(detail.lateExit && !cancelled && !past && spotsLeft > 0 ? [text(lateExitLine(locale, ev.code, detail.lateExit), { color: "#5B6470" })] : []),
       ],
     },
     footer: { type: "box", layout: "vertical", spacing: "sm", contents: footer },

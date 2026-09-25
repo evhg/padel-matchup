@@ -8,6 +8,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { shortHost } from "@/lib/config";
 import { formatEventDay } from "@/lib/dates";
+import { plainLine, streakLine, winStreakFor } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { getEventPhoto, photoDataUrl } from "@/lib/domain/photos";
 import { getEventByCode } from "@/lib/domain/queries";
@@ -62,6 +63,8 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
   const nameOf = (s: (typeof roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
 
   let body: React.ReactNode;
+  // Banter: the winners' streak, one line at the foot, so it travels with the picture when it is forwarded.
+  let banter: string | null = null;
   const waiting = ev.type === "match" && detail.scores.length === 0;
   if (waiting) {
     const seated = roster.filter(isOccupied);
@@ -117,6 +120,8 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
         {row(rowB, "b")}
       </div>
     );
+    const streak = await winStreakFor(db, detail).catch(() => null);
+    if (streak) banter = plainLine(streakLine(locale, ev.code, streak));
   } else {
     const named = roster.filter((s) => isOccupied(s) || s.status === "invited");
     const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
@@ -176,9 +181,13 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
             <div style={{ fontSize: 26, color: muted, maxWidth: 700, overflow: "hidden", whiteSpace: "nowrap" }}>{`${title} · ${day} · ${venue}`}</div>
           </div>
           {body}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", background: onPhoto ? ACCENT : INK, color: onPhoto ? INK : "#fff", padding: "14px 26px", borderRadius: 999, fontSize: 28, fontWeight: 800 }}>{waiting ? t("card.waiting") : t("card.result")}</div>
-            <div style={{ fontSize: 26, color: muted }}>{`${t("card.poweredBy")} · ${host}`}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {/* Two lines at most, then an ellipsis: two long first names still leave the joke room. */}
+            {banter && <div style={{ display: "block", lineClamp: 2, maxWidth: 1040, fontSize: 30, fontWeight: 800, lineHeight: 1.25, letterSpacing: -0.5, color: ink }}>{banter}</div>}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", background: onPhoto ? ACCENT : INK, color: onPhoto ? INK : "#fff", padding: "14px 26px", borderRadius: 999, fontSize: 28, fontWeight: 800 }}>{waiting ? t("card.waiting") : t("card.result")}</div>
+              <div style={{ fontSize: 26, color: muted }}>{`${t("card.poweredBy")} · ${host}`}</div>
+            </div>
           </div>
         </div>
       </div>

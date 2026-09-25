@@ -326,7 +326,9 @@
     "inviteEmailedAgo": "Invitación enviada {ago}",
     "sameContact": "Mismo {kind} que {name}. ¿Usar ese nombre?",
     "emailBounced": "El correo rebota",
-    "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma."
+    "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma.",
+    "banter": "Bromas en el chat",
+    "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública."
   },
   "score": {
     "title": "Resultado",
