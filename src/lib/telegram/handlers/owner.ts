@@ -49,12 +49,16 @@ async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_que
     await answerCallbackQuery(cb.id, "Not found.");
     return "club:noop";
   }
-  const text = action === "ca" ? `✅ Live${row.founding ? " · founding club" : ""}: ${row.name}` : `❌ Not approved${reason ? ` (${reason.replace(/_/g, " ")})` : ""}: ${row.name}`;
+  // A refused claim on a club the directory listed puts the listing back (`decideClub`), and the owner
+  // should know the page is still up rather than guess.
+  const relisted = action === "cr" && row.source === "directory";
+  const text = action === "ca" ? `✅ Live${row.founding ? " · founding club" : ""}: ${row.name}` : `❌ Not approved${reason ? ` (${reason.replace(/_/g, " ")})` : ""}: ${row.name}${relisted ? " · listed again as the directory has it" : ""}`;
   await answerCallbackQuery(cb.id, text.slice(0, 190));
   // The claimant hears the answer where they are: Telegram, else email, else push. A claim that goes
   // quiet after the tap was the walk's finding.
-  // A club a player listed has no claimant: the person to tell is whoever put it on the map.
-  const tellId = row.claimedBy ?? row.addedBy;
+  // A club a player listed has no claimant: the person to tell is whoever put it on the map. The
+  // claimant is read from the row before the decision, because a listing handed back has none.
+  const tellId = club!.claimedBy ?? row.addedBy;
   const claimant = tellId ? await getPlayer(db, tellId) : null;
   // A refused claimant used to get one button to GitHub Discussions, where a club manager has no
   // account. The note that reaches the owner is a page on this site, so that is the button.

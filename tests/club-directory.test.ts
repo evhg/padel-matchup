@@ -1,11 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { eq } from "drizzle-orm";
-import { clubs } from "@/db/schema";
-import { claimClub, clubStatus, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
+import { eq, sql } from "drizzle-orm";
+import { clubCourts, clubs, clubSlots, type Club } from "@/db/schema";
+import { claimClub, clubStatus, decideClub, getClub, getClubByToken, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listPendingClubs, listShownClubs } from "@/lib/domain/clubs";
+import { addClubSlot } from "@/lib/domain/clubWeek";
+import { replaceCourts } from "@/lib/domain/courts";
+import { directoryListing } from "@/lib/domain/directory";
 import { venueSlug } from "@/lib/domain/venueBoard";
 import { createTestDb, makePlayer } from "./helpers/db";
 
@@ -152,5 +155,172 @@ describe("the club directory in the database", () => {
     await listed("z-sing", "Z Singapore", { country: "SG", province: "Singapore" });
     await listed("a-sing", "A Singapore", { country: "SG", province: "Singapore" });
     expect((await listClubsForPicking(db)).map((c) => c.slug)).toEqual(["a-sing", "z-sing", "b-thai", "a-thai"]);
+  });
+});
+
+/**
+ * Erik plays at Warehaus and claimed it once as a test, on 20 September 2026. The claim wrote
+ * `source: "claim"` over the directory's row and the refusal left it refused, so the court with the
+ * most matches in the app fell off `/clubs`, the Phuket page, the venue picker and the claim form.
+ *
+ * The rows here come from the import script's own statement, the way production's did, and the
+ * times are production's: listed on 16 September at 02:21 UTC, refused on the 20th at 09:45.
+ */
+describe("a refused claim on a club the directory listed", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  const LISTED_AT = new Date("2026-09-16T02:21:17.265Z");
+  const REFUSED_AT = new Date("2026-09-20T09:45:55.953Z");
+  const importSql = execFileSync("node", [root("scripts/import-clubs.mjs"), "--sql"], { encoding: "utf8" });
+  const migration = readFileSync(root(`drizzle/${readdirSync(root("drizzle")).find((f) => f.endsWith("_warehaus_listed_again.sql"))}`), "utf8");
+  const importDirectory = async () => {
+    await db.execute(sql.raw(importSql));
+    // The import writes both from the database's clock, in one statement; production's are the 16th.
+    await db.update(clubs).set({ createdAt: LISTED_AT, claimedAt: LISTED_AT });
+  };
+
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+  beforeEach(async () => {
+    await db.delete(clubs);
+    await importDirectory();
+  });
+
+  /** Every column but the two a hand-back renews: the manage link and the edit time. */
+  const facts = (c: Club) => {
+    const { manageToken, updatedAt, ...rest } = c;
+    void manageToken;
+    void updatedAt;
+    return rest;
+  };
+
+  /** Erik's claim, with everything a claimant can type, the courts by name and a week on top. */
+  const claimAsErik = async () => {
+    const erik = await makePlayer(db, "Erik");
+    const claimed = await claimClub(db, {
+      playerId: erik.id,
+      name: "Warehaus",
+      tz: "Asia/Bangkok",
+      place: "Cherngtalay",
+      website: "https://warehaus.example",
+      bookingUrl: "https://playtomic.io/warehaus",
+      mapUrl: "https://maps.example/warehaus",
+      courts: 5,
+      courtsIndoor: 5,
+      courtsOutdoor: "",
+      about: "",
+      opensAt: "07:00",
+      closesAt: "22:00",
+      availabilityUrl: "https://warehaus.example/free.json",
+      availabilityKind: "json_free",
+      claimRole: "owner",
+      claimContact: "erik@warehaus.example",
+    });
+    await replaceCourts(db, claimed.manageToken, [{ name: "Centre", kind: "indoor" }, { name: "Court 2", kind: "indoor" }]);
+    await addClubSlot(db, claimed.slug, { dow: 2, time: "18:00", type: "match" });
+    return claimed;
+  };
+
+  it("hands the listing back as the directory has it when the refusal is about the claimant", async () => {
+    const listed = (await getClub(db, "warehaus"))!;
+    expect(isClubListed(listed)).toBe(true);
+    const claimed = await claimAsErik();
+    // The claim is on the listing itself, not a second page, and it took the listing off the lists.
+    expect(claimed.slug).toBe("warehaus");
+    expect(claimed.courts).toBe(5);
+    expect(claimed.about).toBeNull();
+
+    const refused = (await decideClub(db, "warehaus", false, REFUSED_AT, "unconfirmed"))!;
+    // Every column is what the directory import wrote: the name, the place, the description the claim
+    // cleared, no courts because no source said, and nobody's claim, link or hours.
+    expect(facts(refused)).toEqual(facts(listed));
+    expect(refused.source).toBe("directory");
+    expect(refused.claimedBy).toBeNull();
+    expect(refused.about).toBe("WAREHAUS.club, Cherngtalay, Thalang.");
+    // The courts it named and the week it set were the claim's, and went with it.
+    expect(await db.select().from(clubCourts).where(eq(clubCourts.clubSlug, "warehaus"))).toEqual([]);
+    expect(await db.select().from(clubSlots).where(eq(clubSlots.clubSlug, "warehaus"))).toEqual([]);
+    // The refused claimant's manage link edits nothing any more.
+    expect(refused.manageToken).not.toBe(claimed.manageToken);
+    expect(await getClubByToken(db, claimed.manageToken)).toBeNull();
+    // Back on every list a player reads, and not a claim waiting for the owner.
+    expect(isClubListed(refused)).toBe(true);
+    expect((await listShownClubs(db, "phuket")).map((c) => c.slug)).toContain("warehaus");
+    expect((await listClubsForPicking(db)).map((c) => c.slug)).toContain("warehaus");
+    expect(await listPendingClubs(db)).toEqual([]);
+    // And the club's real owner can still claim it.
+    const owner = await makePlayer(db, "Nok");
+    expect((await claimClub(db, { playerId: owner.id, name: "WAREHAUS.club", tz: "Asia/Bangkok" })).claimedBy).toBe(owner.id);
+  });
+
+  it("does the same when the refusal gives no reason, as Erik's did", async () => {
+    await claimAsErik();
+    const refused = (await decideClub(db, "warehaus", false, REFUSED_AT))!;
+    expect(isClubListed(refused)).toBe(true);
+    expect(refused.courts).toBeNull();
+  });
+
+  it("keeps it off every list when the refusal says the page should not exist", async () => {
+    for (const reason of ["not_a_club", "duplicate"] as const) {
+      await claimAsErik();
+      const refused = (await decideClub(db, "warehaus", false, REFUSED_AT, reason))!;
+      expect(refused.claimDecision, reason).toBe(reason);
+      expect(isClubListed(refused), reason).toBe(false);
+      expect((await listShownClubs(db)).map((c) => c.slug), reason).not.toContain("warehaus");
+      expect((await listClubsForPicking(db)).map((c) => c.slug), reason).not.toContain("warehaus");
+      await db.delete(clubs);
+      await importDirectory();
+    }
+  });
+
+  it("leaves a refused claim refused when the claim made the row itself", async () => {
+    const ghost = await makePlayer(db, "Ghost");
+    const claimed = await claimClub(db, { playerId: ghost.id, name: "Ghost Courts", tz: "Asia/Bangkok", courts: 2 });
+    const refused = (await decideClub(db, claimed.slug, false, REFUSED_AT, "unconfirmed"))!;
+    expect(clubStatus(refused)).toBe("rejected");
+    expect(refused.manageToken).toBe(claimed.manageToken);
+    expect(isClubListed(refused)).toBe(false);
+    // Even under a slug the directory knows: on a database the directory never reached, the claim
+    // made the row, so there is no listing to hand back.
+    await db.delete(clubs);
+    const first = await claimClub(db, { playerId: ghost.id, name: "Warehaus", tz: "Asia/Bangkok", courts: 5 });
+    expect(first.slug).toBe("warehaus");
+    const alone = (await decideClub(db, "warehaus", false, REFUSED_AT, "unconfirmed"))!;
+    expect([clubStatus(alone), alone.source, alone.courts]).toEqual(["rejected", "claim", 5]);
+  });
+
+  it("reads the directory the way the import script writes it, club by club", async () => {
+    const rows = await db.select().from(clubs);
+    expect(rows).toHaveLength(file.clubs.length);
+    for (const r of rows) {
+      const { name, country, province, city, tz, courts, courtsIndoor, courtsOutdoor, website, about } = r;
+      expect({ name, country, province, city, tz, courts, courtsIndoor, courtsOutdoor, website, about }, r.slug).toEqual(directoryListing(r.slug));
+    }
+    expect(directoryListing("warehaus-club")).toBeNull();
+  });
+
+  it("repairs production's row with the migration exactly as a refusal now would", async () => {
+    const listed = (await getClub(db, "warehaus"))!;
+    const claimed = await claimAsErik();
+    // Refused the old way, which is how production holds it: the hour, and nothing handed back.
+    await db.update(clubs).set({ rejectedAt: REFUSED_AT, approvedAt: null, founding: false, notifyMessageId: 4242 }).where(eq(clubs.slug, "warehaus"));
+    for (const statement of migration.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
+    const repaired = (await getClub(db, "warehaus"))!;
+    expect(facts(repaired)).toEqual(facts(listed));
+    expect(repaired.manageToken).not.toBe(claimed.manageToken);
+    expect(repaired.manageToken).toMatch(/^[A-Za-z0-9_-]{16,40}$/);
+    expect(await db.select().from(clubCourts).where(eq(clubCourts.clubSlug, "warehaus"))).toEqual([]);
+    expect(await db.select().from(clubSlots).where(eq(clubSlots.clubSlug, "warehaus"))).toEqual([]);
+    expect(isClubListed(repaired)).toBe(true);
+  });
+
+  it("repairs nothing when the row is in any other state", async () => {
+    await claimAsErik();
+    const live = (await decideClub(db, "warehaus", true, REFUSED_AT))!;
+    for (const statement of migration.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
+    expect(await getClub(db, "warehaus")).toEqual(live);
+    expect(await db.select().from(clubCourts).where(eq(clubCourts.clubSlug, "warehaus"))).toHaveLength(2);
   });
 });

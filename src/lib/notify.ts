@@ -18,6 +18,9 @@ import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/d
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { refillRecipients } from "@/lib/domain/refill";
 import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
+import { claimCourtOffer, COURT_OFFERS, courtOfferLink, courtOffersDue } from "@/lib/domain/courtOffers";
+import { telegramEnabled } from "@/lib/telegram/api";
+import { chatTicket } from "@/lib/telegram/identity";
 import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
@@ -313,6 +316,29 @@ export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise
   // silence the next match for six hours for nothing.
   await markWantsNotified(db, signalIds, now);
   return { emails, pushes, told: people.length };
+}
+
+/**
+ * The club's own feed says a court is free at an hour and a club somebody asked for (the rules are in
+ * `courtOffersDue`). They hear once, on the channel they have (`tell`: Telegram, else email, else push),
+ * with one button: the match form at that club, that day and that hour. Unlike `notifyWanted`, the
+ * claim comes before the send, because it is what stops a second run from sending the same court; a
+ * person nothing can reach is never claimed.
+ */
+export async function offerFreeCourts(db: Db, now = new Date(), say: typeof tell = tell): Promise<{ offered: number }> {
+  const reach = { telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() };
+  let offered = 0;
+  for (const offer of await courtOffersDue(db, now, reach)) {
+    if (offered >= COURT_OFFERS.perRun) break;
+    if ((await claimCourtOffer(db, offer, now)).length === 0) continue;
+    const { t, locale } = await translatorFor(offer.player.locale);
+    const vars = { club: offer.club.name, time: formatEventTime(offer.hour.start, offer.club.tz, locale) };
+    const ticket = reach.telegram && offer.player.telegramId ? chatTicket(offer.player.telegramId, now) : null;
+    const button = { text: t("want.courtButton"), url: courtOfferLink(baseUrl(), offer, ticket) };
+    await say(db, offer.player, `${t("want.courtTitle", vars)}\n${t("want.courtBody", vars)}`, { inline_keyboard: [[button]] }, { label: button.text }).catch(() => undefined);
+    offered++;
+  }
+  return { offered };
 }
 
 /**

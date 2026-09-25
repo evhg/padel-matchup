@@ -13,8 +13,16 @@ import { getSessionPlayer } from "@/lib/session";
 import { SEAT_NAMES_MAX } from "@/lib/domain/slots";
 import type { EventFormValues } from "./EventFields";
 
+/** A day, a time and a zone from the link, all three or none: a time without its zone is another hour. */
+function prefilledHour(p: { date?: string; time?: string; tz?: string } | undefined): Pick<EventFormValues, "date" | "time" | "tz"> | null {
+  const date = p?.date ?? "";
+  const time = p?.time ?? "";
+  const tz = p?.tz ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) && isValidTimeZone(tz) ? { date, time, tz } : null;
+}
+
 /** The create form with its data. Rendered on / and /new. */
-export async function CreateScreen({ heading, prefill }: { heading: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; tg?: string; dc?: string; names?: string } }) {
+export async function CreateScreen({ heading, prefill }: { heading: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -53,7 +61,8 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
   }
   // From a venue board: the venue is prefilled and the listing switched on.
   const venuePrefill = prefill?.venue?.trim().slice(0, 80);
-  if (venuePrefill && !groupValues) groupValues = { venueName: venuePrefill, venueMapUrl: venues.find((v) => v.name === venuePrefill)?.mapUrl ?? "", publicListing: true };
+  // From a free court offered to a player who asked for that hour (`offerFreeCourts`): the day and the time come too, in the club's zone.
+  if (venuePrefill && !groupValues) groupValues = { venueName: venuePrefill, venueMapUrl: venues.find((v) => v.name === venuePrefill)?.mapUrl ?? "", publicListing: true, ...prefilledHour(prefill) };
   // From the americano generator: the schedule was built for these people, so they travel with the
   // tap. Landing on a page that reads "Set up a match in 10 seconds" made the tap look like nothing
   // happened, which is what the owner reported on 20 September.

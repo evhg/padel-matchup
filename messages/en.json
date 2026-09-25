@@ -16,7 +16,10 @@
     "none": "You have not said when you want to play.",
     "unknownPlace": "We do not know that court yet. Try the city instead.",
     "tooMany": "Ten is the most you can have at once. Remove one first.",
-    "at": "at"
+    "at": "at",
+    "courtTitle": "A court is free at {club} today at {time}",
+    "courtBody": "You said you want to play around this time at {club}. Book the court with the club, make the match here, and share the link. To stop these, remove the request on your own page.",
+    "courtButton": "Make the match"
   },
   "common": {
     "appName": "Kicksmash",

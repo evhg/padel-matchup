@@ -12,14 +12,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("landing.metaTitle"), description: t("landing.metaDescription"), alternates: localeAlternates("/", locale), openGraph: { title: t("landing.metaTitle"), description: t("landing.metaDescription"), type: "website", url: "/" } };
 }
 
-/** The landing page is the create form. `?type=tournament&capacity=8` prefills it (used by the /americano generator). */
-export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; tg?: string; dc?: string; names?: string }> }) {
+/** The landing page is the create form. `?type=tournament&capacity=8` prefills it (used by the /americano generator); `?venue=…&date=…&time=…&tz=…` is a club's free court. */
+export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string }> }) {
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
   return (
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
-        <CreateScreen heading={t("landing.formTitle")} prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, tg: sp.tg, dc: sp.dc, names: sp.names }} />
+        <CreateScreen heading={t("landing.formTitle")} prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, date: sp.date, time: sp.time, tz: sp.tz, tg: sp.tg, dc: sp.dc, names: sp.names }} />
         <section className="mt-6 grid gap-2">
           {[t("landing.step1"), t("landing.step2"), t("landing.step3")].map((s, i) => (
             <div key={i} className="flex items-center gap-3 px-1 text-sm text-muted">

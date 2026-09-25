@@ -574,6 +574,28 @@ Everything in this list is live. The README describes each in detail.
   organiser's tools on the match page (`players.banter`, on by default). An exit now records its own
   moment and whether it came from the waitlist, and a partial index (`activity_left_idx`) keeps the
   90-day count one small read.
+- **WAREHAUS.club is back on the club lists (25 September 2026, migration 0081).** The owner:
+  "warehaus is where erik plays and he is using it to test the app." Erik's test claim of 20 September
+  wrote over the directory's row, and the refusal twenty minutes later hid it, so the club with the
+  most matches fell off `/clubs`, the Phuket page, the venue picker and the claim form. The same
+  afternoon a tournament typed as "WAREHAUS.club" landed on a second slug, `warehaus-club`, because a
+  refused row no longer answers to its name. A refusal about the claimant (not confirmed, somebody
+  else runs it, or no reason) now hands a directory listing back exactly as `data/clubs.json` has it:
+  nothing the claimant typed stays, the courts and the week the claim set go with it, and the manage
+  link is new, so the refused claimant can no longer edit the page. "Not a club" and "duplicate" still
+  take the page down. Migration 0081 does the same for Warehaus's row; the five indoor courts the claim
+  typed go too, because no public source says so. The `warehaus-club` tournament stays where it is.
+- **A free court reaches the player who asked for that hour (25 September 2026).** The club's promise in
+  `docs/VISION.md` is an off-peak court hour filled from Kicksmash. A live club's feed of free courts
+  and a player's want ("Tuesdays around two at Rawai") existed side by side and never met. Now, when
+  the feed shows a court free two to six hours ahead at the club a want names, on its day and inside
+  its hours, the player hears once on the channel they have: Telegram with one button that opens the
+  match form at that club, day, hour and zone (listed on the club's board), else email, else push.
+  Nothing is sent for an hour a match at the club already fills, or to somebody already playing there
+  that day. A want hears at most once in six hours, the cooldown it shares with the match notices, so
+  no want hears about the same court twice, and it hears about one court a day; one hourly run sends
+  at most twenty. No table and no column. No club in production shares a feed on 25 September, so nobody hears anything until one
+  does; one want is waiting, at Warehaus.
 
 ## The finish line
 

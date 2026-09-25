@@ -36,7 +36,7 @@ import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promoteWaitlists } from "@/lib/domain/slots";
 import { getPlayer } from "@/lib/domain/players";
-import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, notifyWanted, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
+import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, notifyWanted, offerFreeCourts, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
 import { findRefillsDue } from "@/lib/domain/refill";
 import { pruneCoachWants } from "@/lib/domain/coachWants";
 import { claimWantsNotice, findWantsDue, pruneWants } from "@/lib/domain/demand";
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -243,6 +243,14 @@ export async function GET(req: Request) {
     summary.clubs = await refreshAllAvailability(db, now);
   } catch (e) {
     summary.errors.push(`clubs: ${String(e)}`);
+  }
+
+  try {
+    // A court those feeds say is free, at the club and the hour somebody asked for: they hear once,
+    // with the match form at that hour one tap away. After the refresh, so the hours are this hour's.
+    summary.courtOffers = (await offerFreeCourts(db, now)).offered;
+  } catch (e) {
+    summary.errors.push(`court offers: ${String(e)}`);
   }
 
   try {

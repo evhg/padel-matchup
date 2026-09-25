@@ -46,7 +46,7 @@ export function channelFor(
   return configured.push ? "push" : "none";
 }
 
-export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard, o: { /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string } = {}): Promise<void> {
+export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard, o: { /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string } = {}): Promise<void> {
   if (!p) return;
   const via = channelFor(p, { telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() });
   if (via === "none") return;
@@ -59,7 +59,7 @@ export async function tell(db: Db, p: Player | null | undefined, text: string, k
   if (via === "email" && p.email) {
     const { t } = await translatorFor(p.locale);
     const [heading, ...rest] = text.split("\n");
-    const { html, text: plain } = layout({ heading, body: rest.join("\n") || heading, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("email.openMatch"), cta: { label: t("email.openMatch"), url }, telegram: telegramLine(t("email.telegramLine"), p) });
+    const { html, text: plain } = layout({ heading, body: rest.join("\n") || heading, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("email.openMatch"), cta: { label: o.label ?? t("email.openMatch"), url }, telegram: telegramLine(t("email.telegramLine"), p) });
     await sendEmail({ to: p.email, subject: heading, html, text: plain }).catch(() => undefined);
     return;
   }
