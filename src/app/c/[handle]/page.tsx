@@ -10,7 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { dayRange, labelsFor, slotDTOs, studentLessonDTO, todayIn, sameHoursEveryDay } from "@/lib/coach/view";
 import { studentRequests, studentWaitlist, weekStartOf } from "@/lib/coach/chains";
 import { whenLabel } from "@/lib/coach/strings";
-import { acceptByInvite, activePackage, busyBetween, coachCity, DAY_MS, getCoachByHandle, getCoachForActor, hasPhoto, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
+import { acceptByInvite, activePackage, busyBetween, coachCity, coachDoor, coachReachable, DAY_MS, getCoachByHandle, getCoachForActor, hasPhoto, inviteMatches, isFoundingCoach, listOffers, listStudentLessons, openingsBetween, openSlots, packageLine, STUDENT_HORIZON_DAYS, studentStatus , owedBy} from "@/lib/domain/coaching";
 import { utcToZonedParts } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { notifyStudentJoined } from "@/lib/coach/notify";
@@ -68,10 +68,15 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
   const to = new Date(now.getTime() + STUDENT_HORIZON_DAYS * DAY_MS);
   const second = coach.secondMinutes && coach.secondMinutes !== coach.lessonMinutes ? coach.secondMinutes : null;
   const accepted = status === "accepted";
+  // The same door the directory card reads (`coachDoor`), so the card and this page cannot disagree.
+  // One bounded read, after the others (rule 8); a WhatsApp number on the row answers it without one.
+  const reachable = await coachReachable(db, coach);
+  const door = coachDoor(coach, reachable);
+  const takesAnybody = door === "open" || door === "approve";
   // "Anyone can book": a visitor this coach has not accepted still needs the free hours, or the page
   // offers a booking block with no times in it. The hours only — the waitlist, the requests and what
-  // somebody owes belong to a student who is already on the list.
-  const canBook = accepted || (coach.openBooking && (status === "none" || status === "requested"));
+  // somebody owes belong to a student who is already on the list. A closed door reads no hours at all.
+  const canBook = accepted || (takesAnybody && (status === "none" || status === "requested"));
   const [busy, lessons, pkg, waits, requests] = await Promise.all([
     canBook ? busyBetween(db, coach.id, now, to) : Promise.resolve([]),
     me ? listStudentLessons(db, me.id, new Date(now.getTime() - 2 * 3_600_000)) : Promise.resolve([]),
@@ -166,6 +171,13 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
         {owner ? (
           <section className="card" data-testid="owner-note">
             <p className="text-sm text-muted">{t("page.ownerNote")}</p>
+            {/* The coach sees their page as today, plus the one reason a stranger sees "not taking
+                bookings yet" on it. Only the coach: a manager cannot set the coach's channel. */}
+            {!reachable && own?.role === "coach" && (
+              <p className="mt-2 text-sm font-semibold" data-testid="owner-unreachable">
+                {t("page.ownerUnreachable")}
+              </p>
+            )}
             <Link href="/coach" prefetch={false} className="btn-primary mt-3 w-full">
               {t("page.ownerOpen")}
             </Link>
@@ -179,8 +191,9 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
             coachName={coach.displayName}
             signedIn={Boolean(me)}
             status={status}
-            openBooking={coach.openBooking}
+            openBooking={takesAnybody}
             approveNew={coach.approveNewBookings}
+            closed={door === "closed"}
             invite={invite}
             justJoined={justJoined}
             slots={slotDtos}

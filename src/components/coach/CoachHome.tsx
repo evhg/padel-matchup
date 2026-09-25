@@ -17,8 +17,6 @@ export type RequestDTO = { id: string; name: string; label: string; note: string
 export type MonthDTO = { label: string; done: number; noShows: number };
 type Props = {
   handle: string;
-  /** How students know the coach; the forwarded text speaks as their assistant. */
-  coachName: string;
   url: string;
   /** The coach's own door for other coaches: the front page, tagged, so the digest can count who invited whom in. */
   inviteUrl: string;
@@ -46,7 +44,7 @@ type Props = {
 };
 
 /** The coach's book: today, the next days, one button to book. Three doors to the other screens above it. */
-export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [], slotsSecond = [], gaps = [] }: Props) {
+export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, students, lessons, slots, dayLabels, days, requests = [], waiting = 0, month = null, levelChecks = [], earned = false, lengths = [], slotsSecond = [], gaps = [] }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   const router = useRouter();
@@ -245,7 +243,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
           <p className="mt-1 text-xs text-muted">{t("done.inviteHint")}</p>
           <p className="mt-4 text-sm font-bold">{t("done.forward")}</p>
           <div className="mt-2">
-            <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
+            <ShareButtons url={studentUrl} text={t("done.studentMessage", { url: studentUrl })} size="sm" />
           </div>
           <div className="mt-4">
             <Link href="/coach" prefetch={false} className="btn-secondary" onClick={() => router.replace("/coach")}>
@@ -304,7 +302,7 @@ export function CoachHome({ handle, coachName, url, inviteUrl, studentUrl, today
             <div className="text-sm font-bold">{t("done.forward")}</div>
             <p className="mt-1 break-all font-mono text-xs text-muted">{studentUrl}</p>
             <div className="mt-2">
-              <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
+              <ShareButtons url={studentUrl} text={t("done.studentMessage", { url: studentUrl })} size="sm" />
             </div>
           </div>
         )}

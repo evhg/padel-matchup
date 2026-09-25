@@ -5,8 +5,8 @@ import { baseUrl } from "@/lib/config";
 import { afterLessonFreed } from "@/lib/coach/chains";
 import { notifyLessonBooked, notifyLessonCancelled, notifyOffer, notifyStudentRequest } from "@/lib/coach/notify";
 import { cityOf } from "@/lib/domain/cities";
-import { availableSlots, bookLesson, cancelLesson, DAY_MS, getCoachByHandle, getLesson, requestStudent, studentStatus, type CancelOutcome, type StudentStatus } from "@/lib/domain/coaching";
-import { isDomainError } from "@/lib/domain/errors";
+import { availableSlots, bookLesson, cancelLesson, coachReachable, DAY_MS, getCoachByHandle, getLesson, requestStudent, studentStatus, type CancelOutcome, type StudentStatus } from "@/lib/domain/coaching";
+import { DomainError, isDomainError } from "@/lib/domain/errors";
 import { findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { createPlayer } from "@/lib/domain/players";
 import { personalUrl } from "@/lib/personal";
@@ -73,6 +73,9 @@ export type RequestCoachResult = { status: StudentStatus; coach: PublicCoach; st
 export async function requestCoach(db: Db, raw: unknown, locale = "en"): Promise<RequestCoachResult> {
   const input = requestCoachSchema.parse(raw);
   const coach = await loadCoach(db, input.handle);
+  // A name alone creates a player. Refuse first, so an ask nobody would hear leaves no row behind;
+  // `requestStudent` refuses a token's ask the same way (a student already on the list is not asking).
+  if (!input.token && !(await coachReachable(db, coach))) throw new DomainError("not_taking_bookings");
   const player = await resolveStudent(db, input, locale);
   const before = await studentStatus(db, coach.id, player.id);
   const status = await requestStudent(db, coach.id, player.id);

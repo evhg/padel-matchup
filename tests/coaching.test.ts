@@ -92,7 +92,8 @@ describe("a coach's book", () => {
   });
 
   it("students request, the coach accepts, packages count down and the cancellation policy holds", async () => {
-    const coachPlayer = await makePlayer(db, "Daniel");
+    // An address, so Anna's ask reaches Daniel: a coach nobody can reach takes no asks at all.
+    const coachPlayer = await makePlayer(db, "Daniel", { email: "daniel.coach@example.com" });
     const coach = await createCoach(db, { playerId: coachPlayer.id, displayName: "Daniel", tz: TZ, hours: presetHours("mornings"), lessonMinutes: 60 });
     const anna = await makePlayer(db, "Anna");
     const now = new Date(monday07.getTime() - 3 * DAY);

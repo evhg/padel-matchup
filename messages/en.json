@@ -1443,7 +1443,8 @@
       "forwardText": "Hi! This is {coach}'s assistant. Your lessons with {coach} now live here: {url}\nOpen it once and you are on the list. After that, book or move a lesson in one tap, any time; your package and what is left are always there.",
       "qr": "QR for the court fence",
       "open": "Open my assistant",
-      "inviteHint": "This is your public page: the link for Instagram and the club's board. Students you already have take the invite link on the students screen, which seats them without asking."
+      "inviteHint": "This is your public page: the link for Instagram and the club's board. Students you already have take the invite link on the students screen, which seats them without asking.",
+      "studentMessage": "Book your padel lessons with me here: {url}. You book, move and cancel yourself, and you always see how many lessons you have left."
     },
     "home": {
       "title": "Today",
@@ -1708,7 +1709,9 @@
       "openBookingNote": "{name} lets anyone book a free hour. Pick a time and it is yours — no asking, no waiting.",
       "openBookingAskNote": "{name} takes anybody. Pick a free hour and {name} confirms it — usually the same day.",
       "asked2": "Asked for {when}. {name} answers, and you hear as soon as they do.",
-      "howConfirm": "Tap a free time and {name} confirms it, usually the same day. Cancel up to {hours} hours before and nothing is charged. After that it uses one of your free late cancellations, and when those run out a late cancellation counts as a lesson taken. A package, if you have one, counts down under each lesson."
+      "howConfirm": "Tap a free time and {name} confirms it, usually the same day. Cancel up to {hours} hours before and nothing is charged. After that it uses one of your free late cancellations, and when those run out a late cancellation counts as a lesson taken. A package, if you have one, counts down under each lesson.",
+      "notTaking": "{name} is not taking bookings yet.",
+      "ownerUnreachable": "Students cannot book you yet, because no booking would reach you. Open your assistant and add a way to reach you."
     },
     "me": {
       "title": "Your lessons",
@@ -1730,7 +1733,8 @@
       "past": "That time has passed.",
       "already_paid": "This lesson is already paid. A refund happens at the bank, not here.",
       "has_package": "You already have a package with lessons left. Use it up first.",
-      "blocked": "This coach does not take bookings from you."
+      "blocked": "This coach does not take bookings from you.",
+      "not_taking_bookings": "This coach is not taking bookings yet."
     },
     "email": {
       "paidSubject": "{student} says they paid",
@@ -1910,7 +1914,10 @@
     "cardAsk": "Ask to become a student first",
     "cardSince": "On Kicksmash since {month}",
     "cardLessonsDone": "{count, plural, one {# lesson given here} other {# lessons given here}}",
-    "noneHere": "No coach in {country} lists here yet."
+    "noneHere": "No coach in {country} lists here yet.",
+    "cardNotTaking": "Not taking bookings yet",
+    "cardAsksFirst": "New students ask first",
+    "cardSeePage": "See {name}'s page"
   },
   "moments": {
     "title": "Your moments",

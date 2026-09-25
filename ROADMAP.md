@@ -551,6 +551,15 @@ Everything in this list is live. The README describes each in detail.
   the Mini App: the direct link when the app exists in BotFather, else a web_app button on `/tg`,
   which every deployment with Telegram has. The button never carries a personal link, because a
   forwarded message keeps its buttons. A group gets the sentence alone.
+- **The coach card tells the truth (25 September 2026).** The owner: "Improve the coach card." A
+  coach who confirms every new student had "⚡ Book without asking" on the card; the card now says
+  "New students ask first" and names no free hour. Both listed coaches had no Telegram, no email
+  and no push device, and ricardo's page still promised "ricardo confirms it — usually the same
+  day". A coach nobody can reach stays listed, but the card and the page say "Not taking bookings
+  yet", and a new student's booking or ask is refused on every channel (web, API, MCP, Telegram).
+  The coach's own invite link still works. The coach sees on their own page why, and where to add a
+  channel. The student link now shares a ready message in one tap: "Book your padel lessons with me
+  here…". The end of the setup used to share the message meant for other coaches.
 
 ## The finish line
 

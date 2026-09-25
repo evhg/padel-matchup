@@ -407,7 +407,10 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
               <code className="truncate rounded-lg bg-panel px-3 py-2 text-xs" data-testid="student-link">
                 {link}
               </code>
-              <ShareButtons url={link} text={t("invite.text", { url: link })} />
+              {/* The ready message for students, in the coach's own voice, one tap to WhatsApp or
+                  Telegram. This step used to hand students the text meant for other coaches ("I run
+                  my lessons with an assistant… Free, one minute"), until 25 September 2026. */}
+              <ShareButtons url={link} text={t("done.studentMessage", { url: link })} />
             </>
           )}
           {showImport ? (

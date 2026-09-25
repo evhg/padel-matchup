@@ -115,6 +115,9 @@ try {
   const studentUrl = tgHref ? new URL(tgHref).searchParams.get("url") : null;
   const inviteCode = studentUrl ? new URL(studentUrl).searchParams.get("i") : null;
   check("the welcome card shows the link and a student link that carries the invite code", Boolean(handle) && Boolean(inviteCode) && studentUrl?.includes(`/c/${handle}?i=`), `${handle} ${studentUrl}`);
+  // The ready message in the coach's own voice, one tap to WhatsApp (the owner, 25 September 2026).
+  const waText = new URL((await welcome.locator('a[href*="wa.me"]').getAttribute("href")) ?? "https://wa.me/").searchParams.get("text") ?? "";
+  check("the welcome's WhatsApp button carries the ready message for students, with the link in it", waText.startsWith("Book your padel lessons with me here: ") && waText.includes(`/c/${handle}?i=`), waText);
   check("the fresh welcome asks for no referral and shows no QR", (await welcome.getByText("Know a coach?").count()) === 0 && (await welcome.locator('svg[height="160"]').count()) === 0);
   check("the invite to other coaches waits until the assistant has earned it", (await olga.getByTestId("invite-coach").count()) === 0);
   await shot(olga, "60-coach-welcome");
@@ -133,9 +136,33 @@ try {
   await erik.getByText("Your assistant").first().waitFor({ timeout: 20000 });
   await erik.goto(BASE + "/");
   check("a player who opened the coach screen but made no book is still only a player", (await erik.getByTestId("assistant-link").count()) === 0 && (await erik.getByRole("link", { name: "My matches" }).count()) === 1);
+  // ricardo, in production on 24 September 2026: a book with no Telegram, no email and no push
+  // device, whose page promised that he confirms a booking the same day. Zora makes a book and stops
+  // before the channel step. Her handle is her name: the owner's note on it proves the guess is hers.
+  const zora = await newPage();
+  await zora.goto(BASE + "/coach");
+  await zora.getByPlaceholder("e.g. Alex").fill("Zora");
+  await zora.locator("form button[type=submit]").click();
+  await zora.getByTestId("setup-where").waitFor({ timeout: 20000 });
+  await zora.locator("#coach-clubs").fill("Rawai Padel");
+  await zora.getByRole("button", { name: "Next" }).click();
+  await zora.getByTestId("setup-length").waitFor({ timeout: 10000 });
+  await zora.getByRole("button", { name: "Next" }).click();
+  await zora.getByTestId("setup-hours").waitFor({ timeout: 10000 });
+  await zora.getByTestId("hours-presets").locator('button[data-preset="both"]').click();
+  await zora.getByRole("button", { name: "Set up my assistant" }).click();
+  await zora.getByTestId("setup-price").waitFor({ timeout: 30000 });
+  await zora.goto(`${BASE}/c/zora`);
+  check("a coach nobody can reach sees why on her own page, beside the way to her assistant", (await zora.getByTestId("owner-note").count()) === 1 && (await zora.getByTestId("owner-unreachable").count()) === 1);
+  const passer = await newPage();
+  await passer.goto(`${BASE}/c/zora`);
+  check("a stranger on her page meets 'not taking bookings yet', and nothing to send", (await passer.getByTestId("not-taking").innerText()) === "Zora is not taking bookings yet." && (await passer.getByTestId("ask-to-join").count()) === 0 && (await passer.getByRole("heading", { name: "Book a lesson" }).count()) === 0);
+  await passer.close();
+  await zora.close();
   // The coach opens her own student link: the page as students see it, with the way to her book, and no form to join herself.
   await olga.goto(`${BASE}/c/${handle}?i=${inviteCode}`);
   check("the coach's own student link shows the owner's note instead of the join form", (await olga.getByTestId("owner-note").count()) === 1 && (await olga.getByTestId("invited-join").count()) === 0 && (await olga.getByTestId("ask-to-join").count()) === 0 && (await olga.getByRole("link", { name: "Open my assistant" }).getAttribute("href")) === "/coach");
+  check("a coach the bot can reach is not told to add a channel", (await olga.getByTestId("owner-unreachable").count()) === 0);
   // A ticket minted after the bind (the setup walk reopened) is live; opened from a second Telegram account it is refused and the assistant stays with Olga.
   await olga.goto(BASE + "/coach?setup=1");
   // A reopened walk resumes at the price, because the book already exists.
@@ -532,6 +559,8 @@ try {
   await ivan.reload();
   const shutCard = ivan.getByTestId("coach-list-card").filter({ hasText: "Olga" });
   check("a coach who accepts students by hand asks instead of naming an hour", (await shutCard.getByTestId("card-next-free").innerText()) === "Ask to become a student first" && (await shutCard.getByText("Book without asking").count()) === 0);
+  // Her page offers an ask, not free times, so the button no longer promises times.
+  check("and its button names her page, not free times the page will not show", (await shutCard.getByRole("link", { name: "See Olga's page" }).count()) === 1);
   await olga.goto(BASE + "/coach/settings");
   await olga.getByTestId("open-booking").check();
   await olga.getByRole("button", { name: "Save" }).click();
@@ -561,6 +590,11 @@ try {
   await olga.getByTestId("approve-new").check();
   await olga.getByRole("button", { name: "Save" }).click();
   await olga.getByText("Saved.").waitFor({ timeout: 20000 });
+  // The card read `open_booking` alone, so a coach who answers every newcomer wore "Book without
+  // asking" (25 September 2026). It says who answers now, and names no hour a stranger cannot take.
+  await ivan.goto(`${BASE}/coaches`);
+  const askingCard = ivan.getByTestId("coach-list-card").filter({ hasText: "Olga" });
+  check("a coach who answers every newcomer says so on her card, and no longer 'Book without asking'", (await askingCard.getByTestId("card-next-free").innerText()) === "New students ask first" && (await askingCard.getByText("Book without asking").count()) === 0 && (await askingCard.getByRole("link", { name: "See Olga's free times" }).count()) === 1);
 
   const otto = await newPage();
   await otto.goto(`${BASE}/c/${handle}`);

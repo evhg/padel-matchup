@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
+import type { CoachDoor } from "@/lib/domain/coaching";
 import { formatLevel } from "@/lib/domain/levels";
 
 /** What a player needs to choose between two coaches, in the order they ask for it. */
@@ -20,10 +21,13 @@ export type CoachCardData = {
   /** The first hour they are free, or null. Null also when a stranger cannot take that hour. */
   nextFree: string | null;
   tz: string;
-  /** A stranger can pick an hour here today. Off: they must ask the coach and be accepted first. */
+  /** A stranger can pick an hour here today and it is theirs. Only true for the `open` door. */
   canBookNow: boolean;
-  /** Anyone may book without asking first. */
-  openBooking: boolean;
+  /**
+   * What a stranger meets (`coachDoor`): `open` books without asking, `approve` picks an hour the
+   * coach answers, `ask` asks to become a student, `closed` reaches nobody yet.
+   */
+  door: CoachDoor;
   levels: { min: number | null; max: number | null };
   /** A face, served from `/c/{handle}/photo`. */
   photo: boolean;
@@ -47,7 +51,9 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
     <li className="card flex flex-col gap-2" data-testid="coach-list-card">
       <div className="flex flex-wrap items-center gap-2">
         {coach.founding && foundingCity && <span className="chip-muted">🏅 {tCoach("page.founding", { city: foundingCity })}</span>}
-        {coach.openBooking && <span className="chip-open">⚡ {t("cardOpenBooking")}</span>}
+        {/* Only the open door. It used to read `open_booking` alone, so a coach who answers every
+            newcomer themselves wore "Book without asking" (25 September 2026). */}
+        {coach.door === "open" && <span className="chip-open">⚡ {t("cardOpenBooking")}</span>}
       </div>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="flex min-w-0 items-center gap-2 text-xl font-extrabold tracking-tight">
@@ -81,9 +87,11 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
         </p>
       )}
       {/* Only a coach a stranger can book gets a free hour named here. The card used to promise an
-          hour for a coach whose page then showed a stranger no times at all. */}
+          hour for a coach whose page then showed a stranger no times at all. The other three doors
+          say what the reader meets instead: the coach answers a first pick, the coach accepts an ask,
+          or nobody would hear either — ricardo's card promised bookings to a book nobody could reach. */}
       <p className={`text-sm font-bold ${free ? "text-ok" : "text-muted"}`} data-testid="card-next-free">
-        {!coach.canBookNow ? t("cardAsk") : free ? t("cardNextFree", { when: `${formatEventDay(free, coach.tz, locale)} ${formatEventTime(free, coach.tz, locale)}` }) : t("cardNoFree")}
+        {coach.door === "closed" ? t("cardNotTaking") : coach.door === "approve" ? t("cardAsksFirst") : !coach.canBookNow ? t("cardAsk") : free ? t("cardNextFree", { when: `${formatEventDay(free, coach.tz, locale)} ${formatEventTime(free, coach.tz, locale)}` }) : t("cardNoFree")}
       </p>
       {coach.bio && <p className="text-sm" data-testid="card-bio">{coach.bio}</p>}
       {/* Nothing here is typed by the coach, which is the point: it is the only line on the card a
@@ -94,8 +102,10 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
           {coach.proof.lessonsDone != null ? ` · ${t("cardLessonsDone", { count: coach.proof.lessonsDone })}` : ""}
         </p>
       )}
+      {/* The button names what the page will show: times to book, times to pick for the coach to
+          answer, or a page with neither ("See their free times" led to an ask form, or to nothing). */}
       <Link href={`/c/${coach.handle}`} prefetch={false} className="btn-secondary w-full">
-        {t(coach.openBooking ? "cardBook" : "open", { name: coach.displayName })}
+        {t(coach.door === "open" ? "cardBook" : coach.door === "approve" ? "open" : "cardSeePage", { name: coach.displayName })}
       </Link>
     </li>
   );
