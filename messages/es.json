@@ -968,7 +968,13 @@
     "invite": "Invita a otros a este grupo",
     "delete": "Eliminar grupo",
     "deleteConfirm": "¿Eliminar {name}? Los miembros conservan sus partidos y el hueco semanal se detiene. No se puede deshacer.",
-    "anotherName": "Otro nombre"
+    "anotherName": "Otro nombre",
+    "season": "Temporada",
+    "seasonWindow": "Últimos 90 días",
+    "seasonPlayed": "Jugados",
+    "seasonWon": "Ganados",
+    "seasonStreak": "Seguidas",
+    "seasonHelp": "Partidos con resultado. 🔥 son tres victorias seguidas o más."
   },
   "venue": {
     "board": "Tablón del club",
