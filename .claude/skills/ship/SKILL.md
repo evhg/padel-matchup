@@ -289,6 +289,15 @@ Wall clock first, credits second. What actually moved it, measured:
   died with `Cannot read properties of undefined (reading 'length')` while typecheck, lint and unit
   passed. `.git/info/exclude` hides them from git and from nothing else. Take the commits out
   (`git merge --squash wf/<branch>`), then `git worktree remove --force` every one, before the gate.
+- **Inside a worktree, `check-bundle` reports the worktree, not the change.** A build in
+  `.claude/worktrees/<agent>` with `node_modules` linked from the parent succeeded, and
+  `scripts/check-bundle.mjs` then found the 18 MB test database in all 131 routes, `/me` included,
+  which the change never touched (25 September 2026). Next picks the parent as the workspace root
+  (two lockfiles), every traced path starts with `../../../node_modules`, and the project-relative
+  `**/@electric-sql/pglite/**` in `outputFileTracingExcludes` matches none of them. Read one
+  untouched route's `.nft.json` before blaming the change; the real checkout and CI are the judge.
+  And never edit `src/` while a build runs: its type check reads the files as they are at that
+  second, and a half-made edit fails a build the finished code passes.
 - **Ask production through the read-only query door, in one query.** This container cannot open port
   5432 (or 6543) whatever the network policy says; an hour went on proving that on 18 September. The
   Supabase MCP answers, but every `execute_sql` waits for the owner to approve it, and on 23 September

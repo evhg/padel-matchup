@@ -154,7 +154,9 @@ export async function getRolodex(db: Db, creatorPlayerId: string): Promise<Rolod
     .select({
       name: sql<string | null>`coalesce(${players.displayName}, ${slots.invitedName})`,
       email: sql<string | null>`coalesce(${slots.invitedEmail}, ${players.email})`,
-      phone: sql<string | null>`coalesce(${slots.invitedPhone}, ${players.phone})`,
+      // Only a number the organiser typed themselves. `players.phone` is the WhatsApp number a player
+      // linked, and no phone number is shown to anybody else (rule 7).
+      phone: slots.invitedPhone,
       playerId: slots.playerId,
       lastSeen: sql<Date>`coalesce(${slots.joinedAt}, ${slots.invitedAt}, ${events.createdAt})`,
     })

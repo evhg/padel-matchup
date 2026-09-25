@@ -305,8 +305,33 @@ try {
   await page.getByPlaceholder("e.g. Alex").fill("Tia");
   await page.getByRole("button", { name: "Create & get the link" }).click();
   await page.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const tiaCode = page.url().split("/").slice(-2)[0];
   await page.goto(`${BASE}/me`);
   check("signed-in My matches shows the Telegram row", (await page.getByText("Telegram", { exact: true }).count()) === 1 && (await page.getByText(/Sign in with Telegram on any device/).count()) === 1);
+
+  // The match page's "stay updated" card, all the way through: the Telegram choice, the bot's answer
+  // to that /start, the quiet line that replaces the question, and the calendar feed it offers.
+  await page.goto(`${BASE}/${tiaCode}`);
+  const stay = page.getByTestId("stay-updated");
+  await stay.waitFor({ timeout: 20000 });
+  const tgHref = (await stay.getByTestId("stay-telegram").getAttribute("href")) ?? "";
+  check("a player in a match with no channel is offered Telegram in one tap, the match riding in the start parameter", tgHref.startsWith("https://t.me/kicksmash_bot?start=p_") && tgHref.endsWith(`_${tiaCode}`), tgHref);
+  const tia = { id: 626262, first_name: "Tia", username: "tia_e2e", language_code: "en" };
+  const bound = await hook({ update_id: 700, message: { message_id: 700, date: 0, chat: { id: tia.id, type: "private" }, from: tia, text: `/start ${new URL(tgHref).searchParams.get("start")}` } });
+  check("the tap binds this web player and answers with the match and the calendar", bound.json?.outcome === "bind_match", JSON.stringify(bound.json));
+  await page.reload();
+  await stay.getByText("Updates reach you on Telegram ✓").waitFor({ timeout: 20000 });
+  const webcal = (await stay.getByRole("link", { name: /Subscribe to your matches/ }).getAttribute("href")) ?? "";
+  check("the question is gone: one quiet line, and the calendar to subscribe to", (await stay.getByText("Stay updated").count()) === 0 && /^webcal:\/\/localhost:\d+\/p\/[0-9a-f]{52}\/calendar\.ics$/.test(webcal), webcal);
+  const feedUrl = webcal.replace(/^webcal:/, "http:");
+  const feed = await fetch(feedUrl);
+  const feedText = (await feed.text()).replace(/\r\n[ \t]/g, "");
+  check("the feed is private, holds this match, and carries no sign-in link", feed.status === 200 && (feed.headers.get("content-type") ?? "").startsWith("text/calendar") && /private/.test(feed.headers.get("cache-control") ?? "") && feedText.includes("BEGIN:VEVENT") && feedText.includes(`URL:${BASE}/${tiaCode}`) && !feedText.includes("/p/"), `${feed.status} ${feed.headers.get("cache-control")} ${feedText.slice(0, 120)}`);
+  const offByOne = feedUrl.replace(/([0-9a-f])(\/calendar\.ics)$/, (_m, d, rest) => `${d === "0" ? "1" : "0"}${rest}`);
+  check("a key one digit off opens nothing", (await fetch(offByOne)).status === 404);
+  const landing = await fetch(feedUrl.replace(/\.ics$/, ""));
+  const landingHtml = await landing.text();
+  check("the page a chat button opens offers the subscription, and says where it does not work", landing.status === 200 && landingHtml.includes("Subscribe to your matches") && landingHtml.includes("Android"), String(landing.status));
 } finally {
   await browser.close();
 }

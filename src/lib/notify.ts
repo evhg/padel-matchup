@@ -8,8 +8,7 @@ const CLUB_FANOUT_MAX = 40;
 import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, type Event, type Player, type Slot } from "@/db/schema";
-import { buildIcs } from "@/lib/calendar";
-import { eventTitleLine, venueWithCourt } from "@/lib/labels";
+import { buildIcs, inviteFields } from "@/lib/calendar";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/config";
@@ -24,7 +23,7 @@ import { getPlayer } from "@/lib/domain/players";
 import type { Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
 import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
-import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
+import { lineupComplete } from "@/lib/lineup";
 import { channelFor, tell } from "@/lib/coach/notify";
 import { channelsOffered } from "@/lib/coach/reach";
 import { esc, miniAppUrl, sendMessage, telegramEnabled } from "@/lib/telegram/api";
@@ -54,11 +53,8 @@ async function ctx(db: Db, ev: Event, localeLike: string | null | undefined, rec
   const { t, locale } = await translatorFor(localeLike);
   const d = detail ?? (await getEventDetail(db, ev));
   const base = baseUrl();
-  const courtNumber = (n: string) => t("event.courtNumber", { n });
-  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
-  const complete = lineupComplete(d.roster, ev.capacity);
-  const names = d.roster.filter(isOccupied).map((s) => s.player?.displayName ?? s.invitedName ?? "?");
-  const title = withCompleteSuffix(eventTitleLine(ev, { fallback: t(ev.type === "match" ? "event.match" : "event.tournament"), courtNumber }), complete, t("calendar.completeSuffix"));
+  // The same title, place and players line the player's own calendar feed writes (src/lib/calendarFeed.ts).
+  const { title, location: venue, complete, names, playersLine } = inviteFields(ev, d.roster, t as unknown as Parameters<typeof inviteFields>[2]);
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
   // Every message may use every one of these. Kept in one bag on purpose: a sender that has to remember
@@ -82,7 +78,6 @@ async function ctx(db: Db, ev: Event, localeLike: string | null | undefined, rec
       console.warn("[notify] personal link unavailable", e);
     }
   }
-  const playersLine = names.length ? t("calendar.players", { names: names.join(", ") }) : null;
   return { t, locale, url, publicUrl, vars, meta, footer: t("email.footer", { app: APP_NAME }), openLabel: t("email.openMatch"), title, venue, personal, telegram: telegramLine(t("email.telegramLine"), recipient), complete, names, playersLine, detail: d };
 }
 type Ctx = Awaited<ReturnType<typeof ctx>>;

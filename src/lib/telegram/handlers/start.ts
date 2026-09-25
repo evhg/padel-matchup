@@ -73,7 +73,7 @@ export async function startCommand(db: Db, chat: TelegramChat, from: TgUser, cmd
   // Deep links: t.me/bot?start=r_CODE asks for a result here; ?start=CODE shows a card; ?start=new explains /new;
   // ?start=coach_TICKET comes from the setup's "open your assistant" button and binds this account to the coach.
   const payload = args.trim();
-  // A coach's student invite, a tournament partner's claim, an email's "get this on Telegram": one tap each.
+  // A coach's student invite, a tournament partner's claim, an email's "get this on Telegram" or a match page's "stay updated": one tap each.
   const student = payload.match(/^s_([A-Za-z0-9_-]{4,40})$/);
   if (student) return startStudentInvite(db, chat, from, student[1]);
   const claim = payload.match(/^claim_([a-z2-9]{12})$/);

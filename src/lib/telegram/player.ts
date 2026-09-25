@@ -10,14 +10,20 @@ import { claimPartnerSpot, pairSummary } from "@/lib/domain/competitions";
 import { CITIES, cityBySlug, cityOf } from "@/lib/domain/cities";
 import { recordWant } from "@/lib/domain/demand";
 import { isDomainError } from "@/lib/domain/errors";
+import { bumpMetric } from "@/lib/domain/metrics";
 import { getPlayer } from "@/lib/domain/players";
+import { getEventByCode } from "@/lib/domain/queries";
+import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
+import { baseUrl } from "@/lib/config";
 import { answerCallbackQuery, esc, sendMessage, setChatCommands, type InlineKeyboard, type ReplyKeyboard, type TgMessage, type TgUpdate } from "./api";
 import { strings, type BotLocale, type BotStrings } from "./card";
 import { chatZone } from "./chats";
 import { coachCommand } from "./handlers/start";
 import { gamesFromChat } from "./handlers/games";
 import { startGuidedNew } from "./handlers/new";
+import { readBindPayload } from "./deepLinks";
 import { findOrCreateTelegramPlayer, linkTelegram } from "./identity";
+import { postCard } from "./post";
 import { sendRoleMenu } from "./coach";
 import { competitionCallback, tournamentsInChat } from "./competitions";
 
@@ -258,20 +264,40 @@ export async function startClaim(db: Db, chat: TelegramChat, from: NonNullable<T
   }
 }
 
-/** The email's line: the ticket names the player the email went to; the tap binds this Telegram account to them. */
-export async function startBind(db: Db, chat: TelegramChat, from: NonNullable<TgMessage["from"]>, ticket: string): Promise<string> {
+/**
+ * The email's line and the match page's "stay updated" card: the ticket names the player, the tap
+ * binds this Telegram account to them. A second tap from the same account finds it bound already and
+ * answers as the first did; any other account, or a ticket from before a bind, is refused.
+ *
+ * From a match page the payload also names the match, and the answer to this /start is that match's
+ * card in this chat (edited in place from then on, like every card) and the player's calendar one tap
+ * away. The calendar button opens the feed's page, never the personal link: a message can be
+ * forwarded with its buttons, and the page signs nobody in.
+ */
+export async function startBind(db: Db, chat: TelegramChat, from: NonNullable<TgMessage["from"]>, payload: string): Promise<string> {
   const locale = chatLocale(chat);
   const s = strings(locale);
+  const { ticket, code } = readBindPayload(payload);
   const id = ticketPlayerId(ticket);
   const target = id ? await getPlayer(db, id) : null;
-  if (!target || !verifyPlayerTicket(ticket, target) || (target.telegramId !== null && target.telegramId !== from.id)) {
+  const already = target?.telegramId === from.id;
+  if (!target || (!already && (!verifyPlayerTicket(ticket, target) || target.telegramId !== null))) {
     await sendMessage(chat.chatId, esc(s.bindBad), { silent: true });
     await sendPlayerMenu(chat.chatId, locale);
     return "bind_bad";
   }
-  const linked = await linkTelegram(db, target.id, from);
+  const linked = already ? target : await linkTelegram(db, target.id, from);
   const menu = await sendRoleMenu(db, linked, chat.chatId, { pin: true });
   if (!menu) await sendPlayerMenu(chat.chatId, locale, { intro: s.linkedPlayer });
   else await sendMessage(chat.chatId, esc(s.linkedPlayer), { silent: true });
-  return "bind_done";
+  if (!code) return "bind_done";
+  const detail = await getEventByCode(db, code);
+  if (detail) await postCard(db, detail, chat);
+  // An address on file already brings an invitation per match; the feed as well would show each one twice.
+  if (feedCalendar(linked)) {
+    const calendar = feedLinks(baseUrl(), await feedKeyFor(db, linked), locale).page;
+    await sendMessage(chat.chatId, esc(s.calendarFeed), { silent: true, keyboard: { inline_keyboard: [[{ text: s.calendarButton, url: calendar }]] } });
+  }
+  if (!already) await bumpMetric(db, "stay_linked_telegram").catch(() => undefined);
+  return "bind_match";
 }
