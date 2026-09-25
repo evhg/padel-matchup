@@ -74,7 +74,7 @@ export const lineChannel: CardChannel<LinePayload, LineRoom, LineCard> = {
   },
   async result(db, room, summary) {
     const s = strings(summary.locale);
-    const lines = [summary.score, summary.winners, summary.praise, summary.podium].filter(Boolean) as string[];
+    const lines = [summary.score, summary.winners, summary.praise, summary.banter, summary.podium].filter(Boolean) as string[];
     const messages: LineMessage[] = [
       { type: "text", text: [summary.title, ...lines, `${s.open}: ${summary.url}`].join("\n") },
       { type: "image", originalContentUrl: summary.imageUrl, previewImageUrl: summary.imageUrl },

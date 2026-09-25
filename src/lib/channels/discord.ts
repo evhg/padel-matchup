@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { discordCards, discordChannels, events, type DiscordCard, type DiscordChannel } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
-import { createMessage, discordEnabled, editMessage } from "@/lib/discord/api";
+import { createMessage, discordEnabled, editMessage, md } from "@/lib/discord/api";
 import { renderDiscordCard, type DiscordCard as DiscordCardPayload } from "@/lib/discord/card";
 import { botLocale, strings, type BotLocale } from "@/lib/telegram/card";
 import type { Card, CardChannel, Room } from "./types";
@@ -64,6 +64,7 @@ export const discordChannel: CardChannel<DiscordPayload, DiscordChannel, Discord
     const lines: string[] = [];
     if (summary.score) lines.push(`**${summary.score}**`);
     if (summary.winners) lines.push(summary.winners, summary.praise ?? "");
+    if (summary.banter) lines.push(md(summary.banter));
     if (summary.podium) lines.push(summary.podium);
     const res = await createMessage(room.raw.channelId, {
       embeds: [{ title: summary.title, url: summary.url, description: lines.filter(Boolean).join("\n") || undefined, image: { url: summary.imageUrl }, color: 0x0ea5e9 }],

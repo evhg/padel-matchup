@@ -13,6 +13,7 @@ import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { later } from "@/lib/alerts";
+import { streakLine, winStreakFor } from "@/lib/domain/banter";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { taggedUrl } from "@/lib/source";
@@ -53,11 +54,15 @@ export default async function CardPage({ params }: Props) {
   await later(() => bumpMetric(db, "card_views"));
   let line: string;
   let praise: string | null = null;
+  let banter: string | null = null;
   if (ev.type === "match") {
     const r = matchLine(t as unknown as (key: string, values?: Record<string, string | number>) => string, detail);
     if (!r) redirect(`/${code}`);
     line = r.line;
     if (r.winners) praise = praiseLine(locale, ev.code, r.winners);
+    // The same line the picture carries, in the reader's language. One bounded read, only for a match with winners.
+    const streak = r.winners ? await winStreakFor(db, detail).catch(() => null) : null;
+    if (streak) banter = streakLine(locale, ev.code, streak);
   } else {
     const named = detail.roster.filter((s) => isOccupied(s) || s.status === "invited");
     const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
@@ -83,6 +88,11 @@ export default async function CardPage({ params }: Props) {
         </div>
         <p className="text-sm font-semibold">{line}</p>
         {praise && <p className="text-sm text-muted" data-testid="praise">{praise}</p>}
+        {banter && (
+          <p className="text-sm font-semibold" data-testid="banter">
+            {banter}
+          </p>
+        )}
         <p className="text-xs text-faint">{t("card.saveHint")}</p>
         {participant && ev.type === "match" && <PhotoButton code={code} hasPhoto={Boolean(photo)} canRemove={Boolean(me && photo && (photo.uploadedByPlayerId === me.id || ev.creatorPlayerId === me.id))} />}
         <ShareButtons url={shareUrl} text={text} imageUrl={image} />

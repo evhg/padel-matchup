@@ -17,6 +17,7 @@ import { resultSummary } from "@/lib/channels/cards";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion } from "@/lib/resultCard";
 import { deleteMessage, editMessageMedia, editMessageText, esc, miniAppUrl, sendMessage, sendPhoto, telegramEnabled, type InlineKeyboard } from "@/lib/telegram/api";
+import { winStreakFor, type Streak } from "@/lib/domain/banter";
 import type { Awarded } from "@/lib/domain/milestones";
 import { momentLine } from "@/lib/moments";
 import { strings, botLocale, type BotLocale } from "@/lib/telegram/card";
@@ -152,6 +153,8 @@ export async function closeScoreNudges(db: Db, code: string): Promise<number> {
   const version = cardVersion(detail, await getEventPhotoMeta(db, detail.event.id).catch(() => null));
   const picture = `${base}${cardImagePath(code, version)}`;
   if (rows.some((r) => r.rendered !== null && r.rendered !== version)) await warm(picture);
+  // The winners' streak, as the group's result post tells it: read once, and only for a picture that changes.
+  let streak: Streak | null | undefined;
   let closed = 0;
   for (const row of rows) {
     const locale: BotLocale = botLocale(row.locale);
@@ -162,8 +165,9 @@ export async function closeScoreNudges(db: Db, code: string): Promise<number> {
       continue;
     }
     if (row.rendered === version) continue;
-    const summary = resultSummary(detail, locale, base);
-    const caption = [summary?.title ?? cardTitle(detail, locale), line.score, summary?.winners, summary?.winners ? summary.praise : null, line.who ? s.scoreBy(line.who) : null].filter(Boolean).map((x) => esc(String(x))).join("\n");
+    if (streak === undefined) streak = await winStreakFor(db, detail).catch(() => null);
+    const summary = resultSummary(detail, locale, base, streak);
+    const caption = [summary?.title ?? cardTitle(detail, locale), line.score, summary?.winners, summary?.winners ? summary.praise : null, summary?.banter, line.who ? s.scoreBy(line.who) : null].filter(Boolean).map((x) => esc(String(x))).join("\n");
     const res = await editMessageMedia(row.chatId, row.messageId, picture, caption, { inline_keyboard: [[{ text: s.cardBtn, url: `${base}/${code}/card` }]] }).catch(() => ({ ok: false as const }));
     if (res.ok) {
       await db.update(telegramCards).set({ rendered: version, updatedAt: new Date() }).where(eq(telegramCards.id, row.id)).catch(() => undefined);

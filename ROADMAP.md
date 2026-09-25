@@ -560,6 +560,20 @@ Everything in this list is live. The README describes each in detail.
   The coach's own invite link still works. The coach sees on their own page why, and where to add a
   channel. The student link now shares a ready message in one tap: "Book your padel lessons with me
   here…". The end of the setup used to share the message meant for other coaches.
+- **Banter: the crew's own facts, where the crew already looks (25 September 2026, migrations 0079
+  and 0080).** The owner: "Statistics could be fun, ie. calling out someone for pulling out last
+  minute for the third time, or winning 3 matches in a row and giving them a sarcastic pat on the
+  back in the group together with the result card." Option A: facts only, from the players' own
+  matches. Three or more wins in a row, counting the match just scored, is one line on the group's
+  result post, on the result card in each player's chat, on the card's page and on the picture itself,
+  so it travels when the picture is forwarded. A third late pull-out in 90 days (leaving within 24
+  hours of the start) is one line on the match's card while the spot it opened is open: an edit, never
+  a new message. Several lines per fact in each of the three languages, chosen by the match code,
+  first names only (`src/lib/domain/banter.ts`). Nothing reaches a profile, a board, a ranking,
+  `/built`, the API or the MCP. The organiser switches it off, and on again, with one tap in the
+  organiser's tools on the match page (`players.banter`, on by default). An exit now records its own
+  moment and whether it came from the waitlist, and a partial index (`activity_left_idx`) keeps the
+  90-day count one small read.
 
 ## The finish line
 
@@ -677,4 +691,8 @@ compared with production (rows the old merge dropped that morning stay dropped).
 - **Twilio and SMS**, which need template approval and a verified business.
 - **Court booking integrations** with the platforms, beyond recognising the link and reading a feed a club
   chose to share.
-- **Player reliability and no-show stats**, which would rank people by their worst days.
+- **Player reliability and no-show stats**, which would rank people by their worst days. Still parked as
+  a stat. What changed on 25 September 2026 (banter, `docs/DECIDING.md` rule 18): a third late pull-out
+  in 90 days is one playful line on the crew's own card while the spot it opened is open, and a win
+  streak is one line on the crew's own result. No count is shown anywhere, nothing reaches a public page,
+  and nobody is ranked by their worst days.

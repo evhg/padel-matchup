@@ -532,6 +532,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }))}
             creatorEmail={creator.email}
             creatorNotify={creator.emailNotifications}
+            banter={creator.banter}
             emailEnabled={emailEnabled()}
             manageUrl={manageUrl(base, code, ev.manageCode)}
             isCancelled={cancelled}

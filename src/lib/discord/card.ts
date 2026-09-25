@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
@@ -50,6 +51,8 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
   if (detail.waitlist.length > 0) lines.push(s.waitlist(detail.waitlist.length));
   const spotsLeft = Math.max(0, ev.capacity - occupied - seats.filter((x) => x.status === "invited").length);
   const status = cancelled ? `❌ **${s.cancelled}**` : past ? s.past : complete ? `**${s.complete}**` : spotsLeft > 0 ? `**${s.spots(spotsLeft)}**` : ev.whenFull === "waitlist" ? s.full : s.closed;
+  // Banter: the late pull-out that opened this spot, while it is open (set by the card sync alone).
+  if (detail.lateExit && !cancelled && !past && spotsLeft > 0) lines.push("", md(lateExitLine(locale, ev.code, detail.lateExit)));
   const embed: DcEmbed = {
     title: `🎾 ${cardTitle(detail, locale)}`,
     url,

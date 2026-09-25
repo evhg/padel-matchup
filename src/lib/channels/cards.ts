@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Db } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
+import { lateExitFor, streakLine, winStreakFor, type Streak } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
@@ -51,14 +52,22 @@ export async function postCardsForGroup<P, R, C>(ch: CardChannel<P, R, C>, db: D
   return posted;
 }
 
-/** After anything changed on a match: edits every card silently, notes a complete line-up once. Never throws. */
+/**
+ * After anything changed on a match: edits every card silently, notes a complete line-up once. Never throws.
+ *
+ * A late pull-out that opened a spot rides on the card as one line while the spot is open (banter,
+ * `src/lib/domain/banter.ts`). It is part of the edit, never a message of its own (rule 5), and it is
+ * read only when this channel has a card to put it on.
+ */
 export async function syncCards<P, R, C>(ch: CardChannel<P, R, C>, db: Db, code: string, now = new Date()): Promise<number> {
   if (!ch.enabled()) return 0;
   try {
-    const detail = await getEventByCode(db, code);
-    if (!detail) return 0;
+    const found = await getEventByCode(db, code);
+    if (!found) return 0;
+    const cards = await ch.cardsOf(db, found.event.id, ["card"]);
+    const detail = cards.length > 0 || ch.syncExtra ? { ...found, lateExit: await lateExitFor(db, found, now).catch(() => null) } : found;
     let edits = 0;
-    for (const { card, room } of await ch.cardsOf(db, detail.event.id, ["card"])) {
+    for (const { card, room } of cards) {
       const r = ch.render(detail, room.locale, now);
       const key = ch.canEdit ? r.hash : materialKey(detail);
       if (key !== card.rendered) {
@@ -102,12 +111,16 @@ export async function sendReminders<P, R, C>(ch: CardChannel<P, R, C>, db: Db, n
   return sent;
 }
 
-/** The result of a match as one summary the channel lays out; null while there is nothing to show. */
-export function resultSummary(detail: EventDetail, locale: BotLocale, base = baseUrl()): ResultSummary | null {
+/**
+ * The result of a match as one summary the channel lays out; null while there is nothing to show.
+ * `streak` is the winners' streak the caller read once for every room (`winStreakFor`), told as one
+ * banter line under the praise.
+ */
+export function resultSummary(detail: EventDetail, locale: BotLocale, base = baseUrl(), streak: Streak | null = null): ResultSummary | null {
   const ev = detail.event;
   if (ev.type === "match" ? detail.scores.length === 0 : !ev.standings?.length) return null;
   const s = strings(locale);
-  const summary: ResultSummary = { locale, title: `${s.result} · ${cardTitle(detail, locale)}`, score: null, winners: null, praise: null, podium: null, url: `${base}/${ev.code}/card`, imageUrl: `${base}/${ev.code}/card/opengraph-image`, sameTimeCode: ev.type === "match" && !ev.groupId ? ev.code : null };
+  const summary: ResultSummary = { locale, title: `${s.result} · ${cardTitle(detail, locale)}`, score: null, winners: null, praise: null, banter: null, podium: null, url: `${base}/${ev.code}/card`, imageUrl: `${base}/${ev.code}/card/opengraph-image`, sameTimeCode: ev.type === "match" && !ev.groupId ? ev.code : null };
   if (ev.type === "match") {
     const r = matchResult(
       detail.scores,
@@ -119,6 +132,7 @@ export function resultSummary(detail: EventDetail, locale: BotLocale, base = bas
         const winners = (r.winner === "a" ? r.a : r.b).join(" & ");
         summary.winners = s.winner(winners);
         summary.praise = praiseLine(locale, ev.code, winners);
+        if (streak) summary.banter = streakLine(locale, ev.code, streak);
       }
     }
   } else if (ev.standings?.length) {
@@ -136,9 +150,13 @@ export async function postResult<P, R, C>(ch: CardChannel<P, R, C>, db: Db, code
     if (!detail) return 0;
     const cards = await ch.cardsOf(db, detail.event.id);
     const done = new Set(cards.filter((c) => c.card.kind === "result").map((c) => c.room.id));
+    const due = cards.filter((c) => c.card.kind === "card" && !done.has(c.room.id));
+    if (due.length === 0) return 0;
+    // Read once for every room, and only when a room is waiting for the result.
+    const streak = await winStreakFor(db, detail).catch(() => null);
     let posted = 0;
-    for (const { card, room } of cards.filter((c) => c.card.kind === "card" && !done.has(c.room.id))) {
-      const summary = resultSummary(detail, room.locale);
+    for (const { card, room } of due) {
+      const summary = resultSummary(detail, room.locale, baseUrl(), streak);
       if (!summary) return 0;
       const res = await ch.result(db, room, summary, { replyTo: card.messageId });
       if (res.ok) {

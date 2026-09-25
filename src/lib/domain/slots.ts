@@ -73,7 +73,7 @@ export async function joinEvent(db: Db, input: { eventId: string; playerId: stri
       .returning();
 
     if (claimed) {
-      await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "joined" });
+      await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "joined", createdAt: now });
       const status = await recomputeStatus(tx, ev);
       return { outcome: "joined", slot: claimed, event: { ...ev, status } };
     }
@@ -91,7 +91,7 @@ export async function joinEvent(db: Db, input: { eventId: string; playerId: stri
         position: sql`(select coalesce(max(s.position), ${ev.capacity}) + 1 from ${slots} s where s.event_id = ${ev.id})`,
       })
       .returning();
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "joined", meta: { waitlist: 1 } });
+    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "joined", meta: { waitlist: 1 }, createdAt: now });
     return { outcome: "waitlisted", slot: wl, event: ev };
   });
 }
@@ -141,7 +141,9 @@ export async function leaveEvent(db: Db, input: { eventId: string; playerId: str
       .limit(1);
     if (!mine) throw new DomainError("not_member");
     const wasWaitlisted = mine.position > ev.capacity;
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "left" });
+    // The moment and the seat are facts the late pull-out line reads (`src/lib/domain/banter.ts`): an
+    // exit from the waitlist opened no spot, so it says so, the way a join to the waitlist does.
+    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "left", meta: wasWaitlisted ? { waitlist: 1 } : null, createdAt: now });
     const promotion = await vacateAndPromote(tx, ev, mine);
     const status = await recomputeStatus(tx, ev);
     return { left: true, wasWaitlisted, promotion, event: { ...ev, status } };

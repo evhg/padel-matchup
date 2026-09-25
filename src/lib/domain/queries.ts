@@ -14,6 +14,11 @@ export type EventDetail = {
   waitlist: SlotWithPlayer[];
   scores: Score[];
   activity: ActivityWithActor[];
+  /**
+   * Set by the card sync alone (`src/lib/channels/cards.ts`): the late pull-out the crew's card calls
+   * out (`src/lib/domain/banter.ts`). Never read from here by a page, the API or anything public.
+   */
+  lateExit?: { name: string; count: number } | null;
 };
 
 export async function getEventByCode(db: Db, code: string): Promise<EventDetail | null> {

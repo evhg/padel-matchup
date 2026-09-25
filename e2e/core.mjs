@@ -98,8 +98,10 @@ try {
   await a.getByPlaceholder("you@example.com").first().fill("dana@example.com");
   await a.getByRole("button", { name: "Send invite" }).click();
   await a.getByText(/Calendar invite sent to dana@example.com/).waitFor({ timeout: 20000 });
-  await a.getByRole("switch").waitFor({ timeout: 20000 });
-  check("after entering an email: invite sent line + email row with notifications switch, form gone", (await a.getByText("Add to your calendar").count()) === 0 && (await a.getByText("dana@example.com").count()) >= 2 && (await a.getByRole("switch").getAttribute("aria-checked")) === "true");
+  // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not.
+  const emailSwitch = a.locator('[role="switch"]:not([data-testid="banter-switch"])');
+  await emailSwitch.waitFor({ timeout: 20000 });
+  check("after entering an email: invite sent line + email row with notifications switch, form gone", (await a.getByText("Add to your calendar").count()) === 0 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
   const ics = await a.evaluate(async (c) => { const r = await fetch(`/${c}/calendar.ics`); return { status: r.status, body: await r.text() }; }, code);
   check("calendar.ics serves a VCALENDAR with court in title", ics.status === 200 && ics.body.includes("BEGIN:VCALENDAR") && ics.body.includes("Court 3"), String(ics.status));
   check("calendar.ics carries one short private link, no personal-link line", /URL:http:\/\/localhost:3001\/p\/[A-Za-z0-9]{12}\//.test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(/http:\/\/localhost:3001/g) || []).length === 2);

@@ -42,6 +42,12 @@ export const players = pgTable(
     levelVerifiedSource: text("level_verified_source"),
     /** Opted in to the public club and city rankings. Off by default. */
     rankingOptIn: boolean("ranking_opt_in").notNull().default(false),
+    /**
+     * Banter on the matches this player organises: one playful line about the crew's own facts (three
+     * wins in a row, a third late pull-out) in the crew's chat and on the result card. On by default;
+     * the organiser switches it off with one tap on their match page (`docs/DECIDING.md` rule 18).
+     */
+    banter: boolean("banter").notNull().default(true),
     /** Telegram account linked by the bot or the login widget. */
     telegramId: bigint("telegram_id", { mode: "number" }),
     telegramUsername: text("telegram_username"),

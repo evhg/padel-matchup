@@ -195,7 +195,13 @@ export const activity = pgTable(
     meta: jsonb("meta").$type<Record<string, string | number | null>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("activity_event_idx").on(t.eventId, t.createdAt)],
+  (t) => [
+    index("activity_event_idx").on(t.eventId, t.createdAt),
+    // A player's exits in the last 90 days, for the late pull-out line (`src/lib/domain/banter.ts`): one range read, only the rows that are exits.
+    index("activity_left_idx")
+      .on(t.actorPlayerId, t.createdAt)
+      .where(sql`${t.verb} = 'left'`),
+  ],
 );
 
 // ---------------------------------------------------------------------------
