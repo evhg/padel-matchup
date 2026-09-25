@@ -615,6 +615,26 @@ Everything in this list is live. The README describes each in detail.
   first. It counts a match with a score and both pairs set. One bounded read,
   and a crew with fewer than two matches behind it never makes it. Production's one crew has one
   scored match, so nobody sees the table yet.
+- **A channel the moment a player joins, and a calendar that keeps itself (25 September 2026).** The
+  owner: "When a player joins a game, we need to capture a channel to contact them right away in a
+  very smooth way and give something in return", WhatsApp, Telegram or email, and never push or SMS.
+  Uptake of the old email-only calendar form was lukewarm, and the hurdle was "oh no, not another
+  app". Where that form stood, a player with no channel now meets "Stay updated": changes, a free spot
+  and the result card reach you there, and your calendar updates itself. Three choices, each
+  something they already have: WhatsApp (only once a number is configured), Telegram, email. Telegram
+  is one tap on the email's own signed `p_` link with the match's code on the end; the bot links the
+  account and answers that /start with the match's card and a "📅 Add to calendar" button. WhatsApp
+  opens with `LINK-<code>-<ticket>` typed; the ticket is the same kind, signed with Meta's app
+  secret, and it links the number to the web player (folding in a row the number already had, one
+  seat kept) and answers with the match and the calendar. Email is the invitation it always was.
+  Once a channel is linked, the card is one quiet line ("Updates reach you on Telegram ✓") and it
+  never asks again. A chat player's calendar is a feed of their own matches from thirty days back
+  (`/p/<key>/calendar.ics`, a cancelled match marked, the same UID and fields as the invitation),
+  offered as `webcal:` and through Google on a computer; the Android app cannot subscribe, and the
+  card says so. The key is made from the personal token but is not it, so the address can sit in a
+  chat or a calendar without being a way to sign in. An organiser's list of past players no longer
+  shows a player's own number, only numbers the organiser typed. Not done: WhatsApp sends a linked
+  player nothing on its own yet (item 1 below).
 
 ## The finish line
 
@@ -668,6 +688,12 @@ linked and four have an email address.
    groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
    and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
    A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
+   One piece of code is still missing, found on 25 September 2026: a player who links WhatsApp from
+   the match page's "Stay updated" card gets the reply with the match and the calendar, and nothing
+   after it. The match's changes, a free spot and the result reach Telegram and email through
+   `tell()`, which knows no WhatsApp, and outside the 24-hour window WhatsApp only carries a template
+   Meta has approved. Until those templates exist and `tell()` learns the channel, the card's promise
+   is true for Telegram and email only, and the WhatsApp choice appears only once the number is set.
 2. **LINE — built, waiting on an Official Account.** `src/lib/channels/line.ts` and
    `src/lib/line/`: the card in a group chat, the two taps, a signed webhook, and the two policies a
    platform that cannot edit a message forces — re-send only when something a player would notice
@@ -676,11 +702,12 @@ linked and four have an email address.
    owner's to create, like WhatsApp's. **It ships in English** — decided 15 September. Thai waits
    until somebody is using it, because there is nothing to translate *for* yet.
 
-   The numbers, since they were once given wrongly as one number. The card in a chat is its own set
-   of **151 strings** in `src/lib/telegram/card.ts`, in three languages since 19 September 2026
-   (Spanish came with the inside of the bot, above); the coach's assistant has its own set, also in
-   three. The **1,456** strings are the website, which has three. So Thai in a LINE chat is 151 strings
-   and Thai on the website is 1,456, and neither of them is what stops LINE going live: the Official
+   The numbers, since they were once given wrongly as one number (counted again on 25 September 2026).
+   The card in a chat is its own set of **153 strings** in `src/lib/telegram/card.ts`, in three
+   languages since 19 September 2026 (Spanish came with the inside of the bot, above); the coach's
+   assistant has its own set, also in three. The **2,062** strings are the website, which has three.
+   So Thai in a LINE chat is 153 strings and Thai on the website is 2,062, and neither of them is what
+   stops LINE going live: the Official
    Account is.
 3. **The serious tournament: run one for real.** All five steps are under Built. What is left is
    not code: an organiser (the Thai Padel Series, or Erik's next Open) runs a weekend on it, and what

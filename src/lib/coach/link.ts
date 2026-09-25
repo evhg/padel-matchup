@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Player } from "@/db/schema";
 import { telegramWebhookSecret } from "@/lib/telegram/api";
-import { mintTicket, readTicket, ticketSubject } from "@/lib/ticket";
+import { mintTicket, readTicket, subjectUuid, uuidSubject } from "@/lib/ticket";
 
 /**
  * The ticket in the "open your assistant in Telegram" link: proves the tap came
@@ -14,18 +14,14 @@ import { mintTicket, readTicket, ticketSubject } from "@/lib/ticket";
  */
 const secret = () => telegramWebhookSecret() ?? createHash("sha256").update(process.env.TELEGRAM_BOT_TOKEN ?? "").digest("hex");
 const salt = (player: Pick<Player, "telegramId">) => `tg:${player.telegramId ?? ""}`;
-const subjectOf = (playerId: string) => playerId.replace(/-/g, "").toLowerCase();
+const subjectOf = uuidSubject;
 
 export function playerTicket(player: Pick<Player, "id" | "telegramId">, now = new Date()): string {
   return mintTicket(secret(), subjectOf(player.id), { salt: salt(player), now });
 }
 
 /** The player id a ticket names, before it is checked; the check needs that player's current binding. */
-export function ticketPlayerId(ticket: string | null | undefined): string | null {
-  const s = ticketSubject(ticket);
-  if (!s || !/^[0-9a-f]{32}$/.test(s)) return null;
-  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
-}
+export const ticketPlayerId = subjectUuid;
 
 /** True when the ticket was minted for this player, today or yesterday, while their Telegram binding was what it is now. */
 export function verifyPlayerTicket(ticket: string | null | undefined, player: Pick<Player, "id" | "telegramId">, now = new Date()): boolean {

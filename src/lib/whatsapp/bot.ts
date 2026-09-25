@@ -9,10 +9,14 @@ import { leaveEvent } from "@/lib/domain/slots";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
 import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { isValidShareCode } from "@/lib/codes";
+import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
+import { bumpMetric } from "@/lib/domain/metrics";
+import { getPlayer } from "@/lib/domain/players";
 import type { EventDetail } from "@/lib/domain/queries";
+import { subjectUuid } from "@/lib/ticket";
 import { readInbound, sendButtons, sendText, type WaContact, type WaInboundMessage } from "./api";
-import { codeInJoinText } from "./link";
-import { findOrCreateWhatsappPlayer } from "./identity";
+import { bindInText, codeInJoinText, verifyBindTicket } from "./link";
+import { findOrCreateWhatsappPlayer, linkWhatsapp, sameNumber } from "./identity";
 
 /**
  * The conversation. One person, one thread, and the whole of a player's loop inside it: see the
@@ -44,6 +48,8 @@ const S = {
     who: "Who else is in?",
     requested: "This match has a level range, so the organiser decides. I have asked them and will tell you either way.",
     levelNeeded: (url: string) => `This match is for a level range and I do not know yours. Set it here first, then tap again: ${url}`,
+    linked: (match: string | null, calendar: string | null) => `Linked: this number is yours on Kicksmash now. Send a match link here any time to join or to see who is in.${match ? `\n\n${match}` : ""}${calendar ? `\n\n📅 Your matches in your calendar, updating themselves: ${calendar}` : ""}`,
+    linkBad: "This link is too old. Open the match page and tap WhatsApp again.",
   },
   ru: {
     help: "Пришлите ссылку на матч из вашего чата, и я запишу вас. Можно прислать и код матча из четырёх символов.",
@@ -61,6 +67,8 @@ const S = {
     who: "Кто уже в составе?",
     requested: "У матча есть диапазон уровня, решает организатор. Я спросил и сообщу вам ответ.",
     levelNeeded: (url: string) => `У матча есть диапазон уровня, а ваш мне неизвестен. Укажите его здесь и нажмите снова: ${url}`,
+    linked: (match: string | null, calendar: string | null) => `Готово: этот номер теперь ваш в Kicksmash. Присылайте сюда ссылку на матч, чтобы записаться или узнать, кто играет.${match ? `\n\n${match}` : ""}${calendar ? `\n\n📅 Ваши матчи в календаре, обновляются сами: ${calendar}` : ""}`,
+    linkBad: "Эта ссылка устарела. Откройте страницу матча и снова нажмите WhatsApp.",
   },
   es: {
     help: "Mándame un enlace de partido de tu chat y te apunto. También vale un código de cuatro letras.",
@@ -78,6 +86,8 @@ const S = {
     who: "¿Quién más va?",
     requested: "Este partido tiene un rango de nivel, así que decide el organizador. Se lo he preguntado y te diré la respuesta.",
     levelNeeded: (url: string) => `Este partido tiene un rango de nivel y no sé el tuyo. Ponlo aquí y vuelve a tocar: ${url}`,
+    linked: (match: string | null, calendar: string | null) => `Listo: este número ya es tuyo en Kicksmash. Mándame aquí un enlace de partido cuando quieras para apuntarte o ver quién va.${match ? `\n\n${match}` : ""}${calendar ? `\n\n📅 Tus partidos en tu calendario, se actualizan solos: ${calendar}` : ""}`,
+    linkBad: "Este enlace es demasiado antiguo. Abre la página del partido y toca WhatsApp otra vez.",
   },
 } as const;
 
@@ -99,10 +109,41 @@ async function showMatch(to: string, detail: EventDetail, locale: Locale): Promi
 }
 
 /**
+ * A `LINK-` code from the match page's "stay updated" card: this number becomes the web player's, and
+ * the answer is their match and their calendar. It is a reply to the message the player just sent,
+ * so it is free and inside the 24-hour window, like every other answer here. It runs before the
+ * number is looked up, because looking it up creates a player for a new number, and a linked number
+ * must not leave a second one behind.
+ */
+async function bindFromPage(db: Db, from: string, bind: { ticket: string; code: string | null }): Promise<string> {
+  const id = subjectUuid(bind.ticket);
+  const target = id ? await getPlayer(db, id) : null;
+  const locale = target ? localeOf(target) : "en";
+  const s = S[locale];
+  // Sent twice: the number is theirs already, so the answer is the one they had the first time.
+  const already = Boolean(target && sameNumber(target.phone, from));
+  if (!target || (!already && !verifyBindTicket(bind.ticket, target))) {
+    await sendText(from, s.linkBad);
+    return "wa:link_bad";
+  }
+  const linked = already ? target : await linkWhatsapp(db, target.id, from);
+  if (!already) await bumpMetric(db, "stay_linked_whatsapp").catch(() => undefined);
+  const detail = bind.code ? await getEventByCode(db, bind.code) : null;
+  const match = detail ? `${whenOf(detail, locale)}${detail.event.venueName ? ` · ${detail.event.venueName}` : ""}\n${baseUrl()}/${detail.event.code}` : null;
+  // The calendar page, never the personal link: a message can be forwarded, and the page signs nobody in.
+  // An address on file already brings an invitation per match; the feed as well would show each one twice.
+  const calendar = feedCalendar(linked) ? feedLinks(baseUrl(), await feedKeyFor(db, linked), locale).page : null;
+  await sendText(from, s.linked(match, calendar));
+  return "wa:linked";
+}
+
+/**
  * One inbound message, answered. Returns a short outcome string, as every other channel's handler
  * does, so the webhook's response says what happened and the browser suite can assert on it.
  */
 export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, contact?: WaContact): Promise<string> {
+  const bind = msg.type === "text" ? bindInText(readInbound(msg).text) : null;
+  if (bind) return bindFromPage(db, msg.from, bind);
   const player = await findOrCreateWhatsappPlayer(db, msg.from, contact?.profile?.name);
   const locale = localeOf(player);
   const s = S[locale];

@@ -33,3 +33,18 @@ export function readTicket(secret: string, ticket: string | null | undefined, o:
   const want = sign(secret, subject, bucket, o.salt ?? "");
   return timingSafeEqual(Buffer.from(want), Buffer.from(given)) ? subject : null;
 }
+
+/**
+ * A player id as a ticket subject: the uuid's 32 hex digits, since a ticket keeps its separator (`_`)
+ * and its subject to [A-Za-z0-9-]. Telegram's `p_` and `coach_` links and WhatsApp's `LINK-` code all
+ * name their player this way, so one pair of helpers reads every one of them back. The calendar feed's
+ * key starts with the same 32 digits.
+ */
+export const uuidSubject = (id: string) => id.replace(/-/g, "").toLowerCase();
+
+/** The uuid behind 32 hex digits, or null for anything else. */
+export const hexUuid = (s: string | null | undefined): string | null =>
+  s && /^[0-9a-f]{32}$/.test(s) ? `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}` : null;
+
+/** The player id a ticket names, before it is checked; the check needs that player's current state. */
+export const subjectUuid = (ticket: string | null | undefined): string | null => hexUuid(ticketSubject(ticket));

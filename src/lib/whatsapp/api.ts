@@ -24,7 +24,16 @@ export const whatsappEnabled = () => Boolean(process.env.WHATSAPP_TOKEN && proce
 /** The number people message, digits only, for the wa.me hand-off link. Readable without the send token. */
 export const whatsappNumber = () => (process.env.WHATSAPP_NUMBER ?? "").replace(/\D/g, "") || null;
 export const whatsappVerifyToken = () => process.env.WHATSAPP_VERIFY_TOKEN ?? null;
-const appSecret = () => process.env.WHATSAPP_APP_SECRET ?? null;
+/** Meta's app secret: it signs every delivery to the webhook, and it signs the `LINK-` code a match page puts in a player's mouth (link.ts). */
+export const whatsappAppSecret = () => process.env.WHATSAPP_APP_SECRET || null;
+const appSecret = whatsappAppSecret;
+/**
+ * Whether a match page may offer "link my WhatsApp": a number to write to, a signed code only this
+ * deployment can make (the app secret), and a thread that can answer (the send token and phone id).
+ * Short of any one of them, the tap would open a conversation nobody replies to, so the choice is
+ * simply not there.
+ */
+export const whatsappLinkable = () => Boolean(whatsappEnabled() && whatsappNumber() && whatsappAppSecret());
 const token = () => process.env.WHATSAPP_TOKEN ?? "";
 const phoneId = () => process.env.WHATSAPP_PHONE_ID ?? "";
 

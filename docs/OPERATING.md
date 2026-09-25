@@ -73,6 +73,15 @@ agent's branch that nobody opened, so `vercel.json` now sets `git.deploymentEnab
 Actions and never depended on Vercel. Deployments already built stay until they are deleted:
 `DELETE /v13/deployments/{id}` with `VERCEL_TOKEN`, keeping the live production one and a couple of
 rollback targets.
+**100 deployments a day, for the whole Vercel team, not for one project.** On 25 September 2026 the
+merge of the clubs change was refused ("Deployment rate limited — retry in 24 hours", the Vercel
+status on the commit), and production kept the code from the merge before it. Another project on
+the same team, `cathnivore`, had built 98 previews of its `build` and `ci-status` branches in the
+day. Vercel does not retry a refused deployment: the next push to `main` after a slot comes free
+deploys everything merged since. The Migrate workflow is GitHub Actions, so a migration still lands
+on merge while the code waits: one more reason every migration stays additive. The first sign is
+the commit status, not the site: read it (`GET /repos/…/commits/<sha>/status`) when a deploy poll
+finds no deployment.
 Vercel Web Analytics: 50,000 events a month on Hobby, and every project on the Vercel account
 shares them. Past the allowance there is a three-day grace period, then Vercel stops recording until
 the next billing cycle. Hobby is never billed for it, and nothing else changes. Source: Vercel's own

@@ -1,6 +1,8 @@
 import { EVENT_DURATION_MS } from "@/lib/config";
 import { icsStamp } from "@/lib/dates";
-import type { Event } from "@/db/schema";
+import { eventTitleLine, venueWithCourt } from "@/lib/labels";
+import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
+import type { Event, Slot } from "@/db/schema";
 
 export type CalendarEvent = Pick<Event, "id" | "code" | "title" | "startsAt" | "venueName" | "venueMapUrl" | "court" | "note" | "type" | "icsSequence" | "status">;
 
@@ -58,6 +60,24 @@ export type IcsInput = {
   location?: string;
 };
 
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+type RosterSlot = Pick<Slot, "status" | "position" | "invitedName"> & { player: { displayName: string } | null };
+
+/**
+ * What a calendar entry says about a match: the title ("- COMPLETE" once every spot is taken), the
+ * place with its court, and the line naming who plays. The emailed invitation and the player's own
+ * feed both take these from here, so one match reads the same in the two places it can land.
+ */
+export function inviteFields(ev: Pick<Event, "title" | "type" | "venueName" | "court" | "capacity">, roster: RosterSlot[], t: Translate) {
+  const courtNumber = (n: string) => t("event.courtNumber", { n });
+  const location = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
+  const complete = lineupComplete(roster, ev.capacity);
+  const names = roster.filter((s) => s.position <= ev.capacity && (s.status === "joined" || s.status === "confirmed")).map((s) => s.player?.displayName ?? s.invitedName ?? "?");
+  const title = withCompleteSuffix(eventTitleLine(ev, { fallback: t(ev.type === "match" ? "event.match" : "event.tournament"), courtNumber }), complete, t("calendar.completeSuffix"));
+  const playersLine = names.length ? t("calendar.players", { names: names.join(", ") }) : null;
+  return { title, location, complete, names, playersLine };
+}
+
 /** Stable UID per event so updates/cancellations replace the original entry. */
 export const icsUid = (eventId: string, domain: string) => `${eventId}@${domain}`;
 
@@ -95,7 +115,7 @@ export function buildIcs(input: IcsInput): string {
 }
 
 
-export type FeedEntry = { event: CalendarEvent; title: string; url: string; location?: string };
+export type FeedEntry = { event: CalendarEvent; title: string; url: string; location?: string; /** Lines after the link in DESCRIPTION, as the invitation's `extraDescription`. */ extra?: string[] };
 
 /** A subscribable calendar (METHOD:PUBLISH) with one VEVENT per match: group and venue feeds. */
 export function buildFeed(input: { name: string; domain: string; entries: FeedEntry[]; description?: string }): string {
@@ -111,7 +131,7 @@ export function buildFeed(input: { name: string; domain: string; entries: FeedEn
     "X-PUBLISHED-TTL:PT1H",
   ];
   const stamp = icsStamp(new Date());
-  for (const { event, title, url, location } of input.entries) {
+  for (const { event, title, url, location, extra } of input.entries) {
     const end = new Date(event.startsAt.getTime() + EVENT_DURATION_MS);
     const loc = location ?? event.venueName ?? "";
     lines.push(
@@ -123,7 +143,7 @@ export function buildFeed(input: { name: string; domain: string; entries: FeedEn
       `DTEND:${icsStamp(end)}`,
       `SUMMARY:${icsEscape(title)}`,
       ...(loc ? [`LOCATION:${icsEscape(loc)}`] : []),
-      `DESCRIPTION:${icsEscape([event.note, url].filter(Boolean).join("\n\n"))}`,
+      `DESCRIPTION:${icsEscape([event.note, url, ...(extra ?? [])].filter(Boolean).join("\n\n"))}`,
       `URL:${url}`,
       `STATUS:${event.status === "cancelled" ? "CANCELLED" : "CONFIRMED"}`,
       "END:VEVENT",

@@ -94,14 +94,18 @@ try {
   check("creator sees organizer tools", (await a.getByText("Organizer tools").count()) > 0);
   check("event page shows venue with court", (await a.getByText("Club Padel Test · Court 3").count()) > 0);
   check("no Play again before a score", (await a.getByRole("button", { name: /Play again/ }).count()) === 0);
-  check("no calendar buttons; member without email sees the add-to-calendar email form", (await a.getByRole("link", { name: "Google Calendar" }).count()) === 0 && (await a.getByText("Add to your calendar").count()) > 0);
+  // The moment somebody is in, the card asks where they will hear about it. This run has a bot and email and no WhatsApp number.
+  const stay = a.getByTestId("stay-updated");
+  const tgChoice = (await stay.getByTestId("stay-telegram").getAttribute("href")) ?? "";
+  check("a member with no channel is asked where to stay updated: Telegram in one tap with the match in the link, email, no WhatsApp without a number, no calendar buttons", (await a.getByRole("link", { name: "Google Calendar" }).count()) === 0 && (await stay.getByText("Stay updated").count()) === 1 && /^https:\/\/t\.me\/kicksmash_bot\?start=p_[0-9a-f]{32}_[0-9a-z]+_[0-9a-f]{16}_/.test(tgChoice) && tgChoice.endsWith(`_${code}`) && (await stay.getByTestId("stay-whatsapp").count()) === 0, tgChoice);
+  await stay.getByTestId("stay-email").click();
   await a.getByPlaceholder("you@example.com").first().fill("dana@example.com");
   await a.getByRole("button", { name: "Send invite" }).click();
   await a.getByText(/Calendar invite sent to dana@example.com/).waitFor({ timeout: 20000 });
   // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not.
   const emailSwitch = a.locator('[role="switch"]:not([data-testid="banter-switch"])');
   await emailSwitch.waitFor({ timeout: 20000 });
-  check("after entering an email: invite sent line + email row with notifications switch, form gone", (await a.getByText("Add to your calendar").count()) === 0 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
+  check("after entering an email: one quiet line says where updates go, the invite line + email row with notifications switch, the question gone", (await a.getByText("Stay updated").count()) === 0 && (await stay.getByText("Updates reach you by email ✓").count()) === 1 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
   const ics = await a.evaluate(async (c) => { const r = await fetch(`/${c}/calendar.ics`); return { status: r.status, body: await r.text() }; }, code);
   check("calendar.ics serves a VCALENDAR with court in title", ics.status === 200 && ics.body.includes("BEGIN:VCALENDAR") && ics.body.includes("Court 3"), String(ics.status));
   check("calendar.ics carries one short private link, no personal-link line", /URL:http:\/\/localhost:3001\/p\/[A-Za-z0-9]{12}\//.test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(/http:\/\/localhost:3001/g) || []).length === 2);

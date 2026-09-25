@@ -7,7 +7,6 @@ import { getViewer } from "@/actions/shared";
 import { cleanSource, taggedUrl } from "@/lib/source";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
-import { CalendarEmail } from "@/components/CalendarEmail";
 import { CreatorPanel } from "@/components/CreatorPanel";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
@@ -29,7 +28,11 @@ import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
+import { StayUpdated } from "@/components/StayUpdated";
 import { getDb } from "@/db";
+import { feedKeyFor, feedLinks, stayChannels } from "@/lib/calendarFeed";
+import { stayUpdated } from "@/lib/domain/stayUpdated";
+import { bindDeepLink } from "@/lib/telegram/deepLinks";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
@@ -52,7 +55,7 @@ import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
-import { joinLink } from "@/lib/whatsapp/link";
+import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
@@ -208,6 +211,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const inEventNames = new Set(namesHere.map((n) => n.trim().toLowerCase()));
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
+  // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
+  const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
+  // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
+  const stayFeed = me && stay?.kind === "reached" && stay.calendar === "feed" ? feedLinks(base, await feedKeyFor(db, me), locale) : null;
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
   const inviteTextTemplate = t("shareText.invite", { name: "__NAME__", day, time, venue, url: "__URL__" });
   const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue, url: "__URL__" });
@@ -371,7 +378,19 @@ export default async function EventPage({ params, searchParams }: Props) {
               <div className="text-sm text-muted">{t("event.pastNoScore")}</div>
             </div>
           )}
-          {me && (isMember || isWaitlisted) && !cancelled && !over && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} member={isMember} className="mt-4" />}
+          {me && stay && stay.kind !== "hidden" && (
+            <StayUpdated
+              code={code}
+              member={isMember}
+              email={emailEnabled() ? me.email : null}
+              state={stay}
+              links={{
+                whatsapp: stay.kind === "ask" && stay.choices.includes("whatsapp") ? bindLink(me, code) : null,
+                telegram: stay.kind === "ask" && stay.choices.includes("telegram") ? bindDeepLink(me, code) : null,
+              }}
+              feed={stayFeed ? { webcal: stayFeed.webcal, google: stayFeed.google } : null}
+            />
+          )}
         </section>
 
         {creatorBanner && (
