@@ -17,6 +17,9 @@ export type DomainErrorCode =
   | "blocked"
   // The coach takes anybody, but answers a first booking themselves. The caller makes a request.
   | "needs_approval"
+  // Nobody would hear it: the coach has no Telegram, no email, no push device and no WhatsApp yet,
+  // so a newcomer's booking or ask would sit in a book nobody reads (the owner, 25 September 2026).
+  | "not_taking_bookings"
   | "outside_hours"
   | "too_soon"
   // A student moving a lesson that is already inside the coach's cutoff: at that point it is a

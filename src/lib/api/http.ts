@@ -38,7 +38,7 @@ const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   invalid: 422,
   locked: 409,
   not_started: 409,
-  not_participant: 403, slot_taken: 409, not_student: 403, blocked: 403, needs_approval: 409, outside_hours: 422, too_soon: 422, too_late: 422, has_lessons: 409, no_coach: 404, too_many: 429,
+  not_participant: 403, slot_taken: 409, not_student: 403, blocked: 403, not_taking_bookings: 403, needs_approval: 409, outside_hours: 422, too_soon: 422, too_late: 422, has_lessons: 409, no_coach: 404, too_many: 429,
 };
 
 const DOMAIN_HINT: Partial<Record<DomainErrorCode, string>> = {
@@ -50,6 +50,7 @@ const DOMAIN_HINT: Partial<Record<DomainErrorCode, string>> = {
   already_in: "This player is already in the match. Nothing to do.",
   invalid: "One of the fields is out of range. The message names it.",
   forbidden: "This action needs the organizer. Ask the person who created the match to do it from their manage link.",
+  not_taking_bookings: "This coach has no way to be reached yet, so nobody would see the request. Their page says so too; pick another coach from find_coaches.",
 };
 
 export function json(data: unknown, init: { status?: number; headers?: Record<string, string>; cache?: string } = {}): NextResponse {

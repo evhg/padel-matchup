@@ -1443,7 +1443,8 @@
       "forwardText": "¡Hola! Soy el asistente de {coach}. Tus clases con {coach} ahora viven aquí: {url}\nÁbrelo una vez y ya estás en la lista. Después, reserva o mueve una clase con un toque, cuando quieras; tu bono y lo que te queda están siempre ahí.",
       "qr": "QR para la valla de la pista",
       "open": "Abrir mi asistente",
-      "inviteHint": "Esta es tu página pública: el enlace para Instagram y el tablón del club. Los alumnos que ya tienes usan el enlace de invitación de la pantalla de alumnos, que los apunta sin pedir permiso."
+      "inviteHint": "Esta es tu página pública: el enlace para Instagram y el tablón del club. Los alumnos que ya tienes usan el enlace de invitación de la pantalla de alumnos, que los apunta sin pedir permiso.",
+      "studentMessage": "Reserva tus clases de pádel conmigo aquí: {url}. Reservas, cambias y cancelas por tu cuenta, y siempre ves cuántas clases te quedan."
     },
     "home": {
       "title": "Hoy",
@@ -1708,7 +1709,9 @@
       "openBookingNote": "{name} permite reservar una hora libre a cualquiera. Elige una hora y es tuya, sin pedir permiso ni esperar.",
       "openBookingAskNote": "{name} acepta a cualquiera. Elige una hora libre y {name} la confirma, normalmente el mismo día.",
       "asked2": "Pedido para {when}. {name} responde y te avisamos en cuanto lo haga.",
-      "howConfirm": "Elige una hora libre y {name} la confirma, normalmente el mismo día. Cancela con {hours} horas o más y no se cobra nada. Después usa una de tus cancelaciones tardías gratuitas, y cuando se acaben, una cancelación tardía cuenta como clase. El bono, si tienes uno, descuenta bajo cada clase."
+      "howConfirm": "Elige una hora libre y {name} la confirma, normalmente el mismo día. Cancela con {hours} horas o más y no se cobra nada. Después usa una de tus cancelaciones tardías gratuitas, y cuando se acaben, una cancelación tardía cuenta como clase. El bono, si tienes uno, descuenta bajo cada clase.",
+      "notTaking": "{name} aún no acepta reservas.",
+      "ownerUnreachable": "Tus alumnos aún no pueden reservar contigo: ninguna reserva te llegaría. Abre tu asistente y añade una forma de avisarte."
     },
     "me": {
       "title": "Tus clases",
@@ -1730,7 +1733,8 @@
       "past": "Esa hora ya pasó.",
       "already_paid": "Esta clase ya está pagada. Una devolución se hace en el banco, no aquí.",
       "has_package": "Ya tienes un bono con clases por usar. Úsalo primero.",
-      "blocked": "Este entrenador no acepta reservas tuyas."
+      "blocked": "Este entrenador no acepta reservas tuyas.",
+      "not_taking_bookings": "Este entrenador aún no acepta reservas."
     },
     "email": {
       "paidSubject": "{student} dice que pagó",
@@ -1910,7 +1914,10 @@
     "cardAsk": "Primero pide ser alumno",
     "cardSince": "En Kicksmash desde {month}",
     "cardLessonsDone": "{count, plural, one {# clase impartida aquí} other {# clases impartidas aquí}}",
-    "noneHere": "Ningún entrenador de {country} se lista aquí todavía."
+    "noneHere": "Ningún entrenador de {country} se lista aquí todavía.",
+    "cardNotTaking": "Aún no acepta reservas",
+    "cardAsksFirst": "Los alumnos nuevos preguntan primero",
+    "cardSeePage": "Ver la página de {name}"
   },
   "moments": {
     "title": "Tus momentos",

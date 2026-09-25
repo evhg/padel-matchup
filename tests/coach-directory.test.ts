@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { acceptByInvite, blockTime, bookLesson, busyForCoaches, coachCardFacts, createCoach, nextFree, NO_BUSY, offersForCoaches, openHour, packagePriceFrom, presetHours, priceFrom, requestStudent, saveOffers, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
+import { acceptByInvite, blockTime, bookLesson, busyForCoaches, coachCardFacts, coachDoor, coachReachable, createCoach, nextFree, reachableCoaches, NO_BUSY, offersForCoaches, openHour, packagePriceFrom, presetHours, priceFrom, requestStudent, saveOffers, setStudentStatus, studentStatus, updateCoach } from "@/lib/domain/coaching";
 import { decideRequest, listOpenRequests, requestOrBook } from "@/lib/coach/chains";
 import { getCoachPhoto, hasPhoto, PROOF_LESSONS_FROM, proofForCoaches, proofLine, removeCoachPhoto, setCoachPhoto } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 import { eq } from "drizzle-orm";
-import { lessons } from "@/db/schema";
+import { lessons, players, pushSubscriptions } from "@/db/schema";
 
 /**
  * The player's side of the directory: what a card says, and whether a stranger can take an hour.
@@ -78,8 +78,8 @@ describe("the coach directory", () => {
 
   it("puts on the card what a player chooses between", async () => {
     const coach = await aCoach("Sofia", { priceSingle: 1200, currency: "thb", teachesLevelMin: 2, teachesLevelMax: 4.5, openBooking: true, bio: "Ten years on clay." });
-    const facts = coachCardFacts(coach, NO_BUSY, [], before);
-    expect(facts).toMatchObject({ handle: coach.handle, displayName: "Sofia", priceFrom: 1200, currency: "THB", openBooking: true, levels: { min: 2, max: 4.5 } });
+    const facts = coachCardFacts(coach, NO_BUSY, [], before, { reachable: true });
+    expect(facts).toMatchObject({ handle: coach.handle, displayName: "Sofia", priceFrom: 1200, currency: "THB", door: "open", levels: { min: 2, max: 4.5 } });
     expect(facts.nextFree).toBe(at(0).toISOString());
   });
 
@@ -110,8 +110,9 @@ describe("booking without asking first", () => {
   const at = (h: number) => new Date(monday.getTime() + h * HOUR);
   const before = new Date(monday.getTime() - DAY);
 
+  // Every coach here can be reached (an address), so the open door is the only thing under test.
   const aCoach = async (name: string, openBooking: boolean) => {
-    const p = await makePlayer(db, name);
+    const p = await makePlayer(db, name, { email: `${name.toLowerCase()}@example.com` });
     const coach = await createCoach(db, { playerId: p.id, displayName: name, tz: TZ, hours: presetHours("mornings") });
     return updateCoach(db, coach.id, { openBooking });
   };
@@ -178,8 +179,9 @@ describe("a first booking the coach answers", () => {
   const at = (h: number) => new Date(monday.getTime() + h * HOUR);
   const before = new Date(monday.getTime() - 2 * HOUR);
 
+  // Reachable (an address), so the coach's answer is what is under test, not whether it arrives.
   const aCoach = async (name: string, patch: { openBooking?: boolean; approveNewBookings?: boolean }) => {
-    const p = await makePlayer(db, name);
+    const p = await makePlayer(db, name, { email: `${name.toLowerCase()}@example.com` });
     const coach = await createCoach(db, { playerId: p.id, displayName: name, tz: TZ, hours: presetHours("mornings") });
     return updateCoach(db, coach.id, patch);
   };
@@ -282,16 +284,16 @@ describe("a card keeps what it promises", () => {
     const bare = await aCoach("Wim", { openBooking: true });
     const offers = await offersForCoaches(db, [packs.id, bare.id]);
 
-    const packFacts = coachCardFacts(packs, NO_BUSY, offers.get(packs.id) ?? [], before);
+    const packFacts = coachCardFacts(packs, NO_BUSY, offers.get(packs.id) ?? [], before, { reachable: true });
     expect([packFacts.priceFrom, packFacts.packageFrom]).toEqual([null, { each: 700, size: 10 }]);
     // A coach with a single price does not also get a package line: one number on the card.
     const priced = await aCoach("Yuki", { openBooking: true, priceSingle: 1200 });
     await saveOffers(db, priced.id, [{ size: 10, minutes: 60, heads: 1, price: 7000, validDays: 70 }]);
     const pricedOffers = await offersForCoaches(db, [priced.id]);
-    const pricedFacts = coachCardFacts(priced, NO_BUSY, pricedOffers.get(priced.id) ?? [], before);
+    const pricedFacts = coachCardFacts(priced, NO_BUSY, pricedOffers.get(priced.id) ?? [], before, { reachable: true });
     expect([pricedFacts.priceFrom, pricedFacts.packageFrom]).toEqual([1200, null]);
     // Neither: the card says nothing rather than pointing at a page that has nothing either.
-    const bareFacts = coachCardFacts(bare, NO_BUSY, offers.get(bare.id) ?? [], before);
+    const bareFacts = coachCardFacts(bare, NO_BUSY, offers.get(bare.id) ?? [], before, { reachable: true });
     expect([bareFacts.priceFrom, bareFacts.packageFrom]).toEqual([null, null]);
   });
 
@@ -299,9 +301,9 @@ describe("a card keeps what it promises", () => {
     const open = await aCoach("Zoe", { openBooking: true });
     const asks = await aCoach("Abe", { openBooking: false });
     // Both have the same empty week, so the only difference is whether the door is open.
-    expect(coachCardFacts(open, NO_BUSY, [], before).nextFree).toBe(at(0).toISOString());
-    expect(coachCardFacts(asks, NO_BUSY, [], before).nextFree).toBeNull();
-    expect(coachCardFacts(asks, NO_BUSY, [], before).canBookNow).toBe(false);
+    expect(coachCardFacts(open, NO_BUSY, [], before, { reachable: true }).nextFree).toBe(at(0).toISOString());
+    expect(coachCardFacts(asks, NO_BUSY, [], before, { reachable: true }).nextFree).toBeNull();
+    expect(coachCardFacts(asks, NO_BUSY, [], before, { reachable: true }).canBookNow).toBe(false);
   });
 });
 
@@ -383,12 +385,110 @@ describe("what a player judges a coach on", () => {
 
   it("puts the face and the proof on the card, and neither when there is neither", async () => {
     const coach = await aCoach("Oona", { openBooking: true });
-    const bare = coachCardFacts(coach, NO_BUSY, [], before);
+    const bare = coachCardFacts(coach, NO_BUSY, [], before, { reachable: true });
     expect([bare.photo, bare.proof]).toEqual([false, null]);
     await setCoachPhoto(db, coach.id, "image/png", PNG);
     const proof = await proofForCoaches(db, [coach]);
-    const facts = coachCardFacts(coach, NO_BUSY, [], before, { photo: (await hasPhoto(db, [coach.id])).has(coach.id), proof: proof.get(coach.id) });
+    const facts = coachCardFacts(coach, NO_BUSY, [], before, { reachable: true, photo: (await hasPhoto(db, [coach.id])).has(coach.id), proof: proof.get(coach.id) });
     expect(facts.photo).toBe(true);
     expect(facts.proof).toEqual({ since: coach.createdAt.toISOString(), lessonsDone: null });
+  });
+});
+
+/**
+ * The owner, 25 September 2026: "Improve the coach card." Two lies found the day before. A coach who
+ * answers every newcomer themselves wore "⚡ Book without asking", because the card read
+ * `open_booking` alone. And both listed coaches had no Telegram, no email and no push device, while
+ * ricardo's card and page promised bookings that would have reached nobody.
+ */
+describe("the door a card and a page promise", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const TZ = "Asia/Bangkok";
+  // A Monday 00:00 UTC; the morning template opens at 07:00 Bangkok, so at(0) is the first hour and
+  // `before`, two hours earlier, leaves the default two-hour notice exactly met (rule 11).
+  const monday = new Date("2026-10-05T00:00:00.000Z");
+  const at = (h: number) => new Date(monday.getTime() + h * HOUR);
+  const before = new Date(monday.getTime() - 2 * HOUR);
+
+  const aCoach = async (name: string, player: Parameters<typeof makePlayer>[2] = {}, patch: Parameters<typeof updateCoach>[2] = {}) => {
+    const p = await makePlayer(db, name, player);
+    const coach = await createCoach(db, { playerId: p.id, displayName: name, tz: TZ, hours: presetHours("mornings") });
+    return Object.keys(patch).length ? updateCoach(db, coach.id, patch) : coach;
+  };
+
+  it("reads the door in one word, and nobody hearing it closes every door", () => {
+    expect(coachDoor({ openBooking: true, approveNewBookings: false }, true)).toBe("open");
+    expect(coachDoor({ openBooking: true, approveNewBookings: true }, true)).toBe("approve");
+    expect(coachDoor({ openBooking: false, approveNewBookings: false }, true)).toBe("ask");
+    // Approval without the open door is a leftover switch, not a door: they still ask first.
+    expect(coachDoor({ openBooking: false, approveNewBookings: true }, true)).toBe("ask");
+    for (const openBooking of [true, false]) for (const approveNewBookings of [true, false]) expect(coachDoor({ openBooking, approveNewBookings }, false)).toBe("closed");
+  });
+
+  it("never sells a coach who answers every newcomer as 'book without asking'", async () => {
+    const open = await aCoach("Ines", { email: "ines@example.com" }, { openBooking: true });
+    const answers = await aCoach("Joao", { email: "joao@example.com" }, { openBooking: true, approveNewBookings: true });
+    // The same empty week and the same open door: the only difference is who answers a first pick.
+    const openFacts = coachCardFacts(open, NO_BUSY, [], before, { reachable: true });
+    const answersFacts = coachCardFacts(answers, NO_BUSY, [], before, { reachable: true });
+    expect([openFacts.door, openFacts.canBookNow, openFacts.nextFree]).toEqual(["open", true, at(0).toISOString()]);
+    expect([answersFacts.door, answersFacts.canBookNow, answersFacts.nextFree]).toEqual(["approve", false, null]);
+  });
+
+  it("finds who a request would reach in one read: Telegram, an email, a push device or WhatsApp", async () => {
+    const nobody = await aCoach("Ricardo", {}, { openBooking: true });
+    const blank = await aCoach("Blanca", { email: "   " });
+    const tg = await aCoach("Tomas", { telegramId: 7_100_001 });
+    const mail = await aCoach("Maria", { email: "maria@example.com" });
+    const pushed = await aCoach("Pau");
+    await db.insert(pushSubscriptions).values({ playerId: pushed.playerId, endpoint: "https://push.example/pau", p256dh: "key", auth: "secret" });
+    const wa = await aCoach("Wanda", {}, { whatsapp: "+66 89 111 2222" });
+    const ids = [nobody, blank, tg, mail, pushed, wa].map((c) => c.id);
+    expect([...(await reachableCoaches(db, ids))].sort()).toEqual([tg.id, mail.id, pushed.id, wa.id].sort());
+    expect(await reachableCoaches(db, [])).toEqual(new Set());
+    // One coach at a time says the same, and a WhatsApp number answers without asking the database.
+    expect([await coachReachable(db, nobody), await coachReachable(db, pushed), await coachReachable(db, wa)]).toEqual([false, true, true]);
+  });
+
+  it("keeps a coach nobody can reach on the list, and says they are not taking bookings", async () => {
+    const quiet = await aCoach("Rico", {}, { openBooking: true, isPublic: true });
+    const reach = await reachableCoaches(db, [quiet.id]);
+    const facts = coachCardFacts(quiet, NO_BUSY, [], before, { reachable: reach.has(quiet.id) });
+    // The same open door and the same free week that name at(0) on a reachable card.
+    expect([facts.door, facts.canBookNow, facts.nextFree]).toEqual(["closed", false, null]);
+  });
+
+  it("refuses a newcomer's booking and ask to a coach nobody can reach, and nothing else", async () => {
+    const coach = await aCoach("Rafa", {}, { openBooking: true });
+    const sam = await makePlayer(db, "Sam");
+    // The open door takes anybody, so being unreachable is the only thing in the way.
+    await expect(bookLesson(db, { coach, studentPlayerId: sam.id, startsAt: at(1), byCoach: false, source: "web" }, before)).rejects.toMatchObject({ code: "not_taking_bookings" });
+    await expect(requestOrBook(db, coach, sam.id, at(1), null, before)).rejects.toMatchObject({ code: "not_taking_bookings" });
+    await expect(requestStudent(db, coach.id, sam.id)).rejects.toMatchObject({ code: "not_taking_bookings" });
+    // With "I answer a first booking", the pick would become a request: that is refused too.
+    const answering = await updateCoach(db, coach.id, { approveNewBookings: true });
+    await expect(requestOrBook(db, answering, sam.id, at(1), null, before)).rejects.toMatchObject({ code: "not_taking_bookings" });
+    expect(await listOpenRequests(db, coach.id, before)).toEqual([]);
+    expect(await studentStatus(db, coach.id, sam.id)).toBe("none");
+
+    // What the coach does themselves is not a request to anybody: their own booking, and their link.
+    const kai = await makePlayer(db, "Kai");
+    await bookLesson(db, { coach: answering, studentPlayerId: kai.id, startsAt: at(2), byCoach: true, source: "web" }, before);
+    const lia = await makePlayer(db, "Lia");
+    expect(await acceptByInvite(db, coach.id, lia.id)).toBe("accepted");
+    const { lesson } = await bookLesson(db, { coach: answering, studentPlayerId: lia.id, startsAt: at(3), byCoach: false, source: "web" }, before);
+    expect(lesson.startsAt.toISOString()).toBe(at(3).toISOString());
+
+    // An address on the coach is the whole difference: the same newcomer, the same hour, booked.
+    await db.update(players).set({ email: "rafa@example.com" }).where(eq(players.id, coach.playerId));
+    const reopened = await updateCoach(db, coach.id, { approveNewBookings: false });
+    await bookLesson(db, { coach: reopened, studentPlayerId: sam.id, startsAt: at(1), byCoach: false, source: "web" }, before);
+    expect(await studentStatus(db, coach.id, sam.id)).toBe("accepted");
   });
 });

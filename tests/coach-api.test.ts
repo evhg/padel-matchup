@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { coaches } from "@/db/schema";
+import { coaches, players } from "@/db/schema";
 import { bookLessonApi, cancelLessonApi, coachSlots, requestCoach } from "@/lib/api/coachOps";
+import { fail } from "@/lib/api/http";
+import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { coachToPublic } from "@/lib/api/serialize";
 import { coachesAtClub, createCoach, listPublicCoaches, presetHours, setStudentStatus } from "@/lib/domain/coaching";
 import { createTestDb, makePlayer } from "./helpers/db";
@@ -37,7 +39,8 @@ describe("coaches for assistants", () => {
   });
 
   it("walks the whole path: slots, ask, accept, book, cancel", async () => {
-    const cp = await makePlayer(db, "Coach Api");
+    // An address, so the agent's ask reaches the coach: a coach nobody can reach takes no asks at all.
+    const cp = await makePlayer(db, "Coach Api", { email: "api.coach@example.com" });
     const coach0 = await createCoach(db, { playerId: cp.id, displayName: "Api", tz: "Asia/Bangkok", hours: presetHours("both") });
     await db.update(coaches).set({ isPublic: true }).where(eq(coaches.id, coach0.id));
     const slots = await coachSlots(db, { handle: coach0.handle, days: 7 });
@@ -61,5 +64,31 @@ describe("coaches for assistants", () => {
     expect(cancelled.outcome).toBe("none");
     await expect(cancelLessonApi(db, { lessonId: booked.lesson.id, token: asked.student.personalToken })).rejects.toMatchObject({ status: 409 });
     await expect(bookLessonApi(db, { handle: "nobody", token: asked.student.personalToken, startsAt: slots.slots[3] })).rejects.toMatchObject({ status: 404 });
+  });
+
+  // ricardo, 24 September 2026: listed, open to anybody, and no Telegram, no email, no push device.
+  // An assistant could ask and book on his page, and nobody would ever have heard it.
+  it("refuses an assistant's ask and booking for a coach nobody can reach, and says why", async () => {
+    const cp = await makePlayer(db, "Coach Quiet");
+    const quiet = await createCoach(db, { playerId: cp.id, displayName: "Quiet", tz: "Asia/Bangkok", hours: presetHours("both") });
+    await db.update(coaches).set({ isPublic: true, openBooking: true }).where(eq(coaches.id, quiet.id));
+    const slots = await coachSlots(db, { handle: quiet.handle, days: 7 });
+    const playersBefore = (await db.select().from(players)).length;
+    const refused = await requestCoach(db, { handle: quiet.handle, name: "Agent Bea" }).catch((e: unknown) => e);
+    expect(refused).toMatchObject({ code: "not_taking_bookings" });
+    // The refusal leaves no stranger's row behind, and reaches the agent as a 403 with the reason.
+    expect((await db.select().from(players)).length).toBe(playersBefore);
+    const res = fail(refused);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.hint).toMatch(/no way to be reached/);
+    // With a token of its own, the open door still says no rather than making a student of them.
+    const bea = await makePlayer(db, "Bea");
+    const token = await getOrCreatePersonalToken(db, bea.id);
+    await expect(bookLessonApi(db, { handle: quiet.handle, token, startsAt: slots.slots[3] })).rejects.toMatchObject({ code: "not_taking_bookings" });
+    await expect(requestCoach(db, { handle: quiet.handle, token })).rejects.toMatchObject({ code: "not_taking_bookings" });
+    // An address on the coach is the whole difference: the same token now books.
+    await db.update(players).set({ email: "quiet.coach@example.com" }).where(eq(players.id, cp.id));
+    const booked = await bookLessonApi(db, { handle: quiet.handle, token, startsAt: slots.slots[3] });
+    expect(booked.lesson.startsAt).toBe(slots.slots[3]);
   });
 });

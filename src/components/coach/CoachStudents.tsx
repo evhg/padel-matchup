@@ -279,7 +279,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
         <p className="mt-1 text-sm text-muted">{t("students.linkHelp")}</p>
         <p className="mt-2 break-all font-mono text-xs text-muted">{studentUrl}</p>
         <div className="mt-3">
-          <ShareButtons url={studentUrl} text={t("done.forwardText", { coach: coachName, url: studentUrl })} size="sm" />
+          <ShareButtons url={studentUrl} text={t("done.studentMessage", { url: studentUrl })} size="sm" />
         </div>
         {telegramUrl && (
           <div className="mt-3 rounded-xl bg-panel p-3" data-testid="student-telegram-link">
@@ -287,7 +287,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
             <p className="mt-1 text-xs text-muted">{t("students.telegramHelp")}</p>
             <p className="mt-1 break-all font-mono text-xs text-muted">{telegramUrl}</p>
             <div className="mt-2">
-              <ShareButtons url={telegramUrl} text={t("done.forwardText", { coach: coachName, url: telegramUrl })} size="sm" />
+              <ShareButtons url={telegramUrl} text={t("done.studentMessage", { url: telegramUrl })} size="sm" />
             </div>
           </div>
         )}

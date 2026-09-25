@@ -54,7 +54,8 @@ describe("the coach's student link", () => {
   });
 
   it("accepts on open; a pending ask becomes accepted; paused and accepted stay as they are", async () => {
-    const p = await makePlayer(db, "Coach Bo");
+    // An address, so Ivan's ask reaches Bo: a coach nobody can reach takes no asks at all.
+    const p = await makePlayer(db, "Coach Bo", { email: "bo.coach@example.com" });
     const coach = await createCoach(db, { playerId: p.id, displayName: "Bo", clubNames: "DPC", lessonMinutes: 60, hours: presetHours("both"), tz: "Asia/Bangkok" });
     const fresh = await makePlayer(db, "Dasha");
     expect(await acceptByInvite(db, coach.id, fresh.id)).toBe("accepted");

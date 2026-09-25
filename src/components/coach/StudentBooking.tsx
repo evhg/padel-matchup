@@ -23,6 +23,11 @@ type Props = {
   openBooking?: boolean;
   /** …but the coach answers a first booking themselves, so a newcomer's pick is a request. */
   approveNew?: boolean;
+  /**
+   * Nothing would reach the coach yet (`coachReachable`): somebody not on the list meets one honest
+   * line instead of a form, whatever `openBooking` says. The coach's own invite link still seats them.
+   */
+  closed?: boolean;
   slots: Slot[];
   /** In the hours but already booked: tappable for the waitlist. */
   taken?: Slot[];
@@ -58,12 +63,15 @@ type Props = {
 };
 
 /** The student's side of the book: ask once, then tap a free time. Cancel with the rule in plain words. */
-export function StudentBooking({ handle, coachName, signedIn, status, openBooking = false, approveNew = false, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
+export function StudentBooking({ handle, coachName, signedIn, status, openBooking = false, approveNew = false, closed = false, slots, taken = [], days, dayLabels, weekOf = {}, lessons, pkg, cutoffHours, owed = null, prices = null, packages = [], slotsSecond = [], pay = { promptpay: false, link: null, atClub: false }, whatsappUrl, waits = [], offers = [], requests = [], minLocal, invite = null, justJoined = false }: Props) {
   const t = useTranslations("coach");
   const tRoot = useTranslations();
   // Nobody the coach has accepted yet. `bookLesson` lets exactly these three book when the coach is
   // open, so the screen shows exactly these three the booking block. `paused` is not one of them.
   const guest = status === "none" || status === "left" || status === "requested";
+  // ricardo's page told a stranger "ricardo confirms it — usually the same day" while nothing could
+  // reach ricardo. Where the form would be, the page now says what is true, and offers nothing to send.
+  const shut = closed && guest && !invite;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [name, setName] = useState("");
@@ -112,7 +120,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
   };
   const groupPrices = Boolean(prices && (longer ? second?.two : prices.two || prices.three || prices.four));
   const money = (n: number) => `${n} ${prices?.currency ?? owed?.currency ?? ""}`.trim();
-  const errorText = (code: string) => (["slot_taken", "not_student", "blocked", "outside_hours", "too_soon", "too_late", "no_coach", "past", "has_package"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  const errorText = (code: string) => (["slot_taken", "not_student", "blocked", "not_taking_bookings", "outside_hours", "too_soon", "too_late", "no_coach", "past", "has_package"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
 
   /** The student takes a package from the page: unpaid, and the ways to pay are on this screen. */
   const takePackage = (o: OfferDTO2) => {
@@ -288,7 +296,12 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
   return (
     <div className="flex flex-col gap-4">
       <section className="card">
-        {status === "none" && !openBooking && (
+        {shut && (
+          <p className="text-sm font-semibold" data-testid="not-taking">
+            {t("page.notTaking", { name: coachName })}
+          </p>
+        )}
+        {!shut && status === "none" && !openBooking && (
           <form onSubmit={request} className="flex flex-col gap-3" data-testid={invite ? "invited-join" : "ask-to-join"}>
             {!signedIn && (
               <>
@@ -302,7 +315,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
           </form>
         )}
         {status === "accepted" && justJoined && <p className="mb-3 text-sm font-semibold text-ok">✓ {t("page.invitedSignedIn", { name: coachName })}</p>}
-        {status === "requested" && !openBooking && <p className="text-sm font-semibold">⏳ {t("page.requested", { name: coachName })}</p>}
+        {!shut && status === "requested" && !openBooking && <p className="text-sm font-semibold">⏳ {t("page.requested", { name: coachName })}</p>}
         {status === "paused" && <p className="text-sm font-semibold">{t("page.paused", { name: coachName })}</p>}
         {status === "accepted" && offers.length > 0 && (
           <div className="mb-4 flex flex-col gap-2 rounded-2xl bg-ok-soft px-4 py-3" data-testid="offers">
@@ -322,7 +335,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
             ))}
           </div>
         )}
-        {(status === "accepted" || (openBooking && guest)) && (
+        {(status === "accepted" || (openBooking && guest && !shut)) && (
           <div className="flex flex-col gap-3">
             <h2 className="text-xl font-extrabold tracking-tight">{t("page.book")}</h2>
             {guest && openBooking && (
@@ -638,8 +651,9 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
           <p className="text-xs text-faint">{t("page.payNothingThrough")}</p>
         </section>
       )}
-      {/* "It is yours at once" was still printed under a header saying the coach confirms it. */}
-      <HowThisWorks text={openBooking && approveNew && status !== "accepted" ? t("page.howConfirm", { hours: cutoffHours, name: coachName }) : t("page.how", { hours: cutoffHours })} />
+      {/* "It is yours at once" was still printed under a header saying the coach confirms it. And
+          under "not taking bookings yet" it would promise a booking the line above refuses. */}
+      {!shut && <HowThisWorks text={openBooking && approveNew && status !== "accepted" ? t("page.howConfirm", { hours: cutoffHours, name: coachName }) : t("page.how", { hours: cutoffHours })} />}
 
       {/* Last on the page, the way the one thing you cannot undo is last on My matches. Only somebody
           who is actually on this coach's list sees it. */}

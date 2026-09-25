@@ -74,7 +74,8 @@ describe("a player takes a coach off their own list", () => {
   afterAll(async () => close());
 
   const pair = async (name: string) => {
-    const coachPlayer = await makePlayer(db, `${name} coach`);
+    // An address, so an ask reaches the coach: a coach nobody can reach takes no asks at all.
+    const coachPlayer = await makePlayer(db, `${name} coach`, { email: `${name.toLowerCase()}.coach@example.com` });
     const student = await makePlayer(db, `${name} student`);
     const coach = await createCoach(db, { playerId: coachPlayer.id, displayName: name, tz: "Asia/Bangkok", hours: presetHours("both") });
     await setStudentStatus(db, coach.id, student.id, "accepted");

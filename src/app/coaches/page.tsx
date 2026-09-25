@@ -8,7 +8,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
 import { countryName, countryOfTz, noneInCountry, visitorCountry } from "@/lib/domain/countries";
-import { busyForCoaches, coachCardFacts, listPublicCoaches, hasPhoto, NO_BUSY, offersForCoaches, proofForCoaches } from "@/lib/domain/coaching";
+import { busyForCoaches, coachCardFacts, listPublicCoaches, hasPhoto, NO_BUSY, offersForCoaches, proofForCoaches, reachableCoaches } from "@/lib/domain/coaching";
 import { localeAlternates } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,8 @@ export default async function CoachesPage() {
   const now = new Date();
   // One query for the whole list's busy time, not one per coach (rule 12).
   const ids = coaches.map((c) => c.id);
-  const [busy, offers, photos, proof] = await Promise.all([busyForCoaches(db, ids, now, new Date(now.getTime() + 14 * DAY_MS)), offersForCoaches(db, ids), hasPhoto(db, ids), proofForCoaches(db, coaches)]);
+  // Whether a request would reach each coach is one more query for the whole list, never one per card.
+  const [busy, offers, photos, proof, reachable] = await Promise.all([busyForCoaches(db, ids, now, new Date(now.getTime() + 14 * DAY_MS)), offersForCoaches(db, ids), hasPhoto(db, ids), proofForCoaches(db, coaches), reachableCoaches(db, ids)]);
   // The city the edge reports puts the visitor's own city first; a time zone alone cannot tell Phuket from Bangkok.
   const hdrs = await headers();
   const hereCity = (hdrs.get("x-vercel-ip-city") ?? "").toLowerCase();
@@ -49,7 +50,7 @@ export default async function CoachesPage() {
     .sort((a, b) => Number(decodeURIComponent(b.city.name).toLowerCase() === hereCity || (b.city.tz === hereTz ? 0.5 : 0)) - Number(decodeURIComponent(a.city.name).toLowerCase() === hereCity || (a.city.tz === hereTz ? 0.5 : 0)));
   const placed = new Set(sections.flatMap((s) => s.list.map((c) => c.id)));
   const elsewhere = coaches.filter((c) => !placed.has(c.id));
-  const card = (c: (typeof coaches)[number], cityName: string | null) => <CoachListCard key={c.id} coach={coachCardFacts(c, busy.get(c.id) ?? NO_BUSY, offers.get(c.id) ?? [], now, { photo: photos.has(c.id), proof: proof.get(c.id) })} locale={locale} foundingCity={cityName} />;
+  const card = (c: (typeof coaches)[number], cityName: string | null) => <CoachListCard key={c.id} coach={coachCardFacts(c, busy.get(c.id) ?? NO_BUSY, offers.get(c.id) ?? [], now, { reachable: reachable.has(c.id), photo: photos.has(c.id), proof: proof.get(c.id) })} locale={locale} foundingCity={cityName} />;
   // The same list a search engine reads, in the order a visitor sees it.
   const base = baseUrl();
   const jsonLd = {

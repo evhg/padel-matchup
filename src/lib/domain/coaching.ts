@@ -1,8 +1,8 @@
 import { transliterate } from "@/lib/translit";
-import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lt, lte, max, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, max, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { newCoachCode } from "@/lib/codes";
-import { clubs, coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
+import { clubs, coachAssets, coachBlocks, coachManagers, coachOpenings, coachPackageOffers, coachStudents, coaches, lessonPackages, lessons, players, pushSubscriptions, type Coach, type CoachBlock, type CoachPackageOffer, type CoachStudent, type Lesson, type LessonPackage, type Player } from "@/db/schema";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { COURT_LIMITS } from "./courts";
@@ -374,6 +374,9 @@ export async function requestStudent(db: Db, coachId: string, playerId: string):
   if (current === "blocked") throw new DomainError("blocked");
   // Somebody who left can ask again; leaving is not a door that locks behind them.
   if (current !== "none" && current !== "left") return current;
+  // An ask is a request the coach answers. With no way to reach them it waits for ever, and the page
+  // said "will confirm" to the person waiting. The coach's own invite link is not this door.
+  if (!(await reachableCoaches(db, [coachId])).has(coachId)) throw new DomainError("not_taking_bookings");
   await db.insert(coachStudents).values({ coachId, playerId, status: "requested" }).onConflictDoNothing();
   return "requested";
 }
@@ -981,6 +984,10 @@ export async function bookLesson(db: Db, input: BookLessonInput, now = new Date(
   if (!input.byCoach) {
     joins = status !== "accepted";
     if (joins && !(coach.openBooking && (KNOWN_TO_COACH.includes(status) || NEW_TO_COACH.includes(status)))) throw new DomainError("not_student");
+    // Before the approval, so the request an approving coach turns the pick into is refused too: a
+    // newcomer's booking in a book whose coach nobody can reach is a promise nobody keeps. One bounded
+    // read, and only on this path — a student already on the list never pays for it.
+    if (joins && !(await coachReachable(db, coach))) throw new DomainError("not_taking_bookings");
     if (joins && coach.approveNewBookings && NEW_TO_COACH.includes(status)) throw new DomainError("needs_approval");
     if (startsAt.getTime() < now.getTime() + coach.minNoticeHours * HOUR_MS) throw new DomainError("too_soon");
     if (!withinHours(coach, startsAt, minutes)) throw new DomainError("outside_hours");
@@ -1616,8 +1623,76 @@ export function coachCardGaps(
   return missing.filter(([has]) => !has).map(([, gap]) => gap);
 }
 
-export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[] = [], now = new Date(), judge: { photo?: boolean; proof?: CoachProof } = {}) {
-  const canBookNow = coach.openBooking;
+/**
+ * Which of these coaches a newcomer's booking or ask would actually reach, in one query for the whole
+ * list (rule 12).
+ *
+ * On 24 September 2026 both listed coaches in production had no Telegram, no email and no push
+ * device, and ricardo's card and page still said "ricardo confirms it — usually the same day". Nobody
+ * would ever have heard that request. So a coach is reachable when their own player row has a
+ * Telegram account or an email address, when a device of theirs takes push, or when their book
+ * carries a WhatsApp number a student can write to.
+ *
+ * `channelFor` in `src/lib/coach/notify.ts` is not this test: it answers "push" whenever push is
+ * configured, device or no device, which is right for a notice that may fail quietly and wrong for a
+ * promise on a page. The rows decide rather than the deployment's switches, so a deployment that runs
+ * without one of the channels (rule 4) does not close every book on it.
+ */
+export async function reachableCoaches(db: Db, coachIds: string[]): Promise<Set<string>> {
+  if (coachIds.length === 0) return new Set();
+  const rows = await db
+    .select({ id: coaches.id })
+    .from(coaches)
+    .innerJoin(players, eq(players.id, coaches.playerId))
+    .where(
+      and(
+        inArray(coaches.id, coachIds),
+        or(
+          isNotNull(players.telegramId),
+          sql`coalesce(btrim(${players.email}), '') <> ''`,
+          sql`coalesce(btrim(${coaches.whatsapp}), '') <> ''`,
+          // Aliased and named by hand: a one-table subquery writes its columns bare (the ship skill).
+          sql`exists (select 1 from ${pushSubscriptions} ps where ps.player_id = ${players}.id)`,
+        ),
+      ),
+    );
+  return new Set(rows.map((r) => r.id));
+}
+
+/** The same answer for one coach. A WhatsApp number on the row settles it without a read. */
+export async function coachReachable(db: Db, coach: Pick<Coach, "id" | "whatsapp">): Promise<boolean> {
+  if (coach.whatsapp?.trim()) return true;
+  return (await reachableCoaches(db, [coach.id])).has(coach.id);
+}
+
+/**
+ * What somebody this coach never had meets at the door, in one word, so the card, the page and the
+ * refusal say the same thing.
+ *
+ *   closed  — nobody would hear them: not taking bookings yet, whatever the switches say.
+ *   ask     — they ask to become a student, and the coach accepts.
+ *   approve — they pick a free hour, and the coach answers that first pick ("New students ask first").
+ *   open    — they pick a free hour and it is theirs.
+ *
+ * Only `open` is "book without asking". The card said it for `approve` too, because it read
+ * `open_booking` alone, so a coach who answers every newcomer was sold as one who answers nobody.
+ */
+export type CoachDoor = "open" | "approve" | "ask" | "closed";
+
+export function coachDoor(coach: Pick<Coach, "openBooking" | "approveNewBookings">, reachable: boolean): CoachDoor {
+  if (!reachable) return "closed";
+  if (!coach.openBooking) return "ask";
+  return coach.approveNewBookings ? "approve" : "open";
+}
+
+/**
+ * `judge.reachable` has no default on purpose: a caller that forgot it would either promise a book
+ * nobody reads or close every book on the list, and both are the lie this exists to stop.
+ */
+export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<CoachPackageOffer, "size" | "price" | "heads">[] = [], now = new Date(), judge: { reachable: boolean; photo?: boolean; proof?: CoachProof }) {
+  const door = coachDoor(coach, judge.reachable);
+  // A free hour on a card is a promise that the reader can take it. Only an open door keeps that.
+  const canBookNow = door === "open";
   return {
     /** A face, served from `/c/{handle}/photo`. A player could not tell three real coaches from test data. */
     photo: Boolean(judge.photo),
@@ -1636,7 +1711,7 @@ export function coachCardFacts(coach: Coach, free: CoachFree, offers: Pick<Coach
     nextFree: canBookNow ? (nextFree(coach, free, now)?.toISOString() ?? null) : null,
     tz: coach.tz,
     canBookNow,
-    openBooking: coach.openBooking,
+    door,
     levels: { min: coach.teachesLevelMin, max: coach.teachesLevelMax },
   };
 }
