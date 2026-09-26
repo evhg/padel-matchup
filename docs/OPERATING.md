@@ -97,6 +97,39 @@ unverified tier — and the definition is the whole of it, because Meta counts o
 anything we reply for the next day; only templates to people who have gone quiet are rationed.
 GitHub Actions: free on a public repository.
 
+## WhatsApp templates: what they cost
+
+A player whose channel is WhatsApp (a number that wrote to us, no Telegram) hears about a match
+through four message templates in `data/whatsapp-templates.json`: a change, a free spot, the score
+ask and the result card. Outside the 24-hour window a person opens by writing to us, WhatsApp
+delivers nothing else.
+
+- **What Meta charges.** Since 1 July 2025 Meta charges per delivered template, by category and by
+  the recipient's country (Thailand is in "Rest of Asia Pacific"). A utility template is free inside
+  an open window; a marketing template is charged in every window. All four of ours are utility, so
+  the code does not track the window: inside it a template costs nothing, and outside it nothing else
+  could arrive at all. Read the price per message on Meta's rate card; this page does not copy it.
+- **Meta may change the category.** Meta reads each template and can move a utility template to
+  marketing when the text looks like promotion. A free spot is the likeliest one. After approval, and
+  now and then, run `node scripts/whatsapp-templates.mjs --list`: the last column is the category
+  Meta gave. A template that shows `MARKETING` costs money in every window; rewrite its text as a
+  plain notice and create it again, or set the cap lower.
+- **The daily cap is the cost guard.** `WHATSAPP_TEMPLATES_PER_DAY` (50 when unset) is the most
+  templates the app sends in one UTC day; `0` switches them off. The count is `whatsapp_templates` in
+  `metrics_daily` (only messages Meta took); a refusal at the cap bumps `whatsapp_templates_capped`.
+  At the cap, or when Meta refuses a template, the notice goes by email, then push, as it did before
+  WhatsApp. One free spot sends ten WhatsApp messages at most (`REFILL_WHATSAPP_MAX`).
+- **How many per match.** For one WhatsApp player in a match: one per change that reaches them (the
+  line-up complete or open again, a new time, a cancellation), two score asks at most (the evening
+  and the next morning, only while no score exists), and one result card, once ever. A free spot
+  adds at most ten, to people outside the match.
+- **Creating the templates.** `node scripts/whatsapp-templates.mjs --create` shows what it would send;
+  `--create --yes` sends each template and language Meta does not hold yet (`WHATSAPP_WABA_ID`,
+  `WHATSAPP_TOKEN`; `--base` if the address is not `https://kicksma.sh`). The result card's picture
+  header needs a sample picture: `--header-handle <h>`, or `--sample <png> --app-id <id>` to upload
+  one, or create that template by hand in WhatsApp Manager. A template Meta already holds is left
+  alone: a change to an approved text is a new review, done in WhatsApp Manager.
+
 ## The research desk (Tavily)
 
 The free plan gives a thousand search credits a month. The hourly job spends them evenly: each run may spend up to twelve credits, only as far as the even pace allows, never the last five. Thirty listening queries in English, Russian and Spanish look for fresh threads (one credit each, daily, later when they yield nothing); thirty-three find queries map clubs, coaches, tournaments and communities in ten cities (every ten days); new clubs and coaches get their public contacts read once (ten pages for two credits). Hand searches for answer pages go through `POST /api/admin/research {"q": ...}` and are cached a week; `GET /api/admin/research` shows the meter, the pace, every query's yield and the finds. The board row "Tavily" reads Tavily's own meter. If credits run out early, lower `everyHours` in `src/lib/research/queries.ts`; if they are left over, raise `PLAN.reserve` down.

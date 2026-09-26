@@ -82,6 +82,12 @@ export const players = pgTable(
     uniqueIndex("players_public_slug_idx")
       .on(t.publicSlug)
       .where(sql`${t.publicSlug} is not null`),
+    // Every WhatsApp message looks its sender up by number (src/lib/whatsapp/identity.ts); without
+    // this that is a scan of every player, per message. Not unique, so it builds over whatever rows
+    // production holds today; `linkWhatsapp` is what folds two rows with one number into one.
+    index("players_phone_idx")
+      .on(t.phone)
+      .where(sql`${t.phone} is not null`),
   ],
 );
 

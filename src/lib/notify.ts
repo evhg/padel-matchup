@@ -11,7 +11,7 @@ import { events, type Event, type Player, type Slot } from "@/db/schema";
 import { buildIcs, inviteFields } from "@/lib/calendar";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
-import { APP_NAME, baseUrl, emailEnabled, emailFrom, shortHost } from "@/lib/config";
+import { APP_NAME, baseUrl, emailEnabled, emailFrom, REFILL_EMAIL_MAX, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
@@ -31,6 +31,7 @@ import { botLocale, cardTitle, strings as botStrings, whenLine, whereLine } from
 import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
+import { sendWaTemplate, waLocale, waMatchLine } from "@/lib/whatsapp/templates";
 
 /**
  * All outbound notifications live here. Every function is safe to call when
@@ -343,31 +344,46 @@ export async function offerFreeCourts(db: Db, now = new Date(), say: typeof tell
  * told: the slot sat open until three players turned up or the match quietly died.
  *
  * Each person hears once, on the channel they have (`channelFor`): in Telegram a private message whose
- * ✅ is the same one-tap join the card carries, else an email with the match link, else a push. Who
- * hears it, and the once-ever rule, are decided in `refillRecipients`; this only carries the words.
+ * ✅ is the same one-tap join the card carries, else the `ks_spot_open` template in WhatsApp whose
+ * "I'm in" is the thread's own `wj:` join, else an email with the match link, else a push. Who hears
+ * it, and the once-ever rule, are decided in `refillRecipients`; this only carries the words.
  */
-export async function notifyRefill(db: Db, eventId: string, now = new Date()): Promise<{ telegram: number; emails: number; pushes: number; told: number }> {
-  const sent = { telegram: 0, emails: 0, pushes: 0, told: 0 };
+export async function notifyRefill(db: Db, eventId: string, now = new Date()): Promise<{ telegram: number; whatsapp: number; emails: number; pushes: number; told: number }> {
+  const sent = { telegram: 0, whatsapp: 0, emails: 0, pushes: 0, told: 0 };
   const reach = channelsOffered();
-  if (!reach.telegram && !reach.email && !reach.push) return sent;
+  if (!reach.telegram && !reach.whatsapp && !reach.email && !reach.push) return sent;
   const found = await refillRecipients(db, eventId, now, reach);
   if (!found) return sent;
   const { event: ev, players: people } = found;
   const detail = await getEventDetail(db, ev);
   const seated = detail.roster.filter(isOccupied);
   const left = detail.roster.filter(isClaimable).length;
+  // First names only (rule 7), and the public link: a forwarded message keeps its buttons.
+  const who = seated.map((x) => (x.player?.displayName ?? x.invitedName ?? "").trim().split(/\s+/)[0]).filter(Boolean).join(", ");
   for (const p of people) {
-    const via = channelFor(p, reach);
+    let via = channelFor(p, reach);
     if (via === "telegram" && p.telegramId) {
       const locale = botLocale(p.locale);
       const s = botStrings(locale);
-      // First names only (rule 7), and the public link: a forwarded message keeps its buttons.
-      const who = seated.map((x) => (x.player?.displayName ?? x.invitedName ?? "").trim().split(/\s+/)[0]).filter(Boolean).join(", ");
       const text = s.refillOffer(cardTitle(detail, locale), whenLine(detail, locale), whereLine(detail, locale), who, s.spots(left));
       const keyboard = { inline_keyboard: [[{ text: s.in, callback_data: `j:${ev.code}` }, { text: s.open, url: miniAppUrl(ev.code) ?? eventUrl(baseUrl(), ev.code) }]] };
       const res = await sendMessage(p.telegramId, esc(text), { keyboard }).catch(() => null);
       if (res?.ok) sent.telegram++;
       continue;
+    }
+    if (via === "whatsapp" && p.phone) {
+      const locale = waLocale(p.locale);
+      const { t } = await translatorFor(locale);
+      // "I'm in" comes back as `wj:<code>`, which the thread joins exactly as its own button does.
+      const res = await sendWaTemplate(db, p.phone, "ks_spot_open", locale, { body: [waMatchLine(detail, locale), who, t("event.spotsLeft", { count: left })], quickReply: `wj:${ev.code}`, button: ev.code }, now);
+      if (res.ok) {
+        sent.whatsapp++;
+        continue;
+      }
+      // Not sent (the day's cap, a template not approved yet): email, then push, as without WhatsApp,
+      // and the email still inside this spot's email cap.
+      via = channelFor(p, { ...reach, telegram: false, whatsapp: false });
+      if (via === "none" || (via === "email" && sent.emails >= REFILL_EMAIL_MAX)) continue;
     }
     const c = await ctx(db, ev, p.locale, p, detail);
     // The push's own two lines: the email is the same notice for somebody with no bot and no device.
@@ -415,9 +431,11 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
  *
  * The match was the last thing here that spoke by email alone. The coach's book learned this once
  * already — sixteen notices that read `if (p.telegramId)`, so somebody with no address heard
- * nothing — and `tell()` is the answer it landed on: Telegram, then email, then web push. The
- * tournament uses it too. "The line-up is complete", "the time moved" and "it is off" did not, so a
- * player who linked Telegram, or who allowed push, heard nothing at all about their own match.
+ * nothing — and `tell()` is the answer it landed on: Telegram, then WhatsApp, then email, then web
+ * push. The tournament uses it too. "The line-up is complete", "the time moved" and "it is off" did
+ * not, so a player who linked Telegram, or who allowed push, heard nothing at all about their own
+ * match. In WhatsApp the notice is the `ks_match_update` template: the match, the one line that
+ * changed, and a button to the public match page.
  *
  * Only people with no address. Somebody who turned activity emails off made a choice, and a push
  * instead of the email they refused is not a fix, it is a way around them.
@@ -438,7 +456,8 @@ async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupC
     const c = await ctx(db, ev, player.locale, player, detail);
     const heading = c.t(`push.${key}Title` as "push.lineupCompleteTitle", c.vars);
     const body = c.t(`push.${key}Body` as "push.lineupCompleteBody", c.vars);
-    await tell(db, player, `${heading}\n${body}`, { inline_keyboard: [[{ text: c.openLabel, url: c.url }]] });
+    const wa = waLocale(player.locale);
+    await tell(db, player, `${heading}\n${body}`, { inline_keyboard: [[{ text: c.openLabel, url: c.url }]] }, { whatsapp: { template: "ks_match_update", body: [waMatchLine(c.detail, wa), heading], button: ev.code } });
     told++;
   }
   return told;

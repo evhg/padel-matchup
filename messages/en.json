@@ -731,7 +731,6 @@
     "reached": "Updates reach you {places} ✓",
     "viaTelegram": "on Telegram",
     "viaEmail": "by email",
-    "reachedWhatsapp": "WhatsApp is linked ✓",
     "subscribe": "Subscribe to your matches",
     "subscribeGoogle": "Google Calendar on a computer",
     "subscribeNote": "It updates itself on iPhone and in Google Calendar on a computer. The Android app cannot subscribe from the phone.",
@@ -739,7 +738,8 @@
     "feedTitle": "Your matches in your calendar",
     "feedLead": "Subscribe once. A new match appears, a changed time moves, and a cancelled match is marked.",
     "feedGone": "This calendar link no longer works. Open one of your matches and add the calendar again.",
-    "feedName": "{app}: my matches"
+    "feedName": "{app}: my matches",
+    "viaWhatsapp": "on WhatsApp"
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

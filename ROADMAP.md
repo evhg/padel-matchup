@@ -633,8 +633,26 @@ Everything in this list is live. The README describes each in detail.
   offered as `webcal:` and through Google on a computer; the Android app cannot subscribe, and the
   card says so. The key is made from the personal token but is not it, so the address can sit in a
   chat or a calendar without being a way to sign in. An organiser's list of past players no longer
-  shows a player's own number, only numbers the organiser typed. Not done: WhatsApp sends a linked
-  player nothing on its own yet (item 1 below).
+  shows a player's own number, only numbers the organiser typed. What WhatsApp then sends a linked
+  player is the entry below.
+- **WhatsApp carries the match (26 September 2026, migration 0082).** The owner's decision (option
+  3.A): a player who links WhatsApp on the "Stay updated" card gets what the card promises there.
+  Outside the 24-hour window WhatsApp delivers only a template Meta approved, so the four notices are
+  four utility templates in English, Russian and Spanish (`data/whatsapp-templates.json`):
+  `ks_match_update` (a change, with the match page's button), `ks_spot_open` (a free spot, whose
+  "I'm in" comes back as the thread's own `wj:` join), `ks_score_ask` (the score, after the match)
+  and `ks_match_result` (the result card's picture, once per player per match, ever, kept in the fact
+  log as `whatsapp.result`). WhatsApp is the second channel after Telegram, and only for a notice
+  that has a template (`tell()`'s `whatsapp` option, `channelFor`); a coach's notices stay off it. A
+  send that fails for any reason (the day's cap, a template not approved yet, an error) goes on to
+  email, then push, as before. `WHATSAPP_TEMPLATES_PER_DAY` (50 by default, 0 switches them off) is
+  the cost guard, and one free spot pays for ten WhatsApp messages at most (`REFILL_WHATSAPP_MAX`).
+  No button carries a personal link: a URL button's variable part must be a match code, or a code and
+  `/card`. The number a player writes from is now indexed (`players_phone_idx`), because every inbound
+  message looks it up. `scripts/whatsapp-templates.mjs` lists the templates Meta holds and creates the
+  missing ones. The card's quiet line lists WhatsApp like the others ("Updates reach you on
+  WhatsApp ✓"). Nothing reaches a person until the owner's account exists, the templates are
+  approved and the WhatsApp variables are set (item 1 below).
 
 ## The finish line
 
@@ -688,12 +706,15 @@ linked and four have an email address.
    groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
    and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
    A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
-   One piece of code is still missing, found on 25 September 2026: a player who links WhatsApp from
-   the match page's "Stay updated" card gets the reply with the match and the calendar, and nothing
-   after it. The match's changes, a free spot and the result reach Telegram and email through
-   `tell()`, which knows no WhatsApp, and outside the 24-hour window WhatsApp only carries a template
-   Meta has approved. Until those templates exist and `tell()` learns the channel, the card's promise
-   is true for Telegram and email only, and the WhatsApp choice appears only once the number is set.
+   The piece of code found missing on 25 September 2026 is built (26 September, under Built): the
+   match's changes, a free spot, the score ask and the result card now reach a WhatsApp player as four
+   utility templates, and a send that cannot go falls through to email and push. What remains is the
+   owner's, in this order: create the four templates in the three languages, with
+   `node scripts/whatsapp-templates.mjs --create --yes` (`WHATSAPP_WABA_ID` and `WHATSAPP_TOKEN` set;
+   the result card's picture header needs `--header-handle`, or `--sample` with `--app-id`) or by hand
+   in WhatsApp Manager; wait until `--list` shows each one `APPROVED` and `UTILITY`; then set the
+   WhatsApp variables in Vercel. Until then the card's promise is true for Telegram and email only,
+   and the WhatsApp choice appears only once the number is set.
 2. **LINE — built, waiting on an Official Account.** `src/lib/channels/line.ts` and
    `src/lib/line/`: the card in a group chat, the two taps, a signed webhook, and the two policies a
    platform that cannot edit a message forces — re-send only when something a player would notice

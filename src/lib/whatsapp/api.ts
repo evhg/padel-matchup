@@ -133,6 +133,14 @@ export const sendTemplate = (to: string, name: string, language: string, params:
   });
 
 /**
+ * A template with the whole of its parts: a header picture, the body's variables, a URL button's end,
+ * a quick reply's payload. `templatePayload` in ./templates.ts builds the object from the catalogue
+ * Meta approved, and `sendWaTemplate` beside it is the only caller, because that is where the day's
+ * cap is kept.
+ */
+export const sendTemplateMessage = (to: string, template: { name: string; language: { code: string }; components: Record<string, unknown>[] }): Promise<WaResult> => send({ to, type: "template", template });
+
+/**
  * Meta signs every delivery with the app secret. Unsigned bodies are refused rather than trusted:
  * this endpoint is public, and anything that reaches it can otherwise claim to be any phone number.
  * With no secret configured the webhook refuses everything, which is the safe direction for a channel
@@ -157,6 +165,8 @@ export type WaInboundMessage = {
   type: string;
   text?: { body: string };
   interactive?: { type: string; button_reply?: { id: string; title: string }; list_reply?: { id: string; title: string } };
+  /** A quick reply under a template: the payload set when it was sent (`wj:<code>`), and the words on the button. */
+  button?: { payload?: string; text?: string };
 };
 export type WaContact = { wa_id: string; profile?: { name?: string } };
 export type WaUpdate = {
@@ -168,5 +178,8 @@ export type WaUpdate = {
 export function readInbound(msg: WaInboundMessage): { text: string; tappedId: string | null } {
   const reply = msg.interactive?.button_reply ?? msg.interactive?.list_reply;
   if (reply) return { text: reply.title, tappedId: reply.id };
+  // A template's quick reply arrives as its own type, with the payload it was sent with: "I'm in"
+  // under a free spot is `wj:<code>`, the same id the thread's own reply button carries.
+  if (msg.button?.payload) return { text: msg.button.text ?? "", tappedId: msg.button.payload };
   return { text: msg.text?.body ?? "", tappedId: null };
 }

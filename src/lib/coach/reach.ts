@@ -4,6 +4,7 @@ import { emailEnabled } from "@/lib/config";
 import { playerHasPush } from "@/lib/domain/push";
 import { pushEnabled } from "@/lib/push";
 import { telegramEnabled } from "@/lib/telegram/api";
+import { whatsappNotices } from "@/lib/whatsapp/templates";
 
 /**
  * Whether the assistant can reach this coach at all, channel by channel.
@@ -28,5 +29,8 @@ export async function reachFor(db: Db, player: Pick<Player, "id" | "telegramId" 
   return { telegram, email, push, any: telegram || email || push };
 }
 
-/** Which channels this deployment can offer at all. A channel with no environment is never shown (rule 4). */
-export const channelsOffered = (): { telegram: boolean; email: boolean; push: boolean } => ({ telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() });
+/**
+ * Which channels this deployment can offer at all. A channel with no environment is never shown (rule 4).
+ * WhatsApp counts only while its templates may be sent: `WHATSAPP_TEMPLATES_PER_DAY=0` takes it out.
+ */
+export const channelsOffered = (): { telegram: boolean; whatsapp: boolean; email: boolean; push: boolean } => ({ telegram: telegramEnabled(), whatsapp: whatsappNotices(), email: emailEnabled(), push: pushEnabled() });

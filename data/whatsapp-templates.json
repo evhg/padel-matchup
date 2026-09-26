@@ -1,0 +1,94 @@
+{
+  "$comment": "The WhatsApp message templates Kicksmash sends outside a player's 24-hour window. Meta approves each one per language before it can be sent. src/lib/whatsapp/templates.ts builds the send from this file, scripts/whatsapp-templates.mjs creates the missing ones, and tests/whatsapp-notices.test.ts holds every body to Meta's rules. {base} is the deployment's address, filled in when the template is created; {{1}} in a URL is the part added when a message is sent (a match code, never a personal link).",
+  "templates": [
+    {
+      "name": "ks_match_update",
+      "category": "UTILITY",
+      "buttons": [{ "type": "URL", "url": "{base}/{{1}}", "example": "7KQ2" }],
+      "languages": {
+        "en": {
+          "body": "An update on your padel match ({{1}}):\n\n{{2}}\n\nThe match page has the details and who is playing.",
+          "example": ["Sat, Sep 27 · 18:00 · Rawai Padel", "The match moved"],
+          "buttons": ["Open match"]
+        },
+        "ru": {
+          "body": "Новости по вашему матчу по паделу ({{1}}):\n\n{{2}}\n\nПодробности и состав — на странице матча.",
+          "example": ["сб, 27 сент. · 18:00 · Rawai Padel", "Матч перенесли"],
+          "buttons": ["Открыть матч"]
+        },
+        "es": {
+          "body": "Novedades de tu partido de pádel ({{1}}):\n\n{{2}}\n\nEn la página del partido tienes los detalles y quién juega.",
+          "example": ["sáb, 27 sept · 18:00 · Rawai Padel", "El partido cambió"],
+          "buttons": ["Ver partido"]
+        }
+      }
+    },
+    {
+      "name": "ks_spot_open",
+      "category": "UTILITY",
+      "buttons": [{ "type": "QUICK_REPLY" }, { "type": "URL", "url": "{base}/{{1}}", "example": "7KQ2" }],
+      "languages": {
+        "en": {
+          "body": "A spot is free in a padel match ({{1}}).\n\nPlaying so far: {{2}}. {{3}}.\n\nTap “I'm in” to take it, or open the match first.",
+          "example": ["Sat, Sep 27 · 18:00 · Rawai Padel", "Ana, Ben, Chai", "1 spot left"],
+          "buttons": ["I'm in", "Open match"]
+        },
+        "ru": {
+          "body": "Освободилось место в матче по паделу ({{1}}).\n\nУже играют: {{2}}. {{3}}.\n\nНажмите «Я играю», чтобы занять его, или сначала откройте матч.",
+          "example": ["сб, 27 сент. · 18:00 · Rawai Padel", "Аня, Бен, Чай", "1 место свободно"],
+          "buttons": ["Я играю", "Открыть матч"]
+        },
+        "es": {
+          "body": "Hay un sitio libre en un partido de pádel ({{1}}).\n\nYa juegan: {{2}}. {{3}}.\n\nToca «Voy» para cogerlo, o abre antes el partido.",
+          "example": ["sáb, 27 sept · 18:00 · Rawai Padel", "Ana, Ben, Chai", "Queda 1 plaza"],
+          "buttons": ["Voy", "Ver partido"]
+        }
+      }
+    },
+    {
+      "name": "ks_score_ask",
+      "category": "UTILITY",
+      "buttons": [{ "type": "URL", "url": "{base}/{{1}}", "example": "7KQ2" }],
+      "languages": {
+        "en": {
+          "body": "How did your padel match go ({{1}})?\n\nEnter the score on the match page. It takes one tap.",
+          "example": ["Sat, Sep 27 · 18:00 · Rawai Padel"],
+          "buttons": ["Enter the score"]
+        },
+        "ru": {
+          "body": "Как прошёл ваш матч по паделу ({{1}})?\n\nВнесите счёт на странице матча. Это одно нажатие.",
+          "example": ["сб, 27 сент. · 18:00 · Rawai Padel"],
+          "buttons": ["Внести счёт"]
+        },
+        "es": {
+          "body": "¿Qué tal fue tu partido de pádel ({{1}})?\n\nApunta el resultado en la página del partido. Es un toque.",
+          "example": ["sáb, 27 sept · 18:00 · Rawai Padel"],
+          "buttons": ["Poner el resultado"]
+        }
+      }
+    },
+    {
+      "name": "ks_match_result",
+      "category": "UTILITY",
+      "header": "IMAGE",
+      "buttons": [{ "type": "URL", "url": "{base}/{{1}}", "example": "7KQ2/card" }],
+      "languages": {
+        "en": {
+          "body": "The result of your padel match ({{1}}):\n\n{{2}}\n\nThe card stays on the match page.",
+          "example": ["Sat, Sep 27 · 18:00 · Rawai Padel", "Ana & Ben beat Chai & Dan 6-4 6-3"],
+          "buttons": ["See the card"]
+        },
+        "ru": {
+          "body": "Результат вашего матча по паделу ({{1}}):\n\n{{2}}\n\nКарточка остаётся на странице матча.",
+          "example": ["сб, 27 сент. · 18:00 · Rawai Padel", "Аня & Бен победили Чай & Дэн 6-4 6-3"],
+          "buttons": ["Открыть карточку"]
+        },
+        "es": {
+          "body": "El resultado de tu partido de pádel ({{1}}):\n\n{{2}}\n\nLa tarjeta queda en la página del partido.",
+          "example": ["sáb, 27 sept · 18:00 · Rawai Padel", "Ana & Ben ganaron a Chai & Dan 6-4 6-3"],
+          "buttons": ["Ver la tarjeta"]
+        }
+      }
+    }
+  ]
+}

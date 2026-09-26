@@ -281,7 +281,7 @@ export const facts = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
     /** Dotted, subject first: match.joined, lesson.cancelled. */
     kind: text("kind").notNull(),
-    /** web, telegram, discord, line, api, mcp, cron, email, calendar. */
+    /** web, telegram, discord, line, whatsapp, api, mcp, cron, email, calendar. */
     channel: text("channel").notNull().default("web"),
     actorPlayerId: uuid("actor_player_id"),
     subjectType: text("subject_type").notNull(),

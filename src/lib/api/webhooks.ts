@@ -186,6 +186,14 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
     } catch (e) {
       console.warn("[telegram] closing the score nudges failed", code, e);
     }
+    // WhatsApp cannot edit the nudge, so a player whose channel it is gets the result card as one
+    // new message, once per match, ever (sendWaResults keeps the count in the fact log).
+    try {
+      const { sendWaResults } = await import("@/lib/afterMatch");
+      await sendWaResults(db, code);
+    } catch (e) {
+      console.warn("[whatsapp] the result card failed", code, e);
+    }
   }
   // Telegram alone sends private notes for a time change or a cancellation.
   try {

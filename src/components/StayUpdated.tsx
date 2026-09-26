@@ -59,9 +59,10 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
   const withEmail = sentTo && !via.includes("email") ? [...via, "email" as const] : via;
 
   if (reached) {
-    // WhatsApp links the player and brings the calendar; the match's changes reach them on Telegram or by email.
-    const places = withEmail.filter((c) => c !== "whatsapp").map((c) => t(c === "telegram" ? "calendar.viaTelegram" : "calendar.viaEmail"));
-    const line = places.length > 0 ? t("calendar.reached", { places: new Intl.ListFormat(locale, { type: "conjunction" }).format(places) }) : t("calendar.reachedWhatsapp");
+    // Every channel on the list carries the match's changes, a free spot and the result: WhatsApp as
+    // templates Meta approved (src/lib/whatsapp/templates.ts), Telegram and email as they always did.
+    const places = withEmail.map((c) => t(c === "whatsapp" ? "calendar.viaWhatsapp" : c === "telegram" ? "calendar.viaTelegram" : "calendar.viaEmail"));
+    const line = t("calendar.reached", { places: new Intl.ListFormat(locale, { type: "conjunction" }).format(places) });
     return (
       <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
         <div className="font-semibold text-ok">{line}</div>
