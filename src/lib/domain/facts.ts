@@ -8,7 +8,7 @@ import { facts, type Fact } from "@/db/schema";
  * A fact names its subject by id and code and its actor by player id; `data` holds outcomes and
  * numbers, never a name, an email or a token.
  */
-export const CHANNELS = ["web", "telegram", "discord", "line", "api", "mcp", "cron", "email", "calendar"] as const;
+export const CHANNELS = ["web", "telegram", "discord", "line", "whatsapp", "api", "mcp", "cron", "email", "calendar"] as const;
 export type Channel = (typeof CHANNELS)[number];
 export type FactSubject = "match" | "lesson" | "club" | "coach" | "group" | "series" | "player" | "want" | "package";
 

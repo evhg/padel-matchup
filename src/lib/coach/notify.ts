@@ -8,6 +8,7 @@ import { pushEnabled, sendPush } from "@/lib/push";
 import { removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
 import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { sendWaTemplate, whatsappNotices, type WaTemplateName } from "@/lib/whatsapp/templates";
 import { epochMin, OFFER_MINUTES, type Offer } from "./chains";
 import { coachBotLocale, coachStrings, whenLabel, type CoachBotStrings } from "./strings";
 import type { LessonRequest } from "@/db/schema";
@@ -35,24 +36,42 @@ type Keyboard = { inline_keyboard: { text: string; callback_data?: string; url?:
  * coach who skipped the bot step and gave no address heard nothing at all — sixteen notices with no
  * delivery path, silently. The buttons only exist in Telegram, so the other two channels carry the
  * words and a link to the page where the same thing can be done.
+ *
+ * WhatsApp comes second, and only where the caller says it may (`configured.whatsapp`): outside a
+ * conversation it carries nothing but a template Meta approved, so only a notice that has one can go
+ * there. A caller that does not name WhatsApp gets exactly the order it always had.
  */
 export function channelFor(
-  p: Pick<Player, "telegramId" | "email" | "emailNotifications"> | null | undefined,
-  configured: { telegram: boolean; email: boolean; push: boolean },
-): "telegram" | "email" | "push" | "none" {
+  p: (Pick<Player, "telegramId" | "email" | "emailNotifications"> & { phone?: string | null }) | null | undefined,
+  configured: { telegram: boolean; whatsapp?: boolean; email: boolean; push: boolean },
+): "telegram" | "whatsapp" | "email" | "push" | "none" {
   if (!p) return "none";
   if (configured.telegram && p.telegramId) return "telegram";
+  // `players.phone` is written only by the WhatsApp thread, so a number here is one that wrote to us.
+  if (configured.whatsapp && p.phone) return "whatsapp";
   if (configured.email && p.email && p.emailNotifications) return "email";
   return configured.push ? "push" : "none";
 }
 
-export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard, o: { /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string } = {}): Promise<void> {
+/** A notice as a WhatsApp template: its name, the body's variables, and a match code for its button (never a personal link). */
+export type WaNotice = { template: WaTemplateName; body: string[]; button?: string; quickReply?: string; image?: string };
+
+export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard?: Keyboard, o: { /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string; /** The notice as a WhatsApp template. Without it WhatsApp is never tried: a coach's notices have no template. */ whatsapp?: WaNotice } = {}): Promise<void> {
   if (!p) return;
-  const via = channelFor(p, { telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() });
+  let via = channelFor(p, { telegram: telegramEnabled(), whatsapp: Boolean(o.whatsapp) && whatsappNotices(), email: emailEnabled(), push: pushEnabled() });
   if (via === "none") return;
   if (via === "telegram" && p.telegramId) {
     await sendMessage(p.telegramId, esc(text) + (o.trailer ? `\n${esc(o.trailer)}` : ""), { silent: true, keyboard: keyboard ?? null }).catch(() => undefined);
     return;
+  }
+  if (via === "whatsapp" && p.phone && o.whatsapp) {
+    const w = o.whatsapp;
+    const sent = await sendWaTemplate(db, p.phone, w.template, p.locale, { body: w.body, button: w.button, quickReply: w.quickReply, image: w.image });
+    if (sent.ok) return;
+    // Not sent: the day's cap, a template Meta has not approved yet, or an error. The notice goes on
+    // to email, then push, exactly as it would have gone without WhatsApp.
+    via = channelFor(p, { telegram: false, whatsapp: false, email: emailEnabled(), push: pushEnabled() });
+    if (via === "none") return;
   }
   // The link a button would have opened, so the fallback is not a dead end.
   const url = keyboard?.inline_keyboard.flat().find((b) => b.url)?.url ?? `${baseUrl()}/coach`;

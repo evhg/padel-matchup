@@ -731,7 +731,6 @@
     "reached": "Las novedades te llegan {places} ✓",
     "viaTelegram": "por Telegram",
     "viaEmail": "por email",
-    "reachedWhatsapp": "WhatsApp está vinculado ✓",
     "subscribe": "Suscribirte a tus partidos",
     "subscribeGoogle": "Google Calendar en el ordenador",
     "subscribeNote": "Se actualiza solo en el iPhone y en Google Calendar en el ordenador. La app de Android no puede suscribirse desde el móvil.",
@@ -739,7 +738,8 @@
     "feedTitle": "Tus partidos en tu calendario",
     "feedLead": "Suscríbete una vez. Un partido nuevo aparece, una hora cambiada se mueve y un partido cancelado queda marcado.",
     "feedGone": "Este enlace de calendario ya no funciona. Abre uno de tus partidos y añade el calendario de nuevo.",
-    "feedName": "{app}: mis partidos"
+    "feedName": "{app}: mis partidos",
+    "viaWhatsapp": "por WhatsApp"
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

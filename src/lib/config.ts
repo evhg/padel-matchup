@@ -85,3 +85,9 @@ export const REFILL_FANOUT_MAX = 40;
  * nothing, so they keep the whole cap; past this, somebody who has only an address is not told.
  */
 export const REFILL_EMAIL_MAX = 10;
+/**
+ * Of those, how many may go by WhatsApp. Each is a template Meta bills when it lands outside an open
+ * window, so one freed spot pays for ten at most, as it spends ten emails at most. The day's own cap
+ * (`WHATSAPP_TEMPLATES_PER_DAY`, src/lib/whatsapp/templates.ts) stands over this one.
+ */
+export const REFILL_WHATSAPP_MAX = 10;

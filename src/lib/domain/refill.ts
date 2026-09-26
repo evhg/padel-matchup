@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, max, ne, or, 
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { activity, events, groupMembers, players, pushSubscriptions, slots, type Event, type Player } from "@/db/schema";
-import { EVENT_DURATION_MS, REFILL_EMAIL_MAX, REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WINDOW_MS } from "@/lib/config";
+import { EVENT_DURATION_MS, REFILL_EMAIL_MAX, REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WHATSAPP_MAX, REFILL_WINDOW_MS } from "@/lib/config";
 import { markWantsNotified, matchingWants } from "./demand";
 
 /**
@@ -21,8 +21,8 @@ import { markWantsNotified, matchingWants } from "./demand";
  *     was not going to fill it themselves;
  *   - only to people who already belong to the match's world — its crew, the club's regulars, or
  *     the people its players played with in the last sixty days — never to a list of everyone;
- *   - only to people the match's level range admits, and whom a channel reaches: the bot, an address
- *     they did not mute, or a device with push on;
+ *   - only to people the match's level range admits, and whom a channel reaches: the bot, their
+ *     WhatsApp number, an address they did not mute, or a device with push on;
  *   - capped, hard (rule 12).
  *
  * A private match with no crew reaches its players' past partners and nobody else: they are the
@@ -50,11 +50,11 @@ export function reachesBeyondPartners(ev: Pick<Event, "groupId" | "publicListing
   return Boolean(ev.groupId) || (ev.publicListing && Boolean(ev.venueSlug));
 }
 
-/** The channels this deployment has (rule 4). The caller says which, because the domain reads no environment. */
-export type RefillReach = { telegram: boolean; email: boolean; push: boolean };
+/** The channels this deployment has (rule 4). The caller says which, because the domain reads no environment. WhatsApp left out means off. */
+export type RefillReach = { telegram: boolean; whatsapp?: boolean; email: boolean; push: boolean };
 
 /** What the notice needs about a person: who, the level the range asks about, the language, the channels. */
-export type RefillPerson = Pick<Player, "id" | "displayName" | "locale" | "level" | "telegramId" | "email" | "emailNotifications">;
+export type RefillPerson = Pick<Player, "id" | "displayName" | "locale" | "level" | "telegramId" | "phone" | "email" | "emailNotifications">;
 
 /** Roster seats nobody holds: empty, or a reserved invitation that was declined. */
 export async function openRosterSpots(db: Db, ev: Pick<Event, "id" | "capacity">): Promise<number> {
@@ -126,11 +126,13 @@ export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capa
 
 /**
  * Whether a channel reaches this person on this deployment, in the order `channelFor` in
- * `src/lib/coach/notify.ts` tries them: the bot, then an address they did not mute, then a device.
- * The two must agree, or the cap is spent on somebody the sender then cannot reach.
+ * `src/lib/coach/notify.ts` tries them: the bot, then the WhatsApp number that wrote to us, then an
+ * address they did not mute, then a device. The two must agree, or the cap is spent on somebody the
+ * sender then cannot reach.
  */
-function channelOf(p: Pick<Player, "id" | "telegramId" | "email" | "emailNotifications">, reach: RefillReach, devices: Set<string>): "telegram" | "email" | "push" | null {
+function channelOf(p: Pick<Player, "id" | "telegramId" | "phone" | "email" | "emailNotifications">, reach: RefillReach, devices: Set<string>): "telegram" | "whatsapp" | "email" | "push" | null {
   if (reach.telegram && p.telegramId) return "telegram";
+  if (reach.whatsapp && p.phone) return "whatsapp";
   if (reach.email && p.email && p.emailNotifications) return "email";
   return reach.push && devices.has(p.id) ? "push" : null;
 }
@@ -198,7 +200,7 @@ export async function refillAudience(db: Db, ev: Event, now: Date, reach: Refill
   // cap below is spent on people who will actually see it. Up to two hundred candidates are read, so
   // only the columns the decision and the notice need, never the whole row.
   const rows = await db
-    .select({ id: players.id, displayName: players.displayName, locale: players.locale, level: players.level, telegramId: players.telegramId, email: players.email, emailNotifications: players.emailNotifications })
+    .select({ id: players.id, displayName: players.displayName, locale: players.locale, level: players.level, telegramId: players.telegramId, phone: players.phone, email: players.email, emailNotifications: players.emailNotifications })
     .from(players)
     .where(inArray(players.id, ordered));
   const devices = new Set<string>();
@@ -209,12 +211,14 @@ export async function refillAudience(db: Db, ev: Event, now: Date, reach: Refill
   const byId = new Map(rows.map((p) => [p.id, p]));
   const out: RefillPerson[] = [];
   let emails = 0;
+  let whatsapps = 0;
   for (const id of ordered) {
     const p = byId.get(id);
     const via = p && admits(ev, p) ? channelOf(p, reach, devices) : null;
     if (!p || !via) continue;
-    // Email is the one channel here a free tier counts (REFILL_EMAIL_MAX).
+    // Email is the channel here a free tier counts (REFILL_EMAIL_MAX), and WhatsApp the one Meta bills (REFILL_WHATSAPP_MAX).
     if (via === "email" && emails++ >= REFILL_EMAIL_MAX) continue;
+    if (via === "whatsapp" && whatsapps++ >= REFILL_WHATSAPP_MAX) continue;
     out.push(p);
     if (out.length === REFILL_FANOUT_MAX) break;
   }

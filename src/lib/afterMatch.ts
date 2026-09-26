@@ -1,6 +1,6 @@
 import type { Db } from "@/db";
-import { and, eq } from "drizzle-orm";
-import { telegramCards, telegramChats, type Event, type Player } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { facts, telegramCards, telegramChats, type Event, type Player } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isOccupied } from "@/lib/domain/events";
@@ -15,7 +15,7 @@ import { personalEventUrl } from "@/lib/personal";
 import { pushEnabled, sendPush } from "@/lib/push";
 import { resultSummary } from "@/lib/channels/cards";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
-import { cardImagePath, cardVersion } from "@/lib/resultCard";
+import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { deleteMessage, editMessageMedia, editMessageText, esc, miniAppUrl, sendMessage, sendPhoto, telegramEnabled, type InlineKeyboard } from "@/lib/telegram/api";
 import { winStreakFor, type Streak } from "@/lib/domain/banter";
 import type { Awarded } from "@/lib/domain/milestones";
@@ -23,12 +23,15 @@ import { momentLine } from "@/lib/moments";
 import { strings, botLocale, type BotLocale } from "@/lib/telegram/card";
 import { matchResult } from "@/lib/domain/result";
 import { cardTitle } from "@/lib/telegram/card";
+import { recordFact } from "@/lib/domain/facts";
+import { sendWaTemplate, waLocale, waMatchLine, whatsappNotices } from "@/lib/whatsapp/templates";
 
 /**
  * After the final point. Every player, not only the organizer, hears "how did it go?" on the channel
- * they have (Telegram first, then push, then email): two hours after the start, and once more the
- * next morning if nobody has answered. In Telegram the answer is a reply with the score; the message
- * is remembered as a card so the reply finds the match.
+ * they have (Telegram first, then WhatsApp, then push, then email): two hours after the start, and
+ * once more the next morning if nobody has answered. In Telegram the answer is a reply with the
+ * score; the message is remembered as a card so the reply finds the match. In WhatsApp it is the
+ * `ks_score_ask` template, whose button opens the match page and its score form.
  *
  * In Telegram the nudge is the result card itself, still waiting for its score: the two pairs, the
  * empty sets. The owner, 24 September: "when one of the players enters the result, the score nudge
@@ -38,7 +41,7 @@ import { cardTitle } from "@/lib/telegram/card";
  * text nudge, which is closed as text.
  */
 
-export type NudgeSummary = { players: number; telegram: number; push: number; email: number };
+export type NudgeSummary = { players: number; telegram: number; whatsapp: number; push: number; email: number };
 
 /**
  * Renders the picture once before Telegram asks for it: every player's message carries the same URL,
@@ -53,8 +56,9 @@ async function warm(url: string): Promise<void> {
 export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Promise<NudgeSummary> {
   const d = detail ?? (await getEventDetail(db, ev));
   const players = d.roster.filter((s) => isOccupied(s) && s.player).map((s) => s.player!) as Player[];
-  const out: NudgeSummary = { players: players.length, telegram: 0, push: 0, email: 0 };
+  const out: NudgeSummary = { players: players.length, telegram: 0, whatsapp: 0, push: 0, email: 0 };
   const base = baseUrl();
+  const whatsapp = whatsappNotices();
   const subs = pushEnabled() ? await subscriptionsFor(db, players.map((p) => p.id)) : [];
   const version = telegramEnabled() && players.some((p) => p.telegramId) ? cardVersion(d, await getEventPhotoMeta(db, ev.id).catch(() => null)) : null;
   if (version) await warm(`${base}${cardImagePath(ev.code, version)}`);
@@ -90,6 +94,16 @@ export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Pr
           .catch(() => undefined);
         if (before && before.messageId !== res.result.message_id) await deleteMessage(player.telegramId, before.messageId).catch(() => undefined);
         out.telegram++;
+        reached = true;
+      }
+    }
+    // No Telegram, a WhatsApp number that wrote to us: the template, whose button opens the match page
+    // (the score form leads it after a match). It stands where Telegram stands, so the email is skipped.
+    if (!reached && whatsapp && player.phone) {
+      const locale = waLocale(player.locale);
+      const res = await sendWaTemplate(db, player.phone, "ks_score_ask", locale, { body: [waMatchLine(d, locale)], button: ev.code });
+      if (res.ok) {
+        out.whatsapp++;
         reached = true;
       }
     }
@@ -176,6 +190,52 @@ export async function closeScoreNudges(db: Db, code: string): Promise<number> {
   }
   // The rows stay: a reply to this message still finds the match, which is how a correction arrives.
   return closed;
+}
+
+/** The fact that says a player's WhatsApp got a match's result card: one per match and player, ever. */
+export const WA_RESULT_FACT = "whatsapp.result";
+
+/**
+ * The result card in WhatsApp, for every seated player whose channel it is: a number that wrote to us
+ * and no Telegram. A Telegram player has the card already, because their score nudge turned into it
+ * in place. WhatsApp cannot edit a message, so here the card is one new message, the `ks_match_result`
+ * template with the picture on top, and it goes once per player per match, ever: a corrected score or
+ * a court photo changes the card's page, never the chat again (rule 5).
+ *
+ * The record is the fact log (`whatsapp.result`, read on `facts_subject_idx`), written after the send,
+ * so a send that failed is tried again by the next result. Two results for one match in the same
+ * second could both send; at four players a match, that is the whole of the risk.
+ */
+export async function sendWaResults(db: Db, code: string, now = new Date()): Promise<number> {
+  if (!whatsappNotices()) return 0;
+  const detail = await getEventByCode(db, code);
+  if (!detail || detail.scores.length === 0) return 0;
+  const telegram = telegramEnabled();
+  const seats = playingSeats(detail).filter((s) => s.player?.phone && !(telegram && s.player.telegramId));
+  if (seats.length === 0) return 0;
+  const told = await db
+    .select({ playerId: facts.actorPlayerId })
+    .from(facts)
+    .where(and(eq(facts.subjectType, "match"), eq(facts.subjectId, detail.event.id), eq(facts.kind, WA_RESULT_FACT), inArray(facts.actorPlayerId, seats.map((s) => s.playerId!))));
+  const already = new Set(told.map((r) => r.playerId));
+  const due = seats.filter((s) => !already.has(s.playerId));
+  if (due.length === 0) return 0;
+  const picture = `${baseUrl()}${cardImagePath(code, cardVersion(detail, await getEventPhotoMeta(db, detail.event.id).catch(() => null)))}`;
+  // Meta fetches the picture when it delivers the message: render it once first, as for Telegram.
+  await warm(picture);
+  let sent = 0;
+  for (const seat of due) {
+    const player = seat.player!;
+    const locale = waLocale(player.locale);
+    const { t } = await translatorFor(locale);
+    const line = matchLine(t as unknown as (key: string, values?: Record<string, string | number>) => string, detail)?.line ?? scoreLine(detail)?.score;
+    if (!line) continue;
+    const res = await sendWaTemplate(db, player.phone!, "ks_match_result", locale, { image: picture, body: [waMatchLine(detail, locale), line], button: `${code}/card` }, now);
+    if (!res.ok) continue;
+    await recordFact(db, { kind: WA_RESULT_FACT, channel: "whatsapp", actorPlayerId: player.id, subject: { type: "match", id: detail.event.id }, code, at: now });
+    sent++;
+  }
+  return sent;
 }
 
 /** The score as a person would say it, and who put it there — from rows the caller already has. */

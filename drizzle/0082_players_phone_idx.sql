@@ -1,0 +1,1 @@
+CREATE INDEX "players_phone_idx" ON "players" USING btree ("phone") WHERE "players"."phone" is not null;
