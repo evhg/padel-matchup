@@ -12,7 +12,8 @@ import { buildIcs, inviteFields } from "@/lib/calendar";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { APP_NAME, baseUrl, emailEnabled, emailFrom, REFILL_EMAIL_MAX, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { formatEventDay, formatEventTime, formatEventTimeRange } from "@/lib/dates";
+import { eventEnd } from "@/lib/domain/matchLength";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { refillRecipients } from "@/lib/domain/refill";
@@ -63,7 +64,8 @@ async function ctx(db: Db, ev: Event, localeLike: string | null | undefined, rec
   const spots = t("event.spotsLeft", { count: d.roster.filter(isClaimable).length });
   const vars = { day, time, venue, names: names.join(", "), count: names.length, capacity: ev.capacity, spots };
   const meta = [
-    { label: t("email.when"), value: `${day} · ${time}` },
+    // The end as well as the start: the email says how long the court is booked, as its invitation does.
+    { label: t("email.when"), value: `${day} · ${formatEventTimeRange(ev.startsAt, eventEnd(ev), ev.tz, locale)}` },
     { label: t("email.where"), value: venue },
     ...(names.length ? [{ label: t("calendar.playersLabel"), value: names.join(", ") }] : []),
   ];

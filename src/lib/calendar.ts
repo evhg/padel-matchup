@@ -1,10 +1,10 @@
-import { EVENT_DURATION_MS } from "@/lib/config";
+import { eventEnd } from "@/lib/domain/matchLength";
 import { icsStamp } from "@/lib/dates";
 import { eventTitleLine, venueWithCourt } from "@/lib/labels";
 import { lineupComplete, withCompleteSuffix } from "@/lib/lineup";
 import type { Event, Slot } from "@/db/schema";
 
-export type CalendarEvent = Pick<Event, "id" | "code" | "title" | "startsAt" | "venueName" | "venueMapUrl" | "court" | "note" | "type" | "icsSequence" | "status">;
+export type CalendarEvent = Pick<Event, "id" | "code" | "title" | "startsAt" | "durationMinutes" | "venueName" | "venueMapUrl" | "court" | "note" | "type" | "icsSequence" | "status">;
 
 export function calendarTitle(ev: Pick<Event, "title" | "type">, fallback: string): string {
   return ev.title?.trim() || fallback;
@@ -12,7 +12,7 @@ export function calendarTitle(ev: Pick<Event, "title" | "type">, fallback: strin
 
 /** Google Calendar "render" URL — works with zero email. */
 export function googleCalendarUrl(ev: CalendarEvent, opts: { title: string; url: string; tz: string; venueLabel?: string; location?: string }): string {
-  const end = new Date(ev.startsAt.getTime() + EVENT_DURATION_MS);
+  const end = eventEnd(ev);
   const details = [ev.note, opts.url].filter(Boolean).join("\n\n");
   const venue = opts.location ?? ev.venueName ?? opts.venueLabel ?? "";
   const location = ev.venueMapUrl ? `${venue} (${ev.venueMapUrl})` : venue;
@@ -84,7 +84,7 @@ export const icsUid = (eventId: string, domain: string) => `${eventId}@${domain}
 export function buildIcs(input: IcsInput): string {
   const { event, title, url, organizer, attendee, method, domain } = input;
   const location = input.location ?? event.venueName ?? "";
-  const end = new Date(event.startsAt.getTime() + EVENT_DURATION_MS);
+  const end = eventEnd(event);
   const cancelled = method === "CANCEL" || event.status === "cancelled";
   const lines: string[] = [
     "BEGIN:VCALENDAR",
@@ -132,7 +132,7 @@ export function buildFeed(input: { name: string; domain: string; entries: FeedEn
   ];
   const stamp = icsStamp(new Date());
   for (const { event, title, url, location, extra } of input.entries) {
-    const end = new Date(event.startsAt.getTime() + EVENT_DURATION_MS);
+    const end = eventEnd(event);
     const loc = location ?? event.venueName ?? "";
     lines.push(
       "BEGIN:VEVENT",

@@ -120,6 +120,10 @@ export function formatEventTime(date: Date, tz: string, locale: string): string 
     hourCycle: locale.startsWith("en") ? "h23" : undefined,
   }).format(date);
 }
+/** "09:30–11:00": the start and the end, the way the cards and the emails say when a match is. */
+export function formatEventTimeRange(start: Date, end: Date, tz: string, locale: string): string {
+  return `${formatEventTime(start, tz, locale)}–${formatEventTime(end, tz, locale)}`;
+}
 
 export function formatEventDateTime(date: Date, tz: string, locale: string): string {
   return `${formatEventDay(date, tz, locale)} · ${formatEventTime(date, tz, locale)}`;

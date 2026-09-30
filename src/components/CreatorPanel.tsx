@@ -54,6 +54,7 @@ export function CreatorPanel({
         title: values.title,
         date: values.date,
         time: values.time,
+        durationMinutes: values.durationMinutes,
         tz: values.tz,
         venueName: values.venueName,
         venueMapUrl: values.venueMapUrl,

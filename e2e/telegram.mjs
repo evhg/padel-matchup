@@ -50,7 +50,8 @@ try {
   const left = await hook({ update_id: 7, callback_query: { id: "cb3", from: ivan, message: { message_id: 999, date: 0, chat: group }, data: `l:${code}` } });
   check("leave tap works", left.json?.outcome === "leave:left");
   // Creating from the chat with words: the place in the text gives the zone, the card is posted (the Bot API is unreachable here, the match still exists).
-  const bkk = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", hour12: false }).formatToParts(new Date(Date.now() - 90 * 60 * 1000));
+  // An hour ago, not ninety minutes: a chat-made match lasts the default 90, and three more people join it below, which a finished match refuses.
+  const bkk = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", hour12: false }).formatToParts(new Date(Date.now() - 60 * 60 * 1000));
   const part = (t) => bkk.find((p) => p.type === t).value;
   const made = await hook({ update_id: 30, message: { message_id: 30, date: 0, chat: group, from: ivan, text: `/new ${part("day")}.${part("month")} ${part("hour")}:${part("minute")} Rawai Padel Club 300฿` } });
   const newCode = String(made.json?.outcome ?? "").split(":")[1];

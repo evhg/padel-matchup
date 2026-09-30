@@ -1,7 +1,6 @@
 import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubCourts, clubs, events, lessons, type Club, type ClubCourt, type CourtKind } from "@/db/schema";
-import { EVENT_DURATION_MS } from "@/lib/config";
 import { DomainError } from "./errors";
 
 /**
@@ -148,7 +147,7 @@ const ON_COURT = ["booked", "done"] as const;
  */
 export async function clubBusy(db: Db, clubSlug: string, from: Date, to: Date): Promise<Busy[]> {
   const played = await db
-    .select({ court: events.court, startsAt: events.startsAt, title: events.title })
+    .select({ court: events.court, startsAt: events.startsAt, minutes: events.durationMinutes, title: events.title })
     .from(events)
     .where(and(eq(events.venueSlug, clubSlug), gte(events.startsAt, from), lt(events.startsAt, to), ne(events.status, "cancelled")));
   const taught = await db
@@ -156,7 +155,8 @@ export async function clubBusy(db: Db, clubSlug: string, from: Date, to: Date): 
     .from(lessons)
     .where(and(eq(lessons.venueSlug, clubSlug), gte(lessons.startsAt, from), lt(lessons.startsAt, to), inArray(lessons.status, [...ON_COURT])));
   return [
-    ...played.map((e): Busy => ({ court: e.court, startsAt: e.startsAt, minutes: EVENT_DURATION_MS / 60000, kind: "match", title: e.title })),
+    // A match holds its court for the length its organiser booked, as a lesson does.
+    ...played.map((e): Busy => ({ court: e.court, startsAt: e.startsAt, minutes: e.minutes, kind: "match", title: e.title })),
     // A lesson carries the court the coach said they teach on, or none when they have not said. The
     // row for what named no court is still the honest place for those.
     ...taught.map((l): Busy => ({ court: l.court, startsAt: l.startsAt, minutes: l.minutes, kind: "lesson", title: null })),

@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, strings, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { cardTitle, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import type { FlexBubble, LineMessage } from "./api";
 
 /**
@@ -32,7 +31,7 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
   const cancelled = ev.status === "cancelled";
   const past = ev.status === "past";
 
-  const head: string[] = [`📅 ${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)}`, `📍 ${whereLine(detail, locale)}`];
+  const head: string[] = [`📅 ${whenLine(detail, locale)}`, `📍 ${whereLine(detail, locale)}`];
   const range = { min: ev.levelMin, max: ev.levelMax };
   if (hasRange(range)) head.push(`🎚 ${s.level} ${formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` })}`);
   if (ev.cost) head.push(`💸 ${ev.cost}${ev.payNote ? ` · ${ev.payNote}` : ""}`);
@@ -88,7 +87,7 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
 
   // Alt text is what LINE shows in the chat list and in a notification, so it carries the answer to
   // "is this worth opening": when, where, and how many seats are left.
-  const altText = `${cardTitle(detail, locale)} · ${formatEventDay(ev.startsAt, ev.tz, locale)} ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${status}`.slice(0, 400);
+  const altText = `${cardTitle(detail, locale)} · ${whenLine(detail, locale)} · ${status}`.slice(0, 400);
   const hash = createHash("sha256").update(JSON.stringify(bubble)).digest("hex");
   return { messages: [{ type: "flex", altText, contents: bubble }], complete, hash };
 }

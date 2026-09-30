@@ -18,6 +18,14 @@ export const events = pgTable(
     type: eventTypeEnum("type").notNull().default("match"),
     title: text("title"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    /**
+     * How long the court is booked, in minutes: 60, 90 or 120, picked by the organiser (the rule is
+     * `src/lib/domain/matchLength.ts`). The match page, the cards, the calendar invitation and the
+     * moment a match counts as finished all read it. The owner decided on 30 September 2026, after a
+     * player asked whether his match was 60 or 90 minutes: every event used to end two hours after
+     * its start. 90 is the default; tournaments start at 120.
+     */
+    durationMinutes: integer("duration_minutes").notNull().default(90),
     /** IANA timezone the event was created in (display only; starts_at is UTC). */
     tz: text("tz").notNull(),
     /** Optional: null means "court TBD". */

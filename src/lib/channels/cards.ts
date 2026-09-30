@@ -4,6 +4,7 @@ import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
 import { lateExitFor, streakLine, winStreakFor, type Streak } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
+import { defaultLength } from "@/lib/domain/matchLength";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
@@ -18,11 +19,16 @@ import type { CardChannel, PostOptions, ResultSummary, Room } from "./types";
 
 const occupiedOf = (detail: EventDetail) => detail.roster.filter((x) => x.position <= detail.event.capacity && isOccupied(x)).length;
 
-/** What a card says that matters: when a channel cannot edit, a new card goes out only when this changes. */
+/**
+ * What a card says that matters: when a channel cannot edit, a new card goes out only when this changes.
+ * The length counts (a new end is a new time), but only once it differs from the type's default, so
+ * the key of every card already sent stays what it was and the day lengths shipped pushed nothing.
+ */
 export function materialKey(detail: EventDetail): string {
   const ev = detail.event;
   const result = ev.type === "match" ? detail.scores.length : (ev.standings?.length ?? 0);
-  return createHash("sha256").update([ev.status, ev.startsAt.toISOString(), ev.venueSlug ?? "", ev.capacity, occupiedOf(detail), result].join("|")).digest("hex");
+  const length = ev.durationMinutes === defaultLength(ev.type) ? [] : [`${ev.durationMinutes}min`];
+  return createHash("sha256").update([ev.status, ev.startsAt.toISOString(), ev.venueSlug ?? "", ev.capacity, occupiedOf(detail), result, ...length].join("|")).digest("hex");
 }
 
 /** Posts the card of a match into a room, or refreshes the one already there. */

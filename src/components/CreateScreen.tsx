@@ -6,7 +6,8 @@ import { getDb } from "@/db";
 import Link from "next/link";
 import { isValidInviteCode } from "@/lib/codes";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
-import { getGroupByCode, getGroupMember, nextGroupSlot } from "@/lib/domain/groups";
+import { getGroupByCode, getGroupMember, latestGroupLength, nextGroupSlot } from "@/lib/domain/groups";
+import { parseMatchLength } from "@/lib/domain/matchLength";
 import { venuesForPicking } from "@/lib/domain/clubs";
 import { getPlayerTimePatterns } from "@/lib/domain/queries";
 import { getSessionPlayer } from "@/lib/session";
@@ -45,8 +46,11 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
   if (group && isMember) {
     const slot = nextGroupSlot(group);
     const when = slot ? { date: slot.date, time: slot.time } : undefined;
+    // The crew's usual length: as long as its latest match (one read, members only).
+    const length = parseMatchLength(await latestGroupLength(db, group.id));
     groupValues = {
       type: group.type,
+      ...(length ? { durationMinutes: length } : {}),
       capacity: group.capacity,
       whenFull: group.whenFull,
       venueName: group.venueName ?? "",

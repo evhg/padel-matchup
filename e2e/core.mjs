@@ -278,9 +278,26 @@ try {
 
   // ---- Line-up complete → calendar entry updated (title suffix, players, SEQUENCE) ----
   await a.goto(BASE + "/");
+  // How long: three taps under the time, 90 already chosen (the owner, 30 September 2026, after Erik
+  // could not tell whether his match was 60 or 90 minutes). Dana books an hour.
+  const lengths = a.getByTestId("length-choice");
+  check("the form offers three lengths, 90 minutes chosen", (await lengths.getByRole("button").count()) === 3 && (await lengths.getByRole("button", { name: "90 min", exact: true }).getAttribute("aria-pressed")) === "true");
+  await lengths.getByRole("button", { name: "60 min", exact: true }).click();
+  check("a tap chooses 60 minutes", (await lengths.getByRole("button", { name: "60 min", exact: true }).getAttribute("aria-pressed")) === "true" && (await lengths.getByRole("button", { name: "90 min", exact: true }).getAttribute("aria-pressed")) === "false");
+  await shot(a, "05b-length");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code3 = a.url().split("/").slice(-2)[0];
+  await a.goto(`${BASE}/${code3}`);
+  const lengthLine = await a.getByTestId("match-length").innerText();
+  check("the match page says how long it is, beside the time", /^until \d{2}:\d{2} · 60 min$/.test(lengthLine.trim()), lengthLine);
+  await shot(a, "05c-match-length");
+  // Minutes from DTSTART to DTEND, both written as UTC stamps.
+  const icsMinutes = (body) => {
+    const at = (k) => body.match(new RegExp(`${k}:(\\d{4})(\\d{2})(\\d{2})T(\\d{2})(\\d{2})\\d{2}Z`))?.slice(1).map(Number);
+    const [s, e] = [at("DTSTART"), at("DTEND")];
+    return s && e ? (Date.UTC(e[0], e[1] - 1, e[2], e[3], e[4]) - Date.UTC(s[0], s[1] - 1, s[2], s[3], s[4])) / 60000 : null;
+  };
   let lastJoiner = null;
   for (const n of ["Bo", "Cy", "Di"]) {
     const p = await newPage();
@@ -305,11 +322,20 @@ try {
   };
   const ics3 = await icsWhen(code3, 1);
   check("complete line-up: title gets - COMPLETE, players listed, SEQUENCE bumped", ics3.includes("- COMPLETE") && ics3.includes("Players: ") && ics3.includes("Di") && ics3.includes("SEQUENCE:1"), `${ics3.match(/SUMMARY:.*/)?.[0]} | ${ics3.match(/SEQUENCE:.*/)?.[0]} | ${ics3.match(/Players: [^\\]*/)?.[0]}`);
+  check("the calendar entry ends when the match does: 60 minutes after it starts", icsMinutes(ics3) === 60, `${ics3.match(/DTSTART:.*/)?.[0]} | ${ics3.match(/DTEND:.*/)?.[0]}`);
   await lastJoiner.getByRole("button", { name: "Leave" }).click();
   await lastJoiner.getByRole("button", { name: "Join this match" }).waitFor({ timeout: 20000 });
   await lastJoiner.context().close();
   const ics4 = await icsWhen(code3, 2);
   check("someone left: suffix removed, SEQUENCE bumped again", !ics4.includes("COMPLETE") && ics4.includes("SEQUENCE:2"), ics4.match(/SUMMARY:.*/)?.[0]);
+  // A new length is a new end in everybody's calendar, so it goes out as a time change does.
+  await a.goto(`${BASE}/${code3}`);
+  await a.getByRole("button", { name: "Edit match" }).click();
+  await a.getByTestId("length-choice").getByRole("button", { name: "120 min", exact: true }).click();
+  await a.getByRole("button", { name: "Save changes" }).click();
+  await a.getByTestId("match-length").getByText(/· 120 min/).waitFor({ timeout: 20000 });
+  const ics5 = await icsWhen(code3, 3);
+  check("two hours instead of one: the page says so, the calendar entry ends two hours in, SEQUENCE bumped", icsMinutes(ics5) === 120 && ics5.includes("SEQUENCE:3"), `${ics5.match(/SEQUENCE:.*/)?.[0]} | ${ics5.match(/DTEND:.*/)?.[0]}`);
 
   // ---- RU toggle ----
   await a.goto(`${BASE}/PLAY`);

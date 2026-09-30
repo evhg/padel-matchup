@@ -74,7 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
         <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 120 }}>
           <div style={{ fontSize: 44, fontWeight: 800, color: MUTED, letterSpacing: -1, textDecoration: cancelled ? "line-through" : "none", overflow: "hidden", whiteSpace: "nowrap" }}>{title}</div>
           <div style={{ fontSize: 220, fontWeight: 800, letterSpacing: -12, lineHeight: 0.95 }}>{time}</div>
-          <div style={{ fontSize: 64, fontWeight: 800, letterSpacing: -2 }}>{day}</div>
+          <div style={{ fontSize: 64, fontWeight: 800, letterSpacing: -2 }}>{`${day} · ${t("event.minutes", { minutes: ev.durationMinutes })}`}</div>
           <div style={{ fontSize: 44, color: MUTED, overflow: "hidden", whiteSpace: "nowrap" }}>{venue}</div>
         </div>
 

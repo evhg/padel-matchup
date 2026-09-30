@@ -661,6 +661,24 @@ Everything in this list is live. The README describes each in detail.
   hashing all four billion of them. The same caller still lands on the same counter, so every limit
   works as before. The hourly job deletes rate-limit rows older than two days (`pruneRateRows`); a
   limit only ever reads today's row.
+- **A match says how long it is (30 September 2026, migrations 0083 and 0084).** Erik wrote on 25
+  September from his match page: "is the game 60min or 90min? I can't tell. The calendar invite sent
+  out is 2h I think, but I think the booking app shows 90min". He was right: every event ended two
+  hours after its start (`EVENT_DURATION_MS`), and nothing on the page said how long it was. The
+  owner's decision of 30 September (option A): the organiser picks 60, 90 or 120 minutes, three taps
+  under the time on the create and edit forms, 90 already chosen. `events.duration_minutes` holds it;
+  existing matches became 90, and existing tournaments 120, the two hours they always had. The rule
+  is `src/lib/domain/matchLength.ts` (`MATCH_LENGTHS`, `parseMatchLength`, which refuses anything
+  else rather than rounding it, and `eventEnd`), and every reader of "is it over?" asks it: the match
+  page, joining, the hourly sweep to past, the first score nudge (now when the match ends, rule 16),
+  the past partners a free spot goes to, the current edition of a series and the club's court day.
+  The match page says "until 11:00 · 90 min" beside the start; the Telegram, Discord and LINE cards,
+  their notices, the WhatsApp line and the email say "09:30–11:00"; the link preview and the story
+  picture carry "90 min"; the invitation, the Google link and the player's feed end at the start plus
+  the length. A new length is a new end for everybody's calendar, so it bumps SEQUENCE and resends
+  the invitation as a time change does. A tournament takes the same three lengths and starts at 120.
+  "Play again", a group's weekly match and a series' next edition keep the length of the one before.
+  The API takes `durationMinutes` on create and every match object carries it beside `endsAt`.
 
 ## The finish line
 

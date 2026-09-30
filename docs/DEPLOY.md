@@ -109,7 +109,7 @@ Also add the Resend records from §2 in the same DNS editor if you skipped them.
 
 `vercel.json` schedules `GET /api/cron/hourly` daily at 07:00 UTC (Hobby-plan safe; on Pro set `0 * * * *` for hourly). Vercel automatically sends `Authorization: Bearer $CRON_SECRET` when that variable is set; without it the endpoint is open but every step is idempotent.
 
-The job does: `open/full → past` transitions · waitlist hygiene · 24h invite reminders (email only, stops on response or start) · the single organizer score reminder (2h after start) · automatic group matches for weekly slots (with member notifications) · daily metric snapshots.
+The job does: `open/full → past` transitions · waitlist hygiene · 24h invite reminders (email only, stops on response or start) · the score nudge (when the match ends: its start plus its own length, 60, 90 or 120 minutes) · automatic group matches for weekly slots (with member notifications) · daily metric snapshots.
 
 Verify: **Project → Settings → Cron Jobs** shows the job, or trigger by hand:
 

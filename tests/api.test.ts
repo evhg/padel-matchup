@@ -197,7 +197,7 @@ describe("webhooks", () => {
 describe("calendar feed", () => {
   it("builds a PUBLISH calendar with one VEVENT per match", () => {
     const now = new Date("2026-09-10T11:00:00Z");
-    const ev = { id: "11111111-1111-1111-1111-111111111111", code: "AB12", title: "Thursday padel", startsAt: now, venueName: "Club Nine", venueMapUrl: null, court: null, note: null, type: "match" as const, icsSequence: 2, status: "open" as const };
+    const ev = { id: "11111111-1111-1111-1111-111111111111", code: "AB12", title: "Thursday padel", startsAt: now, durationMinutes: 90, venueName: "Club Nine", venueMapUrl: null, court: null, note: null, type: "match" as const, icsSequence: 2, status: "open" as const };
     const ics = buildFeed({ name: "Thursday crew", domain: "kicksma.sh", entries: [{ event: ev, title: "Thursday padel", url: "https://kicksma.sh/AB12" }, { event: { ...ev, id: "22222222-2222-2222-2222-222222222222", status: "cancelled" as const }, title: "Old one", url: "https://kicksma.sh/CD34" }] });
     expect(ics).toContain("METHOD:PUBLISH");
     expect(ics).toContain("X-WR-CALNAME:Thursday crew");

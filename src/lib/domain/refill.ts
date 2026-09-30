@@ -2,8 +2,9 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, max, ne, or, 
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { activity, events, groupMembers, players, pushSubscriptions, slots, type Event, type Player } from "@/db/schema";
-import { EVENT_DURATION_MS, REFILL_EMAIL_MAX, REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WHATSAPP_MAX, REFILL_WINDOW_MS } from "@/lib/config";
+import { REFILL_EMAIL_MAX, REFILL_FANOUT_MAX, REFILL_MIN_NOTICE_MS, REFILL_WHATSAPP_MAX, REFILL_WINDOW_MS } from "@/lib/config";
 import { markWantsNotified, matchingWants } from "./demand";
+import { endedBy } from "./reminders";
 
 /**
  * A spot that opens, and the people who would take it.
@@ -110,12 +111,12 @@ export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capa
   const mine = alias(slots, "mine");
   const theirs = alias(slots, "theirs");
   const since = new Date(now.getTime() - PARTNER_WINDOW_MS);
-  const finished = new Date(now.getTime() - EVENT_DURATION_MS);
   const rows = await db
     .select({ playerId: theirs.playerId })
     .from(here)
     .innerJoin(mine, and(eq(mine.playerId, here.playerId), ne(mine.eventId, here.eventId), inArray(mine.status, [...SEATED])))
-    .innerJoin(events, and(eq(events.id, mine.eventId), eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), lte(events.startsAt, finished), lte(mine.position, events.capacity)))
+    // Finished means that match's own length has run out (`endedBy`): a 60-minute match makes partners an hour after it starts.
+    .innerJoin(events, and(eq(events.id, mine.eventId), eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), ...endedBy(now), lte(mine.position, events.capacity)))
     .innerJoin(theirs, and(eq(theirs.eventId, events.id), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity), isNotNull(theirs.playerId), ne(theirs.playerId, mine.playerId)))
     .where(and(eq(here.eventId, ev.id), inArray(here.status, [...SEATED]), lte(here.position, ev.capacity), isNotNull(here.playerId)))
     .groupBy(theirs.playerId)

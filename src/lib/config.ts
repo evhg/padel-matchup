@@ -62,10 +62,11 @@ export function emailFrom(): string {
 
 export const MATCH_CAPACITY = 4;
 export const MAX_TOURNAMENT_CAPACITY = 64;
-/** Matches are considered finished this long after their start time. */
-export const EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
-/** Single organizer score reminder fires this long after start. */
-export const SCORE_REMINDER_DELAY_MS = 2 * 60 * 60 * 1000;
+/*
+ * How long a match lasts, and so when it is over and when the first score nudge goes, is the event's
+ * own `duration_minutes`: `eventEnd` in src/lib/domain/matchLength.ts. There is no fixed length here
+ * any more; a constant of two hours made every calendar invitation two hours long (30 September 2026).
+ */
 /** The second and last ask: the morning after, when the first one was missed in the evening. */
 export const SECOND_SCORE_REMINDER_DELAY_MS = 18 * 60 * 60 * 1000;
 /** Unconfirmed invitees with an email are reminded at this interval. */

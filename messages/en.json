@@ -188,7 +188,8 @@
     "tzNearby": "Likely",
     "tzAll": "All time zones",
     "haveAlready": "Players you already have",
-    "haveAlreadyHelp": "One name per line. Each takes a spot and gets a link to pass on, so the message you share says how many you really need."
+    "haveAlreadyHelp": "One name per line. Each takes a spot and gets a link to pass on, so the message you share says how many you really need.",
+    "length": "How long"
   },
   "share": {
     "title": "Your match is live",
@@ -290,7 +291,9 @@
     "paidClaimed": "Says they paid",
     "paidNot": "Not yet",
     "paidClaim": "I have paid",
-    "paidNothingThrough": "Kicksmash only remembers what you both say. No money passes through it."
+    "paidNothingThrough": "Kicksmash only remembers what you both say. No money passes through it.",
+    "minutes": "{minutes} min",
+    "until": "until {time}"
   },
   "creator": {
     "tools": "Organizer tools",

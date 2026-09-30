@@ -2,7 +2,7 @@ import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, slots, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
-import { EVENT_DURATION_MS } from "@/lib/config";
+import { isOver } from "./matchLength";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
 import { mergePlayers } from "./merge";
@@ -25,7 +25,8 @@ export async function lockEvent(tx: Db, eventId: string): Promise<Event> {
 
 function assertLive(ev: Event, now: Date) {
   if (ev.status === "cancelled") throw new DomainError("cancelled");
-  if (ev.status === "past" || ev.startsAt.getTime() + EVENT_DURATION_MS <= now.getTime()) throw new DomainError("past");
+  // Joinable until the match's own length has run out, not a fixed two hours after the start.
+  if (ev.status === "past" || isOver(ev, now)) throw new DomainError("past");
 }
 
 const VACANT: Partial<typeof slots.$inferInsert> = {

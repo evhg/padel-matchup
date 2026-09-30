@@ -28,7 +28,8 @@ import { sendWaTemplate, waLocale, waMatchLine, whatsappNotices } from "@/lib/wh
 
 /**
  * After the final point. Every player, not only the organizer, hears "how did it go?" on the channel
- * they have (Telegram first, then WhatsApp, then push, then email): two hours after the start, and
+ * they have (Telegram first, then WhatsApp, then push, then email): when the match ends (its start plus the
+ * length the organiser picked, `isScoreReminderDue` in src/lib/domain/reminders.ts), and
  * once more the next morning if nobody has answered. In Telegram the answer is a reply with the
  * score; the message is remembered as a card so the reply finds the match. In WhatsApp it is the
  * `ks_score_ask` template, whose button opens the match page and its score form.

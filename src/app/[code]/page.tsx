@@ -35,8 +35,9 @@ import { stayUpdated } from "@/lib/domain/stayUpdated";
 import { bindDeepLink } from "@/lib/telegram/deepLinks";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
-import { baseUrl, emailEnabled, EVENT_DURATION_MS, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventDayLong, formatEventTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
+import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
+import { formatEventDay, formatEventDayLong, formatEventTime, formatEventTimeRange, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
@@ -72,7 +73,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
   const occupied = detail.roster.filter(isOccupied).length;
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
-  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)} · ${venue} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
+  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTimeRange(ev.startsAt, eventEnd(ev), ev.tz, locale)} · ${venue} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
   return {
     title,
     description,
@@ -98,7 +99,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const occupied = roster.filter(isOccupied).length;
   const spotsLeft = roster.filter(isClaimable).length;
   const started = now.getTime() >= ev.startsAt.getTime();
-  const over = ev.status === "past" || now.getTime() >= ev.startsAt.getTime() + EVENT_DURATION_MS;
+  // Over when its own length has run out (60, 90 or 120 minutes, the organiser's pick), or the sweep said so.
+  const over = ev.status === "past" || isOver(ev, now);
   const cancelled = ev.status === "cancelled";
   const live = !cancelled && started && !over;
   const me = viewer.player;
@@ -336,6 +338,10 @@ export default async function EventPage({ params, searchParams }: Props) {
             <div className="text-5xl font-extrabold tracking-tighter tabular-nums">{time}</div>
             <div className="pb-1">
               <div className="text-lg font-bold leading-tight">{formatEventDayLong(ev.startsAt, ev.tz, locale)}</div>
+              {/* How long the court is booked, beside the start: Erik could not tell whether his match was 60 or 90 minutes (25 September 2026). */}
+              <div className="text-sm font-semibold text-muted" data-testid="match-length">
+                {t("event.until", { time: formatEventTime(eventEnd(ev), ev.tz, locale) })} · {t("event.minutes", { minutes: ev.durationMinutes })}
+              </div>
               <div className="text-xs font-semibold text-faint">
                 {tzLabel(ev.startsAt, ev.tz, locale)} · {!over && !cancelled ? t("event.startsIn", { when: relativeTime(ev.startsAt, locale, now) }) : relativeTime(ev.startsAt, locale, now)}
               </div>
@@ -528,6 +534,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               title: ev.title ?? "",
               date: parts.date,
               time: parts.time,
+              durationMinutes: parseMatchLength(ev.durationMinutes) ?? defaultLength(ev.type),
               tz: ev.tz,
               venueName: ev.venueName ?? "",
               venueMapUrl: ev.venueMapUrl ?? "",
