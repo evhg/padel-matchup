@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { later, reportError } from "@/lib/alerts";
 import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
+import { clientKeyFrom } from "@/lib/ipKey";
 
 /** Open by design: any origin may read and write; keys and rate limits do the protecting. */
 export const CORS_HEADERS: Record<string, string> = {
@@ -99,6 +100,7 @@ export async function readJson(req: Request): Promise<unknown> {
   return JSON.parse(text);
 }
 
-export function clientIp(req: Request): string {
-  return (req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown").split(",")[0].trim().slice(0, 64);
+/** The caller's rate-limit key: a keyed hash of their address, never the address itself (`src/lib/ipKey.ts`). */
+export function clientKey(req: Request): string {
+  return clientKeyFrom(req.headers);
 }

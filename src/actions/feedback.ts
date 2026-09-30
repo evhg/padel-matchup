@@ -8,7 +8,7 @@ import { proposeToOwner } from "@/lib/feedback/propose";
 import { FeedbackError, createFeedback, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { getSessionPlayer } from "@/lib/session";
-import { ActionFailure, assertRate, clientIp, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from "./shared";
 
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
@@ -18,7 +18,7 @@ export async function sendFeedbackAction(text: string, contact: string, context:
     const db = await getDb();
     const clean = text.trim();
     if (clean.length < 3) throw new ActionFailure("generic");
-    await assertRate(db, "feedback", await clientIp(), LIMITS.feedbackPerIpPerDay);
+    await assertRate(db, "feedback", await clientKey(), LIMITS.feedbackPerIpPerDay);
     const player = await getSessionPlayer(db);
     const email = EMAIL_RE.test(contact.trim()) ? contact.trim().toLowerCase() : null;
     if ((await feedbackCountToday(db, { playerId: player?.id ?? null, email, telegramUserId: player?.telegramId ?? null })) >= 10) throw new ActionFailure("too_many");

@@ -15,7 +15,7 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { sendEmailCode, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
 import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, setSessionPlayer } from "@/lib/session";
-import { ActionFailure, assertRate, clientIp, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, clientKey, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { removeOptOut } from "@/lib/domain/optouts";
 import { liftOnConsent } from "@/lib/domain/emailMarks";
@@ -98,7 +98,7 @@ export async function requestRestoreCode(email: string): Promise<ActionResult<{ 
     const db = await getDb();
     const normalized = normalizeEmail(email);
     if (!normalized) throw new ActionFailure("invalid");
-    await assertRate(db, "restore", await clientIp(), LIMITS.restoreCodesPerIpPerDay);
+    await assertRate(db, "restore", await clientKey(), LIMITS.restoreCodesPerIpPerDay);
     const owners = await playersWithEmail(db, normalized);
     if (owners.length === 0) return { known: false, sent: false };
     const issued = await issueEmailCode(db, normalized);
