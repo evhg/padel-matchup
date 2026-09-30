@@ -57,7 +57,8 @@ async function readsInOrder(p, locale, where, { hasFeedback = true } = {}) {
 
 try {
   // ------------------------------------------------- a match that started an hour ago
-  // An hour, not two: a match can still be joined until two hours after it starts, and score entry
+  // An hour, not two: a match can still be joined until its length (90 minutes unless the organiser
+  // picked another) has run out, and score entry
   // is open from the moment it does. Both have to be true for one player to walk this.
   const startsAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const made = await api("/api/v1/matches", { startsAt, tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Kai" } });

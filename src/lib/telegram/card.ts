@@ -1,8 +1,9 @@
 import { calendarTitle } from "@/lib/calendar";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { formatEventDay, formatEventTimeRange } from "@/lib/dates";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
+import { eventEnd } from "@/lib/domain/matchLength";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
 import { esc, miniAppUrl, type InlineKeyboard } from "./api";
@@ -518,9 +519,13 @@ export function whereLine(detail: EventDetail, locale: BotLocale): string {
   return ev.court ? `${venue} · ${s.court(ev.court)}` : venue;
 }
 
-export function whenLine(detail: EventDetail, locale: BotLocale): string {
+/**
+ * "Sat 27 Sep · 09:30–11:00": the day, the start and the end. Every channel's card, notice and
+ * WhatsApp line says when a match is through this, so the length the organiser picked is on each.
+ */
+export function whenLine(detail: Pick<EventDetail, "event">, locale: BotLocale): string {
   const ev = detail.event;
-  return `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)}`;
+  return `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTimeRange(ev.startsAt, eventEnd(ev), ev.tz, locale)}`;
 }
 
 /** The one message per match the bot keeps edited. HTML parse mode. */
@@ -539,7 +544,7 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
   const resultOpen = ev.type === "match" && !cancelled && started && !ev.scoreLockedByCreator;
   const lines: string[] = [];
   lines.push(`🎾 <b>${esc(cardTitle(detail, locale))}</b>`);
-  lines.push(`📅 ${esc(formatEventDay(ev.startsAt, ev.tz, locale))} · ${esc(formatEventTime(ev.startsAt, ev.tz, locale))}`);
+  lines.push(`📅 ${esc(whenLine(detail, locale))}`);
   lines.push(`📍 ${esc(whereLine(detail, locale))}`);
   const range = { min: ev.levelMin, max: ev.levelMax };
   if (hasRange(range)) lines.push(`🎚 ${s.level} ${esc(formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` }))}`);

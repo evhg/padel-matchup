@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, strings, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { cardTitle, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import { md, type DcActionRow, type DcEmbed } from "./api";
 
 /**
@@ -28,7 +27,7 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
   const cancelled = ev.status === "cancelled";
   const past = ev.status === "past";
   const head: string[] = [];
-  head.push(`📅 ${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTime(ev.startsAt, ev.tz, locale)}`);
+  head.push(`📅 ${md(whenLine(detail, locale))}`);
   head.push(`📍 ${md(whereLine(detail, locale))}`);
   const range = { min: ev.levelMin, max: ev.levelMax };
   if (hasRange(range)) head.push(`🎚 ${s.level} ${formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` })}`);

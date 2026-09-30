@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { SCORE_REMINDER_DELAY_MS, SECOND_SCORE_REMINDER_DELAY_MS } from "@/lib/config";
+import { SECOND_SCORE_REMINDER_DELAY_MS } from "@/lib/config";
+import { LONGEST_LENGTH } from "@/lib/domain/matchLength";
 import { isScoreReminderDue, isSecondScoreReminderDue } from "@/lib/domain/reminders";
 
 /**
- * A match with no score moves nobody's level, enters no ranking and records no podium. One ask two
- * hours after the start is a single roll of the dice: it lands while people are still at the club,
- * or it never lands. These are the rules for asking exactly once more.
+ * A match with no score moves nobody's level, enters no ranking and records no podium. One ask when
+ * the match ends is a single roll of the dice: it lands while people are still at the club, or it
+ * never lands. These are the rules for asking exactly once more.
  */
+const LONGEST_MS = LONGEST_LENGTH * 60_000;
 describe("the second ask for a missing score", () => {
   // A fixed instant, never today (rule 11).
   const start = new Date("2026-09-14T10:00:00.000Z");
@@ -27,7 +29,8 @@ describe("the second ask for a missing score", () => {
   });
 
   it("waits the full delay, which is long enough to be the next morning and not the same evening", () => {
-    expect(SECOND_SCORE_REMINDER_DELAY_MS).toBeGreaterThan(SCORE_REMINDER_DELAY_MS);
+    // Later than the first ask can ever be, which is the end of the longest match.
+    expect(SECOND_SCORE_REMINDER_DELAY_MS).toBeGreaterThan(LONGEST_MS);
     expect(isSecondScoreReminderDue(ev(), false, after(SECOND_SCORE_REMINDER_DELAY_MS - 1))).toBe(false);
     expect(isSecondScoreReminderDue(ev(), false, after(SECOND_SCORE_REMINDER_DELAY_MS))).toBe(true);
   });
@@ -45,8 +48,8 @@ describe("the second ask for a missing score", () => {
   });
 
   it("leaves the first ask exactly as it was", () => {
-    const fresh = { status: "past" as const, startsAt: start, scoreReminderSent: false, standings: null, type: "match" as const };
-    expect(isScoreReminderDue(fresh, false, after(SCORE_REMINDER_DELAY_MS))).toBe(true);
-    expect(isScoreReminderDue({ ...fresh, scoreReminderSent: true }, false, after(SCORE_REMINDER_DELAY_MS))).toBe(false);
+    const fresh = { status: "past" as const, startsAt: start, durationMinutes: 120, scoreReminderSent: false, standings: null, type: "match" as const };
+    expect(isScoreReminderDue(fresh, false, after(LONGEST_MS))).toBe(true);
+    expect(isScoreReminderDue({ ...fresh, scoreReminderSent: true }, false, after(LONGEST_MS))).toBe(false);
   });
 });

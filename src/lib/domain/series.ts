@@ -1,13 +1,13 @@
 import { and, asc, count, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, series, type Event, type Series, type SeriesRhythm } from "@/db/schema";
-import { EVENT_DURATION_MS } from "@/lib/config";
 import { nextOccurrence, timePatternOf, wallClock, weekdayName, zonedTimeToUtc } from "@/lib/dates";
 import { slugFrom } from "@/lib/translit";
 import { bumpMetric } from "./metrics";
 import { venueInCity, type City } from "./cities";
 import { createEvent, cleanText, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
+import { isOver, LONGEST_LENGTH } from "./matchLength";
 import { venueSlug, withCounts } from "./venueBoard";
 
 /**
@@ -93,8 +93,9 @@ export function seriesDue(s: Rhythm & Pick<Series, "active" | "leadDays" | "last
 export const isRhythm = (v: unknown): v is SeriesRhythm => v === "week" || v === "fortnight" || v === "month";
 
 /** An edition still counts as current while it is running; finalized (standings written), marked past, cancelled or over means past. */
-const isCurrent = (e: Pick<Event, "startsAt" | "status" | "standings">, now: Date) => e.status !== "past" && e.status !== "cancelled" && !e.standings && e.startsAt.getTime() + EVENT_DURATION_MS > now.getTime();
-const sinceRunning = (now: Date) => new Date(now.getTime() - EVENT_DURATION_MS);
+const isCurrent = (e: Pick<Event, "startsAt" | "durationMinutes" | "status" | "standings">, now: Date) => e.status !== "past" && e.status !== "cancelled" && !e.standings && !isOver(e, now);
+/** The earliest start an edition still running can have: the longest length back. The exact test is `isCurrent`, on each row's own length. */
+const sinceRunning = (now: Date) => new Date(now.getTime() - LONGEST_LENGTH * 60_000);
 
 /** The slug from the name, transliterated; a name with nothing usable in it falls back to the venue and the weekday, never to a constant. */
 export function seriesSlugBase(name: string, fallback: Pick<Event, "venueName" | "startsAt" | "tz">): string {
@@ -117,13 +118,24 @@ async function activeSeriesCount(db: Db, organizerPlayerId: string): Promise<num
   return Number(n);
 }
 
+/**
+ * How long the next edition runs: as long as the latest one, which the organiser may have changed on
+ * its page. One read down `events_series_idx`, once per edition made. Null (no edition yet) means the
+ * tournament default.
+ */
+export async function latestEditionLength(db: Db, seriesId: string): Promise<number | null> {
+  const [row] = await db.select({ minutes: events.durationMinutes }).from(events).where(eq(events.seriesId, seriesId)).orderBy(desc(events.startsAt)).limit(1);
+  return row?.minutes ?? null;
+}
+
 /** One edition from the template: a public tournament by the organizer, on the series. `lastCreatedFor` moves with it. */
-export async function createEdition(db: Db, s: Series, startsAt: Date): Promise<Event> {
+export async function createEdition(db: Db, s: Series, startsAt: Date, durationMinutes?: number | null): Promise<Event> {
   const event = await createEvent(db, {
     creatorPlayerId: s.organizerPlayerId,
     type: "tournament",
     title: s.name,
     startsAt,
+    durationMinutes: durationMinutes ?? undefined,
     tz: s.tz,
     venueName: s.venueName,
     venueMapUrl: s.venueMapUrl,
@@ -153,7 +165,7 @@ export async function autoCreateSeriesEditions(db: Db, now = new Date()): Promis
   for (const s of rows) {
     const startsAt = seriesDue(s, now);
     if (!startsAt) continue;
-    out.push({ series: s, event: await createEdition(db, s, startsAt) });
+    out.push({ series: s, event: await createEdition(db, s, startsAt, await latestEditionLength(db, s.id)) });
   }
   return out;
 }
@@ -209,7 +221,7 @@ export async function createSeriesFromEvent(db: Db, input: CreateSeriesInput): P
       })
       .returning();
     await tx.update(events).set({ seriesId: s.id }).where(eq(events.id, ev.id));
-    const next = await createEdition(tx, s, nextAt);
+    const next = await createEdition(tx, s, nextAt, ev.durationMinutes);
     await bumpMetric(tx, "series_created");
     return { series: s, next };
   });

@@ -9,6 +9,7 @@ import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { admission, hasRange } from "@/lib/domain/levels";
+import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
@@ -38,6 +39,7 @@ export const createMatchSchema = z.object({
   type: z.enum(["match", "tournament"]).default("match").describe("A match is exactly four players. A tournament is an americano with 4 to 64 players in fours."),
   startsAt: z.string().min(10).max(40).describe("ISO 8601 date-time. With an offset or Z it is absolute; without one it is read in tz. Example: 2026-09-11T19:00"),
   tz: z.string().min(1).max(64).describe("IANA time zone the players live in, for example Asia/Singapore or Asia/Bangkok."),
+  durationMinutes: z.literal(MATCH_LENGTHS).optional().describe("How long the court is booked: 60, 90 or 120 minutes. Omit for 90 (a match) or 120 (a tournament). The match page, the cards and the calendar invitation show it."),
   venue: z.string().max(80).optional().describe("Club or court name. Enables the venue board and the booking link."),
   venueMapUrl: z.url().max(500).optional(),
   court: z.string().max(40).optional().describe('Court within the venue, e.g. "3".'),
@@ -132,6 +134,7 @@ export async function createMatch(db: Db, raw: unknown, ctx: OpContext, locale =
     type: input.type,
     title: input.title,
     startsAt,
+    durationMinutes: input.durationMinutes,
     tz: input.tz,
     venueName: input.venue,
     venueMapUrl: input.venueMapUrl,

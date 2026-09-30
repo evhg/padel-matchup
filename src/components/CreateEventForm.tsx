@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createEventAction } from "@/actions/events";
 import { nextOccurrence, tomorrowAt } from "@/lib/dates";
+import { defaultLength } from "@/lib/domain/matchLength";
 import { EventFields, type EventFormValues, type TimePatternInput } from "./EventFields";
 import type { VenueOption } from "./VenueCombobox";
 
@@ -60,6 +61,7 @@ export function CreateEventForm({
     title: "",
     date: initial.date,
     time: initial.time,
+    durationMinutes: defaultLength(initialValues?.type ?? initialType),
     tz: defaultTz,
     // The first row is a default only when it is theirs. Since the picker carries the whole directory,
     // venues[0] is otherwise a club they have never been to, quietly filled in as the match's venue.
@@ -119,6 +121,7 @@ export function CreateEventForm({
         title: values.title || undefined,
         date: values.date,
         time: values.time,
+        durationMinutes: values.durationMinutes,
         tz: values.tz,
         venueName: values.venueName || undefined,
         venueMapUrl: values.venueMapUrl || undefined,

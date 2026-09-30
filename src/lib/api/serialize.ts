@@ -1,6 +1,6 @@
 import type { Coach, Event, Player, Series } from "@/db/schema";
 import type { SeriesPage } from "@/lib/domain/series";
-import { EVENT_DURATION_MS } from "@/lib/config";
+import { eventEnd } from "@/lib/domain/matchLength";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { isClubLive } from "@/lib/domain/clubs";
 import type { GroupDetail } from "@/lib/domain/groups";
@@ -27,7 +27,10 @@ export type PublicMatch = {
   title: string | null;
   status: "open" | "full" | "cancelled" | "past";
   startsAt: string;
+  /** startsAt plus durationMinutes. */
   endsAt: string;
+  /** How long the organiser booked: 60, 90 or 120 minutes. */
+  durationMinutes: number;
   tz: string;
   venue: PublicVenue | null;
   capacity: number;
@@ -65,7 +68,8 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     title: ev.title,
     status: ev.status,
     startsAt: ev.startsAt.toISOString(),
-    endsAt: new Date(ev.startsAt.getTime() + EVENT_DURATION_MS).toISOString(),
+    endsAt: eventEnd(ev).toISOString(),
+    durationMinutes: ev.durationMinutes,
     tz: ev.tz,
     venue: ev.venueName ? { name: ev.venueName, slug: ev.venueSlug, mapUrl: ev.venueMapUrl, court: ev.court, boardUrl: ev.venueSlug ? `${base}/v/${ev.venueSlug}` : null } : null,
     capacity: ev.capacity,

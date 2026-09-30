@@ -56,15 +56,16 @@ describe("invite reminder eligibility (pure)", () => {
 });
 
 describe("score reminder eligibility (pure)", () => {
-  const e = (o: Partial<{ status: "open" | "full" | "cancelled" | "past"; startsAt: Date; scoreReminderSent: boolean; standings: string[] | null; type: "match" | "tournament" }>) => ({
+  const e = (o: Partial<{ status: "open" | "full" | "cancelled" | "past"; startsAt: Date; durationMinutes: number; scoreReminderSent: boolean; standings: string[] | null; type: "match" | "tournament" }>) => ({
     status: "past" as const,
     startsAt: new Date(now.getTime() - 3 * HOUR),
+    durationMinutes: 90,
     scoreReminderSent: false,
     standings: null,
     type: "match" as const,
     ...o,
   });
-  it("fires once, 2h after start, only when no score exists", () => {
+  it("fires once, when the match has ended, only when no score exists", () => {
     expect(isScoreReminderDue(e({}), false, now)).toBe(true);
     expect(isScoreReminderDue(e({ startsAt: new Date(now.getTime() - 1 * HOUR) }), false, now)).toBe(false);
     expect(isScoreReminderDue(e({}), true, now)).toBe(false);

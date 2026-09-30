@@ -7,6 +7,7 @@ import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { formatOf } from "./formats";
 import { hasRange, normalizeRange } from "./levels";
+import { defaultLength, parseMatchLength, type MatchLength } from "./matchLength";
 import { venueSlugFor } from "./venueBoard";
 
 export type CreateEventInput = {
@@ -14,6 +15,8 @@ export type CreateEventInput = {
   type: "match" | "tournament";
   title?: string | null;
   startsAt: Date;
+  /** 60, 90 or 120 minutes (`MATCH_LENGTHS`); omitted means 90 for a match, 120 for a tournament. Anything else is refused. */
+  durationMinutes?: number | null;
   tz: string;
   /** Optional: empty means "court TBD". */
   venueName?: string | null;
@@ -61,6 +64,14 @@ function cleanUrl(v: string | null | undefined): string | null {
   }
 }
 
+/** The length a write stores: one of the three, the type's default when nobody said, and a refusal for anything else. */
+export function resolveLength(type: "match" | "tournament", minutes?: number | null): MatchLength {
+  if (minutes === undefined || minutes === null) return defaultLength(type);
+  const m = parseMatchLength(minutes);
+  if (!m) throw new DomainError("invalid", "durationMinutes");
+  return m;
+}
+
 export function resolveCapacity(type: "match" | "tournament", capacity?: number): number {
   if (type === "match") return MATCH_CAPACITY;
   // Americano runs in fours (one court per 4). 4..64; round 1 later shrinks it to the players present.
@@ -85,6 +96,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
   if (!isValidTimeZone(input.tz)) throw new DomainError("invalid", "tz");
   if (!(input.startsAt instanceof Date) || Number.isNaN(input.startsAt.getTime())) throw new DomainError("invalid", "startsAt");
   const capacity = resolveCapacity(input.type, input.capacity);
+  const durationMinutes = resolveLength(input.type, input.durationMinutes);
   const venueMapUrl = cleanUrl(input.venueMapUrl);
   const range = normalizeRange(input.levelMin, input.levelMax);
   // "WAREHAUS.club" is the club at `warehaus`, whatever its name would make of itself. Asked before
@@ -105,6 +117,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           type: input.type,
           title: cleanText(input.title, 80),
           startsAt: input.startsAt,
+          durationMinutes,
           tz: input.tz,
           venueName,
           venueMapUrl,
@@ -165,6 +178,8 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     type: src.type,
     title: src.title,
     startsAt: nextWeekAfter(src.startsAt, now),
+    // "Play again" books the same court for the same time: the length travels with the rest.
+    durationMinutes: src.durationMinutes,
     tz: src.tz,
     venueName: src.venueName,
     venueMapUrl: src.venueMapUrl,
@@ -190,6 +205,8 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
 export type UpdateEventInput = {
   title?: string | null;
   startsAt?: Date;
+  /** 60, 90 or 120; anything else is refused. A change moves the calendar entry's end, as a new time does. */
+  durationMinutes?: number;
   tz?: string;
   venueName?: string | null;
   venueMapUrl?: string | null;
@@ -208,7 +225,7 @@ export type UpdateEventInput = {
 
 export type UpdateEventResult = {
   event: Event;
-  /** True when time or venue changed → send updated .ics to participants. */
+  /** True when the time, the length or the venue changed → send updated .ics to participants. */
   calendarChanged: boolean;
   /** Waitlisted players who became roster members because capacity grew. */
   promotedPlayerIds: string[];
@@ -251,6 +268,15 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         calendarChanged = true;
         // Re-opening a finished event by moving it into the future.
         if (ev.status === "past") set.status = "open";
+      }
+    }
+    if (patch.durationMinutes !== undefined) {
+      const minutes = parseMatchLength(patch.durationMinutes);
+      if (!minutes) throw new DomainError("invalid", "durationMinutes");
+      // A new length is a new end: the players' calendars hold the old one, so it goes out as a time change does.
+      if (minutes !== ev.durationMinutes) {
+        set.durationMinutes = minutes;
+        calendarChanged = true;
       }
     }
     if (venueName !== undefined) {

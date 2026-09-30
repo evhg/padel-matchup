@@ -1,7 +1,19 @@
-import { and, eq, gt, inArray, isNotNull, lte, or, sql, isNull} from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, lte, or, sql, isNull, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player, type Slot } from "@/db/schema";
-import { EVENT_DURATION_MS, INVITE_REMINDER_INTERVAL_MS, SCORE_REMINDER_DELAY_MS, SECOND_SCORE_REMINDER_DELAY_MS } from "@/lib/config";
+import { INVITE_REMINDER_INTERVAL_MS, SECOND_SCORE_REMINDER_DELAY_MS } from "@/lib/config";
+import { isOver, SHORTEST_LENGTH } from "./matchLength";
+
+/**
+ * "The event is over by `now`", as a query: its start plus its own length has come (`eventEnd` in
+ * `./matchLength.ts`, the same rule in SQL). Two conditions: the start bound walks
+ * `events_starts_at_idx` and holds for every length, because nothing ends sooner than the shortest;
+ * the exact test reads the row's own `duration_minutes`. `now` goes in as text, never as a Date
+ * (rule 1: postgres-js refuses a Date inside a raw template).
+ */
+export function endedBy(now: Date): SQL[] {
+  return [lte(events.startsAt, new Date(now.getTime() - SHORTEST_LENGTH * 60_000)), sql`${events.startsAt} + make_interval(mins => ${events.durationMinutes}) <= ${now.toISOString()}::timestamptz`];
+}
 
 /**
  * Decision 12: unconfirmed invitees with an email are reminded every 24h,
@@ -48,11 +60,13 @@ export async function markInviteReminded(db: Db, slotId: string, now = new Date(
 }
 
 /**
- * Decision 13: the creator gets exactly ONE score reminder, 2h after start,
- * only if no score has been entered yet.
+ * Decision 13 and rule 16: the first ask for the score goes once, when the match ends (its start plus
+ * the length the organiser chose), only while no score has been entered. It read "two hours after the
+ * start" while every match lasted two hours; for a 60-minute match that was an hour after everybody
+ * had gone home.
  */
 export function isScoreReminderDue(
-  event: Pick<Event, "status" | "startsAt" | "scoreReminderSent" | "standings" | "type">,
+  event: Pick<Event, "status" | "startsAt" | "durationMinutes" | "scoreReminderSent" | "standings" | "type">,
   hasScores: boolean,
   now: Date,
 ): boolean {
@@ -60,11 +74,10 @@ export function isScoreReminderDue(
   if (event.status === "cancelled") return false;
   if (hasScores) return false;
   if (event.type === "tournament" && event.standings && event.standings.length > 0) return false;
-  return event.startsAt.getTime() + SCORE_REMINDER_DELAY_MS <= now.getTime();
+  return isOver(event, now);
 }
 
 export async function findScoreRemindersDue(db: Db, now = new Date()): Promise<{ event: Event; creator: Player }[]> {
-  const cutoff = new Date(now.getTime() - SCORE_REMINDER_DELAY_MS);
   const rows = await db
     .select({
       event: events,
@@ -73,7 +86,7 @@ export async function findScoreRemindersDue(db: Db, now = new Date()): Promise<{
     })
     .from(events)
     .innerJoin(players, eq(players.id, events.creatorPlayerId))
-    .where(and(eq(events.scoreReminderSent, false), inArray(events.status, ["open", "full", "past"]), lte(events.startsAt, cutoff)));
+    .where(and(eq(events.scoreReminderSent, false), inArray(events.status, ["open", "full", "past"]), ...endedBy(now)));
   return rows.filter((r) => isScoreReminderDue(r.event, Number(r.scoreCount) > 0, now)).map(({ event, creator }) => ({ event, creator }));
 }
 
@@ -120,18 +133,18 @@ export async function markScoreReminderSent(db: Db, eventId: string) {
   await db.update(events).set({ scoreReminderSent: true }).where(eq(events.id, eventId));
 }
 
-/** open/full → past once the event has finished (start + duration). */
-export function shouldBePast(event: Pick<Event, "status" | "startsAt">, now: Date): boolean {
+/** open/full → past once the event has finished: its start plus its own length. */
+export function shouldBePast(event: Pick<Event, "status" | "startsAt" | "durationMinutes">, now: Date): boolean {
   if (event.status !== "open" && event.status !== "full") return false;
-  return event.startsAt.getTime() + EVENT_DURATION_MS <= now.getTime();
+  return isOver(event, now);
 }
 
+/** The hourly sweep: every open or full event whose own length has run out becomes past. */
 export async function transitionPastEvents(db: Db, now = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() - EVENT_DURATION_MS);
   const updated = await db
     .update(events)
     .set({ status: "past" })
-    .where(and(inArray(events.status, ["open", "full"]), lte(events.startsAt, cutoff)))
+    .where(and(inArray(events.status, ["open", "full"]), ...endedBy(now)))
     .returning({ id: events.id });
   return updated.length;
 }

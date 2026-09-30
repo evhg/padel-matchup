@@ -175,7 +175,7 @@ export async function GET(req: Request) {
         summary.scoreRemindersDeferred++;
         continue;
       }
-      // The first nudge, two hours after the start, to every player on the channel they have.
+      // The first nudge, when the match ends (its own length after the start), to every player on the channel they have.
       await markScoreReminderSent(db, event.id);
       await nudgeForScore(db, event).catch((e) => summary.errors.push(`nudge ${event.code}: ${String(e)}`));
       summary.scoreReminders++;

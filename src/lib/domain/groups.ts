@@ -261,6 +261,16 @@ export function recurrenceDue(group: Pick<Group, "recurDow" | "recurTime" | "tz"
 }
 
 /** Hourly: create the next match for every group whose weekly slot is within its lead time. */
+/**
+ * How long a group's next match runs: as long as its latest one, so a crew that books an hour keeps
+ * booking an hour. One read down `events_group_idx`; null when the group has no match yet, which
+ * means the type's default.
+ */
+export async function latestGroupLength(db: Db, groupId: string): Promise<number | null> {
+  const [row] = await db.select({ minutes: events.durationMinutes }).from(events).where(eq(events.groupId, groupId)).orderBy(desc(events.startsAt)).limit(1);
+  return row?.minutes ?? null;
+}
+
 export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<{ group: Group; event: Event }[]> {
   const candidates = await db.select().from(groups).where(and(isNotNull(groups.recurDow), isNotNull(groups.recurTime), isNull(groups.archivedAt)));
   const created: { group: Group; event: Event }[] = [];
@@ -271,6 +281,7 @@ export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<
       creatorPlayerId: g.creatorPlayerId,
       type: g.type,
       startsAt,
+      durationMinutes: await latestGroupLength(db, g.id),
       tz: g.tz,
       venueName: g.venueName,
       venueMapUrl: g.venueMapUrl,

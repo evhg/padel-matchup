@@ -77,7 +77,7 @@ export default async function OgImage({ params }: { params: Promise<{ code: stri
             <div style={{ display: "flex", alignItems: "flex-end", gap: 24 }}>
               <div style={{ fontSize: 132, fontWeight: 800, letterSpacing: -6, lineHeight: 1 }}>{time}</div>
               <div style={{ display: "flex", flexDirection: "column", paddingBottom: 14 }}>
-                <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1 }}>{day}</div>
+                <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1 }}>{`${day} · ${t("event.minutes", { minutes: ev.durationMinutes })}`}</div>
                 <div style={{ fontSize: 34, color: "#5B6470", maxWidth: 640, overflow: "hidden", whiteSpace: "nowrap" }}>{venueWithCourt(ev, { venueTbd: t("og.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) })}</div>
               </div>
             </div>

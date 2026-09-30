@@ -2,11 +2,12 @@
 
 import { CITIES } from "@/lib/domain/cities";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import type { TournamentFormat } from "@/db/schema";
 import { DEFAULT_POINTS, FORMATS } from "@/lib/domain/formats";
 import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, presetFor, rangeFor, type PresetKey } from "@/lib/domain/levels";
+import { defaultLength, MATCH_LENGTHS, type MatchLength } from "@/lib/domain/matchLength";
 
 export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
 export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
@@ -22,6 +23,8 @@ export type EventFormValues = {
   title: string;
   date: string;
   time: string;
+  /** How long the court is booked: 60, 90 or 120 minutes, three taps and never a typed number. */
+  durationMinutes: MatchLength;
   tz: string;
   venueName: string;
   venueMapUrl: string;
@@ -111,6 +114,10 @@ export function EventFields({
   const t = useTranslations();
   const locale = useLocale();
   const [tzOpen, setTzOpen] = useState(false);
+  // Until the organiser taps a length, it follows the type: 90 for a match, 120 for a tournament.
+  const [lengthPicked, setLengthPicked] = useState(false);
+  const lengthLabel = useId();
+  const pickType = (type: "match" | "tournament") => onChange(lengthPicked ? { type } : { type, durationMinutes: defaultLength(type) });
   // The picked club's court count, if it is one Kicksmash knows. Nothing is stored on the event but
   // the court itself: the count is looked up from the list, so it follows whatever venue is showing.
   const [typingCourt, setTypingCourt] = useState(false);
@@ -171,11 +178,11 @@ export function EventFields({
       {showType && (
         <div>
           <div className="segment" role="group" aria-label={t("create.title")}>
-            <button type="button" aria-pressed={values.type === "match"} onClick={() => onChange({ type: "match" })}>
+            <button type="button" aria-pressed={values.type === "match"} onClick={() => pickType("match")}>
               {t("create.typeMatch")}
               <span className="block text-[11px] font-semibold opacity-70">{t("create.typeMatchHelp")}</span>
             </button>
-            <button type="button" aria-pressed={values.type === "tournament"} onClick={() => onChange({ type: "tournament" })}>
+            <button type="button" aria-pressed={values.type === "tournament"} onClick={() => pickType("tournament")}>
               {t("create.typeTournament")}
               <span className="block text-[11px] font-semibold opacity-70">{t("create.typeTournamentHelp")}</span>
             </button>
@@ -234,6 +241,29 @@ export function EventFields({
             {values.tz.replace(/_/g, " ")}
           </button>
         )}
+      </div>
+
+      {/* How long the court is booked, beside the time it starts: three taps, 90 already chosen. The
+          owner's decision of 30 September 2026, after a player could not tell 60 from 90. */}
+      <div>
+        <div className="label" id={lengthLabel}>
+          {t("create.length")}
+        </div>
+        <div className="segment" role="group" aria-labelledby={lengthLabel} data-testid="length-choice">
+          {MATCH_LENGTHS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={values.durationMinutes === m}
+              onClick={() => {
+                setLengthPicked(true);
+                onChange({ durationMinutes: m });
+              }}
+            >
+              {t("event.minutes", { minutes: m })}
+            </button>
+          ))}
+        </div>
       </div>
 
       <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />

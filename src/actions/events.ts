@@ -11,6 +11,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { setBanter } from "@/lib/domain/banter";
 import { cancelEvent, createEvent, duplicateEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
+import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { getPlayer, normalizeEmail } from "@/lib/domain/players";
 import { emitMatchEvent } from "@/lib/api/webhooks";
@@ -28,6 +29,8 @@ const createSchema = z.object({
   title: z.string().max(80).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
+  /** 60, 90 or 120 minutes; omitted means the type's default. Three taps on the form, never a typed number. */
+  durationMinutes: z.literal(MATCH_LENGTHS).optional(),
   tz: z.string().min(1).max(64),
   venueName: z.string().max(80).optional(),
   venueMapUrl: z.string().max(500).optional(),
@@ -74,6 +77,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       type: input.type,
       title: input.title,
       startsAt,
+      durationMinutes: input.durationMinutes,
       tz: input.tz,
       venueName: input.venueName,
       venueMapUrl: input.venueMapUrl,
@@ -132,6 +136,7 @@ const updateSchema = z.object({
   title: z.string().max(80).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  durationMinutes: z.literal(MATCH_LENGTHS).optional(),
   tz: z.string().min(1).max(64).optional(),
   venueName: z.string().max(80).optional(),
   venueMapUrl: z.string().max(500).optional(),
@@ -184,6 +189,7 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
     const result = await updateEvent(db, detail.event.id, viewer.player?.id ?? null, {
       title: input.title,
       startsAt,
+      durationMinutes: input.durationMinutes,
       tz: input.tz,
       venueName: input.venueName,
       venueMapUrl: input.venueMapUrl,
