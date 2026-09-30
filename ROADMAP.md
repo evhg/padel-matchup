@@ -653,6 +653,14 @@ Everything in this list is live. The README describes each in detail.
   missing ones. The card's quiet line lists WhatsApp like the others ("Updates reach you on
   WhatsApp ✓"). Nothing reaches a person until the owner's account exists, the templates are
   approved and the WhatsApp variables are set (item 1 below).
+- **No raw IP address in the rate limits (30 September 2026).** The owner's decision (option A). Every
+  limit counted "per IP" (new identities, restore codes, feedback, the public API, the MCP endpoint,
+  client error reports) wrote the caller's address into `metrics_daily`: about 200 rows a day, nearly
+  all automated clients calling the MCP endpoint. The key is now a hash of the address keyed with
+  `SESSION_SECRET` (`src/lib/ipKey.ts`), because a plain hash of an IPv4 address can be reversed by
+  hashing all four billion of them. The same caller still lands on the same counter, so every limit
+  works as before. The hourly job deletes rate-limit rows older than two days (`pruneRateRows`); a
+  limit only ever reads today's row.
 
 ## The finish line
 

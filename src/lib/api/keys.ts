@@ -4,7 +4,7 @@ import type { Db } from "@/db";
 import { apiKeys, type ApiKey } from "@/db/schema";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { normalizeEmail } from "@/lib/domain/players";
-import { ApiError, clientIp } from "./http";
+import { ApiError, clientKey } from "./http";
 
 export const KEY_PREFIX = "ks_live_";
 
@@ -45,19 +45,20 @@ export async function authenticate(db: Db, req: Request): Promise<ApiKey | null>
   return rec;
 }
 
-export type Caller = { key: ApiKey | null; ip: string };
+/** `ipKey` is the caller's address as a keyed hash (`src/lib/ipKey.ts`): the per-address limits count by it. */
+export type Caller = { key: ApiKey | null; ipKey: string };
 
 export async function caller(db: Db, req: Request): Promise<Caller> {
-  return { key: await authenticate(db, req), ip: clientIp(req) };
+  return { key: await authenticate(db, req), ipKey: clientKey(req) };
 }
 
 /** Per-key when there is one, per-IP otherwise. Throws 429 with a hint that says how to get more room. */
 export async function guard(db: Db, c: Caller, scope: "read" | "write" | "mcp" | "keys"): Promise<void> {
   let ok = true;
-  if (scope === "read") ok = await takeRate(db, "api_read", c.key ? `k:${c.key.id}` : `ip:${c.ip}`, c.key ? LIMITS.apiReadsPerIpPerHour * 5 : LIMITS.apiReadsPerIpPerHour, "hour");
-  else if (scope === "mcp") ok = await takeRate(db, "mcp", c.key ? `k:${c.key.id}` : `ip:${c.ip}`, c.key ? LIMITS.mcpCallsPerIpPerHour * 5 : LIMITS.mcpCallsPerIpPerHour, "hour");
-  else if (scope === "write") ok = c.key ? await takeRate(db, "api_write", `k:${c.key.id}`, LIMITS.apiWritesPerKeyPerDay) : await takeRate(db, "api_write", `ip:${c.ip}`, LIMITS.apiWritesPerIpPerDay);
-  else ok = await takeRate(db, "api_keys", `ip:${c.ip}`, LIMITS.apiKeysPerIpPerDay);
+  if (scope === "read") ok = await takeRate(db, "api_read", c.key ? `k:${c.key.id}` : `ip:${c.ipKey}`, c.key ? LIMITS.apiReadsPerIpPerHour * 5 : LIMITS.apiReadsPerIpPerHour, "hour");
+  else if (scope === "mcp") ok = await takeRate(db, "mcp", c.key ? `k:${c.key.id}` : `ip:${c.ipKey}`, c.key ? LIMITS.mcpCallsPerIpPerHour * 5 : LIMITS.mcpCallsPerIpPerHour, "hour");
+  else if (scope === "write") ok = c.key ? await takeRate(db, "api_write", `k:${c.key.id}`, LIMITS.apiWritesPerKeyPerDay) : await takeRate(db, "api_write", `ip:${c.ipKey}`, LIMITS.apiWritesPerIpPerDay);
+  else ok = await takeRate(db, "api_keys", `ip:${c.ipKey}`, LIMITS.apiKeysPerIpPerDay);
   if (!ok) {
     throw new ApiError(
       429,

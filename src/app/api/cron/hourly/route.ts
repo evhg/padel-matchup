@@ -42,6 +42,7 @@ import { pruneCoachWants } from "@/lib/domain/coachWants";
 import { claimWantsNotice, findWantsDue, pruneWants } from "@/lib/domain/demand";
 import { nudgeForScore } from "@/lib/afterMatch";
 import { removeDisposableDaily } from "@/lib/domain/disposable";
+import { pruneRateRows } from "@/lib/domain/ratelimit";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
 
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -266,6 +267,13 @@ export async function GET(req: Request) {
     summary.disposed = (await removeDisposableDaily(db, now))?.length ?? 0;
   } catch (e) {
     summary.errors.push(`disposable: ${String(e)}`);
+  }
+
+  try {
+    // Rate-limit rows older than two days: hashed, never read again, about 200 a day (src/lib/ipKey.ts).
+    summary.rateRowsPruned = await pruneRateRows(db, now);
+  } catch (e) {
+    summary.errors.push(`rate rows: ${String(e)}`);
   }
 
   try {

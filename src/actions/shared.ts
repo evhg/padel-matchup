@@ -1,6 +1,7 @@
 import "server-only";
 import { getLocale } from "next-intl/server";
 import { headers } from "next/headers";
+import { clientKeyFrom } from "@/lib/ipKey";
 import { later, reportError } from "@/lib/alerts";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { getDb, type Db } from "@/db";
@@ -23,10 +24,9 @@ export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   }
 }
 
-/** Caller IP (Vercel sets x-forwarded-for); "unknown" locally. */
-export async function clientIp(): Promise<string> {
-  const h = await headers();
-  return (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "unknown").split(",")[0].trim().slice(0, 64);
+/** The caller's rate-limit key: a keyed hash of their address, never the address itself (`src/lib/ipKey.ts`). */
+export async function clientKey(): Promise<string> {
+  return clientKeyFrom(await headers());
 }
 
 /** Fixed-window rate limit; throws `too_many` past the ceiling. */
@@ -57,7 +57,7 @@ export async function requirePlayer(db: Db, name?: string | null): Promise<Playe
   if (existing) return existing;
   const clean = normalizeName(name ?? "");
   if (!clean) throw new ActionFailure("name_required");
-  await assertRate(db, "newid", await clientIp(), LIMITS.newIdentitiesPerIpPerDay);
+  await assertRate(db, "newid", await clientKey(), LIMITS.newIdentitiesPerIpPerDay);
   const locale = await getLocale();
   const player = await createPlayer(db, { displayName: clean, locale });
   await setSessionPlayer(player.id);
