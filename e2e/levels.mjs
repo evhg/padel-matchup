@@ -1,6 +1,6 @@
 // Levels: ranged match (Gold preset), level chips, out-of-range request → approve/decline,
 // in-range direct join, level editor on My matches, the "Your level?" card after an open join.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -129,6 +129,17 @@ try {
   await ask.waitFor({ timeout: 20000 });
   check("a new player on an open match is asked 'Your level?' with the named bands, Playtomic and Skip", (await ask.getByText("Your level?").count()) === 1 && (await ask.getByRole("button", { name: "Intermediate", exact: true }).count()) === 1 && (await ask.getByRole("button", { name: "I have a Playtomic number" }).count()) === 1 && (await ask.getByRole("button", { name: "Skip", exact: true }).count()) === 1);
   await shot(fay, "l7-level-after-join");
+  // The longest band is Russian ("Продвинутый"): at 390 px every band button must hold its word and stay inside the card.
+  const bandsFit = () => ask.evaluate((card) => { const edge = card.getBoundingClientRect().right; return [...card.querySelectorAll("[data-testid=level-bands] button")].map((b) => ({ text: b.textContent, fits: b.scrollWidth <= b.clientWidth + 1 && b.getBoundingClientRect().right <= edge + 0.5 })); });
+  await switchLang(fay, "ru");
+  await ask.getByRole("button", { name: "Продвинутый", exact: true }).waitFor({ timeout: 20000 });
+  const ruBands = await bandsFit();
+  check("in Russian the three band buttons fit inside the card at 390 px", ruBands.length === 3 && ruBands.every((b) => b.fits), JSON.stringify(ruBands));
+  await shot(fay, "l7b-level-after-join-ru");
+  await switchLang(fay, "en");
+  await ask.getByRole("button", { name: "Intermediate", exact: true }).waitFor({ timeout: 20000 });
+  const enBands = await bandsFit();
+  check("in English they fit too", enBands.length === 3 && enBands.every((b) => b.fits), JSON.stringify(enBands));
   await ask.getByRole("button", { name: "Intermediate", exact: true }).click();
   await fay.locator("li", { hasText: "Fay" }).getByText("3.0", { exact: true }).waitFor({ timeout: 20000 });
   check("one tap on Intermediate puts the 3.0 chip on her roster row and the card is gone", (await fay.getByTestId("level-after-join").count()) === 0);

@@ -58,9 +58,11 @@ export function LevelAfterJoin({ playerId }: { playerId: string }) {
     <div className="mt-3 rounded-2xl border border-line px-4 py-3" data-testid="level-after-join">
       <div className="font-bold">{t("level.joinedTitle")}</div>
       <p className="mt-0.5 text-sm text-muted">{t("level.joinedHelp")}</p>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      {/* The buttons wrap rather than share three equal columns: "Продвинутый" needs 127 px with its
+          padding and a third of the card at 390 px is 90, so in a grid it ran out of its button. */}
+      <div className="mt-3 flex flex-wrap gap-2" data-testid="level-bands">
         {QUICK_BANDS.map((b) => (
-          <button key={b} type="button" className="btn-secondary btn-sm" disabled={pending} title={t(`level.bandHelp.${b}`)} onClick={() => save(bandLevel(b))}>
+          <button key={b} type="button" className="btn-secondary btn-sm grow" disabled={pending} title={t(`level.bandHelp.${b}`)} onClick={() => save(bandLevel(b))}>
             {t(`level.bands.${b}`)}
           </button>
         ))}
