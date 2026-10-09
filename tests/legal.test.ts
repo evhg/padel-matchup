@@ -7,9 +7,10 @@ import { BACKUP_KEEP_DAYS } from "@/lib/backup";
 import { DISPOSABLE_AFTER_DAYS } from "@/lib/domain/disposable";
 import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { LEGAL_OPERATOR, legalDate, legalValues } from "@/lib/legal";
-import { HAS_ID_COOKIE, manageCookieName, PLAYER_COOKIE } from "@/lib/session";
-import { COACH_SOURCE_COOKIE, SOURCE_COOKIE } from "@/lib/source";
-import { TEXT_SIZE_COOKIE } from "@/lib/textSize";
+import { hintCookieOptions } from "@/lib/hintCookie";
+import { HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE } from "@/lib/session";
+import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
+import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 
 /**
  * /privacy promises things about the code: which cookies it sets, how long it keeps what. A promise
@@ -31,6 +32,32 @@ describe("the privacy page tells the truth about the code", () => {
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
+    }
+  });
+
+  it("gives each cookie the lifetime the code sets, in every language", () => {
+    // The words for a lifetime, per language. A lifetime that is not here has no words on the page
+    // yet: change the copy first, then add it here.
+    const WORDS: Record<number, Record<(typeof LOCALES)[number], string>> = {
+      [365 * 24 * 3600]: { en: "One year", ru: "Один год", es: "Un año" },
+      [24 * 3600]: { en: "One day", ru: "Один день", es: "Un día" },
+    };
+    const textSizeAge = Number(/max-age=(\d+)/.exec(textSizeCookie("big"))?.[1]);
+    const lifetimes: [string, number][] = [
+      [PLAYER_COOKIE, ONE_YEAR],
+      [manageCookieName(""), ONE_YEAR],
+      [HAS_ID_COOKIE, hintCookieOptions().maxAge],
+      [SOURCE_COOKIE, SOURCE_MAX_AGE],
+      [COACH_SOURCE_COOKIE, SOURCE_MAX_AGE],
+      [TEXT_SIZE_COOKIE, textSizeAge],
+    ];
+    for (const l of LOCALES) {
+      const lines = render(l, "privacy.cookiesBody").split("\n");
+      for (const [cookie, seconds] of lifetimes) {
+        const words = WORDS[seconds]?.[l];
+        expect(words, `${cookie} lasts ${seconds} s, which the page has no words for`).toBeDefined();
+        expect(lines.find((x) => x.includes(cookie)), `${l}: ${cookie}`).toContain(words);
+      }
     }
   });
 

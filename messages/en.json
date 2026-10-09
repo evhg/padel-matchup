@@ -806,7 +806,7 @@
     "cancelledBody": "{day} at {time} · {venue} will not happen."
   },
   "about": {
-    "footerLink": "Privacy & terms (short, promise)",
+    "footerLink": "Privacy and terms",
     "title": "The fine print, kept short",
     "sub": "No lawyers were harmed. Here's what Kicksmash does with your stuff.",
     "storeTitle": "What we store",
@@ -836,9 +836,9 @@
     "cookiesTitle": "Cookies",
     "cookiesBody": "Only the cookies the app needs to work. No tracking, no ads, no cookies from anybody else.\n• km_player: who you are, signed so nobody can fake it. One year.\n• km_has_id: tells the page that you have an identity. One year.\n• NEXT_LOCALE: your language. One year.\n• km_manage_ plus a match code: lets the organiser manage that one match. One year.\n• ks_src and ks_csrc: the link that brought you here, so we can count it. One day.\n• ks_notmine: the names you said are not you, on My matches. One year.\n• km_text: bigger text, only if you switch it on. One year.\nYour browser also keeps a copy of who you are in its own storage, so a lost cookie does not lose your matches.",
     "ipTitle": "Your IP address",
-    "ipBody": "We never write it into our database. To slow down scripts that hammer the app, we keep a key made from it with a secret (a keyed hash), which cannot be turned back into the address. Those rows go after {rateDays, plural, one {# day} other {# days}}. Our host sees your address to deliver each page, as every host does.",
+    "ipBody": "We never write it into our database. To slow down scripts that hammer the app, we keep a key made from it with a secret (a keyed hash), so the address itself is not stored. Those rows go after {rateDays, plural, one {# day} other {# days}}. Our host sees your address to deliver each page, as every host does.",
     "helpersTitle": "Who helps us run it",
-    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
+    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
     "keepTitle": "How long we keep it",
     "keepBody": "• Your data: while you use Kicksmash, until you delete your account.\n• A name with no match, no way to reach it and nothing else behind it: a daily clean-up removes it after {disposableDays, plural, one {# day} other {# days}}.\n• The rate-limit keys made from IP addresses: {rateDays, plural, one {# day} other {# days}}.\n• Backups: every night a copy of the database goes to a private GitHub repository. Each day's file leaves it after {backupDays, plural, one {# day} other {# days}}, but the repository's history still holds older copies, and only we can open them.",
     "deleteTitle": "When you delete your account",
