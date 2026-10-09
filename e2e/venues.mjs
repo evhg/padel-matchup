@@ -107,8 +107,12 @@ try {
   // year, in all three languages, must now sit on one line inside it at 390 px.
   const day = await widestDayFits(row.getByTestId("result-day")).catch((e) => ({ ok: false, worst: String(e).slice(0, 80) }));
   check("the result's day is one line inside its column at 390 px, for the widest day in every language", day.ok, JSON.stringify(day.worst));
-  await guest.goto(`${BASE}/v/no-such-venue`);
-  check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
+  // The status is the server's answer and cannot race. The words are a paint, so they are waited for:
+  // read at one instant after goto they were missing twice on 9 October 2026, both times while two
+  // gates loaded the machine, from a page that served them correctly in every probe.
+  const unknown = await guest.goto(`${BASE}/v/no-such-venue`);
+  const notFoundShown = await guest.getByText("Link not found").waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  check("unknown venue → 404 page", unknown?.status() === 404 && (notFoundShown || (await guest.title()).toLowerCase().includes("not found")), String(unknown?.status()));
 } catch (e) {
   await crashed(browser, results, e);
 } finally {
