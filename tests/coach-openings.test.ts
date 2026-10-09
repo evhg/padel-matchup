@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { availableSlots, blockTime, closeHour, createCoach, openHour, openSlots, openingsBetween, presetHours } from "@/lib/domain/coaching";
+import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 /**
@@ -19,6 +20,9 @@ describe("an hour opened on one date", () => {
   const TZ = "Asia/Bangkok";
   // A Monday 00:00 UTC, so every time below is counted from it and never from today (rule 11).
   const monday = new Date("2026-10-05T00:00:00.000Z");
+  // The clock stands on that Monday too. Without it, `blockTime` compared Monday with the real
+  // clock and refused the block as "past" from 6 October 2026, the day after the Monday went by.
+  freezeClock(monday);
   const at = (hoursFromMidnightUtc: number) => new Date(monday.getTime() + hoursFromMidnightUtc * HOUR);
 
   const aCoach = async (name: string) => {
