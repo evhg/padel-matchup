@@ -35,8 +35,12 @@ export function EventRow({ ev, t, locale }: { ev: EventRowData; t: T; locale: st
   const where = [ev.venueName, ev.organiser ? t("city.playBy", { name: ev.organiser }) : null].filter(Boolean).join(" · ");
   return (
     <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30" data-testid="event-row">
-      <div className="w-[4.5rem] shrink-0 text-center">
-        <div className="text-xs font-bold uppercase text-faint">{formatEventDay(ev.startsAt, ev.tz, locale)}</div>
+      {/* The weekday stays (it is how a player picks a game this week), so the column is wide enough
+          for it: up to 83 px in bold capitals at 12 px ("DOM, 13 SEPT"), 93 px with Bigger text. */}
+      <div className="w-[5.5rem] shrink-0 text-center">
+        <div className="whitespace-nowrap text-xs font-bold uppercase text-faint" data-testid="event-row-day">
+          {formatEventDay(ev.startsAt, ev.tz, locale)}
+        </div>
         <div className="text-2xl font-extrabold leading-none tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
       </div>
       <div className="min-w-0 flex-1">

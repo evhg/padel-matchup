@@ -48,6 +48,7 @@ Players and assistants can tell us what should change: /feedback in Telegram or 
 ## Pages
 
 - ${base}/: create a match (the landing page is the form)
+- ${base}/play: the open games to join in a city, by day, level, club and free spots
 - ${base}/ru and ${base}/es: the same pages in Russian and Spanish
 - ${base}/americano: free schedule generator
 - ${base}/about: privacy and terms, short

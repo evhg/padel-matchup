@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { createTranslator } from "next-intl";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { cancelEvent, createEvent } from "@/lib/domain/events";
-import { cityBySlug } from "@/lib/domain/cities";
-import { clubsOf, filterGames, findGames, firstNameOf, homeCity, parsePlayFilters, playHref, playWindow, type PlayFilters } from "@/lib/domain/findGame";
+import { CITIES, cityBySlug } from "@/lib/domain/cities";
+import { clubsOf, filterGames, findGames, firstNameOf, homeCity, parsePlayFilters, playCities, playHref, playWindow, type PlayFilters } from "@/lib/domain/findGame";
 import { joinEvent } from "@/lib/domain/slots";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
@@ -16,6 +19,21 @@ freezeClock(NOW);
 const phuket = cityBySlug("phuket")!;
 const singapore = cityBySlug("singapore")!;
 const base: PlayFilters = { city: "phuket", day: "week", fits: false, club: null, spots: false };
+
+describe("the page's description names the cities /play serves, read from CITIES", () => {
+  it("lists every city in the reader's language, and the copy itself names none", () => {
+    expect(playCities("en")).toBe("Phuket and Singapore");
+    expect(playCities("ru")).toBe("Phuket и Singapore");
+    expect(playCities("es")).toBe("Phuket y Singapore");
+    for (const locale of ["en", "ru", "es"] as const) {
+      const messages = JSON.parse(readFileSync(path.resolve(process.cwd(), "messages", `${locale}.json`), "utf8"));
+      // A fixed city in the sentence is the copy that went stale the day a third city arrived.
+      expect(messages.city.playMetaDescription, locale).not.toMatch(/Phuket|Singapore|Пхукет|Сингапур|Singapur/);
+      const text = createTranslator({ locale, messages })("city.playMetaDescription" as never, { cities: playCities(locale) } as never) as string;
+      for (const c of CITIES) expect(text, locale).toContain(c.name);
+    }
+  });
+});
 
 describe("the city a visitor meets first", () => {
   it("is the edge's city when it is one of ours, a whole-city zone next, and Phuket otherwise", () => {

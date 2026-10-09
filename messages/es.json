@@ -1148,7 +1148,7 @@
     "metaDescription": "Pádel en {city}: partidos abiertos, rankings de club, americano, mexicano y Rey de la pista. Crea un partido en diez segundos, comparte un enlace, sin app.",
     "playTitle": "Busca un partido de pádel",
     "playSub": "Partidos y torneos abiertos a los que puedes unirte. Abre uno y apúntate con tu nombre.",
-    "playMetaDescription": "Partidos y americanos de pádel abiertos en Phuket y Singapur. Elige el día, tu nivel y el club, y apúntate con tu nombre. Sin app.",
+    "playMetaDescription": "Partidos y americanos de pádel abiertos en {cities}. Elige el día, tu nivel y el club, y apúntate con tu nombre. Sin app.",
     "playFilters": "Filtros",
     "playToday": "Hoy",
     "playTomorrow": "Mañana",

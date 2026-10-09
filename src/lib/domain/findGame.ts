@@ -123,6 +123,14 @@ export function clubsOf(rows: readonly { venueSlug: string | null; venueName: st
   return [...seen.entries()].map(([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Every city /play serves, as one list in the reader's language ("Phuket and Singapore", "Phuket и
+ * Singapore"), for the page's description. Read from `CITIES`, so a third city needs no copy change. Pure.
+ */
+export function playCities(locale: string): string {
+  return new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(CITIES.map((c) => c.name));
+}
+
 /** "Anna Maria" → "Anna". The organiser on a public row is a first name only (rule 6). */
 export const firstNameOf = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0]?.slice(0, 24) || "";
 

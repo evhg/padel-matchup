@@ -8,7 +8,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { visitorCity } from "@/lib/domain/countries";
-import { clubsOf, filterGames, findGames, homeCity, parsePlayFilters, playHref, playWindow, type PlayDay, type PlayFilters } from "@/lib/domain/findGame";
+import { clubsOf, filterGames, findGames, homeCity, parsePlayFilters, playCities, playHref, playWindow, type PlayDay, type PlayFilters } from "@/lib/domain/findGame";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const title = t("city.playTitle");
-  const description = t("city.playMetaDescription");
+  const description = t("city.playMetaDescription", { cities: playCities(locale) });
   return { title, description, alternates: localeAlternates("/play", locale), openGraph: { title, description, type: "website", url: `${baseUrl()}/play` } };
 }
 

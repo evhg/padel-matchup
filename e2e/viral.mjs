@@ -1,6 +1,6 @@
 // Viral pieces: robots/sitemap, the public americano generator with its prefill link,
 // and the shareable result card.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, widestDayFits } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -163,16 +163,45 @@ try {
   const rowText = (await row.innerText()).toLowerCase();
   check("/play lists the public match with its time, seats, level, price and the organiser's first name", rowText.includes("18:00") && rowText.includes("3 spots left") && rowText.includes("400 thb") && rowText.includes("by pia") && !rowText.includes("sol") && /2\.0–4\.0/.test(rowText), rowText.replace(/\s+/g, " ").slice(0, 200));
   await shot(p, "v5-play");
+  // The weekday stays on the row, so its column must hold the widest one ("DOM, 13 SEPT") on one line at 390 px.
+  const day = await widestDayFits(row.getByTestId("event-row-day")).catch((e) => ({ ok: false, worst: String(e).slice(0, 80) }));
+  check("the game's day is one line inside its column at 390 px, for the widest day in every language", day.ok, JSON.stringify(day.worst));
   await p.getByTestId("play-day-today").click();
   await p.waitForURL((u) => u.searchParams.get("day") === "today", { timeout: 20000 });
   await p.locator(`a[href="/${lcode}"]`).waitFor({ state: "detached", timeout: 20000 });
   check("the Today chip hides tomorrow's match and keeps the choice in the URL", (await p.locator(`a[href="/${lcode}"]`).count()) === 0 && new URL(p.url()).searchParams.get("city") === "phuket");
   await p.getByTestId("play-day-tomorrow").click();
   await p.waitForURL((u) => u.searchParams.get("day") === "tomorrow", { timeout: 20000 });
-  await p.locator(`a[href="/${lcode}"]`).waitFor({ timeout: 20000 });
-  check("the Tomorrow chip brings it back", true);
-  await p.goto(`${BASE}/play?city=phuket&day=today&club=no-such-club`);
-  check("a filter that hides everything says so and offers the way back", (await p.getByTestId("play-none-fit").count()) + (await p.getByTestId("play-empty").count()) === 1);
+  const back = await p.locator(`a[href="/${lcode}"]`).waitFor({ timeout: 20000 }).then(() => true, () => false);
+  check("the Tomorrow chip brings it back", back && new URL(p.url()).searchParams.get("day") === "tomorrow");
+  // Tomorrow holds Pia's match, so a club nobody plays at hides every game: the list says so, and
+  // "Show them all" drops the club (and keeps the day) to bring the games back.
+  await p.goto(`${BASE}/play?city=phuket&day=tomorrow&club=no-such-club`);
+  const noneFit = p.getByTestId("play-none-fit");
+  const hidden = await noneFit.waitFor({ timeout: 20000 }).then(() => true, () => false);
+  check("a filter that hides everything says so", hidden && (await p.locator(`a[href="/${lcode}"]`).count()) === 0);
+  await noneFit.getByRole("link", { name: "Show them all" }).click();
+  await p.waitForURL((u) => u.pathname === "/play" && !u.searchParams.has("club"), { timeout: 20000 }).catch(() => undefined);
+  const cleared = await p.locator(`a[href="/${lcode}"]`).waitFor({ timeout: 20000 }).then(() => true, () => false);
+  check("\"Show them all\" clears the club and brings the games back", cleared && !new URL(p.url()).searchParams.has("club") && new URL(p.url()).searchParams.get("day") === "tomorrow", p.url());
+  // The empty state needs a city and day with no open game at all. Other suites list games on the same
+  // server (agents and embeds in Singapore), so look for one rather than assume it; alone, Singapore is empty.
+  let emptyAt = "";
+  for (const [city, day] of [["singapore", "today"], ["singapore", "tomorrow"], ["phuket", "today"]]) {
+    await p.goto(`${BASE}/play?city=${city}&day=${day}`);
+    if ((await p.getByTestId("play-empty").count()) === 1) {
+      emptyAt = `${city}, ${day}`;
+      break;
+    }
+  }
+  if (emptyAt) {
+    await p.getByTestId("play-empty").getByRole("link", { name: "Organize one in 30 seconds" }).click();
+    await p.waitForURL((u) => u.pathname === "/", { timeout: 20000 }).catch(() => undefined);
+    const form = await p.getByRole("button", { name: "Create & get the link" }).waitFor({ timeout: 20000 }).then(() => true, () => false);
+    check(`the empty state's button opens the create form (${emptyAt})`, form && new URL(p.url()).pathname === "/", p.url());
+  } else {
+    console.log("· every city and day here had a game from another suite, so the empty state's button was not reached in this run");
+  }
 } catch (e) {
   await crashed(browser, results, e);
 } finally {
