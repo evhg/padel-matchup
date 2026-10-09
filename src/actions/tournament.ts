@@ -6,6 +6,7 @@ import type { TournamentFormat } from "@/db/schema";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { applyEventLevels } from "@/lib/domain/rating";
 import { MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
+import { absentToTell } from "@/lib/domain/checkIn";
 import { DomainError } from "@/lib/domain/errors";
 import { wasComplete } from "@/lib/domain/joining";
 import { LIMITS } from "@/lib/domain/ratelimit";
@@ -26,11 +27,14 @@ export async function setTournamentSettingsAction(code: string, input: { courts?
 export async function generateRoundAction(code: string, checkIn?: CheckIn): Promise<ActionResult<{ roundNumber: number }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
-    const round = await generateRound(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, checkIn: cleanCheckIn(checkIn) });
-    if (round.absent.length) {
+    const actor = viewer.player?.id ?? null;
+    const round = await generateRound(db, { eventId: detail.event.id, actorPlayerId: actor, checkIn: cleanCheckIn(checkIn) });
+    // Never the organiser who unticked their own name: they know (absentToTell).
+    const tell = absentToTell(round.absent, actor);
+    if (tell.length) {
       after(async () => {
         // Bounded by the names unticked, sequential (rule 8); each notice is one email at most.
-        for (const a of round.absent) await notifyRemoved(db, detail.event, a.playerId, { absent: true });
+        for (const a of tell) await notifyRemoved(db, detail.event, a.playerId, { absent: true });
       });
     }
     revalidatePath(`/${code}`);

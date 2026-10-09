@@ -38,6 +38,15 @@ export function presentSpots(names: CheckInNames, choice: CheckInChoice): string
   return [...names.listed.filter((id) => !choice.away.has(id)), ...names.waiting.filter((id) => choice.waitingIn.has(id))];
 }
 
+/**
+ * Who hears "We started without you": every name the check-in left out, except the person who pressed
+ * Start. An organiser who unticks their own name has chosen to sit out, and an email telling them the
+ * night went on without them is noise. A reserved name with no player has nobody to tell.
+ */
+export function absentToTell<T extends { playerId: string | null }>(absent: readonly T[], actorPlayerId: string | null): T[] {
+  return absent.filter((a) => a.playerId !== null && a.playerId !== actorPlayerId);
+}
+
 export type StartAdvice =
   | { kind: "ready"; count: number }
   /** Fewer than four ticked: `more` is how many to tick or add. */

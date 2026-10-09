@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, slots } from "@/db/schema";
-import { presentSpots, startAdvice } from "@/lib/domain/checkIn";
+import { absentToTell, presentSpots, startAdvice } from "@/lib/domain/checkIn";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent, reserveSlot } from "@/lib/domain/slots";
 import { addWalkIn, generateRound, loadRounds } from "@/lib/domain/tournament";
@@ -37,6 +37,19 @@ describe("the check-in, pure", () => {
       expect(startAdvice("americano", n)).toEqual({ kind: "ready", count: n });
       expect(startAdvice("mexicano", n)).toEqual({ kind: "ready", count: n });
     }
+  });
+
+  it("tells every name left out that the night started without them, except the organiser who unticked their own", () => {
+    const absent = [
+      { playerId: "olga", name: "Olga" },
+      { playerId: "petr", name: "Petr" },
+      { playerId: null, name: "Reserved for Kim" },
+    ];
+    // Olga pressed Start with her own name unticked: no email to her, Petr still hears it.
+    expect(absentToTell(absent, "olga").map((a) => a.name)).toEqual(["Petr"]);
+    // A manage-link holder with no player of their own: everybody with a player hears it.
+    expect(absentToTell(absent, null).map((a) => a.name)).toEqual(["Olga", "Petr"]);
+    expect(absentToTell(absent, "somebody-else").map((a) => a.name)).toEqual(["Olga", "Petr"]);
   });
 
   it("tells king how many to tick or add, or untick, to reach a four", () => {

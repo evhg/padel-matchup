@@ -725,7 +725,10 @@ Everything in this list is live. The README describes each in detail.
   spot offered to strangers and no waiting list moved up at the moment the spots close. While the
   night runs (round 1 drawn, scores not final, the booking not over) the page asks the server
   again every twenty seconds while it is on screen, so a score typed on one phone appears on the
-  others; a score box keeps what its own phone is typing. `src/lib/domain/checkIn.ts`, proven in
+  others; a score box keeps what its own phone is typing. An organiser who unticks their own name
+  gets no "We started without you". The club's TV view (`/t/[slug]/tv`) was skipped: it reads the
+  serious tournament's competitions only (`liveBoard`), never a social night's rounds, so the match
+  page's live refresh is the night's screen. `src/lib/domain/checkIn.ts`, proven in
   `tests/check-in.test.ts`.
 - **Bigger text, and a dark theme that follows the phone (9 October 2026, no migration).** "Bigger
   text" is one switch on My matches and in the header's ⋯ menu, for anybody, account or not. It is a
