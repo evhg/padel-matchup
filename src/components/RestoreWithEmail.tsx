@@ -4,12 +4,8 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { startTransition, useState, useTransition } from "react";
 import { requestRestoreCode, verifyRestoreCode } from "@/actions/identity";
+import { placeholderWidth } from "@/lib/fieldWidth";
 
-/**
- * The width a field needs to show its placeholder whole: about 0.6em a character (measured in Chromium:
- * "you@example.com" is 0.57em a character, "tu@ejemplo.com" 0.54em), plus the padding and the border.
- */
-const placeholderWidth = (placeholder: string) => `calc(${(placeholder.length * 0.6).toFixed(1)}em + 2rem + 2px)`;
 
 /**
  * Email → 6-digit code → every identity with that email is merged into one and

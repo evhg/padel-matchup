@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { placeholderWidth } from "@/lib/fieldWidth";
 import { htmlTextAttr, TEXT_SIZE_COOKIE, textSizeCookie, textSizeOf } from "@/lib/textSize";
 
 /**
@@ -42,5 +43,29 @@ describe("bigger text", () => {
     expect(css).toMatch(/@utility chip\s*{[^}]*\btext-2xs\b/);
     const chipRem = Number(rule.match(/--text-2xs:\s*([\d.]+)rem/)?.[1]);
     expect(root * chipRem).toBeGreaterThanOrEqual(13);
+  });
+});
+
+/**
+ * An e-mail field beside a button read "you@example.c" at 18 px (and in Russian at 16 px, beside the
+ * wider "Отправить код"). Every such field takes its placeholder's width as its minimum and its row
+ * wraps; the browser suite measures one at the big size, this keeps the next field from forgetting.
+ */
+describe("e-mail fields keep their placeholder whole", () => {
+  const files = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith(".tsx") ? [path.join(dir, e.name)] : []));
+
+  it("gives every field that shows the e-mail placeholder its placeholder's width", () => {
+    const root = process.cwd();
+    const fields = files(path.join(root, "src")).filter((f) => readFileSync(f, "utf8").includes('t("share.emailPlaceholder")'));
+    expect(fields.length).toBeGreaterThanOrEqual(5);
+    const without = fields.filter((f) => !readFileSync(f, "utf8").includes("placeholderWidth(")).map((f) => path.relative(root, f));
+    expect(without).toEqual([]);
+  });
+
+  it("asks at least 0.57em a character, what you@example.com measures, plus the padding", () => {
+    const em = (p: string) => Number(/calc\(([\d.]+)em/.exec(placeholderWidth(p))?.[1]);
+    expect(em("you@example.com") / "you@example.com".length).toBeGreaterThanOrEqual(0.57);
+    expect(placeholderWidth("x")).toContain("+ 2rem");
   });
 });

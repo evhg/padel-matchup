@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { resendCalendarInviteAction } from "@/actions/calendar";
 import { updateMyEmail } from "@/actions/identity";
+import { placeholderWidth } from "@/lib/fieldWidth";
 
 /**
  * "Add to your calendar" = give us an email. The invite we send is a real
@@ -72,8 +73,8 @@ export function CalendarEmail({ code, email, emailEnabled, member = true, classN
     >
       <div className="font-bold">📅 {t("calendar.emailTitle")}</div>
       <p className="mt-0.5 text-sm text-muted">{t("calendar.emailHelp")}</p>
-      <div className="mt-2 flex gap-2">
-        <input type="email" inputMode="email" autoComplete="email" className="input" placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input type="email" inputMode="email" autoComplete="email" className="input flex-1" style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }} placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
         <button type="submit" className="btn-primary shrink-0" disabled={pending || !value.trim()}>
           {pending ? t("common.working") : t("calendar.send")}
         </button>

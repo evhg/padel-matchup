@@ -30,8 +30,8 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
           <span className="h-4 w-4 rounded-full bg-accent" />
         </span>
         {/* With Bigger text on a phone the three chips leave the word no room either, and "Kicksm…" reads
-            worse than the mark alone. */}
-        <span className={`truncate [[data-text=big]_&]:max-sm:hidden ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
+            worse than the mark alone. The minimal header holds the language pill only, so it keeps the word. */}
+        <span className={`truncate ${minimal ? "" : "[[data-text=big]_&]:max-sm:hidden"} ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
         {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText") }} />}

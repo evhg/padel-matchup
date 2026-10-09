@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { setEmailNotificationsAction, updateMyEmail } from "@/actions/identity";
 import { setCreatorEmailAction, setCreatorEmailNotificationsAction } from "@/actions/events";
 import { RestoreWithEmail } from "./RestoreWithEmail";
+import { placeholderWidth } from "@/lib/fieldWidth";
 
 /**
  * Decision 9: email is optional, never required, and always explained with the
@@ -139,12 +140,13 @@ export function EmailField({
           <p className="text-sm text-muted">{help ?? t("event.emailReward")}</p>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           type="email"
           inputMode="email"
           autoComplete="email"
-          className="input"
+          className="input flex-1"
+          style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }}
           placeholder={t("share.emailPlaceholder")}
           value={email}
           onChange={(e) => {

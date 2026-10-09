@@ -92,6 +92,9 @@ try {
   // The header's word Kicksmash is whole or gone at the big size, never cut to "Kicksm…".
   const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.scrollWidth <= e.clientWidth).catch(() => false);
   check("with Bigger text the header shows the whole word Kicksmash or the mark alone, never a cut word", brandWhole);
+  const emailFields = a.locator('main input[type="email"]');
+  const allPlaceholdersFit = await emailFields.evaluateAll((es) => es.every((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; })).catch(() => false);
+  check("with Bigger text every e-mail field on a player's My matches shows its whole placeholder", (await emailFields.count()) > 0 && allPlaceholdersFit);
   await shot(a, "04d-me-player-bigger-text");
   await a.emulateMedia({ colorScheme: "dark" });
   await a.reload();
