@@ -1,14 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, pushSubscriptions, slots } from "@/db/schema";
+import { events, feedback, players, pushSubscriptions, slots } from "@/db/schema";
 import { anonymizePlayer } from "@/lib/domain/anonymize";
 import { createEvent } from "@/lib/domain/events";
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { addOptOut, isOptedOut, optOutPath, optOutSignature, removeOptOut } from "@/lib/domain/optouts";
 import { takeRate } from "@/lib/domain/ratelimit";
+import { getRolodex } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
-import { createTestDb, makePlayer, HOUR } from "./helpers/db";
+import { freezeClock } from "./helpers/clock";
+import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
+
+const NOW = new Date("2026-10-09T09:00:00Z");
+freezeClock(NOW);
 
 let db: Db;
 let close: () => Promise<void>;
@@ -111,5 +116,27 @@ describe("delete account", () => {
     const stillIn = await db.select().from(slots).where(eq(slots.playerId, me.id));
     expect(stillIn.some((s) => s.eventId === theirs.id)).toBe(false);
     expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.playerId, me.id))).toHaveLength(0);
+  });
+
+  it("takes the organiser's typed copies and the /built name too, and keeps the seat and the note", async () => {
+    const me = await makePlayer(db, "Typed", { email: "typed@example.com" });
+    const host = await makePlayer(db, "Organiser");
+    // A match last week: the organiser reserved the seat with my name, email and phone, and I took it.
+    const ev = await createEvent(db, { creatorPlayerId: host.id, type: "match", startsAt: new Date(NOW.getTime() + HOUR), tz: "UTC", venueName: "Club", whenFull: "waitlist" });
+    const [seat] = await db.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.status, "empty"))).orderBy(slots.position).limit(1);
+    await db.update(slots).set({ playerId: me.id, status: "confirmed", invitedName: "Typed T.", invitedEmail: "typed@example.com", invitedPhone: "+66812345678" }).where(eq(slots.id, seat.id));
+    await db.update(events).set({ startsAt: new Date(NOW.getTime() - 7 * DAY) }).where(eq(events.id, ev.id));
+    const [note] = await db.insert(feedback).values({ source: "web", playerId: me.id, text: "Bigger score buttons", status: "shipped", publicSummary: "Bigger score buttons", publicName: "Typed" }).returning();
+
+    await anonymizePlayer(db, me.id, NOW);
+
+    const [kept] = await db.select().from(slots).where(eq(slots.id, seat.id));
+    expect(kept.playerId).toBe(me.id);
+    expect([kept.invitedName, kept.invitedEmail, kept.invitedPhone]).toEqual([null, null, null]);
+    const rolodex = await getRolodex(db, host.id);
+    expect(rolodex.some((r) => r.email === "typed@example.com" || r.phone === "+66812345678")).toBe(false);
+    const [n] = await db.select().from(feedback).where(eq(feedback.id, note.id));
+    expect(n.publicName).toBeNull();
+    expect(n.publicSummary).toBe("Bigger score buttons");
   });
 });

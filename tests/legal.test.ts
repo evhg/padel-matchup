@@ -38,7 +38,17 @@ describe("the privacy page tells the truth about the code", () => {
       const keep = render(l, "privacy.keepBody");
       for (const n of [DISPOSABLE_AFTER_DAYS, RATE_ROWS_KEEP_DAYS, BACKUP_KEEP_DAYS]) expect(keep, `${l}: ${n}`).toMatch(new RegExp(`(^|\\D)${n}\\s`));
       expect(render(l, "privacy.ipBody")).toMatch(new RegExp(`(^|\\D)${RATE_ROWS_KEEP_DAYS}\\s`));
-      expect(render(l, "privacy.deleteBody")).toMatch(new RegExp(`(^|\\D)${BACKUP_KEEP_DAYS}\\s`));
+    }
+  });
+
+  it("promises no end date for a backup, because the repository's history keeps every copy", () => {
+    // runBackup prunes an old day with the GitHub contents API, and that is a new commit: the file
+    // leaves the folder, not the history (src/lib/backup.ts). Until 9 October 2026 the page said the
+    // copies "expire". The days a file stays are fine to give; a date when you are gone from them is not.
+    for (const l of LOCALES) {
+      const m = messagesOf(l).privacy;
+      expect(m.deleteBody, l).not.toContain("{backupDays");
+      expect(render(l, "privacy.keepBody"), l).toContain("GitHub");
     }
   });
 

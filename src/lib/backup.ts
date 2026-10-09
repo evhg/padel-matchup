@@ -63,7 +63,9 @@ export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetc
     await bumpMetric(db, "backup_done", 1, day);
     await bumpMetric(db, "backup_bytes", body.length, day);
     if (capped.length) await bumpMetric(db, "backup_capped", capped.length, day);
-    // Old days go: the repository keeps their history anyway.
+    // Old days leave the folder, not the history: a contents-API DELETE is one more commit, so every
+    // night's dump stays in the private repository's history. /privacy says exactly that. Making the
+    // copies really go (rewriting history, or a store that deletes) is the owner's decision.
     let pruned = 0;
     const cutoff = dayKey(new Date(now.getTime() - BACKUP_KEEP_DAYS * 86_400_000));
     const list = await fetchImpl(api("backups"), { headers });

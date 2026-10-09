@@ -1,6 +1,6 @@
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db";
-import { coachManagers, coaches, events, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
+import { coachManagers, coaches, events, feedback, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
 import { dropCoachWantsFor } from "./coachWants";
 import { dropWantsFor } from "./demand";
 import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching";
@@ -103,5 +103,13 @@ export async function anonymizePlayer(
       publicSince: null,
     })
     .where(eq(players.id, playerId));
+  // The organiser's copies go too. Reserving a seat "for someone" types a name, an email and a phone
+  // into the slot, and the organiser's rolodex reads them back (getRolodex): until 9 October 2026 a
+  // deleted player's address and number stayed there, on every seat they ever held. One update, by
+  // the slots_player_idx index; the seats themselves stay, so old line-ups still add up.
+  await db.update(slots).set({ invitedName: null, invitedEmail: null, invitedPhone: null }).where(eq(slots.playerId, playerId));
+  // And their first name leaves /built, the public page of ideas that became the app. The note and
+  // its summary stay: the change is the app's, the name was theirs.
+  await db.update(feedback).set({ publicName: null }).where(and(eq(feedback.playerId, playerId), isNotNull(feedback.publicName)));
   return { cancelledEvents, leftEvents, coachClosure };
 }
