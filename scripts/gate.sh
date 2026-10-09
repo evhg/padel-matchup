@@ -47,11 +47,14 @@ if [ -n "${GATE_E2E:-}" ]; then
     [ -z "$suites" ] && echo "· no browser suite can be broken by this change" || echo "· browser suites for this change: $suites"
   fi
   if [ -n "$suites" ]; then
-    step "production build" env APP_BASE_URL=http://localhost:3001 NEXT_TELEMETRY_DISABLED=1 pnpm build
+    # One port for the build and the server it is tested on. Two gates on one machine each need their
+    # own (E2E_PORT=3031 bash scripts/gate.sh), and e2e/run.mjs refuses a port somebody else holds.
+    port=${E2E_PORT:-3001}
+    step "production build" env APP_BASE_URL="http://localhost:$port" NEXT_TELEMETRY_DISABLED=1 pnpm build
     # What the build actually produced, not what the config says it should have. 18 MB of the test
     # database shipped inside every route for as long as no check read the build output.
     step "function weight" node scripts/check-bundle.mjs
-    step "browser suites: $suites" env E2E_ONLY="$suites" pnpm e2e
+    step "browser suites: $suites" env E2E_ONLY="$suites" E2E_PORT="$port" pnpm e2e
   fi
 fi
 # Last, because the browser suites only tear their server down as they finish: anything alive now was

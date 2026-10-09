@@ -1,6 +1,6 @@
 // Passport: the public page switch on My matches, the profile page, the signed level verified against the
 // well-known key, the data export without secrets, the level import from another scale, and the scales table.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, finish, HOST_RE, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -30,7 +30,7 @@ try {
   await page.goto(`${BASE}/me`);
   check("My matches carries the passport card, off by default", (await page.getByText("Passport").count()) >= 1 && (await page.getByText(/Public page · off/).count()) === 1);
   await page.getByLabel(/Public page/).check();
-  await page.getByText(/kicksma\.sh\/u\/|localhost:3001\/u\//).waitFor({ timeout: 15000 });
+  await page.getByText(new RegExp(`kicksma\\.sh/u/|${HOST_RE}/u/`)).waitFor({ timeout: 15000 });
   const link = (await page.getByRole("link", { name: /\/u\// }).first().getAttribute("href")) ?? "";
   const slug = link.split("/u/")[1];
   check("switching the page on mints a slug", /^[a-z0-9]+-[a-z0-9]{5}$/.test(slug ?? ""), link);

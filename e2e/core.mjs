@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, crashed, finish, iphone, launch, makeCheck, resendEvent, shot, switchLang } from "./lib.mjs";
+import { BASE, BASE_RE, crashed, finish, iphone, launch, makeCheck, resendEvent, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -149,7 +149,7 @@ try {
   check("after entering an email: one quiet line says where updates go, the invite line + email row with notifications switch, the question gone", (await a.getByText("Stay updated").count()) === 0 && (await stay.getByText("Updates reach you by email ✓").count()) === 1 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
   const ics = await a.evaluate(async (c) => { const r = await fetch(`/${c}/calendar.ics`); return { status: r.status, body: await r.text() }; }, code);
   check("calendar.ics serves a VCALENDAR with court in title", ics.status === 200 && ics.body.includes("BEGIN:VCALENDAR") && ics.body.includes("Court 3"), String(ics.status));
-  check("calendar.ics carries one short private link, no personal-link line", /URL:http:\/\/localhost:3001\/p\/[A-Za-z0-9]{12}\//.test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(/http:\/\/localhost:3001/g) || []).length === 2);
+  check("calendar.ics carries one short private link, no personal-link line", new RegExp(`URL:${BASE_RE}/p/[A-Za-z0-9]{12}/`).test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(new RegExp(BASE_RE, "g")) || []).length === 2);
 
   // ---- The invite really went out: the test server writes every email to a file instead of sending ----
   const { existsSync, readFileSync } = await import("node:fs");
@@ -203,7 +203,7 @@ try {
   check("reserved row shows forward buttons right away", (await a.getByText("Send them their personal link").count()) > 0 && (await a.locator('a[href^="https://wa.me"]').count()) > 0);
   await shot(a, "08-reserved");
   const hrefs = await a.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
-  const inviteUrl = hrefs.map(decodeURIComponent).map((h) => h.match(/(http:\/\/localhost:3001\/[^/\s]{4}\/i\/[^\s]{6})/)?.[1]).find(Boolean);
+  const inviteUrl = hrefs.map(decodeURIComponent).map((h) => h.match(new RegExp(`(${BASE_RE}/[^/\\s]{4}/i/[^\\s]{6})`))?.[1]).find(Boolean);
   check("invite url extracted from forward button", !!inviteUrl, inviteUrl);
   // Rolodex suggestions never include people already in the match
   await a.getByRole("button", { name: /Open spot/ }).first().click();

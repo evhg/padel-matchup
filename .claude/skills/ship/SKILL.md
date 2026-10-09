@@ -330,6 +330,14 @@ Wall clock first, credits second. What actually moved it, measured:
   twenty-one real people look like. Two rules came out of it: a shared counter is shared state, so
   count it like one; and a wait for a navigation also waits for the error that replaced it — watch
   both, or the failure cannot say what it was.
+- **A suite tests whatever answers on its port, so a port is a lock.** On 9 October 2026 two gates
+  ran on one machine for two checkouts. `e2e/run.mjs` started its server on 3001 and called it up the
+  moment `/api/health` answered — and the other checkout's server was already answering there, so a
+  suite could test a build it never made and go green or red for somebody else's code. `core.mjs` and
+  `passport.mjs` also pinned `localhost:3001` in their patterns, and the gate built for 3001 whatever
+  port it then served. Now `run.mjs` refuses a port that is already taken, before it starts anything;
+  the suites build their patterns from `BASE`; and the gate builds and serves on `E2E_PORT`. Two gates
+  at once: `E2E_PORT=3031 GATE_E2E=auto bash scripts/gate.sh`.
 - **A setting a walk switches on stays on for every check after it.** Olga ticked "anyone can book"
   at the first settings save, and forty lines later the assistant walk — which exists to prove that
   booking before the coach accepts is refused — got a 201 and then hung waiting for "Waiting for your

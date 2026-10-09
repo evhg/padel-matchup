@@ -3,6 +3,7 @@
 //                                            E2E_ONLY=levels or E2E_ONLY=telegram,coach runs those suites ("all" or unset runs every one),
 //                                            E2E_SHARD=1/2 runs every second suite starting at the first)
 import { spawn } from "node:child_process";
+import net from "node:net";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -62,6 +63,28 @@ if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
   env.VAPID_PUBLIC_KEY = k.publicKey;
   env.VAPID_PRIVATE_KEY = k.privateKey;
   env.VAPID_SUBJECT = env.VAPID_SUBJECT || "mailto:e2e@example.com";
+}
+
+// The port is a lock. The health wait below takes the first server that answers on it, so a server
+// somebody else left there (another checkout's gate, a dev server) was tested in place of this build,
+// green or red for code that is not this change. Two gates ran on one machine on 9 October 2026.
+// Anything answering before we start is refused, on IPv4 and IPv6 alike, since localhost can be either.
+const answers = (host) =>
+  new Promise((resolve) => {
+    const sock = net.connect({ port: PORT, host });
+    const done = (v) => {
+      sock.destroy();
+      resolve(v);
+    };
+    sock.once("connect", () => done(true));
+    sock.once("error", () => done(false));
+    sock.setTimeout(1500, () => done(false));
+  });
+if ((await answers("127.0.0.1")) || (await answers("::1"))) {
+  rmSync(dataDir, { recursive: true, force: true });
+  console.error(`✗ something already answers on port ${PORT}, so the suites would test that server and not this build.`);
+  console.error(`  Stop it, or give this run a port of its own: E2E_PORT=3031 pnpm e2e (the gate takes the same E2E_PORT).`);
+  process.exit(2);
 }
 
 const server = spawn("pnpm", ["exec", "next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });

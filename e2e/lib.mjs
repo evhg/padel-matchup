@@ -3,6 +3,13 @@ import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
 
 export const BASE = process.env.BASE ?? "http://localhost:3001";
+/**
+ * The server under test, ready for a RegExp. A pattern that spells out "localhost:3001" passes on the
+ * one port and fails, or matches somebody else's server, on any other (E2E_PORT, two gates at once).
+ */
+export const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const BASE_RE = escapeRe(BASE);
+export const HOST_RE = escapeRe(new URL(BASE).host);
 const SHOTS = process.env.SHOTS;
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
