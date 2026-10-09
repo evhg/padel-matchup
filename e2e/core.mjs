@@ -54,6 +54,13 @@ try {
   check("Bigger text raises the root to 18px at once", (await rootSize()) === "18px");
   await a.reload();
   check("Bigger text holds after a reload, and nothing runs off a phone", (await rootSize()) === "18px" && (await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)));
+  // The pictures of /me at the big size, in the light theme and the dark one; then back to the landing page.
+  await a.goto(BASE + "/me");
+  await shot(a, "04b-me-bigger-text");
+  await a.emulateMedia({ colorScheme: "dark" });
+  await shot(a, "04c-me-bigger-text-dark");
+  await a.emulateMedia({ colorScheme: "light" });
+  await a.goto(BASE + "/");
   await a.getByTestId("nav-more").click();
   await a.getByRole("switch", { name: "Bigger text" }).click();
   check("switched off, the text is back to 16px", (await rootSize()) === "16px" && (await a.getByRole("switch", { name: "Bigger text" }).getAttribute("aria-checked")) === "false");
@@ -247,6 +254,7 @@ try {
   const scoreCheck = a.getByTestId("score-check");
   await scoreCheck.waitFor({ timeout: 20000 });
   check("an unusual set asks before it saves, naming the set", (await scoreCheck.getByText("Is 6-5 right?").count()) === 1 && (await a.getByRole("button", { name: "Save score" }).count()) === 0);
+  await shot(a, "11a-score-question");
   await scoreCheck.getByRole("button", { name: "Fix it" }).click();
   check("\"Fix it\" goes back to the sets with nothing saved", (await a.getByTestId("score-check").count()) === 0 && (await setInputs.count()) === 8);
   await a.getByRole("button", { name: "Save score" }).click();
@@ -468,6 +476,12 @@ try {
   // ---- Hardening round: about, unsubscribe, Spanish, delete account ----
   await a.goto(`${BASE}/about`);
   await shot(a, "19-about");
+  await a.goto(`${BASE}/privacy`);
+  await shot(a, "19b-privacy");
+  await a.emulateMedia({ colorScheme: "dark" });
+  await shot(a, "19c-privacy-dark");
+  await a.emulateMedia({ colorScheme: "light" });
+  await a.goto(`${BASE}/about`);
   check("about page renders the short legal text", (await a.getByText("The fine print, kept short").count()) > 0 && (await a.getByText("Open source").count()) > 0);
   await a.goto(`${BASE}/unsubscribe?e=someone%40example.com&s=forged`);
   check("forged unsubscribe link is rejected", (await a.getByText("That link doesn't check out").count()) > 0);

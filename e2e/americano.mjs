@@ -78,6 +78,7 @@ try {
   await here.getByRole("button", { name: "Add", exact: true }).click();
   await here.getByRole("checkbox", { name: "Wes" }).waitFor({ timeout: 20000 });
   check("the walk-in arrives ticked and Cal stays unticked", (await here.getByRole("checkbox", { name: "Wes" }).isChecked()) && !(await here.getByRole("checkbox", { name: "Cal" }).isChecked()));
+  await shot(a, "t1b-check-in");
   await a.getByRole("button", { name: "Start with 4 players" }).click();
   await a.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
   // Zed and Wes have not accepted yet: 2 occupied of a capacity now 4, but both are in the round, and Cal is not.
