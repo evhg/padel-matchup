@@ -738,7 +738,9 @@ Everything in this list is live. The README describes each in detail.
   colour names a dark set under `prefers-color-scheme: dark`, an ink-navy ground with the same lime.
   `tests/contrast.test.ts` holds every text colour at 4.5:1 in both themes, and fails on a new
   `bg-white` or `text-white` outside the few places white is meant (a QR code, the brand buttons).
-  The club's TV page, the printed poster and the embeds stay light (`data-keep-light`).
+  The club's TV page, the printed poster and the embeds stay light (`data-keep-light`), with a light
+  theme-color for the browser's bar (`KEEP_LIGHT_VIEWPORT`). A switch that is off has its own knob
+  colour (`knob-off`), light in the dark theme, at 3:1 or better on its track.
 
 ## The finish line
 

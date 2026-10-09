@@ -7,9 +7,13 @@ import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { rangeChip } from "@/lib/levelText";
+import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
+// Light, like the page itself (data-keep-light): the phone's bar must not turn navy round it.
+export const viewport = KEEP_LIGHT_VIEWPORT;
+
 export const metadata: Metadata = { robots: { index: false, follow: true } };
 
 /** The venue board as an iframe: no header, no footer, opens matches on kicksma.sh in a new tab. */

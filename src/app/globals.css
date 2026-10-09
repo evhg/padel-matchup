@@ -28,6 +28,9 @@
   --color-ok-soft: #e6f6ec;
   --color-warn: #b45309;
   --color-warn-soft: #fef3c7;
+  /* The knob of a switch that is off, on its line-strong track. Light: white, as it always was. Dark:
+     the knob was on-ink, navy on a slate track at 1.98:1, under the 3:1 a control's parts need. */
+  --color-knob-off: #ffffff;
   /* Words on an ink fill (a dark button, the picked chip). Ink turns light in the dark theme, so the
      words on it turn dark: `text-white` there was white on near-white. */
   --color-on-ink: #ffffff;
@@ -71,6 +74,7 @@
     --color-warn: #e9b672;
     --color-warn-soft: #3a2d16;
     --color-on-ink: #0f1520;
+    --color-knob-off: #d3d9e1;
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 30px -14px rgb(0 0 0 / 0.6);
     --shadow-bar: 0 -8px 30px -12px rgb(0 0 0 / 0.7);
   }

@@ -12,9 +12,13 @@ import { isLevelVerified } from "@/lib/domain/levels";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip } from "@/lib/levelText";
+import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ code: string }> };
+// Light, like the page itself (data-keep-light): the phone's bar must not turn navy round it.
+export const viewport = KEEP_LIGHT_VIEWPORT;
+
 export const metadata: Metadata = { robots: { index: false, follow: true } };
 
 /** One match as an iframe: who plays, spots left, one button that opens the real page. */

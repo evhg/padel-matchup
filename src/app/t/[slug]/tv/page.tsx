@@ -9,10 +9,14 @@ import { liveBoard } from "@/lib/domain/competitionLive";
 import type { PlayRow } from "@/lib/domain/competitionSchedule";
 import { categoriesOf, getCompetition } from "@/lib/domain/competitions";
 import { scoreText } from "@/lib/domain/draw";
+import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
 const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
+
+// Light, like the page itself (data-keep-light): the phone's bar must not turn navy round it.
+export const viewport = KEEP_LIGHT_VIEWPORT;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;

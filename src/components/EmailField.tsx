@@ -119,7 +119,7 @@ export function EmailField({
             onClick={toggleNotify}
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${notify ? "bg-ink" : "bg-line-strong"}`}
           >
-            <span className={`inline-block h-5 w-5 rounded-full bg-on-ink shadow transition ${notify ? "translate-x-6" : "translate-x-1"}`} />
+            <span className={`inline-block h-5 w-5 rounded-full shadow transition ${notify ? "translate-x-6 bg-on-ink" : "translate-x-1 bg-knob-off"}`} />
           </button>
         </div>
         )}

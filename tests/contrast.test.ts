@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 /**
  * Every word on a screen is readable, in the light theme and in the dark one.
@@ -128,5 +129,37 @@ describe("colours that follow the theme", () => {
       if (n) found[rel] = n;
     }
     expect(found).toEqual(KEEP_WHITE);
+  });
+});
+
+/**
+ * Parts of a control that are not words need 3:1 against what is next to them (WCAG 1.4.11). The
+ * switch's knob, off, sat navy (on-ink) on a slate track in the dark theme at 1.98:1, so "off" read as
+ * an empty bar. It is its own token now, `knob-off`, light in the dark theme. The light theme keeps
+ * the white knob it always had, at 1.59:1 on its track; that look is unchanged here on purpose.
+ */
+describe("the switch's knob", () => {
+  it("reaches 3:1 against the off track in the dark theme", () => {
+    expect(dark["knob-off"], "a dark value for knob-off").toMatch(/^#[0-9a-f]{6}$/);
+    expect(Math.floor(contrast(dark["knob-off"], dark["line-strong"]) * 100) / 100).toBeGreaterThanOrEqual(3);
+  });
+
+  it("is knob-off in every switch when off, never the on-ink that turns navy", () => {
+    const root = process.cwd();
+    const switches = sources(path.join(root, "src")).filter((f) => readFileSync(f, "utf8").includes('role="switch"'));
+    expect(switches.length).toBeGreaterThanOrEqual(3);
+    const without = switches.filter((f) => !readFileSync(f, "utf8").includes("bg-knob-off")).map((f) => path.relative(root, f));
+    expect(without).toEqual([]);
+  });
+});
+
+describe("pages that keep the light colours", () => {
+  it("set one light theme-color, the light page ground, so the phone's bar does not turn navy round them", () => {
+    expect(KEEP_LIGHT_VIEWPORT.themeColor).toBe(light.bg);
+    const root = process.cwd();
+    const pages = sources(path.join(root, "src/app")).filter((f) => readFileSync(f, "utf8").includes("data-keep-light"));
+    expect(pages.length).toBeGreaterThanOrEqual(4);
+    const without = pages.filter((f) => !/export const viewport = KEEP_LIGHT_VIEWPORT;/.test(readFileSync(f, "utf8"))).map((f) => path.relative(root, f));
+    expect(without).toEqual([]);
   });
 });
