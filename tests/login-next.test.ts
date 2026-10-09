@@ -6,12 +6,14 @@ describe("loginNext", () => {
   it("keeps a path on this site", () => {
     expect(loginNext("/AB12")).toBe("/AB12");
     expect(loginNext("/g/QWERTY")).toBe("/g/QWERTY");
-    expect(loginNext("/")).toBe("/");
     expect(loginNext("/coaches/phuket?level=3")).toBe("/coaches/phuket?level=3");
     expect(loginNext("/AB12#score")).toBe("/AB12#score");
   });
 
   it("falls back to My matches when there is nothing to go back to", () => {
+    // The landing page is the create form: a sign-in there came for the player's own matches.
+    expect(loginNext("/")).toBe("/me");
+    expect(loginNext("/?source=homescreen")).toBe("/me");
     expect(loginNext(null)).toBe("/me");
     expect(loginNext(undefined)).toBe("/me");
     expect(loginNext("")).toBe("/me");

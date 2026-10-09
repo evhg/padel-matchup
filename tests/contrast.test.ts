@@ -49,7 +49,7 @@ describe("text contrast", () => {
 
   for (const ground of ["bg", "card"]) {
     it(`keeps every text colour at ${AA}:1 or better on ${ground}`, () => {
-      const low = TEXT.map((name) => ({ name, ratio: Math.round(contrast(tokens[name], tokens[ground]) * 100) / 100 })).filter((r) => r.ratio < AA);
+      const low = TEXT.map((name) => ({ name, ratio: contrast(tokens[name], tokens[ground]) })).filter((r) => r.ratio < AA).map((r) => ({ ...r, ratio: Math.floor(r.ratio * 100) / 100 }));
       expect(low).toEqual([]);
     });
   }
@@ -61,7 +61,7 @@ describe("text contrast", () => {
       .map((m) => ({ bg: m[1].match(/(?<![\w:-])bg-([\w-]+)/)?.[1], text: m[1].match(/(?<![\w:-])text-([\w-]+)/g)?.map((t) => t.slice(5)).find((t) => colour(t)) }))
       .filter((p): p is { bg: string; text: string } => Boolean(p.bg && p.text && colour(p.bg)));
     expect(pairs.length).toBeGreaterThanOrEqual(8);
-    const low = pairs.map((p) => ({ ...p, ratio: Math.round(contrast(colour(p.text), colour(p.bg)) * 100) / 100 })).filter((p) => p.ratio < AA);
+    const low = pairs.map((p) => ({ ...p, ratio: contrast(colour(p.text), colour(p.bg)) })).filter((p) => p.ratio < AA).map((p) => ({ ...p, ratio: Math.floor(p.ratio * 100) / 100 }));
     expect(low).toEqual([]);
   });
 });

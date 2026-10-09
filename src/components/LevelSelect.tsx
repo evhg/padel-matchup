@@ -48,7 +48,7 @@ export function LevelChip({ level, verified = false, className = "" }: { level: 
     <span className={`chip-muted tabular-nums ${className}`} title={verified ? t("level.verified") : undefined}>
       {formatLevel(level)}
       {verified && (
-        <span className="ml-0.5 text-accent-strong" aria-label={t("level.verified")}>
+        <span className="ml-0.5 text-ok" aria-label={t("level.verified")}>
           ✓
         </span>
       )}

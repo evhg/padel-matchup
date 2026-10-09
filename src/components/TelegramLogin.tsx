@@ -23,7 +23,10 @@ export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: 
       const here = window.location.pathname + window.location.search;
       history.replaceState(null, "", here);
       // The login route sends the tab back to this page (`loginNext` checks it), not to My matches.
-      window.location.replace(`${authUrl}?${new URLSearchParams({ ...fields, next: here })}`);
+      // Two pages keep My matches: the landing page, where "the way back to your own matches" is the
+      // reason to sign in, and a personal link, whose token must never travel in another URL.
+      const keep = window.location.pathname !== "/" && !/^\/p(\/|$)/i.test(window.location.pathname);
+      window.location.replace(`${authUrl}?${new URLSearchParams(keep ? { ...fields, next: here } : fields)}`);
     };
     back();
     window.addEventListener("hashchange", back);

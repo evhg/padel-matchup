@@ -177,10 +177,22 @@ export async function handOverGroup(db: Db, groupId: string, actorPlayerId: stri
   const to = await getGroupMember(db, groupId, toPlayerId);
   if (!to) throw new DomainError("not_member");
   return db.transaction(async (tx) => {
+    // The step down is conditional on still being the admin, so two hand-overs from two tabs cannot
+    // both land and leave the group with two admins: the second finds no admin row and stops.
+    const stepped = await tx
+      .update(groupMembers)
+      .set({ role: "member" })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, actorPlayerId), eq(groupMembers.role, "admin")))
+      .returning({ playerId: groupMembers.playerId });
+    if (stepped.length === 0) throw new DomainError("forbidden");
+    const promoted = await tx
+      .update(groupMembers)
+      .set({ role: "admin" })
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, toPlayerId)))
+      .returning({ playerId: groupMembers.playerId });
+    if (promoted.length === 0) throw new DomainError("not_member");
     const [g] = await tx.update(groups).set({ creatorPlayerId: toPlayerId }).where(eq(groups.id, groupId)).returning();
     if (!g) throw new DomainError("not_found");
-    await tx.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, actorPlayerId)));
-    await tx.update(groupMembers).set({ role: "admin" }).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, toPlayerId)));
     return g;
   });
 }

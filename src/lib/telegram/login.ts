@@ -55,6 +55,8 @@ export function loginNext(next: string | null | undefined): string {
   if (!p.startsWith("/") || p.length > LOGIN_NEXT_MAX) return "/me";
   if (p.startsWith("//") || p.includes("\\") || /[\u0000-\u0020\u007f]/.test(p)) return "/me";
   if (/^\/p(\/|$)/i.test(p)) return "/me";
+  // The landing page is the create form; somebody who signed in there came for their own matches.
+  if (p === "/" || p.startsWith("/?") || p.startsWith("/#")) return "/me";
   // The last word goes to the URL parser itself: the path must resolve on the same origin.
   try {
     const probe = "https://same.invalid";

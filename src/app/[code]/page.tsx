@@ -427,7 +427,7 @@ export default async function EventPage({ params, searchParams }: Props) {
           {cancelled && (
             <div className="mt-4 rounded-2xl bg-danger-soft p-4">
               <div className="font-extrabold text-danger">{t("event.cancelled")}</div>
-              <div className="text-sm text-danger/80">{t("event.cancelledHelp")}</div>
+              <div className="text-sm text-danger">{t("event.cancelledHelp")}</div>
             </div>
           )}
           {!cancelled && over && detail.scores.length === 0 && ev.type === "match" && (
