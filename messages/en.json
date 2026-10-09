@@ -49,7 +49,8 @@
     "more": "More",
     "coaches": "Coaches",
     "clubs": "Clubs",
-    "tournaments": "Tournaments"
+    "tournaments": "Tournaments",
+    "findGame": "Find a game"
   },
   "identity": {
     "whatsYourName": "What's your name?",
@@ -1125,7 +1126,23 @@
     "how2": "Levels 0–7, the scale you know. Organizers can confirm them after a match.",
     "how3": "Americano, mexicano and King of the Court with live scores from any phone.",
     "how4": "Everything is open: the API, the data and the code. Bring your own bot or assistant.",
-    "metaDescription": "Padel in {city}: open matches, club rankings, americano, mexicano and King of the Court. Create a match in ten seconds, share one link, no app."
+    "metaDescription": "Padel in {city}: open matches, club rankings, americano, mexicano and King of the Court. Create a match in ten seconds, share one link, no app.",
+    "playTitle": "Find a padel game",
+    "playSub": "Open matches and tournaments you can join. Tap one, then join with your first name.",
+    "playMetaDescription": "Open padel matches and americanos you can join in Phuket and Singapore. Pick the day, your level and the club, then join with your first name. No app.",
+    "playFilters": "Filters",
+    "playToday": "Today",
+    "playTomorrow": "Tomorrow",
+    "playWeek": "This week",
+    "playFits": "Fits my level",
+    "playSpots": "Spots left only",
+    "playAllClubs": "All clubs",
+    "playCount": "{count, plural, one {# open game} other {# open games}}",
+    "playEmpty": "No open games in {city} {day, select, today {today} tomorrow {tomorrow} other {this week}}.",
+    "playEmptyCta": "Organize one in 30 seconds",
+    "playNoneFit": "{count, plural, one {# game is open, but not with these filters.} other {# games are open, but not with these filters.}}",
+    "playClear": "Show them all",
+    "playBy": "by {name}"
   },
   "telegram": {
     "title": "Telegram",

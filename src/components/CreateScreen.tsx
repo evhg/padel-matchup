@@ -22,8 +22,8 @@ function prefilledHour(p: { date?: string; time?: string; tz?: string } | undefi
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) && isValidTimeZone(tz) ? { date, time, tz } : null;
 }
 
-/** The create form with its data. Rendered on / and /new. */
-export async function CreateScreen({ heading, prefill }: { heading: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string } }) {
+/** The create form with its data. Rendered on / and /new. `below` sits under the heading (the landing page's "Find a game"). */
+export async function CreateScreen({ heading, below, prefill }: { heading: string; below?: React.ReactNode; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -86,6 +86,9 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
         <h1 className="text-3xl font-extrabold tracking-tight">{group && isMember ? t("group.forGroup", { name: group.name }) : fromGenerator ? t("landing.fromGeneratorTitle") : heading}</h1>
         {fromGenerator && !(group && isMember) && <p className="mt-1 text-muted">{t("landing.fromGeneratorSub")}</p>}
         {group && isMember && <p className="mt-1 text-muted">{t("group.nextMatchHelp")}</p>}
+        {/* The landing page's way to a game somebody else made. Inside the heading's block, so it
+            costs the form one short line and no extra gap; a crew or a generator hand-off has its own job. */}
+        {below && !(group && isMember) && !fromGenerator && below}
       </div>
       {group && !isMember && (
         <Link href={`/g/${group.code}`} prefetch={false} className="card flex items-center justify-between bg-accent-soft border-accent text-sm font-bold">

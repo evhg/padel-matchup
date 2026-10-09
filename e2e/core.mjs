@@ -45,7 +45,7 @@ try {
     (await a.getByRole("button", { name: /Tell us what should change/ }).count()) === 1 && (await a.getByText(/built from what players say/).count()) === 1,
   );
   check("the landing page links to the tournaments and to the clubs", (await a.getByTestId("landing-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("landing-clubs").getAttribute("href")) === "/clubs");
-  check("the header's More menu holds the three public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
+  check("the header's More menu holds the four public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-find").getAttribute("href")) === "/play" && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
   await a.goto(BASE + "/PLAY");
   const story = await fetch(BASE + "/PLAY/story");
   check("story image renders as a 9:16 PNG", story.status === 200 && (story.headers.get("content-type") || "").startsWith("image/png"), `${story.status} ${story.headers.get("content-type")}`);

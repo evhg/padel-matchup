@@ -49,7 +49,8 @@
     "more": "Más",
     "coaches": "Entrenadores",
     "clubs": "Clubes",
-    "tournaments": "Torneos"
+    "tournaments": "Torneos",
+    "findGame": "Buscar partido"
   },
   "identity": {
     "whatsYourName": "¿Cómo te llamas?",
@@ -1125,7 +1126,23 @@
     "how2": "Niveles 0–7, la escala de siempre. Los organizadores pueden confirmarlos tras un partido.",
     "how3": "Americano, mexicano y Rey de la pista con resultados en directo desde cualquier móvil.",
     "how4": "Todo es abierto: la API, los datos y el código. Trae tu propio bot o asistente.",
-    "metaDescription": "Pádel en {city}: partidos abiertos, rankings de club, americano, mexicano y Rey de la pista. Crea un partido en diez segundos, comparte un enlace, sin app."
+    "metaDescription": "Pádel en {city}: partidos abiertos, rankings de club, americano, mexicano y Rey de la pista. Crea un partido en diez segundos, comparte un enlace, sin app.",
+    "playTitle": "Busca un partido de pádel",
+    "playSub": "Partidos y torneos abiertos a los que puedes unirte. Abre uno y apúntate con tu nombre.",
+    "playMetaDescription": "Partidos y americanos de pádel abiertos en Phuket y Singapur. Elige el día, tu nivel y el club, y apúntate con tu nombre. Sin app.",
+    "playFilters": "Filtros",
+    "playToday": "Hoy",
+    "playTomorrow": "Mañana",
+    "playWeek": "Esta semana",
+    "playFits": "Para mi nivel",
+    "playSpots": "Solo con plazas libres",
+    "playAllClubs": "Todos los clubes",
+    "playCount": "{count, plural, one {# partido abierto} other {# partidos abiertos}}",
+    "playEmpty": "No hay partidos abiertos en {city} {day, select, today {hoy} tomorrow {mañana} other {esta semana}}.",
+    "playEmptyCta": "Organiza uno en 30 segundos",
+    "playNoneFit": "{count, plural, one {Hay # partido abierto, pero no con estos filtros.} other {Hay # partidos abiertos, pero no con estos filtros.}}",
+    "playClear": "Ver todos",
+    "playBy": "organiza {name}"
   },
   "telegram": {
     "title": "Telegram",

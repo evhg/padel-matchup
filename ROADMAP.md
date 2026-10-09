@@ -702,6 +702,19 @@ Everything in this list is live. The README describes each in detail.
   Court keeps names in fours, because there the waiting players come in at the bottom court by the
   format's own rule. Rounds already drawn, and the next round of a tournament under way, are drawn
   exactly as before. The organiser's banner on a tournament names the round waiting for scores.
+- **Find a game (9 October 2026, no migration).** The owner's decision C: a compact "Find a game"
+  chip under the landing page's headline opens `/play`, the open games a visitor can join. It lists
+  the listed matches and social tournaments of one city, soonest first, with chips kept in the URL:
+  the city (the edge's city when it is one of ours, else Phuket), the day (Today, Tomorrow, This
+  week, in the city's own zone), "Fits my level" for a viewer with a level, the club, and "Spots
+  left only". Each game is one `EventRow` (`src/components/EventRow.tsx`): the time big and in
+  tabular figures, the seats in the group rows' words, the level, the price, the format of a
+  tournament, the club and the organiser's first name. It is one read (`findGames` in
+  `src/lib/domain/findGame.ts`: one query with the seat counts inside it, at most 120 rows) and the
+  rules are pure and tested in `tests/find-game.test.ts`. An empty city says so and offers the form.
+  `/play` is in the More menu and the sitemap. Later, when a city has three or more open games, a
+  strip of them above the form; and `EventRow` replaces the city page's, the venue board's and the
+  group page's own rows.
 
 ## The finish line
 

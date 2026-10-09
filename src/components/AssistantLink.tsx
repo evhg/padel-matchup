@@ -18,14 +18,16 @@ import type { RoleSet } from "@/lib/domain/roles";
 const chip = "btn-ghost btn-xs";
 
 type Door = { key: string; href: string; label: string; kind: "coach" | "club" | "series" | "public"; testId: string };
-export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; coaches: string; clubs: string; tournaments: string };
+export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; findGame: string; coaches: string; clubs: string; tournaments: string };
 
 /**
- * The public doors every visitor gets, in the More menu: the coaches' directory, the clubs' page
- * with the claim, the tournaments. They used to be reachable only by URL or from a city page, which
- * is how a club owner or a serious organiser arrived on kicksma.sh and saw only the match form.
+ * The public doors every visitor gets, in the More menu: the open games to join (/play), the
+ * coaches' directory, the clubs' page with the claim, the tournaments. They used to be reachable only
+ * by URL or from a city page, which is how a club owner or a serious organiser arrived on kicksma.sh
+ * and saw only the match form.
  */
 const publicDoors = (labels: NavLabels): Door[] => [
+  { key: "play", href: "/play", label: labels.findGame, kind: "public", testId: "nav-find" },
   { key: "coaches", href: "/coaches", label: labels.coaches, kind: "public", testId: "nav-coaches" },
   { key: "clubs", href: "/clubs", label: labels.clubs, kind: "public", testId: "nav-clubs" },
   { key: "tournaments", href: "/t", label: labels.tournaments, kind: "public", testId: "nav-tournaments" },
@@ -48,7 +50,7 @@ export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?
     </Link>
   );
   // The menu is one short glyph, so the header keeps its one word beside it on a phone. Inside: the
-  // way to My matches when this is not it, every role door not shown outside, then the public three.
+  // way to My matches when this is not it, every role door not shown outside, then the public four.
   const more = (inside: React.ReactNode[]) => (
     <details className="relative">
       <summary className={`${chip} list-none cursor-pointer`} data-testid="nav-more" aria-label={labels.more} title={labels.more}>

@@ -18,7 +18,9 @@ try {
   const robots = await p.request.get(`${BASE}/robots.txt`);
   check("robots.txt served with a sitemap line", robots.status() === 200 && (await robots.text()).includes("Sitemap:"));
   const sitemap = await p.request.get(`${BASE}/sitemap.xml`);
-  check("sitemap lists /americano", sitemap.status() === 200 && (await sitemap.text()).includes("/americano"));
+  const sitemapText = await sitemap.text();
+  check("sitemap lists /americano", sitemap.status() === 200 && sitemapText.includes("/americano"));
+  check("sitemap lists /play", sitemapText.includes("/play<"));
 
   // ---- Generator: 8 players → 7 exact rounds on 2 courts ----
   await p.goto(`${BASE}/americano`);
@@ -141,6 +143,36 @@ try {
     check("the moment page unfurls with its picture and is not indexed", mhtml.includes('property="og:image"') && /noindex/.test(mhtml));
     await shot(p, "v4-moment");
   }
+
+  // ---- Find a game: the landing chip opens /play, a listed match shows there, and a day chip hides it ----
+  // Tomorrow at 18:00 in Phuket (UTC+7 all year), computed from the moment the suite runs (rule 11):
+  // never today, always inside "This week".
+  const bkk = new Date(Date.now() + 7 * 3600 * 1000);
+  const tomorrowEvening = new Date(Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate() + 1, 18 - 7));
+  const listed = await p.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: tomorrowEvening.toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Pia Sol" }, listOnVenueBoard: true, cost: "400 THB", levelMin: 2, levelMax: 4 } }).then((r) => r.json());
+  const lcode = listed.match?.code;
+  check("a listed match for tomorrow in Phuket is created", Boolean(lcode), JSON.stringify(listed).slice(0, 160));
+  await p.goto(`${BASE}/`);
+  check("the landing page offers Find a game under the headline", (await p.getByTestId("landing-find-game").getAttribute("href")) === "/play");
+  await p.getByTestId("landing-find-game").click();
+  await p.waitForURL((u) => u.pathname === "/play", { timeout: 20000 });
+  const row = p.getByTestId("event-row").and(p.locator(`a[href="/${lcode}"]`));
+  await row.waitFor({ timeout: 20000 });
+  // The chips are set in capitals by the stylesheet and innerText carries that, so compare lower-cased.
+  // Pia is seated as the organiser, so three of the four spots are left.
+  const rowText = (await row.innerText()).toLowerCase();
+  check("/play lists the public match with its time, seats, level, price and the organiser's first name", rowText.includes("18:00") && rowText.includes("3 spots left") && rowText.includes("400 thb") && rowText.includes("by pia") && !rowText.includes("sol") && /2\.0–4\.0/.test(rowText), rowText.replace(/\s+/g, " ").slice(0, 200));
+  await shot(p, "v5-play");
+  await p.getByTestId("play-day-today").click();
+  await p.waitForURL((u) => u.searchParams.get("day") === "today", { timeout: 20000 });
+  await p.locator(`a[href="/${lcode}"]`).waitFor({ state: "detached", timeout: 20000 });
+  check("the Today chip hides tomorrow's match and keeps the choice in the URL", (await p.locator(`a[href="/${lcode}"]`).count()) === 0 && new URL(p.url()).searchParams.get("city") === "phuket");
+  await p.getByTestId("play-day-tomorrow").click();
+  await p.waitForURL((u) => u.searchParams.get("day") === "tomorrow", { timeout: 20000 });
+  await p.locator(`a[href="/${lcode}"]`).waitFor({ timeout: 20000 });
+  check("the Tomorrow chip brings it back", true);
+  await p.goto(`${BASE}/play?city=phuket&day=today&club=no-such-club`);
+  check("a filter that hides everything says so and offers the way back", (await p.getByTestId("play-none-fit").count()) + (await p.getByTestId("play-empty").count()) === 1);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {
