@@ -24,6 +24,8 @@ import { handleWantCallback, wantCommand } from "./handlers/want";
 import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
+import { crewLeft, crewRightsChanged, crewStart, quietCommand } from "./handlers/crew";
+import { countSeat, isListening, listenInGroup, replyToCard } from "./handlers/words";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { cancelEvent } from "@/lib/domain/events";
 import { notifyEventCancelled } from "@/lib/notify";
@@ -119,6 +121,9 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       return "lang";
     }
     if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale, ctx);
+    // A crew's own group: the crew page's link arrives as /start crew_<ticket>; /quiet stops the bot reading.
+    if (cmd.command === "start" && !isPrivate && /^crew_/.test(cmd.args.trim())) return crewStart(db, msg, chat, from, cmd.args.trim());
+    if (cmd.command === "quiet" && !isPrivate) return quietCommand(db, msg, chat, from);
     if (ROLE_COMMANDS.has(cmd.command) && isPrivate) return roleCommand(db, msg, chat, from, cmd.command);
     if (cmd.command === "want") return wantCommand(db, msg, chat, from, cmd.args);
     if (cmd.command === "coach" && isPrivate) return coachCommand(db, chat, from);
@@ -129,7 +134,11 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   // "6-4 6-3" as a reply to a card or a nudge is the score; a reply to the thank-you joins the note.
   const scored = await plainScore(db, msg, chat, from, ctx);
   if (scored) return scored;
-  const appended = await feedbackReply(db, msg, chat, from, locale);
+  // "+1" or "can't make it" in reply to a card takes or frees the seat, as its buttons do.
+  const seated = await replyToCard(db, msg, chat, from, ctx);
+  if (seated) return seated;
+  // Where the bot reads a crew's group it keeps no text, so a reply there never joins a feedback note.
+  const appended = isListening(chat) ? null : await feedbackReply(db, msg, chat, from, locale);
   if (appended) return appended;
   // A pasted kicksma.sh link becomes a live card (in groups this needs admin rights or privacy mode off); in the private chat a bare code works too.
   const codes = codesInText(msg.text, base);
@@ -159,6 +168,9 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     posted++;
   }
   if (codes.length || posted) return "card";
+  // A crew's own group: "in", "out" and "who's in Thursday 7pm Rawai?" as plain messages. Anything else stays unread.
+  const heard = await listenInGroup(db, msg, chat, from, ctx);
+  if (heard) return heard;
   if (isPrivate && player) {
     // The book could not read the word and no match answers to it: the book's help.
     if (resolved?.kind === "coach") return coachHelp(player, chat.chatId);
@@ -267,6 +279,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   }
   await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") });
   await syncTelegram(db, code);
+  await countSeat(db, "tap", outcome, player.id, detail.event);
   return `${action === "j" ? "join" : "leave"}:${outcome}`;
 }
 
@@ -274,12 +287,20 @@ async function handleMyChatMember(db: Db, u: NonNullable<TgUpdate["my_chat_membe
   if (!GROUP_TYPES.has(u.chat.type)) return "ignored";
   const status = u.new_chat_member.status;
   if (status === "left" || status === "kicked") {
-    await db.update(telegramChats).set({ leftAt: new Date() }).where(eq(telegramChats.chatId, u.chat.id));
+    await db.update(telegramChats).set({ leftAt: new Date(), ...crewLeft }).where(eq(telegramChats.chatId, u.chat.id));
     return "left";
+  }
+  // Restricted is not an admin: whatever else it means, the bot stops reading a crew's group.
+  if (status === "restricted") {
+    await db.update(telegramChats).set({ listeningSince: null }).where(eq(telegramChats.chatId, u.chat.id));
+    return "ignored";
   }
   if (status === "member" || status === "administrator") {
     const { chat, created } = await upsertChat(db, u.chat, u.from);
     if (created) await sendMessage(chat.chatId, strings(chatLocale(chat)).welcome, { silent: true });
+    // A crew's own group starts when the bot may pin its notice there, and stops when it is no longer an admin.
+    const crew = await crewRightsChanged(db, chat, u.new_chat_member);
+    if (crew) return crew;
     return created ? "welcome" : "rejoined";
   }
   return "ignored";

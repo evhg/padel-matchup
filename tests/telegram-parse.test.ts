@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { freezeClock } from "./helpers/clock";
-import { parseNewCommand, resolveZone, tzHintFor } from "@/lib/telegram/parse";
+import { matchVenue, parseNewCommand, resolveZone, tzHintFor } from "@/lib/telegram/parse";
 
 // Saturday 2026-09-05 12:00 in Bangkok (05:00Z).
 const now = new Date("2026-09-05T05:00:00Z");
@@ -99,5 +99,67 @@ describe("/new text parsing", () => {
     expect(resolveZone("Europe/Madrid")).toBe("Europe/Madrid");
     expect(resolveZone("Mars/Olympus")).toBeNull();
     expect(resolveZone("")).toBeNull();
+  });
+});
+
+describe("free chat: a question, Spanish, and a place matched against the known courts", () => {
+  // Saturday 5 September, noon in Bangkok: Thursday is the 10th, tomorrow the 6th.
+  it("a question asks for players; its own words never become the place", () => {
+    const p = parseNewCommand("who's in Thursday 7pm Rawai?", { tz, now });
+    expect(p.startsAt).toEqual(at("2026-09-10", "19:00"));
+    expect(p.venue).toBe("Rawai");
+    expect(parseNewCommand("Who’s in tomorrow 19:00?", { tz, now }).venue).toBeNull();
+    expect(parseNewCommand("anyone for tmr 18:00 Kata?", { tz, now }).venue).toBe("Kata");
+    const ru = parseNewCommand("Кто играет завтра в 19:00 Равай?", { tz, now });
+    expect([ru.startsAt, ru.venue]).toEqual([at("2026-09-06", "19:00"), "Равай"]);
+    const es = parseNewCommand("¿Quién juega mañana a las 19 Rawai?", { tz, now });
+    expect([es.startsAt, es.venue]).toEqual([at("2026-09-06", "19:00"), "Rawai"]);
+  });
+
+  it("a seat word is never a place", () => {
+    expect(parseNewCommand("I'm in", { tz, now }).venue).toBeNull();
+    expect(parseNewCommand("tomorrow 19:00 I'm in", { tz, now }).venue).toBeNull();
+    expect(parseNewCommand("12.09 19:00 can't make it", { tz, now }).venue).toBeNull();
+    expect(parseNewCommand("12.09 19:00 me apunto", { tz, now }).venue).toBeNull();
+  });
+
+  it("Spanish days and hours, as the welcome line in Spanish tells people to type them", () => {
+    const p = parseNewCommand("mañana 19:00 Rawai", { tz, now });
+    expect([p.startsAt, p.venue]).toEqual([at("2026-09-06", "19:00"), "Rawai"]);
+    expect(parseNewCommand("manana 19:00", { tz, now }).startsAt).toEqual(at("2026-09-06", "19:00"));
+    expect(parseNewCommand("hoy a las 19 Rawai", { tz, now }).startsAt).toEqual(at("2026-09-05", "19:00"));
+    expect(parseNewCommand("hoy a las 19 Rawai", { tz, now }).venue).toBe("Rawai");
+    expect(parseNewCommand("esta noche a las 20", { tz, now }).startsAt).toEqual(at("2026-09-05", "20:00"));
+    expect(parseNewCommand("pasado mañana 18:30", { tz, now }).startsAt).toEqual(at("2026-09-07", "18:30"));
+    const thu = parseNewCommand("el jueves a las 20 Bangtao", { tz, now });
+    expect([thu.startsAt, thu.venue]).toEqual([at("2026-09-10", "20:00"), "Bangtao"]);
+    expect(parseNewCommand("jueves 20:00 en Kata", { tz, now }).venue).toBe("Kata");
+    for (const [day, date] of [["lunes", "2026-09-07"], ["martes", "2026-09-08"], ["miércoles", "2026-09-09"], ["miercoles", "2026-09-09"], ["viernes", "2026-09-11"], ["sábado", "2026-09-12"], ["domingo", "2026-09-06"]] as const) {
+      expect(parseNewCommand(`${day} 10:00`, { tz, now }).startsAt, day).toEqual(at(date, "10:00"));
+    }
+  });
+
+  const known = ["Rawai Padel", "Padel Phuket @ Blue Tree", "Xplore Padel Phuket", "Sensei Padel Phuket", "Pattaya Padel Club", "WAREHAUS.club"];
+  it("a place the chat already knows wins over the leftover words", () => {
+    expect(parseNewCommand("who's in Thursday 7pm Rawai?", { tz, now, venues: known }).venue).toBe("Rawai Padel");
+    expect(parseNewCommand("tmr 19:00 xplore padel phuket", { tz, now, venues: known }).venue).toBe("Xplore Padel Phuket");
+    expect(parseNewCommand("tmr 19:00 at warehaus", { tz, now, venues: known }).venue).toBe("WAREHAUS.club");
+    // A word several courts share decides nothing: the words stay as typed.
+    expect(parseNewCommand("tmr 19:00 Phuket", { tz, now, venues: known }).venue).toBe("Phuket");
+    // A court nobody has used yet is still a court.
+    expect(parseNewCommand("tmr 19:00 Some New Court", { tz, now, venues: known }).venue).toBe("Some New Court");
+    expect(parseNewCommand("tmr 19:00", { tz, now, venues: known }).venue).toBeNull();
+  });
+
+  it("matchVenue: the whole name first, then the one court a word points at; a tie between the same words keeps the first", () => {
+    expect(matchVenue("rawai", known)).toBe("Rawai Padel");
+    expect(matchVenue("Blue Tree", known)).toBe("Padel Phuket @ Blue Tree");
+    expect(matchVenue("phuket", known)).toBeNull();
+    expect(matchVenue("pattaya", known)).toBe("Pattaya Padel Club");
+    expect(matchVenue("padel club", known)).toBeNull();
+    // The chat's own court comes first in the list, and the directory's spelling of it after.
+    expect(matchVenue("Rawai", ["Rawai Padel Club", "Rawai Padel"])).toBe("Rawai Padel Club");
+    expect(matchVenue("", known)).toBeNull();
+    expect(matchVenue("rawai", [])).toBeNull();
   });
 });

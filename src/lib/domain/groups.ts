@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { timePatternOf } from "@/lib/dates";
-import { events, groupMembers, groupRequests, groups, players, slots, type Event, type Group, type GroupMember, type GroupRequest, type Player } from "@/db/schema";
+import { events, groupMembers, groupRequests, groups, players, slots, telegramChats, type Event, type Group, type GroupMember, type GroupRequest, type Player } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isValidTimeZone, nextOccurrence, zonedTimeToUtc } from "@/lib/dates";
 import { createEvent, fieldInFours, resolveCapacity } from "./events";
@@ -534,4 +534,19 @@ export async function getPlayerGroups(db: Db, playerId: string, now = new Date()
 export async function getGroupById(db: Db, id: string): Promise<Group | null> {
   const [g] = await db.select().from(groups).where(eq(groups.id, id)).limit(1);
   return g ?? null;
+}
+
+/**
+ * The way into a crew's own Telegram group (DECIDING rule 30): the invite link the bot made there, for
+ * the crew page to hand its members, while the bot is still in the group. One indexed read
+ * (`telegram_chats_group_idx`); a group the bot reads comes before one it was told to stop reading.
+ */
+export async function crewTelegramInvite(db: Db, groupId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ link: telegramChats.inviteLink })
+    .from(telegramChats)
+    .where(and(eq(telegramChats.groupId, groupId), isNull(telegramChats.leftAt), isNotNull(telegramChats.inviteLink)))
+    .orderBy(sql`${telegramChats.listeningSince} desc nulls last`)
+    .limit(1);
+  return row?.link ?? null;
 }

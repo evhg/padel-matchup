@@ -186,6 +186,13 @@ const STRINGS = {
     spotsShort: (n: number, cap: number) => `${n}/${cap}`,
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} is in · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} joined the waitlist` : kind === "left" ? `↩️ ${name} left · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} asks to join (outside the level range)` : kind === "confirmed" ? `✅ ${name} confirmed · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declined` : `⬆️ ${name} moved in from the waitlist · ${n}/${cap}`,
+    // A crew's own group, run by the bot as an admin (DECIDING rule 30). The notice is the description and the pinned line; Telegram keeps a description to 255 characters.
+    crewNotice: "Kicksmash runs matches here. It reads messages in this group to do that. It keeps first names, who is in or out, the court and the score. It never keeps the text. Remove the bot or type /quiet to stop.",
+    crewHow: "Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm Rawai?” and I post the card.",
+    crewLinkBad: "This link is too old. Open the crew's page on kicksma.sh and tap “Run a Telegram group for this crew” again.",
+    crewAdminOnly: "Only an admin of this group can tie it to a crew.",
+    crewNeedsAdmin: "Tied to the crew. Make me an admin who may pin messages, and I start.",
+    whichMatch: "Which match?",
   },
   ru: {
     match: "Падел-матч",
@@ -348,6 +355,12 @@ const STRINGS = {
     spotsShort: (n: number, cap: number) => `${n}/${cap}`,
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} играет · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} в листе ожидания` : kind === "left" ? `↩️ ${name} больше не играет · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} просится в матч (вне диапазона уровней)` : kind === "confirmed" ? `✅ ${name}: участие подтверждено · ${n}/${cap}` : kind === "declined" ? `❌ ${name}: отказ` : `⬆️ ${name} из листа ожидания в состав · ${n}/${cap}`,
+    crewNotice: "Kicksmash ведёт здесь матчи. Для этого он читает сообщения в этой группе. Он хранит имена, кто в игре и кто нет, корт и счёт. Текст сообщений он не хранит никогда. Чтобы остановить, удалите бота или напишите /quiet.",
+    crewHow: "Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00 Равай?», и я выложу карточку.",
+    crewLinkBad: "Ссылка устарела. Откройте страницу группы на kicksma.sh и снова нажмите «Завести Telegram-чат для этой группы».",
+    crewAdminOnly: "Привязать этот чат к группе может только его админ.",
+    crewNeedsAdmin: "Чат привязан к группе. Сделайте меня админом с правом закреплять сообщения, и я начну.",
+    whichMatch: "Какой матч?",
   },
   es: {
     match: "Partido de pádel",
@@ -509,6 +522,12 @@ const STRINGS = {
     spotsShort: (n: number, cap: number) => `${n}/${cap}`,
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} se apunta · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} entró en la lista de espera` : kind === "left" ? `↩️ ${name} se fue · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} pide unirse (fuera del rango de nivel)` : kind === "confirmed" ? `✅ ${name} confirmó · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declinó` : `⬆️ ${name} entró desde la lista de espera · ${n}/${cap}`,
+    crewNotice: "Kicksmash organiza aquí los partidos. Para eso lee los mensajes de este grupo. Guarda los nombres, quién juega y quién no, la pista y el resultado. Nunca guarda el texto. Para pararlo, quita el bot o escribe /quiet.",
+    crewHow: "Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19 Rawai?» y publico la tarjeta.",
+    crewLinkBad: "Este enlace ha caducado. Abre la página del grupo en kicksma.sh y toca otra vez «Abrir un chat de Telegram para este grupo».",
+    crewAdminOnly: "Solo un administrador de este chat puede vincularlo a un grupo.",
+    crewNeedsAdmin: "Vinculado al grupo. Hazme administrador con permiso para fijar mensajes y empiezo.",
+    whichMatch: "¿Qué partido?",
   },
 } as const;
 

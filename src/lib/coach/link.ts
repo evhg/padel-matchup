@@ -12,7 +12,9 @@ import { mintTicket, readTicket, subjectUuid, uuidSubject } from "@/lib/ticket";
  * prefix the whole start parameter is sixty characters of [A-Za-z0-9_], which
  * is what Telegram accepts (sixty-four at most).
  */
-const secret = () => telegramWebhookSecret() ?? createHash("sha256").update(process.env.TELEGRAM_BOT_TOKEN ?? "").digest("hex");
+/** The secret every bot ticket is signed with: the webhook secret, else a hash of the token. A crew group's ticket uses it too (`deepLinks.ts`). */
+export const botTicketSecret = () => telegramWebhookSecret() ?? createHash("sha256").update(process.env.TELEGRAM_BOT_TOKEN ?? "").digest("hex");
+const secret = botTicketSecret;
 const salt = (player: Pick<Player, "telegramId">) => `tg:${player.telegramId ?? ""}`;
 const subjectOf = uuidSubject;
 

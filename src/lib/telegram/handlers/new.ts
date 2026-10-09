@@ -5,6 +5,7 @@ import type { OpContext } from "@/lib/api/operations";
 import { chatLocale } from "@/lib/channels/telegram";
 import { baseUrl } from "@/lib/config";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
+import { listedClubNames } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getEventByCode, getVenues } from "@/lib/domain/queries";
@@ -14,17 +15,31 @@ import { sendCalendarInvite } from "@/lib/notify";
 import { answerCallbackQuery, deleteMessage, editMessageText, esc, sendMessage, telegramBotId, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
 import { strings, type BotLocale, type BotStrings } from "../card";
 import { chatZone, getChat, rememberChatDefaults } from "../chats";
-import { chatTicket, findOrCreateTelegramPlayer } from "../identity";
+import { chatTicket, findOrCreateTelegramPlayer, findTelegramPlayer } from "../identity";
 import { GUIDED_ZONES, parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "../parse";
 import { postCard } from "../post";
+import { readWords } from "../words";
 
 /** Creating from the chat: "/new tomorrow 19:00 Rawai" in one line, the three taps of a bare /new, and a reply to one of its prompts. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ChatMatchInput = Pick<ParsedNew, "startsAt" | "venue" | "court" | "type" | "format" | "capacity" | "levelMin" | "levelMax" | "cost" | "publicListing">;
 
-/** The creation itself, shared by the one-line command, the tap-through and the reply steps: rate limit, event, organizer in, chat defaults, card, webhook. */
-async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input: ChatMatchInput & { startsAt: Date }, tz: string, ctx: OpContext, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<{ ok: true; ev: Event } | { ok: false; reason: "past" | "too_many" | "invalid" }> {
+/**
+ * The courts a chat's words are matched against, most likely first: its usual court, the ones the
+ * sender has played at, then the clubs listed in its zone. Three bounded reads, and the sender is
+ * looked up, never created, so a line that makes no match leaves no player row behind.
+ */
+export async function knownVenues(db: Db, chat: TelegramChat, from: TgUser, tz: string): Promise<string[]> {
+  const out: string[] = chat.venueName ? [chat.venueName] : [];
+  const player = await findTelegramPlayer(db, from.id);
+  if (player) for (const v of await getVenues(db, player.id)) out.push(v.name);
+  out.push(...(await listedClubNames(db, tz)));
+  return out;
+}
+
+/** The creation itself, shared by the one-line command, the tap-through, the reply steps and a crew's "who's in …?": rate limit, event, organizer in, chat defaults, card, webhook. */
+export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input: ChatMatchInput & { startsAt: Date }, tz: string, ctx: OpContext, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<{ ok: true; ev: Event } | { ok: false; reason: "past" | "too_many" | "invalid" }> {
   const now = new Date();
   if (input.startsAt.getTime() < now.getTime() - DAY_MS) return { ok: false, reason: "past" };
   const player = await findOrCreateTelegramPlayer(db, from);
@@ -82,7 +97,7 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
     await sendMessage(chat.chatId, esc(s.newZone), { keyboard: zoneKeyboard(), replyTo: msg.message_id, threadId, silent: true });
     return "new_zone";
   }
-  const parsed = parseNewCommand(args, { tz, now: new Date() });
+  const parsed = parseNewCommand(args, { tz, now: new Date(), venues: await knownVenues(db, chat, from, tz) });
   if (!parsed.startsAt) {
     await say(s.newHowTo, formKeyboard(chat, s));
     return "new_how";
@@ -236,11 +251,15 @@ async function continueGuidedNew(db: Db, msg: TgMessage, chat: TelegramChat, fro
   if (!parent?.text || !msg.text || !botId || String(parent.from?.id) !== botId) return null;
   const trailer = parent.text.match(/\/new (\d{2}\.\d{2})(?: (\d{2}:\d{2}))?\s*$/);
   if (!trailer) return null;
+  // "I'm in" under a prompt is about a match, not the place of a new one: it never makes a match at a court called "I'm".
+  // (A score shape stays: "18:30" is the time the prompt asked for.)
+  const said = readWords(msg.text)?.kind;
+  if (said === "join" || said === "leave") return null;
   const locale = chatLocale(chat);
   const s = strings(locale);
   const tz = await chatZone(db, chat, null);
   if (!tz) return null;
-  const parsed = parseNewCommand(`${trailer[1]} ${trailer[2] ?? ""} ${msg.text}`, { tz, now: new Date() });
+  const parsed = parseNewCommand(`${trailer[1]} ${trailer[2] ?? ""} ${msg.text}`, { tz, now: new Date(), venues: await knownVenues(db, chat, from, tz) });
   if (!parsed.startsAt || !parsed.date || !parsed.time) {
     await sendMessage(chat.chatId, esc(s.newHowTo), { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null, silent: true });
     return "new_how";
