@@ -42,10 +42,12 @@ export async function findOrCreateWhatsappPlayer(db: Db, waId: string, profileNa
 }
 
 /**
- * Links a WhatsApp number to a player who signed in on the web, as `linkTelegram` links a Telegram
- * account: a row this number already had (somebody who once joined through JOIN-) folds into the web
- * player with `mergePlayers`, which keeps one seat where both held one, and the web player takes the
- * number. No row is created on the way, so linking never makes a second player.
+ * Links a WhatsApp number to a player who signed in on the web. It keeps the signed-in record, always:
+ * a row this number already had (somebody who once joined through JOIN-) folds into the web player
+ * with `mergePlayers`, which keeps one seat where both held one, and the web player takes the number.
+ * That is not what `linkTelegram` does since the owner's decision of 9 October 2026: there the record
+ * with more history survives (`recordToKeep`). No row is created on the way, so linking never makes a
+ * second player, and the caller's player id is still the one that holds the number afterwards.
  */
 export async function linkWhatsapp(db: Db, playerId: string, waId: string): Promise<Player> {
   const { plus, digits } = shapes(waId);
