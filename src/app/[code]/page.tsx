@@ -8,6 +8,8 @@ import { cleanSource, taggedUrl } from "@/lib/source";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
 import { CreatorPanel } from "@/components/CreatorPanel";
+import { EditMatch } from "@/components/EditMatch";
+import type { EventFormValues } from "@/components/EventFields";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { SourceTag } from "@/components/SourceTag";
@@ -39,7 +41,7 @@ import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
 import { formatEventDay, formatEventDayLong, formatEventTime, formatEventTimeRange, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
-import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
+import { canEditMatchDetails, isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
@@ -203,7 +205,9 @@ export default async function EventPage({ params, searchParams }: Props) {
           : { cls: "chip-open", label: t("event.statusOpen") };
 
   // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8).
-  const venues = viewer.isCreator ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
+  // The organiser and every seated player may change the details (canEditMatchDetails), so both get the form.
+  const canEdit = canEditMatchDetails(detail, { isCreator: viewer.isCreator, playerId: me?.id });
+  const venues = canEdit ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
   const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
@@ -218,6 +222,35 @@ export default async function EventPage({ params, searchParams }: Props) {
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
   const stayFeed = me && stay?.kind === "reached" && stay.calendar === "feed" ? feedLinks(base, await feedKeyFor(db, me), locale) : null;
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
+  const editInitial: EventFormValues = {
+    type: ev.type,
+    // Editing a match that exists: its people are already on the roster below.
+    haveNames: "",
+    title: ev.title ?? "",
+    date: parts.date,
+    time: parts.time,
+    durationMinutes: parseMatchLength(ev.durationMinutes) ?? defaultLength(ev.type),
+    tz: ev.tz,
+    venueName: ev.venueName ?? "",
+    venueMapUrl: ev.venueMapUrl ?? "",
+    court: ev.court ?? "",
+    note: ev.note ?? "",
+    capacity: ev.capacity,
+    whenFull: ev.whenFull,
+    courts: ev.courts,
+    pointsPerMatch: ev.pointsPerMatch,
+    gamesTo: ev.gamesTo,
+    levelMin: ev.levelMin,
+    levelMax: ev.levelMax,
+    levelVerifiedOnly: ev.levelVerifiedOnly,
+    myLevel: creator.level,
+    publicListing: ev.publicListing,
+    format: ev.format ?? "americano",
+    bookingUrl: ev.bookingUrl ?? "",
+    cost: ev.cost ?? "",
+    payNote: ev.payNote ?? "",
+  };
+  const venueOptions = venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }));
   const inviteTextTemplate = t("shareText.invite", { name: "__NAME__", day, time, venue, url: "__URL__" });
   const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue, url: "__URL__" });
   const pendingInvites = roster.filter((s) => s.status === "invited" && s.inviteCode);
@@ -527,35 +560,8 @@ export default async function EventPage({ params, searchParams }: Props) {
         {viewer.isCreator && (
           <CreatorPanel
             code={code}
-            initial={{
-              type: ev.type,
-              // Editing a match that exists: its people are already on the roster below.
-              haveNames: "",
-              title: ev.title ?? "",
-              date: parts.date,
-              time: parts.time,
-              durationMinutes: parseMatchLength(ev.durationMinutes) ?? defaultLength(ev.type),
-              tz: ev.tz,
-              venueName: ev.venueName ?? "",
-              venueMapUrl: ev.venueMapUrl ?? "",
-              court: ev.court ?? "",
-              note: ev.note ?? "",
-              capacity: ev.capacity,
-              whenFull: ev.whenFull,
-              courts: ev.courts,
-              pointsPerMatch: ev.pointsPerMatch,
-              gamesTo: ev.gamesTo,
-              levelMin: ev.levelMin,
-              levelMax: ev.levelMax,
-              levelVerifiedOnly: ev.levelVerifiedOnly,
-              myLevel: creator.level,
-              publicListing: ev.publicListing,
-              format: ev.format ?? "americano",
-              bookingUrl: ev.bookingUrl ?? "",
-              cost: ev.cost ?? "",
-              payNote: ev.payNote ?? "",
-            }}
-            venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }))}
+            initial={editInitial}
+            venues={venueOptions}
             creatorEmail={creator.email}
             creatorNotify={creator.emailNotifications}
             banter={creator.banter}
@@ -564,6 +570,16 @@ export default async function EventPage({ params, searchParams }: Props) {
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
           />
+        )}
+
+        {!viewer.isCreator && canEdit && !cancelled && !over && (
+          <section className="card" data-testid="player-edit">
+            <h2 className="text-lg font-extrabold">{t("event.changeDetails")}</h2>
+            <p className="mt-0.5 text-sm text-muted">{t("event.changeDetailsHelp")}</p>
+            <div className="mt-3">
+              <EditMatch code={code} initial={editInitial} venues={venueOptions} />
+            </div>
+          </section>
         )}
 
         <ActivityFeed items={detail.activity} viewerId={me?.id ?? null} />
