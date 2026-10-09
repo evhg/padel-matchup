@@ -69,7 +69,12 @@ export async function findOrCreateTelegramPlayer(db: Db, user: TgUser): Promise<
  * bot made empty on first contact, and wrong the other way round: a WhatsApp link opens in a browser
  * with no cookie, the person taps Join (a new, nearly empty record), then signs in with Telegram
  * there. The real record, with the matches, the personal link the home-screen icon opens and the
- * cookie on every other phone, was merged into the new one and deleted, and a merge keeps no token.
+ * cookie on every other phone, was merged into the new one and deleted, and a merge kept no token.
+ *
+ * Either record can lose now, so both merges pass `proved`: the same Telegram account proves one
+ * person, and the survivor takes the loser's personal link (as its token, or else as its previous
+ * token) and its public page. A web record with a home-screen icon that loses to a busier bot
+ * record keeps its icon working.
  */
 export async function linkTelegram(db: Db, playerId: string, user: TgUser): Promise<Player> {
   const other = await findTelegramPlayer(db, user.id);
@@ -81,10 +86,10 @@ export async function linkTelegram(db: Db, playerId: string, user: TgUser): Prom
     if (mine && theirs) keep = recordToKeep(mine, theirs);
     if (keep === playerId) {
       await db.update(players).set({ telegramId: null, telegramUsername: null }).where(eq(players.id, other.id));
-      await mergePlayers(db, playerId, [other.id]);
+      await mergePlayers(db, playerId, [other.id], { proved: true });
     } else {
       // The record that holds the account already is the real one: the signed-in record folds into it.
-      await mergePlayers(db, other.id, [playerId]);
+      await mergePlayers(db, other.id, [playerId], { proved: true });
     }
   }
   const [p] = await db.update(players).set({ telegramId: user.id, telegramUsername: user.username ?? null }).where(eq(players.id, keep)).returning();

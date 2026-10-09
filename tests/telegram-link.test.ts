@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { players, scores, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
+import { findPlayerByPersonalToken } from "@/lib/domain/identity";
 import { recordToKeep, recordWeights } from "@/lib/domain/merge";
 import { joinEvent } from "@/lib/domain/slots";
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/identity";
@@ -100,6 +101,51 @@ describe("linking Telegram keeps the record with more history", () => {
     expect(linked2.id).toBe(older.id);
     expect(linked2.telegramId).toBe(7004);
     expect(await exists(newer.id)).toBe(false);
+  });
+
+  it("a web record that loses to a busier bot record gives it its personal link, its proved address and its level", async () => {
+    const org = await makePlayer(db, "Org Four", { email: "org4@example.com" });
+    // She tapped Join on three Telegram group cards: the bot record has three seats and no token.
+    const bot = await findOrCreateTelegramPlayer(db, tg(7005, "Ola"));
+    for (const d of [1, 2, 3]) await match(org, d, bot);
+    // Her web record: two seats, a proved address, a level and the icon on her home screen.
+    const web = await makePlayer(db, "Ola", {
+      personalToken: "Xy7hRt3wQm8z",
+      email: "ola@example.com",
+      emailVerifiedAt: new Date("2026-09-02T09:00:00.000Z"),
+      homescreenAt: new Date("2026-09-03T09:00:00.000Z"),
+      level: 3.5,
+      levelSource: "self",
+    });
+    await match(org, 4, web);
+    await match(org, 5, web);
+
+    const linked = await linkTelegram(db, web.id, tg(7005, "Ola"));
+    expect(linked.id, "more history: the bot record survives").toBe(bot.id);
+    expect(await exists(web.id)).toBe(false);
+    expect(linked.personalToken, "the home-screen icon still opens her personal link").toBe("Xy7hRt3wQm8z");
+    expect((await findPlayerByPersonalToken(db, "Xy7hRt3wQm8z"))?.id).toBe(bot.id);
+    expect(linked.email).toBe("ola@example.com");
+    expect(linked.emailVerifiedAt, "the address keeps its proof").toEqual(new Date("2026-09-02T09:00:00.000Z"));
+    expect(linked.homescreenAt).toEqual(new Date("2026-09-03T09:00:00.000Z"));
+    expect([linked.level, linked.levelSource]).toEqual([3.5, "self"]);
+    expect(await seatsOf(bot.id)).toBe(5);
+  });
+
+  it("when both records have a personal link, the loser's still opens the survivor", async () => {
+    const org = await makePlayer(db, "Org Five", { email: "org5@example.com" });
+    // /start in the bot gave the bot record a link too.
+    const bot = await makePlayer(db, "Pim", { telegramId: 7006, personalToken: "Bt9cWd4fGh5j" });
+    for (const d of [1, 2]) await match(org, d, bot);
+    const web = await makePlayer(db, "Pim", { personalToken: "Xy7hRt3wQm9a" });
+    await match(org, 3, web);
+
+    const linked = await linkTelegram(db, web.id, tg(7006, "Pim"));
+    expect(linked.id).toBe(bot.id);
+    expect(linked.personalToken).toBe("Bt9cWd4fGh5j");
+    expect(linked.previousToken).toBe("Xy7hRt3wQm9a");
+    expect((await findPlayerByPersonalToken(db, "Xy7hRt3wQm9a"))?.id, "the web record's home-screen icon").toBe(bot.id);
+    expect((await findPlayerByPersonalToken(db, "Bt9cWd4fGh5j"))?.id).toBe(bot.id);
   });
 
   it("the rule alone: more history first, then the older record, then the first one given", () => {

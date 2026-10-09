@@ -58,10 +58,22 @@ const count = (r: unknown) => (Array.isArray(r) ? r.length : ((r as { rows?: unk
  * not foreign keys), and a want (`demand_signals`, no foreign key either). Everything else that points at a player moves, table by table from the schema.
  * Where a unique key would clash — both in the same group, both students of one coach — the
  * survivor's row stays and the source's goes. Then the sources are deleted, and the survivor takes
- * any address or chat account it lacked. Crypto-free on purpose so slot code (reachable from client
- * bundles) can import it.
+ * any address or chat account it lacked, with the facts that belong to them: an address comes with
+ * its proof (`emailVerifiedAt`), and a level comes with its source, log and confirmation. The
+ * recovery address and the home-screen mark come across when the survivor has none.
+ *
+ * `proved` is for a caller that proved the sources are the same person (the same Telegram account).
+ * Then the survivor also takes the source's personal link and public page, because people already
+ * hold them: the icon on a home screen, a calendar subscription, the cookie of another phone. The
+ * source's token becomes the survivor's token when it has none, and otherwise its `previousToken`
+ * when that is free, which `findPlayerByPersonalToken` still accepts. Since the owner's decision 2A
+ * (9 October 2026) the survivor can be either record, so without this the record that lost took its
+ * personal link with it. A fold by name or a placeholder never passes `proved`: a stranger with the
+ * same name must not get a key to the survivor.
+ *
+ * Crypto-free on purpose so slot code (reachable from client bundles) can import it.
  */
-export async function mergePlayers(db: Db, into: string, from: string[]): Promise<void> {
+export async function mergePlayers(db: Db, into: string, from: string[], o: { proved?: boolean } = {}): Promise<void> {
   const sources = [...new Set(from)].filter((id) => id !== into);
   if (sources.length === 0) return;
   await db.transaction(async (tx) => {
@@ -128,11 +140,42 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
       }
     }
 
-    // After the sources are gone: a chat account is unique to one row, so the survivor can only take
-    // it once nobody else holds it.
+    // After the sources are gone: a chat account, a personal token and a public slug are each unique
+    // to one row, so the survivor can only take one once nobody else holds it.
     const first = <K extends keyof (typeof srcRows)[number]>(k: K) => srcRows.find((s) => s[k] !== null && s[k] !== undefined)?.[k] ?? null;
     const patch: Partial<typeof players.$inferInsert> = {};
-    if (!target.email && first("email")) patch.email = first("email");
+    // An address keeps its proof: the code came back to that address, whichever row asked for it.
+    const withEmail = target.email ? srcRows.find((s) => s.email === target.email && s.emailVerifiedAt) : srcRows.find((s) => s.email);
+    if (!target.email && withEmail) patch.email = withEmail.email;
+    if (withEmail?.emailVerifiedAt && !target.emailVerifiedAt) patch.emailVerifiedAt = withEmail.emailVerifiedAt;
+    if (!target.recoveryEmail && first("recoveryEmail")) patch.recoveryEmail = first("recoveryEmail");
+    if (!target.homescreenAt && first("homescreenAt")) patch.homescreenAt = first("homescreenAt");
+    // A level travels whole, from one row: the number, where it came from, its log and who confirmed it.
+    const leveled = target.level === null ? srcRows.find((s) => s.level !== null) : undefined;
+    if (leveled) {
+      Object.assign(patch, {
+        level: leveled.level,
+        levelSource: leveled.levelSource,
+        levelUpdatedAt: leveled.levelUpdatedAt,
+        levelLog: leveled.levelLog,
+        levelVerifiedAt: leveled.levelVerifiedAt,
+        levelVerifiedBy: leveled.levelVerifiedBy,
+        levelVerifiedLevel: leveled.levelVerifiedLevel,
+        levelVerifiedSource: leveled.levelVerifiedSource,
+      });
+    }
+    if (o.proved) {
+      const tokens = srcRows.flatMap((s) => [s.personalToken, s.previousToken]).filter((t): t is string => Boolean(t));
+      if (!target.personalToken && tokens.length) {
+        patch.personalToken = tokens[0];
+        patch.previousToken = target.previousToken ?? tokens[1] ?? null;
+      } else if (target.personalToken && !target.previousToken && tokens.length) {
+        // Two links can stay alive, not more: the one a home screen most likely opens is the current one.
+        patch.previousToken = tokens[0];
+      }
+      const pub = target.publicSlug ? undefined : srcRows.find((s) => s.publicSlug);
+      if (pub) Object.assign(patch, { publicSlug: pub.publicSlug, publicProfile: pub.publicProfile || target.publicProfile, publicSince: target.publicSince ?? pub.publicSince });
+    }
     if (!target.phone && first("phone")) patch.phone = first("phone");
     if (!target.telegramId && first("telegramId")) patch.telegramId = first("telegramId");
     if (!target.discordId && first("discordId")) patch.discordId = first("discordId");
