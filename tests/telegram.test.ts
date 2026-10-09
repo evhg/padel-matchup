@@ -261,18 +261,23 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await postTelegramResult(db, ev.code)).toBe(0);
   });
 
-  it("linking merges the bot-created player into the signed-in one; cards render for tournaments too", async () => {
+  it("linking keeps the record with the seat: a fresh web record folds into the bot's player who joined; cards render for tournaments too", async () => {
     const chat = { id: -100999, type: "group" as const, title: "Merge" };
     await handleTelegramUpdate(db, { update_id: 60, my_chat_member: { chat, from: user(21, "Nina"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } }, NO_SIDE_EFFECTS);
     const { ev } = await match();
     await handleTelegramUpdate(db, { update_id: 61, message: { message_id: 1, date: 0, chat, from: user(21, "Nina"), text: `/match ${ev.code}` } }, NO_SIDE_EFFECTS);
     const [card] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, ev.id));
     await handleTelegramUpdate(db, { update_id: 62, callback_query: { id: "x", from: user(21, "Nina"), message: { message_id: card.messageId, date: 0, chat }, data: `j:${ev.code}` } }, NO_SIDE_EFFECTS);
+    // Nina's bot record holds a seat and the web record holds nothing, so the bot record survives
+    // (the owner's decision 2A, 9 October 2026; tests/telegram-link.test.ts has the other cases).
+    const [botNina] = await db.select().from(players).where(eq(players.telegramId, 21));
     const web = await makePlayer(db, "Nina Web");
     const linked = await linkTelegram(db, web.id, user(21, "Nina"));
+    expect(linked.id).toBe(botNina.id);
     expect(linked.telegramId).toBe(21);
     const detail = (await getEventByCode(db, ev.code))!;
-    expect(detail.roster.some((s) => s.playerId === web.id)).toBe(true);
+    expect(detail.roster.some((s) => s.playerId === linked.id)).toBe(true);
+    expect(await db.select().from(players).where(eq(players.id, web.id))).toHaveLength(0);
     expect(await db.select().from(players).where(eq(players.telegramId, 21))).toHaveLength(1);
 
     const org = await makePlayer(db, "Org");

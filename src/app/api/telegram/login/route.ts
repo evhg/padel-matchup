@@ -30,6 +30,7 @@ export async function GET(req: Request) {
   const db = await getDb();
   const me = await getSessionPlayer(db);
   const player = me ? await linkTelegram(db, me.id, user) : await findOrCreateTelegramPlayer(db, user);
+  // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
   const dest = new URL(loginNext(url.searchParams.get("next")), url.origin);
   // My matches says "Telegram linked"; any other page shows it by being signed in.

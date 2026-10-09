@@ -2,7 +2,7 @@ import { eq, getTableName, inArray, is, sql, type SQL } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import * as schema from "@/db/schema";
-import { demandSignals, events, players, slots, tournamentRounds } from "@/db/schema";
+import { demandSignals, events, players, scores, slots, tournamentRounds } from "@/db/schema";
 import { DomainError } from "./errors";
 
 /**
@@ -140,4 +140,49 @@ export async function mergePlayers(db: Db, into: string, from: string[]): Promis
     await tx.delete(players).where(inArray(players.id, sources));
     if (Object.keys(patch).length) await tx.update(players).set(patch).where(eq(players.id, into));
   });
+}
+
+/**
+ * How much a record has lived: its occupied seats, the matches it created and the matches it entered
+ * a score for. Read when two records turn out to be one person, to decide which one survives
+ * (`recordToKeep`).
+ */
+export type RecordWeight = { id: string; history: number; createdAt: Date };
+
+/**
+ * The record to keep when two records are one person: the one with more history, and on a tie the
+ * older one. On the same instant too, the first one, which callers pass as the record signed in here.
+ *
+ * The owner, 9 October 2026 (decision 2A): "keep the record with more history". A merge keeps the
+ * survivor's personal token and nothing of the other's, so the record that loses also loses the
+ * personal link its home-screen icon opens and the cookie on every other device. The real record has
+ * the matches, so it is the one people already hold in their hands.
+ */
+export function recordToKeep(first: RecordWeight, second: RecordWeight): string {
+  if (first.history !== second.history) return first.history > second.history ? first.id : second.id;
+  return second.createdAt.getTime() < first.createdAt.getTime() ? second.id : first.id;
+}
+
+/**
+ * `RecordWeight` for a few players, in one query. Each count is one player's own rows read through an
+ * index (`slots_player_idx`, `events_creator_idx`); a score is counted only in a match the player sat
+ * in or created, so it is read through `scores_event_set_idx` and never by a scan of every score.
+ */
+export async function recordWeights(db: Db, ids: string[]): Promise<RecordWeight[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({
+      id: players.id,
+      createdAt: players.createdAt,
+      history: sql<number>`(
+        (select count(*) from ${slots} s where s.player_id = ${players}.id and s.status in ('joined', 'confirmed'))
+        + (select count(*) from ${events} e where e.creator_player_id = ${players}.id)
+        + (select count(distinct sc.event_id) from ${scores} sc where sc.entered_by_player_id = ${players}.id and sc.event_id in (
+            select s2.event_id from ${slots} s2 where s2.player_id = ${players}.id
+            union all select e2.id from ${events} e2 where e2.creator_player_id = ${players}.id))
+      )::int`,
+    })
+    .from(players)
+    .where(inArray(players.id, ids));
+  return rows.map((r) => ({ id: r.id, createdAt: r.createdAt, history: Number(r.history) }));
 }
