@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
+/* Every colour a word is written in reads at 4.5:1 or better (WCAG AA) on the page and on a card:
+   faint was #8a919c, 2.9:1 on the page, and it carried every hint and footnote in the app; danger
+   was #d93838, 4.1:1. Each moved darker on its own hue, and muted moved with faint to keep the step
+   between them. tests/contrast.test.ts reads this block and fails when a text colour drops below the line. */
 @theme {
   --color-bg: #f4f3ee;
   --color-card: #ffffff;
   --color-ink: #14161a;
   --color-ink-soft: #2a2f36;
-  --color-muted: #5b6470;
-  --color-faint: #8a919c;
+  --color-muted: #545c67;
+  --color-faint: #676e7a;
   --color-line: #e4e2da;
   --color-line-strong: #cfcdc3;
   --color-accent: #c8f135;
@@ -14,7 +18,7 @@
   --color-accent-soft: #eefbc4;
   --color-court: #1b4fd8;
   --color-court-soft: #e8eefc;
-  --color-danger: #d93838;
+  --color-danger: #d02828;
   --color-danger-soft: #fdecec;
   --color-ok: #15803d;
   --color-ok-soft: #e6f6ec;
@@ -50,6 +54,15 @@
   ::selection {
     background: var(--color-accent);
     color: var(--color-ink);
+  }
+  /* A keyboard user sees where they are. :focus-visible leaves a tap or a click alone; an outline and
+     a shadow take no space, so nothing moves. The white halo fills the offset, so the ring still
+     shows round a button that sits on ink (the Copy button on a code block). :where() keeps this at
+     zero specificity: `.input` keeps its own accent ring, and any utility can still override it. */
+  :where(a, button, input, select, textarea, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--color-card);
   }
 }
 
