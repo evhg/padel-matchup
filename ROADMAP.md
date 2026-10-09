@@ -715,6 +715,18 @@ Everything in this list is live. The README describes each in detail.
   `/play` is in the More menu and the sitemap. Later, when a city has three or more open games, a
   strip of them above the form; and `EventRow` replaces the city page's, the venue board's and the
   group page's own rows.
+- **"Who is here?" and a night that updates itself (9 October 2026, no migration).** Before round 1
+  the organiser (or whoever holds the manage link) sees every name with a tick, ticked by default,
+  and the waiting list unticked. "Add a walk-in" seats a name the way "Open spot" does, and opens
+  another court's worth of spots when the field is full. "Generate round 1" is now "Start with N
+  players" and draws only the ticked names; King of the Court says how many to tick, add or untick
+  to reach a four. The unticked leave in the same write as the draw (the feed records each one,
+  as "Remove player" does) and hear "We started without you" by the removal's own email, with no
+  spot offered to strangers and no waiting list moved up at the moment the spots close. While the
+  night runs (round 1 drawn, scores not final, the booking not over) the page asks the server
+  again every twenty seconds while it is on screen, so a score typed on one phone appears on the
+  others; a score box keeps what its own phone is typing. `src/lib/domain/checkIn.ts`, proven in
+  `tests/check-in.test.ts`.
 
 ## The finish line
 

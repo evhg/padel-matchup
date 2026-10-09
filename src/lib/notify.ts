@@ -538,13 +538,20 @@ export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
 }
 
 /** Removed by the organizer → cancel their calendar entry (courtesy). */
-export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string | null): Promise<void> {
+/**
+ * The organiser took a player out. `absent` is the tournament's check-in ("Who is here?"): the
+ * same notice and the same calendar cancel, in words that say the night went on without them
+ * rather than that they were struck off.
+ */
+export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string | null, opts: { absent?: boolean } = {}): Promise<void> {
   if (!emailEnabled() || !removedPlayerId) return;
   const p = await getPlayer(db, removedPlayerId);
   if (!p?.email) return;
   const c = await ctx(db, ev, p.locale, p);
-  const { html, text } = layout({ heading: c.t("activity.removed", { name: p.displayName }), body: c.t("email.footer", { app: APP_NAME }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
-  await sendEmail({ to: p.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: p.displayName, email: p.email }, "CANCEL") } });
+  const heading = opts.absent ? c.t("email.cancelled.absentHeading") : c.t("activity.removed", { name: p.displayName });
+  const body = opts.absent ? c.t("email.cancelled.absentBody") : c.t("email.footer", { app: APP_NAME });
+  const { html, text } = layout({ heading, body, meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
+  await sendEmail({ to: p.email, subject: c.t(opts.absent ? "email.cancelled.absentSubject" : "email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: p.displayName, email: p.email }, "CANCEL") } });
 }
 
 /** Immediate invite to a reserved spot when the organizer entered an email. */

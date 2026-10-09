@@ -522,7 +522,10 @@
     "cancelled": {
       "subject": "Cancelled: padel {day} {time} · {venue}",
       "heading": "The match was cancelled",
-      "body": "{organizer} cancelled the padel match on {day} at {time} at {venue}. Sorry! The calendar entry will be removed when you open the attachment."
+      "body": "{organizer} cancelled the padel match on {day} at {time} at {venue}. Sorry! The calendar entry will be removed when you open the attachment.",
+      "absentSubject": "Started without you: padel {day} {time} · {venue}",
+      "absentHeading": "We started without you",
+      "absentBody": "The tournament started with the players who were there. No worries: we hope to see you at the next one!"
     },
     "creator": {
       "joinedSubject": "{name} joined · {count}/{capacity}",
@@ -632,7 +635,8 @@
     "level_required": "Pick your level first.",
     "scores_missing": "Enter all scores of the last round first.",
     "format_locked": "The format can't change once round 1 exists.",
-    "no_result": "Finalize the result first."
+    "no_result": "Finalize the result first.",
+    "roster_changed": "The list changed while you looked. Check who is here again."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -657,7 +661,6 @@
     "court": "Court {n}",
     "resting": "Sitting out: {names}",
     "generateRound": "Generate round {n}",
-    "generateFirst": "Generate round 1",
     "needPlayers": "Round 1 needs at least 4 names ({count} so far). Reserved players count too.",
     "deleteLastRound": "Delete round {n}",
     "deleteLastRoundConfirm": "Delete round {n}? Only possible while it has no scores.",
@@ -675,8 +678,8 @@
     "colDiff": "+/-",
     "noRounds": "No rounds yet.",
     "vs": "vs",
-    "needMultiple": "Round 1 needs names in fours ({count} so far): add {up} or remove {down}.",
-    "autoShrink": "Generating round 1 with {count} players closes the remaining spots.",
+    "needMultiple": "King of the court plays in fours ({count} ticked): tick or add {up}, or untick {down}.",
+    "autoShrink": "Starting with {count} players closes the remaining spots.",
     "deleteScoredRoundConfirm": "Delete round {n}? Its scores will be lost.",
     "courtNames": "Courts",
     "courtNamesHelp": "Give the courts their real numbers or names, e.g. 5, 7 or Centre. Empty = Court 1, 2, …",
@@ -734,7 +737,13 @@
     "chipGames": "first to {n} games",
     "chipRounds": "{n, plural, one {about # round} other {about # rounds}}",
     "chipCourts": "{n, plural, one {# court} other {# courts}}",
-    "chipEnds": "ends ~{time}"
+    "chipEnds": "ends ~{time}",
+    "whoIsHere": "Who is here?",
+    "whoIsHereHelp": "Untick anyone who did not come, and add anyone who walked in. Round 1 draws the ticked names.",
+    "waitingTag": "waiting list",
+    "walkIn": "Add a walk-in",
+    "walkInAdd": "Add",
+    "startWith": "{count, plural, one {Start with # player} other {Start with # players}}"
   },
   "calendar": {
     "title": "Add to calendar",

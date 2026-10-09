@@ -522,7 +522,10 @@
     "cancelled": {
       "subject": "Cancelado: pádel {day} {time} · {venue}",
       "heading": "El partido se ha cancelado",
-      "body": "{organizer} ha cancelado el partido de pádel del {day} a las {time} en {venue}. ¡Lo sentimos! La entrada de calendario se eliminará al abrir el adjunto."
+      "body": "{organizer} ha cancelado el partido de pádel del {day} a las {time} en {venue}. ¡Lo sentimos! La entrada de calendario se eliminará al abrir el adjunto.",
+      "absentSubject": "Empezamos sin ti: pádel {day} {time} · {venue}",
+      "absentHeading": "Empezamos sin ti",
+      "absentBody": "El torneo empezó con los jugadores que estaban. No pasa nada: ¡te esperamos en el próximo!"
     },
     "creator": {
       "joinedSubject": "{name} se apuntó · {count}/{capacity}",
@@ -632,7 +635,8 @@
     "level_required": "Primero elige tu nivel.",
     "scores_missing": "Introduce primero todos los resultados de la última ronda.",
     "format_locked": "El formato no se puede cambiar una vez existe la ronda 1.",
-    "no_result": "Cierra primero el resultado."
+    "no_result": "Cierra primero el resultado.",
+    "roster_changed": "La lista cambió mientras mirabas. Revisa otra vez quién está."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -657,7 +661,6 @@
     "court": "Pista {n}",
     "resting": "Descansan: {names}",
     "generateRound": "Generar ronda {n}",
-    "generateFirst": "Generar ronda 1",
     "needPlayers": "La ronda 1 necesita al menos 4 nombres ({count} de momento). Los reservados también cuentan.",
     "deleteLastRound": "Eliminar ronda {n}",
     "deleteLastRoundConfirm": "¿Eliminar la ronda {n}? Solo es posible mientras no tenga resultados.",
@@ -675,8 +678,8 @@
     "colDiff": "+/-",
     "noRounds": "Aún no hay rondas.",
     "vs": "vs",
-    "needMultiple": "La ronda 1 necesita nombres de cuatro en cuatro ({count} de momento): añade {up} o quita {down}.",
-    "autoShrink": "Generar la ronda 1 con {count} jugadores cierra las plazas restantes.",
+    "needMultiple": "El rey de la pista se juega de cuatro en cuatro ({count} marcados): marca o añade {up}, o desmarca {down}.",
+    "autoShrink": "Empezar con {count} jugadores cierra las plazas restantes.",
     "deleteScoredRoundConfirm": "¿Eliminar la ronda {n}? Se perderán sus resultados.",
     "courtNames": "Pistas",
     "courtNamesHelp": "Pon a las pistas sus números o nombres reales, p. ej. 5, 7 o Central. Vacío = Pista 1, 2, …",
@@ -734,7 +737,13 @@
     "chipGames": "primero a {n} juegos",
     "chipRounds": "{n, plural, one {# ronda aprox.} other {unas # rondas}}",
     "chipCourts": "{n, plural, one {# pista} other {# pistas}}",
-    "chipEnds": "termina ~{time}"
+    "chipEnds": "termina ~{time}",
+    "whoIsHere": "¿Quién ha venido?",
+    "whoIsHereHelp": "Desmarca a quien no ha venido y añade a quien se ha presentado sin apuntarse. La ronda 1 sortea a los marcados.",
+    "waitingTag": "lista de espera",
+    "walkIn": "Añadir a alguien que ha venido",
+    "walkInAdd": "Añadir",
+    "startWith": "{count, plural, one {Empezar con # jugador} other {Empezar con # jugadores}}"
   },
   "calendar": {
     "title": "Añadir al calendario",

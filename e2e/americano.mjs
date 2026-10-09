@@ -60,7 +60,7 @@ try {
   check("event page shows Court TBD", (await a.getByText("Court TBD").count()) > 0);
   check("americano panel present", (await a.getByText("Americano").count()) > 0);
   check("no courts setting (courts follow players)", (await a.getByLabel("Courts").count()) === 0);
-  check("3 names: round 1 blocked with the in-fours hint", (await a.getByRole("button", { name: "Generate round 1" }).isDisabled()) && (await a.getByText(/needs at least 4 names/).count()) > 0);
+  check("3 names: round 1 blocked with the in-fours hint", (await a.getByRole("button", { name: "Start with 3 players" }).isDisabled()) && (await a.getByText(/needs at least 4 names/).count()) > 0);
   // Organizer reserves Zed (name only) → 4 names, one not yet accepted
   await a.getByRole("button", { name: /Open spot/ }).first().click();
   await a.getByPlaceholder("Name").fill("Zed");
@@ -69,10 +69,22 @@ try {
   check("reserved row says invite not yet accepted (no email sent)", (await a.getByText("Invite not yet accepted").count()) > 0 && (await a.getByText("Invited now").count()) === 0);
   check("buttons read Invite now / Remove player", (await a.getByRole("button", { name: "Invite now" }).count()) > 0 && (await a.getByRole("button", { name: "Remove player" }).count()) > 0);
   check("4 names of 8: auto-shrink note shown", (await a.getByText(/closes the remaining spots/).count()) > 0);
-  await a.getByRole("button", { name: "Generate round 1" }).click();
+  // On the night: "Who is here?" Cal did not come, Wes walked in. Every name starts ticked.
+  const here = a.getByTestId("check-in");
+  check("the check-in lists every name, ticked", (await here.getByRole("checkbox", { checked: true }).count()) === 4 && (await here.getByRole("checkbox", { name: "Cal" }).isChecked()));
+  await here.getByRole("checkbox", { name: "Cal" }).uncheck();
+  check("unticking Cal leaves three, and the start waits for a fourth", (await a.getByRole("button", { name: "Start with 3 players" }).isDisabled()) && (await a.getByText(/needs at least 4 names \(3 so far\)/).count()) > 0);
+  await here.getByPlaceholder("Add a walk-in").fill("Wes");
+  await here.getByRole("button", { name: "Add", exact: true }).click();
+  await here.getByRole("checkbox", { name: "Wes" }).waitFor({ timeout: 20000 });
+  check("the walk-in arrives ticked and Cal stays unticked", (await here.getByRole("checkbox", { name: "Wes" }).isChecked()) && !(await here.getByRole("checkbox", { name: "Cal" }).isChecked()));
+  await a.getByRole("button", { name: "Start with 4 players" }).click();
   await a.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
-  // Zed has not accepted yet: 3 occupied of a capacity now 4, but Zed is in the round.
-  check("round 1 generated with the reserved name, capacity shrunk to 4", (await a.getByText("3/4 players").count()) > 0 && (await a.locator("section#score").getByText("Zed").count()) > 0 && (await a.getByText(/Sitting out:/).count()) === 0, await a.locator("h2").filter({ hasText: /players/ }).innerText());
+  // Zed and Wes have not accepted yet: 2 occupied of a capacity now 4, but both are in the round, and Cal is not.
+  const roundOne = await a.locator("section#score").innerText();
+  check("round 1 draws the ticked names and the walk-in, capacity shrunk to 4", (await a.getByText("2/4 players").count()) > 0 && ["Org", "Bea", "Zed", "Wes"].every((n) => roundOne.includes(n)) && !/\bCal\b/.test(roundOne) && (await a.getByText(/Sitting out:/).count()) === 0, roundOne.replace(/\n/g, " | ").slice(0, 200));
+  check("the check-in is gone once round 1 exists", (await a.getByTestId("check-in").count()) === 0);
+  check("Cal's removal is on the record", (await a.getByText("You removed Cal").count()) > 0);
   check("(you) marks the organizer in the round", (await a.locator("section#score").getByText(/Org \(you\)/).count()) > 0);
   check("rotation hint: 3 rounds for 4 players", (await a.getByText(/3 rounds complete the rotation/).count()) > 0);
   check("the organiser's banner names the round waiting for scores", (await a.getByText("Round 1 is waiting for scores. Enter them in the card below.").count()) === 1 && (await a.getByText(/Enter the final score/).count()) === 0);
