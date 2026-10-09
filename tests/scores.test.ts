@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
-import { isUsualSet, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, tally, unusualSets, validateSets } from "@/lib/domain/scores";
+import { checkSets, isUsualSet, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, tally, unusualSets, validateSets } from "@/lib/domain/scores";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -81,6 +81,22 @@ describe("score-lock rules (pure)", () => {
     expect(unusualSets(sets([9, 2]))).toEqual([]);
     expect(unusualSets(sets([9, 2], [6, 4]))).toEqual([0]);
     expect(unusualSets(sets([6, 5], [3, 1], [6, 4], [2, 2], [7, 6]))).toEqual([0, 1, 3]);
+  });
+  it("never asks about a winner-only result, and refuses a 0-0 set before it asks anything", () => {
+    const sets = (...s: [number, number][]) => s.map(([sideA, sideB]) => ({ sideA, sideB }));
+    // The 🏁 tap stores who won as one 1-0 set (WINNER_ONLY_SETS): "Is 1-0 right?" would question the tap itself.
+    expect(unusualSets(sets([1, 0]))).toEqual([]);
+    expect(unusualSets(sets([0, 1]))).toEqual([]);
+    expect(checkSets(sets([1, 0]))).toEqual({ ask: [] });
+    // 1-0 inside a longer score is no tap, it is a typo, and still asks.
+    expect(unusualSets(sets([6, 4], [1, 0]))).toEqual([1]);
+    // A 0-0 set is refused with the server's own message, before the question: the 6-5 beside it is
+    // never asked about, so nobody answers "Yes, save" and is then refused.
+    expect(checkSets(sets([0, 0]))).toEqual({ refuse: "empty_set" });
+    expect(checkSets(sets([6, 5], [0, 0]))).toEqual({ refuse: "empty_set" });
+    expect(() => validateSets([{ setNumber: 1, sideA: 0, sideB: 0 }])).toThrow("empty_set");
+    expect(checkSets(sets([6, 5], [6, 4]))).toEqual({ ask: [0] });
+    expect(checkSets(sets([6, 3], [6, 4]))).toEqual({ ask: [] });
   });
   it("tallies sets and derives outcomes per team", () => {
     const sets = [

@@ -558,7 +558,8 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await msg(92, org, `/score ${code} 6-3`)).toBe("score_saved");
     // Four sets save (decision H; the owner's note "we played 4 sets but we couldn't add the result!"),
     // and an unusual one is saved too, with one line saying so in the chat's language.
-    expect(parseSets("6-3 4-6 6-4 3-6 7-5 6-1")).toHaveLength(5);
+    // A sixth set is read, so it can be refused rather than dropped (the owner's note 25d412f7 was a set that vanished).
+    expect(parseSets("6-3 4-6 6-4 3-6 7-5 6-1")).toHaveLength(6);
     expect(await msg(96, org, `/score ${code} 6-3 4-6 6-4 6-5`)).toBe("score_saved:unusual");
     pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
     expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 4, b: 6 }, { a: 6, b: 4 }, { a: 6, b: 5 }]);
@@ -567,6 +568,13 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(String(sent("sendMessage").at(-1)!.body.text)).not.toContain("необычный");
     // A bare four-set score in reply to the card is read too, not only the /score command.
     expect(await msg(99, org, "6-3 4-6 6-4 6-2", card.messageId)).toBe("score_saved");
+    // Six sets are refused whole, in one line in the chat's language, and the saved score stays as it was:
+    // from /score CODE and from a bare reply to the card alike.
+    expect(await msg(120, org, `/score ${code} 6-3 4-6 6-4 3-6 7-5 6-1`)).toBe("score_too_many_sets");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toBe("Не больше 5 сетов. Пришлите счёт ещё раз.");
+    expect(await msg(121, org, "6-3 4-6 6-4 3-6 7-5 6-1 6-2", card.messageId)).toBe("score_too_many_sets");
+    pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 4, b: 6 }, { a: 6, b: 4 }, { a: 6, b: 2 }]);
     expect(await msg(93, org, "/score what")).toBe("score_how");
     // A locked result stays locked for players.
     expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_error:locked");

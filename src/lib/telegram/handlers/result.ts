@@ -50,6 +50,11 @@ async function scoreFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: T
     await say(s.scoreHow);
     return "score_how";
   }
+  // Six sets or more: refused whole, never cut to the first five without a word (note 25d412f7).
+  if (sets.length > MAX_SETS) {
+    await say(s.scoreTooManySets(MAX_SETS));
+    return "score_too_many_sets";
+  }
   if (!teamsOf(detail)) {
     // Only score entry sets the pairs, so a first bare "6-4 6-3" always stopped here, and with three
     // seated it could never get past (Erik, 15 September, match 9wjp). In the player's own chat the
@@ -256,8 +261,11 @@ async function handleSameTime(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   }
 }
 
-/** One to `MAX_SETS` sets and nothing else. */
-const SETS_ONLY_RE = new RegExp(`^\\s*\\d{1,2}\\s*[-:]\\s*\\d{1,2}(?:[\\s,;/]+\\d{1,2}\\s*[-:]\\s*\\d{1,2}){0,${MAX_SETS - 1}}\\s*$`);
+/**
+ * Sets and nothing else. Any number of them: six or more reach `scoreFromChat`, which refuses them in
+ * words, rather than falling through here as if the message were not a score at all.
+ */
+const SETS_ONLY_RE = /^\s*\d{1,2}\s*[-:]\s*\d{1,2}(?:[\s,;/]+\d{1,2}\s*[-:]\s*\d{1,2})*\s*$/;
 
 /** A bare "6-4 6-3": as a reply it scores the card or nudge it answers; in the private chat, the player's freshest finished match. */
 export

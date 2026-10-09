@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
-import { MAX_SETS, tally, unusualSets } from "@/lib/domain/scores";
+import { checkSets, MAX_SETS, tally } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton } from "./PlayAgainButton";
 import { ShareButtons } from "./ShareSheet";
@@ -75,7 +75,15 @@ export function ScorePanel({
 
   const save = () => {
     const filled = sets.filter((s) => Number.isFinite(s.sideA) && Number.isFinite(s.sideB));
-    const odd = unusualSets(filled).map((i) => sets.indexOf(filled[i]));
+    const check = checkSets(filled);
+    // A 0-0 set: the message the server would give, before any question (it would refuse after "Yes, save").
+    if ("refuse" in check) {
+      setAsking(null);
+      setError(t("errors.invalid"));
+      return;
+    }
+    setError(null);
+    const odd = check.ask.map((i) => sets.indexOf(filled[i]));
     const key = JSON.stringify(filled.map((s) => [s.sideA, s.sideB]));
     if (odd.length > 0 && key !== askedFor) {
       setAsking(odd);

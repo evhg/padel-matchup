@@ -1,5 +1,7 @@
 import type { Score, Slot } from "@/db/schema";
-import { tally } from "./scores";
+import { isWinnerOnly, tally } from "./scores";
+
+export { isWinnerOnly };
 
 export type MatchResult = {
   a: string[];
@@ -21,7 +23,6 @@ export type MatchResult = {
 export const firstName = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0]?.slice(0, 24) || "?";
 
 export const WINNER_ONLY_SETS = { a: [{ setNumber: 1, sideA: 1, sideB: 0 }], b: [{ setNumber: 1, sideA: 0, sideB: 1 }] } as const;
-export const isWinnerOnly = (sets: Pick<Score, "sideA" | "sideB">[]) => sets.length === 1 && sets[0].sideA + sets[0].sideB === 1;
 
 /** Names per side and who won, from the saved sets and the roster's team assignment. Null without a score. */
 export function matchResult(scores: Pick<Score, "sideA" | "sideB" | "setNumber">[], roster: (Pick<Slot, "team" | "status"> & { name: string })[]): MatchResult | null {

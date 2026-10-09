@@ -65,13 +65,37 @@ export function isUsualSet(set: { sideA: number; sideB: number }, place: { last:
   return false;
 }
 
-/** The indexes (from 0) of the sets `isUsualSet` would ask about, in order; empty when the whole score looks right. */
+/**
+ * A result recorded with one tap (who won) and no games: one 1-0 set, which padel never produces. The
+ * Telegram card's 🏁 saves it (`WINNER_ONLY_SETS` in `result.ts`, which re-exports this).
+ */
+export const isWinnerOnly = (sets: Pick<Score, "sideA" | "sideB">[]) => sets.length === 1 && sets[0].sideA + sets[0].sideB === 1;
+
+/** A set where nobody won a game. The server refuses it (`validateSets`), so the form never asks about it. */
+export const isEmptySet = (s: { sideA: number; sideB: number }) => s.sideA === 0 && s.sideB === 0;
+
+/**
+ * The indexes (from 0) of the sets `isUsualSet` would ask about, in order; empty when the whole score
+ * looks right. A winner-only result is never asked about: "Is 1-0 right?" would question a tap that
+ * means exactly what it says.
+ */
 export function unusualSets(sets: { sideA: number; sideB: number }[]): number[] {
+  if (isWinnerOnly(sets)) return [];
   const out: number[] = [];
   sets.forEach((s, i) => {
     if (!isUsualSet(s, { last: i === sets.length - 1, only: sets.length === 1 })) out.push(i);
   });
   return out;
+}
+
+/**
+ * The score form's one check before it saves. A 0-0 set is refused first, with the server's own
+ * message, so nobody is asked "Is 0-0 right?" and then refused after a "Yes, save". Else: the sets to
+ * ask about, once (`unusualSets`); none means save.
+ */
+export function checkSets(sets: { sideA: number; sideB: number }[]): { refuse: "empty_set" } | { ask: number[] } {
+  if (sets.some(isEmptySet)) return { refuse: "empty_set" };
+  return { ask: unusualSets(sets) };
 }
 
 export function validateSets(raw: SetScore[]): SetScore[] {
@@ -81,7 +105,7 @@ export function validateSets(raw: SetScore[]): SetScore[] {
   if (sets.length < 1 || sets.length > MAX_SETS) throw new DomainError("invalid", "sets");
   for (const s of sets) {
     if (s.sideA < 0 || s.sideB < 0 || s.sideA > 30 || s.sideB > 30) throw new DomainError("invalid", "score_range");
-    if (s.sideA === 0 && s.sideB === 0) throw new DomainError("invalid", "empty_set");
+    if (isEmptySet(s)) throw new DomainError("invalid", "empty_set");
   }
   return sets;
 }

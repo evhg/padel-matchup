@@ -154,6 +154,7 @@ const STRINGS = {
     scoreSaved: (score: string) => `Saved: ${score}`,
     /** Under "Saved", when a set does not look like padel (`unusualSets`). The score is saved; this only asks. */
     scoreUnusual: (sets: string[]) => `${sets.join(", ")} ${sets.length === 1 ? "looks" : "look"} unusual. Send the score again to fix it.`,
+    scoreTooManySets: (max: number) => `Up to ${max} sets. Send the score again.`,
     sameTime: "🔁 Same time next week?",
     groupMade: (name: string, when: string) => `Done: “${name}”. Every ${when} a fresh card posts itself here; members tap in or out.`,
     groupExists: (name: string) => `This crew is already a group: “${name}”.`,
@@ -316,6 +317,7 @@ const STRINGS = {
     noTeamsPage: "Я пока не знаю составы пар. Нажмите 🏁 Результат ниже, чтобы ввести счёт на странице матча.",
     scoreSaved: (score: string) => `Сохранено: ${score}`,
     scoreUnusual: (sets: string[]) => `${sets.join(", ")}: необычный счёт. Чтобы исправить, пришлите счёт ещё раз.`,
+    scoreTooManySets: (max: number) => `Не больше ${max} сетов. Пришлите счёт ещё раз.`,
     sameTime: "🔁 В то же время на следующей неделе?",
     groupMade: (name: string, when: string) => `Готово: «${name}». Каждый ${when} здесь сама появляется новая карточка; участники нажимают «в игре» или «пас».`,
     groupExists: (name: string) => `Эта компания уже группа: «${name}».`,
@@ -476,6 +478,7 @@ const STRINGS = {
     noTeamsPage: "Aún no sé las parejas. Toca 🏁 Resultado abajo para anotar el resultado en la página del partido.",
     scoreSaved: (score: string) => `Guardado: ${score}`,
     scoreUnusual: (sets: string[]) => `${sets.join(", ")} ${sets.length === 1 ? "parece raro" : "parecen raros"}. Para corregirlo, envía el resultado otra vez.`,
+    scoreTooManySets: (max: number) => `Hasta ${max} sets. Envía el resultado otra vez.`,
     sameTime: "🔁 ¿A la misma hora la semana que viene?",
     groupMade: (name: string, when: string) => `Hecho: “${name}”. Cada ${when} se publica aquí una tarjeta nueva; los miembros se apuntan o se quitan con un toque.`,
     groupExists: (name: string) => `Este grupo ya existe: “${name}”.`,

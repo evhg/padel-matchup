@@ -250,7 +250,13 @@ try {
   await scoreCheck.getByRole("button", { name: "Fix it" }).click();
   check("\"Fix it\" goes back to the sets with nothing saved", (await a.getByTestId("score-check").count()) === 0 && (await setInputs.count()) === 8);
   await a.getByRole("button", { name: "Save score" }).click();
-  check("the same score is asked about once, not twice", (await a.getByTestId("score-check").count()) === 0);
+  // The second Save of the same score must save, not ask again. Counting the question at once proves
+  // nothing (it is not on screen yet either way), so wait for whichever comes: the saved view or the question.
+  const settled = (p, v) => p.then(() => v, () => "timeout");
+  const second = await Promise.race([settled(a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 }), "saved"), settled(scoreCheck.waitFor({ timeout: 20000 }), "asked")]);
+  check("the same score is asked about once, not twice", second === "saved" && (await a.getByTestId("score-check").count()) === 0, second);
+  // Asked twice is a failure above; answer it so the checks after this one still run.
+  if (second === "asked") await scoreCheck.getByRole("button", { name: "Yes, save" }).click();
   await a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 });
   const fourSets = await a.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
   check("a four-set score saves", JSON.stringify(fourSets.result?.sets) === JSON.stringify([{ a: 6, b: 3 }, { a: 7, b: 5 }, { a: 4, b: 6 }, { a: 6, b: 5 }]), JSON.stringify(fourSets.result));
@@ -258,6 +264,14 @@ try {
   await a.getByRole("button", { name: "Edit score" }).click();
   await a.getByRole("button", { name: /Add set/ }).click();
   check("five sets is the most", (await a.getByRole("button", { name: /Add set/ }).count()) === 0);
+  // A 0-0 set is refused with the server's own words before any question: never "Is 0-0 right?", then a refusal.
+  await setInputs.nth(8).fill("0");
+  await setInputs.nth(9).fill("0");
+  await a.getByRole("button", { name: "Save score" }).click();
+  const refused = await a.getByText("Please check the details and try again.").waitFor({ timeout: 20000 }).then(() => true, () => false);
+  check("a 0-0 set is refused before the question", refused && (await a.getByTestId("score-check").count()) === 0 && (await a.getByRole("button", { name: "Save score" }).count()) === 1);
+  // Asked instead is a failure above; go back to the sets so the checks after this one still run.
+  if ((await a.getByTestId("score-check").count()) === 1) await a.getByTestId("score-check").getByRole("button", { name: "Fix it" }).click();
   await setInputs.nth(8).fill("3");
   await setInputs.nth(9).fill("1");
   await a.getByRole("button", { name: "Save score" }).click();
