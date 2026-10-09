@@ -1106,7 +1106,8 @@
     "coachHere": "Тренируете в {venue}? Создайте книгу записи →",
     "listNow": "Показать на доске {venue}",
     "recentResults": "Последние результаты",
-    "recentWon": "Победа"
+    "recentWon": "Победа",
+    "recentPlayer": "Игрок"
   },
   "ranking": {
     "title": "Рейтинг",

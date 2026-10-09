@@ -1106,7 +1106,8 @@
     "coachHere": "¿Entrenas en {venue}? Crea tu agenda →",
     "listNow": "Mostrar en el tablón de {venue}",
     "recentResults": "Resultados recientes",
-    "recentWon": "Ganó"
+    "recentWon": "Ganó",
+    "recentPlayer": "Jugador"
   },
   "ranking": {
     "title": "Ranking",

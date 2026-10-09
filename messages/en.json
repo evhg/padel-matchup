@@ -1106,7 +1106,8 @@
     "coachHere": "Coach at {venue}? Set up your lessons →",
     "listNow": "Show on the {venue} board",
     "recentResults": "Recent results",
-    "recentWon": "Won"
+    "recentWon": "Won",
+    "recentPlayer": "Player"
   },
   "ranking": {
     "title": "Ranking",

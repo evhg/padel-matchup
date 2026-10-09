@@ -4,6 +4,7 @@ import type { Db } from "@/db";
 import { events, scores, slots, type Player } from "@/db/schema";
 import { cityBySlug } from "@/lib/domain/cities";
 import { createEvent } from "@/lib/domain/events";
+import { setRankingOptIn } from "@/lib/domain/ranking";
 import { RECENT_RESULTS, recentResults, toRecentResult } from "@/lib/domain/recentResults";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
@@ -11,7 +12,8 @@ import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 /**
  * The "Recent results" strip (`src/lib/domain/recentResults.ts`) on a club page and a city page:
  * only matches the organiser listed, over by their own length, with a score, at this club or in this
- * city, newest first and never more than ten.
+ * city, newest first and never more than ten. A name shows only for a player who opted in to the
+ * rankings; every other seat comes back as null, which the strip shows as "Player".
  */
 
 /** Wednesday 10 June 2026, 16:00 in Phuket. Every date below is counted back from here. */
@@ -28,6 +30,9 @@ const codes = { rawai: "", kata: "" };
 beforeAll(async () => {
   ({ db, close } = await createTestDb());
   four = [await makePlayer(db, "Ana Smith"), await makePlayer(db, "Bo"), await makePlayer(db, "Cy"), await makePlayer(db, "Di")];
+  // Ana and Cy switched on "Show me in rankings"; Bo and Di never did (the default).
+  await setRankingOptIn(db, four[0].id, true);
+  await setRankingOptIn(db, four[2].id, true);
 });
 afterAll(async () => close());
 
@@ -46,7 +51,7 @@ async function played(venueName: string, startsAt: Date, o: { sets?: [number, nu
 }
 
 describe("recent results", () => {
-  it("lists only scored, finished, listed matches at this club, with first names, sides and sets", async () => {
+  it("lists only scored, finished, listed matches at this club, with sides, sets and only opted-in first names", async () => {
     const shown = await played("Rawai Padel Club", ago(DAY), { sets: [[4, 6], [6, 3], [7, 5]] });
     await played("Rawai Padel Club", ago(2 * DAY), { sets: [] }); // no score
     await played("Rawai Padel Club", ago(30 * 60 * 1000)); // still on: 90 minutes, started half an hour ago
@@ -59,7 +64,7 @@ describe("recent results", () => {
 
     const rows = await recentResults(db, { venueSlug: "rawai-padel-club" });
     expect(rows.map((r) => r.code)).toEqual([shown.code]);
-    expect(rows[0]).toMatchObject({ a: ["Ana", "Bo"], b: ["Cy", "Di"], winner: "a", venueName: "Rawai Padel Club", sets: [{ sideA: 4, sideB: 6 }, { sideA: 6, sideB: 3 }, { sideA: 7, sideB: 5 }] });
+    expect(rows[0]).toMatchObject({ a: ["Ana", null], b: ["Cy", null], winner: "a", venueName: "Rawai Padel Club", sets: [{ sideA: 4, sideB: 6 }, { sideA: 6, sideB: 3 }, { sideA: 7, sideB: 5 }] });
   });
 
   it("a city's strip takes every club in the city and nothing outside it", async () => {
@@ -81,13 +86,28 @@ describe("recent results", () => {
   it("a winner-only result keeps its tick and shows no sets; a result with one side empty is left out", () => {
     const base = { code: "ABCD", startsAt: NOW, tz: "UTC", venueName: null, venueSlug: null };
     const roster = [
-      { team: "a" as const, status: "joined" as const, name: "Ana Smith" },
-      { team: "a" as const, status: "joined" as const, name: "Bo" },
-      { team: "b" as const, status: "joined" as const, name: "Cy" },
-      { team: "b" as const, status: "joined" as const, name: "Di" },
+      { team: "a" as const, status: "joined" as const, name: "Ana Smith", optIn: true },
+      { team: "a" as const, status: "joined" as const, name: "Bo", optIn: true },
+      { team: "b" as const, status: "joined" as const, name: "Cy", optIn: true },
+      { team: "b" as const, status: "joined" as const, name: "Di", optIn: true },
     ];
     expect(toRecentResult({ ...base, sets: [{ setNumber: 1, sideA: 0, sideB: 1 }], roster })).toMatchObject({ winner: "b", sets: [], a: ["Ana", "Bo"] });
     expect(toRecentResult({ ...base, sets: [{ setNumber: 1, sideA: 6, sideB: 2 }], roster: roster.slice(0, 2) })).toBeNull();
     expect(toRecentResult({ ...base, sets: null, roster })).toBeNull();
+  });
+
+  it("never names a player who did not opt in, and an empty invitation is still left out", () => {
+    const base = { code: "ABCD", startsAt: NOW, tz: "UTC", venueName: null, venueSlug: null, sets: [{ setNumber: 1, sideA: 6, sideB: 4 }] };
+    const roster = [
+      { team: "a" as const, status: "joined" as const, name: "Ana Smith", optIn: true },
+      { team: "a" as const, status: "joined" as const, name: "Bo Jensen", optIn: false },
+      // A seat the organiser reserved by name: that person never had the switch, so no name either.
+      { team: "b" as const, status: "invited" as const, name: "Cy", optIn: false },
+      { team: "b" as const, status: "joined" as const, name: "Di", optIn: false },
+      { team: "b" as const, status: "invited" as const, name: "?", optIn: false },
+    ];
+    const r = toRecentResult({ ...base, roster });
+    expect(r).toMatchObject({ a: ["Ana", null], b: [null, null], winner: "a" });
+    expect(JSON.stringify(r)).not.toMatch(/Bo|Jensen|Cy|Di/);
   });
 });
