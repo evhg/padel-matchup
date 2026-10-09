@@ -65,7 +65,12 @@ export const RANKING_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 /** Points: 3 per match win, 1 per draw; tournaments give 3, 2, 1 to the podium. Opted-in players only. */
 export const RANKING_POINTS = { win: 3, draw: 1, podium: [3, 2, 1] } as const;
 
-function scopeCondition(scope: RankingScope) {
+/**
+ * The ranking's place as a SQL condition: one venue, or a city's zone and its venues. Every row it
+ * lets through for a city also passes `venueInCity`, so a query can put its `limit` after it and still
+ * count only rows in the city. The recent results strip asks it too.
+ */
+export function scopeCondition(scope: RankingScope) {
   if ("venueSlug" in scope) return eq(events.venueSlug, scope.venueSlug);
   const city = scope.city;
   const parts = [...city.venueSlugs.map((s) => eq(events.venueSlug, s)), ...city.needles.map((n) => like(events.venueSlug, `%${n}%`))];

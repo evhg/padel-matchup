@@ -70,6 +70,33 @@ try {
   await other.getByRole("link", { name: /On the Riverside Padel board/ }).waitFor({ timeout: 20000 });
   await guest.goto(`${BASE}/v/riverside-padel`);
   check("one tap on the match page puts it on the board", (await guest.locator(`a[href='/${code2}']`).count()) === 1 && (await other.getByTestId("list-on-board").count()) === 0);
+  // ---- Recent results: a finished, scored, listed match shows on its club's page ----
+  // Made through the API ninety minutes ago and booked for two hours, so three can still join and
+  // Ana can score it; then a 60-minute booking makes it over, which is when the strip takes it.
+  const key = await guest.request.post(`${BASE}/api/v1/keys`, { data: { name: "e2e venues", agent: "playwright" } }).then((r) => r.json());
+  const auth = { authorization: `Bearer ${key.key}` };
+  const made = await guest.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(), durationMinutes: 120, tz: "Asia/Bangkok", venue: "Lakeside Padel", listOnVenueBoard: true, organizer: { name: "Ana" } } }).then((r) => r.json());
+  const rcode = made.match?.code;
+  for (const name of ["Bo", "Cy", "Di"]) await guest.request.post(`${BASE}/api/v1/matches/${rcode}/join`, { headers: auth, data: { name } });
+  const ana = await newPage();
+  await ana.goto(`${made.organizer.personalUrl}?next=/${rcode}`);
+  await ana.waitForURL((u) => u.pathname === `/${rcode}`, { timeout: 20000 });
+  await guest.goto(`${BASE}/v/lakeside-padel`);
+  check("no result yet → no results strip, and no line saying so", (await guest.getByTestId("recent-results").count()) === 0);
+  await ana.getByRole("button", { name: "Enter score" }).click();
+  await ana.getByRole("button", { name: /^Ana/ }).click();
+  await ana.getByRole("button", { name: /^Bo/ }).click();
+  await ana.getByRole("button", { name: "Save score" }).click();
+  await ana.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
+  await ana.getByRole("button", { name: "Edit match" }).click();
+  await ana.getByTestId("length-choice").getByRole("button", { name: "60 min", exact: true }).click();
+  await ana.getByRole("button", { name: "Save changes" }).click();
+  await ana.getByRole("button", { name: "Save changes" }).waitFor({ state: "detached", timeout: 20000 });
+  await guest.goto(`${BASE}/v/lakeside-padel`);
+  const strip = guest.getByTestId("recent-results");
+  const row = strip.locator(`a[href='/${rcode}/card']`);
+  await shot(guest, "b3-recent-results");
+  check("the finished match shows in the club's recent results, with both pairs, the tick and a link to its card", (await strip.getByRole("heading", { name: "Recent results" }).count()) === 1 && (await row.count()) === 1 && /Ana & Bo/.test(await row.innerText()) && /Cy & Di/.test(await row.innerText()) && (await row.getByText("Won").count()) === 1, (await strip.innerText().catch(() => "no strip")).slice(0, 160));
   await guest.goto(`${BASE}/v/no-such-venue`);
   check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
 } catch (e) {

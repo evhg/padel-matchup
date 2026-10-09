@@ -15,11 +15,15 @@ import { ClubRow } from "@/components/ClubBits";
 import { CLUB_LIMITS, listShownClubs } from "@/lib/domain/clubs";
 import { rangeChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
+import { recentResults } from "@/lib/domain/recentResults";
+import { RecentResults } from "@/components/RecentResults";
 
 /** /phuket, /singapore: open matches across the city's clubs, the city ranking, and the pitch in four lines. */
 export async function CityPage({ city }: { city: City }) {
   const db = await getDb();
   const [t, locale, me, board, ranking, clubs, opens] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listShownClubs(db, city.slug), listSeries(db, city)]);
+  // After the others, not beside them: the pooler stalls on pipelined bursts (rule 8).
+  const results = await recentResults(db, { city });
   const liveSlugs = new Set(clubs.map((c) => c.slug));
   const otherClubs = board.clubs.filter((c) => !liveSlugs.has(c.slug));
   const foundingLeft = Math.max(0, CLUB_LIMITS.foundingPerCity - clubs.filter((c) => c.founding).length);
@@ -129,6 +133,8 @@ export async function CityPage({ city }: { city: City }) {
             </div>
           </div>
         </section>
+
+        <RecentResults results={results} showVenue />
 
         <section className="card">
           <h2 className="text-lg font-extrabold">🏆 {t("city.ranking", { city: city.name })}</h2>

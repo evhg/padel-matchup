@@ -20,6 +20,8 @@ import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { embedHtml } from "@/lib/embed";
 import { rangeChip } from "@/lib/levelText";
+import { recentResults } from "@/lib/domain/recentResults";
+import { RecentResults } from "@/components/RecentResults";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -80,6 +82,9 @@ export default async function VenueBoardPage({ params }: Props) {
   // The week card already shows these; the list below carries only what comes after it.
   const inWeek = new Set((week ?? []).flatMap((d) => d.events.map((b) => b.event.id)));
   const later = week ? board.events.filter((b) => !inWeek.has(b.event.id)) : board.events;
+  // The last scored matches here, one bounded read after the others (rule 8), so a visitor sees
+  // that people actually play at this club and how it went.
+  const results = await recentResults(db, { venueSlug: slug });
   const tz = club?.tz ?? "UTC";
   const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: tz }).format(zonedTimeToUtc(date, "12:00", tz));
   return (
@@ -245,6 +250,7 @@ export default async function VenueBoardPage({ params }: Props) {
             })}
           </ul>
         )}
+        <RecentResults results={results} />
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <Link href={`/v/${slug}/ranking`} prefetch={false} className="link">
             🏆 {t("ranking.title")}

@@ -1104,7 +1104,9 @@
     "coaches": "Coaches here",
     "coachesHelp": "Coaches who named this club and chose to be listed.",
     "coachHere": "Coach at {venue}? Set up your lessons →",
-    "listNow": "Show on the {venue} board"
+    "listNow": "Show on the {venue} board",
+    "recentResults": "Recent results",
+    "recentWon": "Won"
   },
   "ranking": {
     "title": "Ranking",
