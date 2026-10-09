@@ -19,6 +19,7 @@ import { hasRange } from "@/lib/domain/levels";
 import { fillOf, withCounts } from "@/lib/domain/venueBoard";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, tagChip } from "@/lib/levelText";
+import { telegramEnabled } from "@/lib/telegram/api";
 import { crewGroupLink } from "@/lib/telegram/deepLinks";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -80,8 +81,8 @@ export default async function GroupPage({ params }: Props) {
   // rows, after the detail rather than beside it (rules 8 and 12).
   const fills = new Map((await withCounts(db, detail.upcoming)).map((b) => [b.event.id, fillOf(b)]));
   // A member's way into the crew's own Telegram group, or the link that makes one (DECIDING rule 30).
-  // A visitor sees neither, and the read waits for a member (rules 8 and 12).
-  const telegramInvite = member ? await crewTelegramInvite(db, group.id) : null;
+  // A visitor sees neither, and the read waits for a member on a deployment with a bot (rules 4, 8 and 12).
+  const telegramInvite = member && telegramEnabled() ? await crewTelegramInvite(db, group.id) : null;
   const telegramRun = member && !telegramInvite ? crewGroupLink(group.id) : null;
 
   const eventRow = (ev: (typeof detail.upcoming)[number]) => {

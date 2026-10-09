@@ -275,9 +275,10 @@ const placeWords = (s: string) =>
 
 /**
  * The known court the words point at, or null. The whole name wins ("xplore padel phuket"); else the
- * court whose own words ("rawai", "blue tree") the text carries most of. A word several courts share
- * ("phuket") decides nothing, unless those courts are one court spelled twice ("Rawai Padel Club" the
- * chat typed and "Rawai Padel" in the directory), where the first in the list (the chat's own) wins.
+ * court that owns every word typed ("rawai", "blue tree"), so a new court that shares one word with a
+ * known one ("Rawai Beach Club") stays the new court. A word several courts own ("phuket") decides
+ * nothing, unless those courts are one court spelled twice ("Rawai Padel Club" the chat typed and
+ * "Rawai Padel" in the directory), where the first in the list (the chat's own) wins.
  */
 export function matchVenue(text: string, venues: readonly string[]): string | null {
   const said = placeWords(text);
@@ -292,17 +293,15 @@ export function matchVenue(text: string, venues: readonly string[]): string | nu
   });
   const whole = known.filter((v) => joined.includes(` ${placeWords(v).join(" ")} `)).sort((a, b) => placeWords(b).length - placeWords(a).length)[0];
   if (whole) return whole;
-  const saidSet = new Set(said);
-  let best: { name: string; own: string; hits: number }[] = [];
-  for (const name of known) {
-    const own = placeWords(name).filter((w) => w.length >= 3 && !GENERIC.has(w));
-    const hits = own.filter((w) => saidSet.has(w)).length;
-    if (hits === 0) continue;
-    if (!best.length || hits > best[0].hits) best = [{ name, own: own.join(" "), hits }];
-    else if (hits === best[0].hits) best.push({ name, own: own.join(" "), hits });
-  }
-  if (best.length === 0) return null;
-  return best.every((b) => b.own === best[0].own) ? best[0].name : null;
+  const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENERIC.has(w));
+  const typed = distinct(said);
+  if (typed.length === 0) return null;
+  const owners = known
+    .map((name) => ({ name, own: distinct(placeWords(name)) }))
+    .filter(({ own }) => typed.every((w) => own.includes(w)))
+    .map(({ name, own }) => ({ name, own: own.join(" ") }));
+  if (owners.length === 0) return null;
+  return owners.every((o) => o.own === owners[0].own) ? owners[0].name : null;
 }
 
 /** The cities offered as taps when a chat or a coach has no time zone yet. One list, two flows. */

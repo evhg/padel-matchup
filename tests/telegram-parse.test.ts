@@ -148,6 +148,9 @@ describe("free chat: a question, Spanish, and a place matched against the known 
     expect(parseNewCommand("tmr 19:00 Phuket", { tz, now, venues: known }).venue).toBe("Phuket");
     // A court nobody has used yet is still a court.
     expect(parseNewCommand("tmr 19:00 Some New Court", { tz, now, venues: known }).venue).toBe("Some New Court");
+    // A new court that shares one word with a known one is still the new court: every word typed must belong to the known one.
+    expect(parseNewCommand("tmr 19:00 Rawai Beach Club", { tz, now, venues: known }).venue).toBe("Rawai Beach Club");
+    expect(parseNewCommand("tmr 19:00 Blue Tree Rawai", { tz, now, venues: known }).venue).toBe("Blue Tree Rawai");
     expect(parseNewCommand("tmr 19:00", { tz, now, venues: known }).venue).toBeNull();
   });
 
@@ -156,6 +159,8 @@ describe("free chat: a question, Spanish, and a place matched against the known 
     expect(matchVenue("Blue Tree", known)).toBe("Padel Phuket @ Blue Tree");
     expect(matchVenue("phuket", known)).toBeNull();
     expect(matchVenue("pattaya", known)).toBe("Pattaya Padel Club");
+    expect(matchVenue("rawai beach", known)).toBeNull();
+    expect(matchVenue("Rawai Padel Club", known)).toBe("Rawai Padel");
     expect(matchVenue("padel club", known)).toBeNull();
     // The chat's own court comes first in the list, and the directory's spelling of it after.
     expect(matchVenue("Rawai", ["Rawai Padel Club", "Rawai Padel"])).toBe("Rawai Padel Club");
