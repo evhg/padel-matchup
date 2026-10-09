@@ -229,7 +229,11 @@ try {
   // Chips are set in capitals by the stylesheet: textContent reads the words as written.
   const chips = (await org.getByTestId("night-chips").textContent()) ?? "";
   check("the hero shows the night at a glance", chips.includes("5 of 8 players") && chips.includes("Americano") && chips.includes("ends ~"), chips);
-  check("before round 1 the rule and a sample of the night are open", (await org.getByTestId("night-sample").innerText()).includes("5 players: about 1 court, 4 per court, 1 rests each round, in turn."));
+  const sampleText = await org.getByTestId("night-sample").innerText();
+  check("before round 1 the rule and a sample of the night are open", sampleText.includes("5 players: about 1 court, 4 per court, 1 rests each round, in turn."));
+  // One count for both: the chips once planned eight (2 courts) while the sample planned five (1 court).
+  const chipCourts = chips.match(/(\d+) courts?/)?.[1];
+  check("the chips and the sample name the same courts", chipCourts !== undefined && chipCourts === sampleText.match(/about (\d+) courts?/)?.[1], `${chips} | ${sampleText}`);
   await org.getByRole("button", { name: /How Americano works/ }).click();
   check("the help is named for the format and opens the whole rule", (await org.getByText(/Partners rotate every round/).count()) > 0);
   const restGen = org.getByRole("button", { name: "Generate round 1" });

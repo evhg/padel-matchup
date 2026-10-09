@@ -687,7 +687,9 @@ Everything in this list is live. The README describes each in detail.
   ("10 players: about 2 courts, 4 per court, 2 rest each round, in turn.") are open. The create form
   says under Players what the night needs ("Needs 2 courts · 7 rounds for a full rotation · about 1h
   52m at 21 points") and warns, gently, when a full rotation runs past the booking. One pure function
-  (`nightPlan` in `src/lib/domain/tournamentPlan.ts`) feeds all three. Round 1 of an americano or a
+  (`nightPlan` in `src/lib/domain/tournamentPlan.ts`) feeds all three, and the page computes the
+  plan once (`nightField` picks the count) and hands it to the panel, so the chips and the sample
+  give the same courts. Round 1 of an americano or a
   mexicano now starts with any four names or more, as the /americano generator always promised:
   whoever does not fit a court rests that round, in turn, and a rest adds no points. King of the
   Court keeps names in fours, because there the waiting players come in at the bottom court by the

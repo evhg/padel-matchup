@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeStandings, mulberry32, rotationLength } from "@/lib/domain/americano";
 import { drawRound, firstRoundRefusal, type DrawnRound } from "@/lib/domain/formats";
-import { courtsUsed, nightPlan, roundMinutes, rotationRounds } from "@/lib/domain/tournamentPlan";
+import { courtsUsed, nightField, nightPlan, roundMinutes, rotationRounds } from "@/lib/domain/tournamentPlan";
 
 /**
  * The social tournament night (October 2026): any field of four or more starts round 1 in americano
@@ -113,6 +113,18 @@ describe("round 1 at any count of four or more", () => {
 });
 
 describe("the night at a glance", () => {
+  it("the chips and the sample count one field: the names round 1 would draw, else the field opened", () => {
+    // Five of eight, before round 1: Generate would draw five, so the night is five (it once read eight in the chips and five in the sample).
+    expect(nightField({ format: "americano", names: 5, capacity: 8, roundsDrawn: 0 })).toBe(5);
+    expect(nightField({ format: "mexicano", names: 6, capacity: 12, roundsDrawn: 0 })).toBe(6);
+    // Fewer than four, or a king field not in fours: round 1 cannot start, so the night is the field opened.
+    expect(nightField({ format: "americano", names: 3, capacity: 8, roundsDrawn: 0 })).toBe(8);
+    expect(nightField({ format: "king", names: 5, capacity: 8, roundsDrawn: 0 })).toBe(8);
+    expect(nightField({ format: "king", names: 4, capacity: 8, roundsDrawn: 0 })).toBe(4);
+    // From round 1 on, the names that play.
+    expect(nightField({ format: "americano", names: 5, capacity: 5, roundsDrawn: 2 })).toBe(5);
+  });
+
   it("a round's minutes at each score: about forty seconds a point, four minutes a game, two to change over", () => {
     expect(roundMinutes({ pointsPerMatch: 16 })).toBe(13);
     expect(roundMinutes({ pointsPerMatch: 21 })).toBe(16);

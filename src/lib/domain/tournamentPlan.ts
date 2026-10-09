@@ -1,5 +1,6 @@
 import type { TournamentFormat } from "@/db/schema";
 import { maxCourtsFor } from "./americano";
+import { firstRoundRefusal } from "./formats";
 
 /**
  * The shape of a social tournament night, before anybody plays it: how many courts, how many rest
@@ -10,7 +11,8 @@ import { maxCourtsFor } from "./americano";
  * format, to how many points, how many rounds, how many courts, when it ends — and an organiser
  * choosing 16 players at 32 points wants to hear before the night that it does not fit in two hours.
  * The match page's chips, the panel's sample before round 1 and the create form's line all read this
- * one function, so the three cannot disagree.
+ * one function. The page computes the plan once, from `nightField`, and hands the same object to the
+ * panel, so the chips and the sample cannot disagree.
  *
  * Pure and a leaf: the create form imports it, so it must not reach the database.
  */
@@ -71,6 +73,17 @@ export type NightPlan = {
   /** The full rotation runs past the booking. */
   tooLong: boolean;
 };
+
+/**
+ * How many players the night is planned for, so the hero's chips and the panel's sample give one
+ * number. From round 1 on, the names that play. Before it, the names in now when round 1 could start
+ * with them (that is the field Generate would draw), else the field the organiser opened: three names
+ * of eight, or a king night of five, still reads as a night of eight.
+ */
+export function nightField(input: { format: TournamentFormat; names: number; capacity: number; roundsDrawn: number }): number {
+  if (input.roundsDrawn > 0) return input.names;
+  return firstRoundRefusal(input.format, input.names) ? input.capacity : input.names;
+}
 
 /** The night for this many players, or null below four, where there is no round to draw. */
 export function nightPlan(input: { players: number; courts?: number | null; format: TournamentFormat; pointsPerMatch?: number | null; gamesTo?: number | null; durationMinutes: number }): NightPlan | null {

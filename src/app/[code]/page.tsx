@@ -54,7 +54,7 @@ import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/qu
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
-import { nightPlan } from "@/lib/domain/tournamentPlan";
+import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText } from "@/lib/levelText";
@@ -189,9 +189,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
   // A tournament has no "final score": the banner names the first round still waiting for one.
   const waitingRound = tstate?.rounds.find((r) => r.matches.some((m) => m.sideA == null || m.sideB == null))?.roundNumber ?? null;
-  // The night at a glance under the title (src/lib/domain/tournamentPlan.ts): the field as planned
-  // until round 1, then the field that plays. The panel's sample and the create form read the same function.
-  const night = tstate ? nightPlan({ players: tstate.rounds.length > 0 ? namedSlots.length : ev.capacity, courts: ev.courts, format: tstate.format, pointsPerMatch: ev.pointsPerMatch, gamesTo: ev.gamesTo, durationMinutes: ev.durationMinutes }) : null;
+  // The night at a glance under the title (src/lib/domain/tournamentPlan.ts), computed once and handed
+  // to the panel too, so the chips and the panel's sample before round 1 name the same courts.
+  // The count: the names round 1 would draw, or the field the organiser opened while it cannot start.
+  const night = tstate ? nightPlan({ players: nightField({ format: tstate.format, names: namedSlots.length, capacity: ev.capacity, roundsDrawn: tstate.rounds.length }), courts: ev.courts, format: tstate.format, pointsPerMatch: ev.pointsPerMatch, gamesTo: ev.gamesTo, durationMinutes: ev.durationMinutes }) : null;
   // The format's name, as the create form says it (FORMAT_KEYS lives in a client module, which a server page cannot read values from).
   const formatName = tstate ? t(({ americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const)[tstate.format]) : null;
 
@@ -493,8 +494,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             rotationLength={tstate.rotationLength}
             participantCount={namedSlots.length}
             capacity={ev.capacity}
-            courts={ev.courts}
-            durationMinutes={ev.durationMinutes}
+            night={night}
             rounds={tstate.rounds.map((r) => ({
               id: r.id,
               roundNumber: r.roundNumber,

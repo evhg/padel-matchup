@@ -6,7 +6,7 @@ import { deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, 
 import type { TournamentFormat } from "@/db/schema";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import { firstRoundRefusal, FORMATS } from "@/lib/domain/formats";
-import { nightPlan } from "@/lib/domain/tournamentPlan";
+import type { NightPlan } from "@/lib/domain/tournamentPlan";
 import { FORMAT_HELP_KEYS, FORMAT_KEYS } from "./EventFields";
 import { PlayAgainButton } from "./PlayAgainButton";
 
@@ -26,8 +26,7 @@ export function AmericanoPanel({
   gamesTo,
   participantCount,
   capacity,
-  courts = null,
-  durationMinutes = 120,
+  night = null,
   rounds,
   standings,
   courtNames,
@@ -48,10 +47,8 @@ export function AmericanoPanel({
   /** Named roster spots: joined, confirmed and reserved-not-yet-accepted. */
   participantCount: number;
   capacity: number;
-  /** Courts the organiser gave, or null: one per four players. */
-  courts?: number | null;
-  /** How long the court is booked, for the sample of the night. */
-  durationMinutes?: number;
+  /** The night as the page's chips show it (`nightPlan`, counted by `nightField`), for the sample before round 1. */
+  night?: NightPlan | null;
   rounds: PanelRound[];
   standings: PanelStanding[];
   /** Organizer-given court names by index (court 1 = [0]). */
@@ -77,10 +74,9 @@ export function AmericanoPanel({
   /** Mexicano and King build the next round from the scores, so they wait for them. */
   const needScores = format !== "americano" && rounds.length > 0 && !lastFullyScored;
   const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && !refusal && !needScores;
-  // Before round 1, the night in one line: from the names in now, or from the field while fewer than
-  // four have joined (a visitor used to read "No rounds yet." and nothing about what they would play).
-  const samplePlayers = participantCount >= 4 && !refusal ? participantCount : capacity;
-  const sample = firstRound ? nightPlan({ players: samplePlayers, courts, format, pointsPerMatch, gamesTo, durationMinutes }) : null;
+  // Before round 1, the night in one line (a visitor used to read "No rounds yet." and nothing about
+  // what they would play). The page's own plan, the one its chips read, so the two cannot disagree.
+  const sample = firstRound ? night : null;
   const courtCount = Math.max(1, Math.floor(participantCount / 4), ...rounds.flatMap((r) => r.matches.map((m) => m.court)));
   const courtLabel = (n: number) => courtNames?.[n - 1]?.trim() || t("americano.court", { n });
   const [names, setNames] = useState<string[]>(() => Array.from({ length: courtCount }, (_, i) => courtNames?.[i] ?? ""));
