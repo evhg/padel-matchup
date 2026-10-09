@@ -9,6 +9,7 @@ import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { LEGAL_OPERATOR, legalDate, legalValues } from "@/lib/legal";
 import { HAS_ID_COOKIE, manageCookieName, PLAYER_COOKIE } from "@/lib/session";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE } from "@/lib/source";
+import { TEXT_SIZE_COOKIE } from "@/lib/textSize";
 
 /**
  * /privacy promises things about the code: which cookies it sets, how long it keeps what. A promise
@@ -26,7 +27,7 @@ const notMineCookie = readFileSync(path.resolve(process.cwd(), "src/components/S
 describe("the privacy page tells the truth about the code", () => {
   it("names every cookie the app sets, in every language", () => {
     expect(notMineCookie).toBe("ks_notmine");
-    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!];
+    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE];
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
