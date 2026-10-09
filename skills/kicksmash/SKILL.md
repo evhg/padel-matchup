@@ -14,7 +14,7 @@ Add `https://kicksma.sh/mcp` (streamable HTTP, no auth). Tools:
 - `about_kicksmash` — read once.
 - `get_match {code}` — a match by its 4-character code.
 - `find_matches {venue}` — open matches at a venue (its public board).
-- `get_group {code}` — a crew: members, weekly slot, upcoming.
+- `get_group {code}` — a crew: members' first names (levels are for members only), weekly slot, whether it asks to join, upcoming.
 - `generate_schedule {players | names, courts?, rounds?}` — exact americano rotation, nothing stored. Mexicano and King of the Court rounds depend on scores, so they are generated live on the match page (pass `format` to `create_match`).
 - `create_match {startsAt, tz, durationMinutes? (60, 90 or 120; 90 by default), venue?, organizer:{name, token?, email?, level?}, levelMin?, levelMax?, category? (men, women or mixed), ageMin? (35, 45 or 55), …}` — returns `shareUrl` for the players and the organizer's `personalUrl` and `manageUrl` (private).
 - `join_match {code, name | token, level?, email?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range).

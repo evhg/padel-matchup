@@ -80,7 +80,7 @@ describe("handing a group over", () => {
     expect(row.creatorPlayerId).toBe(olga.id);
     expect(await roleOf(g.id, olga.id)).toBe("admin");
     // A player who rejoins is a member again and can take it.
-    await joinGroup(db, g.id, bea.id);
+    await joinGroup(db, g.id, bea.id, "self");
     expect((await handOverGroup(db, g.id, olga.id, bea.id)).creatorPlayerId).toBe(bea.id);
   });
 });

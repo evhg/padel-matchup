@@ -92,7 +92,7 @@ const TOOLS: Tool[] = [
   {
     name: "get_group",
     title: "Get a group",
-    description: "A crew that plays together: members with levels, weekly slot, upcoming matches, calendar feed.",
+    description: "A crew that plays together: members' first names and count (their levels are for members only, so null here), weekly slot, whether it asks to join, upcoming matches, calendar feed.",
     schema: codeSchema,
     readOnly: true,
     run: async (db, args) => {
@@ -215,7 +215,7 @@ const TOOLS: Tool[] = [
   {
     name: "join_match",
     title: "Join a match",
-    description: "Put a person into a match by first name (or by their personal token from an earlier call). Handles waitlists and level ranges; when the level is outside the range, the organizer is asked to approve.",
+    description: "Put a person into a match by first name (or by their personal token from an earlier call). Handles waitlists and level ranges; when the level is outside the range, the organizer is asked to approve. For a group's match the answer says whether the person is now a member of the group; a group that asks to join is never joined through a match.",
     schema: joinMatchSchema,
     readOnly: false,
     run: async (db, args, ctx) => joinMatch(db, args, ctx),

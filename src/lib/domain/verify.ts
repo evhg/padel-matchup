@@ -172,8 +172,8 @@ export async function admitConfirmed(db: Db, player: Player, byPlayerId: string 
       const res = await decideJoinRequest(db, { eventId: event.id, requestId: request.id, approve: true, actorPlayerId: byPlayerId, now });
       if (res.join) {
         out.push({ event: res.event, join: res.join });
-        // A seat in a group's match makes you part of the group, the same as tapping Join would.
-        if (event.groupId && (res.join.outcome === "joined" || res.join.outcome === "waitlisted")) await joinGroup(db, event.groupId, player.id).catch(() => undefined);
+        // A seat in a group's match makes you part of the group, unless the group asks to join (`via: "match"`).
+        if (event.groupId && (res.join.outcome === "joined" || res.join.outcome === "waitlisted")) await joinGroup(db, event.groupId, player.id, "match").catch(() => undefined);
       }
     } catch {
       // Full or already decided: the organizer's list keeps it.

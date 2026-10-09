@@ -622,6 +622,14 @@ Everything in this list is live. The README describes each in detail.
   first. It counts a match with a score and both pairs set. One bounded read,
   and a crew with fewer than two matches behind it never makes it. Production's one crew has one
   scored match, so nobody sees the table yet.
+- **A group page shows names, not levels, and a crew can ask to join (9 October 2026, decision E,
+  migration 0085).** The owner: "names visible, levels hidden, optional Ask to join", for social
+  proof and privacy. A visitor sees the members' first names and the count; members see each other's
+  levels; the API and the MCP server never carry them. An admin switches on Ask to join in the
+  group's settings (a ladies' crew, a level crew): a newcomer asks with an optional note, the admins
+  hear it on their own channel and approve or decline on the group page, the person hears the
+  answer, and a declined person may ask again after seven days. A seat in such a group's match is a
+  seat, never a membership.
 - **A channel the moment a player joins, and a calendar that keeps itself (25 September 2026).** The
   owner: "When a player joins a game, we need to capture a channel to contact them right away in a
   very smooth way and give something in return", WhatsApp, Telegram or email, and never push or SMS.

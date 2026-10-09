@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { fillText } from "@/components/EventRow";
-import { GroupJoin, GroupMembers, GroupSettings } from "@/components/GroupPanel";
+import { GroupJoin, GroupMembers, GroupRequests, GroupSettings, type MyAsk } from "@/components/GroupPanel";
 import { Footer, Header } from "@/components/Header";
 import { LevelChip } from "@/components/LevelSelect";
 import { ShareButtons } from "@/components/ShareSheet";
@@ -11,9 +11,10 @@ import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidInviteCode } from "@/lib/codes";
 import { baseUrl, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { formatEventDay, formatEventTime, relativeTime } from "@/lib/dates";
 import { crewSeasonSeats, SEASON_HOT_STREAK, SEASON_MIN_MATCHES, seasonTable } from "@/lib/domain/crewSeason";
-import { getGroupByCode, getGroupDetail } from "@/lib/domain/groups";
+import { askAgainFrom, canSeeMemberLevels } from "@/lib/domain/groupAccess";
+import { getGroupByCode, getGroupDetail, getGroupRequest, pendingGroupRequests } from "@/lib/domain/groups";
 import { hasRange } from "@/lib/domain/levels";
 import { fillOf, withCounts } from "@/lib/domain/venueBoard";
 import { venueWithCourt } from "@/lib/labels";
@@ -32,7 +33,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + i))));
 
-/** A crew's home: members, the next matches, one button to create the next one, and under the matches the season once two results are in. Anyone with the link can join. */
+/**
+ * A crew's home: members, the next matches, one button to create the next one, and under the matches
+ * the season once two results are in. Anyone with the link joins, or asks to when the group asks to
+ * join (decision E). A visitor sees the members' first names and the count, never their levels
+ * (`canSeeMemberLevels`); the group's own range stays, because it describes the crew.
+ */
 export default async function GroupPage({ params }: Props) {
   const { code } = await params;
   if (!isValidInviteCode(code)) notFound();
@@ -42,6 +48,11 @@ export default async function GroupPage({ params }: Props) {
   const [t, locale, me, detail] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getGroupDetail(db, group)]);
   const member = me ? detail.members.find((m) => m.playerId === me.id) : undefined;
   const isAdmin = member?.role === "admin";
+  const seesLevels = canSeeMemberLevels(member);
+  // One more read at most, after the detail (rules 8 and 12): the admins' pending asks, or the
+  // visitor's own ask on a group that asks to join. A plain visitor of an open group pays for neither.
+  const asks = isAdmin ? await pendingGroupRequests(db, group.id) : [];
+  const myRequest = me && !member && group.askToJoin ? await getGroupRequest(db, group.id, me.id) : null;
   const url = `${baseUrl()}/g/${code}`;
   const weekdays = weekdayNames(locale);
   const labelOpts = { venueTbd: t("event.venueTbd"), courtNumber: (n: string) => t("event.courtNumber", { n }) };
@@ -51,6 +62,13 @@ export default async function GroupPage({ params }: Props) {
   // The season table reads the crew's scored matches, and a crew with fewer than two matches behind
   // it cannot have two scored ones: most crews never pay for the query (rule 12).
   const now = new Date();
+  const againOn = myRequest ? askAgainFrom(myRequest) : null;
+  const myAsk: MyAsk =
+    myRequest?.status === "pending"
+      ? { status: "pending" }
+      : againOn && againOn.getTime() > now.getTime()
+        ? { status: "declined", againOn: new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: group.tz }).format(againOn) }
+        : null;
   const season =
     detail.past.filter((e) => e.status !== "cancelled").length >= SEASON_MIN_MATCHES
       ? seasonTable(await crewSeasonSeats(db, group.id, now), detail.members.map((m) => ({ playerId: m.playerId, name: m.player.displayName })), now)
@@ -120,11 +138,12 @@ export default async function GroupPage({ params }: Props) {
             </div>
           </div>
           <div className="mt-4">
-            <GroupJoin code={code} member={Boolean(member)} hasIdentity={Boolean(me)} canLeave={Boolean(member) && group.creatorPlayerId !== me?.id} name={group.name} />
+            <GroupJoin code={code} member={Boolean(member)} hasIdentity={Boolean(me)} canLeave={Boolean(member) && group.creatorPlayerId !== me?.id} name={group.name} askToJoin={group.askToJoin} ask={myAsk} />
           </div>
+          {isAdmin && <GroupRequests code={code} items={asks.map((r) => ({ id: r.id, name: r.player.displayName, level: r.player.level, note: r.note, ago: relativeTime(r.createdAt, locale, now) }))} />}
           {isAdmin && (
             <div className="mt-4">
-              <GroupSettings code={code} name={group.name} recurDow={group.recurDow} recurTime={group.recurTime} recurLeadDays={group.recurLeadDays} weekdays={weekdays} others={detail.members.filter((m) => m.playerId !== me?.id).map((m) => ({ playerId: m.playerId, name: m.player.displayName }))} />
+              <GroupSettings code={code} name={group.name} recurDow={group.recurDow} recurTime={group.recurTime} recurLeadDays={group.recurLeadDays} weekdays={weekdays} askToJoin={group.askToJoin} others={detail.members.filter((m) => m.playerId !== me?.id).map((m) => ({ playerId: m.playerId, name: m.player.displayName }))} />
             </div>
           )}
         </section>
@@ -143,7 +162,7 @@ export default async function GroupPage({ params }: Props) {
               <p className="mt-1.5 text-xs text-faint">{t("group.nextMatchHelp")}</p>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-muted">{t("group.memberOnly")}</p>
+            <p className="mt-4 text-sm text-muted">{t(group.askToJoin ? "group.memberOnlyAsk" : "group.memberOnly")}</p>
           )}
         </section>
 
@@ -186,12 +205,13 @@ export default async function GroupPage({ params }: Props) {
             members={detail.members.map((m) => ({
               playerId: m.playerId,
               name: m.player.displayName,
-              level: m.player.level,
+              level: seesLevels ? m.player.level : null,
               role: m.role,
               isMe: m.playerId === me?.id,
               removable: Boolean(isAdmin) && m.playerId !== me?.id && m.playerId !== group.creatorPlayerId,
             }))}
           />
+          {!seesLevels && <p className="mt-3 text-xs text-faint">{t("group.levelsForMembers")}</p>}
           {hasRange({ min: group.levelMin, max: group.levelMax }) && (
             <p className="mt-3 text-xs text-faint">
               <LevelChip level={null} /> {t("level.rangeHelp", { range: levelChip ?? "" })}
@@ -205,7 +225,7 @@ export default async function GroupPage({ params }: Props) {
             {shortHost()}/g/{code}
           </div>
           <ShareButtons url={url} text={t("shareText.group", { name: group.name, url })} />
-          <p className="mt-2 text-xs text-faint">{t("group.shareHelp")}</p>
+          <p className="mt-2 text-xs text-faint">{t(group.askToJoin ? "group.shareHelpAsk" : "group.shareHelp")}</p>
         </section>
 
         {detail.past.length > 0 && (

@@ -1,5 +1,6 @@
 // Groups: form one from a match, member creates the next match from the group page (prefilled,
-// linked back), anyone with the link joins, admin sets the weekly slot, a member leaves.
+// linked back), anyone with the link joins, admin sets the weekly slot, a member leaves; a visitor
+// sees names but no levels, and a group that asks to join takes an ask the admin approves.
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot, sitsInside } from "./lib.mjs";
 
 const browser = await launch();
@@ -117,6 +118,53 @@ try {
   check("after the hand-over Olga is a member without the settings", (await olga.getByRole("button", { name: /Group settings/ }).count()) === 0 && (await olga.getByText("You're in this group").count()) === 1);
   await bea.goto(`${BASE}/g/${gcode}`);
   check("Bea is the admin now", (await bea.getByRole("button", { name: /Group settings/ }).count()) === 1 && (await bea.getByRole("button", { name: "Remove" }).count()) === 1);
+
+  // Decision E (9 October 2026): names visible, levels hidden, optional Ask to join.
+  // Bea declares a level on My matches: a member sees it on the group page, a visitor never does.
+  await bea.goto(`${BASE}/me`);
+  const beaLevel = bea.locator("section", { hasText: "Your level" });
+  await beaLevel.getByRole("button", { name: "Set my level" }).click();
+  await bea.getByLabel("Your level").selectOption({ label: "3.5" });
+  await beaLevel.getByRole("button", { name: "Save", exact: true }).click();
+  await beaLevel.getByText("3.5", { exact: true }).waitFor({ timeout: 20000 });
+  await olga.goto(`${BASE}/g/${gcode}`);
+  check("a member sees Bea's level on the member row", (await olga.locator("li", { hasText: "Bea" }).getByText("3.5", { exact: true }).count()) === 1);
+  const dee = await newPage();
+  await dee.goto(`${BASE}/g/${gcode}`);
+  check(
+    "a visitor sees the members by name and the count, and no level on any member row",
+    (await dee.locator("li", { hasText: "Bea" }).count()) >= 1 && (await dee.getByText("3.5", { exact: true }).count()) === 0 && (await dee.getByText("2 members").count()) > 0 && (await dee.getByText("Levels show to members only.").count()) === 1,
+  );
+
+  // Bea switches on Ask to join in the settings. The checkbox is set where the walk needs it, at the end.
+  await bea.goto(`${BASE}/g/${gcode}`);
+  await bea.getByRole("button", { name: /Group settings/ }).click();
+  await bea.getByLabel("Ask to join", { exact: true }).check();
+  await bea.getByRole("button", { name: "Save", exact: true }).click();
+  await bea.getByText(/Whoever opens it asks to join/).waitFor({ timeout: 20000 });
+
+  // Dee, with no identity yet, asks with a note instead of joining in one tap.
+  await dee.goto(`${BASE}/g/${gcode}`);
+  check("a visitor of an asking group meets Ask to join, not Join", (await dee.getByRole("button", { name: "Ask to join", exact: true }).count()) === 1 && (await dee.getByRole("button", { name: "Join this group" }).count()) === 0);
+  await dee.getByRole("button", { name: "Ask to join", exact: true }).click();
+  await dee.getByPlaceholder("e.g. Alex").fill("Dee");
+  await dee.getByLabel("A note for the admins (optional)").fill("Ladies' night regular, Tuesdays");
+  await shot(dee, "g4-ask");
+  await dee.getByRole("button", { name: "Ask to join", exact: true }).click();
+  await dee.getByText("Asked. The admins decide.").waitFor({ timeout: 20000 });
+  await shot(dee, "g5-asked");
+  check("Dee asked: not a member yet, and she can take it back", (await dee.getByText("2 members").count()) > 0 && (await dee.getByRole("button", { name: "Withdraw", exact: true }).count()) === 1);
+
+  // Bea sees the ask with its note and approves it; Dee is listed and now sees the levels.
+  await bea.goto(`${BASE}/g/${gcode}`);
+  const asks = bea.getByTestId("group-asks");
+  check("the admin sees Dee's ask with her note", (await asks.getByText("Dee", { exact: true }).count()) === 1 && (await asks.getByText(/Ladies' night regular/).count()) === 1);
+  await shot(bea, "g3-asks");
+  await asks.getByRole("button", { name: "Approve", exact: true }).click();
+  await bea.getByText("3 members").first().waitFor({ timeout: 20000 });
+  check("approved: Dee is listed among the members and the ask is gone", (await bea.locator("li", { hasText: "Dee" }).count()) >= 1 && (await bea.getByTestId("group-asks").count()) === 0);
+  await dee.goto(`${BASE}/g/${gcode}`);
+  check("Dee is in the group and sees Bea's level now", (await dee.getByText("You're in this group").count()) === 1 && (await dee.locator("li", { hasText: "Bea" }).getByText("3.5", { exact: true }).count()) === 1);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {
