@@ -171,12 +171,26 @@ try {
   await a.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
   await a.locator("input[type=time]").fill("11:30");
   await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  // Who it is for (the owner's decision of 9 October 2026): behind the level chip, so the form is not
+  // one line longer for anybody who skips it. "Men" is inside "Women" and the chip repeats both: exact.
+  check("the tag stays folded behind the level chip until asked", (await a.getByRole("button", { name: "Women", exact: true }).count()) === 0);
+  await a.getByTestId("level-chip").click();
+  await a.getByTestId("tag-category").getByRole("button", { name: "Women", exact: true }).click();
+  await a.getByTestId("tag-age").getByRole("button", { name: "45+", exact: true }).click();
+  // Chips are set in capitals by CSS, and innerText carries that: read textContent, or match blind to case.
+  check("the level chip reads the tag once it is picked", /any level · women · 45\+/i.test(await a.getByTestId("level-chip").innerText()));
+  await shot(a, "05b-new-tagged");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code2 = a.url().split("/").slice(-2)[0];
   const organizerInvite = await waitUntil(() => invitesFor(code2)[0]);
   check("organizer with an email on file gets the calendar invite the moment the match exists", Boolean(organizerInvite) && unfoldIcs(organizerInvite.ics.content).includes("DTSTART:"), organizerInvite ? organizerInvite.subject : `no invite for ${code2}`);
+  await a.goto(`${BASE}/${code2}`);
+  const tagText = ((await a.getByTestId("tag-chip").textContent().catch(() => null)) ?? "no chip").trim();
+  check("the match page shows who it is for, as one chip", tagText === "Women · 45+", tagText);
+  await shot(a, "05c-match-tagged");
   await a.goto(`${BASE}/${code}`);
+  check("an untagged match shows no tag chip", (await a.getByTestId("tag-chip").count()) === 0);
 
   // ---- Reserve a spot for Jordi by tapping an open spot ----
   check("creator sees tappable open spots", (await a.getByText("Tap to reserve for someone").count()) === 3);

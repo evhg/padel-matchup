@@ -4,6 +4,7 @@ import { eventEnd } from "@/lib/domain/matchLength";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { isClubLive } from "@/lib/domain/clubs";
 import type { GroupDetail } from "@/lib/domain/groups";
+import { cleanAgeMin, cleanCategory, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
 import { formatOf } from "@/lib/domain/formats";
 import { hasRange, presetFor } from "@/lib/domain/levels";
 import type { Club } from "@/db/schema";
@@ -39,6 +40,10 @@ export type PublicMatch = {
   waitlist: number;
   whenFull: "waitlist" | "closed";
   level: { min: number | null; max: number | null; preset: string | null; /** Only confirmed levels walk in; declared ones ask. */ verifiedOnly?: boolean } | null;
+  /** Who it is for: men, women or mixed; null for anyone. Information only, nobody is checked at join. */
+  category: EventCategory | null;
+  /** 35, 45 or 55 for an age tag (35+, 45+, 55+); null for any age. */
+  ageMin: AgeMin | null;
   group: { code: string; name: string; url: string } | null;
   listed: boolean;
   bookingUrl: string | null;
@@ -48,6 +53,9 @@ export type PublicMatch = {
   result: { sets: { a: number; b: number }[]; teamA: string[]; teamB: string[]; winner: "a" | "b" | "draw"; confirmed: boolean } | null;
   createdAt: string;
 };
+
+/** The tag as every public shape carries it, cleaned again so a row holding anything else reads as none. */
+const tagOf = (r: { category: string | null; ageMin: number | null }): { category: EventCategory | null; ageMin: AgeMin | null } => ({ category: cleanCategory(r.category), ageMin: cleanAgeMin(r.ageMin) });
 
 export function playerName(p: Player | null, invitedName: string | null): string {
   return p?.displayName ?? invitedName ?? "?";
@@ -78,6 +86,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     waitlist: detail.waitlist.filter((s) => s.status === "joined").length,
     whenFull: ev.whenFull,
     level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range), verifiedOnly: ev.levelVerifiedOnly } : null,
+    ...tagOf(ev),
     group: group ? { code: group.code, name: group.name, url: `${base}/g/${group.code}` } : null,
     listed: ev.publicListing,
     bookingUrl: ev.bookingUrl,
@@ -88,7 +97,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
   };
 }
 
-export type PublicBoard = { slug: string; name: string; url: string; mapUrl: string | null; calendarUrl: string; matches: { code: string; url: string; type: string; title: string | null; startsAt: string; tz: string; capacity: number; players: number; spotsLeft: number; level: PublicMatch["level"] }[] };
+export type PublicBoard = { slug: string; name: string; url: string; mapUrl: string | null; calendarUrl: string; matches: { code: string; url: string; type: string; title: string | null; startsAt: string; tz: string; capacity: number; players: number; spotsLeft: number; level: PublicMatch["level"]; category: PublicMatch["category"]; ageMin: PublicMatch["ageMin"] }[] };
 
 export function boardToPublic(board: VenueBoard, base: string): PublicBoard {
   return {
@@ -99,7 +108,7 @@ export function boardToPublic(board: VenueBoard, base: string): PublicBoard {
     calendarUrl: `${base}/v/${board.slug}/calendar.ics`,
     matches: board.events.map(({ event: ev, occupied, spotsLeft }) => {
       const range = { min: ev.levelMin, max: ev.levelMax };
-      return { code: ev.code, url: `${base}/${ev.code}`, type: ev.type, title: ev.title, startsAt: ev.startsAt.toISOString(), tz: ev.tz, capacity: ev.capacity, players: occupied, spotsLeft, level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range), verifiedOnly: ev.levelVerifiedOnly } : null };
+      return { code: ev.code, url: `${base}/${ev.code}`, type: ev.type, title: ev.title, startsAt: ev.startsAt.toISOString(), tz: ev.tz, capacity: ev.capacity, players: occupied, spotsLeft, level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range), verifiedOnly: ev.levelVerifiedOnly } : null, ...tagOf(ev) };
     }),
   };
 }
@@ -241,6 +250,9 @@ export type PublicSeries = {
   rhythm: { every: string; weekday: number; time: string; nth: number | null; tz: string };
   venue: { name: string; slug: string | null; mapUrl: string | null } | null;
   level: { min: number | null; max: number | null; verifiedOnly: boolean };
+  /** The tag every edition carries; null for anyone and any age. */
+  category: EventCategory | null;
+  ageMin: AgeMin | null;
   capacity: number;
   cost: string | null;
   active: boolean;
@@ -259,6 +271,7 @@ export function seriesToPublic(s: Series, next: Event | null, base: string, orga
     rhythm: { every: s.every, weekday: s.dow, time: s.time, nth: s.nth, tz: s.tz },
     venue: s.venueName ? { name: s.venueName, slug: s.venueSlug, mapUrl: s.venueMapUrl } : null,
     level: { min: s.levelMin, max: s.levelMax, verifiedOnly: s.levelVerifiedOnly },
+    ...tagOf(s),
     capacity: s.capacity,
     cost: s.cost,
     active: s.active,

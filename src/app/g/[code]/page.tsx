@@ -17,7 +17,7 @@ import { getGroupByCode, getGroupDetail } from "@/lib/domain/groups";
 import { hasRange } from "@/lib/domain/levels";
 import { fillOf, withCounts } from "@/lib/domain/venueBoard";
 import { venueWithCourt } from "@/lib/labels";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
 
 type Props = { params: Promise<{ code: string }> };
@@ -63,6 +63,7 @@ export default async function GroupPage({ params }: Props) {
     // Upcoming rows say whether there is room, for whom and at what cost; a past row has no seats to offer.
     const fill = fills.get(ev.id);
     const range = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+    const forChip = tagChip(t, ev);
     return (
       <li key={ev.id}>
         <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
@@ -80,6 +81,7 @@ export default async function GroupPage({ params }: Props) {
               <div className="mt-1.5 flex items-center gap-1.5 overflow-hidden" data-testid="group-row-chips">
                 <span className={`${fill.kind === "full" ? "chip-full" : "chip-open"} shrink-0 tabular-nums`}>{fillText(t, fill)}</span>
                 {range && <span className="chip-muted shrink-0">🎚️ {range}</span>}
+                {forChip && <span className="chip-muted shrink-0">{forChip}</span>}
                 {ev.cost && (
                   <span className="chip-muted min-w-0">
                     <span className="truncate">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>

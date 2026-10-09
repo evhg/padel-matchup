@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import type { TournamentFormat } from "@/db/schema";
+import { AGE_MINS, CATEGORY_KEYS, EVENT_CATEGORIES, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
 import { DEFAULT_POINTS, FORMATS } from "@/lib/domain/formats";
 import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, presetFor, rangeFor, type PresetKey } from "@/lib/domain/levels";
 import { defaultLength, MATCH_LENGTHS, type MatchLength } from "@/lib/domain/matchLength";
@@ -13,7 +14,7 @@ import { hoursAndMinutes, nightPlan } from "@/lib/domain/tournamentPlan";
 export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
 export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
 import { nextOccurrence } from "@/lib/dates";
-import { rangeChip, rangeText } from "@/lib/levelText";
+import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
 
@@ -44,6 +45,9 @@ export type EventFormValues = {
   levelMax: number | null;
   /** With a range: only confirmed levels walk in; declared ones ask to join. */
   levelVerifiedOnly: boolean;
+  /** Who it is for: men, women or mixed, and 35+, 45+ or 55+. Null is anyone; nothing is checked at join. */
+  category: EventCategory | null;
+  ageMin: AgeMin | null;
   /** Organizer's own level, asked once when they set a range without having one. */
   myLevel: number | null;
   /** Opt-in to the public venue board (needs a venue). */
@@ -146,6 +150,8 @@ export function EventFields({
   // The level sits one tap from the form, behind its own chip: "looking for a fourth" carries the one
   // fact the fourth needs. The presets stay folded (rule 1); the chip reads what is set.
   const [levelOpen, setLevelOpen] = useState(false);
+  const tagLabel = useId();
+  const pill = (on: boolean) => `min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${on ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`;
   const range = { min: values.levelMin, max: values.levelMax };
   const preset = presetFor(range);
   const [customOpen, setCustomOpen] = useState(preset === "custom");
@@ -391,7 +397,7 @@ export function EventFields({
 
       <div>
         <button type="button" className="chip-muted hover:bg-line" aria-expanded={levelOpen} onClick={() => setLevelOpen((o) => !o)} data-testid="level-chip">
-          🎚️ {rangeChip(t, range) ?? t("level.any")}{" "}
+          🎚️ {[rangeChip(t, range) ?? t("level.any"), tagChip(t, values)].filter(Boolean).join(" · ")}{" "}
           <span className={`inline-block transition ${levelOpen ? "rotate-180" : ""}`} aria-hidden>
             ⌄
           </span>
@@ -448,6 +454,29 @@ export function EventFields({
             <LevelGuide className="mt-2" />
           </div>
         )}
+      </div>
+      {/* Who it is for, behind the same chip as the level, so the common case is no longer on a phone.
+          The owner's decision of 9 October 2026 (G1): a tag on the event, never on the player, and
+          nothing is checked at join. */}
+      <div className="mt-4">
+        <div className="label" id={tagLabel}>
+          {t("level.tagLabel")}
+        </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-labelledby={tagLabel} data-testid="tag-category">
+          {([null, ...EVENT_CATEGORIES] as const).map((c) => (
+            <button key={c ?? "anyone"} type="button" aria-pressed={values.category === c} onClick={() => onChange({ category: c })} className={pill(values.category === c)}>
+              {c ? t(CATEGORY_KEYS[c]) : t("level.tagAnyone")}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={t("level.tagAgeLabel")} data-testid="tag-age">
+          {([null, ...AGE_MINS] as const).map((a) => (
+            <button key={a ?? "any"} type="button" aria-pressed={values.ageMin === a} onClick={() => onChange({ ageMin: a })} className={pill(values.ageMin === a)}>
+              {a ? t("level.tagAge", { age: a }) : t("level.tagAnyAge")}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-sm text-muted">{t("level.tagHelp")}</p>
       </div>
           </div>
         )}

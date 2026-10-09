@@ -6,7 +6,8 @@ import { getDb } from "@/db";
 import Link from "next/link";
 import { isValidInviteCode } from "@/lib/codes";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
-import { getGroupByCode, getGroupMember, latestGroupLength, nextGroupSlot } from "@/lib/domain/groups";
+import { getGroupByCode, getGroupMember, latestGroupMatch, nextGroupSlot } from "@/lib/domain/groups";
+import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { parseMatchLength } from "@/lib/domain/matchLength";
 import { venuesForPicking } from "@/lib/domain/clubs";
 import { getPlayerTimePatterns } from "@/lib/domain/queries";
@@ -46,8 +47,9 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
   if (group && isMember) {
     const slot = nextGroupSlot(group);
     const when = slot ? { date: slot.date, time: slot.time } : undefined;
-    // The crew's usual length: as long as its latest match (one read, members only).
-    const length = parseMatchLength(await latestGroupLength(db, group.id));
+    // The crew's usual length and tag: as its latest match has them (one read, members only).
+    const latest = await latestGroupMatch(db, group.id);
+    const length = parseMatchLength(latest?.durationMinutes);
     groupValues = {
       type: group.type,
       ...(length ? { durationMinutes: length } : {}),
@@ -58,6 +60,8 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
       court: group.court ?? "",
       levelMin: group.levelMin,
       levelMax: group.levelMax,
+      category: cleanCategory(latest?.category),
+      ageMin: cleanAgeMin(latest?.ageMin),
       tz: group.tz,
       ...when,
     };

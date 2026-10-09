@@ -9,7 +9,7 @@ import { getDb } from "@/db";
 import { baseUrl, shortHost } from "@/lib/config";
 import { formatEventDayLong, formatEventTime } from "@/lib/dates";
 import { getSeries, seriesPage } from "@/lib/domain/series";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { localeAlternates } from "@/lib/seo";
 import { rhythmLabel } from "@/lib/seriesText";
 import { getSessionPlayer } from "@/lib/session";
@@ -45,6 +45,7 @@ export default async function SeriesPage({ params }: Props) {
   const url = `${baseUrl()}/s/${s.slug}`;
   const rhythm = rhythmLabel(t, locale, s);
   const level = rangeChip(t, { min: s.levelMin, max: s.levelMax });
+  const forChip = tagChip(t, s);
   const next = page.next;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -86,6 +87,7 @@ export default async function SeriesPage({ params }: Props) {
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="chip-muted">{t(`club.week.kind.${s.format}`)}</span>
             {level && <span className="chip-muted">{level}</span>}
+            {forChip && <span className="chip-muted">{forChip}</span>}
             {s.cost && <span className="chip-muted">{t("series.perPlayer", { cost: s.cost })}</span>}
             <span className="chip-muted">{t("series.editions", { count: page.editions })}</span>
           </div>

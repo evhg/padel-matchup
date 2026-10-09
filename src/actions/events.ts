@@ -11,6 +11,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { setBanter } from "@/lib/domain/banter";
 import { cancelEvent, createEvent, duplicateEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
+import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { changePlayerEmail } from "@/lib/domain/identity";
 import { getPlayer, normalizeEmail } from "@/lib/domain/players";
@@ -46,6 +47,9 @@ const createSchema = z.object({
   levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
   levelVerifiedOnly: z.boolean().optional(),
+  /** Who it is for: chips on the form, so anything else is a form that is not ours, and refused. */
+  category: z.enum(EVENT_CATEGORIES).nullable().optional(),
+  ageMin: z.literal(AGE_MINS).nullable().optional(),
   myLevel: z.coerce.number().min(0).max(7).nullable().optional(),
   /** Created from a group page: the match belongs to the group and every member is notified. */
   groupCode: z.string().length(6).optional(),
@@ -92,6 +96,8 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       levelMin: input.levelMin ?? null,
       levelMax: input.levelMax ?? null,
       levelVerifiedOnly: input.levelVerifiedOnly ?? false,
+      category: input.category ?? null,
+      ageMin: input.ageMin ?? null,
       groupId: group?.id ?? null,
       publicListing: input.publicListing ?? false,
       bookingUrl: input.bookingUrl,
@@ -147,6 +153,9 @@ const updateSchema = z.object({
   levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
   levelVerifiedOnly: z.boolean().optional(),
+  /** Null takes the tag off; omitted leaves it as it is. */
+  category: z.enum(EVENT_CATEGORIES).nullable().optional(),
+  ageMin: z.literal(AGE_MINS).nullable().optional(),
   publicListing: z.boolean().optional(),
   bookingUrl: z.string().max(500).optional(),
   cost: z.string().max(40).optional(),
@@ -200,6 +209,8 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       levelMin: input.levelMin,
       levelMax: input.levelMax,
       levelVerifiedOnly: input.levelVerifiedOnly,
+      category: input.category,
+      ageMin: input.ageMin,
       publicListing: input.publicListing,
       bookingUrl: input.bookingUrl,
       cost: input.cost,

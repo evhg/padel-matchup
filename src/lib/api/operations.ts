@@ -9,6 +9,7 @@ import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { admission, hasRange } from "@/lib/domain/levels";
+import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
@@ -51,6 +52,10 @@ export const createMatchSchema = z.object({
   levelMin: levelField.describe("Level range 0 to 7 (Playtomic-style). Omit both for any level."),
   levelMax: levelField,
   verifiedLevelsOnly: z.boolean().default(false).describe("With a range: only levels confirmed by an organizer, a coach or a club walk in; declared levels inside the range ask to join."),
+  // Refused rather than dropped: an assistant that sends "ladies" hears which words exist, instead of
+  // making an untagged match it believes is tagged.
+  category: z.enum(EVENT_CATEGORIES).nullable().optional().describe("Who the match is for: men, women or mixed. Omit for anyone. Information for the players who find it; nobody is checked when they join."),
+  ageMin: z.literal(AGE_MINS).nullable().optional().describe("An age tag: 35, 45 or 55 means 35+, 45+ or 55+. Omit for any age. Information only; nobody is checked when they join."),
   title: z.string().max(80).optional(),
   note: z.string().max(500).optional(),
   bookingUrl: z.url().max(500).optional().describe("The club's booking page or confirmation link, shown to players."),
@@ -148,6 +153,8 @@ export async function createMatch(db: Db, raw: unknown, ctx: OpContext, locale =
     levelMin: input.levelMin ?? null,
     levelMax: input.levelMax ?? null,
     levelVerifiedOnly: input.verifiedLevelsOnly,
+    category: input.category ?? null,
+    ageMin: input.ageMin ?? null,
     publicListing: input.listOnVenueBoard,
     bookingUrl: input.bookingUrl,
     cost: input.cost,

@@ -11,7 +11,7 @@ import { LevelChecks } from "@/components/LevelChecks";
 import { listLevelChecks } from "@/lib/domain/verify";
 import { CLUB_WEEK, clubDay, listClubSlots, upcomingBySlot } from "@/lib/domain/clubWeek";
 import { formatEventTime, relativeTime } from "@/lib/dates";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { calendarTitle } from "@/lib/calendar";
 import { getLocale } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
@@ -113,6 +113,7 @@ export default async function ClubManagePage({ params }: Props) {
             <ul className="mt-2 flex flex-col gap-2">
               {day.events.map(({ event: ev, occupied, spotsLeft, names, waiting }) => {
                 const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+                const forChip = tagChip(t, ev);
                 return (
                   <li key={ev.id} className="rounded-2xl border border-line bg-card px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -121,6 +122,7 @@ export default async function ClubManagePage({ params }: Props) {
                         {calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}
                       </Link>
                       {level && <span className="chip-muted">{level}</span>}
+                      {forChip && <span className="chip-muted">{forChip}</span>}
                       {ev.court && <span className="chip-muted">{/^\d+$/.test(ev.court) ? t("event.courtNumber", { n: ev.court }) : ev.court}</span>}
                       <span className={`ml-auto shrink-0 text-sm font-bold tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
                         {occupied}/{ev.capacity}
@@ -146,7 +148,7 @@ export default async function ClubManagePage({ params }: Props) {
           leadDays={CLUB_WEEK.leadDaysDefault}
           slots={slots.map((s) => {
             const next = nextBySlot.get(s.id);
-            return { id: s.id, dow: s.dow, time: s.time, type: s.type, format: s.format, capacity: s.capacity, levelMin: s.levelMin, levelMax: s.levelMax, verifiedOnly: s.verifiedOnly, title: s.title, active: s.active, leadDays: s.leadDays, next: next ? { code: next.code, startsAt: next.startsAt.toISOString() } : null };
+            return { id: s.id, dow: s.dow, time: s.time, type: s.type, format: s.format, capacity: s.capacity, levelMin: s.levelMin, levelMax: s.levelMax, verifiedOnly: s.verifiedOnly, category: s.category, ageMin: s.ageMin, title: s.title, active: s.active, leadDays: s.leadDays, next: next ? { code: next.code, startsAt: next.startsAt.toISOString() } : null };
           })}
         />
         <section className="card" data-testid="club-coaching">

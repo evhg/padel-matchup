@@ -6,7 +6,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +39,7 @@ export default async function EmbedBoard({ params }: Props) {
         <ul className="flex flex-col gap-2">
           {board.events.slice(0, 8).map(({ event: ev, spotsLeft }) => {
             const chip = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+            const forChip = tagChip(t, ev);
             return (
               <li key={ev.id}>
                 <a href={`${base}/${ev.code}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-2xl border border-line bg-card px-3 py-2 hover:border-ink/30">
@@ -51,6 +52,7 @@ export default async function EmbedBoard({ params }: Props) {
                     <div className={`text-xs font-bold ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
                       {spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t("venue.full")}
                       {chip ? ` · ${chip}` : ""}
+                      {forChip ? ` · ${forChip}` : ""}
                     </div>
                   </div>
                 </a>

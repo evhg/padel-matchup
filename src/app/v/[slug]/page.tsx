@@ -19,7 +19,7 @@ import { coachesAtClub } from "@/lib/domain/coaching";
 import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { embedHtml } from "@/lib/embed";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { recentResults } from "@/lib/domain/recentResults";
 import { RecentResults } from "@/components/RecentResults";
 
@@ -195,11 +195,13 @@ export default async function VenueBoardPage({ params }: Props) {
                     ) : (
                       d.events.map(({ event: ev, occupied, spotsLeft }) => {
                         const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+                        const forChip = tagChip(t, ev);
                         return (
                           <Link key={ev.id} href={`/${ev.code}`} prefetch={false} className="flex items-center gap-2 text-sm hover:underline">
                             <span className="font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
                             <span className="truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
                             {level && <span className="chip-muted">{level}</span>}
+                            {forChip && <span className="chip-muted">{forChip}</span>}
                             <span className={`ml-auto shrink-0 tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
                               {occupied}/{ev.capacity}
                             </span>
@@ -226,6 +228,7 @@ export default async function VenueBoardPage({ params }: Props) {
           <ul className="flex flex-col gap-2">
             {later.map(({ event: ev, occupied, spotsLeft }) => {
               const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+              const forChip = tagChip(t, ev);
               return (
                 <li key={ev.id}>
                   <Link href={`/${ev.code}`} prefetch={false} className="card flex items-center gap-4 py-4 hover:border-ink/30">
@@ -237,6 +240,7 @@ export default async function VenueBoardPage({ params }: Props) {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
                         {level && <span className="chip-muted">{level}</span>}
+                        {forChip && <span className="chip-muted">{forChip}</span>}
                       </div>
                       <div className="truncate text-sm text-muted">
                         {formatEventDay(ev.startsAt, ev.tz, locale)} · {t("event.players", { count: occupied, capacity: ev.capacity })}

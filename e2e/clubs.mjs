@@ -202,15 +202,20 @@ try {
   await page.getByRole("radio", { name: "Americano" }).click();
   await page.getByRole("radio", { name: /Gold/ }).click();
   await page.getByTestId("slot-verified-only").check();
+  // Who the slot's matches are for (the owner's decision of 9 October 2026): one tap, carried to every match.
+  await page.getByTestId("slot-category").getByRole("radio", { name: "Women", exact: true }).click();
   await page.getByTestId("slot-title").fill("Gold night");
   await page.getByTestId("slot-add").click();
   await page.getByText(/Added\. The first match appears/).waitFor({ timeout: 20000 });
   await page.getByTestId("club-slots").getByText("Gold night").waitFor({ timeout: 20000 });
+  await shot(page, "c3-week-tagged");
+  check("the slot's line says who its matches are for", /· Women/.test(await page.getByTestId("club-slots").innerText()));
   const hourly = await fetch(`${BASE}/api/cron/hourly`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((r) => r.json());
   check("the hourly job turns the slot into a match", hourly.clubMatches >= 1, JSON.stringify(hourly).slice(0, 200));
   await page.goto(`${BASE}/v/${SLUG}`);
   const weekCard = page.getByTestId("club-week");
   check("the club page shows this week with the gold night and eight open seats", (await weekCard.count()) === 1 && (await weekCard.getByText("Gold night").count()) >= 1 && (await weekCard.getByText("0/8").count()) >= 1);
+  check("the gold night on the club's week carries the slot's tag", (await weekCard.getByText("Women", { exact: true }).count()) >= 1);
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the editor names the next match of the slot", (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).count()) === 1);
 

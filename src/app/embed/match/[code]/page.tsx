@@ -11,7 +11,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { isLevelVerified } from "@/lib/domain/levels";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +35,7 @@ export default async function EmbedMatch({ params }: Props) {
   const occupied = seats.filter(isOccupied).length;
   const spotsLeft = Math.max(0, ev.capacity - occupied - seats.filter((s) => s.status === "invited").length);
   const chip = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+  const forChip = tagChip(t, ev);
   const cancelled = ev.status === "cancelled";
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-3 p-3" data-keep-light>
@@ -46,6 +47,7 @@ export default async function EmbedMatch({ params }: Props) {
         <div className="mt-0.5 text-sm text-muted">
           {venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) })}
           {chip ? ` · ${chip}` : ""}
+          {forChip ? ` · ${forChip}` : ""}
         </div>
       </div>
       <ul className="grid grid-cols-2 gap-1.5 text-sm">

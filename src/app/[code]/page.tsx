@@ -49,6 +49,7 @@ import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
+import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
@@ -60,7 +61,7 @@ import { getTournamentState } from "@/lib/domain/tournament";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
-import { rangeChip, rangeText } from "@/lib/levelText";
+import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
@@ -217,6 +218,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const seriesNext = seriesRow ? await nextEdition(db, seriesRow.id, now) : null;
   const canMakeSeries = Boolean(me) && me?.id === ev.creatorPlayerId && isTournament && Boolean(ev.standings) && !ev.seriesId && !cancelled;
   const levelChip = rangeChip(t, levelRange);
+  // Who it is for, beside the level: information, never a gate (eventTags.ts).
+  const forChip = tagChip(t, ev);
   const levelRangeText = ranged ? rangeText(t, levelRange) : "";
   const statusChip = cancelled
     ? { cls: "chip-danger", label: t("event.statusCancelled") }
@@ -269,6 +272,8 @@ export default async function EventPage({ params, searchParams }: Props) {
     levelMin: ev.levelMin,
     levelMax: ev.levelMax,
     levelVerifiedOnly: ev.levelVerifiedOnly,
+    category: cleanCategory(ev.category),
+    ageMin: cleanAgeMin(ev.ageMin),
     myLevel: creator.level,
     publicListing: ev.publicListing,
     format: ev.format ?? "americano",
@@ -379,6 +384,11 @@ export default async function EventPage({ params, searchParams }: Props) {
             <span className="text-xs font-bold uppercase tracking-wider text-faint">{typeLabel}</span>
             {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
             {levelChip && ev.levelVerifiedOnly && <span className="chip-muted">✓ {t("levelCheck.chip")}</span>}
+            {forChip && (
+              <span className="chip-muted" data-testid="tag-chip">
+                {forChip}
+              </span>
+            )}
             {group && (
               <Link href={`/g/${group.code}`} prefetch={false} className="chip-muted hover:bg-line">
                 👥 {t("group.partOf", { name: group.name })}

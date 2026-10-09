@@ -1003,7 +1003,16 @@
     "joinedHelp": "Un toque. Aparece junto a tu nombre para que los partidos sean igualados. Cámbialo cuando quieras en Mis partidos.",
     "joinedPlaytomic": "Tengo nivel de Playtomic",
     "joinedPlaytomicHelp": "Playtomic usa la misma escala de 0 a 7, así que tu número vale tal cual.",
-    "joinedSkip": "Omitir"
+    "joinedSkip": "Omitir",
+    "tagLabel": "¿Para quién es?",
+    "tagAnyone": "Para todos",
+    "tagMen": "Hombres",
+    "tagWomen": "Mujeres",
+    "tagMixed": "Mixto",
+    "tagAgeLabel": "Edad",
+    "tagAnyAge": "Cualquier edad",
+    "tagAge": "{age}+",
+    "tagHelp": "La etiqueta ayuda a los jugadores adecuados a encontrar el partido. No se comprueba a nadie."
   },
   "card": {
     "title": "Tarjeta de resultado",

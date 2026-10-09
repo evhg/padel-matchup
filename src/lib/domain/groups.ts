@@ -297,13 +297,14 @@ export function recurrenceDue(group: Pick<Group, "recurDow" | "recurTime" | "tz"
 
 /** Hourly: create the next match for every group whose weekly slot is within its lead time. */
 /**
- * How long a group's next match runs: as long as its latest one, so a crew that books an hour keeps
- * booking an hour. One read down `events_group_idx`; null when the group has no match yet, which
- * means the type's default.
+ * What a group's next match takes from its latest one: the length, so a crew that books an hour keeps
+ * booking an hour, and the tag (`eventTags.ts`), so a ladies' crew's next match is a ladies' match too.
+ * A group has neither column of its own; the crew's own last choice is the habit. One read down
+ * `events_group_idx`; null when the group has no match yet, which means the type's default and no tag.
  */
-export async function latestGroupLength(db: Db, groupId: string): Promise<number | null> {
-  const [row] = await db.select({ minutes: events.durationMinutes }).from(events).where(eq(events.groupId, groupId)).orderBy(desc(events.startsAt)).limit(1);
-  return row?.minutes ?? null;
+export async function latestGroupMatch(db: Db, groupId: string): Promise<Pick<Event, "durationMinutes" | "category" | "ageMin"> | null> {
+  const [row] = await db.select({ durationMinutes: events.durationMinutes, category: events.category, ageMin: events.ageMin }).from(events).where(eq(events.groupId, groupId)).orderBy(desc(events.startsAt)).limit(1);
+  return row ?? null;
 }
 
 export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<{ group: Group; event: Event }[]> {
@@ -312,11 +313,14 @@ export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<
   for (const g of candidates) {
     const startsAt = recurrenceDue(g, now);
     if (!startsAt) continue;
+    const latest = await latestGroupMatch(db, g.id);
     const event = await createEvent(db, {
       creatorPlayerId: g.creatorPlayerId,
       type: g.type,
       startsAt,
-      durationMinutes: await latestGroupLength(db, g.id),
+      durationMinutes: latest?.durationMinutes ?? null,
+      category: latest?.category ?? null,
+      ageMin: latest?.ageMin ?? null,
       tz: g.tz,
       venueName: g.venueName,
       venueMapUrl: g.venueMapUrl,

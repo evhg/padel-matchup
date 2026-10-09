@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
-import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
+import { formatLevel } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { cardTitle, levelLine, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import type { FlexBubble, LineMessage } from "./api";
 
 /**
@@ -32,8 +32,8 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
   const past = ev.status === "past";
 
   const head: string[] = [`📅 ${whenLine(detail, locale)}`, `📍 ${whereLine(detail, locale)}`];
-  const range = { min: ev.levelMin, max: ev.levelMax };
-  if (hasRange(range)) head.push(`🎚 ${s.level} ${formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` })}`);
+  const level = levelLine(ev, locale);
+  if (level) head.push(level);
   if (ev.cost) head.push(`💸 ${ev.cost}${ev.payNote ? ` · ${ev.payNote}` : ""}`);
 
   const lines: string[] = [];

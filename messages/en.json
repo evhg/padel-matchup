@@ -1003,7 +1003,16 @@
     "joinedHelp": "One tap. It shows next to your name, so games can be even. Change it any time on My matches.",
     "joinedPlaytomic": "I have a Playtomic number",
     "joinedPlaytomicHelp": "Playtomic uses the same 0–7 scale, so your number carries over.",
-    "joinedSkip": "Skip"
+    "joinedSkip": "Skip",
+    "tagLabel": "Who is it for?",
+    "tagAnyone": "Anyone",
+    "tagMen": "Men",
+    "tagWomen": "Women",
+    "tagMixed": "Mixed",
+    "tagAgeLabel": "Age",
+    "tagAnyAge": "Any age",
+    "tagAge": "{age}+",
+    "tagHelp": "The tag helps the right players find the game. Nobody is checked."
   },
   "card": {
     "title": "Result card",

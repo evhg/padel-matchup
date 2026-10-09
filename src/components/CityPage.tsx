@@ -13,7 +13,7 @@ import { listSeries } from "@/lib/domain/series";
 import { rhythmLabel } from "@/lib/seriesText";
 import { ClubRow } from "@/components/ClubBits";
 import { CLUB_LIMITS, listShownClubs } from "@/lib/domain/clubs";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
 import { recentResults } from "@/lib/domain/recentResults";
 import { RecentResults } from "@/components/RecentResults";
@@ -48,6 +48,7 @@ export async function CityPage({ city }: { city: City }) {
             <ul className="mt-3 flex flex-col gap-2">
               {board.events.map(({ event: ev, spotsLeft }) => {
                 const chip = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+                const forChip = tagChip(t, ev);
                 return (
                   <li key={ev.id}>
                     <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-4 rounded-2xl border border-line px-4 py-3 hover:border-ink/30">
@@ -60,6 +61,7 @@ export async function CityPage({ city }: { city: City }) {
                         <div className="truncate text-sm text-muted">
                           {ev.venueName}
                           {chip ? ` · ${chip}` : ""}
+                          {forChip ? ` · ${forChip}` : ""}
                         </div>
                         <div className={`mt-1 text-sm font-bold ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t("venue.full")}</div>
                       </div>

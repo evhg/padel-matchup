@@ -1,6 +1,7 @@
 // A claimed club, and the weekly programme that fills its quiet hours.
 import { bigint, boolean, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { players } from "./players";
+import type { EventCategory } from "@/lib/domain/eventTags";
 
 // ---------------------------------------------------------------------------
 // clubs — a venue page a club has claimed. Rows exist only for claimed clubs;
@@ -142,6 +143,9 @@ export const clubSlots = pgTable(
     levelMax: real("level_max"),
     /** The matches made from this slot take confirmed levels only (see events.level_verified_only). */
     verifiedOnly: boolean("verified_only").notNull().default(false),
+    /** Who the matches made from this slot are for (see events.category): a weekly "Ladies social" is "women" on every one. */
+    category: text("category").$type<EventCategory>(),
+    ageMin: integer("age_min"),
     /** "Ladies social", "Gold night"; shown as the match title. */
     title: text("title"),
     /** The match appears on the page this many days ahead. */

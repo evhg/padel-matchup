@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { addClubSlotAction, removeClubSlotAction, setClubSlotActiveAction, type ClubSlotInput } from "@/actions/clubWeek";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
+import { AGE_MINS, CATEGORY_KEYS, EVENT_CATEGORIES, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
 import { LEVEL_PRESETS, type PresetKey } from "@/lib/domain/levels";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 
-export type EditorSlot = { id: string; dow: number; time: string; type: string; format: string | null; capacity: number; levelMin: number | null; levelMax: number | null; verifiedOnly: boolean; title: string | null; active: boolean; leadDays: number; next: { code: string; startsAt: string } | null };
+export type EditorSlot = { id: string; dow: number; time: string; type: string; format: string | null; capacity: number; levelMin: number | null; levelMax: number | null; verifiedOnly: boolean; category: string | null; ageMin: number | null; title: string | null; active: boolean; leadDays: number; next: { code: string; startsAt: string } | null };
 
 const KINDS = [
   { key: "match", type: "match" as const, format: null, capacity: MATCH_CAPACITY },
@@ -29,6 +30,9 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
   const [capacityText, setCapacityText] = useState("8");
   const [preset, setPreset] = useState<PresetKey | "any">("any");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  // Who the slot's matches are for (the owner's decision of 9 October 2026, G1): a weekly "Ladies social" is "Women" on every one.
+  const [category, setCategory] = useState<EventCategory | null>(null);
+  const [ageMin, setAgeMin] = useState<AgeMin | null>(null);
   const [title, setTitle] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
     const range = preset === "any" ? null : LEVEL_PRESETS.find((p) => p.key === preset)!;
     const capacity = k.type === "match" ? MATCH_CAPACITY : clampCapacity(capacityText, k.capacity);
     setCapacityText(String(capacity));
-    const input: ClubSlotInput = { dow, time, type: k.type, format: k.format, capacity, levelMin: range?.min ?? null, levelMax: range?.max ?? null, verifiedOnly: Boolean(range) && verifiedOnly, title: title.trim() || undefined, leadDays };
+    const input: ClubSlotInput = { dow, time, type: k.type, format: k.format, capacity, levelMin: range?.min ?? null, levelMax: range?.max ?? null, verifiedOnly: Boolean(range) && verifiedOnly, category, ageMin, title: title.trim() || undefined, leadDays };
     start(async () => {
       setError(null);
       const r = await addClubSlotAction(token, input);
@@ -87,6 +91,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
         <ul className="mt-3 flex flex-col gap-2" data-testid="club-slots">
           {slots.map((s) => {
             const level = rangeChip(t, { min: s.levelMin, max: s.levelMax });
+            const forChip = tagChip(t, s);
             return (
               <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-2 ${s.active ? "" : "opacity-60"}`}>
                 <div className="w-16 shrink-0">
@@ -102,6 +107,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
                     {t("club.week.players", { count: s.capacity })}
                     {level ? ` · ${level}` : ""}
                     {s.verifiedOnly ? ` · ✓ ${t("levelCheck.chip")}` : ""}
+                    {forChip ? ` · ${forChip}` : ""}
                     {!s.active ? ` · ${t("club.week.paused")}` : s.next ? ` · ${t("club.week.nextUp", { code: s.next.code })}` : ""}
                   </div>
                 </div>
@@ -182,6 +188,21 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
             </span>
           </label>
         )}
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("level.tagLabel")} data-testid="slot-category">
+          {([null, ...EVENT_CATEGORIES] as const).map((c) => (
+            <button key={c ?? "anyone"} type="button" role="radio" aria-checked={category === c} className={chip(category === c)} onClick={() => setCategory(c)}>
+              {c ? t(CATEGORY_KEYS[c]) : t("level.tagAnyone")}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("level.tagAgeLabel")} data-testid="slot-age">
+          {([null, ...AGE_MINS] as const).map((a) => (
+            <button key={a ?? "any"} type="button" role="radio" aria-checked={ageMin === a} className={chip(ageMin === a)} onClick={() => setAgeMin(a)}>
+              {a ? t("level.tagAge", { age: a }) : t("level.tagAnyAge")}
+            </button>
+          ))}
+        </div>
+        <p className="-mt-1 text-xs text-muted">{t("level.tagHelp")}</p>
         <label className="block">
           <span className="text-xs font-bold">{t("club.week.titleLabel")}</span>
           <input className="input mt-1" value={title} maxLength={80} placeholder={t("club.week.titlePlaceholder")} onChange={(e) => setTitle(e.target.value)} data-testid="slot-title" />

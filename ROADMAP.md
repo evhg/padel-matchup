@@ -742,6 +742,18 @@ Everything in this list is live. The README describes each in detail.
   theme-color for the browser's bar (`KEEP_LIGHT_VIEWPORT`). A switch that is off has its own knob
   colour (`knob-off`), light in the dark theme, at 3:1 or better on its track. With Bigger text on a phone the
   header shows the mark without the word, and the e-mail field never gets narrower than its placeholder.
+- **Who a match is for (9 October 2026, migrations 0085 and 0086).** The owner's decision G1: a match
+  can say "Men", "Women" or "Mixed", and "35+", "45+" or "55+". The tag is on the event, never on the
+  player: no gender and no age is stored about a person, and nothing is checked at join. It sits behind
+  the level chip on the create and edit forms ("Who is it for?"), so the form is not one line longer
+  for anybody who skips it, and shows as one chip beside the level wherever the level shows: the match page, the
+  club's board and day, the city pages, the group rows, the series page, the embeds and the Telegram,
+  Discord and LINE cards ("🎚 Level 3.0–4.5 · Women · 45+"). `events.category` and `age_min`, with the
+  same pair on `series` and `club_slots`, so a ladies' night keeps its tag on every edition and a
+  club's weekly "Ladies social" on every match it makes; "Play again" and a group's weekly match keep
+  the tag of the one before. The rule is `src/lib/domain/eventTags.ts`. The API and the MCP take
+  `category` and `ageMin` on create (anything else is refused with a 422) and every match object and
+  board row carries them. Filters on a listing come later.
 
 ## The finish line
 

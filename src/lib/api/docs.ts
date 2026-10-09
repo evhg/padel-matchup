@@ -30,7 +30,7 @@ ${APP_NAME} (${base}) organises padel matches and tournaments (americano, mexica
 - GET ${base}/api/v1/series?city=phuket and ${base}/api/v1/series/{slug}: Opens that repeat (a tournament series: same weekday and time every week, fortnight or month), each with the next edition to sign up for and the past podiums. Pages at /s/{slug}.
 - GET ${base}/api/v1/coaches?city=phuket, ${base}/api/v1/coaches/{handle} and /slots: listed coaches, their rules and free starts. POST /requests (become a student, by name or token), POST /lessons (book, accepted students) and DELETE /lessons/{id} (cancel; the outcome says refunded, free_pass or counted). MCP tools: find_coaches, coach_slots, request_coach, book_lesson, cancel_lesson.
 - GET ${base}/api/v1/schedule?players=8&courts=2: an exact americano rotation.
-- POST ${base}/api/v1/matches: create a match (rate-limited per address without a key). durationMinutes is 60, 90 or 120 (default 90 for a match, 120 for a tournament); every match object carries it with endsAt.
+- POST ${base}/api/v1/matches: create a match (rate-limited per address without a key). durationMinutes is 60, 90 or 120 (default 90 for a match, 120 for a tournament); every match object carries it with endsAt. category (men, women or mixed) and ageMin (35, 45 or 55, read as 35+, 45+, 55+) say who a match is for; both are optional, any other value is refused, and every match object and board row carries them, null for anyone.
 - POST ${base}/api/v1/matches/{code}/join: join a match by name.
 - POST ${base}/api/v1/keys: get a key instantly for roomier limits and webhooks.
 - Webhooks: match.created, match.joined, match.full, match.cancelled, match.result, signed with HMAC.
@@ -74,6 +74,9 @@ No accounts. A player is a name in a signed cookie plus a personal link (${base}
 
 ### Levels
 0 to 7 in quarter steps, self-declared, the scale most padel apps use. Results move it a little: when an organiser confirms a 2v2 score or finalises a tournament, an Elo-style delta (one level ≈ 10:1 odds, at most ±0.10 per match) is applied to rated players. Matches can carry a range (Bronze 1.0–2.5, Silver 2.5–3.5, Gold 3.0–4.5, Platinum 4.5+, or custom). Inside the range people join; outside they ask, and the organiser approves. Unrated players are asked for a level once. After a finalised result the organiser can confirm the levels of the people they played with; a confirmed level shows a tick and stays confirmed while it moves less than half a step. Rankings (per club at /v/{slug}/ranking and per city at /phuket, /singapore) count finalised results from the last 90 days, 3 points per win and 1 per draw, 3/2/1 for tournament podiums, and list only players who opted in.
+
+### Who a match is for
+A match can say it is for men, women or mixed players, and for 35+, 45+ or 55+ ("Women", "Mixed · 45+"). The tag is on the match, never on a person: Kicksmash stores no gender and no age about anybody, and nobody is checked when they join. It helps the right players find the game. A series and a club's weekly programme carry it to every match they make.
 
 ### Groups
 "Turn this crew into a group" makes a group from a match: same players, same defaults. Any member creates the next match from the group page, prefilled; everyone else is notified by email and push. A weekly slot creates the match automatically a few days ahead. Once a group has two scored matches in the last 90 days, its page shows a small season table: each member who played, by first name, with played, won and wins in a row.
