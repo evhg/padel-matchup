@@ -47,8 +47,8 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
   if (group && isMember) {
     const slot = nextGroupSlot(group);
     const when = slot ? { date: slot.date, time: slot.time } : undefined;
-    // The crew's usual length and tag: as its latest match has them (one read, members only).
-    const latest = await latestGroupMatch(db, group.id);
+    // The crew's usual length and tag: as the match before the next slot has them (one read, members only).
+    const latest = await latestGroupMatch(db, group, slot?.startsAt ?? new Date());
     const length = parseMatchLength(latest?.durationMinutes);
     groupValues = {
       type: group.type,

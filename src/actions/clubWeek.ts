@@ -46,6 +46,22 @@ export async function addClubSlotAction(token: string, raw: ClubSlotInput): Prom
   });
 }
 
+/**
+ * The club changes a slot it already has, in place: today, who its matches are for. The slot keeps
+ * what it already made, so no second match appears for a night that has one, and the coming match
+ * takes the new tag (`updateClubSlot`).
+ */
+export async function updateClubSlotAction(token: string, id: string, raw: Partial<ClubSlotInput>): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const patch = slotSchema.partial().parse(raw);
+    const { db, club } = await clubFor(token);
+    const row = await updateClubSlot(db, club.slug, id, patch);
+    if (!row) throw new ActionFailure("not_found");
+    revalidate(club.slug, token);
+    return null;
+  });
+}
+
 export async function setClubSlotActiveAction(token: string, id: string, active: boolean): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, club } = await clubFor(token);

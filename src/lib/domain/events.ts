@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
+import { activity, events, series, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
 import { newManageCode, newShareCode } from "@/lib/codes";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
@@ -389,6 +389,15 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     if (Object.keys(set).length === 0) return { event: ev, calendarChanged: false, promotedPlayerIds };
 
     const [updated] = await tx.update(events).set(set).where(eq(events.id, ev.id)).returning();
+    // An edition is made from its series row, so a tag the series' organiser sets here would be gone by
+    // the next edition. Their change is the series' change too; a player who edits the edition changes
+    // this date only. One update by primary key, and only when the tag moved.
+    if (ev.seriesId && actorPlayerId && ("category" in set || "ageMin" in set)) {
+      await tx
+        .update(series)
+        .set({ category: updated.category, ageMin: updated.ageMin, updatedAt: new Date() })
+        .where(and(eq(series.id, ev.seriesId), eq(series.organizerPlayerId, actorPlayerId)));
+    }
     for (const pid of promotedPlayerIds) {
       await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: pid, verb: "promoted" });
     }

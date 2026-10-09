@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubSlots, clubs, events, players, slots, type Club, type ClubSlot, type Event, type TournamentFormat } from "@/db/schema";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
@@ -84,8 +84,12 @@ export async function addClubSlot(db: Db, clubSlug: string, input: SlotInput): P
   return row;
 }
 
-/** Pausing keeps the slot; moving it forgets what was already created so the new time is honoured. */
-export async function updateClubSlot(db: Db, clubSlug: string, id: string, patch: Partial<SlotInput> & { active?: boolean }): Promise<ClubSlot | null> {
+/**
+ * Pausing keeps the slot; moving it forgets what was already created so the new time is honoured. A
+ * new tag also reaches the matches the slot already made and that are still to come, so a club that
+ * retags its "Ladies social" needs no remove-and-add (which made a second match for the same night).
+ */
+export async function updateClubSlot(db: Db, clubSlug: string, id: string, patch: Partial<SlotInput> & { active?: boolean }, now = new Date()): Promise<ClubSlot | null> {
   const [cur] = await db.select().from(clubSlots).where(and(eq(clubSlots.id, id), eq(clubSlots.clubSlug, clubSlug))).limit(1);
   if (!cur) return null;
   const merged = cleanSlotInput({ dow: cur.dow, time: cur.time, type: cur.type as "match" | "tournament", format: cur.format as TournamentFormat | null, capacity: cur.capacity, courts: cur.courts, levelMin: cur.levelMin, levelMax: cur.levelMax, verifiedOnly: cur.verifiedOnly, category: cur.category, ageMin: cur.ageMin, title: cur.title, leadDays: cur.leadDays, whenFull: cur.whenFull as "waitlist" | "closed", cost: cur.cost, ...patch });
@@ -95,6 +99,13 @@ export async function updateClubSlot(db: Db, clubSlug: string, id: string, patch
     .set({ ...merged, active: patch.active ?? cur.active, ...(moved ? { lastCreatedFor: null } : {}) })
     .where(eq(clubSlots.id, id))
     .returning();
+  // One bounded update down `events_club_slot_idx`: the slot's coming matches, a week ahead at most.
+  if (row && (merged.category !== cur.category || merged.ageMin !== cur.ageMin)) {
+    await db
+      .update(events)
+      .set({ category: merged.category, ageMin: merged.ageMin })
+      .where(and(eq(events.clubSlotId, id), gt(events.startsAt, now), ne(events.status, "cancelled")));
+  }
   return row ?? null;
 }
 

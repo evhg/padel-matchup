@@ -197,14 +197,26 @@ export default async function VenueBoardPage({ params }: Props) {
                         const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
                         const forChip = tagChip(t, ev);
                         return (
-                          <Link key={ev.id} href={`/${ev.code}`} prefetch={false} className="flex items-center gap-2 text-sm hover:underline">
-                            <span className="font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
-                            <span className="truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
-                            {level && <span className="chip-muted">{level}</span>}
-                            {forChip && <span className="chip-muted">{forChip}</span>}
-                            <span className={`ml-auto shrink-0 tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
-                              {occupied}/{ev.capacity}
+                          // The time, the name and the seats on one line; the chips on their own line under it, so at
+                          // 390px a level and a tag wrap instead of crushing the name or running off the card.
+                          <Link key={ev.id} href={`/${ev.code}`} prefetch={false} className="block text-sm hover:underline" data-testid="club-week-row">
+                            <span className="flex items-center gap-2">
+                              <span className="font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
+                              <span className="min-w-0 truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
+                              <span className={`ml-auto shrink-0 tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
+                                {occupied}/{ev.capacity}
+                              </span>
                             </span>
+                            {(level || forChip) && (
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {level && <span className="chip-muted">{level}</span>}
+                                {forChip && (
+                                  <span className="chip-muted" data-testid="tag-chip">
+                                    {forChip}
+                                  </span>
+                                )}
+                              </span>
+                            )}
                           </Link>
                         );
                       })

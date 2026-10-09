@@ -7,13 +7,13 @@ import type { Db } from "@/db";
 import { activity, clubSlots, events, series as seriesTable } from "@/db/schema";
 import { fail } from "@/lib/api/http";
 import { createMatch, NO_SIDE_EFFECTS } from "@/lib/api/operations";
-import { boardToPublic, matchToPublic, seriesToPublic } from "@/lib/api/serialize";
+import { boardToPublic, groupToPublic, matchToPublic, seriesToPublic } from "@/lib/api/serialize";
 import { renderDiscordCard } from "@/lib/discord/card";
 import { claimClub, decideClub } from "@/lib/domain/clubs";
 import { addClubSlot, autoCreateClubEvents, updateClubSlot } from "@/lib/domain/clubWeek";
-import { createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
+import { cancelEvent, createEvent, duplicateEvent, updateEvent } from "@/lib/domain/events";
 import { AGE_MINS, cleanAgeMin, cleanCategory, EVENT_CATEGORIES, hasTag, tagParts } from "@/lib/domain/eventTags";
-import { autoCreateGroupMatches, createGroup, updateGroup } from "@/lib/domain/groups";
+import { autoCreateGroupMatches, createGroup, getGroupByCode, getGroupDetail, updateGroup } from "@/lib/domain/groups";
 import { getEventByCode } from "@/lib/domain/queries";
 import { autoCreateSeriesEditions, createSeriesFromEvent } from "@/lib/domain/series";
 import { joinEvent } from "@/lib/domain/slots";
@@ -221,14 +221,18 @@ describe("every path that writes a match keeps the tag", () => {
     expect(next).toMatchObject({ category: "women", ageMin: 35 });
     expect(next.startsAt.toISOString()).toBe("2026-10-10T02:00:00.000Z");
 
-    // The organiser takes the tag off the coming edition only; the series still says what the night is.
-    await updateEvent(db, next.id, org.id, { category: null, ageMin: null });
+    const seriesRow = async () => (await db.select().from(seriesTable).where(eq(seriesTable.id, s.id)))[0];
+    // A player of the edition may change its details (canEditMatchDetails): that is this date only.
+    await updateEvent(db, next.id, ids[1], { category: "men" });
+    expect(await seriesRow()).toMatchObject({ category: "women", ageMin: 35 });
+    // The organiser's change is the series' change: an edition is made from the series row, so a tag
+    // set on the edition alone would be gone by the next date.
+    await updateEvent(db, next.id, org.id, { category: "mixed", ageMin: 45 });
+    expect(await seriesRow()).toMatchObject({ category: "mixed", ageMin: 45 });
     const made = (await autoCreateSeriesEditions(db, new Date("2026-10-11T03:00:00.000Z"))).find((m) => m.series.id === s.id)?.event;
     expect(made?.startsAt.toISOString()).toBe("2026-10-17T02:00:00.000Z");
-    expect(made).toMatchObject({ category: "women", ageMin: 35 });
-
-    const [row] = await db.select().from(seriesTable).where(eq(seriesTable.id, s.id));
-    expect(seriesToPublic(row, made ?? null, BASE)).toMatchObject({ category: "women", ageMin: 35 });
+    expect(made).toMatchObject({ category: "mixed", ageMin: 45 });
+    expect(seriesToPublic(await seriesRow(), made ?? null, BASE)).toMatchObject({ category: "mixed", ageMin: 45 });
   });
 
   it("carries a club slot's tag onto every match it makes, through a pause and a resume", async () => {
@@ -256,6 +260,33 @@ describe("every path that writes a match keeps the tag", () => {
     expect(second).toMatchObject({ category: "women", ageMin: 35 });
   });
 
+  it("retags a slot in place: its coming match follows, a played one keeps its tag, and no night gets a second match", async () => {
+    const pim = await makePlayer(db, "Pim");
+    const club = await claimClub(db, { name: "Retag Club", playerId: pim.id, tz: TZ });
+    await decideClub(db, club.slug, true, NOW);
+    const slot = await addClubSlot(db, club.slug, { dow: 2, time: "18:00", title: "Tuesday social", category: "women", ageMin: 35 });
+    const mine = (run: Awaited<ReturnType<typeof autoCreateClubEvents>>) => run.created.filter((c) => c.slot.id === slot.id).map((c) => c.event);
+    const [tue13] = mine(await autoCreateClubEvents(db, NOW));
+    const [tue20] = mine(await autoCreateClubEvents(db, new Date(NOW.getTime() + 7 * DAY)));
+    expect([tue13.startsAt.toISOString(), tue20.startsAt.toISOString()]).toEqual(["2026-10-13T11:00:00.000Z", "2026-10-20T11:00:00.000Z"]);
+
+    // Wednesday 14 October: the 13th is played, the 20th is still to come.
+    const wed14 = new Date("2026-10-14T03:00:00.000Z");
+    await updateClubSlot(db, club.slug, slot.id, { category: "mixed", ageMin: 45 }, wed14);
+    const tagOfEvent = async (id: string) => (await db.select({ category: events.category, ageMin: events.ageMin }).from(events).where(eq(events.id, id)))[0];
+    expect(await tagOfEvent(tue20.id)).toEqual({ category: "mixed", ageMin: 45 });
+    expect(await tagOfEvent(tue13.id)).toEqual({ category: "women", ageMin: 35 });
+
+    // The slot still knows it made the 20th: the hourly job makes nothing new for that night.
+    const [after] = await db.select().from(clubSlots).where(eq(clubSlots.id, slot.id));
+    expect(after).toMatchObject({ category: "mixed", ageMin: 45, title: "Tuesday social" });
+    expect(after.lastCreatedFor?.toISOString()).toBe("2026-10-20T11:00:00.000Z");
+    expect(mine(await autoCreateClubEvents(db, wed14))).toEqual([]);
+    expect(mine(await autoCreateClubEvents(db, new Date("2026-10-15T03:00:00.000Z")))).toEqual([]);
+    const ofSlot = await db.select({ id: events.id }).from(events).where(eq(events.clubSlotId, slot.id));
+    expect(ofSlot).toHaveLength(2);
+  });
+
   it("gives a group's weekly match the tag of its latest one", async () => {
     const admin = await makePlayer(db, "Crew admin");
     const g0 = await createGroup(db, { name: "Thursday ladies", creatorPlayerId: admin.id, tz: "UTC", venueName: "Court 7" });
@@ -267,6 +298,50 @@ describe("every path that writes a match keeps the tag", () => {
     const [second] = (await autoCreateGroupMatches(db, new Date(monday.getTime() + 7 * DAY))).filter((c) => c.group.id === g.id);
     expect(second.event.startsAt.toISOString()).toBe("2026-10-22T19:00:00.000Z");
     expect(second.event).toMatchObject({ category: "women", ageMin: 45 });
+    // The group's public shape names the tag of each coming match.
+    const pub = groupToPublic(await getGroupDetail(db, (await getGroupByCode(db, g.code))!, monday), BASE);
+    expect(pub.upcoming.find((u) => u.code === second.event.code)).toMatchObject({ category: "women", ageMin: 45 });
+  });
+
+  /** A Thursday crew at 19:00 UTC, made a week ahead; `monday` is when the hourly job makes the 15th. */
+  const thursdayCrew = async (name: string) => {
+    const admin = await makePlayer(db, `${name} admin`);
+    const g0 = await createGroup(db, { name, creatorPlayerId: admin.id, tz: "UTC", venueName: "Court 8" });
+    return { admin, g: await updateGroup(db, g0.id, admin.id, { recurDow: 4, recurTime: "19:00", recurLeadDays: 5 }) };
+  };
+  const monday12 = new Date("2026-10-12T10:00:00.000Z");
+  const monday19 = new Date("2026-10-19T10:00:00.000Z");
+  const groupMatch = (g: { id: string; creatorPlayerId: string }, startsAt: string, category: string | null, ageMin: number | null) =>
+    createEvent(db, { creatorPlayerId: g.creatorPlayerId, type: "match", startsAt: new Date(startsAt), tz: "UTC", whenFull: "waitlist", groupId: g.id, category: category as never, ageMin, durationMinutes: 60 });
+
+  it("takes the weekly habit from the last weekly match, not from a one-off played since", async () => {
+    const { admin, g } = await thursdayCrew("Thursday women");
+    const [thu15] = (await autoCreateGroupMatches(db, monday12)).filter((c) => c.group.id === g.id);
+    await updateEvent(db, thu15.event.id, admin.id, { category: "women" });
+    // Saturday 17th, the same crew plays a one-off mixed 45+ night, an hour long.
+    await groupMatch(g, "2026-10-17T10:00:00.000Z", "mixed", 45);
+    const [thu22] = (await autoCreateGroupMatches(db, monday19)).filter((c) => c.group.id === g.id);
+    expect(thu22.event.startsAt.toISOString()).toBe("2026-10-22T19:00:00.000Z");
+    expect(thu22.event).toMatchObject({ category: "women", ageMin: null, durationMinutes: 90 });
+  });
+
+  it("never takes it from a match after the one being made", async () => {
+    const { g } = await thursdayCrew("Before only");
+    // Played on the 8th as women; a men's 55+ match already planned for the 29th.
+    await groupMatch(g, "2026-10-08T19:00:00.000Z", "women", null);
+    await groupMatch(g, "2026-10-29T19:00:00.000Z", "men", 55);
+    const [thu15] = (await autoCreateGroupMatches(db, monday12)).filter((c) => c.group.id === g.id);
+    expect(thu15.event.startsAt.toISOString()).toBe("2026-10-15T19:00:00.000Z");
+    expect(thu15.event).toMatchObject({ category: "women", ageMin: null });
+  });
+
+  it("never takes it from a cancelled match", async () => {
+    const { admin, g } = await thursdayCrew("Called off");
+    const [thu15] = (await autoCreateGroupMatches(db, monday12)).filter((c) => c.group.id === g.id);
+    await updateEvent(db, thu15.event.id, admin.id, { category: "women", durationMinutes: 60 });
+    await cancelEvent(db, thu15.event.id, admin.id);
+    const [thu22] = (await autoCreateGroupMatches(db, monday19)).filter((c) => c.group.id === g.id);
+    expect(thu22.event).toMatchObject({ category: null, ageMin: null, durationMinutes: 90 });
   });
 
   it("prints it on the Telegram, Discord and LINE cards", async () => {

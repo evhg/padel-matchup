@@ -67,6 +67,18 @@ export const widestDayFits = (cell) =>
     e.textContent = original;
     return { ok: worst.over <= 0 && worst.lines <= 1, worst };
   });
+
+/**
+ * Does `inner` sit wholly inside `outer`, and on the screen? A chip pushed past its row's edge is still
+ * "visible" to every other check: only the boxes say it ran off a 390px phone or was clipped.
+ */
+export async function sitsInside(page, inner, outer) {
+  const [a, b] = [await inner.boundingBox(), await outer.boundingBox()];
+  const width = page.viewportSize()?.width ?? Infinity;
+  const ok = Boolean(a && b) && a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.width <= b.x + b.width + 0.5 && a.y + a.height <= b.y + b.height + 0.5 && a.x + a.width <= width + 0.5;
+  return { ok, detail: JSON.stringify({ inner: a, outer: b, width }) };
+}
+
 export const shot = (page, name) => (SHOTS ? page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true }) : Promise.resolve());
 
 export function makeCheck(results) {

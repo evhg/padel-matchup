@@ -125,7 +125,7 @@ export type PublicGroup = {
   level: PublicMatch["level"];
   weekly: { weekday: number; time: string; leadDays: number } | null;
   members: { name: string; level: number | null; admin: boolean }[];
-  upcoming: { code: string; url: string; startsAt: string; title: string | null }[];
+  upcoming: { code: string; url: string; startsAt: string; title: string | null; category: PublicMatch["category"]; ageMin: PublicMatch["ageMin"] }[];
 };
 
 export function groupToPublic(detail: GroupDetail, base: string): PublicGroup {
@@ -143,7 +143,7 @@ export function groupToPublic(detail: GroupDetail, base: string): PublicGroup {
     level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range) } : null,
     weekly: g.recurDow != null && g.recurTime ? { weekday: g.recurDow, time: g.recurTime, leadDays: g.recurLeadDays } : null,
     members: detail.members.map((m) => ({ name: m.player.displayName, level: m.player.level, admin: m.role === "admin" })),
-    upcoming: detail.upcoming.map((e: Event) => ({ code: e.code, url: `${base}/${e.code}`, startsAt: e.startsAt.toISOString(), title: e.title })),
+    upcoming: detail.upcoming.map((e: Event) => ({ code: e.code, url: `${base}/${e.code}`, startsAt: e.startsAt.toISOString(), title: e.title, ...tagOf(e) })),
   };
 }
 

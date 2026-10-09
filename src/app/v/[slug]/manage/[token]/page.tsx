@@ -118,16 +118,25 @@ export default async function ClubManagePage({ params }: Props) {
                   <li key={ev.id} className="rounded-2xl border border-line bg-card px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
-                      <Link href={`/${ev.code}`} prefetch={false} className="truncate font-bold hover:underline">
+                      <Link href={`/${ev.code}`} prefetch={false} className="min-w-0 truncate font-bold hover:underline">
                         {calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}
                       </Link>
-                      {level && <span className="chip-muted">{level}</span>}
-                      {forChip && <span className="chip-muted">{forChip}</span>}
-                      {ev.court && <span className="chip-muted">{/^\d+$/.test(ev.court) ? t("event.courtNumber", { n: ev.court }) : ev.court}</span>}
                       <span className={`ml-auto shrink-0 text-sm font-bold tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
                         {occupied}/{ev.capacity}
                       </span>
                     </div>
+                    {/* The chips on a line of their own, wrapping: three of them beside a name ran off a phone. */}
+                    {(level || forChip || ev.court) && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {level && <span className="chip-muted">{level}</span>}
+                        {forChip && (
+                          <span className="chip-muted" data-testid="tag-chip">
+                            {forChip}
+                          </span>
+                        )}
+                        {ev.court && <span className="chip-muted">{/^\d+$/.test(ev.court) ? t("event.courtNumber", { n: ev.court }) : ev.court}</span>}
+                      </div>
+                    )}
                     <p className="mt-1 text-sm text-muted">
                       {names.length ? names.join(", ") : t("club.week.nobodyYet")}
                       {waiting > 0 ? ` · ${t("club.week.waiting", { count: waiting })}` : ""}

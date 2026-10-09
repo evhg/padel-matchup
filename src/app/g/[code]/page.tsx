@@ -78,12 +78,17 @@ export default async function GroupPage({ params }: Props) {
               {ev.status === "cancelled" ? ` · ${t("me.cancelled")}` : ""}
             </div>
             {fill && (
-              <div className="mt-1.5 flex items-center gap-1.5 overflow-hidden" data-testid="group-row-chips">
+              // Wrapping, never clipping: with a level, a tag and a price the fourth chip used to vanish at 390px.
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="group-row-chips">
                 <span className={`${fill.kind === "full" ? "chip-full" : "chip-open"} shrink-0 tabular-nums`}>{fillText(t, fill)}</span>
                 {range && <span className="chip-muted shrink-0">🎚️ {range}</span>}
-                {forChip && <span className="chip-muted shrink-0">{forChip}</span>}
+                {forChip && (
+                  <span className="chip-muted shrink-0" data-testid="tag-chip">
+                    {forChip}
+                  </span>
+                )}
                 {ev.cost && (
-                  <span className="chip-muted min-w-0">
+                  <span className="chip-muted min-w-0 max-w-full">
                     <span className="truncate">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>
                   </span>
                 )}
