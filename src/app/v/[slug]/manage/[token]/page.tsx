@@ -114,7 +114,7 @@ export default async function ClubManagePage({ params }: Props) {
               {day.events.map(({ event: ev, occupied, spotsLeft, names, waiting }) => {
                 const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
                 return (
-                  <li key={ev.id} className="rounded-2xl border border-line bg-white px-4 py-3">
+                  <li key={ev.id} className="rounded-2xl border border-line bg-card px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
                       <Link href={`/${ev.code}`} prefetch={false} className="truncate font-bold hover:underline">
@@ -156,7 +156,7 @@ export default async function ClubManagePage({ params }: Props) {
           ) : (
             <ul className="mt-3 flex flex-col gap-2">
               {coaching.map((c) => (
-                <li key={c.coachId} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3">
+                <li key={c.coachId} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <Link href={`/c/${c.handle}`} prefetch={false} className="truncate font-bold hover:underline">
                       {c.displayName}

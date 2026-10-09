@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { cookies } from "next/headers";
 import { getDb } from "@/db";
 import type { Player } from "@/db/schema";
 import { baseUrl, emailEnabled } from "@/lib/config";
@@ -16,17 +17,20 @@ import { PushToggle } from "./PushToggle";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { TelegramLogin } from "./TelegramLogin";
 import { markOf } from "@/lib/domain/emailMarks";
+import { TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
+import { TextSizeSwitch } from "./TextSizeSwitch";
 
 /**
  * Everything a player sets rather than reads: reminders, the link that is their way back in, the
- * home-screen prompt, their name and level, the Telegram link, and getting an account back by email.
+ * home-screen prompt, their name and level, bigger text, the Telegram link, and getting an account
+ * back by email.
  *
  * It used to be the tail of MyMatches, which put it in the middle of the screen with the content
  * below it — "When do you want to play?" came after the delete button. Settings sit under the
  * content now, and the one irreversible button sits under them.
  */
 export async function MySettings({ player, personalToken, hasMatches }: { player: Player; personalToken: string; hasMatches: boolean }) {
-  const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
+  const [t, locale, db, jar] = await Promise.all([getTranslations(), getLocale(), getDb(), cookies()]);
   const hasPush = await playerHasPush(db, player.id);
   // Mail to this address stopped arriving: the one place the person can fix it is here, so it says so here.
   const mark = emailEnabled() && player.email ? await markOf(db, player.email) : null;
@@ -41,6 +45,9 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
         <NameEditor name={player.displayName} />
         <div className="mt-4 border-t border-line pt-4">
           <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasMatches} />
+        </div>
+        <div className="mt-4 border-t border-line pt-4">
+          <TextSizeSwitch label={t("common.biggerText")} help={t("me.biggerTextHelp")} initial={textSizeOf(jar.get(TEXT_SIZE_COOKIE)?.value) === "big"} />
         </div>
         {telegramBotId() && (
           <div className="mt-4 border-t border-line pt-4">

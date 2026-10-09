@@ -542,6 +542,14 @@ Wall clock first, credits second. What actually moved it, measured:
   Playwright, so four checks written from the source strings ("8 pairs of 8", "Entries closed") went
   red while the screen was right. Compare lower-cased text, or read `textContent`, whenever the check
   touches a `.chip-*` or anything else the stylesheet capitalises.
+- **The header is on every page, so a control added there is on every page a suite searches.** The
+  "Bigger text" switch went into the ⋯ menu, and core's `[role="switch"]:not([data-testid="banter-switch"])`
+  found it first, hidden in the closed menu, and timed out three screens later. Scope a page-wide
+  locator to `main`, and grep `e2e/*.mjs` for the role, not only the name, before adding to the header.
+- **A colour named after itself does not turn with the theme.** `bg-white` was the card in thirty-four
+  files and `text-white` the words on every ink fill, so the dark set alone gave white boxes on navy
+  and white words on light grey. Use the tokens (`bg-card`, `text-on-ink`, `text-night` on lime);
+  `tests/contrast.test.ts` counts the white that is left and names the file of a new one.
 - **The suite map reads the `e2e/` directory, so the suite file comes before the rule.** A rule for
   the tournament paths printed "no suite" until `e2e/tournament.mjs` existed, because `ALL` is the
   directory listing and a rule's suites are filtered against it. Write the suite, then ask

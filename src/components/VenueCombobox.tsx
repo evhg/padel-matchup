@@ -70,7 +70,7 @@ export function VenueCombobox({
         maxLength={80}
       />
       {open && (rows.length > 0 || (value.trim() && !exact)) && (
-        <ul className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-line bg-white shadow-card">
+        <ul className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-line bg-card shadow-card">
           {rows.map(({ venue: v, heading }) => (
             <li key={v.name}>
               {heading && <div className="bg-bg px-4 py-1 text-xs font-bold uppercase tracking-wider text-faint">{heading}</div>}

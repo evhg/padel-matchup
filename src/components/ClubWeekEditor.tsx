@@ -35,7 +35,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
 
   const weekday = (d: number, style: "short" | "long" = "short") => new Intl.DateTimeFormat(locale, { weekday: style, timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + d, 12)));
   const kindLabel = (type: string, format: string | null) => t(`club.week.kind.${type === "tournament" ? (format ?? "americano") : "match"}` as "club.week.kind.match");
-  const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
+  const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-on-ink" : "border-line bg-card text-ink hover:border-ink/40"}`;
 
   // Fours within the tournament bounds; typed freely, settled when the field is left or the form sent.
   const clampCapacity = (raw: string, fallback: number) => {
@@ -88,7 +88,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
           {slots.map((s) => {
             const level = rangeChip(t, { min: s.levelMin, max: s.levelMax });
             return (
-              <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-2 ${s.active ? "" : "opacity-60"}`}>
+              <li key={s.id} className={`flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-2 ${s.active ? "" : "opacity-60"}`}>
                 <div className="w-16 shrink-0">
                   <div className="text-xs font-bold uppercase text-faint">{weekday(s.dow)}</div>
                   <div className="text-lg font-extrabold leading-none tabular-nums">{s.time}</div>
@@ -174,7 +174,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
           ))}
         </div>
         {preset !== "any" && (
-          <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-white px-4 py-3">
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-card px-4 py-3">
             <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} data-testid="slot-verified-only" />
             <span className="min-w-0">
               <span className="block text-sm font-bold">✓ {t("levelCheck.verifiedOnly")}</span>

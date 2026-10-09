@@ -96,7 +96,7 @@ export function WhenIPlay({ initial, suggestedPlace }: { initial: Want[]; sugges
       </div>
       <input id="want-place" className="input mt-2 min-h-11 w-full text-sm" value={place} onChange={(e) => setPlace(e.target.value)} placeholder={t("place")} aria-label={t("place")} />
       <p className="mt-1 text-xs text-faint">{t("placeHelp")}</p>
-      {error ? <p className="mt-2 text-xs font-bold text-red">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs font-bold text-danger">{error}</p> : null}
       <button type="button" className="btn-primary mt-3 self-start" disabled={pending || place.trim() === ""} onClick={add}>
         {t("add")}
       </button>

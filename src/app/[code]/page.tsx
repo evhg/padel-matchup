@@ -295,10 +295,10 @@ export default async function EventPage({ params, searchParams }: Props) {
     const justInvited = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() < 90 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
     return (
-      <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-white" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
+      <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-card" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
         <div className="flex items-center gap-3">
           {!tappable && (
-            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-white" : "bg-line text-muted"}`}>
+            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-on-ink" : "bg-line text-muted"}`}>
               {occupiedSlot ? name.slice(0, 1).toUpperCase() : isWaitlist ? index + 1 : "·"}
             </span>
           )}

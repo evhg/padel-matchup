@@ -24,16 +24,16 @@ export async function WeekendStrip({ stages }: { stages: Stage[] }) {
               <Link
                 href={s.href}
                 prefetch={false}
-                className={`flex h-full flex-col items-center gap-1 rounded-2xl px-1 py-2 text-center transition ${lit ? "bg-ink text-white" : s.done ? "bg-bg text-ink" : "text-muted hover:bg-bg"}`}
+                className={`flex h-full flex-col items-center gap-1 rounded-2xl px-1 py-2 text-center transition ${lit ? "bg-ink text-on-ink" : s.done ? "bg-bg text-ink" : "text-muted hover:bg-bg"}`}
                 data-testid={`stage-${s.key}`}
                 data-done={s.done ? "1" : "0"}
                 aria-current={lit ? "step" : undefined}
               >
-                <span className={`inline-grid h-6 w-6 place-items-center rounded-full text-xs font-extrabold ${s.done ? "bg-ok text-white" : lit ? "bg-accent text-ink" : "bg-line text-muted"}`} aria-hidden>
+                <span className={`inline-grid h-6 w-6 place-items-center rounded-full text-xs font-extrabold ${s.done ? "bg-ok text-on-ink" : lit ? "bg-accent text-night" : "bg-line text-muted"}`} aria-hidden>
                   {s.done ? "✓" : i + 1}
                 </span>
                 <span className="text-xs font-bold leading-tight">{t(s.key)}</span>
-                {s.count && <span className={`text-[11px] leading-tight tabular-nums ${lit ? "text-white/80" : "text-faint"}`}>{s.count}</span>}
+                {s.count && <span className={`text-2xs leading-tight tabular-nums ${lit ? "text-on-ink/80" : "text-faint"}`}>{s.count}</span>}
               </Link>
             </li>
           );

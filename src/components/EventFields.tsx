@@ -200,11 +200,11 @@ export function EventFields({
           <div className="segment" role="group" aria-label={t("create.title")}>
             <button type="button" aria-pressed={values.type === "match"} onClick={() => pickType("match")}>
               {t("create.typeMatch")}
-              <span className="block text-[11px] font-semibold opacity-70">{t("create.typeMatchHelp")}</span>
+              <span className="block text-2xs font-semibold opacity-70">{t("create.typeMatchHelp")}</span>
             </button>
             <button type="button" aria-pressed={values.type === "tournament"} onClick={() => pickType("tournament")}>
               {t("create.typeTournament")}
-              <span className="block text-[11px] font-semibold opacity-70">{t("create.typeTournamentHelp")}</span>
+              <span className="block text-2xs font-semibold opacity-70">{t("create.typeTournamentHelp")}</span>
             </button>
           </div>
 
@@ -218,7 +218,7 @@ export function EventFields({
           {chips.map((c) => {
             const active = values.date === c.date && values.time === c.time;
             return (
-              <button key={c.key} type="button" aria-pressed={active} onClick={() => onChange({ date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+              <button key={c.key} type="button" aria-pressed={active} onClick={() => onChange({ date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
                 {c.label}
               </button>
             );
@@ -327,7 +327,7 @@ export function EventFields({
                     type="button"
                     aria-pressed={values.format === f}
                     onClick={() => onChange({ format: f, pointsPerMatch: values.gamesTo ? null : values.pointsPerMatch == null || values.pointsPerMatch === DEFAULT_POINTS[values.format] ? DEFAULT_POINTS[f] : values.pointsPerMatch })}
-                    className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${values.format === f ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}
+                    className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${values.format === f ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}
                   >
                     {t(FORMAT_KEYS[f])}
                   </button>
@@ -402,7 +402,7 @@ export function EventFields({
         <label className="label">{t("level.label")}</label>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t("level.label")}>
           {(["any", ...LEVEL_PRESETS.map((p) => p.key), "custom"] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={levelChoice === k} onClick={() => pickPreset(k)} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${levelChoice === k ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+            <button key={k} type="button" aria-pressed={levelChoice === k} onClick={() => pickPreset(k)} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${levelChoice === k ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
               {t(`level.${k}`)}
             </button>
           ))}

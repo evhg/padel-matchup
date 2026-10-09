@@ -236,7 +236,7 @@ export function ClubClaimForm({ initialName, hasIdentity, base, listed = [] }: {
             <span className="text-sm font-bold">{t("club.role")}</span>
             <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={t("club.role")}>
               {CLAIM_ROLES.map((r) => (
-                <button key={r} type="button" aria-pressed={v.claimRole === r} onClick={() => set({ claimRole: r })} className={`min-h-10 rounded-xl px-3 text-sm font-bold transition ${v.claimRole === r ? "bg-ink text-white" : "border border-line hover:border-ink/30"}`}>
+                <button key={r} type="button" aria-pressed={v.claimRole === r} onClick={() => set({ claimRole: r })} className={`min-h-10 rounded-xl px-3 text-sm font-bold transition ${v.claimRole === r ? "bg-ink text-on-ink" : "border border-line hover:border-ink/30"}`}>
                   {t(`club.role_${r}`)}
                 </button>
               ))}

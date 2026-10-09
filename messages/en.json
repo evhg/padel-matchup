@@ -50,7 +50,8 @@
     "coaches": "Coaches",
     "clubs": "Clubs",
     "tournaments": "Tournaments",
-    "findGame": "Find a game"
+    "findGame": "Find a game",
+    "biggerText": "Bigger text"
   },
   "identity": {
     "whatsYourName": "What's your name?",
@@ -411,7 +412,8 @@
     "sameWith": "with {names}",
     "sameMine": "Yes, these are mine",
     "sameNotMe": "Not me",
-    "sameFailed": "These could not be added. Reload the page and try again."
+    "sameFailed": "These could not be added. Reload the page and try again.",
+    "biggerTextHelp": "Larger words everywhere in the app, on this device."
   },
   "notFound": {
     "title": "Link not found",

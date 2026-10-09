@@ -160,7 +160,7 @@ export function AmericanoPanel({
           <span className="label">{t("create.format")}</span>
           <div className="flex flex-wrap gap-2" role="group" aria-label={t("create.format")}>
             {FORMATS.map((f) => (
-              <button key={f} type="button" aria-pressed={format === f} disabled={pending} onClick={() => f !== format && run(() => setTournamentSettingsAction(code, { format: f }))} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${format === f ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+              <button key={f} type="button" aria-pressed={format === f} disabled={pending} onClick={() => f !== format && run(() => setTournamentSettingsAction(code, { format: f }))} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${format === f ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
                 {t(FORMAT_KEYS[f])}
               </button>
             ))}
@@ -446,7 +446,7 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }
 
   return (
     <div className="rounded-xl bg-bg p-3">
-      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
+      <div className="mb-2 text-2xs font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
       <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] items-center gap-2">
         <div className={`text-sm font-bold leading-tight ${aWon ? "" : match.sideA != null ? "text-muted" : ""}`}>
           {match.a[0]}
@@ -456,13 +456,13 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }
         {editable ? (
           <input aria-label="A" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={a} onChange={(e) => onOther(setA, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
         ) : (
-          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${aWon ? "bg-accent" : "bg-white"}`}>{match.sideA ?? "–"}</span>
+          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${aWon ? "bg-accent text-night" : "bg-card"}`}>{match.sideA ?? "–"}</span>
         )}
         <span className="text-xs font-bold text-faint">{t("americano.vs")}</span>
         {editable ? (
           <input aria-label="B" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={b} onChange={(e) => onOther(setB, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
         ) : (
-          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${bWon ? "bg-accent" : "bg-white"}`}>{match.sideB ?? "–"}</span>
+          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${bWon ? "bg-accent text-night" : "bg-card"}`}>{match.sideB ?? "–"}</span>
         )}
         <div className={`text-right text-sm font-bold leading-tight ${bWon ? "" : match.sideB != null ? "text-muted" : ""}`}>
           {match.b[0]}

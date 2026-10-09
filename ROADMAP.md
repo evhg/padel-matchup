@@ -727,6 +727,15 @@ Everything in this list is live. The README describes each in detail.
   again every twenty seconds while it is on screen, so a score typed on one phone appears on the
   others; a score box keeps what its own phone is typing. `src/lib/domain/checkIn.ts`, proven in
   `tests/check-in.test.ts`.
+- **Bigger text, and a dark theme that follows the phone (9 October 2026, no migration).** "Bigger
+  text" is one switch on My matches and in the header's ⋯ menu, for anybody, account or not. It is a
+  cookie (`km_text`, `src/lib/textSize.ts`) that the root layout reads, so the first paint is already
+  the chosen size: the root goes from 16px to 18px and the chips to 13.5px. Every size is in rem, so
+  the whole app grows with it. The dark theme needs no switch: `src/app/globals.css` gives the same
+  colour names a dark set under `prefers-color-scheme: dark`, an ink-navy ground with the same lime.
+  `tests/contrast.test.ts` holds every text colour at 4.5:1 in both themes, and fails on a new
+  `bg-white` or `text-white` outside the few places white is meant (a QR code, the brand buttons).
+  The club's TV page, the printed poster and the embeds stay light (`data-keep-light`).
 
 ## The finish line
 

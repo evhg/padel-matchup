@@ -26,7 +26,7 @@ const DAY_KEY: Record<PlayDay, "city.playToday" | "city.playTomorrow" | "city.pl
 /** One filter chip: a link to the list with that filter changed, dark when it is the one in force. */
 function Chip({ href, on, children, testId }: { href: string; on: boolean; children: React.ReactNode; testId?: string }) {
   return (
-    <Link href={href} prefetch={false} aria-current={on ? "true" : undefined} data-testid={testId} className={`inline-flex min-h-9 items-center rounded-full px-3.5 text-sm font-bold ring-1 transition ${on ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+    <Link href={href} prefetch={false} aria-current={on ? "true" : undefined} data-testid={testId} className={`inline-flex min-h-9 items-center rounded-full px-3.5 text-sm font-bold ring-1 transition ${on ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
       {children}
     </Link>
   );

@@ -39,7 +39,7 @@ export default async function TvPage({ params }: Props) {
   const pair = (name: string | null) => name ?? t("tournament.tbd");
   void locale;
   return (
-    <main className="min-h-screen bg-bg px-6 py-6 text-fg" data-testid="tv">
+    <main className="min-h-screen bg-bg px-6 py-6 text-fg" data-testid="tv" data-keep-light>
       <AutoRefresh seconds={30} />
       <header className="flex items-baseline justify-between gap-4">
         <h1 className="text-4xl font-extrabold tracking-tight">{c.name}</h1>

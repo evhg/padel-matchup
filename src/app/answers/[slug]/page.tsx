@@ -51,7 +51,7 @@ export default async function AnswerPage({ params }: Props) {
           </Link>
           <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{a.title}</h1>
           <p className="mt-3 whitespace-pre-wrap text-sm text-muted">{a.question}</p>
-          <div className="mt-4 whitespace-pre-wrap text-[15px] leading-relaxed">{a.answer}</div>
+          <div className="mt-4 whitespace-pre-wrap text-[0.9375rem] leading-relaxed">{a.answer}</div>
           <p className="mt-5 border-t border-line pt-3 text-xs text-faint">{t("answers.footer")}</p>
         </article>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">

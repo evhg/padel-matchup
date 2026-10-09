@@ -140,7 +140,7 @@ export async function MyMatches({ player }: { player: Player }) {
               {stats.map((s) => (
                 <div key={s.label} className="card px-2 py-3 text-center">
                   <div className="text-xl font-extrabold tabular-nums">{s.value}</div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-faint">{s.label}</div>
+                  <div className="text-2xs font-bold uppercase tracking-wider text-faint">{s.label}</div>
                 </div>
               ))}
             </section>

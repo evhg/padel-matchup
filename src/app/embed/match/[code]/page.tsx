@@ -33,7 +33,7 @@ export default async function EmbedMatch({ params }: Props) {
   const chip = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
   const cancelled = ev.status === "cancelled";
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-3 p-3">
+    <main className="mx-auto flex w-full max-w-md flex-col gap-3 p-3" data-keep-light>
       <div>
         <div className="text-xs font-bold uppercase tracking-wider text-muted">{formatEventDayLong(ev.startsAt, ev.tz, locale)}</div>
         <h1 className="mt-0.5 text-lg font-extrabold leading-tight">
@@ -46,7 +46,7 @@ export default async function EmbedMatch({ params }: Props) {
       </div>
       <ul className="grid grid-cols-2 gap-1.5 text-sm">
         {seats.slice(0, 8).map((s) => (
-          <li key={s.id} className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 ${isOccupied(s) ? "bg-white ring-1 ring-line" : "border border-dashed border-line-strong text-faint"}`}>
+          <li key={s.id} className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 ${isOccupied(s) ? "bg-card ring-1 ring-line" : "border border-dashed border-line-strong text-faint"}`}>
             {isOccupied(s) ? (
               <>
                 <span className="truncate font-semibold">{s.player?.displayName ?? s.invitedName ?? "?"}</span>
@@ -62,7 +62,7 @@ export default async function EmbedMatch({ params }: Props) {
       <a href={`${base}/${ev.code}`} target="_blank" rel="noopener noreferrer" className={`${cancelled || spotsLeft === 0 ? "btn-secondary" : "btn-primary"} w-full`}>
         {cancelled ? t("event.statusCancelled") : spotsLeft > 0 ? `${t("event.join")} · ${t("event.spotsLeft", { count: spotsLeft })}` : t("embed.openOn")}
       </a>
-      <p className="text-[11px] text-faint">
+      <p className="text-2xs text-faint">
         {t("embed.poweredBy")}{" "}
         <a href={base} target="_blank" rel="noopener noreferrer" className="font-semibold text-muted">
           kicksma.sh

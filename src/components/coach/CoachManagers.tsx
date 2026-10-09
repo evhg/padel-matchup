@@ -33,7 +33,7 @@ export function CoachManagers({ managers, isOwner }: Props) {
       {managers.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2 text-sm">
           {managers.map((m) => (
-            <li key={m.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-2">
+            <li key={m.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-2">
               <span className="font-bold">{m.name}</span>
               <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => start(async () => { await removeManagerAction(m.id); router.refresh(); })}>
                 {t("remove")}

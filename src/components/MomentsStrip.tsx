@@ -16,7 +16,7 @@ export async function MomentsStrip({ db, playerId }: { db: Db; playerId: string 
       <p className="mt-1 text-xs text-muted">{t("lead")}</p>
       <ul className="mt-3 flex gap-3 overflow-x-auto pb-1">
         {rows.map((m, i) => (
-          <li key={m.id} className="w-56 shrink-0 overflow-hidden rounded-2xl border border-line bg-white">
+          <li key={m.id} className="w-56 shrink-0 overflow-hidden rounded-2xl border border-line bg-card">
             <Link href={`/m/${m.id}`} prefetch={false} className="block">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/m/${m.id}/opengraph-image`} alt={lines[i]} width={1200} height={630} className="block h-auto w-full" />

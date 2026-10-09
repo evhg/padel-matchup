@@ -22,7 +22,7 @@ export default async function EmbedBoard({ params }: Props) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const base = baseUrl();
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-3 p-3">
+    <main className="mx-auto flex w-full max-w-md flex-col gap-3 p-3" data-keep-light>
       <div className="flex items-baseline justify-between gap-3">
         <h1 className="text-lg font-extrabold leading-tight">{t("venue.boardTitle", { venue: board.name })}</h1>
         <a href={`${base}/v/${slug}`} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs font-bold text-court">
@@ -37,9 +37,9 @@ export default async function EmbedBoard({ params }: Props) {
             const chip = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
             return (
               <li key={ev.id}>
-                <a href={`${base}/${ev.code}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-2xl border border-line bg-white px-3 py-2 hover:border-ink/30">
+                <a href={`${base}/${ev.code}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-2xl border border-line bg-card px-3 py-2 hover:border-ink/30">
                   <div className="w-14 shrink-0 text-center">
-                    <div className="text-[10px] font-bold uppercase text-muted">{formatEventDay(ev.startsAt, ev.tz, locale)}</div>
+                    <div className="text-[0.625rem] font-bold uppercase text-muted">{formatEventDay(ev.startsAt, ev.tz, locale)}</div>
                     <div className="text-base font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
                   </div>
                   <div className="min-w-0 flex-1">
@@ -58,7 +58,7 @@ export default async function EmbedBoard({ params }: Props) {
       <a href={`${base}/?venue=${encodeURIComponent(board.name)}`} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm self-start">
         + {t("common.newMatch")}
       </a>
-      <p className="text-[11px] text-faint">
+      <p className="text-2xs text-faint">
         {t("embed.poweredBy")}{" "}
         <a href={base} target="_blank" rel="noopener noreferrer" className="font-semibold text-muted">
           kicksma.sh

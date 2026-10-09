@@ -148,7 +148,7 @@ export async function CityPage({ city }: { city: City }) {
           <ol className="mt-2 flex flex-col gap-2 text-sm text-muted">
             {(["city.how1", "city.how2", "city.how3", "city.how4"] as const).map((k, i) => (
               <li key={k} className="flex gap-3">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-ink text-xs font-extrabold text-accent">{i + 1}</span>
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-night text-xs font-extrabold text-accent">{i + 1}</span>
                 <span>{t(k)}</span>
               </li>
             ))}

@@ -17,11 +17,11 @@ export const metadata: Metadata = {
 
 const Code = ({ children }: { children: string }) => (
   <div className="relative">
-    <pre className="overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl bg-ink py-3 pl-4 pr-20 text-[13px] leading-relaxed text-white">
+    <pre className="overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl bg-night py-3 pl-4 pr-20 text-[0.8125rem] leading-relaxed text-white">
       <code>{children}</code>
     </pre>
     <div className="absolute right-2 top-2">
-      <CopyButton value={children} label="Copy" className="btn-ghost btn-xs bg-white/90" />
+      <CopyButton value={children} label="Copy" className="btn-ghost btn-xs bg-card/90" />
     </div>
   </div>
 );
@@ -136,7 +136,7 @@ export default function DevelopersPage() {
           <p className="text-sm text-muted">
             A player who switches their public page on gets a signed level document at <code>/u/&#123;slug&#125;/passport.json</code> (people get the readable version at <code>/u/&#123;slug&#125;/passport</code>): name, level, band, whether an organizer confirmed it, matches played and won, issued and expiry dates. Ed25519 over canonical JSON (keys sorted, no whitespace, every field except <code>alg</code> and <code>sig</code>). The public key is at <code>/.well-known/kicksmash-passport.json</code>. Profiles are opt-in and off by default; there is no list of them, and you should never guess a slug.
           </p>
-          <pre className="overflow-x-auto rounded-2xl bg-ink p-4 text-xs text-bg">
+          <pre className="overflow-x-auto rounded-2xl bg-night p-4 text-xs text-white">
             <code>{`import { verifyPassport } from "@erikv69/levels";
 
 const doc = await fetch("https://kicksma.sh/u/ana-x7k2m/passport.json").then((r) => r.json());

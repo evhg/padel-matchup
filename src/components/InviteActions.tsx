@@ -56,7 +56,7 @@ export function InviteActions({
       {emailEnabled && !knownEmail && (
         <div>
           <div className="flex items-start gap-2">
-            <span aria-hidden className="mt-0.5 inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-court-soft text-court text-[10px] font-black">
+            <span aria-hidden className="mt-0.5 inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-court-soft text-court text-[0.625rem] font-black">
               i
             </span>
             <p className="text-sm text-muted">{t("event.emailReward")}</p>

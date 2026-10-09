@@ -29,7 +29,7 @@ export function LevelLine({ series, caption, ariaLabel }: { series: LevelSeries;
           </g>
         ))}
       </svg>
-      <figcaption className="mt-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-faint">
+      <figcaption className="mt-1 flex items-center justify-between gap-2 text-2xs font-semibold text-faint">
         <span>
           {formatLevel(first.level)} → {formatLevel(last.level)}
         </span>

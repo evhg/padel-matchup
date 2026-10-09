@@ -86,7 +86,7 @@ export default async function AmericanoStaticPage({ params }: Props) {
             <div className="mt-2 flex flex-col gap-1.5 text-sm">
               {r.matches.map((m) => (
                 <div key={m.court} className="grid grid-cols-[auto_1fr_auto_1fr] items-center gap-x-2 rounded-xl bg-bg px-3 py-2">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-faint">{t("americano.court", { n: m.court })}</span>
+                  <span className="text-2xs font-extrabold uppercase tracking-wider text-faint">{t("americano.court", { n: m.court })}</span>
                   <span className="font-semibold">
                     {name(m.a[0])} + {name(m.a[1])}
                   </span>

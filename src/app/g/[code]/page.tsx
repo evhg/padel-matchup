@@ -65,7 +65,7 @@ export default async function GroupPage({ params }: Props) {
     const range = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
     return (
       <li key={ev.id}>
-        <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 hover:border-ink/30">
+        <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
           <div className="w-14 shrink-0 text-center">
             <div className="text-xs font-bold uppercase text-faint">{formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]}</div>
             <div className="text-xl font-extrabold leading-none tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>

@@ -50,7 +50,8 @@
     "coaches": "Entrenadores",
     "clubs": "Clubes",
     "tournaments": "Torneos",
-    "findGame": "Buscar partido"
+    "findGame": "Buscar partido",
+    "biggerText": "Texto más grande"
   },
   "identity": {
     "whatsYourName": "¿Cómo te llamas?",
@@ -411,7 +412,8 @@
     "sameWith": "con {names}",
     "sameMine": "Sí, son míos",
     "sameNotMe": "No soy yo",
-    "sameFailed": "No se pudieron añadir. Recarga la página e inténtalo de nuevo."
+    "sameFailed": "No se pudieron añadir. Recarga la página e inténtalo de nuevo.",
+    "biggerTextHelp": "Letra más grande en toda la app, en este dispositivo."
   },
   "notFound": {
     "title": "Enlace no encontrado",

@@ -29,7 +29,7 @@ export function ApiKeyForm() {
     return (
       <div className="rounded-2xl bg-accent-soft p-4">
         <div className="text-sm font-bold">Your key, shown once</div>
-        <code className="mt-2 block break-all rounded-xl bg-white px-3 py-2 text-sm">{key}</code>
+        <code className="mt-2 block break-all rounded-xl bg-card px-3 py-2 text-sm">{key}</code>
         <div className="mt-3 flex gap-2">
           <CopyButton value={key} label="Copy key" className="btn-secondary btn-sm" />
           <button type="button" className="btn-ghost btn-sm" onClick={() => setKey(null)}>

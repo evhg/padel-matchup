@@ -8,7 +8,8 @@ import { promptPayPayload } from "@/lib/promptpay";
  * amount embedded, or the picture their bank gave them. Nothing passes through us.
  */
 export function PromptPayQr({ promptpayId, amount, imageUrl, size = 200 }: { promptpayId?: string | null; amount?: number | null; imageUrl?: string | null; size?: number }) {
-  // Their bank's own picture, shown as uploaded: no optimisation, no remote loader.
+  // Their bank's own picture, shown as uploaded: no optimisation, no remote loader. Both boxes stay
+  // white in the dark theme, never `bg-card`: a banking app scans dark squares on a light ground.
   // eslint-disable-next-line @next/next/no-img-element
   if (imageUrl) return <img src={imageUrl} alt="" width={size} height={size} className="rounded-xl border border-line bg-white object-contain" />;
   const payload = promptpayId ? promptPayPayload(promptpayId, amount ?? null) : null;

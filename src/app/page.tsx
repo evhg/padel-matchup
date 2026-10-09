@@ -24,7 +24,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
           // Decision C (9 October 2026): one compact chip to the open games, under the headline. It
           // must not push the form down by more than a line on a phone, so it is a pill, not a card.
           below={
-            <Link href="/play" prefetch={false} className="mt-1.5 inline-flex h-7 items-center gap-1 rounded-full bg-accent-soft px-3 text-sm font-bold text-ink hover:bg-accent" data-testid="landing-find-game">
+            <Link href="/play" prefetch={false} className="mt-1.5 inline-flex h-7 items-center gap-1 rounded-full bg-accent-soft px-3 text-sm font-bold text-ink hover:bg-accent hover:text-night" data-testid="landing-find-game">
               🔎 {t("common.findGame")} →
             </Link>
           }
@@ -32,7 +32,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
         <section className="mt-6 grid gap-2">
           {[t("landing.step1"), t("landing.step2"), t("landing.step3")].map((s, i) => (
             <div key={i} className="flex items-center gap-3 px-1 text-sm text-muted">
-              <span className="inline-grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-ink text-xs font-extrabold text-accent">{i + 1}</span>
+              <span className="inline-grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-night text-xs font-extrabold text-accent">{i + 1}</span>
               <span className="font-semibold">{s}</span>
             </div>
           ))}
@@ -48,7 +48,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
               { href: "/clubs", icon: "🏟", title: t("common.clubs"), line: t("landing.doorClubs"), testId: "landing-clubs" },
               { href: "/americano", icon: "🔀", title: t("landing.americanoTitle"), line: t("landing.doorAmericano"), testId: "landing-americano" },
             ].map((d) => (
-              <Link key={d.href} href={d.href} prefetch={false} className="flex flex-col gap-1 rounded-2xl border border-line bg-white px-4 py-3 transition hover:border-ink/30" data-testid={d.testId}>
+              <Link key={d.href} href={d.href} prefetch={false} className="flex flex-col gap-1 rounded-2xl border border-line bg-card px-4 py-3 transition hover:border-ink/30" data-testid={d.testId}>
                 <span className="text-xl" aria-hidden>
                   {d.icon}
                 </span>

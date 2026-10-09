@@ -269,7 +269,7 @@ export default async function VenueBoardPage({ params }: Props) {
             <ul className="mt-3 flex flex-col gap-2">
               {coachesHere.map((c) => (
                 <li key={c.id}>
-                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 hover:border-ink/30">
+                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
                     <span className="font-bold">{c.displayName}</span>
                     <span className="text-xs text-muted">{t("coach.page.lesson", { minutes: c.lessonMinutes })} ›</span>
                   </Link>

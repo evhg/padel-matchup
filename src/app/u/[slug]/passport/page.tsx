@@ -54,7 +54,7 @@ export default async function PassportDocumentPage({ params }: Props) {
           <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {facts.map((f) => (
               <Fragment key={f.label}>
-                <dt className="pt-0.5 text-[11px] font-bold uppercase tracking-wider text-faint">{f.label}</dt>
+                <dt className="pt-0.5 text-2xs font-bold uppercase tracking-wider text-faint">{f.label}</dt>
                 <dd className="font-semibold">{f.value}</dd>
               </Fragment>
             ))}
@@ -76,7 +76,7 @@ export default async function PassportDocumentPage({ params }: Props) {
           </div>
           <details className="mt-3 text-sm">
             <summary className="cursor-pointer font-semibold">{t("passport.docShow")}</summary>
-            <pre className="mt-2 overflow-x-auto rounded-2xl bg-bg p-3 font-mono text-[11px] leading-relaxed">{JSON.stringify(doc, null, 2)}</pre>
+            <pre className="mt-2 overflow-x-auto rounded-2xl bg-bg p-3 font-mono text-2xs leading-relaxed">{JSON.stringify(doc, null, 2)}</pre>
           </details>
         </section>
 

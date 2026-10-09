@@ -144,8 +144,8 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
   return (
     <ul className="mt-3 flex flex-col gap-2">
       {members.map((m) => (
-        <li key={m.playerId} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3">
-          <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-white">{m.name.slice(0, 1).toUpperCase()}</span>
+        <li key={m.playerId} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
+          <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-on-ink">{m.name.slice(0, 1).toUpperCase()}</span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate font-bold">{m.name}</span>
             {m.level != null && <span className="chip-muted tabular-nums">{formatLevel(m.level)}</span>}

@@ -46,6 +46,17 @@ try {
   );
   check("the landing page links to the tournaments and to the clubs", (await a.getByTestId("landing-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("landing-clubs").getAttribute("href")) === "/clubs");
   check("the header's More menu holds the four public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-find").getAttribute("href")) === "/play" && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
+  // "Bigger text" in the same menu, for a visitor with no account: a tap grows the page in place,
+  // the cookie keeps it from the first paint of the next page, and a phone still has no sideways scroll.
+  const rootSize = () => a.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+  await a.getByTestId("nav-more").click();
+  await a.getByRole("switch", { name: "Bigger text" }).click();
+  check("Bigger text raises the root to 18px at once", (await rootSize()) === "18px");
+  await a.reload();
+  check("Bigger text holds after a reload, and nothing runs off a phone", (await rootSize()) === "18px" && (await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)));
+  await a.getByTestId("nav-more").click();
+  await a.getByRole("switch", { name: "Bigger text" }).click();
+  check("switched off, the text is back to 16px", (await rootSize()) === "16px" && (await a.getByRole("switch", { name: "Bigger text" }).getAttribute("aria-checked")) === "false");
   await a.goto(BASE + "/PLAY");
   const story = await fetch(BASE + "/PLAY/story");
   check("story image renders as a 9:16 PNG", story.status === 200 && (story.headers.get("content-type") || "").startsWith("image/png"), `${story.status} ${story.headers.get("content-type")}`);
@@ -102,8 +113,9 @@ try {
   await a.getByPlaceholder("you@example.com").first().fill("dana@example.com");
   await a.getByRole("button", { name: "Send invite" }).click();
   await a.getByText(/Calendar invite sent to dana@example.com/).waitFor({ timeout: 20000 });
-  // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not.
-  const emailSwitch = a.locator('[role="switch"]:not([data-testid="banter-switch"])');
+  // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not;
+  // and the header's ⋯ menu carries "Bigger text", so the search stays inside the page's own content.
+  const emailSwitch = a.locator('main [role="switch"]:not([data-testid="banter-switch"])');
   await emailSwitch.waitFor({ timeout: 20000 });
   check("after entering an email: one quiet line says where updates go, the invite line + email row with notifications switch, the question gone", (await a.getByText("Stay updated").count()) === 0 && (await stay.getByText("Updates reach you by email ✓").count()) === 1 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
   const ics = await a.evaluate(async (c) => { const r = await fetch(`/${c}/calendar.ics`); return { status: r.status, body: await r.text() }; }, code);

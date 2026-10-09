@@ -55,7 +55,7 @@ export function CreatorPanel({
   return (
     <section className="card border-ink/15">
       <div className="flex items-center gap-2">
-        <span className="chip bg-ink text-white">{t("common.organizer")}</span>
+        <span className="chip bg-ink text-on-ink">{t("common.organizer")}</span>
         <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
       </div>
 
@@ -88,7 +88,7 @@ export function CreatorPanel({
             data-testid="banter-switch"
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${banter ? "bg-ink" : "bg-line-strong"}`}
           >
-            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${banter ? "translate-x-6" : "translate-x-1"}`} />
+            <span className={`inline-block h-5 w-5 rounded-full bg-on-ink shadow transition ${banter ? "translate-x-6" : "translate-x-1"}`} />
           </button>
         </div>
       )}

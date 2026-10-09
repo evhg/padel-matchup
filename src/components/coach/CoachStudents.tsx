@@ -102,7 +102,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
           {rest.map((s) => (
             // The id is what the name on the coach's book links to; :target lights the row up on arrival.
             // The dimming sits on the text, not the row: a dimmed row made "Resume bookings" look disabled.
-            <li key={s.playerId} id={`s-${s.playerId}`} className="scroll-mt-24 rounded-2xl border border-line bg-white px-4 py-3 target:ring-2 target:ring-accent" data-testid="student-row">
+            <li key={s.playerId} id={`s-${s.playerId}`} className="scroll-mt-24 rounded-2xl border border-line bg-card px-4 py-3 target:ring-2 target:ring-accent" data-testid="student-row">
               <div className="flex items-start justify-between gap-3">
                 <div className={`min-w-0 ${s.status === "paused" || s.status === "left" || s.status === "blocked" ? "opacity-60" : ""}`}>
                   <div className="truncate font-bold">

@@ -34,7 +34,7 @@ export function EventRow({ ev, t, locale }: { ev: EventRowData; t: T; locale: st
   const range = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
   const where = [ev.venueName, ev.organiser ? t("city.playBy", { name: ev.organiser }) : null].filter(Boolean).join(" · ");
   return (
-    <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 hover:border-ink/30" data-testid="event-row">
+    <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30" data-testid="event-row">
       <div className="w-[4.5rem] shrink-0 text-center">
         <div className="text-xs font-bold uppercase text-faint">{formatEventDay(ev.startsAt, ev.tz, locale)}</div>
         <div className="text-2xl font-extrabold leading-none tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>

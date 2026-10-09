@@ -119,7 +119,7 @@ export function ScorePanel({
             <div className={`font-bold ${tl.a > tl.b ? "" : "text-muted"}`}>{hasTeams ? teamAPlayers.map((p) => p.name).join(" & ") : t("score.teamA")}</div>
             <div className={`flex ${scores.length > 3 ? "gap-1.5" : "gap-2"}`}>
               {scores.map((s) => (
-                <span key={s.setNumber} className={`inline-grid ${chip} place-items-center font-extrabold tabular-nums ${s.sideA > s.sideB ? "bg-accent text-ink" : "bg-bg text-muted"}`}>
+                <span key={s.setNumber} className={`inline-grid ${chip} place-items-center font-extrabold tabular-nums ${s.sideA > s.sideB ? "bg-accent text-night" : "bg-bg text-muted"}`}>
                   {s.sideA}
                 </span>
               ))}
@@ -127,7 +127,7 @@ export function ScorePanel({
             <div className={`font-bold ${tl.b > tl.a ? "" : "text-muted"}`}>{hasTeams ? teamBPlayers.map((p) => p.name).join(" & ") : t("score.teamB")}</div>
             <div className={`flex ${scores.length > 3 ? "gap-1.5" : "gap-2"}`}>
               {scores.map((s) => (
-                <span key={s.setNumber} className={`inline-grid ${chip} place-items-center font-extrabold tabular-nums ${s.sideB > s.sideA ? "bg-accent text-ink" : "bg-bg text-muted"}`}>
+                <span key={s.setNumber} className={`inline-grid ${chip} place-items-center font-extrabold tabular-nums ${s.sideB > s.sideA ? "bg-accent text-night" : "bg-bg text-muted"}`}>
                   {s.sideB}
                 </span>
               ))}
@@ -175,7 +175,7 @@ export function ScorePanel({
                       key={p.id}
                       type="button"
                       onClick={() => toggleTeam(p.id)}
-                      className={`min-h-11 rounded-xl px-3 text-sm font-bold ring-1 transition ${inA ? "bg-accent text-ink ring-accent" : inB ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong"}`}
+                      className={`min-h-11 rounded-xl px-3 text-sm font-bold ring-1 transition ${inA ? "bg-accent text-night ring-accent" : inB ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong"}`}
                     >
                       {inA ? "A · " : inB ? "B · " : ""}
                       {p.name}

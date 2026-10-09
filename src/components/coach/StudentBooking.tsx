@@ -109,7 +109,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
   const [asking, setAsking] = useState(false);
   const [askLocal, setAskLocal] = useState("");
   const [askNote, setAskNote] = useState("");
-  const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
+  const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-on-ink" : "border-line bg-card text-ink hover:border-ink/40"}`;
   // What one person pays at this size, falling down the ladder the way the book does. A local copy
   // on purpose: the domain's `priceFor` lives beside the database and cannot come into a client bundle.
   const eachPays = (n: number, minutes: number | null = length): number | null => {
@@ -440,7 +440,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
                 {t("page.otherTime")} →
               </button>
             ) : (
-              <form onSubmit={ask} className="flex flex-col gap-2 rounded-2xl border border-line bg-white p-3 animate-pop" data-testid="ask-form">
+              <form onSubmit={ask} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-3 animate-pop" data-testid="ask-form">
                 <p className="text-xs text-muted">
                   {t("page.otherTimeHelp", { name: coachName })}
                   {prices?.fee ? ` ${t("page.feeLine", { amount: money(prices.fee) })}.` : ""}
@@ -545,7 +545,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
           )}
           <ul className="mt-3 flex flex-col gap-2">
             {lessons.map((l) => (
-              <li key={l.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-white px-4 py-3">
+              <li key={l.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-card px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-bold">{l.label}</div>

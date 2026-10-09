@@ -38,9 +38,9 @@ export default async function PosterPage({ params }: Props) {
   const t = await getTranslations();
   const url = `${baseUrl()}/v/${slug}`;
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col items-center justify-center gap-6 px-6 py-10 text-center print:max-w-none">
+    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col items-center justify-center gap-6 px-6 py-10 text-center print:max-w-none" data-keep-light>
       <div className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-        <span className="inline-grid h-9 w-9 place-items-center rounded-xl bg-ink">
+        <span className="inline-grid h-9 w-9 place-items-center rounded-xl bg-night">
           <span className="h-4 w-4 rounded-full bg-accent" />
         </span>
         {APP_NAME}

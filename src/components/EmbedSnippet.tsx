@@ -25,7 +25,7 @@ export function EmbedSnippet({ html }: { html: string }) {
       {open && (
         <div className="mt-2 rounded-2xl bg-bg p-3 animate-pop">
           <p className="text-xs text-muted">{t("embed.help")}</p>
-          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-ink p-3 text-[12px] leading-relaxed text-white">
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-night p-3 text-xs leading-relaxed text-white">
             <code>{html}</code>
           </pre>
           <button type="button" className="btn-secondary btn-xs mt-2" onClick={copy}>
