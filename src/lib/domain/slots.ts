@@ -222,43 +222,53 @@ export async function reserveSlot(
   const now = input.now ?? new Date();
   const name = normalizeName(input.name);
   if (!name) throw new DomainError("invalid", "name");
-  return db.transaction(async (tx) => {
-    const ev = await lockEvent(tx, input.eventId);
-    assertLive(ev, now);
-    const claimable = and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"]));
-    const [target] = await tx
-      .select()
-      .from(slots)
-      .where(input.slotId ? and(claimable, eq(slots.id, input.slotId)) : claimable)
-      .orderBy(asc(slots.position))
-      .limit(1);
-    if (!target) throw new DomainError(input.slotId ? "invalid" : "full", input.slotId ? "slot_taken" : undefined);
+  return db.transaction(async (tx) => reserveLocked(tx, await lockEvent(tx, input.eventId), { ...input, name, now }));
+}
 
-    let slot: Slot | undefined;
-    for (let attempt = 0; attempt < 5 && !slot; attempt++) {
-      const inviteCode = newInviteCode();
-      const [clash] = await tx.select({ id: slots.id }).from(slots).where(eq(slots.inviteCode, inviteCode)).limit(1);
-      if (clash) continue;
-      [slot] = await tx
-        .update(slots)
-        .set({
-          ...VACANT,
-          kind: "reserved",
-          status: "invited",
-          inviteCode,
-          invitedName: name,
-          invitedEmail: normalizeEmail(input.email),
-          invitedPhone: normalizePhone(input.phone),
-          invitedAt: now,
-        })
-        .where(eq(slots.id, target.id))
-        .returning();
-    }
-    if (!slot) throw new Error("Could not allocate an invite code");
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.actorPlayerId, verb: "invited", meta: { name } });
-    const status = await recomputeStatus(tx, ev);
-    return { slot, event: { ...ev, status } };
-  });
+/**
+ * `reserveSlot`'s write, for a caller that already holds the event lock and has cleaned the name
+ * (a tournament's walk-in grows the field and reserves in one transaction: `addWalkIn`).
+ */
+export async function reserveLocked(
+  tx: Db,
+  ev: Event,
+  input: { actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; now: Date },
+): Promise<{ slot: Slot; event: Event }> {
+  const { name, now } = input;
+  assertLive(ev, now);
+  const claimable = and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"]));
+  const [target] = await tx
+    .select()
+    .from(slots)
+    .where(input.slotId ? and(claimable, eq(slots.id, input.slotId)) : claimable)
+    .orderBy(asc(slots.position))
+    .limit(1);
+  if (!target) throw new DomainError(input.slotId ? "invalid" : "full", input.slotId ? "slot_taken" : undefined);
+
+  let slot: Slot | undefined;
+  for (let attempt = 0; attempt < 5 && !slot; attempt++) {
+    const inviteCode = newInviteCode();
+    const [clash] = await tx.select({ id: slots.id }).from(slots).where(eq(slots.inviteCode, inviteCode)).limit(1);
+    if (clash) continue;
+    [slot] = await tx
+      .update(slots)
+      .set({
+        ...VACANT,
+        kind: "reserved",
+        status: "invited",
+        inviteCode,
+        invitedName: name,
+        invitedEmail: normalizeEmail(input.email),
+        invitedPhone: normalizePhone(input.phone),
+        invitedAt: now,
+      })
+      .where(eq(slots.id, target.id))
+      .returning();
+  }
+  if (!slot) throw new Error("Could not allocate an invite code");
+  await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.actorPlayerId, verb: "invited", meta: { name } });
+  const status = await recomputeStatus(tx, ev);
+  return { slot, event: { ...ev, status } };
 }
 
 export type ConfirmOutcome =

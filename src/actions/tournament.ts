@@ -7,12 +7,11 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { applyEventLevels } from "@/lib/domain/rating";
 import { MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { DomainError } from "@/lib/domain/errors";
-import { fieldInFours } from "@/lib/domain/events";
-import { deleteLastRound, generateRound, saveTournamentMatchScore, setTournamentLock, setTournamentSettings, type CheckIn } from "@/lib/domain/tournament";
-import { notifyRemoved } from "@/lib/notify";
-import { updateEventAction } from "./events";
-import { getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
-import { reserveAction } from "./slots";
+import { wasComplete } from "@/lib/domain/joining";
+import { LIMITS } from "@/lib/domain/ratelimit";
+import { addWalkIn, deleteLastRound, generateRound, saveTournamentMatchScore, setTournamentLock, setTournamentSettings, type CheckIn } from "@/lib/domain/tournament";
+import { notifyLineupChange, notifyRemoved } from "@/lib/notify";
+import { assertRate, getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
 
 export async function setTournamentSettingsAction(code: string, input: { courts?: number | null; pointsPerMatch?: number | null; gamesTo?: number | null; courtNames?: string[] | null; format?: TournamentFormat }): Promise<ActionResult<null>> {
   return runA(async () => {
@@ -49,23 +48,22 @@ function cleanCheckIn(raw: CheckIn | undefined): CheckIn | undefined {
 }
 
 /**
- * A walk-in: somebody turned up who was not on the list. It is the organiser's "Open spot" reserve,
- * the same row and the same notices (`reserveAction`). When no spot is left it first opens another
- * court's worth, through the same edit the organiser's capacity picker makes (`updateEventAction`,
- * which moves the waiting list up as it always has); round 1 then closes whatever stays open.
+ * A walk-in: somebody turned up who was not on the list. The organiser's "Open spot" reserve, with its
+ * rate limit and its line-up notice (`reserveAction`), through `addWalkIn`, which grows a full field by
+ * this one spot without moving the waiting list up. No email: a walk-in has none.
  */
 export async function addWalkInAction(code: string, name: string): Promise<ActionResult<{ name: string }>> {
-  const first = await reserveAction(code, { name });
-  if (first.ok) return { ok: true, data: { name: first.data.name } };
-  if (first.error !== "full") return first;
-  const loaded = await runA(() => loadEvent(code));
-  if (!loaded.ok) return loaded;
-  const ev = loaded.data.detail.event;
-  if (ev.type !== "tournament" || ev.capacity >= MAX_TOURNAMENT_CAPACITY) return first;
-  const grown = await updateEventAction(code, { capacity: fieldInFours(ev.capacity + 1) });
-  if (!grown.ok) return grown;
-  const again = await reserveAction(code, { name });
-  return again.ok ? { ok: true, data: { name: again.data.name } } : again;
+  return runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
+    const before = wasComplete(detail);
+    const { slot, event } = await addWalkIn(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, name });
+    after(async () => {
+      await notifyLineupChange(db, event, before);
+    });
+    revalidatePath(`/${code}`);
+    return { name: slot.invitedName ?? name };
+  });
 }
 
 export async function deleteLastRoundAction(code: string): Promise<ActionResult<null>> {

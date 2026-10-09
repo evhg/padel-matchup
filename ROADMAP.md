@@ -717,8 +717,8 @@ Everything in this list is live. The README describes each in detail.
   group page's own rows.
 - **"Who is here?" and a night that updates itself (9 October 2026, no migration).** Before round 1
   the organiser (or whoever holds the manage link) sees every name with a tick, ticked by default,
-  and the waiting list unticked. "Add a walk-in" seats a name the way "Open spot" does, and opens
-  another court's worth of spots when the field is full. "Generate round 1" is now "Start with N
+  and the waiting list unticked. "Add a walk-in" seats a name the way "Open spot" does. On a full
+  night it adds that one spot: the waiting list moves back a place and nobody on it is moved up. "Generate round 1" is now "Start with N
   players" and draws only the ticked names; King of the Court says how many to tick, add or untick
   to reach a four. The unticked leave in the same write as the draw (the feed records each one,
   as "Remove player" does) and hear "We started without you" by the removal's own email, with no

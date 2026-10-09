@@ -5,7 +5,7 @@ import { activity, events, slots } from "@/db/schema";
 import { presentSpots, startAdvice } from "@/lib/domain/checkIn";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent, reserveSlot } from "@/lib/domain/slots";
-import { generateRound, loadRounds } from "@/lib/domain/tournament";
+import { addWalkIn, generateRound, loadRounds } from "@/lib/domain/tournament";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -148,5 +148,43 @@ describe("round 1 with a check-in", () => {
     expect(await db.select().from(activity).where(and(eq(activity.eventId, ev.id), eq(activity.verb, "removed")))).toEqual([]);
     const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: org.id, checkIn: { away: [], waitingIn: [], count: 8 } });
     expect(drawn(r1).size).toBe(8);
+  });
+
+  it("adds a walk-in to a full night by one spot, and moves nobody up from the waiting list", async () => {
+    // Eight seats, the organiser and seven on the list; P8 to P12 wait, in that order.
+    const { org, ev, people } = await night(8, 12);
+    const waiting = people.slice(7).map((p) => p.id);
+    const { slot, grew } = await addWalkIn(db, { eventId: ev.id, actorPlayerId: org.id, name: "Wes" });
+    expect(grew).toBe(true);
+    expect(slot.position).toBe(9);
+    expect(slot.invitedName).toBe("Wes");
+
+    const [after] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(after.capacity).toBe(9);
+    const rows = await db.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(asc(slots.position));
+    // No spot is left open for the hourly cron to fill from the waiting list or to offer to strangers.
+    expect(rows.filter((s) => s.position <= 9 && s.status === "empty")).toEqual([]);
+    // The five still wait, behind the field, in their order, and nobody was moved up.
+    expect(rows.filter((s) => s.position > 9).map((s) => [s.position, s.playerId, s.status])).toEqual(waiting.map((id, i) => [10 + i, id, "joined"]));
+    expect(await db.select().from(activity).where(and(eq(activity.eventId, ev.id), eq(activity.verb, "promoted")))).toEqual([]);
+
+    // A second walk-in grows it again; the check-in's defaults then draw the list and both walk-ins.
+    await addWalkIn(db, { eventId: ev.id, actorPlayerId: org.id, name: "Zoe" });
+    const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: org.id, checkIn: { away: [], waitingIn: [], count: 10 } });
+    const ids = drawn(r1);
+    expect(ids.size).toBe(10);
+    for (const id of waiting) expect(ids.has(id)).toBe(false);
+  });
+
+  it("puts a walk-in on an open spot without growing the night, and refuses one once round 1 is drawn", async () => {
+    const { org, ev } = await night(8, 5);
+    const { slot, grew } = await addWalkIn(db, { eventId: ev.id, actorPlayerId: org.id, name: "Wes" });
+    expect(grew).toBe(false);
+    expect(slot.position).toBe(7);
+    const [same] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(same.capacity).toBe(8);
+
+    await generateRound(db, { eventId: ev.id, actorPlayerId: org.id, checkIn: { away: [], waitingIn: [], count: 7 } });
+    await expect(addWalkIn(db, { eventId: ev.id, actorPlayerId: org.id, name: "Zoe" })).rejects.toMatchObject({ code: "invalid", message: "roster_changed" });
   });
 });

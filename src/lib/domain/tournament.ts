@@ -1,12 +1,14 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, slots, tournamentMatches, tournamentRounds, type Event, type Slot, type TournamentFormat, type TournamentMatch, type TournamentRound } from "@/db/schema";
 import { computeStandings, maxCourtsFor, rotationLength, type StandingRow } from "./americano";
 import { presentSpots } from "./checkIn";
 import { DomainError } from "./errors";
 import { computeKingStandings, drawRound, firstRoundRefusal, FORMATS, formatOf, type KingStandingRow } from "./formats";
+import { MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { recomputeStatus } from "./events";
-import { lockEvent } from "./slots";
+import { normalizeName } from "./players";
+import { lockEvent, reserveLocked } from "./slots";
 
 export type RoundWithMatches = TournamentRound & { matches: TournamentMatch[] };
 export type TournamentState = {
@@ -211,6 +213,51 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
       .values(plan.matches.map((m) => ({ roundId: round.id, court: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1] })))
       .returning();
     return { ...round, matches: matches.sort((a, b) => a.court - b.court), absent };
+  });
+}
+
+/**
+ * A walk-in: somebody turned up who was not on the list, added by the organiser before round 1. It is
+ * the organiser's "Open spot" reserve (`reserveLocked`), the same row and the same feed line. When the
+ * field is full, the field grows by exactly this one spot, in the same transaction: the waiting list
+ * moves back one place, so nobody on it is moved up or told they are in at the night itself, and no
+ * spot is left open for the hourly cron to fill from the waiting list or to offer to strangers.
+ * King of the Court's fours are the check-in's business (`startAdvice`), not this write's.
+ */
+export async function addWalkIn(db: Db, input: { eventId: string; actorPlayerId: string | null; name: string; now?: Date }): Promise<{ slot: Slot; event: Event; grew: boolean }> {
+  const now = input.now ?? new Date();
+  const name = normalizeName(input.name);
+  if (!name) throw new DomainError("invalid", "name");
+  return db.transaction(async (tx) => {
+    let ev = await lockEvent(tx, input.eventId);
+    if (ev.type !== "tournament") throw new DomainError("invalid", "not_a_tournament");
+    if (ev.status === "cancelled") throw new DomainError("cancelled");
+    // Round 1 closed the field while the screen still showed the check-in: show the round.
+    if ((await loadRounds(tx, ev.id)).length > 0) throw new DomainError("invalid", "roster_changed");
+    const [open] = await tx
+      .select({ id: slots.id })
+      .from(slots)
+      .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"])))
+      .limit(1);
+    let grew = false;
+    if (!open) {
+      if (ev.capacity >= MAX_TOURNAMENT_CAPACITY) throw new DomainError("full");
+      // The waiting list moves back one place: two set-based passes keep the (event, position) unique index happy.
+      await tx
+        .update(slots)
+        .set({ position: sql`-(${slots.position} + 1)` })
+        .where(and(eq(slots.eventId, ev.id), gt(slots.position, ev.capacity)));
+      await tx
+        .update(slots)
+        .set({ position: sql`-${slots.position}` })
+        .where(and(eq(slots.eventId, ev.id), lt(slots.position, 0)));
+      await tx.insert(slots).values({ eventId: ev.id, position: ev.capacity + 1, kind: "open", status: "empty" });
+      [ev] = await tx.update(events).set({ capacity: ev.capacity + 1 }).where(eq(events.id, ev.id)).returning();
+      await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.actorPlayerId, verb: "updated", meta: { capacity: ev.capacity } });
+      grew = true;
+    }
+    const reserved = await reserveLocked(tx, ev, { actorPlayerId: input.actorPlayerId, name, now });
+    return { ...reserved, grew };
   });
 }
 
