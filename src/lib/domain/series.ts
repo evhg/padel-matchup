@@ -5,7 +5,7 @@ import { nextOccurrence, timePatternOf, wallClock, weekdayName, zonedTimeToUtc }
 import { slugFrom } from "@/lib/translit";
 import { bumpMetric } from "./metrics";
 import { venueInCity, type City } from "./cities";
-import { createEvent, cleanText, resolveCapacity } from "./events";
+import { createEvent, cleanText, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
 import { isOver, LONGEST_LENGTH } from "./matchLength";
 import { venueSlug, withCounts } from "./venueBoard";
@@ -204,7 +204,7 @@ export async function createSeriesFromEvent(db: Db, input: CreateSeriesInput): P
         venueSlug: ev.venueSlug,
         format: ev.format ?? "americano",
         // The field the organizer wants, not the size the last edition shrank to.
-        capacity: resolveCapacity("tournament", input.capacity ?? ev.capacity),
+        capacity: resolveCapacity("tournament", input.capacity ?? fieldInFours(ev.capacity)),
         courts: input.capacity && input.capacity !== ev.capacity ? null : ev.courts,
         pointsPerMatch: ev.pointsPerMatch,
         gamesTo: ev.gamesTo,

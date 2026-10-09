@@ -1,5 +1,5 @@
 import type { TournamentFormat } from "@/db/schema";
-import { buildHistory, computeStandings, maxCourtsFor, type History, type MatchRef, type Pairing, type RoundPlan, type StandingRow } from "./americano";
+import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, seedFrom, type History, type MatchRef, type Pairing, type RoundPlan, type StandingRow } from "./americano";
 import { DomainError } from "./errors";
 
 /**
@@ -13,7 +13,8 @@ import { DomainError } from "./errors";
  *   split every round. Standings follow the court you finish on.
  *
  * Both work for any field of four or more: sit-outs rotate fairly and
- * return at the bottom of the ladder.
+ * return at the bottom of the ladder. Round 1 of king still wants names in
+ * fours (`firstRoundRefusal`).
  */
 export const FORMATS: readonly TournamentFormat[] = ["americano", "mexicano", "king"];
 
@@ -262,4 +263,58 @@ export function computeKingStandings(ids: readonly string[], rounds: readonly Co
     r.rank = i + 1;
   });
   return rows;
+}
+
+/**
+ * Why round 1 cannot be drawn with this many names, or null when it can.
+ *
+ * Americano and mexicano start with any field of four or more. Whoever does not fit on a court rests
+ * that round, and the rests go round: the fewest rests so far sit out first, so nobody rests twice
+ * before everyone has rested once (`planRound`, `pickResting`). Until October 2026 a live tournament
+ * refused ten names until it had twelve, while the /americano generator, on the same engine, promised
+ * "any number of players" and drew ten without a fuss.
+ *
+ * King of the Court keeps names in fours. There the waiting players come in at the bottom court and
+ * the bottom court's losers step out, so the top court's winners never rest: that is the format, and
+ * it cannot also promise that everyone rests in turn. A king field that loses a player after round 1
+ * still plays on by that rule.
+ */
+export function firstRoundRefusal(format: TournamentFormat, names: number): "need_4_players" | "multiple_of_4" | null {
+  if (names < 4) return "need_4_players";
+  if (format === "king" && names % 4 !== 0) return "multiple_of_4";
+  return null;
+}
+
+/** A round as the draw reads it back: its number, its matches with their courts and scores, who rested. */
+export type DrawnRound = CourtRound & { roundNumber: number };
+
+/**
+ * The next round of a tournament, in any format: the one choice `generateRound` makes, kept pure so a
+ * test can play a whole night through it. The seeds come from the event and the round number, so the
+ * same tournament always draws the same round, as it did before this lived here.
+ *
+ * - americano, field in fours on every court: the exact circle schedule, and once the rotation is
+ *   complete round n replays round 1;
+ * - americano otherwise: `planRound`, the generator's own heuristic, with fair rests;
+ * - mexicano and king: their own planners, which wait for the scores.
+ */
+export function drawRound(input: { eventId: string; format: TournamentFormat; ids: readonly string[]; courts: number | null | undefined; rounds: readonly DrawnRound[] }): RoundPlan {
+  const { eventId, format, ids, courts, rounds } = input;
+  const roundNumber = (rounds.at(-1)?.roundNumber ?? 0) + 1;
+  const rng = mulberry32(seedFrom(`${eventId}:${roundNumber}`));
+  if (format === "mexicano") return planMexicanoRound({ ids, courts, rounds, rnd: rng });
+  if (format === "king") return planKingRound({ ids, courts, rounds, rnd: rng });
+  const history = buildHistory(rounds.map((r) => ({ matches: r.matches, resting: r.resting })));
+  const cycle = rotationLength(ids.length);
+  const replay = cycle && roundNumber > cycle ? rounds.find((r) => r.roundNumber === roundNumber - cycle) : undefined;
+  if (replay && replay.matches.every((m) => [m.a1, m.a2, m.b1, m.b2].every((id) => ids.includes(id)))) {
+    // Rotation complete: round n repeats round 1, exactly.
+    return { matches: replay.matches.map((m) => ({ court: m.court, a: [m.a1, m.a2] as [string, string], b: [m.b1, m.b2] as [string, string] })), resting: [] };
+  }
+  if (cycle) {
+    // Field in fours: exact schedule (every pair partners once in n-1 rounds). Order is seeded per event, stable across rounds.
+    const ordered = seededShuffle(ids, mulberry32(seedFrom(`${eventId}:order`)));
+    return scheduleRound(ordered, roundNumber - 1, history, rng);
+  }
+  return planRound(ids, courts, history, rng);
 }

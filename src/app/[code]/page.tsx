@@ -54,6 +54,7 @@ import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/qu
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState } from "@/lib/domain/tournament";
+import { nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText } from "@/lib/levelText";
@@ -186,6 +187,13 @@ export default async function EventPage({ params, searchParams }: Props) {
     .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)
     .map((s) => ({ id: s.player!.id, name: s.player!.displayName, level: s.player!.level!, verified: isLevelVerified(s.player!) }));
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
+  // A tournament has no "final score": the banner names the first round still waiting for one.
+  const waitingRound = tstate?.rounds.find((r) => r.matches.some((m) => m.sideA == null || m.sideB == null))?.roundNumber ?? null;
+  // The night at a glance under the title (src/lib/domain/tournamentPlan.ts): the field as planned
+  // until round 1, then the field that plays. The panel's sample and the create form read the same function.
+  const night = tstate ? nightPlan({ players: tstate.rounds.length > 0 ? namedSlots.length : ev.capacity, courts: ev.courts, format: tstate.format, pointsPerMatch: ev.pointsPerMatch, gamesTo: ev.gamesTo, durationMinutes: ev.durationMinutes }) : null;
+  // The format's name, as the create form says it (FORMAT_KEYS lives in a client module, which a server page cannot read values from).
+  const formatName = tstate ? t(({ americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const)[tstate.format]) : null;
 
   const group = ev.groupId ? await getGroupById(db, ev.groupId) : null;
   // An Open that repeats: every edition names its series; a finished tournament offers its organizer the door once.
@@ -367,6 +375,16 @@ export default async function EventPage({ params, searchParams }: Props) {
             {viewer.isCreator && !ev.publicListing && ev.venueSlug && ev.venueName && !cancelled && !over && <ListOnBoard code={code} venue={ev.venueName} />}
           </div>
           <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{title}</h1>
+          {night && (
+            <div className="mt-2 flex flex-wrap gap-1.5" data-testid="night-chips">
+              <span className="chip-muted">👥 {t("americano.chipPlayers", { count: occupied, capacity: ev.capacity })}</span>
+              {formatName && <span className="chip-muted">{formatName}</span>}
+              {ev.gamesTo ? <span className="chip-muted">{t("americano.chipGames", { n: ev.gamesTo })}</span> : ev.pointsPerMatch ? <span className="chip-muted">{t("americano.chipPoints", { n: ev.pointsPerMatch })}</span> : null}
+              {night.rounds && <span className="chip-muted">{t("americano.chipRounds", { n: night.rounds })}</span>}
+              <span className="chip-muted">{t("americano.chipCourts", { n: night.courts })}</span>
+              <span className="chip-muted">{t("americano.chipEnds", { time: formatEventTime(eventEnd(ev), ev.tz, locale) })}</span>
+            </div>
+          )}
           <div className="mt-4 flex items-end gap-3">
             <div className="text-5xl font-extrabold tracking-tighter tabular-nums">{time}</div>
             <div className="pb-1">
@@ -434,7 +452,7 @@ export default async function EventPage({ params, searchParams }: Props) {
 
         {creatorBanner && (
           <a href="#score" className="flex items-center justify-between rounded-2xl border border-accent bg-accent-soft px-4 py-3 font-bold">
-            <span>🏆 {t("creator.scoreReminderBanner")}</span>
+            <span>🏆 {isTournament && waitingRound ? t("creator.scoreReminderTournament", { n: waitingRound }) : t("creator.scoreReminderBanner")}</span>
             <span>→</span>
           </a>
         )}
@@ -475,6 +493,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             rotationLength={tstate.rotationLength}
             participantCount={namedSlots.length}
             capacity={ev.capacity}
+            courts={ev.courts}
+            durationMinutes={ev.durationMinutes}
             rounds={tstate.rounds.map((r) => ({
               id: r.id,
               roundNumber: r.roundNumber,

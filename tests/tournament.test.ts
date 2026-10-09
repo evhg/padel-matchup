@@ -4,7 +4,9 @@ import type { Db } from "@/db";
 import { events } from "@/db/schema";
 import { and, isNull } from "drizzle-orm";
 import { players, slots, tournamentMatches } from "@/db/schema";
-import { createEvent, duplicateEvent, nextWeekAfter, resolveCapacity } from "@/lib/domain/events";
+import { createEvent, duplicateEvent, fieldInFours, nextWeekAfter, resolveCapacity, updateEvent } from "@/lib/domain/events";
+import { createGroupFromEvent } from "@/lib/domain/groups";
+import { freezeClock } from "./helpers/clock";
 import { confirmInvite, joinEvent, reserveSlot } from "@/lib/domain/slots";
 import { deleteLastRound, generateRound, getTournamentState, saveTournamentMatchScore, setTournamentLock, setTournamentSettings } from "@/lib/domain/tournament";
 import { createTestDb, makePlayer, HOUR, DAY } from "./helpers/db";
@@ -107,8 +109,9 @@ describe("americano engine (db)", () => {
     await expect(generateRound(db, { eventId: ev.id, actorPlayerId: creator.id })).rejects.toMatchObject({ code: "invalid" });
   });
 
-  it("round 1 needs names in fours; later rounds tolerate sit-outs", async () => {
+  it("round 1 of king needs names in fours; a field in fours shrinks to its names", async () => {
     const { creator, ev } = await tournamentWith(5);
+    await setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, format: "king" });
     await expect(generateRound(db, { eventId: ev.id, actorPlayerId: creator.id })).rejects.toMatchObject({ code: "invalid", message: "multiple_of_4" });
     const { creator: c2, ev: ev2 } = await tournamentWith(4);
     const r1 = await generateRound(db, { eventId: ev2.id, actorPlayerId: c2.id });
@@ -192,5 +195,57 @@ describe("play again", () => {
     const creator = await makePlayer(db, "NoVenue");
     const ev = await createEvent(db, { creatorPlayerId: creator.id, type: "match", startsAt: new Date(Date.now() + DAY), tz: "UTC", venueName: "", whenFull: "waitlist" });
     expect(ev.venueName).toBeNull();
+  });
+});
+
+describe("the tournament night: round 1 with rests (db)", () => {
+  // Friday 9 October 2026, 19:00 in Bangkok; the tournaments started an hour before.
+  const NOW = new Date("2026-10-09T12:00:00Z");
+  freezeClock(NOW);
+  const started = new Date(NOW.getTime() - HOUR);
+
+  it("americano starts with five: one rests a round, capacity shrinks to five, everyone rests once in five rounds", async () => {
+    const { creator, ev, players: field } = await tournamentWith(5, started);
+    const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    expect(r1.matches).toHaveLength(1);
+    expect(r1.resting).toHaveLength(1);
+    const [shrunk] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(shrunk.capacity).toBe(5);
+    expect(shrunk.status).toBe("full");
+    const rested = [r1.resting[0]];
+    for (let i = 2; i <= 5; i++) rested.push(...(await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id })).resting);
+    expect(rested.sort()).toEqual(field.map((p) => p.id).sort());
+    // A rest adds nothing to the table.
+    await saveTournamentMatchScore(db, { eventId: ev.id, matchId: r1.matches[0].id, sideA: 13, sideB: 8, playerId: creator.id, isCreator: true });
+    const state = await getTournamentState(db, shrunk, field.map((p) => p.id));
+    expect(state.standings.find((s) => s.playerId === r1.resting[0])).toMatchObject({ points: 0, played: 0 });
+    expect(state.standings.filter((s) => s.played === 1)).toHaveLength(4);
+  });
+
+  it("mexicano starts with six: two rest a round, and every one rests once in three rounds", async () => {
+    const { creator, ev, players: field } = await tournamentWith(6, started);
+    await setTournamentSettings(db, { eventId: ev.id, actorPlayerId: creator.id, format: "mexicano" });
+    const rested: string[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+      expect(r.matches).toHaveLength(1);
+      rested.push(...r.resting);
+      await saveTournamentMatchScore(db, { eventId: ev.id, matchId: r.matches[0].id, sideA: 14, sideB: 10, playerId: creator.id, isCreator: true });
+    }
+    expect(rested.sort()).toEqual(field.map((p) => p.id).sort());
+  });
+
+  it("a field of ten copies as twelve, and an edit that leaves ten alone still saves", async () => {
+    const { creator, ev } = await tournamentWith(10, started);
+    await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
+    const [ten] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(ten.capacity).toBe(10);
+    const { event: edited } = await updateEvent(db, ev.id, creator.id, { capacity: 10, note: "Courts 5 and 7" });
+    expect(edited).toMatchObject({ capacity: 10, note: "Courts 5 and 7" });
+    const again = await duplicateEvent(db, { sourceEventId: ev.id, creatorPlayerId: creator.id, now: NOW });
+    expect(again.capacity).toBe(12);
+    const group = await createGroupFromEvent(db, { eventId: ev.id, actorPlayerId: creator.id, fallbackName: "Friday crew" });
+    expect(group.capacity).toBe(12);
+    expect([fieldInFours(4), fieldInFours(5), fieldInFours(10), fieldInFours(64)]).toEqual([4, 8, 12, 64]);
   });
 });

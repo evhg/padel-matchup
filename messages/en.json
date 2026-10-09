@@ -189,7 +189,14 @@
     "tzAll": "All time zones",
     "haveAlready": "Players you already have",
     "haveAlreadyHelp": "One name per line. Each takes a spot and gets a link to pass on, so the message you share says how many you really need.",
-    "length": "How long"
+    "length": "How long",
+    "planCourts": "Needs {courts, plural, one {# court} other {# courts}}",
+    "planRotation": "{rounds, plural, one {# round} other {# rounds}} for a full rotation",
+    "planFits": "{rounds, plural, one {about # round} other {about # rounds}} in {minutes} min",
+    "planTimePoints": "about {time} at {n} points",
+    "planTimeGames": "about {time} at first to {n} games",
+    "planHm": "{m, plural, =0 {{h}h} other {{h}h {m}m}}",
+    "planTooLong": "A full rotation runs past your {minutes} min. Play shorter matches, book longer, or stop early: the table counts every round played."
   },
   "share": {
     "title": "Your match is live",
@@ -336,7 +343,8 @@
     "emailBounced": "Email bounced",
     "inviteBounced": "The invite email bounced. Send the invite link another way.",
     "banter": "Banter in the chat",
-    "banterHelp": "One playful line from your crew's own matches, like three wins in a row or a third late pull-out. Only in the crew's chat and on the result card, never on a public page."
+    "banterHelp": "One playful line from your crew's own matches, like three wins in a row or a third late pull-out. Only in the crew's chat and on the result card, never on a public page.",
+    "scoreReminderTournament": "Round {n} is waiting for scores. Enter them in the card below."
   },
   "score": {
     "title": "Score",
@@ -713,7 +721,16 @@
     "colGames": "Games",
     "enterHelpGames": "Tap a score box to enter each court's games; the side that reached {n} won. Anyone in the tournament can fill in or correct scores until the organizer finalizes.",
     "gamesRange": "A side wins at {n} games; the other side has fewer.",
-    "gamesRule": "Matches are first to {n} games. The table ranks by matches won, then by games difference."
+    "gamesRule": "Matches are first to {n} games. The table ranks by matches won, then by games difference.",
+    "howFormatWorks": "How {format} works",
+    "sampleAll": "{players} players: about {courts, plural, one {# court} other {# courts}}, 4 per court, everyone plays every round.",
+    "sampleRest": "{players} players: about {courts, plural, one {# court} other {# courts}}, 4 per court, {resting, plural, one {# rests} other {# rest}} each round, in turn.",
+    "chipPlayers": "{count} of {capacity} players",
+    "chipPoints": "to {n} points",
+    "chipGames": "first to {n} games",
+    "chipRounds": "{n, plural, one {about # round} other {about # rounds}}",
+    "chipCourts": "{n, plural, one {# court} other {# courts}}",
+    "chipEnds": "ends ~{time}"
   },
   "calendar": {
     "title": "Add to calendar",

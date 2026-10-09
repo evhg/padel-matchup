@@ -28,6 +28,7 @@ try {
   await a.locator("input[type=date]").fill(`${g("year")}-${g("month")}-${g("day")}`);
   await a.locator("input[type=time]").fill(`${g("hour")}:${g("minute")}`);
   await a.getByLabel("Players").selectOption("8"); // capacity, in fours
+  check("the form says what the night needs", (await a.getByTestId("night-plan").innerText()).startsWith("Needs 2 courts · 7 rounds for a full rotation"), await a.getByTestId("night-plan").innerText());
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code = a.url().split("/").slice(-2)[0];
@@ -74,6 +75,7 @@ try {
   check("round 1 generated with the reserved name, capacity shrunk to 4", (await a.getByText("3/4 players").count()) > 0 && (await a.locator("section#score").getByText("Zed").count()) > 0 && (await a.getByText(/Sitting out:/).count()) === 0, await a.locator("h2").filter({ hasText: /players/ }).innerText());
   check("(you) marks the organizer in the round", (await a.locator("section#score").getByText(/Org \(you\)/).count()) > 0);
   check("rotation hint: 3 rounds for 4 players", (await a.getByText(/3 rounds complete the rotation/).count()) > 0);
+  check("the organiser's banner names the round waiting for scores", (await a.getByText("Round 1 is waiting for scores. Enter them in the card below.").count()) === 1 && (await a.getByText(/Enter the final score/).count()) === 0);
   // Court names: rename court 1 → "Centre"
   await a.getByRole("button", { name: /Court 1/ }).first().click();
   await a.getByPlaceholder("Court 1").fill("Centre");

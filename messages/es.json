@@ -189,7 +189,14 @@
     "tzAll": "Todas las zonas horarias",
     "haveAlready": "Jugadores que ya tienes",
     "haveAlreadyHelp": "Un nombre por línea. Cada uno ocupa una plaza y recibe un enlace, así el mensaje que compartes dice cuántos te faltan de verdad.",
-    "length": "Cuánto dura"
+    "length": "Cuánto dura",
+    "planCourts": "{courts, plural, one {Hace falta # pista} other {Hacen falta # pistas}}",
+    "planRotation": "{rounds, plural, one {# ronda} other {# rondas}} para la rotación completa",
+    "planFits": "{rounds, plural, one {# ronda aprox.} other {unas # rondas}} en {minutes} min",
+    "planTimePoints": "{time} aprox. a {n} puntos",
+    "planTimeGames": "{time} aprox. a {n} juegos",
+    "planHm": "{m, plural, =0 {{h} h} other {{h} h {m} min}}",
+    "planTooLong": "La rotación completa no cabe en tus {minutes} min. Juega partidos más cortos, reserva más tiempo o termina antes: la tabla cuenta cada ronda jugada."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -336,7 +343,8 @@
     "emailBounced": "El correo rebota",
     "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma.",
     "banter": "Bromas en el chat",
-    "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública."
+    "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública.",
+    "scoreReminderTournament": "La ronda {n} espera los resultados. Introdúcelos en la tarjeta de abajo."
   },
   "score": {
     "title": "Resultado",
@@ -713,7 +721,16 @@
     "colGames": "Juegos",
     "enterHelpGames": "Toca una casilla para introducir los juegos de cada pista; el lado que llegó a {n} ganó. Cualquiera del torneo puede introducir o corregir resultados hasta que el organizador cierre.",
     "gamesRange": "Un lado gana con {n} juegos; el otro tiene menos.",
-    "gamesRule": "Los partidos son al primero que llega a {n} juegos. La tabla ordena por partidos ganados y luego por diferencia de juegos."
+    "gamesRule": "Los partidos son al primero que llega a {n} juegos. La tabla ordena por partidos ganados y luego por diferencia de juegos.",
+    "howFormatWorks": "Cómo funciona el {format}",
+    "sampleAll": "{players} jugadores: {courts, plural, one {una pista} other {unas # pistas}}, 4 por pista, todos juegan cada ronda.",
+    "sampleRest": "{players} jugadores: {courts, plural, one {una pista} other {unas # pistas}}, 4 por pista, {resting, plural, one {descansa #} other {descansan #}} por ronda, por turnos.",
+    "chipPlayers": "{count} de {capacity} jugadores",
+    "chipPoints": "a {n} puntos",
+    "chipGames": "primero a {n} juegos",
+    "chipRounds": "{n, plural, one {# ronda aprox.} other {unas # rondas}}",
+    "chipCourts": "{n, plural, one {# pista} other {# pistas}}",
+    "chipEnds": "termina ~{time}"
   },
   "calendar": {
     "title": "Añadir al calendario",

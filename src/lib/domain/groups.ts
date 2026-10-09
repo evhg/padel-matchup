@@ -4,7 +4,7 @@ import { timePatternOf } from "@/lib/dates";
 import { events, groupMembers, groups, players, slots, type Event, type Group, type GroupMember, type Player } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isValidTimeZone, nextOccurrence, zonedTimeToUtc } from "@/lib/dates";
-import { createEvent, resolveCapacity } from "./events";
+import { createEvent, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
 import { normalizeRange } from "./levels";
 import { joinEvent } from "./slots";
@@ -91,7 +91,7 @@ export async function createGroupFromEvent(db: Db, input: { eventId: string; act
     venueMapUrl: ev.venueMapUrl,
     court: ev.court,
     type: ev.type,
-    capacity: ev.capacity,
+    capacity: ev.type === "tournament" ? fieldInFours(ev.capacity) : ev.capacity,
     whenFull: ev.whenFull,
     levelMin: ev.levelMin,
     levelMax: ev.levelMax,
