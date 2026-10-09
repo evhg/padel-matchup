@@ -40,7 +40,7 @@ export function LevelEditor({ level, source, log, verified = false, rankingOptIn
               <div className="text-xl font-extrabold tabular-nums">
                 {formatLevel(level)}
                 {verified && (
-                  <span className="ml-1.5 text-base text-accent-strong" title={t("level.verified")}>
+                  <span className="ml-1.5 text-base text-ok" title={t("level.verified")}>
                     ✓
                   </span>
                 )}

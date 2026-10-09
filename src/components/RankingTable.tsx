@@ -27,7 +27,7 @@ export function RankingTable({ rows, events, highlightId }: { rows: RankingRow[]
                 {r.level != null && (
                   <span className="ml-1.5 text-xs font-semibold text-faint tabular-nums">
                     {formatLevel(r.level)}
-                    {r.levelVerified && <span className="ml-0.5 text-accent-strong">✓</span>}
+                    {r.levelVerified && <span className="ml-0.5 text-ok">✓</span>}
                   </span>
                 )}
               </td>

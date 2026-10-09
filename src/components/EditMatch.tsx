@@ -33,7 +33,8 @@ export function EditMatch({ code, initial, venues, beside }: { code: string; ini
         court: values.court,
         note: values.note,
         whenFull: values.whenFull,
-        capacity: values.type === "tournament" ? values.capacity : undefined,
+        // Only a changed field: round 1 can leave a tournament at ten, which is no new capacity to check.
+        capacity: values.type === "tournament" && values.capacity !== initial.capacity ? values.capacity : undefined,
         levelMin: values.levelMin,
         levelMax: values.levelMax,
         levelVerifiedOnly: values.levelVerifiedOnly,

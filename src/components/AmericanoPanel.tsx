@@ -5,8 +5,9 @@ import { useState, useTransition } from "react";
 import { deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
 import type { TournamentFormat } from "@/db/schema";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
-import { FORMATS } from "@/lib/domain/formats";
-import { FORMAT_KEYS } from "./EventFields";
+import { firstRoundRefusal, FORMATS } from "@/lib/domain/formats";
+import type { NightPlan } from "@/lib/domain/tournamentPlan";
+import { FORMAT_HELP_KEYS, FORMAT_KEYS } from "./EventFields";
 import { PlayAgainButton } from "./PlayAgainButton";
 
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
@@ -25,6 +26,7 @@ export function AmericanoPanel({
   gamesTo,
   participantCount,
   capacity,
+  night = null,
   rounds,
   standings,
   courtNames,
@@ -45,6 +47,8 @@ export function AmericanoPanel({
   /** Named roster spots: joined, confirmed and reserved-not-yet-accepted. */
   participantCount: number;
   capacity: number;
+  /** The night as the page's chips show it (`nightPlan`, counted by `nightField`), for the sample before round 1. */
+  night?: NightPlan | null;
   rounds: PanelRound[];
   standings: PanelStanding[];
   /** Organizer-given court names by index (court 1 = [0]). */
@@ -64,11 +68,15 @@ export function AmericanoPanel({
   const lastScored = last ? last.matches.some((m) => m.sideA != null || m.sideB != null) : false;
   const nextRound = (last?.roundNumber ?? 0) + 1;
   const firstRound = rounds.length === 0;
-  const inFours = participantCount % 4 === 0;
+  /** Why round 1 cannot start with these names: fewer than four, or a king field not in fours. Americano and mexicano rest the rest. */
+  const refusal = firstRound ? firstRoundRefusal(format, participantCount) : null;
   const lastFullyScored = last ? last.matches.every((m) => m.sideA != null && m.sideB != null) : true;
   /** Mexicano and King build the next round from the scores, so they wait for them. */
   const needScores = format !== "americano" && rounds.length > 0 && !lastFullyScored;
-  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && (!firstRound || inFours) && !needScores;
+  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && !refusal && !needScores;
+  // Before round 1, the night in one line (a visitor used to read "No rounds yet." and nothing about
+  // what they would play). The page's own plan, the one its chips read, so the two cannot disagree.
+  const sample = firstRound ? night : null;
   const courtCount = Math.max(1, Math.floor(participantCount / 4), ...rounds.flatMap((r) => r.matches.map((m) => m.court)));
   const courtLabel = (n: number) => courtNames?.[n - 1]?.trim() || t("americano.court", { n });
   const [names, setNames] = useState<string[]>(() => Array.from({ length: courtCount }, (_, i) => courtNames?.[i] ?? ""));
@@ -92,13 +100,23 @@ export function AmericanoPanel({
         {locked ? <span className="chip-open">✓ {t("americano.locked")}</span> : rounds.length > 0 && started ? <span className="chip-live">● {t("americano.live")}</span> : null}
       </div>
       <button type="button" className="mt-1 text-left text-sm link" onClick={() => setHelp((h) => !h)}>
-        {help ? "−" : "?"} {t("create.typeTournament")}
+        {help ? "−" : "?"} {t("americano.howFormatWorks", { format: t(FORMAT_KEYS[format]) })}
       </button>
       {help && (
         <p className="mt-1 text-sm text-muted">
           {howItWorks}
           {gamesTo ? ` ${t("americano.gamesRule", { n: gamesTo })}` : ""}
         </p>
+      )}
+      {firstRound && (
+        <div className="mt-2 text-sm" data-testid="night-sample">
+          <p className="text-muted">{t(FORMAT_HELP_KEYS[format])}</p>
+          {sample && (
+            <p className="mt-1 font-semibold">
+              {sample.resting > 0 ? t("americano.sampleRest", { players: sample.players, courts: sample.courts, resting: sample.resting }) : t("americano.sampleAll", { players: sample.players, courts: sample.courts })}
+            </p>
+          )}
+        </div>
       )}
 
       {isCreator && !locked && !cancelled && rounds.length === 0 && (
@@ -237,12 +255,13 @@ export function AmericanoPanel({
                 </button>
               )}
             </div>
+            {/* Who rests, under the round's name: the first thing a player looks for when their name is on no court. A rest adds no points. */}
+            {r.resting.length > 0 && <p className="mt-1 text-sm font-semibold text-muted">{t("americano.resting", { names: r.resting.join(", ") })}</p>}
             <div className="mt-2 flex flex-col gap-2">
               {r.matches.map((m) => (
                 <MatchRow key={m.id} code={code} match={m} courtLabel={courtLabel(m.court)} editable={canScore && !cancelled && (!locked || isCreator)} pointsPerMatch={pointsPerMatch} gamesTo={gamesTo} />
               ))}
             </div>
-            {r.resting.length > 0 && <p className="mt-2 text-xs text-muted">{t("americano.resting", { names: r.resting.join(", ") })}</p>}
           </div>
         ))}
       </div>
@@ -260,7 +279,7 @@ export function AmericanoPanel({
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.scoresMissing", { n: last.roundNumber })}</p>
               ) : participantCount < 4 ? (
                 <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: participantCount })}</p>
-              ) : firstRound && !inFours ? (
+              ) : refusal === "multiple_of_4" ? (
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: participantCount, up: 4 - (participantCount % 4), down: participantCount % 4 })}</p>
               ) : firstRound && participantCount < capacity ? (
                 <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: participantCount })}</p>

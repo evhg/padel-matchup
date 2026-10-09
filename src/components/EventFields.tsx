@@ -8,6 +8,7 @@ import type { TournamentFormat } from "@/db/schema";
 import { DEFAULT_POINTS, FORMATS } from "@/lib/domain/formats";
 import { hasRange, LEVEL_PRESETS, LEVEL_STEPS, formatLevel, normalizeRange, presetFor, rangeFor, type PresetKey } from "@/lib/domain/levels";
 import { defaultLength, MATCH_LENGTHS, type MatchLength } from "@/lib/domain/matchLength";
+import { hoursAndMinutes, nightPlan } from "@/lib/domain/tournamentPlan";
 
 export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
 export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
@@ -162,6 +163,25 @@ export function EventFields({
       onChange({ levelMin: r.min, levelMax: r.max });
     }
   };
+
+  // The tournament's night in one line under Players, from the same function as the match page's
+  // chips: courts, the rounds a full rotation takes, and how long that is at the chosen score.
+  const plan = values.type === "tournament" ? nightPlan({ players: values.capacity, courts: values.courts, format: values.format, pointsPerMatch: values.pointsPerMatch, gamesTo: values.gamesTo, durationMinutes: values.durationMinutes }) : null;
+  const hm = (minutes: number) => {
+    const { h, m } = hoursAndMinutes(minutes);
+    return h === 0 ? t("event.minutes", { minutes: m }) : t("create.planHm", { h, m });
+  };
+  const planLine = plan
+    ? [
+        t("create.planCourts", { courts: plan.courts }),
+        plan.rotation ? t("create.planRotation", { rounds: plan.rotation }) : plan.fits ? t("create.planFits", { rounds: plan.fits, minutes: values.durationMinutes }) : null,
+        plan.rotationMinutes ? (values.gamesTo ? t("create.planTimeGames", { time: hm(plan.rotationMinutes), n: values.gamesTo }) : t("create.planTimePoints", { time: hm(plan.rotationMinutes), n: values.pointsPerMatch ?? 0 })) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+  // Round 1 shrinks a field to the names present, and since rests exist that can be ten: an edit keeps it on offer.
+  const fieldSizes = [...new Set([...Array.from({ length: 16 }, (_, i) => (i + 1) * 4), values.capacity])].sort((a, b) => a - b);
 
   const summary = [
     values.whenFull === "closed" ? t("create.whenFullClosed") : t("create.whenFullWaitlist"),
@@ -325,7 +345,7 @@ export function EventFields({
                 value={values.capacity}
                 onChange={(e) => onChange({ capacity: Number(e.target.value) })}
               >
-                {Array.from({ length: 16 }, (_, i) => (i + 1) * 4).map((n) => (
+                {fieldSizes.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
@@ -358,6 +378,12 @@ export function EventFields({
               </select>
             </div>
           </div>
+          {planLine && (
+            <p className="mt-1.5 text-sm font-semibold" data-testid="night-plan">
+              {planLine}
+            </p>
+          )}
+          {plan?.tooLong && <p className="mt-1 text-sm text-warn">{t("create.planTooLong", { minutes: values.durationMinutes })}</p>}
           <p className="mt-1.5 text-sm text-muted">{showType ? `${t("create.roundsHelp")} ${t("create.capacityHelp")}` : `${t("create.tournamentHelp")} ${t("create.capacityHelp")}`}</p>
         </div>
       )}

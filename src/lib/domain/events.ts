@@ -80,6 +80,14 @@ export function resolveCapacity(type: "match" | "tournament", capacity?: number)
   return c;
 }
 
+/**
+ * A tournament's field rounded up to fours, for whatever copies one. Round 1 shrinks the capacity to
+ * the names present, and since americano and mexicano rest whoever does not fit a court, that can be
+ * ten. "Play again", a group's weekly match and a series' next edition then offer twelve, which
+ * `resolveCapacity` accepts and round 1 shrinks again.
+ */
+export const fieldInFours = (capacity: number): number => Math.min(MAX_TOURNAMENT_CAPACITY, Math.max(4, Math.ceil(capacity / 4) * 4));
+
 /** Persists the creator's venue memory (upsert by name) and touches last_used_at. */
 export async function rememberVenue(db: Db, creatorPlayerId: string, name: string, mapUrl: string | null) {
   await db
@@ -184,7 +192,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     venueName: src.venueName,
     venueMapUrl: src.venueMapUrl,
     court: src.court,
-    capacity: src.capacity,
+    capacity: src.type === "tournament" ? fieldInFours(src.capacity) : src.capacity,
     whenFull: src.whenFull,
     note: src.note,
     courts: src.courts,
@@ -319,7 +327,8 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     }
 
     const promotedPlayerIds: string[] = [];
-    if (patch.capacity !== undefined && ev.type === "tournament") {
+    // An unchanged capacity is no change, even one round 1 left outside fours (ten players).
+    if (patch.capacity !== undefined && ev.type === "tournament" && patch.capacity !== ev.capacity) {
       const newCap = resolveCapacity("tournament", patch.capacity);
       if (newCap > ev.capacity) {
         const existing = await tx

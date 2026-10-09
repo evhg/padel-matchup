@@ -679,6 +679,22 @@ Everything in this list is live. The README describes each in detail.
   the invitation as a time change does. A tournament takes the same three lengths and starts at 120.
   "Play again", a group's weekly match and a series' next edition keep the length of the one before.
   The API takes `durationMinutes` on create and every match object carries it beside `endsAt`.
+- **The tournament night at a glance (9 October 2026, no migration).** A competitor makes the format
+  clear at a glance, and ours read "? Tournament" and "No rounds yet." Under a tournament's title the
+  page now carries the night as chips: players in out of the field, the format, the score ("to 21
+  points", "first to 4 games"), about how many rounds, the courts and the end. The help is named for
+  the format ("How Americano works"), and before round 1 the one-line rule and a sample of the night
+  ("10 players: about 2 courts, 4 per court, 2 rest each round, in turn.") are open. The create form
+  says under Players what the night needs ("Needs 2 courts · 7 rounds for a full rotation · about 1h
+  52m at 21 points") and warns, gently, when a full rotation runs past the booking. One pure function
+  (`nightPlan` in `src/lib/domain/tournamentPlan.ts`) feeds all three, and the page computes the
+  plan once (`nightField` picks the count) and hands it to the panel, so the chips and the sample
+  give the same courts. Round 1 of an americano or a
+  mexicano now starts with any four names or more, as the /americano generator always promised:
+  whoever does not fit a court rests that round, in turn, and a rest adds no points. King of the
+  Court keeps names in fours, because there the waiting players come in at the bottom court by the
+  format's own rule. Rounds already drawn, and the next round of a tournament under way, are drawn
+  exactly as before. The organiser's banner on a tournament names the round waiting for scores.
 
 ## The finish line
 

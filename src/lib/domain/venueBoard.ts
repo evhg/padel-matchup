@@ -51,6 +51,19 @@ export const isValidVenueSlug = (s: string) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test
 export type BoardEvent = { event: Event; occupied: number; spotsLeft: number };
 export type VenueBoard = { slug: string; name: string; mapUrl: string | null; events: BoardEvent[] };
 
+/**
+ * What a row in a list says about its seats: "Full" when nothing is open, a tournament's head count
+ * against its field ("6/8 players", because a field fills up rather than waits for a fourth), and for
+ * a match the spots still open. A reserved seat is neither open nor taken, so a match with a guest
+ * still to confirm can be full with fewer heads than its capacity. Pure.
+ */
+export type Fill = { kind: "full" } | { kind: "left"; count: number } | { kind: "field"; count: number; capacity: number };
+
+export function fillOf(b: { event: Pick<Event, "type" | "capacity">; occupied: number; spotsLeft: number }): Fill {
+  if (b.spotsLeft <= 0) return { kind: "full" };
+  return b.event.type === "tournament" ? { kind: "field", count: b.occupied, capacity: b.event.capacity } : { kind: "left", count: b.spotsLeft };
+}
+
 /** Upcoming, not cancelled, organizer-listed matches at a venue. Null when the venue has never been used. */
 export async function getVenueBoard(db: Db, slug: string, now = new Date()): Promise<VenueBoard | null> {
   const [latest] = await db.select({ venueName: events.venueName, venueMapUrl: events.venueMapUrl }).from(events).where(eq(events.venueSlug, slug)).orderBy(sql`${events.createdAt} desc`).limit(1);
@@ -64,22 +77,25 @@ export async function getVenueBoard(db: Db, slug: string, now = new Date()): Pro
   return { slug, name: latest.venueName, mapUrl: latest.venueMapUrl, events: await withCounts(db, rows) };
 }
 
-/** Occupied seats and open spots per event, in one round trip each. */
+/**
+ * Occupied seats and open spots per event, both counted in one round trip over `slots`: a seat
+ * inside the capacity is occupied when joined or confirmed and open when empty or declined; a
+ * reserved seat is neither. It was two queries, one per count, until the group page needed it too.
+ */
 export async function withCounts(db: Db, rows: Event[]): Promise<BoardEvent[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((e) => e.id);
   const counts = await db
-    .select({ eventId: slots.eventId, n: sql<number>`count(*)` })
+    .select({
+      eventId: slots.eventId,
+      occupied: sql<number>`count(*) filter (where ${slots.status} in ('joined', 'confirmed'))`,
+      open: sql<number>`count(*) filter (where ${slots.status} in ('empty', 'declined'))`,
+    })
     .from(slots)
-    .where(and(inArray(slots.eventId, ids), inArray(slots.status, ["joined", "confirmed"]), sql`${slots.position} <= (select capacity from ${events} e where e.id = ${slots.eventId})`))
+    .where(and(inArray(slots.eventId, ids), inArray(slots.status, ["joined", "confirmed", "empty", "declined"]), sql`${slots.position} <= (select capacity from ${events} e where e.id = ${slots.eventId})`))
     .groupBy(slots.eventId);
-  const open = await db
-    .select({ eventId: slots.eventId, n: sql<number>`count(*)` })
-    .from(slots)
-    .where(and(inArray(slots.eventId, ids), inArray(slots.status, ["empty", "declined"]), sql`${slots.position} <= (select capacity from ${events} e where e.id = ${slots.eventId})`))
-    .groupBy(slots.eventId);
-  const occ = new Map(counts.map((c) => [c.eventId, Number(c.n)]));
-  const free = new Map(open.map((c) => [c.eventId, Number(c.n)]));
+  const occ = new Map(counts.map((c) => [c.eventId, Number(c.occupied)]));
+  const free = new Map(counts.map((c) => [c.eventId, Number(c.open)]));
   return rows.map((event) => ({ event, occupied: occ.get(event.id) ?? 0, spotsLeft: free.get(event.id) ?? 0 }));
 }
 

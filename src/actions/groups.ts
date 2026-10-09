@@ -1,10 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getLocale } from "next-intl/server";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { createGroupFromEvent, deleteGroup, getGroupByCode, getGroupMember, joinGroup, leaveGroup, removeGroupMember, updateGroup, weeklyGroupFromEvent } from "@/lib/domain/groups";
+import { tell } from "@/lib/coach/notify";
+import { baseUrl } from "@/lib/config";
+import { recordFact } from "@/lib/domain/facts";
+import { createGroupFromEvent, deleteGroup, getGroupByCode, getGroupMember, handOverGroup, joinGroup, leaveGroup, removeGroupMember, updateGroup, weeklyGroupFromEvent } from "@/lib/domain/groups";
+import { getPlayer } from "@/lib/domain/players";
+import { translatorFor } from "@/lib/email/templates";
 import { isValidInviteCode } from "@/lib/codes";
 import { suggestGroupName } from "@/lib/domain/groupNames";
 import { getSessionPlayer } from "@/lib/session";
@@ -64,6 +70,33 @@ export async function removeGroupMemberAction(code: string, playerId: string): P
     if (!me) throw new ActionFailure("no_identity");
     await removeGroupMember(db, group.id, me.id, playerId);
     revalidatePath(`/g/${code}`);
+    return null;
+  });
+}
+
+/**
+ * Admin only: the group goes to another member, and the old admin stays on as a member. The new
+ * admin hears it through `tell()`, after the response, and the fact log keeps the hand-over.
+ */
+export async function handOverGroupAction(code: string, playerId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const parsed = z.string().uuid().safeParse(playerId);
+    if (!parsed.success) throw new ActionFailure("invalid");
+    const to = parsed.data;
+    const { db, group } = await loadGroup(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const handed = await handOverGroup(db, group.id, me.id, to);
+    after(async () => {
+      await recordFact(db, { kind: "group.handed_over", channel: "web", actorPlayerId: me.id, subject: { type: "group", id: handed.id }, code: handed.code, data: { to } });
+      const admin = await getPlayer(db, to);
+      if (!admin) return;
+      const { t } = await translatorFor(admin.locale);
+      const url = `${baseUrl()}/g/${handed.code}`;
+      await tell(db, admin, t("group.handedOver", { from: me.displayName, name: handed.name }), { inline_keyboard: [[{ text: t("group.open"), url }]] }, { label: t("group.open") }).catch(() => undefined);
+    });
+    revalidatePath(`/g/${code}`);
+    revalidatePath("/me");
     return null;
   });
 }

@@ -65,6 +65,9 @@ try {
   check("next match belongs to the group", (await bea.getByText("Part of Club Nine").count()) === 1);
   await olga.goto(`${BASE}/g/${gcode}`);
   check("group lists both matches", (await olga.locator("a[href='/" + code2 + "']").count()) >= 1 && (await olga.locator("a[href='/" + code + "']").count()) >= 1);
+  // Each upcoming row says whether there is room. Chips are set in capitals by CSS, so read textContent.
+  const firstFill = ((await olga.locator("a[href='/" + code + "']").getByTestId("group-row-chips").first().textContent()) ?? "").toLowerCase();
+  check("an upcoming row shows the spots left on one line of chips", /\d spots? left/.test(firstFill), firstFill);
 
   // Cal joins via the link (no identity yet).
   const cal = await newPage();
@@ -95,6 +98,15 @@ try {
   check("Cal left: 2 members", (await cal.getByText("2 members").count()) > 0);
   await olga.goto(`${BASE}/g/${gcode}`);
   check("admin sees a remove button for Bea only", (await olga.getByRole("button", { name: "Remove" }).count()) === 1);
+
+  // Olga hands the group to Bea from the settings. Olga stays a member and can now leave; Bea runs it.
+  await olga.getByRole("button", { name: /Group settings/ }).click();
+  await olga.getByLabel("Hand the group to").selectOption({ label: "Bea" });
+  await olga.getByRole("button", { name: "Hand over", exact: true }).click();
+  await olga.getByRole("button", { name: "Leave group" }).waitFor({ timeout: 20000 });
+  check("after the hand-over Olga is a member without the settings", (await olga.getByRole("button", { name: /Group settings/ }).count()) === 0 && (await olga.getByText("You're in this group").count()) === 1);
+  await bea.goto(`${BASE}/g/${gcode}`);
+  check("Bea is the admin now", (await bea.getByRole("button", { name: /Group settings/ }).count()) === 1 && (await bea.getByRole("button", { name: "Remove" }).count()) === 1);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {

@@ -1,9 +1,9 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, slots, tournamentMatches, tournamentRounds, type Event, type Slot, type TournamentFormat, type TournamentMatch, type TournamentRound } from "@/db/schema";
-import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, seedFrom, type StandingRow } from "./americano";
+import { computeStandings, maxCourtsFor, rotationLength, type StandingRow } from "./americano";
 import { DomainError } from "./errors";
-import { computeKingStandings, FORMATS, formatOf, planKingRound, planMexicanoRound, type KingStandingRow } from "./formats";
+import { computeKingStandings, drawRound, firstRoundRefusal, FORMATS, formatOf, type KingStandingRow } from "./formats";
 import { recomputeStatus } from "./events";
 import { lockEvent } from "./slots";
 
@@ -138,8 +138,10 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
     const existing = await loadRounds(tx, ev.id);
     const named = await namedRoster(tx, ev);
     if (existing.length === 0) {
-      // Round 1 sets the field: names in fours (reserved-but-unaccepted count), open spots close.
-      if (named.length < 4 || named.length % 4 !== 0) throw new DomainError("invalid", "multiple_of_4");
+      // Round 1 sets the field: four names or more (reserved-but-unaccepted count), open spots close.
+      // Americano and mexicano rest whoever does not fit a court; king wants fours (`firstRoundRefusal`).
+      const refusal = firstRoundRefusal(formatOf(ev.format), named.length);
+      if (refusal) throw new DomainError("invalid", refusal);
       const [creator] = await tx.select({ locale: players.locale }).from(players).where(eq(players.id, ev.creatorPlayerId));
       for (const s of named) {
         if (s.playerId) continue;
@@ -152,27 +154,10 @@ export async function generateRound(db: Db, input: { eventId: string; actorPlaye
     }
     const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
     if (ids.length < 4) throw new DomainError("invalid", "need_4_players");
-    const history = buildHistory(existing.map((r) => ({ matches: r.matches, resting: r.resting })));
     const roundNumber = (existing.at(-1)?.roundNumber ?? 0) + 1;
-    const rng = mulberry32(seedFrom(`${ev.id}:${roundNumber}`));
-    const format = formatOf(ev.format);
-    const cycle = format === "americano" ? rotationLength(ids.length) : null;
-    let plan;
-    const replay = cycle && roundNumber > cycle ? existing.find((r) => r.roundNumber === roundNumber - cycle) : undefined;
-    if (format === "mexicano") {
-      plan = planMexicanoRound({ ids, courts: ev.courts, rounds: existing, rnd: rng });
-    } else if (format === "king") {
-      plan = planKingRound({ ids, courts: ev.courts, rounds: existing, rnd: rng });
-    } else if (replay && replay.matches.every((m) => [m.a1, m.a2, m.b1, m.b2].every((id) => ids.includes(id)))) {
-      // Rotation complete: round n repeats round 1, exactly.
-      plan = { matches: replay.matches.map((m) => ({ court: m.court, a: [m.a1, m.a2] as [string, string], b: [m.b1, m.b2] as [string, string] })), resting: [] as string[] };
-    } else if (cycle) {
-      // Field in fours: exact schedule (every pair partners once in n-1 rounds). Order is seeded per event, stable across rounds.
-      const ordered = seededShuffle(ids, mulberry32(seedFrom(`${ev.id}:order`)));
-      plan = scheduleRound(ordered, roundNumber - 1, history, rng);
-    } else {
-      plan = planRound(ids, ev.courts, history, rng);
-    }
+    // The draw itself is pure (`drawRound`): the same seeds and the same choices as always, so a
+    // tournament already under way draws its next round exactly as it would have.
+    const plan = drawRound({ eventId: ev.id, format: formatOf(ev.format), ids, courts: ev.courts, rounds: existing });
     const [round] = await tx.insert(tournamentRounds).values({ eventId: ev.id, roundNumber, resting: plan.resting }).returning();
     const matches = await tx
       .insert(tournamentMatches)

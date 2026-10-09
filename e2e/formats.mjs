@@ -71,6 +71,7 @@ try {
   await org.getByRole("button", { name: "Mexicano", exact: true }).click();
   check("mexicano explains itself and sets 24 points", (await org.getByText(/courts follow the standings/).count()) > 0 && (await org.locator("select").filter({ has: org.locator('option[value="p:21"]') }).inputValue()) === "p:24");
   await org.getByLabel("Players").selectOption("8");
+  check("the form says what a mexicano night needs", (await org.getByTestId("night-plan").innerText()) === "Needs 2 courts · about 6 rounds in 120 min", await org.getByTestId("night-plan").innerText());
   await org.getByPlaceholder("Court TBD · or pick a club").fill("Club Mex");
   await shot(org, "f1-create-mexicano");
   await org.getByRole("button", { name: "Create & get the link" }).click();
@@ -194,7 +195,11 @@ try {
   await org.goto(BASE + "/");
   await org.getByRole("button", { name: /^Tournament/ }).click();
   await org.getByLabel("Score by").selectOption("g:4");
+  // Sixteen at first to four games cannot rotate in two hours: the form says so before anybody books.
+  await org.getByLabel("Players").selectOption("16");
+  check("a rotation too long for the booking is named, gently", (await org.getByTestId("night-plan").innerText()).includes("15 rounds for a full rotation · about 7h at first to 4 games") && (await org.getByText(/A full rotation runs past your 120 min/).count()) === 1);
   await org.getByLabel("Players").selectOption("4");
+  check("and the warning goes when it fits", (await org.getByText(/A full rotation runs past/).count()) === 0);
   await org.getByPlaceholder("Court TBD · or pick a club").fill("Club Games");
   await org.getByRole("button", { name: "Create & get the link" }).click();
   await org.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
@@ -213,6 +218,34 @@ try {
   await org.locator('input[aria-label="A"]').nth(0).blur();
   await org.getByText("✓ Saved").first().waitFor({ timeout: 15000 });
   check("the games table ranks by matches won", (await org.locator("section#score th").filter({ hasText: "Games" }).count()) === 1 && (await org.locator("section#score tbody tr").first().locator("td").nth(4).innerText()) === "1" && (await org.locator("section#score tbody tr").first().locator("td").nth(2).innerText()) === "4");
+
+  // ---- Five names, one rests: round 1 at any count of four or more (October 2026) ----
+  // Rally Point shows the night at a glance; a field of five used to be refused until it had eight.
+  const restRes = await api("/api/v1/matches", { type: "tournament", format: "americano", capacity: 8, startsAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Club Rest", organizer: { name: "Rosa", level: 3 } }, key);
+  const rest = restRes.json.match.code;
+  for (let i = 1; i <= 4; i++) await api(`/api/v1/matches/${rest}/join`, { name: `Rest${i}`, level: 3 }, key);
+  await org.goto(restRes.json.organizer.manageUrl);
+  await org.waitForURL(new RegExp(`/${rest}$`), { timeout: 20000 });
+  // Chips are set in capitals by the stylesheet: textContent reads the words as written.
+  const chips = (await org.getByTestId("night-chips").textContent()) ?? "";
+  check("the hero shows the night at a glance", chips.includes("5 of 8 players") && chips.includes("Americano") && chips.includes("ends ~"), chips);
+  const sampleText = await org.getByTestId("night-sample").innerText();
+  check("before round 1 the rule and a sample of the night are open", sampleText.includes("5 players: about 1 court, 4 per court, 1 rests each round, in turn."));
+  // One count for both: the chips once planned eight (2 courts) while the sample planned five (1 court).
+  const chipCourts = chips.match(/(\d+) courts?/)?.[1];
+  check("the chips and the sample name the same courts", chipCourts !== undefined && chipCourts === sampleText.match(/about (\d+) courts?/)?.[1], `${chips} | ${sampleText}`);
+  await org.getByRole("button", { name: /How Americano works/ }).click();
+  check("the help is named for the format and opens the whole rule", (await org.getByText(/Partners rotate every round/).count()) > 0);
+  const restGen = org.getByRole("button", { name: "Generate round 1" });
+  check("five names may start round 1", !(await restGen.isDisabled()) && (await org.getByText(/needs names in fours/).count()) === 0);
+  await restGen.click();
+  await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
+  await org.getByRole("button", { name: "Generate round 2" }).click();
+  await org.getByText("Round 2", { exact: true }).waitFor({ timeout: 20000 });
+  const sitting = await org.locator("section#score").getByText(/^Sitting out: /).allTextContents();
+  check("each round names who rests, and nobody rests twice in a row", sitting.length === 2 && sitting[0] !== sitting[1], JSON.stringify(sitting));
+  check("the field shrank to the five who came", ((await org.getByTestId("night-chips").textContent()) ?? "").includes("5 of 5 players"));
+  await shot(org, "f7-five-names");
 } finally {
   await browser.close();
 }

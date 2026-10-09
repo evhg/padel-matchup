@@ -298,6 +298,21 @@ try {
   await forged.waitForTimeout(1500);
   check("a tampered hash never signs anyone in", !/telegram=linked/.test(forged.url()) && (await forged.getByRole("button", { name: "Sign in with Telegram" }).count()) === 1, forged.url());
   await forgedCtx.close();
+
+  // A sign-in started on a match page comes back to that match page, not to My matches.
+  const tappedCode = (tapPlace.json?.outcome ?? "").split(":")[1];
+  const returnCtx = await browser.newContext(iphone);
+  const returnPage = await returnCtx.newPage();
+  const loginHop = returnPage.waitForRequest((r) => r.url().includes("/api/telegram/login"), { timeout: 30000 });
+  await returnPage.goto(`${BASE}/${tappedCode}#tgAuthResult=${authResultHash(olya)}`);
+  // Each hop of a redirect is its own request in Playwright, so this one's response is the 303 itself.
+  const hop = await (await loginHop).response();
+  const landed = new URL(hop?.headers()["location"] ?? "/", BASE);
+  check("a Telegram sign-in returns to the page it started from", hop?.status() === 303 && landed.pathname === `/${tappedCode}` && !landed.search, `${hop?.status()} ${landed.href}`);
+  await returnPage.waitForLoadState("load");
+  const returnedAs = await returnPage.request.get(`${BASE}/api/me/export`).then((r) => r.json());
+  check("and the player is signed in there", returnedAs.player?.displayName === "Оля", JSON.stringify(returnedAs.player ?? null).slice(0, 120));
+  await returnCtx.close();
   await ctx.close();
 
   const ctx2 = await browser.newContext(iphone);
