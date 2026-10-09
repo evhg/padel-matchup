@@ -2,9 +2,9 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots, type Score, type Slot } from "@/db/schema";
 import { venueInCity } from "./cities";
-import { scopeCondition, type RankingScope } from "./ranking";
+import { RANKING_WINDOW_MS, scopeCondition, type RankingScope } from "./ranking";
 import { endedBy } from "./reminders";
-import { firstName, matchResult } from "./result";
+import { DELETED_PLAYER_NAME, firstName, matchResult } from "./result";
 
 /**
  * The "Recent results" strip on a club page and a city page: the last scored matches played there.
@@ -13,9 +13,11 @@ import { firstName, matchResult } from "./result";
  * had a score, because the ranking waits for the organiser's confirmation and for players who opted
  * in. The strip asks less and shows less: a score, the first names, the day, and the result card.
  *
- * A name still follows the ranking's consent. A player who switched on `ranking_opt_in` shows by
- * first name; every other seat shows as "Player". The help text under that switch, and the levels
- * FAQ, promise that club and city pages name only those who switched it on. These pages are indexed.
+ * A name still follows the ranking's consent, and the query decides it, so a name that may not be
+ * shown never leaves the database. A player who switched on `ranking_opt_in` shows by first name for
+ * a result from the last 90 days (`RANKING_WINDOW_MS`), which is what the switch's help text promises
+ * ("results from the last 90 days"); an older result, everybody else, and a deleted account show as
+ * "Player". These pages are indexed.
  *
  * What counts is what the city board already lists: a match its organiser put on the venue board
  * (`public_listing`), never cancelled, from the last half year. On top of that it must be over by
@@ -41,15 +43,21 @@ export type RecentResult = {
   winner: "a" | "b" | "draw";
 };
 
-type Row = {
+export type RecentResultRow = {
   code: string;
   startsAt: Date;
   tz: string;
   venueName: string | null;
   venueSlug: string | null;
   sets: Pick<Score, "setNumber" | "sideA" | "sideB">[] | null;
-  roster: (Pick<Slot, "team" | "status"> & { name: string; optIn: boolean })[] | null;
+  /**
+   * Each seat as the query hands it out: `name` only where it may be shown (opted in, the result in
+   * the window, not a deleted account), else null; `named` says whether the seat had a name at all,
+   * so an empty invitation still drops out of the line-up.
+   */
+  roster: (Pick<Slot, "team" | "status"> & { name: string | null; named: boolean })[] | null;
 };
+type Row = RecentResultRow;
 
 /**
  * Stands in for the name of a player who did not opt in, while `matchResult` sorts the seats into
@@ -63,7 +71,7 @@ const UNNAMED = "\u0000";
  * so the two never disagree about who won. Null when the result has no two sides to name. Pure.
  */
 export function toRecentResult(row: Row): RecentResult | null {
-  const roster = (row.roster ?? []).map((s) => ({ team: s.team, status: s.status, name: s.optIn ? firstName(s.name) : s.name.trim() === "" || s.name === "?" ? s.name : UNNAMED }));
+  const roster = (row.roster ?? []).map((s) => ({ team: s.team, status: s.status, name: s.name ? firstName(s.name) : s.named ? UNNAMED : "?" }));
   const r = matchResult(row.sets ?? [], roster);
   if (!r || !r.hasTeams) return null;
   const named = (side: string[]) => side.map((n) => (n === UNNAMED ? null : n));
@@ -78,7 +86,13 @@ export function toRecentResult(row: Row): RecentResult | null {
  * select from one table drizzle writes `${events.id}` bare, which the subquery would read as its own.
  */
 export async function recentResults(db: Db, scope: RankingScope, now = new Date()): Promise<RecentResult[]> {
+  return (await recentResultRows(db, scope, now)).map(toRecentResult).filter((r): r is RecentResult => r !== null);
+}
+
+/** The query behind `recentResults`, as the database answers it: the names in it are only those that may be shown. */
+export async function recentResultRows(db: Db, scope: RankingScope, now = new Date()): Promise<Row[]> {
   const since = new Date(now.getTime() - RECENT_RESULTS_WINDOW_MS);
+  const namedSince = new Date(now.getTime() - RANKING_WINDOW_MS);
   const rows: Row[] = await db
     .select({
       code: events.code,
@@ -87,7 +101,7 @@ export async function recentResults(db: Db, scope: RankingScope, now = new Date(
       venueName: events.venueName,
       venueSlug: events.venueSlug,
       sets: sql<Row["sets"]>`(select json_agg(json_build_object('setNumber', sc.set_number, 'sideA', sc.side_a, 'sideB', sc.side_b)) from ${scores} sc where sc.event_id = ${events}.id)`,
-      roster: sql<Row["roster"]>`(select json_agg(json_build_object('team', sl.team, 'status', sl.status, 'name', coalesce(p.display_name, sl.invited_name, '?'), 'optIn', coalesce(p.ranking_opt_in, false)) order by sl.position) from ${slots} sl left join ${players} p on p.id = sl.player_id where sl.event_id = ${events}.id and sl.position <= ${events}.capacity)`,
+      roster: sql<Row["roster"]>`(select json_agg(json_build_object('team', sl.team, 'status', sl.status, 'name', case when coalesce(p.ranking_opt_in, false) and p.display_name <> ${DELETED_PLAYER_NAME} and ${events}.starts_at >= ${namedSince.toISOString()}::timestamptz then p.display_name end, 'named', btrim(coalesce(p.display_name, sl.invited_name, '')) not in ('', '?')) order by sl.position) from ${slots} sl left join ${players} p on p.id = sl.player_id where sl.event_id = ${events}.id and sl.position <= ${events}.capacity)`,
     })
     .from(events)
     .where(
@@ -103,6 +117,5 @@ export async function recentResults(db: Db, scope: RankingScope, now = new Date(
     )
     .orderBy(desc(events.startsAt), desc(events.id))
     .limit(RECENT_RESULTS);
-  const inScope = "city" in scope ? rows.filter((r) => venueInCity(scope.city, r.venueSlug, r.tz)) : rows;
-  return inScope.map(toRecentResult).filter((r): r is RecentResult => r !== null);
+  return "city" in scope ? rows.filter((r) => venueInCity(scope.city, r.venueSlug, r.tz)) : rows;
 }

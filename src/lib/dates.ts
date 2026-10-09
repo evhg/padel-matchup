@@ -98,6 +98,14 @@ export function formatEventDay(date: Date, tz: string, locale: string): string {
   }).format(date);
 }
 
+/**
+ * Day and short month ("Oct 9", "9 окт.", "9 oct"), in the event's zone: a narrow column's date. The
+ * weekday version reaches 83 px in bold capitals at 12 px; this one 55 px ("10 НОЯБ.").
+ */
+export function formatDayMonth(date: Date, tz: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { timeZone: tz, day: "numeric", month: "short" }).format(date);
+}
+
 /** The weekday alone ("Thursday", "четверг"), in the event's zone. */
 export function weekdayName(date: Date, tz: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: "long" }).format(date);

@@ -1,6 +1,6 @@
 // Venue boards: opt-in listing at create time, the public board, the printable poster,
 // unlisting from Edit match, the board's empty state prefilling the venue.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, widestDayFits } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -103,6 +103,10 @@ try {
   const rowText = (await row.innerText().catch(() => "")) || "";
   check("the finished match shows in the club's recent results, with both pairs, the tick and a link to its card", (await strip.getByRole("heading", { name: "Recent results" }).count()) === 1 && (await row.count()) === 1 && (await row.getByText("Won").count()) === 1, (await strip.innerText().catch(() => "no strip")).slice(0, 160));
   check("only the player who opted in is named; the other three show as Player", /Ana & Player/.test(rowText) && /Player & Player/.test(rowText) && !/\b(Bo|Cy|Di)\b/.test(rowText), rowText.slice(0, 160));
+  // The day column held "WED, OCT 9" in 64 px and broke it over two lines on a phone. Every day of a
+  // year, in all three languages, must now sit on one line inside it at 390 px.
+  const day = await widestDayFits(row.getByTestId("result-day")).catch((e) => ({ ok: false, worst: String(e).slice(0, 80) }));
+  check("the result's day is one line inside its column at 390 px, for the widest day in every language", day.ok, JSON.stringify(day.worst));
   await guest.goto(`${BASE}/v/no-such-venue`);
   check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
 } catch (e) {

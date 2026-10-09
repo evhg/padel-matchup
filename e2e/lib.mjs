@@ -42,6 +42,31 @@ export async function switchLang(page, l) {
   if (!(await target.isVisible())) await page.locator('[aria-label="Language"] button[aria-pressed="true"]').click();
   await target.click();
 }
+/**
+ * Does a day label hold the widest label its format prints, on one line, inside its box? Today's date
+ * proves little: "FRI, OCT 9" fits a column that "DOM, 13 SEPT" overflows. So the label takes every day
+ * of a year in English, Russian and Spanish, in the format it shows (with the weekday when its text has
+ * a comma, as "Fri, Oct 9" does and "Oct 9" does not), and is measured where it stands. Its own text
+ * comes back afterwards. Returns the worst label and whether it fitted.
+ */
+export const widestDayFits = (cell) =>
+  cell.evaluate((e) => {
+    const original = e.textContent;
+    const opts = original.includes(",") ? { weekday: "short", day: "numeric", month: "short" } : { day: "numeric", month: "short" };
+    const lh = parseFloat(getComputedStyle(e).lineHeight);
+    let worst = { text: original, over: -Infinity, lines: 0 };
+    for (const loc of ["en", "ru", "es"]) {
+      const f = new Intl.DateTimeFormat(loc, { ...opts, timeZone: "UTC" });
+      for (let d = 0; d < 366; d++) {
+        e.textContent = f.format(new Date(Date.UTC(2026, 0, 1 + d)));
+        const over = e.scrollWidth - e.clientWidth;
+        const lines = Math.round(e.getBoundingClientRect().height / lh);
+        if (lines > worst.lines || (lines === worst.lines && over > worst.over)) worst = { text: e.textContent, over, lines };
+      }
+    }
+    e.textContent = original;
+    return { ok: worst.over <= 0 && worst.lines <= 1, worst };
+  });
 export const shot = (page, name) => (SHOTS ? page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true }) : Promise.resolve());
 
 export function makeCheck(results) {

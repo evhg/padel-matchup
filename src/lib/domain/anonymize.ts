@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db";
 import { coachManagers, coaches, events, feedback, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
+import { DELETED_PLAYER_NAME } from "./result";
 import { dropCoachWantsFor } from "./coachWants";
 import { dropWantsFor } from "./demand";
 import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching";
@@ -83,7 +84,7 @@ export async function anonymizePlayer(
   await db
     .update(players)
     .set({
-      displayName: "Deleted player",
+      displayName: DELETED_PLAYER_NAME,
       email: null,
       recoveryEmail: null,
       phone: null,

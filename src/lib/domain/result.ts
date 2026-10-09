@@ -22,6 +22,9 @@ export type MatchResult = {
  */
 export const firstName = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0]?.slice(0, 24) || "?";
 
+/** The name `anonymizePlayer` leaves on a deleted account, so old line-ups still add up. Never a first name to show. */
+export const DELETED_PLAYER_NAME = "Deleted player";
+
 export const WINNER_ONLY_SETS = { a: [{ setNumber: 1, sideA: 1, sideB: 0 }], b: [{ setNumber: 1, sideA: 0, sideB: 1 }] } as const;
 
 /** Names per side and who won, from the saved sets and the roster's team assignment. Null without a score. */
