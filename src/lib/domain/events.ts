@@ -395,6 +395,16 @@ export const isOccupied = (slot: Pick<Slot, "status">) => slot.status === "joine
 export const isSeated = (detail: { roster: Pick<Slot, "status" | "playerId">[] }, playerId: string | null | undefined): boolean => Boolean(playerId) && detail.roster.some((s) => s.playerId === playerId && isOccupied(s));
 
 /**
+ * Who may change a match's details (time, length, place, court, note, price): the organiser, and
+ * every player who holds a seat in it. The owner, 9 October 2026: "any player should be able to
+ * change match details" - this is a friendly app among people who play together, and the one who
+ * books the court is often not the one who made the match. Cancelling the match, removing people
+ * and the organiser's own switches stay with the organiser.
+ */
+export const canEditMatchDetails = (detail: { roster: Pick<Slot, "status" | "playerId">[] }, viewer: { isCreator: boolean; playerId: string | null | undefined }): boolean =>
+  viewer.isCreator || isSeated(detail, viewer.playerId);
+
+/**
  * open ↔ full is derived from roster occupancy. cancelled/past are terminal
  * and never overwritten here.
  */

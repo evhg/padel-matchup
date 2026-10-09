@@ -8,6 +8,7 @@ import { getDb, type Db } from "@/db";
 import type { Player } from "@/db/schema";
 import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
+import { canEditMatchDetails } from "@/lib/domain/events";
 import { createPlayer, normalizeName } from "@/lib/domain/players";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer } from "@/lib/session";
 
@@ -83,5 +84,13 @@ export async function requireCreator(code: string): Promise<{ db: Db; detail: Ev
   const { db, detail } = await loadEvent(code);
   const viewer = await getViewer(db, detail);
   if (!viewer.isCreator) throw new ActionFailure("forbidden");
+  return { db, detail, viewer };
+}
+
+/** The organiser, or a player with a seat in this match (`canEditMatchDetails`). */
+export async function requireMatchEditor(code: string): Promise<{ db: Db; detail: EventDetail; viewer: Viewer }> {
+  const { db, detail } = await loadEvent(code);
+  const viewer = await getViewer(db, detail);
+  if (!canEditMatchDetails(detail, { isCreator: viewer.isCreator, playerId: viewer.player?.id })) throw new ActionFailure("forbidden");
   return { db, detail, viewer };
 }

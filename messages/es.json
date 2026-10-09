@@ -293,7 +293,9 @@
     "paidClaim": "Ya he pagado",
     "paidNothingThrough": "Kicksmash solo recuerda lo que decís los dos. Por él no pasa dinero.",
     "minutes": "{minutes} min",
-    "until": "hasta las {time}"
+    "until": "hasta las {time}",
+    "changeDetails": "Cambiar los detalles",
+    "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -503,7 +505,7 @@
     "updated": {
       "subject": "Actualizado: pádel {day} {time} · {venue}",
       "heading": "Han cambiado los detalles del partido",
-      "body": "El organizador ha actualizado el partido. Ahora es {day} a las {time} en {venue}. Tu entrada de calendario se actualizará al aceptar la invitación adjunta."
+      "body": "Los detalles del partido cambiaron. Ahora es {day} a las {time} en {venue}. Tu entrada de calendario se actualizará al aceptar la invitación adjunta."
     },
     "cancelled": {
       "subject": "Cancelado: pádel {day} {time} · {venue}",

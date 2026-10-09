@@ -2,9 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
-import { cancelEventAction, setBanterAction, updateEventAction } from "@/actions/events";
+import { cancelEventAction, setBanterAction } from "@/actions/events";
 import { EmailField } from "./EmailField";
-import { EventFields, type EventFormValues } from "./EventFields";
+import { EditMatch } from "./EditMatch";
+import type { EventFormValues } from "./EventFields";
 import { CopyButton, ShareButtons } from "./ShareSheet";
 import type { VenueOption } from "./VenueCombobox";
 
@@ -33,9 +34,6 @@ export function CreatorPanel({
   groupInvite: { text: string; count: number; url: string } | null;
 }) {
   const t = useTranslations();
-  const [values, setValues] = useState<EventFormValues>(initial);
-  const [editOpen, setEditOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [banter, setBanter] = useState(banterInitial);
   const toggleBanter = () => {
@@ -46,36 +44,6 @@ export function CreatorPanel({
       if (!r.ok) setBanter(!next);
     });
   };
-
-  const save = () =>
-    start(async () => {
-      setError(null);
-      const r = await updateEventAction(code, {
-        title: values.title,
-        date: values.date,
-        time: values.time,
-        durationMinutes: values.durationMinutes,
-        tz: values.tz,
-        venueName: values.venueName,
-        venueMapUrl: values.venueMapUrl,
-        court: values.court,
-        note: values.note,
-        whenFull: values.whenFull,
-        capacity: values.type === "tournament" ? values.capacity : undefined,
-        levelMin: values.levelMin,
-        levelMax: values.levelMax,
-        levelVerifiedOnly: values.levelVerifiedOnly,
-        publicListing: values.publicListing,
-        bookingUrl: values.bookingUrl,
-        cost: values.cost,
-        payNote: values.payNote,
-      });
-      if (!r.ok) {
-        setError(t("errors.invalid"));
-        return;
-      }
-      setEditOpen(false);
-    });
 
   const cancel = () => {
     if (!confirm(t("creator.cancelEventConfirm"))) return;
@@ -127,30 +95,16 @@ export function CreatorPanel({
 
       {!isCancelled && (
         <div className="mt-4 border-t border-line pt-4">
-          {editOpen ? (
-            <div className="flex flex-col gap-4 animate-pop">
-              <h3 className="font-extrabold">{t("creator.edit")}</h3>
-              <EventFields values={values} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} />
-              {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-              <div className="flex gap-2">
-                <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>
-                  {pending ? t("common.saving") : t("creator.saveChanges")}
-                </button>
-                <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
-                  {t("common.cancel")}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setEditOpen(true)}>
-                ✎ {t("creator.edit")}
-              </button>
+          <EditMatch
+            code={code}
+            initial={initial}
+            venues={venues}
+            beside={
               <button type="button" className="btn-danger btn-sm" disabled={pending} onClick={cancel}>
                 {t("creator.cancelEvent")}
               </button>
-            </div>
-          )}
+            }
+          />
         </div>
       )}
 

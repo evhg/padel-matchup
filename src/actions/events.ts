@@ -18,7 +18,7 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
-import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
 const createSchema = z.object({
@@ -183,7 +183,7 @@ export async function duplicateEventAction(code: string): Promise<ActionResult<{
 export async function updateEventAction(code: string, raw: UpdateEventInput): Promise<ActionResult<null>> {
   return runA(async () => {
     const input = updateSchema.parse(raw);
-    const { db, detail, viewer } = await requireCreator(code);
+    const { db, detail, viewer } = await requireMatchEditor(code);
     const tz = input.tz ?? detail.event.tz;
     const startsAt = input.date && input.time ? zonedTimeToUtc(input.date, input.time, tz) : undefined;
     const result = await updateEvent(db, detail.event.id, viewer.player?.id ?? null, {

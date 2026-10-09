@@ -336,6 +336,26 @@ try {
   await a.getByTestId("match-length").getByText(/· 120 min/).waitFor({ timeout: 20000 });
   const ics5 = await icsWhen(code3, 3);
   check("two hours instead of one: the page says so, the calendar entry ends two hours in, SEQUENCE bumped", icsMinutes(ics5) === 120 && ics5.includes("SEQUENCE:3"), `${ics5.match(/SEQUENCE:.*/)?.[0]} | ${ics5.match(/DTEND:.*/)?.[0]}`);
+  // The owner, 9 October 2026: any player in the match may change its details, not just the organiser.
+  const ed = await newPage();
+  await ed.goto(`${BASE}/${code3}`);
+  await ed.getByRole("button", { name: "Join this match" }).click();
+  await ed.getByPlaceholder("e.g. Alex").fill("Ed");
+  await ed.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  await ed.getByText("You're in").waitFor({ timeout: 20000 });
+  await ed.getByTestId("player-edit").getByRole("button", { name: "Edit match" }).click();
+  await ed.getByRole("button", { name: /More options/ }).click();
+  await ed.getByPlaceholder("Bring balls, level 3.5, parking tips…").fill("Court 3 tonight, Ed brings balls");
+  await ed.getByRole("button", { name: "Save changes" }).click();
+  await ed.getByText("Court 3 tonight, Ed brings balls").waitFor({ timeout: 20000 });
+  await shot(ed, "11b-player-edited");
+  check("a player in the match changed the note, and the page shows it", true);
+  await ed.context().close();
+  const outsider = await newPage();
+  await outsider.goto(`${BASE}/${code3}`);
+  await outsider.getByText("Court 3 tonight, Ed brings balls").waitFor({ timeout: 20000 });
+  check("a visitor who has not joined gets no edit form", (await outsider.getByTestId("player-edit").count()) === 0 && (await outsider.getByRole("button", { name: "Edit match" }).count()) === 0);
+  await outsider.context().close();
 
   // ---- RU toggle ----
   await a.goto(`${BASE}/PLAY`);
