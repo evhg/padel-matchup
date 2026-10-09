@@ -996,7 +996,12 @@
     "confirmOne": "Looks right",
     "confirmed": "Confirmed",
     "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}",
-    "changedSince": "Changed since you looked: {names}. The new number is shown; confirm it if it still looks right."
+    "changedSince": "Changed since you looked: {names}. The new number is shown; confirm it if it still looks right.",
+    "joinedTitle": "Your level?",
+    "joinedHelp": "One tap. It shows next to your name, so games can be even. Change it any time on My matches.",
+    "joinedPlaytomic": "I have a Playtomic number",
+    "joinedPlaytomicHelp": "Playtomic uses the same 0–7 scale, so your number carries over.",
+    "joinedSkip": "Skip"
   },
   "card": {
     "title": "Result card",

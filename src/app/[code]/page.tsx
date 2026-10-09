@@ -32,6 +32,7 @@ import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { StayUpdated } from "@/components/StayUpdated";
+import { LevelAfterJoin } from "@/components/LevelAfterJoin";
 import { getDb } from "@/db";
 import { feedKeyFor, feedLinks, stayChannels } from "@/lib/calendarFeed";
 import { stayUpdated } from "@/lib/domain/stayUpdated";
@@ -47,6 +48,7 @@ import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
+import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
@@ -241,6 +243,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
+  // Right under it, while they have no level: "Your level?" in one tap. A ranged match asked at the join already.
+  const askLevel = Boolean(me) && askLevelAfterJoin({ seated: isMember || isWaitlisted, level: me?.level ?? null, ranged, organiser: viewer.isCreator, open: !cancelled && !over });
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
   const stayFeed = me && stay?.kind === "reached" && stay.calendar === "feed" ? feedLinks(base, await feedKeyFor(db, me), locale) : null;
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
@@ -462,6 +466,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               feed={stayFeed ? { webcal: stayFeed.webcal, google: stayFeed.google } : null}
             />
           )}
+          {me && askLevel && <LevelAfterJoin playerId={me.id} />}
         </section>
 
         {creatorBanner && (

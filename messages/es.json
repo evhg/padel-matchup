@@ -996,7 +996,12 @@
     "confirmOne": "Es correcto",
     "confirmed": "Confirmado",
     "confirmedCount": "{count, plural, one {# nivel confirmado} other {# niveles confirmados}}",
-    "changedSince": "Cambió desde que lo viste: {names}. Se muestra el nuevo nivel; confírmalo si sigue siendo correcto."
+    "changedSince": "Cambió desde que lo viste: {names}. Se muestra el nuevo nivel; confírmalo si sigue siendo correcto.",
+    "joinedTitle": "¿Tu nivel?",
+    "joinedHelp": "Un toque. Aparece junto a tu nombre para que los partidos sean igualados. Cámbialo cuando quieras en Mis partidos.",
+    "joinedPlaytomic": "Tengo nivel de Playtomic",
+    "joinedPlaytomicHelp": "Playtomic usa la misma escala de 0 a 7, así que tu número vale tal cual.",
+    "joinedSkip": "Omitir"
   },
   "card": {
     "title": "Tarjeta de resultado",

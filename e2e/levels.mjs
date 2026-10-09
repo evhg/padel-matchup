@@ -1,5 +1,5 @@
 // Levels: ranged match (Gold preset), level chips, out-of-range request → approve/decline,
-// in-range direct join, level editor on My matches.
+// in-range direct join, level editor on My matches, the "Your level?" card after an open join.
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
@@ -117,6 +117,23 @@ try {
   await org.getByRole("button", { name: "Save changes" }).click();
   await org.getByText("Gold · 3.0–4.5").waitFor({ state: "detached", timeout: 20000 }).catch(() => undefined);
   check("range removed via edit", (await org.getByText("Gold · 3.0–4.5").count()) === 0);
+
+  // ---- Fay joins the open match with no level: one tap under the join sets it ----
+  const fay = await newPage();
+  await fay.goto(`${BASE}/${code}`);
+  await fay.getByRole("button", { name: "Join this match" }).click();
+  await fay.getByPlaceholder("e.g. Alex").fill("Fay");
+  await fay.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  await fay.getByText("You're in").waitFor({ timeout: 20000 });
+  const ask = fay.getByTestId("level-after-join");
+  await ask.waitFor({ timeout: 20000 });
+  check("a new player on an open match is asked 'Your level?' with the named bands, Playtomic and Skip", (await ask.getByText("Your level?").count()) === 1 && (await ask.getByRole("button", { name: "Intermediate", exact: true }).count()) === 1 && (await ask.getByRole("button", { name: "I have a Playtomic number" }).count()) === 1 && (await ask.getByRole("button", { name: "Skip", exact: true }).count()) === 1);
+  await shot(fay, "l7-level-after-join");
+  await ask.getByRole("button", { name: "Intermediate", exact: true }).click();
+  await fay.locator("li", { hasText: "Fay" }).getByText("3.0", { exact: true }).waitFor({ timeout: 20000 });
+  check("one tap on Intermediate puts the 3.0 chip on her roster row and the card is gone", (await fay.getByTestId("level-after-join").count()) === 0);
+  await fay.goto(`${BASE}/me`);
+  check("the tap saved it as self-declared, as My matches does", (await fay.getByText("Self-declared").count()) > 0 && (await fay.locator("section", { hasText: "Your level" }).getByText("3.0", { exact: true }).count()) > 0);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {
