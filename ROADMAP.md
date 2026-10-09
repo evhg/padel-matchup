@@ -769,6 +769,20 @@ Everything in this list is live. The README describes each in detail.
   the tag of the one before. The rule is `src/lib/domain/eventTags.ts`. The API and the MCP take
   `category` and `ageMin` on create (anything else is refused with a 422) and every match object and
   board row carries them. Filters on a listing come later.
+- **A crew's own Telegram group (9 October 2026, migrations 0085 and 0086).** The owner's decision:
+  a crew can run its own Telegram group with the bot as an admin, opted in group by group (DECIDING
+  rule 30). A member of a crew finds "Run a Telegram group for this crew" on its page: one link picks
+  or makes a group and adds the bot as an admin with three rights (pin, description, invite links).
+  The bot ties the group to the crew, pins its notice ("It reads messages in this group … It never
+  keeps the text"), and makes the invite link the crew page then shows its members ("Join the crew's
+  Telegram group"). From then on "in", "+1", "я в деле", "me apunto" take the seat of the one open
+  match, "out", "can't make it", "не смогу", "no puedo" give it back, and "who's in Thursday 7pm
+  Rawai?" makes the match and posts its card as the reply; the card is edited and the bot answers
+  with a reaction, never a message. With two matches open it asks that person alone. In any group, a
+  reply "+1" to a card now takes the seat as the ✅ button does. The `/new` line reads Spanish
+  ("mañana 19:00 Rawai", "el jueves a las 20") as the Spanish welcome always said it did, and a
+  place the chat already knows (its usual court, the sender's, the listed clubs in its zone) wins
+  over leftover words. /quiet from a group admin stops it. No message text is stored anywhere.
 
 ## The finish line
 

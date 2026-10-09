@@ -393,6 +393,19 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(await crewTelegramInvite(db, crew.id)).toBeNull();
   });
 
+  it("\"I'm in\" in reply to a /new prompt is not the place of a new match", async () => {
+    const chat = { id: -200900, type: "group" as const, title: "Prompted" };
+    expect(await say(chat, user(1, "Ana"), "/tz phuket").outcome).toBe("tz");
+    const prompt = { message_id: 7777, date: 0, chat, from: BOT, text: "📅 Thu 15 Oct · 19:00\nWhere?\nAnother place: reply to this message with its name.\n/new 15.10 19:00" };
+    const before = (await db.select().from(events)).length;
+    calls = [];
+    expect(await update({ message: { message_id: messageId++, date: 0, chat, from: user(2, "Petr"), text: "I'm in", reply_to_message: prompt } })).toBe("ignored");
+    expect((await db.select().from(events)).length).toBe(before);
+    expect(calls).toHaveLength(0);
+    // The place it asked for still makes the match.
+    expect(await update({ message: { message_id: messageId++, date: 0, chat, from: user(2, "Petr"), text: "Kata", reply_to_message: prompt } })).toMatch(/^new_created:/);
+  });
+
   it("no message text is kept anywhere: every table is searched for the words people typed", async () => {
     const MARK = "zqxwvmark";
     const { chat } = await listeningCrew(-200800);

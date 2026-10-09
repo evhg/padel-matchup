@@ -91,7 +91,10 @@ counted on the server, crawlers left out, while Vercel counts page views in the 
 2,022 on 24 September, which is 4% of the allowance.
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
-20 a minute per group. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
+20 a minute per group. A crew's own Telegram group (DECIDING rule 30) sends every message to the
+webhook, because an admin bot receives them all: one invocation each, read and dropped. A busy
+group of 200 messages a day is 6,000 invocations a month, so 160 such groups would spend the whole
+1M; `tg_groups_managed` counts them. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
 unverified tier — and the definition is the whole of it, because Meta counts only numbers messaged
 *outside* an open 24-hour window. A player who writes to us first costs nothing, and neither does
 anything we reply for the next day; only templates to people who have gone quiet are rationed.
