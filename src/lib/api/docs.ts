@@ -51,6 +51,7 @@ Players and assistants can tell us what should change: /feedback in Telegram or 
 - ${base}/ru and ${base}/es: the same pages in Russian and Spanish
 - ${base}/americano: free schedule generator
 - ${base}/about: privacy and terms, short
+- ${base}/privacy and ${base}/terms: privacy and terms in full
 - ${base}/developers and ${base}/agents
 
 ## Source

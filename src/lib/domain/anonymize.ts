@@ -77,9 +77,31 @@ export async function anonymizePlayer(
   // one thing an account deletion must not leave behind is a reason to send somebody a message.
   await dropWantsFor(db, playerId);
   await dropCoachWantsFor(db, playerId);
+  // The chat accounts and the public page go too. They are ways to reach a person and a page with
+  // their level on it, and /privacy promises that deletion takes them: until 9 October 2026 the row
+  // kept its Telegram, Discord and LINE ids, so the bot still knew a "Deleted player" by their account.
   await db
     .update(players)
-    .set({ displayName: "Deleted player", email: null, recoveryEmail: null, phone: null, personalToken: null, previousToken: null, emailVerifiedAt: null, emailNotifications: false, homescreenAt: null })
+    .set({
+      displayName: "Deleted player",
+      email: null,
+      recoveryEmail: null,
+      phone: null,
+      personalToken: null,
+      previousToken: null,
+      emailVerifiedAt: null,
+      emailNotifications: false,
+      homescreenAt: null,
+      telegramId: null,
+      telegramUsername: null,
+      discordId: null,
+      discordUsername: null,
+      lineId: null,
+      lineDisplayName: null,
+      publicProfile: false,
+      publicSlug: null,
+      publicSince: null,
+    })
     .where(eq(players.id, playerId));
   return { cancelledEvents, leftEvents, coachClosure };
 }

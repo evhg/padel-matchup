@@ -66,6 +66,8 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
     ...answerPages,
     ...inEveryLanguage("/built", "weekly", 0.5),
     ...inEveryLanguage("/about", "yearly", 0.3),
+    ...inEveryLanguage("/privacy", "yearly", 0.3),
+    ...inEveryLanguage("/terms", "yearly", 0.3),
     ...inEveryLanguage("/feedback", "yearly", 0.3),
   ];
 }

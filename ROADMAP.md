@@ -51,7 +51,14 @@ Everything in this list is live. The README describes each in detail.
   "Warehaus" stopped being two different places.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
-  quiet hours from a weekly programme.
+  quiet hours from a weekly programme. A programme match reaches the club's recent players by push; the
+  email that went with it stopped on 9 October 2026 and comes back as an opt-in with the per-kind
+  notice settings (`mayEmailClubMatch` in `src/lib/notify.ts`).
+- **Privacy and terms in full.** `/privacy` and `/terms` in three languages, operator "Kicksmash, Phuket,
+  Thailand", the feedback form as the contact, Thailand's PDPA as the law. The figures on the page come
+  from the constants that enforce them (`src/lib/legal.ts`), and `tests/legal.test.ts` checks the cookie
+  names and the figures. Deleting an account now also unlinks Telegram, Discord and LINE and takes the
+  public page down.
 - **Every padel club in Thailand and Singapore, listed.** 67 clubs from public sources — 40 in Thailand
   across eight provinces, 27 in Singapore — with the indoor and outdoor court split where a source said
   it, which is also the first capacity number the app has. Where two sources disagree the club's own

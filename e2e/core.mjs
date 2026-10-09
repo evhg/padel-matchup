@@ -36,7 +36,7 @@ try {
   await a.getByRole("button", { name: "Send code" }).click();
   await a.getByText(/We don't know that email yet/).waitFor({ timeout: 20000 });
   check("the landing page's way back in answers when it is used", (await a.getByText(/We don't know that email yet/).count()) === 1);
-  check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
+  check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/privacy");
   // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
   // "there should be a feedback option on the main landing page which explains that kicksmash is a
   // self-learning app with community feedback." Eight pages carried this door; the busiest did not.

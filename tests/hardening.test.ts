@@ -72,7 +72,19 @@ describe("changePlayerEmail", () => {
 
 describe("delete account", () => {
   it("cancels upcoming own matches, leaves joined ones, wipes personal data, keeps the row", async () => {
-    const me = await makePlayer(db, "Gone", { email: "gone@example.com", phone: "+6512345678", personalToken: "abcdefghijkl" });
+    const me = await makePlayer(db, "Gone", {
+      email: "gone@example.com",
+      phone: "+6512345678",
+      personalToken: "abcdefghijkl",
+      telegramId: 700100200,
+      telegramUsername: "gone_tg",
+      discordId: "900100200300400500",
+      discordUsername: "gone_dc",
+      lineId: "Ugone",
+      lineDisplayName: "Gone on LINE",
+      publicProfile: true,
+      publicSlug: "gone-1",
+    });
     const host = await makePlayer(db, "Host");
     const other = await makePlayer(db, "Other");
     const mine = await createEvent(db, { creatorPlayerId: me.id, type: "match", startsAt: new Date(Date.now() + HOUR), tz: "UTC", venueName: "Club", whenFull: "waitlist" });
@@ -91,6 +103,9 @@ describe("delete account", () => {
     expect(row.phone).toBeNull();
     expect(row.personalToken).toBeNull();
     expect(row.emailNotifications).toBe(false);
+    // The chat accounts and the public page are personal data too (/privacy says deletion takes them).
+    expect([row.telegramId, row.telegramUsername, row.discordId, row.discordUsername, row.lineId, row.lineDisplayName, row.publicSlug]).toEqual([null, null, null, null, null, null, null]);
+    expect(row.publicProfile).toBe(false);
     const [ev] = await db.select().from(events).where(eq(events.id, mine.id));
     expect(ev.status).toBe("cancelled");
     const stillIn = await db.select().from(slots).where(eq(slots.playerId, me.id));
