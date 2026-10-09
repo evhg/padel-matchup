@@ -25,6 +25,13 @@ const MUTED = "#5B6470";
 const BG = "#F4F3EE";
 const ACCENT = "#C8F135";
 
+/** One set's square on the card: full size up to three sets, smaller for four and five (5 × 80 + 4 × 10 = 440 px). */
+function setCell(sets: number): { size: number; radius: number; font: number; gap: number } {
+  if (sets <= 3) return { size: 96, radius: 24, font: 56, gap: 14 };
+  if (sets === 4) return { size: 88, radius: 22, font: 50, gap: 12 };
+  return { size: 80, radius: 20, font: 46, gap: 10 };
+}
+
 async function fonts() {
   const dir = join(process.cwd(), "src/lib/og/fonts");
   const [regular, bold] = await Promise.all([readFile(join(dir, "Inter-Regular.ttf")), readFile(join(dir, "Inter-ExtraBold.ttf"))]);
@@ -98,15 +105,18 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
     const r = matchResult(detail.scores, roster.map((s) => ({ team: s.team, status: s.status, name: nameOf(s) })));
     const rowA = r?.hasTeams ? r.a.join(" & ") : t("card.teamA");
     const rowB = r?.hasTeams ? r.b.join(" & ") : t("card.teamB");
+    // The text column is 1052 px wide. Three 96 px squares leave the names 720 px; five would leave them
+    // under 500, so four or five sets (decision H) get smaller squares and the names keep about 590.
+    const cell = setCell(r?.sets.length ?? 0);
     const row = (label: string, side: "a" | "b") => (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
-        <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: -1, color: r && r.winner !== side && r.winner !== "draw" ? muted : ink, maxWidth: 720, overflow: "hidden", whiteSpace: "nowrap" }}>{label}</div>
-        <div style={{ display: "flex", gap: 14 }}>
+        <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: -1, color: r && r.winner !== side && r.winner !== "draw" ? muted : ink, maxWidth: 720, minWidth: 0, flexShrink: 1, overflow: "hidden", whiteSpace: "nowrap" }}>{label}</div>
+        <div style={{ display: "flex", gap: cell.gap, flexShrink: 0 }}>
           {(r?.sets ?? []).map((s, i) => {
             const mine = side === "a" ? s.sideA : s.sideB;
             const theirs = side === "a" ? s.sideB : s.sideA;
             return (
-              <div key={i} style={{ width: 96, height: 96, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 56, fontWeight: 800, background: mine > theirs ? ACCENT : onPhoto ? "rgba(255,255,255,0.22)" : "#E4E2DA", color: mine > theirs ? INK : muted }}>
+              <div key={i} style={{ width: cell.size, height: cell.size, borderRadius: cell.radius, display: "flex", alignItems: "center", justifyContent: "center", fontSize: cell.font, fontWeight: 800, background: mine > theirs ? ACCENT : onPhoto ? "rgba(255,255,255,0.22)" : "#E4E2DA", color: mine > theirs ? INK : muted }}>
                 {mine}
               </div>
             );

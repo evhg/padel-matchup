@@ -220,6 +220,39 @@ try {
   await a.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   check("Play again appears after the score", (await a.getByRole("button", { name: /Play again/ }).count()) === 1);
   await shot(a, "11-score-locked");
+  // ---- Four sets, one of them unusual (decision H; the owner's note "we played 4 sets but we couldn't add the result!") ----
+  // 6-3 stays the first set, because /me is read for it below. The organiser's "Confirmed" chip stays
+  // up while they edit, so a save is over when "Edit score" comes back, not when the chip shows.
+  const setInputs = a.locator("#score input[type=number]");
+  await a.getByRole("button", { name: "Edit score" }).click();
+  await a.getByRole("button", { name: /Add set/ }).click();
+  await a.getByRole("button", { name: /Add set/ }).click();
+  await setInputs.nth(4).fill("4");
+  await setInputs.nth(5).fill("6");
+  await setInputs.nth(6).fill("6");
+  await setInputs.nth(7).fill("5");
+  await a.getByRole("button", { name: "Save score" }).click();
+  const scoreCheck = a.getByTestId("score-check");
+  await scoreCheck.waitFor({ timeout: 20000 });
+  check("an unusual set asks before it saves, naming the set", (await scoreCheck.getByText("Is 6-5 right?").count()) === 1 && (await a.getByRole("button", { name: "Save score" }).count()) === 0);
+  await scoreCheck.getByRole("button", { name: "Fix it" }).click();
+  check("\"Fix it\" goes back to the sets with nothing saved", (await a.getByTestId("score-check").count()) === 0 && (await setInputs.count()) === 8);
+  await a.getByRole("button", { name: "Save score" }).click();
+  check("the same score is asked about once, not twice", (await a.getByTestId("score-check").count()) === 0);
+  await a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 });
+  const fourSets = await a.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
+  check("a four-set score saves", JSON.stringify(fourSets.result?.sets) === JSON.stringify([{ a: 6, b: 3 }, { a: 7, b: 5 }, { a: 4, b: 6 }, { a: 6, b: 5 }]), JSON.stringify(fourSets.result));
+  // A fifth set with an unusual score, answered with "Yes, save" this time.
+  await a.getByRole("button", { name: "Edit score" }).click();
+  await a.getByRole("button", { name: /Add set/ }).click();
+  check("five sets is the most", (await a.getByRole("button", { name: /Add set/ }).count()) === 0);
+  await setInputs.nth(8).fill("3");
+  await setInputs.nth(9).fill("1");
+  await a.getByRole("button", { name: "Save score" }).click();
+  await a.getByTestId("score-check").getByRole("button", { name: "Yes, save" }).click();
+  await a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 });
+  const fiveSets = await a.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
+  check("\"Yes, save\" saves the five sets as they are", fiveSets.result?.sets?.length === 5 && fiveSets.result.sets[4].a === 3 && fiveSets.result.sets[4].b === 1, JSON.stringify(fiveSets.result));
   // Jordi (player) is now locked out
   await b.reload();
   check("player locked out after organizer confirms", (await b.getByText("Only they can change it").count()) > 0);

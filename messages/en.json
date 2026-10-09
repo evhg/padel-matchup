@@ -371,7 +371,10 @@
     "standingsHelp": "Tap players in finishing order — 1st, 2nd, 3rd…",
     "saveStandings": "Save standings",
     "clear": "Clear",
-    "place": "{n}."
+    "place": "{n}.",
+    "unusual": "Is {score} right?",
+    "unusualYes": "Yes, save",
+    "unusualFix": "Fix it"
   },
   "me": {
     "title": "My matches",

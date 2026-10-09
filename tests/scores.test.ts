@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
-import { outcomeForTeam, saveMatchScore, scorePermission, tally, validateSets } from "@/lib/domain/scores";
+import { isUsualSet, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, tally, unusualSets, validateSets } from "@/lib/domain/scores";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -36,11 +36,51 @@ describe("score-lock rules (pure)", () => {
   it("cancelled events never take scores", () => {
     expect(scorePermission({ event: { ...base, status: "cancelled" }, now: after, viewerPlayerId: "c", isCreator: true, participantIds: [] })).toEqual({ allowed: false, reason: "cancelled" });
   });
-  it("validates 1–3 sets", () => {
+  it("validates 1–5 sets of 0 to 30 games, whatever they look like (decision H)", () => {
+    const set = (sideA: number, sideB: number, setNumber = 1) => ({ setNumber, sideA, sideB });
+    expect(MAX_SETS).toBe(5);
     expect(() => validateSets([])).toThrow();
-    expect(() => validateSets([{ setNumber: 1, sideA: 6, sideB: 4 }, { setNumber: 2, sideA: 6, sideB: 4 }, { setNumber: 3, sideA: 6, sideB: 4 }, { setNumber: 4, sideA: 6, sideB: 4 }])).toThrow();
+    // Four sets: the owner's own note ("we played 4 sets but we couldn't add the result!").
+    expect(validateSets([set(6, 4), set(4, 6), set(6, 3), set(6, 5)])).toHaveLength(4);
+    expect(validateSets([set(6, 4), set(4, 6), set(6, 3), set(3, 6), set(7, 6)])).toHaveLength(5);
+    expect(() => validateSets([set(6, 4), set(6, 4), set(6, 4), set(6, 4), set(6, 4), set(6, 4)])).toThrow();
+    // Unusual is not invalid: the server keeps taking any games score.
+    expect(validateSets([set(6, 5), set(2, 2)])).toEqual([set(6, 5, 1), set(2, 2, 2)]);
+    expect(validateSets([set(30, 28)])).toEqual([set(30, 28)]);
+    expect(() => validateSets([set(31, 4)])).toThrow();
     expect(validateSets([{ setNumber: 9, sideA: 6, sideB: 4 }])).toEqual([{ setNumber: 1, sideA: 6, sideB: 4 }]);
     expect(() => validateSets([{ setNumber: 1, sideA: -1, sideB: 4 }])).toThrow();
+  });
+  it("says which sets look unusual: a question for the player, never a refusal", () => {
+    const mid = { last: false, only: false };
+    const last = { last: true, only: false };
+    const only = { last: true, only: true };
+    // [a, b, where the set stands, usual?]
+    const table: [number, number, typeof mid, boolean][] = [
+      // A set to six.
+      [6, 0, mid, true], [6, 4, mid, true], [4, 6, mid, true], [7, 5, mid, true], [7, 6, mid, true], [6, 7, last, true],
+      [6, 5, mid, false], [5, 6, last, false], [7, 4, mid, false], [7, 7, mid, false], [6, 6, only, false],
+      // A short set to four, with 5-3 and 5-4 for a set played on or its tie-break.
+      [4, 0, mid, true], [2, 4, mid, true], [5, 3, mid, true], [4, 5, last, true],
+      [4, 3, mid, false], [3, 1, mid, false], [2, 2, last, false], [5, 2, mid, false], [5, 5, mid, false],
+      // A pro set is the whole match: 8-0..8-6 and 9-0..9-8 as the only set, a typo inside a longer match.
+      [8, 6, only, true], [9, 2, only, true], [7, 9, only, true], [9, 8, only, true],
+      [9, 2, mid, false], [9, 2, last, false], [8, 3, mid, false], [8, 7, only, false], [9, 9, only, false],
+      // A match tie-break as the last set: ten or more, two clear, and exactly two apart beyond ten.
+      [10, 8, last, true], [8, 10, last, true], [10, 0, last, true], [11, 9, last, true], [12, 10, last, true], [18, 16, last, true], [10, 6, only, true],
+      [10, 8, mid, false], [10, 9, last, false], [11, 8, last, false], [12, 6, last, false], [9, 7, last, false], [10, 10, last, false],
+      // What a winner-only result looks like, and nothing at all.
+      [1, 0, only, false], [0, 1, last, false],
+    ];
+    for (const [a, b, place, usual] of table) expect(isUsualSet({ sideA: a, sideB: b }, place), `${a}-${b} ${JSON.stringify(place)}`).toBe(usual);
+    const sets = (...s: [number, number][]) => s.map(([sideA, sideB]) => ({ sideA, sideB }));
+    expect(unusualSets(sets([6, 3], [6, 4]))).toEqual([]);
+    expect(unusualSets(sets([6, 4], [4, 6], [10, 8]))).toEqual([]);
+    expect(unusualSets(sets([6, 4], [4, 6], [6, 3], [6, 5]))).toEqual([3]);
+    expect(unusualSets(sets([10, 8], [6, 4]))).toEqual([0]);
+    expect(unusualSets(sets([9, 2]))).toEqual([]);
+    expect(unusualSets(sets([9, 2], [6, 4]))).toEqual([0]);
+    expect(unusualSets(sets([6, 5], [3, 1], [6, 4], [2, 2], [7, 6]))).toEqual([0, 1, 3]);
   });
   it("tallies sets and derives outcomes per team", () => {
     const sets = [

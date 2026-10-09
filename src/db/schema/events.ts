@@ -152,7 +152,7 @@ export const slots = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// scores — one shared scoreboard per match, per-set (1..3 sets).
+// scores — one shared scoreboard per match, per-set (1..5 sets, MAX_SETS in src/lib/domain/scores.ts).
 // ---------------------------------------------------------------------------
 export const scores = pgTable(
   "scores",

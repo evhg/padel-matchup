@@ -556,6 +556,17 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
     expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 6, b: 4 }]);
     expect(await msg(92, org, `/score ${code} 6-3`)).toBe("score_saved");
+    // Four sets save (decision H; the owner's note "we played 4 sets but we couldn't add the result!"),
+    // and an unusual one is saved too, with one line saying so in the chat's language.
+    expect(parseSets("6-3 4-6 6-4 3-6 7-5 6-1")).toHaveLength(5);
+    expect(await msg(96, org, `/score ${code} 6-3 4-6 6-4 6-5`)).toBe("score_saved:unusual");
+    pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 4, b: 6 }, { a: 6, b: 4 }, { a: 6, b: 5 }]);
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("6-5: необычный счёт");
+    expect(await msg(97, org, `/score ${code} 6-3 4-6 6-4 7-5`)).toBe("score_saved");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).not.toContain("необычный");
+    // A bare four-set score in reply to the card is read too, not only the /score command.
+    expect(await msg(99, org, "6-3 4-6 6-4 6-2", card.messageId)).toBe("score_saved");
     expect(await msg(93, org, "/score what")).toBe("score_how");
     // A locked result stays locked for players.
     expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_error:locked");

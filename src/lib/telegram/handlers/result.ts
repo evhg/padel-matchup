@@ -13,7 +13,7 @@ import { praiseLine } from "@/lib/domain/praise";
 import { getEventByCode, getPlayerEvents, type EventDetail } from "@/lib/domain/queries";
 import { applyEventLevels } from "@/lib/domain/rating";
 import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
-import { saveMatchScore, type SetScore } from "@/lib/domain/scores";
+import { MAX_SETS, saveMatchScore, unusualSets, type SetScore } from "@/lib/domain/scores";
 import { answerCallbackQuery, botDeepLink, editMessageText, esc, sendMessage, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
 import { cardTitle, strings, type BotLocale, type BotStrings } from "../card";
 import { playingSeats, scoreFormButton, scoreLine } from "@/lib/afterMatch";
@@ -72,8 +72,12 @@ async function scoreFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: T
   }
   if (isCreator) await applyEventLevels(db, detail.event.id).catch(() => undefined);
   ctx.emit("match.result", detail.event.code, { confirmed: isCreator });
-  await say(s.scoreSaved(sets.map((x) => `${x.sideA}-${x.sideB}`).join(" ")));
-  return "score_saved";
+  // An unusual set is saved all the same (decision H): the chat has no "Yes, save", so the bot says so
+  // once and a second message with the right score replaces it.
+  const odd = unusualSets(sets).map((i) => `${sets[i].sideA}-${sets[i].sideB}`);
+  const saved = s.scoreSaved(sets.map((x) => `${x.sideA}-${x.sideB}`).join(" "));
+  await say(odd.length ? `${saved}\n${s.scoreUnusual(odd)}` : saved);
+  return odd.length ? "score_saved:unusual" : "score_saved";
 }
 
 /** 🏁 on the card: "who won?", one tap per possible pair (or per known pair). */
@@ -252,7 +256,8 @@ async function handleSameTime(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   }
 }
 
-const SETS_ONLY_RE = /^\s*\d{1,2}\s*[-:]\s*\d{1,2}(?:[\s,;/]+\d{1,2}\s*[-:]\s*\d{1,2}){0,2}\s*$/;
+/** One to `MAX_SETS` sets and nothing else. */
+const SETS_ONLY_RE = new RegExp(`^\\s*\\d{1,2}\\s*[-:]\\s*\\d{1,2}(?:[\\s,;/]+\\d{1,2}\\s*[-:]\\s*\\d{1,2}){0,${MAX_SETS - 1}}\\s*$`);
 
 /** A bare "6-4 6-3": as a reply it scores the card or nudge it answers; in the private chat, the player's freshest finished match. */
 export

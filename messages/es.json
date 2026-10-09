@@ -371,7 +371,10 @@
     "standingsHelp": "Toca los jugadores por orden de llegada: 1.º, 2.º, 3.º…",
     "saveStandings": "Guardar clasificación",
     "clear": "Limpiar",
-    "place": "{n}.º"
+    "place": "{n}.º",
+    "unusual": "¿{score} es correcto?",
+    "unusualYes": "Sí, guardar",
+    "unusualFix": "Corregir"
   },
   "me": {
     "title": "Mis partidos",
