@@ -1013,7 +1013,15 @@
     "seasonPlayed": "Jugados",
     "seasonWon": "Ganados",
     "seasonStreak": "Seguidas",
-    "seasonHelp": "Partidos con resultado. 🔥 son tres victorias seguidas o más."
+    "seasonHelp": "Partidos con resultado. 🔥 son tres victorias seguidas o más.",
+    "handOver": "Ceder",
+    "handOverTo": "Ceder el grupo a",
+    "handOverPick": "Elige a un miembro",
+    "handOverHelp": "A partir de ahí, el grupo lo lleva el nuevo admin. Tú sigues como miembro.",
+    "handOverConfirm": "¿Ceder {name} a {member}? Seguirás como miembro.",
+    "handOverGone": "Esa persona ya no está en el grupo. Elige a otra.",
+    "handedOver": "{from} te cede {name}\nAhora llevas tú el grupo: los ajustes, el horario semanal y los miembros.",
+    "open": "Abrir el grupo"
   },
   "venue": {
     "board": "Tablón del club",

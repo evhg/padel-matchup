@@ -40,6 +40,30 @@ export function returnToFor(loc: { origin: string; pathname: string }): string {
   return `${loc.origin}${loc.pathname}`;
 }
 
+/** The longest page a sign-in may come back to; anything longer is not a path we mint. */
+export const LOGIN_NEXT_MAX = 300;
+
+/**
+ * Where a Telegram sign-in lands: the page it started from, carried to the login route as `?next=`,
+ * or My matches when that value is anything but a path on this site. A path starts with one "/";
+ * "//host" and "/\host" are other hosts to a browser, and so is "/<tab>/host", because the URL parser
+ * drops tabs and line breaks. A personal link (`/p/<token>`) is never carried, because a token does
+ * not travel in a query string (rule 5). Pure.
+ */
+export function loginNext(next: string | null | undefined): string {
+  const p = next ?? "";
+  if (!p.startsWith("/") || p.length > LOGIN_NEXT_MAX) return "/me";
+  if (p.startsWith("//") || p.includes("\\") || /[\u0000-\u0020\u007f]/.test(p)) return "/me";
+  if (/^\/p(\/|$)/i.test(p)) return "/me";
+  // The last word goes to the URL parser itself: the path must resolve on the same origin.
+  try {
+    const probe = "https://same.invalid";
+    return new URL(p, probe).origin === probe ? p : "/me";
+  } catch {
+    return "/me";
+  }
+}
+
 /**
  * The start parameter the Mini App opened with. A direct link (t.me/<bot>/<app>?startapp=) has it
  * signed in initData. A web_app button gets none from Telegram, so the bot writes it into the

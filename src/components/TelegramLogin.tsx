@@ -7,8 +7,9 @@ import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/log
 /**
  * Sign in with Telegram, in this tab: one button that sends the tab to
  * Telegram and comes back here with the signed fields in the hash; those go
- * to /api/telegram/login, which verifies them and sets the session. No
- * widget, no popup, no second tab. Linked accounts see their handle instead.
+ * to /api/telegram/login, which verifies them, sets the session and returns
+ * the tab to this page. No widget, no popup, no second tab. Linked accounts
+ * see their handle instead.
  */
 export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: { botId: string; linkedUsername: string | null; linked: boolean; lang: string; authUrl: string }) {
   const t = useTranslations();
@@ -19,8 +20,10 @@ export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: 
       const fields = readAuthResult(window.location.hash);
       if (!fields) return;
       setBusy(true);
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-      window.location.replace(`${authUrl}?${new URLSearchParams(fields)}`);
+      const here = window.location.pathname + window.location.search;
+      history.replaceState(null, "", here);
+      // The login route sends the tab back to this page (`loginNext` checks it), not to My matches.
+      window.location.replace(`${authUrl}?${new URLSearchParams({ ...fields, next: here })}`);
     };
     back();
     window.addEventListener("hashchange", back);

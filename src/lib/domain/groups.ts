@@ -162,6 +162,29 @@ export async function removeGroupMember(db: Db, groupId: string, actorPlayerId: 
   await db.delete(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, playerId)));
 }
 
+/**
+ * The admin hands the group to another current member. Two things make a group's admin, and both
+ * move together in one transaction: the `admin` role on the member row, which opens the settings, and
+ * `groups.creator_player_id`, which keeps that person from leaving or being removed and is who the
+ * weekly match is created for. The old admin stays on as a plain member and may now leave. Only the
+ * admin can do it, and only to somebody in the group now: a player who left, or never joined, is
+ * `not_member`.
+ */
+export async function handOverGroup(db: Db, groupId: string, actorPlayerId: string, toPlayerId: string): Promise<Group> {
+  const actor = await getGroupMember(db, groupId, actorPlayerId);
+  if (!actor || actor.role !== "admin") throw new DomainError("forbidden");
+  if (toPlayerId === actorPlayerId) throw new DomainError("invalid", "self");
+  const to = await getGroupMember(db, groupId, toPlayerId);
+  if (!to) throw new DomainError("not_member");
+  return db.transaction(async (tx) => {
+    const [g] = await tx.update(groups).set({ creatorPlayerId: toPlayerId }).where(eq(groups.id, groupId)).returning();
+    if (!g) throw new DomainError("not_found");
+    await tx.update(groupMembers).set({ role: "member" }).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, actorPlayerId)));
+    await tx.update(groupMembers).set({ role: "admin" }).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.playerId, toPlayerId)));
+    return g;
+  });
+}
+
 export type UpdateGroupInput = {
   name?: string;
   venueName?: string | null;

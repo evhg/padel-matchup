@@ -1013,7 +1013,15 @@
     "seasonPlayed": "Played",
     "seasonWon": "Won",
     "seasonStreak": "In a row",
-    "seasonHelp": "Matches with a score. 🔥 is three wins in a row or more."
+    "seasonHelp": "Matches with a score. 🔥 is three wins in a row or more.",
+    "handOver": "Hand over",
+    "handOverTo": "Hand the group to",
+    "handOverPick": "Pick a member",
+    "handOverHelp": "The new admin runs the group from then on. You stay a member.",
+    "handOverConfirm": "Hand {name} to {member}? You stay a member.",
+    "handOverGone": "They are not in the group any more. Pick someone else.",
+    "handedOver": "{from} handed you {name}\nYou run the group now: the settings, the weekly slot and the members.",
+    "open": "Open the group"
   },
   "venue": {
     "board": "Venue board",

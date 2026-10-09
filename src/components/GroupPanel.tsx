@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createGroupFromEventAction, deleteGroupAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction } from "@/actions/groups";
+import { createGroupFromEventAction, deleteGroupAction, handOverGroupAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction } from "@/actions/groups";
 import { formatLevel } from "@/lib/domain/levels";
 
 const errKey = (e: string) => (e === "name_required" || e === "no_identity" || e === "level_required" ? "generic" : e);
@@ -174,8 +174,8 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
   );
 }
 
-/** Admin: name and the weekly slot that creates matches automatically. */
-export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, weekdays }: { code: string; name: string; recurDow: number | null; recurTime: string | null; recurLeadDays: number; weekdays: string[] }) {
+/** Admin: name and the weekly slot that creates matches automatically, and under them the group handed to another member. */
+export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, weekdays, others }: { code: string; name: string; recurDow: number | null; recurTime: string | null; recurLeadDays: number; weekdays: string[]; others: { playerId: string; name: string }[] }) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -257,6 +257,48 @@ export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, 
           {t("group.delete")}
         </button>
       </div>
+      {others.length > 0 && <HandOver code={code} name={name} others={others} />}
     </form>
+  );
+}
+
+/** Inside the settings: the admin picks a current member and hands the group over. They stay a member. */
+function HandOver({ code, name, others }: { code: string; name: string; others: { playerId: string; name: string }[] }) {
+  const t = useTranslations();
+  const [to, setTo] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const pick = others.find((o) => o.playerId === to);
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-3">
+      <label className="block">
+        <span className="label">{t("group.handOverTo")}</span>
+        <select className="input px-3" value={to} onChange={(e) => setTo(e.target.value)}>
+          <option value="">{t("group.handOverPick")}</option>
+          {others.map((o) => (
+            <option key={o.playerId} value={o.playerId}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="text-xs text-faint">{t("group.handOverHelp")}</p>
+      {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+      <button
+        type="button"
+        className="btn-ghost btn-sm self-start"
+        disabled={pending || !pick}
+        onClick={() => {
+          if (!pick || !confirm(t("group.handOverConfirm", { name, member: pick.name }))) return;
+          start(async () => {
+            setError(null);
+            const r = await handOverGroupAction(code, pick.playerId);
+            if (!r.ok) setError(r.error === "not_member" ? t("group.handOverGone") : t(`errors.${errKey(r.error)}` as "errors.generic"));
+          });
+        }}
+      >
+        {pending ? t("common.working") : t("group.handOver")}
+      </button>
+    </div>
   );
 }
