@@ -740,7 +740,8 @@ Everything in this list is live. The README describes each in detail.
   `bg-white` or `text-white` outside the few places white is meant (a QR code, the brand buttons).
   The club's TV page, the printed poster and the embeds stay light (`data-keep-light`), with a light
   theme-color for the browser's bar (`KEEP_LIGHT_VIEWPORT`). A switch that is off has its own knob
-  colour (`knob-off`), light in the dark theme, at 3:1 or better on its track.
+  colour (`knob-off`), light in the dark theme, at 3:1 or better on its track. With Bigger text on a phone the
+  header shows the mark without the word, and the e-mail field never gets narrower than its placeholder.
 
 ## The finish line
 

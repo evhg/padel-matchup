@@ -56,8 +56,13 @@ try {
   check("Bigger text holds after a reload, and nothing runs off a phone", (await rootSize()) === "18px" && (await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)));
   // The pictures of /me at the big size, in the light theme and the dark one; then back to the landing page.
   await a.goto(BASE + "/me");
+  // The e-mail field holds its whole placeholder at the big size: it read "you@example.c" beside "Send code".
+  const placeholderFits = () => a.locator('main input[type="email"]').first().evaluate((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; }).catch(() => false);
+  check("with Bigger text the e-mail field on My matches shows its whole placeholder", await placeholderFits());
   await shot(a, "04b-me-bigger-text");
+  // A fresh render in the dark theme: a picture taken as the scheme flips catches the buttons halfway through their colour transition.
   await a.emulateMedia({ colorScheme: "dark" });
+  await a.reload();
   await shot(a, "04c-me-bigger-text-dark");
   await a.emulateMedia({ colorScheme: "light" });
   await a.goto(BASE + "/");
@@ -81,6 +86,20 @@ try {
 
   await a.goto(BASE + "/me");
   await shot(a, "04-me");
+  // A player's My matches at the big size, with its own switch on, in both themes; then the normal size again.
+  await a.getByTestId("text-size-switch").click();
+  check("the switch on My matches raises the text to 18px", (await rootSize()) === "18px");
+  // The header's word Kicksmash is whole or gone at the big size, never cut to "Kicksm…".
+  const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.scrollWidth <= e.clientWidth).catch(() => false);
+  check("with Bigger text the header shows the whole word Kicksmash or the mark alone, never a cut word", brandWhole);
+  await shot(a, "04d-me-player-bigger-text");
+  await a.emulateMedia({ colorScheme: "dark" });
+  await a.reload();
+  await shot(a, "04e-me-player-bigger-text-dark");
+  await a.emulateMedia({ colorScheme: "light" });
+  await a.reload();
+  await a.getByTestId("text-size-switch").click();
+  check("switched off on My matches, the text is back to 16px", (await rootSize()) === "16px");
   check("/me lists PLAY", (await a.content()).includes('href="/PLAY"'));
   // The feedback card is the app saying what it is, not a suggestion box at the foot of the page.
   check("the feedback card says the app is built by the players on it", (await a.getByText(/built by the players on it/).count()) === 1);
@@ -479,6 +498,7 @@ try {
   await a.goto(`${BASE}/privacy`);
   await shot(a, "19b-privacy");
   await a.emulateMedia({ colorScheme: "dark" });
+  await a.reload();
   await shot(a, "19c-privacy-dark");
   await a.emulateMedia({ colorScheme: "light" });
   await a.goto(`${BASE}/about`);

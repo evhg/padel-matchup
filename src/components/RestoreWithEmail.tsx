@@ -6,6 +6,12 @@ import { startTransition, useState, useTransition } from "react";
 import { requestRestoreCode, verifyRestoreCode } from "@/actions/identity";
 
 /**
+ * The width a field needs to show its placeholder whole: about 0.6em a character (measured in Chromium:
+ * "you@example.com" is 0.57em a character, "tu@ejemplo.com" 0.54em), plus the padding and the border.
+ */
+const placeholderWidth = (placeholder: string) => `calc(${(placeholder.length * 0.6).toFixed(1)}em + 2rem + 2px)`;
+
+/**
  * Email → 6-digit code → every identity with that email is merged into one and
  * this device signs in as it.
  *
@@ -82,13 +88,17 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
       )}
       {step === "email" ? (
         <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
+          {/* The field is never narrower than its own placeholder; when the button leaves it less, the
+              button goes under it. Beside "Send code" at 18 px, and beside "Отправить код" at 16 px,
+              the field read "you@example.c". */}
+          <div className="flex flex-wrap gap-2">
             <input
               type="email"
               inputMode="email"
               autoComplete="email"
               enterKeyHint="send"
-              className="input"
+              className="input flex-1"
+              style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }}
               placeholder={t("share.emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
