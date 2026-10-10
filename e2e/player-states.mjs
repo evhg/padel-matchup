@@ -145,6 +145,8 @@ try {
   check("the header's My matches carries the unread count", /^[1-9]\+?$/.test(await dana.getByTestId("nav-unread").innerText()) && (await dana.getByRole("link", { name: "My matches", exact: true }).count()) > 0);
   await inbox.locator("summary").click();
   check("the inbox lists the notice: Kai joined Dana's match", (await inbox.locator("li").filter({ hasText: "Kai joined" }).count()) === 1 && (await inbox.locator(`a[href="/${mine.match?.code}"]`).count()) === 1);
+  // The marks go after the tap is handled, not at the instant of the click: wait for them to go, never for long.
+  await inbox.getByTestId("inbox-new").waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
   check("opening the inbox reads it", (await inbox.getByTestId("inbox-new").count()) === 0 && (await inbox.locator("li[data-unread]").count()) === 0);
   await shot(dana, "player-inbox");
 

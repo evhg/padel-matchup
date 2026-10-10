@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { markNoticesReadAction } from "@/actions/notices";
 
 type Item = { id: string; text: string; when: string; unread: boolean; href: string | null };
@@ -9,13 +9,22 @@ type Item = { id: string; text: string; when: string; unread: boolean; href: str
 /** The inbox's one line and its list. Opening it reads it: one call marks every notice read, and the new marks go at once. */
 export function InboxDetails({ title, newLabel, unreadLabel, help, items }: { title: string; newLabel: string | null; unreadLabel: string; help: string; items: Item[] }) {
   const [read, setRead] = useState(false);
-  const open = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
-    if (!e.currentTarget.open || read || !newLabel) return;
+  const ref = useRef<HTMLDetailsElement>(null);
+  const markRead = () => {
+    if (read || !newLabel) return;
     setRead(true);
     void markNoticesReadAction();
   };
+  const open = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    if (e.currentTarget.open) markRead();
+  };
+  // A tap before the page has hydrated opens the list with no handler attached yet: read it as soon as one is.
+  useEffect(() => {
+    if (ref.current?.open) markRead();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at hydration
+  }, []);
   return (
-    <details id="inbox" className="card" data-testid="inbox" onToggle={open}>
+    <details ref={ref} id="inbox" className="card" data-testid="inbox" onToggle={open}>
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
         <span className="font-bold">{title}</span>
         {newLabel && !read && (
