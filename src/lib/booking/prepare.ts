@@ -41,38 +41,53 @@ export const DEEP_LINK = {
 /** A slug the day links may carry: anything else falls back to the club's page. */
 const SLUG = /^[a-z0-9-]{1,80}$/;
 
+/** https only: a player is never handed to a plain-http page on the way to paying. */
 const parse = (u: string | null | undefined): URL | null => {
   if (!u) return null;
   try {
     const url = new URL(u);
-    return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+    return url.protocol === "https:" ? url : null;
   } catch {
     return null;
   }
 };
 
+/** The host is the platform's own or a subdomain of it, as `detectPlatform` reads it: evilplaytomic.com is not Playtomic. */
+const onHost = (u: URL, host: string) => {
+  const h = u.hostname.toLowerCase();
+  return h === host || h.endsWith(`.${host}`);
+};
+
 /** playtomic.com/clubs/{slug}, or the old playtomic.io/{slug}/{tenant}. */
 function playtomicSlug(u: URL): string | null {
   const parts = u.pathname.split("/").filter(Boolean);
-  const host = u.hostname.toLowerCase();
-  const slug = host.endsWith("playtomic.com") && parts[0] === "clubs" ? parts[1] : host.endsWith("playtomic.io") && parts.length === 2 && parts[0] !== "wl" ? parts[0] : null;
+  const slug = onHost(u, "playtomic.com") && parts[0] === "clubs" ? parts[1] : onHost(u, "playtomic.io") && parts.length === 2 && parts[0] !== "wl" ? parts[0] : null;
   return slug && SLUG.test(slug) ? slug : null;
 }
 
 /** matchi.se/facilities/{slug}. */
 function matchiSlug(u: URL): string | null {
   const parts = u.pathname.split("/").filter(Boolean);
-  const slug = parts[0] === "facilities" ? parts[1] : null;
+  const slug = onHost(u, "matchi.se") && parts[0] === "facilities" ? parts[1] : null;
   return slug && SLUG.test(slug) ? slug : null;
 }
 
 /**
- * Where "Book this court" goes for this club and this match, and how far it is prepared; null when the
- * club has no link at all. The platform is the club's own word first (`booking_platform`, which a
- * custom domain needs: book.pop-padel.com is Playbypoint), then the link's host. The day is the club's
- * local day.
+ * May this club's links become "Book this court"? Only a row somebody vetted: a club that runs its
+ * page (claimed and approved) or the directory's own row, read from public sources. A club any player
+ * listed carries whatever website that player typed, and a claim still waiting or a refused row
+ * carries what its claimant typed: a link on a club's page is the thing the owner's tap guards.
  */
-export function prepareBooking(club: Pick<Club, "bookingUrl" | "bookingPlatform" | "website" | "tz">, slot: BookingSlot): PreparedBooking | null {
+export const mayPrepareFor = (c: Pick<Club, "source" | "approvedAt" | "rejectedAt">): boolean => !c.rejectedAt && (Boolean(c.approvedAt) || c.source === "directory");
+
+/**
+ * Where "Book this court" goes for this club and this match, and how far it is prepared; null when the
+ * club has no https link, or its links were never vetted (`mayPrepareFor`). The platform is the club's
+ * own word first (`booking_platform`, which a custom domain needs: book.pop-padel.com is Playbypoint),
+ * then the link's host. The day is the club's local day.
+ */
+export function prepareBooking(club: Pick<Club, "bookingUrl" | "bookingPlatform" | "website" | "tz" | "source" | "approvedAt" | "rejectedAt">, slot: BookingSlot): PreparedBooking | null {
+  if (!mayPrepareFor(club)) return null;
   const links = [parse(club.bookingUrl), parse(club.website)].filter((u): u is URL => u !== null);
   if (links.length === 0) return null;
   const platform = platformById(club.bookingPlatform) ?? detectPlatform(club.bookingUrl) ?? detectPlatform(club.website);

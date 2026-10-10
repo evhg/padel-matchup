@@ -14,9 +14,10 @@ import file from "../../../data/clubs.json";
  * `tests/club-directory.test.ts` runs the import script's own statement and compares every row it
  * writes with this function, so the two cannot drift apart.
  */
-export type DirectoryListing = Pick<Club, "name" | "country" | "province" | "city" | "tz" | "courts" | "courtsIndoor" | "courtsOutdoor" | "website" | "about">;
+/** The booking link and its platform are the directory's too (10 October 2026): a refused claim hands them back with the rest. */
+export type DirectoryListing = Pick<Club, "name" | "country" | "province" | "city" | "tz" | "courts" | "courtsIndoor" | "courtsOutdoor" | "website" | "bookingUrl" | "bookingPlatform" | "about">;
 
-type Row = { slug: string; name: string; country: string; province: string; city?: string | null; tz: string; area?: string | null; courts?: number | null; courtsIndoor?: number | null; courtsOutdoor?: number | null; website?: string | null };
+type Row = { slug: string; name: string; country: string; province: string; city?: string | null; tz: string; area?: string | null; courts?: number | null; courtsIndoor?: number | null; courtsOutdoor?: number | null; website?: string | null; bookingUrl?: string | null; bookingPlatform?: string | null };
 
 const bySlug = new Map((file.clubs as Row[]).map((c) => [c.slug, c]));
 
@@ -33,6 +34,8 @@ export function directoryListing(slug: string): DirectoryListing | null {
     courtsIndoor: c.courtsIndoor ?? null,
     courtsOutdoor: c.courtsOutdoor ?? null,
     website: c.website ?? null,
+    bookingUrl: c.bookingUrl ?? null,
+    bookingPlatform: c.bookingPlatform ?? null,
     // The script's own sentence: the name and the area, or nothing when no source named the area.
     about: c.area ? `${c.name}, ${c.area}.` : null,
   };

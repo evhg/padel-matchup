@@ -297,8 +297,11 @@ export default async function EventPage({ params, searchParams }: Props) {
   // booking link, when the organiser gave one, stays where it was. One read, only for them.
   const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
   const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClub(db, ev.venueSlug) : null;
+  // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
   const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
-  const slotLine = [day, time, t("event.minutes", { minutes: ev.durationMinutes }), ev.court ? (/^\d{1,3}$/.test(ev.court) ? courtNumber(ev.court) : ev.court) : null].filter(Boolean).join(", ");
+  // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.
+  const clubTz = venueClub?.tz || ev.tz;
+  const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), ev.court ? (/^\d{1,3}$/.test(ev.court) ? courtNumber(ev.court) : ev.court) : null].filter(Boolean).join(", ");
   const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));

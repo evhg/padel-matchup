@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import type { Player } from "@/db/schema";
+import { players, type Player } from "@/db/schema";
 import { matchToPublic } from "@/lib/api/serialize";
 import { courtBookedBy, mayMarkBooked, setCourtBooked } from "@/lib/domain/courtBooked";
 import { cancelEvent, createEvent, updateEvent } from "@/lib/domain/events";
+import { DELETED_PLAYER_NAME } from "@/lib/domain/result";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
 import { renderCard } from "@/lib/telegram/card";
@@ -89,9 +91,37 @@ describe("court booked", () => {
     expect(courtBookedBy(await fresh(d.event.code))).toBeNull();
   });
 
-  it("a cancelled match takes no mark", async () => {
+  it("a cancelled match takes no mark, and the API shows none on one cancelled after it was booked", async () => {
     const d = await match();
+    await setCourtBooked(db, d, ana.id, true, NOW);
     await cancelEvent(db, d.event.id, olga.id);
+    const off = await fresh(d.event.code);
+    expect(matchToPublic(off, "https://kicksma.sh").courtBooked).toBeNull();
     await expect(setCourtBooked(db, await fresh(d.event.code), ana.id, true, NOW)).rejects.toMatchObject({ code: "cancelled" });
+  });
+
+  it("a match already played takes no new mark", async () => {
+    const d = await match();
+    // Two days and three hours on: the 90 minutes are long over, though the sweep has not marked it past.
+    await expect(setCourtBooked(db, d, ana.id, true, new Date(NOW.getTime() + 2 * DAY + 3 * 3600_000))).rejects.toMatchObject({ code: "past" });
+  });
+
+  it("a booker whose account is gone shows no name: the row says \"Deleted player\", never a first name", async () => {
+    const zed = await makePlayer(db, "Zed Example");
+    const d = await match();
+    await joinEvent(db, { eventId: d.event.id, playerId: zed.id });
+    await setCourtBooked(db, await fresh(d.event.code), zed.id, true, NOW);
+    await db.update(players).set({ displayName: DELETED_PLAYER_NAME }).where(eq(players.id, zed.id));
+    const gone = await fresh(d.event.code);
+    expect(courtBookedBy(gone)).toEqual({ at: NOW, name: null });
+    expect(matchToPublic(gone, "https://kicksma.sh").courtBooked).toEqual({ at: NOW.toISOString(), by: null });
+    expect(renderCard(gone, "https://kicksma.sh", "en", NOW).text).toContain("🎟 Court booked ✓\n");
+  });
+
+  it("a club's name typed in other letters is the same club, and keeps the mark", async () => {
+    const d = await match();
+    await setCourtBooked(db, d, ana.id, true, NOW);
+    await updateEvent(db, d.event.id, olga.id, { venueName: "rawai padel" });
+    expect(courtBookedBy(await fresh(d.event.code))?.name).toBe("Ana");
   });
 });

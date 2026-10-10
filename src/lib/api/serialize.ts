@@ -80,7 +80,8 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     .map((s) => ({ name: playerName(s.player, s.invitedName), level: s.player?.level ?? null, organizer: s.playerId === ev.creatorPlayerId, status: s.status as PublicPlayer["status"] }));
   const range = { min: ev.levelMin, max: ev.levelMax };
   const res = ev.type === "match" ? matchResult(detail.scores, detail.roster.map((s) => ({ team: s.team, status: s.status, name: playerName(s.player, s.invitedName) }))) : null;
-  const booked = courtBookedBy(detail);
+  // A cancelled match has no court to book: the page and the cards hide the mark, and so does the API.
+  const booked = ev.status === "cancelled" ? null : courtBookedBy(detail);
   return {
     code: ev.code,
     url: `${base}/${ev.code}`,

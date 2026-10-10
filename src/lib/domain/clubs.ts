@@ -389,6 +389,15 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   // check, listing a club in the directory would tell its real owner it was "already claimed".
   if (existing && !existing.rejectedAt && existing.claimedBy !== null && existing.claimedBy !== input.playerId) throw new DomainError("forbidden", "already_claimed");
   const fields = cleanClubInput(input);
+  // The booking page the row already has stays unless the claim names another: a blank field is not
+  // "we have no booking page". And the same page typed again keeps the platform the row knew, which a
+  // custom domain cannot say (book.pop-padel.com is Playbypoint).
+  if (existing?.bookingUrl && !fields.bookingUrl) {
+    delete fields.bookingUrl;
+    delete fields.bookingPlatform;
+  } else if (existing?.bookingUrl && fields.bookingUrl && !fields.bookingPlatform && hostOf(fields.bookingUrl) === hostOf(existing.bookingUrl)) {
+    fields.bookingPlatform = existing.bookingPlatform;
+  }
   const city = fields.city ?? guessCity(slug, input.tz ?? existing?.tz) ?? existing?.city ?? null;
   const country = fields.country ?? countryOfTz(input.tz ?? existing?.tz) ?? existing?.country ?? null;
   const province = fields.province ?? existing?.province ?? (city ? (cityBySlug(city)?.name ?? null) : null);
@@ -509,12 +518,11 @@ async function listingUnderClaim(club: Club): Promise<DirectoryListing | null> {
 
 /**
  * Everything a claim may have written that a directory row does not have. The listing's own facts come
- * from the directory; these go back to nothing, whoever typed them.
+ * from the directory; these go back to nothing, whoever typed them. The booking link and its platform
+ * are the directory's own since 10 October 2026, so they come back from the listing instead.
  */
 const UNCLAIMED = {
   mapUrl: null,
-  bookingUrl: null,
-  bookingPlatform: null,
   opensAt: null,
   closesAt: null,
   availabilityUrl: null,
@@ -600,13 +608,14 @@ const hostOf = (u: string | null | undefined): string | null => {
  * The work email the claim can prove by itself: the contact is an email at the club's own domain —
  * its website, or its booking page when that is the club's own and not a platform's. A code to that
  * address confirms the person is inside the club; a public mailbox or a phone number confirms
- * nothing, and those the owner checks by hand.
+ * nothing, and those the owner checks by hand. A website that is the club's page on a booking
+ * platform (many directory rows carry their Playtomic page) is the platform's domain, never the club's.
  */
 export function claimEmailForCode(c: Pick<Club, "claimContact" | "website" | "bookingUrl" | "bookingPlatform">): string | null {
   const email = normalizeEmail(c.claimContact);
   const domain = email?.split("@")[1];
   if (!email || !domain || PUBLIC_MAIL.has(domain)) return null;
-  const hosts = [hostOf(c.website), c.bookingPlatform ? null : hostOf(c.bookingUrl)].filter((h): h is string => Boolean(h));
+  const hosts = [detectPlatform(c.website) ? null : hostOf(c.website), c.bookingPlatform || detectPlatform(c.bookingUrl) ? null : hostOf(c.bookingUrl)].filter((h): h is string => Boolean(h));
   return hosts.some((h) => h === domain || h.endsWith(`.${domain}`) || domain.endsWith(`.${h}`)) ? email : null;
 }
 

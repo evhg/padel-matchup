@@ -353,7 +353,8 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
       }
     }
     // "Court booked" was for that day, hour, length and club: a new one of any of them clears it (src/lib/domain/courtBooked.ts).
-    if (ev.courtBookedAt && ("startsAt" in set || "durationMinutes" in set || "venueName" in set)) {
+    // The club is its slug: "rawai padel" for "Rawai Padel" is the same court. A tournament's number of courts is its own business.
+    if (ev.courtBookedAt && ("startsAt" in set || "durationMinutes" in set || ("venueSlug" in set && set.venueSlug !== ev.venueSlug))) {
       set.courtBookedAt = null;
       set.courtBookedBy = null;
     }

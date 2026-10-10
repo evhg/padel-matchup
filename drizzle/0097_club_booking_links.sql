@@ -1,10 +1,11 @@
 -- The directory's booking links (DECIDING rule 34): which platform each listed club books on, and
--- its public booking page, from data/clubs.json. Only rows the directory owns and nobody claimed; a value
--- the file leaves null never clears one, and a club's own website already set is kept.
+-- its public booking page, from data/clubs.json. Only rows the directory owns and nobody claimed, so
+-- every value here replaces the directory's own older one (Bangkok Padel left MATCHi for Playtomic);
+-- a value the file leaves null never clears one.
 UPDATE "clubs" SET
   "booking_url" = coalesce(v.booking_url, "clubs"."booking_url"),
   "booking_platform" = coalesce(v.booking_platform, "clubs"."booking_platform"),
-  "website" = coalesce("clubs"."website", v.website),
+  "website" = coalesce(v.website, "clubs"."website"),
   "updated_at" = now()
 FROM (VALUES
   ('blue-tree', 'https://www.matchi.se/facilities/bluetree', 'matchi', null),

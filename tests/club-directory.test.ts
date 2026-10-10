@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { clubCourts, clubs, clubSlots, type Club } from "@/db/schema";
-import { claimClub, clubStatus, decideClub, getClub, getClubByToken, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listPendingClubs, listShownClubs } from "@/lib/domain/clubs";
+import { claimClub, claimEmailForCode, clubStatus, decideClub, getClub, getClubByToken, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listPendingClubs, listShownClubs } from "@/lib/domain/clubs";
 import { addClubSlot } from "@/lib/domain/clubWeek";
 import { replaceCourts } from "@/lib/domain/courts";
 import { directoryListing } from "@/lib/domain/directory";
@@ -70,6 +70,14 @@ describe("the club directory as a file", () => {
     expect(by.get("blue-tree")).toMatchObject({ bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: "matchi" });
     expect(by.get("pop-padel")).toMatchObject({ bookingPlatform: "playbypoint" });
     expect(detectPlatform(by.get("pop-padel")?.bookingUrl)).toBeNull();
+  });
+
+  it("never takes a booking platform's own domain for the club's own in the work-email check", () => {
+    // A directory club whose website is its Playtomic page: an address at playtomic.com is nobody at the club.
+    expect(claimEmailForCode({ claimContact: "someone@playtomic.com", website: "https://playtomic.com/clubs/sensei-padel-phuket", bookingUrl: null, bookingPlatform: null })).toBeNull();
+    expect(claimEmailForCode({ claimContact: "someone@matchi.se", website: null, bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: null })).toBeNull();
+    // The club's own site still counts, beside a platform link.
+    expect(claimEmailForCode({ claimContact: "nok@kata-padel.com", website: "https://kata-padel.com", bookingUrl: "https://playtomic.com/clubs/kata", bookingPlatform: null })).toBe("nok@kata-padel.com");
   });
 
   it("keeps the slug the live data already carries", () => {
@@ -297,6 +305,46 @@ describe("a refused claim on a club the directory listed", () => {
     expect((await claimClub(db, { playerId: owner.id, name: "WAREHAUS.club", tz: "Asia/Bangkok" })).claimedBy).toBe(owner.id);
   });
 
+  it("hands back the directory's booking link and platform too, whatever link the claim typed (Blue Tree on MATCHi)", async () => {
+    const listed = (await getClub(db, "blue-tree"))!;
+    expect([listed.bookingUrl, listed.bookingPlatform]).toEqual(["https://www.matchi.se/facilities/bluetree", "matchi"]);
+    const someone = await makePlayer(db, "Someone");
+    await claimClub(db, { playerId: someone.id, name: "Padel Phuket @ Blue Tree", tz: "Asia/Bangkok", bookingUrl: "https://karon-padel-pay.example/checkout" });
+    const refused = (await decideClub(db, "blue-tree", false, REFUSED_AT, "unconfirmed"))!;
+    expect(facts(refused)).toEqual(facts(listed));
+  });
+
+  it("lets the real owner's claim keep the directory's booking link when the field is blank, and the platform its own domain cannot tell", async () => {
+    const owner = await makePlayer(db, "Pop owner");
+    // As the claim form sends it: every key there, the blank ones undefined.
+    const blank = await claimClub(db, { playerId: owner.id, name: "Pop Padel", tz: "Asia/Singapore", website: undefined, bookingUrl: undefined, mapUrl: undefined });
+    expect([blank.bookingUrl, blank.bookingPlatform]).toEqual(["https://book.pop-padel.com/", "playbypoint"]);
+    // The same booking page typed in: book.pop-padel.com does not say Playbypoint, the row does.
+    const typed = await claimClub(db, { playerId: owner.id, name: "Pop Padel", tz: "Asia/Singapore", bookingUrl: "https://book.pop-padel.com/" });
+    expect([typed.bookingUrl, typed.bookingPlatform]).toEqual(["https://book.pop-padel.com/", "playbypoint"]);
+    // Another page is the owner's word, and its platform follows its host.
+    const moved = await claimClub(db, { playerId: owner.id, name: "Pop Padel", tz: "Asia/Singapore", bookingUrl: "https://playtomic.com/clubs/pop-padel" });
+    expect([moved.bookingUrl, moved.bookingPlatform]).toEqual(["https://playtomic.com/clubs/pop-padel", "playtomic"]);
+  });
+
+  it("brings production to the file with migration 0097: the booking links, and the file's website over the directory's older one; a claimed club untouched", async () => {
+    // Production as main left it: no booking link or platform anywhere, and Bangkok Padel still on MATCHi.
+    await db.update(clubs).set({ bookingUrl: null, bookingPlatform: null });
+    await db.update(clubs).set({ website: "https://www.matchi.se/facilities/bangkokpadel" }).where(eq(clubs.slug, "bangkok-padel"));
+    const owner = await makePlayer(db, "Baan owner");
+    await claimClub(db, { playerId: owner.id, name: "Baan Padel", tz: "Asia/Bangkok", bookingUrl: "https://baan.example/book" });
+    const m0097 = readFileSync(root(`drizzle/${readdirSync(root("drizzle")).find((f) => f.endsWith("_club_booking_links.sql"))}`), "utf8");
+    await db.execute(sql.raw(m0097));
+    const bp = (await getClub(db, "bangkok-padel"))!;
+    const file = directoryListing("bangkok-padel")!;
+    expect({ u: bp.bookingUrl, p: bp.bookingPlatform, w: bp.website }).toEqual({ u: file.bookingUrl, p: file.bookingPlatform, w: file.website });
+    expect(bp.website).toBe("https://playtomic.com/clubs/bangkok-padel");
+    const baan = (await getClub(db, "baan-padel"))!;
+    expect([baan.bookingUrl, baan.source]).toEqual(["https://baan.example/book", "claim"]);
+    // A club the file names no platform for keeps what it had.
+    expect((await getClub(db, "warehaus"))!.bookingUrl).toBeNull();
+  });
+
   it("does the same when the refusal gives no reason, as Erik's did", async () => {
     await claimAsErik();
     const refused = (await decideClub(db, "warehaus", false, REFUSED_AT))!;
@@ -337,8 +385,8 @@ describe("a refused claim on a club the directory listed", () => {
     const rows = await db.select().from(clubs);
     expect(rows).toHaveLength(file.clubs.length);
     for (const r of rows) {
-      const { name, country, province, city, tz, courts, courtsIndoor, courtsOutdoor, website, about } = r;
-      expect({ name, country, province, city, tz, courts, courtsIndoor, courtsOutdoor, website, about }, r.slug).toEqual(directoryListing(r.slug));
+      const { name, country, province, city, tz, courts, courtsIndoor, courtsOutdoor, website, bookingUrl, bookingPlatform, about } = r;
+      expect({ name, country, province, city, tz, courts, courtsIndoor, courtsOutdoor, website, bookingUrl, bookingPlatform, about }, r.slug).toEqual(directoryListing(r.slug));
     }
     expect(directoryListing("warehaus-club")).toBeNull();
   });

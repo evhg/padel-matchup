@@ -38,7 +38,7 @@ export function detectPlatform(url: string | null | undefined): Platform | null 
 
 export const platformById = (id: string | null | undefined): Platform | null => (id ? (PLATFORMS.find((p) => p.id === id) ?? null) : null);
 
-/** https links only, trimmed, bounded; anything else becomes null. */
+/** http(s) links only, trimmed, bounded; anything else becomes null. ("Book this court" takes https only: `prepareBooking`.) */
 export function cleanUrl(u: unknown, max = 500): string | null {
   if (typeof u !== "string") return null;
   const s = u.trim();
