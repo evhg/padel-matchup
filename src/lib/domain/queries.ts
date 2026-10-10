@@ -213,19 +213,43 @@ export async function getPlayerTimePatterns(db: Db, playerId: string, limit = 4)
   return timePatternsOf(await getPlayerHistory(db, playerId), limit);
 }
 
+const historyColumns = { id: events.id, startsAt: events.startsAt, tz: events.tz, venueSlug: events.venueSlug, durationMinutes: events.durationMinutes };
+
+/**
+ * The two reads of a player's history, each started from an index on the player: the matches they
+ * made (`events_creator_idx`) and the seats they held (`slots_player_idx`). One read with an OR across
+ * an outer join cannot use either, and walks the whole `events` table by date for a player with few
+ * matches (the review of 10 October 2026: 3,003 rows read for 3). Exported for the test that reads
+ * their plans.
+ */
+export function playerHistoryReads(db: Db, playerId: string, limit: number) {
+  return [
+    db.select(historyColumns).from(events).where(and(eq(events.creatorPlayerId, playerId), ne(events.status, "cancelled"))).orderBy(desc(events.startsAt)).limit(limit),
+    db
+      .select(historyColumns)
+      .from(slots)
+      .innerJoin(events, eq(events.id, slots.eventId))
+      .where(and(eq(slots.playerId, playerId), inArray(slots.status, ["joined", "confirmed"]), ne(events.status, "cancelled")))
+      .orderBy(desc(events.startsAt))
+      .limit(limit),
+  ] as const;
+}
+
 /**
  * The matches a player made or played (not cancelled), newest first: when, in which zone, where and for
- * how long. One bounded read; the usual times (`timePatternsOf`) and the usual clubs (the best times,
+ * how long. Two bounded reads, one after the other (`playerHistoryReads`), merged; a match they made
+ * and also sat in counts once. The usual times (`timePatternsOf`) and the usual clubs (the best times,
  * `src/lib/domain/freeCourts.ts`) are both read off it.
  */
 export async function getPlayerHistory(db: Db, playerId: string, limit = 200): Promise<{ startsAt: Date; tz: string; venueSlug: string | null; durationMinutes: number }[]> {
-  return db
-    .select({ startsAt: events.startsAt, tz: events.tz, venueSlug: events.venueSlug, durationMinutes: events.durationMinutes })
-    .from(events)
-    .leftJoin(slots, and(eq(slots.eventId, events.id), eq(slots.playerId, playerId), inArray(slots.status, ["joined", "confirmed"])))
-    .where(and(ne(events.status, "cancelled"), or(eq(events.creatorPlayerId, playerId), sql`${slots.id} is not null`)))
-    .orderBy(desc(events.startsAt))
-    .limit(limit);
+  const [madeRead, playedRead] = playerHistoryReads(db, playerId, limit);
+  const made = await madeRead;
+  const played = await playedRead;
+  const byId = new Map([...made, ...played].map((r) => [r.id, r]));
+  return [...byId.values()]
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+    .slice(0, limit)
+    .map(({ id: _id, ...r }) => r);
 }
 
 /** The weekday + time slots in a list of matches, most frequent first, then most recent. Pure. */
