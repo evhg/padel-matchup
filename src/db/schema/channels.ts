@@ -27,15 +27,16 @@ export const telegramChats = pgTable(
     /**
      * A crew's own group (the owner's decision of 9 October 2026, DECIDING rule 30): since when the bot
      * reads the plain messages here for "in", "out" and "who's in …?". Set only where a group admin
-     * opted in from the crew page, the bot is an admin and the notice is pinned; null everywhere else,
-     * and again after /quiet, a lost admin right or the bot's removal. No message text is kept anywhere.
+     * opted in from the crew page and the bot is an admin: claimed the moment before the notice is
+     * pinned, and cleared again if the pin fails. Null everywhere else, and again after /quiet, a lost
+     * admin right or the bot's removal. No message text is kept anywhere.
      */
     listeningSince: timestamp("listening_since", { withTimezone: true }),
     /** The version of the notice the group opted in under (`CREW_NOTICE_VERSION`); null where it never did, or after it opted out. */
     noticeVersion: integer("notice_version"),
-    /** The pinned notice, so /quiet unpins that message and nothing somebody else pinned. */
+    /** The pinned notice, so /quiet unpins that message and nothing somebody else pinned, and a promotion after a demotion pins it again instead of posting another. */
     noticeMessageId: bigint("notice_message_id", { mode: "number" }),
-    /** The invite link the bot made for the crew's members, shown on the crew page while the bot listens. A door into the group, so the reader role never sees it. */
+    /** The invite link the bot made for the crew's members, shown on the crew page while the bot is in the group (after /quiet too: the group is still the crew's). A door into the group, so the reader role never sees it. */
     inviteLink: text("invite_link"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

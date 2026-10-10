@@ -26,16 +26,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 type ChatMatchInput = Pick<ParsedNew, "startsAt" | "venue" | "court" | "type" | "format" | "capacity" | "levelMin" | "levelMax" | "cost" | "publicListing">;
 
 /**
- * The courts a chat's words are matched against, most likely first: its usual court, the ones the
- * sender has played at, then the clubs listed in its zone. Three bounded reads, and the sender is
- * looked up, never created, so a line that makes no match leaves no player row behind.
+ * The courts a chat's words are matched against, most likely first: its usual court and the ones the
+ * sender has played at (`venues`), then the clubs listed in its zone (`clubs`, which an area word alone
+ * never picks). Three bounded reads, and the sender is looked up, never created, so a line that makes
+ * no match leaves no player row behind.
  */
-export async function knownVenues(db: Db, chat: TelegramChat, from: TgUser, tz: string): Promise<string[]> {
-  const out: string[] = chat.venueName ? [chat.venueName] : [];
+export async function knownVenues(db: Db, chat: TelegramChat, from: TgUser, tz: string): Promise<{ venues: string[]; clubs: string[] }> {
+  const venues: string[] = chat.venueName ? [chat.venueName] : [];
   const player = await findTelegramPlayer(db, from.id);
-  if (player) for (const v of await getVenues(db, player.id)) out.push(v.name);
-  out.push(...(await listedClubNames(db, tz)));
-  return out;
+  if (player) for (const v of await getVenues(db, player.id)) venues.push(v.name);
+  return { venues, clubs: await listedClubNames(db, tz) };
 }
 
 /** The creation itself, shared by the one-line command, the tap-through, the reply steps and a crew's "who's in …?": rate limit, event, organizer in, chat defaults, card, webhook. */
@@ -97,7 +97,7 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
     await sendMessage(chat.chatId, esc(s.newZone), { keyboard: zoneKeyboard(), replyTo: msg.message_id, threadId, silent: true });
     return "new_zone";
   }
-  const parsed = parseNewCommand(args, { tz, now: new Date(), venues: await knownVenues(db, chat, from, tz) });
+  const parsed = parseNewCommand(args, { tz, now: new Date(), ...(await knownVenues(db, chat, from, tz)) });
   if (!parsed.startsAt) {
     await say(s.newHowTo, formKeyboard(chat, s));
     return "new_how";
@@ -259,7 +259,7 @@ async function continueGuidedNew(db: Db, msg: TgMessage, chat: TelegramChat, fro
   const s = strings(locale);
   const tz = await chatZone(db, chat, null);
   if (!tz) return null;
-  const parsed = parseNewCommand(`${trailer[1]} ${trailer[2] ?? ""} ${msg.text}`, { tz, now: new Date(), venues: await knownVenues(db, chat, from, tz) });
+  const parsed = parseNewCommand(`${trailer[1]} ${trailer[2] ?? ""} ${msg.text}`, { tz, now: new Date(), ...(await knownVenues(db, chat, from, tz)) });
   if (!parsed.startsAt || !parsed.date || !parsed.time) {
     await sendMessage(chat.chatId, esc(s.newHowTo), { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null, silent: true });
     return "new_how";

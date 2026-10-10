@@ -19,12 +19,21 @@ describe("readWords: join, leave, a score, a new match, or nothing", () => {
     expect(readWords(line)?.kind).toBe(kind);
   });
 
-  it("an ask is a question with a time in it, and its words are handed on whole", () => {
+  it("an ask is a question with a time in it; only the question is handed on, never what follows its \"?\"", () => {
     for (const line of ["who's in Thursday 7pm Rawai?", "Who’s in tomorrow 19:00?", "WHO IS IN sat 10:00 Bangtao", "anyone for tmr 18:00?", "Кто играет завтра в 19:00 Равай?", "кто в деле чт 20:00", "¿Quién juega mañana a las 19 Rawai?", "quien se apunta el jueves 20:00"]) {
       const w = readWords(line);
       expect(w?.kind, line).toBe("ask");
-      expect(w && w.kind === "ask" ? w.text : null).toBe(line.trim());
+      expect(w && w.kind === "ask" ? w.text : null).toBe(line.split("?")[0].trim());
     }
+    const after = readWords("who's in Thursday 7pm? zqxw beers at 9, 2 of us");
+    expect(after && after.kind === "ask" ? after.text : null).toBe("who's in Thursday 7pm");
+    // A number after the question does not make it an ask: the question itself has no time.
+    expect(readWords("who's in? I booked court 3")).toBeNull();
+  });
+
+  it("a word that answers any question (\"me\", \"+\", \"я\", \"буду\", \"voy\") takes a seat only as a reply to the card", () => {
+    for (const line of ["me", "Me!", "+", "я", "Я!", "буду", "я буду", "voy", "¡Voy!", "yo voy"]) expect(readWords(line), line).toEqual({ kind: "join", onlyAsReply: true });
+    for (const line of ["in", "I'm in", "+1", "+ 1", "count me in", "я в деле", "в деле", "me apunto", "cuenta conmigo"]) expect(readWords(line), line).toEqual({ kind: "join", onlyAsReply: false });
   });
 
   it.each([
@@ -53,6 +62,19 @@ describe("readWords: join, leave, a score, a new match, or nothing", () => {
     "minus the rain it was great",
     "6-4 6-3 what a game",
     "the score was 6-4",
+    // A question is never a seat: "in?" asks whether somebody is in.
+    "in?",
+    "me?",
+    "+1?",
+    "+1 ?",
+    "out?",
+    "can't make it?",
+    "я?",
+    "я в деле?",
+    "не смогу?",
+    "¿voy?",
+    "¿me apunto?",
+    "dentro?",
     // An ask without a time is a question about the card, not a new match.
     "who's in?",
     "who's in tomorrow?",

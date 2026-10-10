@@ -14,7 +14,7 @@ import { baseUrl, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime, relativeTime } from "@/lib/dates";
 import { crewSeasonSeats, SEASON_HOT_STREAK, SEASON_MIN_MATCHES, seasonTable } from "@/lib/domain/crewSeason";
 import { askAgainFrom, canSeeMemberLevels } from "@/lib/domain/groupAccess";
-import { crewTelegramInvite, getGroupByCode, getGroupDetail, getGroupRequest, pendingGroupRequests } from "@/lib/domain/groups";
+import { crewTelegramDoors, crewTelegramInvite, getGroupByCode, getGroupDetail, getGroupRequest, pendingGroupRequests } from "@/lib/domain/groups";
 import { hasRange } from "@/lib/domain/levels";
 import { fillOf, withCounts } from "@/lib/domain/venueBoard";
 import { venueWithCourt } from "@/lib/labels";
@@ -80,10 +80,13 @@ export default async function GroupPage({ params }: Props) {
   // The seats on the upcoming rows: one bounded read over their slots, whatever the number of
   // rows, after the detail rather than beside it (rules 8 and 12).
   const fills = new Map((await withCounts(db, detail.upcoming)).map((b) => [b.event.id, fillOf(b)]));
-  // A member's way into the crew's own Telegram group, or the link that makes one (DECIDING rule 30).
-  // A visitor sees neither, and the read waits for a member on a deployment with a bot (rules 4, 8 and 12).
-  const telegramInvite = member && telegramEnabled() ? await crewTelegramInvite(db, group.id) : null;
-  const telegramRun = member && !telegramInvite ? crewGroupLink(group.id) : null;
+  // A member's way into the crew's own Telegram group, and for the crew's admins the link that makes one
+  // while the bot reads no group of the crew's (DECIDING rule 30). The link is signed for that admin and
+  // dies when they stop being one. A visitor sees neither, and the read waits for a member on a
+  // deployment with a bot (rules 4, 8 and 12).
+  const doors = crewTelegramDoors(member?.role ?? null, member && telegramEnabled() ? await crewTelegramInvite(db, group.id) : null);
+  const telegramInvite = doors.join;
+  const telegramRun = doors.run && me ? crewGroupLink(group.id, me.id) : null;
 
   const eventRow = (ev: (typeof detail.upcoming)[number]) => {
     // Upcoming rows say whether there is room, for whom and at what cost; a past row has no seats to offer.
@@ -168,18 +171,19 @@ export default async function GroupPage({ params }: Props) {
                 + {t("group.nextMatch")}
               </Link>
               <p className="mt-1.5 text-xs text-faint">{t("group.nextMatchHelp")}</p>
-              {telegramInvite ? (
+              {telegramInvite && (
                 <a href={telegramInvite} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-3 w-full whitespace-normal leading-snug">
                   {t("group.telegramJoin")}
                 </a>
-              ) : telegramRun ? (
+              )}
+              {telegramRun && (
                 <>
                   <a href={telegramRun} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-3 w-full whitespace-normal leading-snug">
                     {t("group.telegramRun")}
                   </a>
                   <p className="mt-1.5 text-xs text-faint">{t("group.telegramRunHelp")}</p>
                 </>
-              ) : null}
+              )}
             </div>
           ) : (
             <p className="mt-4 text-sm text-muted">{t(group.askToJoin ? "group.memberOnlyAsk" : "group.memberOnly")}</p>

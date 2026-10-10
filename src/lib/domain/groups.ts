@@ -538,15 +538,37 @@ export async function getGroupById(db: Db, id: string): Promise<Group | null> {
 
 /**
  * The way into a crew's own Telegram group (DECIDING rule 30): the invite link the bot made there, for
- * the crew page to hand its members, while the bot is still in the group. One indexed read
- * (`telegram_chats_group_idx`); a group the bot reads comes before one it was told to stop reading.
+ * the crew page to hand its members, while the bot is still in the group (after /quiet too: the group
+ * is still the crew's), and whether the bot reads it now. One indexed read (`telegram_chats_group_idx`).
+ * The first group the bot reads stays the crew's group: a group it reads comes first, then a group
+ * with a link, then the older one, so a second group tied later never takes the first one's place.
  */
-export async function crewTelegramInvite(db: Db, groupId: string): Promise<string | null> {
+export async function crewTelegramInvite(db: Db, groupId: string): Promise<{ invite: string | null; listening: boolean }> {
   const [row] = await db
-    .select({ link: telegramChats.inviteLink })
+    .select({ link: telegramChats.inviteLink, listeningSince: telegramChats.listeningSince })
     .from(telegramChats)
-    .where(and(eq(telegramChats.groupId, groupId), isNull(telegramChats.leftAt), isNotNull(telegramChats.inviteLink)))
-    .orderBy(sql`${telegramChats.listeningSince} desc nulls last`)
+    .where(and(eq(telegramChats.groupId, groupId), isNull(telegramChats.leftAt)))
+    .orderBy(sql`${telegramChats.listeningSince} is null`, sql`${telegramChats.inviteLink} is null`, asc(telegramChats.createdAt))
     .limit(1);
-  return row?.link ?? null;
+  return { invite: row?.link ?? null, listening: Boolean(row?.listeningSince) };
+}
+
+/**
+ * Which Telegram doors the crew page shows (DECIDING rule 30): the way into the crew's group to every
+ * member, and the link that makes one to the crew's admins only, while the bot reads no group of the
+ * crew's. A visitor sees neither.
+ */
+export function crewTelegramDoors(role: GroupMember["role"] | null, tg: { invite: string | null; listening: boolean } | null): { join: string | null; run: boolean } {
+  if (!role || !tg) return { join: null, run: false };
+  return { join: tg.invite, run: role === "admin" && !tg.listening };
+}
+
+/** The crew's admins: whoever may tie a Telegram group to it. One read on the members' primary key, a handful of rows. */
+export async function crewAdminIds(db: Db, groupId: string): Promise<string[]> {
+  const rows = await db
+    .select({ playerId: groupMembers.playerId })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.role, "admin")))
+    .limit(20);
+  return rows.map((r) => r.playerId);
 }

@@ -10,8 +10,10 @@ import { ASK_PREFIX, readWords } from "./words";
  * crew's own question ("who's in Thursday 7pm Rawai?"), so the question's words
  * and a seat word ("I'm in") are dropped rather than kept as the place. What is
  * left is the venue: one the chat already knows when the caller passes the known
- * courts and the words point at exactly one, else the words themselves. Pure: no
- * database, no clock of its own.
+ * courts and the words point at exactly one, else the words themselves. The
+ * result also says how it read the time and whether the place is a known court,
+ * because a crew's question may make a match only from an hour named outright and
+ * a court the chat knows (`askForMatch`). Pure: no database, no clock of its own.
  */
 export type ParsedNew = {
   /** Null when no time was found (a day alone is not enough). */
@@ -30,6 +32,16 @@ export type ParsedNew = {
   tzHint: string | null;
   /** "public" / "открытый": list the match on the venue and city boards, where strangers find it. */
   publicListing: boolean;
+  /** How the time was read: "clock" for 19:00, 7pm, at 19 or 19h; "bare" for a lone number ("tmr 19"); null without a time. */
+  timeFrom: "clock" | "bare" | null;
+  /** True when the day was typed (a date, a day word, a weekday); false when the hour alone placed it. */
+  dayTyped: boolean;
+  /** True when the hour cannot be twelve hours off: am/pm, or a part of the day ("de la tarde"). */
+  meridiem: boolean;
+  /** The words left over for the place, as typed (in memory only: never stored as they are by a crew's question). */
+  place: string | null;
+  /** True when `venue` is a court from the known lists rather than the words as typed. */
+  venueKnown: boolean;
 };
 
 // Cyrillic has no \b in JS regexes; these lookarounds are the word boundary for both alphabets.
@@ -95,10 +107,14 @@ const dateStr = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const dowOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
 const toNum = (s: string) => Number(s.replace(",", "."));
 
-/** `venues`: the courts the chat already knows, most likely first (its usual court, the organizer's, the clubs in its zone). */
-export function parseNewCommand(args: string, opts: { tz: string; now?: Date; venues?: readonly string[] }): ParsedNew {
+/**
+ * `venues`: the courts the chat already knows, most likely first (its usual court, then the ones the
+ * organizer played at). `clubs`: the clubs the directory lists in its zone, which a city or area word
+ * alone never picks (`matchVenue`).
+ */
+export function parseNewCommand(args: string, opts: { tz: string; now?: Date; venues?: readonly string[]; clubs?: readonly string[] }): ParsedNew {
   const now = opts.now ?? new Date();
-  const out: ParsedNew = { startsAt: null, date: null, time: null, venue: null, court: null, type: "match", format: null, capacity: null, levelMin: null, levelMax: null, cost: null, tzHint: tzHintFor(args), publicListing: false };
+  const out: ParsedNew = { startsAt: null, date: null, time: null, venue: null, court: null, type: "match", format: null, capacity: null, levelMin: null, levelMax: null, cost: null, tzHint: tzHintFor(args), publicListing: false, timeFrom: null, dayTyped: false, meridiem: false, place: null, venueKnown: false };
   let text = ` ${args.replace(/[\u2018\u2019\u02bc]/g, "'").replace(/\s+/g, " ").trim()} `;
   const take = (re: RegExp, on: (m: RegExpMatchArray) => boolean | void) => {
     text = text.replace(re, (...m) => {
@@ -107,8 +123,9 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
     });
   };
 
-  // A crew's question ("who's in …?", "кто играет …?", "¿quién juega …?") asks for players; its words are not the place.
-  take(new RegExp(`^\\s*[¿¡]?\\s*(?:${ASK_PREFIX})(?![\\p{L}\\d])`, "iu"), () => undefined);
+  // A crew's question ("who's in …?", "кто играет …?", "¿quién juega …?") asks for players; its words are not the place,
+  // and neither are the small words after it ("who's in for the 7pm?", "who's in this Thursday …"). "next" stays: it moves the day.
+  take(new RegExp(`^\\s*[¿¡]?\\s*(?:${ASK_PREFIX})(?:\\s+(?:for|on|the|this))*(?![\\p{L}\\d])`, "iu"), () => undefined);
 
   take(word("public|open game|открыт(?:ый|о|ая)|публичн(?:ый|о)"), () => {
     out.publicListing = true;
@@ -157,6 +174,19 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
   const today = utcToZonedParts(now, opts.tz);
   let dayOffset: number | null = null;
   let weekday: number | null = null;
+  // Spanish "mañana" is also "morning": "por la mañana" and "de la mañana" name a part of the day, never
+  // tomorrow, and "esta mañana" is this morning. "De la tarde" and "de la noche" say the hour is after noon.
+  let half: "am" | "pm" | null = null;
+  take(word("(?:por|de) la ma[ñn]ana"), () => {
+    half = "am";
+  });
+  take(word("esta ma[ñn]ana"), () => {
+    half = "am";
+    dayOffset = 0;
+  });
+  take(word("(?:por|de) la (?:tarde|noche)"), () => {
+    half = "pm";
+  });
   take(/(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/, (m) => {
     out.date = `${m[1]}-${m[2]}-${m[3]}`;
   });
@@ -182,20 +212,28 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
         dayOffset = 0;
       });
     if (dayOffset == null)
-      take(word("tomorrow|tmr|tmrw|завтра|ma[ñn]ana"), () => {
+      take(word("tomorrow|tmr|tmrw|завтра"), () => {
         dayOffset = 1;
       });
     if (dayOffset == null)
       take(WEEKDAY_RE, (m) => {
         weekday = WEEKDAYS[m[0].toLowerCase().replace(/^el\s+/, "")];
       });
+    // A bare "mañana" is tomorrow, unless a day was named: then "el jueves mañana" is Thursday morning.
+    take(word("ma[ñn]ana"), () => {
+      if (dayOffset == null && weekday == null) dayOffset = 1;
+      else half ??= "am";
+    });
   }
+  out.dayTyped = Boolean(out.date) || dayOffset != null || weekday != null;
 
   // The time: 7pm, 19:00, 19.00, at 19, в 19, 19h, or a bare hour.
+  let ampm = false;
   take(word("(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)"), (m) => {
     let h = Number(m[1]) % 12;
     if (m[3].toLowerCase() === "pm") h += 12;
     out.time = `${pad(h)}:${pad(Number(m[2] ?? 0))}`;
+    ampm = true;
   });
   if (!out.time)
     take(/(?<![\d.,])(\d{1,2})[:.](\d{2})(?!\d|[.,]\d)/, (m) => {
@@ -216,12 +254,18 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
       if (h > 23) return false;
       out.time = `${pad(h)}:00`;
     });
+  if (out.time) out.timeFrom = "clock";
   if (!out.time)
     take(word("(\\d{1,2})"), (m) => {
       const h = Number(m[1]);
       if (h < 6 || h > 23) return false;
       out.time = `${pad(h)}:00`;
+      out.timeFrom = "bare";
     });
+  // "a las 7 de la tarde" is 19:00; an hour from 13 up is already past noon.
+  const halfOfDay = half as "am" | "pm" | null;
+  if (out.time && halfOfDay === "pm" && !ampm && Number(out.time.slice(0, 2)) < 12) out.time = `${pad(Number(out.time.slice(0, 2)) + 12)}${out.time.slice(2)}`;
+  out.meridiem = ampm || halfOfDay != null;
 
   // Resolve the day now that the time is known (a weekday or a bare time that already passed rolls forward).
   if (out.time) {
@@ -240,18 +284,22 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
   }
 
   // Whatever is left is the place, unless it is a seat word ("I'm in" in reply to a prompt is not a court).
+  // Every preposition goes, not only the first: "в четверг в 19:00 Равай" leaves "Равай", not "в Равай".
   const words = readWords(text.trim())?.kind;
   const venue =
     words === "join" || words === "leave"
       ? ""
       : text
           .replace(/[?!¿¡"«»“”]+/g, " ")
-          .replace(word("at|in|on|в|во|на|у|@|с|from|en|a las|a la"), " ")
+          .replace(word("at|in|on|в|во|на|у|@|с|from|en|a las|a la", "giu"), " ")
           .replace(/[,;·]+/g, " ")
           .replace(/\s+/g, " ")
           .replace(/^[\s\-–—.]+|[\s\-–—.]+$/g, "")
           .trim();
-  out.venue = venue ? (opts.venues?.length ? matchVenue(venue, opts.venues) : null) ?? venue.slice(0, 80) : null;
+  const known = venue && (opts.venues?.length || opts.clubs?.length) ? matchVenue(venue, opts.venues ?? [], opts.clubs ?? []) : null;
+  out.place = venue || null;
+  out.venueKnown = Boolean(known);
+  out.venue = known ?? (venue ? venue.slice(0, 80) : null);
   if (out.type === "tournament" && out.capacity == null) out.capacity = 8;
   if (out.capacity != null) out.capacity = Math.min(64, Math.max(4, Math.ceil(out.capacity / 4) * 4));
   if (out.type === "match") out.capacity = out.capacity && out.capacity > 4 ? out.capacity : null;
@@ -263,45 +311,76 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
   return out;
 }
 
-// Words that name what a court is rather than which one: they point at no court in particular.
-const GENERIC = new Set(["padel", "club", "the", "co", "sports", "sport", "tennis", "indoor", "outdoor", "hotel", "arena", "racquet", "racket", "court", "courts", "center", "centre", "academy", "and", "клуб", "падел", "корт", "de", "del", "la", "el"]);
+// Words that name what a court is rather than which one, and the small words around a name: they point at no court in particular.
+const GENERIC = new Set(["padel", "club", "the", "co", "sports", "sport", "tennis", "indoor", "outdoor", "hotel", "arena", "racquet", "racket", "court", "courts", "center", "centre", "academy", "and", "for", "this", "клуб", "падел", "корт", "de", "del", "la", "el"]);
+// A city or a country ("phuket", "bangkok", "madrid"): it names no court, wherever it is typed.
+const CITY_NAMES = new Set([...CITIES.flatMap((c) => [c.slug, c.name.toLowerCase()]), ...Object.keys(ZONE_ALIASES)]);
+// An area of a city ("rawai", "kata"): a court the chat already knows may go by it ("Rawai" for the crew's Rawai Padel), a club
+// in the directory may not, or "/new tmr 19:00 Rawai" would land on a club's board and reach its regulars.
+const AREA_WORDS = new Set(CITY_WORDS.flatMap((c) => c.needles).filter((n) => /^[\p{L}\d]+$/u.test(n) && !CITY_NAMES.has(n)));
+// The same areas typed in Cyrillic, read as their Latin names, so "Равай" finds the crew's Rawai Padel.
+const LATIN: Record<string, string> = { пхукет: "phuket", патонг: "patong", равай: "rawai", ката: "kata", карон: "karon", чалонг: "chalong", бангтао: "bangtao", камала: "kamala", найхарн: "naiharn", сурин: "surin", лагуна: "laguna", сингапур: "singapore" };
 const placeWords = (s: string) =>
   s
     .toLowerCase()
     .replace(/[^\p{L}\d]+/gu, " ")
     .trim()
     .split(" ")
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((w) => LATIN[w] ?? w);
+/** The words of a name that tell one court from another: no generic word, no city, nothing under three letters. */
+const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENERIC.has(w) && !CITY_NAMES.has(w));
+
+/** True when the words name a place at all ("Bangtao", "Phuket", "the beers"); false for nothing but small or generic words ("the", "padel"). */
+export const namesAPlace = (text: string | null | undefined): boolean => Boolean(text) && placeWords(text!).some((w) => w.length >= 3 && !GENERIC.has(w));
 
 /**
- * The known court the words point at, or null. The whole name wins ("xplore padel phuket"); else the
- * court that owns every word typed ("rawai", "blue tree"), so a new court that shares one word with a
- * known one ("Rawai Beach Club") stays the new court. A word several courts own ("phuket") decides
- * nothing, unless those courts are one court spelled twice ("Rawai Padel Club" the chat typed and
- * "Rawai Padel" in the directory), where the first in the list (the chat's own) wins.
+ * The known court the words point at, or null; `venues` are the chat's own courts (its usual court, the
+ * sender's), `clubs` the directory's. In order:
+ *
+ * 1. The same words in any order ("bangkok padel club" is Padel Club Bangkok).
+ * 2. The whole name inside the words, when every other word typed is generic ("Rawai Padel Club" is
+ *    Rawai Padel; "Rawai Padel Park" stays the park, and "Top Padel Rawai" never becomes Top Padel).
+ * 3. The one court that owns every word typed ("rawai", "blue tree"), so a new court that shares one
+ *    word with a known one ("Rawai Beach Club") stays the new court. A city never decides, and an area
+ *    decides only for the chat's own courts: "Rawai" is the crew's Rawai Padel, never the directory's.
+ *    A word several courts own decides nothing, unless those are the chat's court spelled twice
+ *    ("Rawai Padel Club" the chat typed and "Rawai Padel" in the directory), where the chat's first
+ *    spelling wins; two clubs of the directory are never one court.
  */
-export function matchVenue(text: string, venues: readonly string[]): string | null {
+export function matchVenue(text: string, venues: readonly string[], clubs: readonly string[] = []): string | null {
   const said = placeWords(text);
   if (said.length === 0) return null;
-  const joined = ` ${said.join(" ")} `;
   const seen = new Set<string>();
-  const known = venues.filter((v) => {
-    const key = placeWords(v).join(" ");
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const whole = known.filter((v) => joined.includes(` ${placeWords(v).join(" ")} `)).sort((a, b) => placeWords(b).length - placeWords(a).length)[0];
-  if (whole) return whole;
-  const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENERIC.has(w));
+  const known = [...venues.map((name) => ({ name, club: false })), ...clubs.map((name) => ({ name, club: true }))]
+    .map((k) => ({ ...k, words: placeWords(k.name) }))
+    .filter((k) => {
+      const key = k.words.join(" ");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const saidSet = [...new Set(said)].sort().join(" ");
+  const exact = known.find((k) => [...new Set(k.words)].sort().join(" ") === saidSet);
+  if (exact) return exact.name;
   const typed = distinct(said);
+  const joined = ` ${said.join(" ")} `;
+  const whole = known
+    .filter((k) => joined.includes(` ${k.words.join(" ")} `) && typed.every((w) => distinct(k.words).includes(w)))
+    .sort((a, b) => b.words.length - a.words.length)[0];
+  if (whole) return whole.name;
   if (typed.length === 0) return null;
+  // A club of the directory needs every word typed, like any court, and a line of area words alone picks none.
+  const forClubs = typed.some((w) => !AREA_WORDS.has(w)) ? typed : [];
   const owners = known
-    .map((name) => ({ name, own: distinct(placeWords(name)) }))
-    .filter(({ own }) => typed.every((w) => own.includes(w)))
-    .map(({ name, own }) => ({ name, own: own.join(" ") }));
+    .map((k) => ({ ...k, own: distinct(k.words) }))
+    .filter((k) => {
+      const need = k.club ? forClubs : typed;
+      return need.length > 0 && need.every((w) => k.own.includes(w));
+    });
   if (owners.length === 0) return null;
-  return owners.every((o) => o.own === owners[0].own) ? owners[0].name : null;
+  const one = owners.every((o) => o.own.join(" ") === owners[0].own.join(" ")) && owners.filter((o) => o.club).length <= 1;
+  return one ? owners[0].name : null;
 }
 
 /** The cities offered as taps when a chat or a coach has no time zone yet. One list, two flows. */

@@ -1,6 +1,6 @@
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, metricsDaily, players, pushSubscriptions, slots } from "@/db/schema";
+import { activity, events, metricsDaily, players, pushSubscriptions, slots, telegramChats } from "@/db/schema";
 
 /**
  * Self-measured usage: counters bumped by the app, snapshots taken by the hourly cron.
@@ -41,11 +41,15 @@ export async function snapshotMetrics(db: Db): Promise<void> {
   const nEvents = await count(db.select({ n: sql<number>`count(*)` }).from(events));
   const nSlots = await count(db.select({ n: sql<number>`count(*)` }).from(slots).where(inArray(slots.status, ["joined", "confirmed"])));
   const nPush = await count(db.select({ n: sql<number>`count(*)` }).from(pushSubscriptions));
+  // The crews' own Telegram groups the bot reads now (DECIDING rule 30): each one sends every message to
+  // the webhook, which is what the invocation budget needs (docs/OPERATING.md). `tg_groups_started` counts starts.
+  const nCrewGroups = await count(db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNotNull(telegramChats.listeningSince), isNull(telegramChats.leftAt))));
   await setMetric(db, "db_bytes", dbBytes);
   await setMetric(db, "players_total", nPlayers);
   await setMetric(db, "events_total", nEvents);
   await setMetric(db, "slots_total", nSlots);
   await setMetric(db, "push_subs", nPush);
+  await setMetric(db, "tg_groups_managed", nCrewGroups);
 }
 
 export type DaySeries = { days: string[]; values: Record<string, number[]> };

@@ -35,7 +35,29 @@ export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: 
 export type ReplyKeyboard = { keyboard: { text: string }[][]; is_persistent?: boolean; resize_keyboard?: boolean; input_field_placeholder?: string };
 export type TgUser = { id: number; is_bot?: boolean; first_name: string; last_name?: string; username?: string; language_code?: string };
 export type TgChat = { id: number; type: "private" | "group" | "supergroup" | "channel"; title?: string; username?: string };
-export type TgMessage = { message_id: number; date: number; chat: TgChat; from?: TgUser; text?: string; caption?: string; photo?: { file_id: string }[]; message_thread_id?: number; reply_to_message?: TgMessage; entities?: { type: string; offset: number; length: number; url?: string }[] };
+export type TgMessage = {
+  message_id: number;
+  date: number;
+  chat: TgChat;
+  from?: TgUser;
+  text?: string;
+  caption?: string;
+  photo?: { file_id: string }[];
+  message_thread_id?: number;
+  reply_to_message?: TgMessage;
+  entities?: { type: string; offset: number; length: number; url?: string }[];
+  /** Posted as a chat, not a person: an anonymous admin (the group itself) or a channel. */
+  sender_chat?: TgChat;
+  /** A linked channel's post copied into its discussion group by Telegram (sent from 777000). */
+  is_automatic_forward?: boolean;
+  /** A message forwarded from somewhere else: its words are somebody else's. */
+  forward_origin?: unknown;
+  forward_date?: number;
+  /** Service messages: the group's new title, and a basic group upgraded to a supergroup under a new id. */
+  new_chat_title?: string;
+  migrate_to_chat_id?: number;
+  migrate_from_chat_id?: number;
+};
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
@@ -124,11 +146,6 @@ export function setMessageReaction(chatId: number, messageId: number, emoji: str
 /** Somebody's place in a chat: whether they may opt a group in, and whether the bot itself is an admin there. */
 export function getChatMember(chatId: number, userId: number) {
   return tg<TgChatMember>("getChatMember", { chat_id: chatId, user_id: userId });
-}
-
-/** The group's description (255 characters at most); needs the can_change_info right. */
-export function setChatDescription(chatId: number, description: string) {
-  return tg<true>("setChatDescription", { chat_id: chatId, description: description.slice(0, 255) });
 }
 
 /** A named invite link to the group; needs the can_invite_users right. */
