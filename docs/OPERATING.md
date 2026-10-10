@@ -180,7 +180,7 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
 - **A name that was already there.** `newid_name_here`: the new record took a name already in the
   match it joined, held spots included. Most of these are somebody who has played before, in a
   browser that does not know them.
-- **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 32), with
+- **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 33), with
   `signin_thats_me_fold` when it folded the browser's own new record into the old one;
   `signin_restore` (the saved id brought back without proof); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each

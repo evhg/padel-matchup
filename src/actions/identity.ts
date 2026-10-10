@@ -73,7 +73,7 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
       await removeOptOut(db, p.email);
       // New address: calendar invite when in this match (carries the personal link), else the personal-link email.
       // Not for a session that came in by "That's me" and proved nothing: a typed address is not proof,
-      // and the welcome would carry the personal link it is not shown (DECIDING rule 32).
+      // and the welcome would carry the personal link it is not shown (DECIDING rule 33).
       const detail = eventCode ? await getEventByCode(db, eventCode) : null;
       if (!(await nameOnly(me))) after(() => welcomeEmail(db, p, detail?.event ?? null));
     }
@@ -146,7 +146,7 @@ export async function claimSameNameAction(rowId: string): Promise<ActionResult<n
 }
 
 /**
- * "That's me" on a match page (DECIDING rule 32): this browser signs in as the record of that name in
+ * "That's me" on a match page (DECIDING rule 33): this browser signs in as the record of that name in
  * this match or its crew, without proof, inside the owner's limits (`thatsMe`). A browser that already
  * made its own new record folds it into the old one. Refused as `invalid` whatever the reason, so the
  * answer says nothing about the record beyond what the page already showed; `too_many` past the rate.
@@ -235,7 +235,7 @@ export async function rotatePersonalLinkAction(): Promise<ActionResult<{ url: st
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
-    // A sign-in by name may not lock the real player's home-screen icon and other devices out (DECIDING rule 32).
+    // A sign-in by name may not lock the real player's home-screen icon and other devices out (DECIDING rule 33).
     if (await nameOnly(me)) throw new ActionFailure("forbidden");
     const token = await rotatePersonalToken(db, me.id);
     revalidatePath("/me");

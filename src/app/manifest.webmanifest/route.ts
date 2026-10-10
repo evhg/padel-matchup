@@ -20,7 +20,7 @@ export async function GET() {
     const playerId = await getSessionPlayerId();
     if (playerId) {
       const db = await getDb();
-      // A session that came in by "That's me" and has proved nothing since gets the plain start page, never its personal link (DECIDING rule 32).
+      // A session that came in by "That's me" and has proved nothing since gets the plain start page, never its personal link (DECIDING rule 33).
       const me = await getPlayer(db, playerId);
       if (me && !(await nameOnly(me))) startUrl = `${personalPath(await getOrCreatePersonalToken(db, playerId))}?source=homescreen`;
     }

@@ -52,7 +52,7 @@ export const LIMITS = {
   restoreCodesPerIpPerDay: 20,
   /**
    * "That's me" taps from one address in a day, refused ones too: a name is tried, never guessed in a
-   * loop (DECIDING rule 32). Twenty, not ten: a club's Wi-Fi is one address for every player on it.
+   * loop (DECIDING rule 33). Twenty, not ten: a club's Wi-Fi is one address for every player on it.
    */
   thatsMePerIpPerDay: 20,
   /** Sign-ins by name into one record in a day, from anywhere: a record is not taken over and over. */

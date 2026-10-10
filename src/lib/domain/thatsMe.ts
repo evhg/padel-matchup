@@ -12,7 +12,7 @@ import { lockEvent, vacateAndPromote, type Promotion } from "./slots";
 
 /**
  * "That's me": a browser that has never seen this person signs in as their record, by name, with no
- * email and no code (DECIDING rule 32).
+ * email and no code (DECIDING rule 33).
  *
  * A link in a WhatsApp group opens the phone's default browser, and every browser, every app's own
  * browser and the icon on an iPhone's home screen keeps its own cookies. A player in a browser that

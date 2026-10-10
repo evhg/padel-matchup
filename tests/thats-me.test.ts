@@ -16,7 +16,7 @@ import { createTestDb, DAY, makePlayer } from "./helpers/db";
  * The owner, 10 October 2026: "Yes, 'That's me' signs in." A browser that has never seen this person
  * signs in as their record by name, with no email and no code, when the record has nothing to prove
  * it and shares the match or the crew — and never past any of the limits below, every one of which
- * the owner required (DECIDING rule 32).
+ * the owner required (DECIDING rule 33).
  */
 
 // ------------------------------------------------------------------ the rule, as a table

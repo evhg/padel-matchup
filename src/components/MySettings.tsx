@@ -33,7 +33,7 @@ import { kindOn, NOTICE_KINDS, noticeSummary, type NoticeKind } from "@/lib/doma
  */
 /**
  * `personalToken` is null for a session that came in by "That's me" and has proved nothing since
- * (`nameOnlySession`, DECIDING rule 32): no personal link and no home-screen card for it.
+ * (`nameOnlySession`, DECIDING rule 33): no personal link and no home-screen card for it.
  */
 export async function MySettings({ player, personalToken, hasMatches }: { player: Player; personalToken: string | null; hasMatches: boolean }) {
   const [t, locale, db, jar] = await Promise.all([getTranslations(), getLocale(), getDb(), cookies()]);

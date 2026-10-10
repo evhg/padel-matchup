@@ -6,7 +6,7 @@ import { thatsMeAction } from "@/actions/identity";
 import { requestBackIn } from "./backInBus";
 
 /**
- * "That's me" (DECIDING rule 32): one tap signs this browser in as the record of that name, or folds
+ * "That's me" (DECIDING rule 33): one tap signs this browser in as the record of that name, or folds
  * the browser's own new record into it. The page shows it only where `thatsMeVerdict` already said
  * yes, and the action asks again; when the answer has changed in between, the way back in that needs
  * proof (email code, Telegram) opens instead, as it always did for a record that can prove itself.

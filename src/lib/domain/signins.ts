@@ -10,7 +10,7 @@ import { bumpMetric } from "./metrics";
  * WhatsApp group. Each way back in is a door, and a door nobody uses is a door to redesign, so each
  * one counts itself the moment it sets the cookie in a browser that held another identity or none:
  *
- *   - `thats_me`: "That's me" on a match page, by name, without proof (DECIDING rule 32);
+ *   - `thats_me`: "That's me" on a match page, by name, without proof (DECIDING rule 33);
  *     `thats_me_fold` as well when it folded the new record this browser had made into the old one.
  *   - `restore`: the browser's own saved id brought back without proof (`restoreIdentity`).
  *   - `personal_link`: the personal link, on any of its three paths.
