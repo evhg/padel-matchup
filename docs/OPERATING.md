@@ -302,17 +302,17 @@ it. Ask
 `select slug, availability->>'error', availability->>'why' from clubs where availability->>'error'
 is not null`. The push job's answer also lists every club the run wrote as failed (`scrape.failed`),
 and pg_net keeps that answer for about six hours in `net._http_response`, which outlives Vercel's
-hour of logs. A request that the run's own deadline cuts short is not a failure: the club is not
-written and stays due for the next run.
+hour of logs. A request that the run's own deadline cuts short is not the club's failure: the club is
+not written and stays due for the next run. The one exception is the lane's first club. It had the
+run's whole budget and still did not fit, so the next run would cut it again and read no club behind
+it. It is written as "timeout" with `why` "frame: budget", and goes to the back of the queue.
 
-**When a club is cut every run.** `scrape_cut_<platform>` counts the clubs whose read the run's
-deadline cut short, at most one a lane a run. A club that is cut is not written and goes first in the
-next run, so a few cuts a day are normal. About one cut for each run of the day (96 runs a day) means
-the lane's first club never finishes, so it is never read, and the clubs behind it wait. Ask
-`select day, key, value from metrics_daily where key like 'scrape_cut_%' order by day desc limit 14`.
-Then find the oldest club on that platform (`select slug, availability_at from clubs where
-availability->>'source' = 'scrape:<platform>' order by availability_at nulls first limit 3`): a
-club that stays there with a cut each run is the one to look at.
+**When clubs are cut.** `scrape_cut_<platform>` counts the clubs whose read the run's deadline cut
+short, at most one a lane a run. A few cuts a day are normal: the push job leaves the read less time on
+a busy tick. Many "frame: budget" rows on one platform mean that its clubs need more time than a run
+has, so read the slowest club's requests. Ask
+`select day, key, value from metrics_daily where key like 'scrape_cut_%' order by day desc limit 14`,
+and `select slug, availability_at from clubs where availability->>'why' = 'frame: budget'`.
 
 **When a platform blocks us.** Do nothing that gets around it: no other address, no browser
 disguise, no captcha service, no sign-in. Let the rest run out. If it blocks again after a week,

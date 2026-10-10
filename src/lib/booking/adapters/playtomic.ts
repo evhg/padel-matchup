@@ -229,7 +229,7 @@ type Got = { kind: "response"; status: number; text: string } | { kind: "timeout
  */
 function errorClass(e: unknown): string {
   if (!(e instanceof Error)) return "Error";
-  const name = /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : "Error";
+  const name = /^[A-Z][A-Za-z]{0,39}$/.test(e.name) ? e.name : "Error";
   const code = (e as { cause?: { code?: unknown } }).cause?.code ?? (e as { code?: unknown }).code;
   return `${name}${typeof code === "string" && /^[A-Z_]{1,30}$/.test(code) ? ` ${code}` : ""}`;
 }
@@ -268,7 +268,8 @@ const fail = (reason: ScrapeFailure, status: number | null, requests: number, de
 
 /** A failed response, or null when the status is a success. */
 function failureOf(got: Got, requests: number, what: string): ScrapeResult | null {
-  if (got.kind === "timeout") return fail("timeout", null, requests, `${what}: no answer in ${REQUEST_TIMEOUT_MS / 1000} s`);
+  // The class, never a sentence: `failureWhy` keeps only a class or a status after the step.
+  if (got.kind === "timeout") return fail("timeout", null, requests, `${what}: TimeoutError`);
   if (got.kind === "error") return fail("error", null, requests, `${what}: ${got.detail}`);
   if (got.status === 401 || got.status === 403 || got.status === 429) return fail("blocked", got.status, requests, `${what}: HTTP ${got.status}`);
   if (got.status === 404 || got.status === 410) return fail("not_found", got.status, requests, `${what}: HTTP ${got.status}`);

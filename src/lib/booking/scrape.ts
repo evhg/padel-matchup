@@ -472,10 +472,15 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
       else if (stop) result = { ...result, detail: `frame: ${stop}` };
     }
     if (lane.blocked !== null) result = { ok: false, status: lane.blocked, reason: "blocked", requests: lf.count(), detail: null };
-    // Cut short by the deadline: nothing is written, and the club stays due. Counted (`scrape_cut_<platform>`),
-    // so a club that is cut on every run, and so never read, shows on the day's counters.
+    // Cut short by the deadline, and counted (`scrape_cut_<platform>`). A club after the lane's first is
+    // not written and stays due: the next run starts with it. The lane's first club had the run's whole
+    // budget and still did not fit, and a later run would do the same, so it would be cut on every run
+    // and no club behind it would be read. It is written as a timeout, and so goes to the back.
     if (lane.outOfTime && lane.blocked === null) {
       lane.cut++;
+      if (out.length > 0) break;
+      result = { ok: false, status: null, reason: "timeout", requests: lf.count(), detail: "frame: budget" };
+      out.push({ club, platform: lane.platform, result, todayOnly });
       break;
     }
     out.push({ club, platform: lane.platform, result, todayOnly });
@@ -525,15 +530,21 @@ export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { pla
 
 /** The steps a reader names in its `detail` before the colon ("club page: HTTP 500"); `failureWhy` keeps no other. */
 const WHY_STEP = /^(club page|availability \d{4}-\d{2}-\d{2}|locations|frame)$/;
-/** An error's class ("TypeError") or a word of the frame's own ("cap"). */
-const WHY_CLASS = /^[A-Za-z]{1,40}$/;
+/**
+ * An error's class ("TypeError"): a capital, then letters. A word of a message is not one: Playtomic's
+ * "club page: no answer in 10 s" once kept "no".
+ */
+const WHY_CLASS = /^[A-Z][A-Za-z]{0,39}$/;
+/** After the step "frame", only the frame's own stops (`ScrapeStop`). */
+const WHY_FRAME = /^(blocked|cap|budget|method|credentials)$/;
 /** The network's code on an error's cause, as undici gives it ("ECONNRESET", "UND_ERR_CONNECT_TIMEOUT"). */
 const WHY_CODE = /^[A-Z_]{1,30}$/;
 
 /**
  * A failure's cause in a few words that are safe to keep, built only from parts of a known shape: one of
  * the readers' fixed steps (`WHY_STEP`), then either an HTTP status ("HTTP 500") or an error's class with,
- * at most, the network's code ("TypeError ECONNRESET"). Everything after those parts is dropped, and a
+ * at most, the network's code ("TypeError ECONNRESET"); after "frame", only one of the frame's own stops
+ * ("frame: budget"). Everything after those parts is dropped, and a
  * detail that does not start with them gives null. So no link, path, query string, body, address or
  * token reaches the cache, whatever a message held. Pure.
  */
@@ -544,6 +555,7 @@ export function failureWhy(detail: string | null | undefined): string | null {
   const step = detail.slice(0, colon);
   if (!WHY_STEP.test(step)) return null;
   const [first, second] = detail.slice(colon + 2).split(" ");
+  if (step === "frame") return WHY_FRAME.test(first) ? `frame: ${first}` : null;
   if (first === "HTTP") return /^[1-5]\d\d$/.test(second ?? "") ? `${step}: HTTP ${second}` : null;
   if (!WHY_CLASS.test(first)) return null;
   return second !== undefined && WHY_CODE.test(second) ? `${step}: ${first} ${second}` : `${step}: ${first}`;
