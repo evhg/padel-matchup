@@ -142,7 +142,7 @@ export default async function VenueBoardPage({ params }: Props) {
             </div>
           </section>
         )}
-        {/* A club Kicksmash lists gets the card too while a read of its platform is fresh: the hours its row shows on /clubs are here, with the platform named (DECIDING rule 32). */}
+        {/* A club Kicksmash lists gets the card too while a read of its platform is fresh: the hours its row shows on /clubs are here, with the platform named (DECIDING rule 35). */}
         {shown && freeCourtsCardShown(shown, Boolean(club), new Date()) && (
           <section className="card" data-testid="club-free">
             <h2 className="text-lg font-extrabold">{t("club.freeToday")}</h2>

@@ -167,7 +167,7 @@ held to the migration by `tests/cron-jobs.test.ts`). Before that they existed on
 
 ## Free court times from the platforms
 
-DECIDING rule 32, the owner's decision of 10 October 2026: Kicksmash reads the free court times that
+DECIDING rule 35, the owner's decision of 10 October 2026: Kicksmash reads the free court times that
 the booking platforms show on their public club pages, and accepts the risk of being blocked.
 
 **The job.** `scrapeIfDue` in `src/lib/booking/scrape.ts`, called at the end of each push tick. A run
@@ -236,7 +236,7 @@ new commit starts it again. A challenge is not a changed page: never fix a reade
 
 **Where the bot answers for itself.** Every request names `https://kicksma.sh/about` in its
 User-Agent, and `/about` has a KicksmashBot section: what it reads, how often, that it stops, and the
-address to write to. robots.txt does not bind a reader (DECIDING rule 32): the Playtomic reader reads
+address to write to. robots.txt does not bind a reader (DECIDING rule 35): the Playtomic reader reads
 paths Playtomic's robots.txt disallows, under the owner's decision of 10 October 2026.
 
 ## The Sunday digest, one line to watch

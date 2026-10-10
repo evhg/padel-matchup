@@ -6,7 +6,7 @@ export type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, Scr
 
 /**
  * The platform readers, one file each (`./<platform>.ts`), one line each here. A reader reads only what
- * an anonymous visitor's browser loads on the platform's public club page (DECIDING rule 32), and the
+ * an anonymous visitor's browser loads on the platform's public club page (DECIDING rule 35), and the
  * frame in `../scrape.ts` holds every reader to the same limits: a GET, no cookie, no sign-in, one
  * request a second per platform, at most eight a club, and a stop at the first 401, 403 or 429.
  *

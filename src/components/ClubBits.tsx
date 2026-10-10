@@ -36,7 +36,7 @@ export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "cour
 /**
  * Today's free courts: a row of time chips, or one honest line. From the club's own feed when it shares
  * one, else from a recent read of its booking platform's public page, and then the line under the chips
- * names the platform, because the club did not publish those times (DECIDING rule 32). A read that
+ * names the platform, because the club did not publish those times (DECIDING rule 35). A read that
  * failed or grew old says the platform's times are not available just now, never that the club must
  * share its calendar (`freeCourtsState`).
  */

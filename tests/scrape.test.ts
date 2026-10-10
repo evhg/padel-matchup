@@ -17,7 +17,7 @@ import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 
 /**
- * The fifteen-minute read of free court times (DECIDING rule 32), on a reader that exists only here.
+ * The fifteen-minute read of free court times (DECIDING rule 35), on a reader that exists only here.
  *
  * NOW is Saturday 10 October 2026, 03:00 UTC — 10:00 in Bangkok (UTC+7). Every time below comes off
  * NOW (rule 11):

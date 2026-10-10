@@ -24,7 +24,7 @@ import type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, Scr
  *
  * robots.txt: Playtomic's (read 10 October 2026) disallows /api, /*?*date= and /*?*sport=, and step 2
  * above asks for exactly that. This reader reads those paths under the owner's decision of 10 October
- * 2026 (DECIDING rule 32): "platforms forbid scraping in their terms but we are just testing ... So
+ * 2026 (DECIDING rule 35): "platforms forbid scraping in their terms but we are just testing ... So
  * scraping at risk of being blocked is acceptable, just do it." robots.txt does not bind a reader under
  * that rule; the frame keeps the load low instead (today every 15 minutes at most, the next two days at
  * most hourly) and stops at the first sign of a block.

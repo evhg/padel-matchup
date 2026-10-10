@@ -46,7 +46,7 @@ export default async function AboutPage() {
             )}
           </section>
         ))}
-        {/* The User-Agent every booking platform sees names this page (DECIDING rule 32): what the bot reads, how often, that it stops, and where to write. */}
+        {/* The User-Agent every booking platform sees names this page (DECIDING rule 35): what the bot reads, how often, that it stops, and where to write. */}
         <section id="bot" className="card">
           <h2 className="font-extrabold">{t("about.botTitle")}</h2>
           <p className="mt-1 text-sm text-ink-soft">{t("about.botBody")}</p>

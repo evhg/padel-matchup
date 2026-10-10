@@ -24,7 +24,7 @@ import type { AvailabilityAdapter, ScrapedSlot, ScrapeResult, ScrapeTarget } fro
  * never used for the time; the hour comes from the text and the club's own zone. So a club with no
  * zone of its own is an error ("no time zone"), never a guess.
  *
- * robots.txt does not bind a reader under DECIDING rule 32: the owner accepted the risk of a block on
+ * robots.txt does not bind a reader under DECIDING rule 35: the owner accepted the risk of a block on
  * 10 October 2026, and the Playtomic reader reads paths Playtomic's robots.txt disallows. This reader
  * keeps out of the paths MATCHi's robots.txt names (`MATCHI_DISALLOWED`) as a courtesy only, because
  * it needs none of them.

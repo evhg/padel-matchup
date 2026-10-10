@@ -630,7 +630,7 @@ export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined,
   const a = c?.availability;
   if (!a || a.error) return null;
   if (!isScraped(a)) return todaySlots(a, now).reduce((sum, s) => sum + s.free, 0);
-  // A read from a booking platform covers several days and goes stale when the platform rests (DECIDING rule 32).
+  // A read from a booking platform covers several days and goes stale when the platform rests (DECIDING rule 35).
   if (!scrapeFresh(a, now)) return null;
   const ms = todaySlots(a, now).reduce((sum, s) => sum + s.free * Math.max(0, Date.parse(s.end) - Math.max(Date.parse(s.start), now.getTime())), 0);
   return Math.round(ms / 1_800_000) / 2;

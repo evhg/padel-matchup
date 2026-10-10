@@ -140,7 +140,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const pushAge = pushAt ? minutesAgo(pushAt, now) : null;
   push({ key: "pg_cron", name: "Supabase pg_cron + pg_net", role: "hourly job, the five-minute push job, the ten-minute calendar sync", used: null, limit: null, usage: `hourly ${hourlyAge === null ? "never" : `${hourlyAge} min ago`} · push ${pushAge === null ? "never" : `${pushAge} min ago`} · sync ${syncAge === null ? "never" : `${syncAge} min ago`}`, ceiling: `hourly < ${CEILINGS.hourlyCronMaxAgeMin} min · push < ${CEILINGS.pushCronMaxAgeMin} min · sync < ${CEILINGS.syncCronMaxAgeMin} min`, note: "Reminders, waitlists, lessons, offers, calendars, listening, backups, digests all hang off these three.", state: hourlyAge !== null && hourlyAge < CEILINGS.hourlyCronMaxAgeMin && pushAge !== null && pushAge < CEILINGS.pushCronMaxAgeMin && (syncAge === null || syncAge < CEILINGS.syncCronMaxAgeMin) ? "ok" : "alert" });
 
-  // Free court times read from the booking platforms' public pages (DECIDING rule 32): one line per platform with a reader.
+  // Free court times read from the booking platforms' public pages (DECIDING rule 35): one line per platform with a reader.
   const scrapeLines = await scrapeBoard(db, now);
   if (!scrapeLines.length) push({ key: "scrape", name: "Court times from platforms", role: "free courts read from the booking platforms' public pages", used: null, limit: null, usage: "no platform reader yet", ceiling: "1 request / second / platform · 8 clubs / platform / run · 45 s", note: "A reader per platform goes in src/lib/booking/adapters/. Until one exists the job reads nothing.", state: "off" });
   for (const l of scrapeLines) {

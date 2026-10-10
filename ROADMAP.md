@@ -825,7 +825,7 @@ Everything in this list is live. The README describes each in detail.
   a switch on the email channel. Ninety days, then the hourly job prunes. Proven in
   `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.
 - **Free court times read from the booking platforms, every 15 minutes (10 October 2026, no
-  migration).** The owner's decision (DECIDING rule 32): "scraping at risk of being blocked is
+  migration).** The owner's decision (DECIDING rule 35): "scraping at risk of being blocked is
   acceptable, just do it." Built: `src/lib/booking/scrape.ts` is the frame, and the Playtomic and
   MATCHi readers (`src/lib/booking/adapters/`) read the public club pages; The Padel Society shows
   free courts only inside its app, so it has no reader. Each platform picks its own clubs, at most
@@ -968,7 +968,7 @@ compared with production (rows the old merge dropped that morning stay dropped).
 - **WhatsApp Channels**, which need a person on a phone to post, and there is no staff.
 - **Twilio and SMS**, which need template approval and a verified business.
 - **Court booking integrations** with the platforms: booking, reserving or paying for a player, or
-  signing in to a platform for anybody (DECIDING rule 32). Reading the free court times a platform
+  signing in to a platform for anybody (DECIDING rule 35). Reading the free court times a platform
   shows publicly is built; the player books and pays on the platform.
 - **Player reliability and no-show stats**, which would rank people by their worst days. Still parked as
   a stat. What changed on 25 September 2026 (banter, `docs/DECIDING.md` rule 18): a third late pull-out

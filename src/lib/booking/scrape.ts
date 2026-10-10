@@ -11,7 +11,7 @@ import { platformById } from "./platforms";
 /**
  * Free court times read from the booking platforms' public club pages, every fifteen minutes.
  *
- * The owner's decision of 10 October 2026 (DECIDING rule 32): "platforms forbid scraping in their terms
+ * The owner's decision of 10 October 2026 (DECIDING rule 35): "platforms forbid scraping in their terms
  * but we are just testing, and on top every app scrapes every other app ... So scraping at risk of being
  * blocked is acceptable, just do it." This file is the frame; a reader per platform lives in
  * `adapters/<platform>.ts` and parses nothing here. The frame holds every reader to the limits that
@@ -25,7 +25,7 @@ import { platformById } from "./platforms";
  *     browser or answers a challenge;
  *   - the club's zone as the row has it: a reader that cannot know the zone says so, never guesses.
  *
- * robots.txt does not bind a reader under rule 32 (the owner accepted the risk of a block); the frame
+ * robots.txt does not bind a reader under rule 35 (the owner accepted the risk of a block); the frame
  * keeps the load low instead: each platform's own slice of at most eight clubs a run, today every 15
  * minutes for a club people use, the next two days at most hourly. `/about#bot` says who we are.
  *
@@ -188,7 +188,7 @@ const nextDay = (day: string) => new Date(Date.UTC(+day.slice(0, 4), +day.slice(
  * the platform's grid (wherever a court becomes free or busy, which on Playtomic and MATCHi is the half
  * hour) and at each of the club's midnights; and counts the courts free for the whole of each piece.
  * Neighbours with the same count on the same day merge. So the rows never overlap, every start is
- * unique, and `free x length` adds up to the true court-hours (DECIDING rule 32; the decision of 10
+ * unique, and `free x length` adds up to the true court-hours (DECIDING rule 35; the decision of 10
  * October 2026 on the review of this reader).
  *
  * Only `{ start, end, free }` is kept: a link, a price or a court name for each row was most of the

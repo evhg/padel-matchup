@@ -18,7 +18,7 @@ import { platformById } from "./platforms";
  *
  * This header said "No scraping, no credentials, nothing a club did not hand us" from 7 September
  * 2026; a session wrote that line, and the owner never asked for it. The owner's decision of
- * 10 October 2026 replaces it (DECIDING rule 32): "platforms forbid scraping in their terms but we
+ * 10 October 2026 replaces it (DECIDING rule 35): "platforms forbid scraping in their terms but we
  * are just testing, and on top every app scrapes every other app, for example padel society scrapes
  * playtomic and matchi for court availability. So scraping at risk of being blocked is acceptable,
  * just do it." What stays: we never sign in to a platform, never store a player's password, token or
@@ -222,7 +222,7 @@ export type FreeCourtsState =
 
 /**
  * What a club's free courts say, decided once for the club page, the manage page, the lists and the API
- * (DECIDING rule 32). The club's own feed when it shares one: it always wins, and before its first read
+ * (DECIDING rule 35). The club's own feed when it shares one: it always wins, and before its first read
  * there is nothing yet (`a: null`). Else a clean read of the platform's public page from the last two
  * hours, named as the platform's, because the club did not publish it. Else, after a read that failed or
  * grew old, that the platform's times are not available just now: a block is ours, never the club's
