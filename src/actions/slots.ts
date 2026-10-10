@@ -26,6 +26,7 @@ import {
   type JoinOutcome,
 } from "@/lib/domain/slots";
 import { joinGroup } from "@/lib/domain/groups";
+import { setCourtBooked } from "@/lib/domain/courtBooked";
 import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
 import { admission, hasRange } from "@/lib/domain/levels";
@@ -335,6 +336,27 @@ export async function setPaidAction(code: string, slotId: string, paid: boolean)
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     await setSlotPaid(db, { eventId: detail.event.id, slotId, actorPlayerId: viewer.player?.id ?? "", paid });
+    revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
+/**
+ * "I booked it", or taken back: the organiser or a player in a seat (the domain refuses anyone else).
+ * The player booked and paid in the club's own app; this only tells the others. The cards follow in
+ * `after()`, edited in place (DECIDING rules 5 and 36).
+ */
+export async function setCourtBookedAction(code: string, booked: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail } = await loadEvent(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("not_member");
+    const changed = await setCourtBooked(db, detail, me.id, booked);
+    if (changed) {
+      after(async () => {
+        await emitMatchEvent(db, "match.updated", code, { courtBooked: booked }, { channel: "web", actorPlayerId: me.id });
+      });
+    }
     revalidatePath(`/${code}`);
     return null;
   });

@@ -24,24 +24,26 @@ const token = () => randomBytes(18).toString("base64url").slice(0, 24);
 /** A slug the app will accept: lowercase, digits and hyphens, the same shape venueSlug() makes. */
 const valid = (s) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) && s.length <= 80;
 
-const bad = clubs.filter((c) => !valid(c.slug) || !c.name || !c.country || !c.province);
+const bad = clubs.filter((c) => !valid(c.slug) || !c.name || !c.country || !c.province || (c.bookingUrl && !/^https:\/\//.test(c.bookingUrl)) || (c.bookingPlatform && !/^[a-z]{2,20}$/.test(c.bookingPlatform)));
 if (bad.length) {
   console.error(`✗ ${bad.length} row(s) in data/clubs.json are not usable:`);
-  for (const c of bad) console.error(`  ${c.slug ?? "(no slug)"} — a slug, a name, a country and a province are all required`);
+  for (const c of bad) console.error(`  ${c.slug ?? "(no slug)"} — a slug, a name, a country and a province are all required; a booking link is https, a platform an id`);
   process.exit(1);
 }
 
 // One statement, not sixty-three: the same upsert over a VALUES list. Easier to read, easier to
 // apply by hand, and there is exactly one guard to check rather than one per club.
+// The booking link and its platform (10 October 2026): the file's value wins over an older one, a
+// null in the file never clears one, and a claimed club's own entry is never touched (the guard).
 const row = (c) => {
   const about = c.area ? `${c.name}, ${c.area}.` : null;
-  return `  (${[c.slug, c.name, c.country, c.province, c.city, c.tz, c.courts, c.courtsIndoor, c.courtsOutdoor, c.website, about, token()].map(q).join(", ")})`;
+  return `  (${[c.slug, c.name, c.country, c.province, c.city, c.tz, c.courts, c.courtsIndoor, c.courtsOutdoor, c.website, c.bookingUrl ?? null, c.bookingPlatform ?? null, about, token()].map(q).join(", ")})`;
 };
-const statement = `insert into clubs (slug, name, country, province, city, tz, courts, courts_indoor, courts_outdoor, website, about, manage_token, source)
-select v.slug, v.name, v.country, v.province, v.city, v.tz, v.courts::int, v.courts_indoor::int, v.courts_outdoor::int, v.website, v.about, v.manage_token, 'directory'
+const statement = `insert into clubs (slug, name, country, province, city, tz, courts, courts_indoor, courts_outdoor, website, booking_url, booking_platform, about, manage_token, source)
+select v.slug, v.name, v.country, v.province, v.city, v.tz, v.courts::int, v.courts_indoor::int, v.courts_outdoor::int, v.website, v.booking_url, v.booking_platform, v.about, v.manage_token, 'directory'
 from (values
 ${clubs.map(row).join(",\n")}
-) as v (slug, name, country, province, city, tz, courts, courts_indoor, courts_outdoor, website, about, manage_token)
+) as v (slug, name, country, province, city, tz, courts, courts_indoor, courts_outdoor, website, booking_url, booking_platform, about, manage_token)
 on conflict (slug) do update set
   name = excluded.name,
   country = coalesce(excluded.country, clubs.country),
@@ -52,6 +54,8 @@ on conflict (slug) do update set
   courts_indoor = coalesce(excluded.courts_indoor, clubs.courts_indoor),
   courts_outdoor = coalesce(excluded.courts_outdoor, clubs.courts_outdoor),
   website = coalesce(clubs.website, excluded.website),
+  booking_url = coalesce(excluded.booking_url, clubs.booking_url),
+  booking_platform = coalesce(excluded.booking_platform, clubs.booking_platform),
   about = coalesce(clubs.about, excluded.about),
   updated_at = now()
 where clubs.source = 'directory' and clubs.claimed_by is null;`;

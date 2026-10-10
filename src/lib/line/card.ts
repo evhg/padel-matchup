@@ -4,7 +4,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { formatLevel } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, levelLine, pairCardLines, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { bookedLine, cardTitle, levelLine, pairCardLines, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import type { FlexBubble, LineMessage } from "./api";
 
 /**
@@ -35,6 +35,9 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
   const level = levelLine(ev, locale);
   if (level) head.push(level);
   if (ev.cost) head.push(`💸 ${ev.cost}${ev.payNote ? ` · ${ev.payNote}` : ""}`);
+  // Not part of the material key: LINE cannot edit, so the mark rides on the next card a real change sends.
+  const booked = bookedLine(detail, locale);
+  if (booked) head.push(booked);
 
   // A fixed-pairs night lists its pairs, one line each (decision F).
   const lines: string[] = ev.fixedPairs ? pairCardLines(detail, locale, { text: (x) => x, level: (x) => x, note: (x) => `(${x})`, and: "&" }, MAX_LINES) : [];

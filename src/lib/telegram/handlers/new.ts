@@ -39,7 +39,7 @@ export async function knownVenues(db: Db, chat: TelegramChat, from: TgUser, tz: 
 }
 
 /** The creation itself, shared by the one-line command, the tap-through, the reply steps and a crew's "who's in …?": rate limit, event, organizer in, chat defaults, card, webhook. */
-export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input: ChatMatchInput & { startsAt: Date }, tz: string, ctx: OpContext, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<{ ok: true; ev: Event } | { ok: false; reason: "past" | "too_many" | "invalid" }> {
+export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input: ChatMatchInput & { startsAt: Date; /** A free court's length (the best times); the default otherwise. */ durationMinutes?: number | null }, tz: string, ctx: OpContext, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<{ ok: true; ev: Event } | { ok: false; reason: "past" | "too_many" | "invalid" }> {
   const now = new Date();
   if (input.startsAt.getTime() < now.getTime() - DAY_MS) return { ok: false, reason: "past" };
   const player = await findOrCreateTelegramPlayer(db, from);
@@ -50,6 +50,7 @@ export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser
       creatorPlayerId: player.id,
       type: input.type,
       startsAt: input.startsAt,
+      ...(input.durationMinutes ? { durationMinutes: input.durationMinutes } : {}),
       tz,
       venueName: input.venue ?? chat.venueName,
       court: input.court,
@@ -252,9 +253,9 @@ async function continueGuidedNew(db: Db, msg: TgMessage, chat: TelegramChat, fro
   const trailer = parent.text.match(/\/new (\d{2}\.\d{2})(?: (\d{2}:\d{2}))?\s*$/);
   if (!trailer) return null;
   // "I'm in" under a prompt is about a match, not the place of a new one: it never makes a match at a court called "I'm".
-  // (A score shape stays: "18:30" is the time the prompt asked for.)
+  // Nor does "times?", which asks for the free courts. (A score shape stays: "18:30" is the time the prompt asked for.)
   const said = readWords(msg.text)?.kind;
-  if (said === "join" || said === "leave") return null;
+  if (said === "join" || said === "leave" || said === "times") return null;
   const locale = chatLocale(chat);
   const s = strings(locale);
   const tz = await chatZone(db, chat, null);

@@ -1,6 +1,7 @@
 import { isValidShareCode } from "@/lib/codes";
-import { baseUrl } from "@/lib/config";
+import { baseUrl, TELEGRAM_BOT } from "@/lib/config";
 import { MAX_SETS, type SetScore } from "@/lib/domain/scores";
+import { telegramBotUsername } from "./api";
 
 /** Reading a message: a command and its words, the codes in a pasted link, a score. No database. */
 
@@ -29,12 +30,17 @@ export
 const CODE_RE = /(?:^|\/|\s)([A-Za-z0-9]{4})(?=$|[\s/?#])/;
 const LINK_RE = /https?:\/\/[^\s/]+\/([A-Za-z0-9]{4})(?=$|[\s/?#])/g;
 
+/**
+ * A command and its words, or null. A command named for another bot ("/times@prayer_times_bot") is
+ * that bot's: an admin bot hears every message in its groups, and answering it would talk over them.
+ */
 export
-function parseCommand(text: string | undefined): { command: string; args: string } | null {
+function parseCommand(text: string | undefined, botName: string = telegramBotUsername() ?? TELEGRAM_BOT): { command: string; args: string } | null {
   if (!text || !text.startsWith("/")) return null;
   const [head, ...rest] = text.trim().split(/\s+/);
-  const command = head.slice(1).split("@")[0].toLowerCase();
-  return { command, args: rest.join(" ") };
+  const [name, addressed] = head.slice(1).split("@");
+  if (addressed && addressed.toLowerCase() !== botName.toLowerCase()) return null;
+  return { command: name.toLowerCase(), args: rest.join(" ") };
 }
 
 /** Codes of kicksma.sh links in a message (own host or the short domain). */

@@ -3,6 +3,7 @@ import { formatEventDay, formatEventTimeRange } from "@/lib/dates";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { seatUnits } from "@/lib/domain/fixedPairs";
+import { courtBookedBy } from "@/lib/domain/courtBooked";
 import { tagParts } from "@/lib/domain/eventTags";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import { eventEnd } from "@/lib/domain/matchLength";
@@ -197,6 +198,16 @@ const STRINGS = {
     crewAdminOnly: "Only an admin of this group can tie it to a crew.",
     crewNeedsAdmin: "Tied to the crew. Make me an admin who may pin messages, and I start.",
     whichMatch: "Which match?",
+    // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. "From" names whose
+    // times they are: a platform's, or the clubs' own (DECIDING rule 35); never "this week", because a
+    // club's own feed holds today.
+    timesFree: (from: string) => `Free courts at your clubs, from ${from}. Tap one and I make the match; you book and pay in the club's own app.`,
+    timesTheClubs: "the clubs",
+    timesAnd: " and ",
+    timesNone: "None of your clubs shows a free court just now.",
+    timesExists: "That match is already on.",
+    timesGone: "That time is no longer on offer. Ask again for the free times.",
+    courtBooked: (name: string | null) => (name ? `Court booked ✓ (by ${name})` : "Court booked ✓"),
   },
   ru: {
     match: "Падел-матч",
@@ -366,6 +377,13 @@ const STRINGS = {
     crewAdminOnly: "Привязать этот чат к группе может только его админ.",
     crewNeedsAdmin: "Чат привязан к группе. Сделайте меня админом с правом закреплять сообщения, и я начну.",
     whichMatch: "Какой матч?",
+    timesFree: (from: string) => `Свободные корты в ваших клубах, по данным ${from}. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.`,
+    timesTheClubs: "клубов",
+    timesAnd: " и ",
+    timesNone: "Сейчас ни один из ваших клубов не показывает свободных кортов.",
+    timesGone: "Это время больше не предлагается. Спросите свободное время ещё раз.",
+    timesExists: "Этот матч уже есть.",
+    courtBooked: (name: string | null) => (name ? `Корт забронирован ✓ (${name})` : "Корт забронирован ✓"),
   },
   es: {
     match: "Partido de pádel",
@@ -534,6 +552,13 @@ const STRINGS = {
     crewAdminOnly: "Solo un administrador de este chat puede vincularlo a un grupo.",
     crewNeedsAdmin: "Vinculado al grupo. Hazme administrador con permiso para fijar mensajes y empiezo.",
     whichMatch: "¿Qué partido?",
+    timesFree: (from: string) => `Pistas libres en tus clubs, según ${from}. Toca una y creo el partido; reservas y pagas tú, en la app del club.`,
+    timesTheClubs: "los clubs",
+    timesAnd: " y ",
+    timesNone: "Ahora mismo ninguno de tus clubs muestra una pista libre.",
+    timesGone: "Esa hora ya no está disponible. Vuelve a pedir los horarios libres.",
+    timesExists: "Ese partido ya existe.",
+    courtBooked: (name: string | null) => (name ? `Pista reservada ✓ (por ${name})` : "Pista reservada ✓"),
   },
 } as const;
 
@@ -598,6 +623,18 @@ export function pairCardLines(detail: EventDetail, locale: BotLocale, f: { text:
   return lines.length > max ? [...shown, `… +${lines.length - max}`] : shown;
 }
 
+/**
+ * "🎟 Court booked ✓ (by Ana)": a player booked and paid in the club's own app and said so (DECIDING
+ * rule 36). Plain text; the name is the booker's first name. Null while not booked, and on a match
+ * that is off or played. Telegram, Discord and LINE all print this line.
+ */
+export function bookedLine(detail: EventDetail, locale: BotLocale): string | null {
+  const ev = detail.event;
+  const b = courtBookedBy(detail);
+  if (!b || ev.status === "cancelled" || ev.status === "past") return null;
+  return `🎟 ${strings(locale).courtBooked(b.name)}`;
+}
+
 /** The one message per match the bot keeps edited. HTML parse mode. */
 export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
@@ -619,6 +656,8 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
   const level = levelLine(ev, locale);
   if (level) lines.push(esc(level));
   if (ev.cost) lines.push(`💸 ${esc(ev.cost)}${ev.payNote ? ` · ${esc(ev.payNote)}` : ""}`);
+  const booked = bookedLine(detail, locale);
+  if (booked) lines.push(esc(booked));
   lines.push("");
   lines.push(`<b>${s.players} ${occupied}/${ev.capacity}</b>`);
   const shown = ev.fixedPairs ? [] : seats.slice(0, MAX_LINES);

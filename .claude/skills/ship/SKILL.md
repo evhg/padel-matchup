@@ -385,6 +385,13 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### Editing that keeps going wrong
 
+- **A test that reads a query plan must run on both databases.** PGlite's `db.execute` answers `{ rows }`
+  and postgres-js (CI's real-Postgres run) a bare array, and real Postgres plans from statistics, so a
+  fresh table may get a bitmap scan where PGlite showed an index scan. `tests/player-history.test.ts`
+  passed the local gate and failed CI: take both shapes, `analyze` the tables first, and accept every
+  scan that starts from the index. Prove it on a throwaway Postgres 16 (`/usr/lib/postgresql/16/bin`,
+  run as the `postgres` user) with `TEST_DATABASE_URL`, not only on PGlite.
+
 - **A time zone set inside a running test is not a time zone.** `process.env.TZ = "Asia/Bangkok"` in a
   `beforeAll` passed the local gate and failed CI's real-Postgres run: a worker thread ignores the
   assignment outright, and a long-lived test process cannot be trusted to honour it either. A test that

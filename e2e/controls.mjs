@@ -97,6 +97,8 @@ const CONTROLS = {
   x: "x:AAAA", // the organiser says the match never happened
   // Creating a match in three taps.
   n: "n:z:phuket",
+  // A free court from "times?" (epoch minutes in base 36, the length, the club's slug).
+  bt: "bt:1:90:nowhere-club",
   // The owner's desk.
   la: `la:${ZERO_UUID}`,
   ls: `ls:${ZERO_UUID}`,

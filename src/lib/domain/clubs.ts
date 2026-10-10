@@ -13,6 +13,8 @@ import { countryOfTz, isCountryCode } from "./countries";
 import { normalizeEmail } from "./players";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
+import type { FreeFeed } from "./bestTimes";
+import { clubFeeds } from "./freeCourts";
 import { courtNamesBySlug } from "./courts";
 import { isValidVenueSlug, venueSlug } from "./venueBoard";
 import type { DirectoryListing } from "./directory";
@@ -205,7 +207,26 @@ export async function listedClubNames(db: Db, tz: string, limit = 200): Promise<
  * them. `slug` is the club's own address when the pick is a listed club, so a match made here lands
  * on that club's page rather than on a second one made from its name.
  */
-export type PickableVenue = { name: string; slug: string | null; mapUrl: string | null; country: string | null; province: string | null; courts: number | null; /** The club's courts by name when it listed them; the form offers these instead of 1…n. */ courtNames: string[]; where: "yours" | "here" | "nearby" | "elsewhere" };
+export type PickableVenue = {
+  name: string;
+  slug: string | null;
+  mapUrl: string | null;
+  country: string | null;
+  province: string | null;
+  courts: number | null;
+  /** The club's courts by name when it listed them; the form offers these instead of 1…n. */
+  courtNames: string[];
+  where: "yours" | "here" | "nearby" | "elsewhere";
+  /**
+   * The club's free courts (its own feed, or a platform's fresh read), for the form's free times. Only
+   * the person's own, here and nearby clubs carry them, twelve at most (`clubFeeds`); null elsewhere,
+   * so the landing page never carries the feeds of every club in the world.
+   */
+  free: FreeFeed | null;
+};
+
+/** The most clubs whose free courts the form carries: the ones a person is likely to pick. */
+const FREE_FOR_PICKING = 12;
 
 /**
  * Where to find a club on a map when nobody has published a link for it: a search for the club by
@@ -238,7 +259,7 @@ const same = (a: string | null | undefined, b: string | null | undefined) => Boo
  * A place appears once. "Warehaus" on their own list and "WAREHAUS.club" in the directory are one
  * club, because both answer to the slug `warehaus`.
  */
-export async function venuesForPicking(db: Db, playerId: string | null, at: Whereabouts | string | null = null): Promise<PickableVenue[]> {
+export async function venuesForPicking(db: Db, playerId: string | null, at: Whereabouts | string | null = null, now = new Date(), linked: string | null = null): Promise<PickableVenue[]> {
   // A time zone on its own is still accepted, so a caller that only has one keeps working.
   const { tz = null, city = null } = typeof at === "string" ? { tz: at, city: null } : (at ?? {});
   // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). All are bounded.
@@ -273,7 +294,7 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
     if (seen.has(key)) continue;
     seen.add(key);
     // Their own name for it, not the directory's: it is what their matches already say.
-    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, courtNames: [], where: "yours" });
+    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, courtNames: [], where: "yours", free: null });
   }
   const here: PickableVenue[] = [];
   const nearby: PickableVenue[] = [];
@@ -286,12 +307,18 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
     // slug we already keep. Either is a far finer signal than the time zone, which cannot tell one
     // Thai province from another.
     const bucket = same(city, province) || same(city, c.city) ? here : tz && c.tz === tz ? nearby : elsewhere;
-    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, courtNames: [], where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere" });
+    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, courtNames: [], where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere", free: null });
   }
   const all = [...out, ...here, ...nearby, ...elsewhere];
   // The courts by name, one read for every listed club that has rows (few do), so the form can offer "Centre" rather than 1…n.
   const names = await courtNamesBySlug(db, all.flatMap((v) => (v.slug ? [v.slug] : [])));
   for (const v of all) if (v.slug && names.has(v.slug)) v.courtNames = names.get(v.slug)!;
+  // The free courts of the clubs this person is likely to pick, one bounded read (AGENTS.md rule 12):
+  // the club a link named first (a row on /play, a free court offered), then their own, here and nearby.
+  const named = linked ? all.find((v) => same(v.name, linked)) : undefined;
+  const likely = [...new Set([named, ...out, ...here, ...nearby].flatMap((v) => (v?.slug ? [v.slug] : [])))].slice(0, FREE_FOR_PICKING);
+  const feeds = await clubFeeds(db, likely, now);
+  for (const v of all) if (v.slug && feeds.has(v.slug)) v.free = feeds.get(v.slug)!;
   return all;
 }
 
@@ -373,6 +400,15 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   // check, listing a club in the directory would tell its real owner it was "already claimed".
   if (existing && !existing.rejectedAt && existing.claimedBy !== null && existing.claimedBy !== input.playerId) throw new DomainError("forbidden", "already_claimed");
   const fields = cleanClubInput(input);
+  // The booking page the row already has stays unless the claim names another: a blank field is not
+  // "we have no booking page". And the same page typed again keeps the platform the row knew, which a
+  // custom domain cannot say (book.pop-padel.com is Playbypoint).
+  if (existing?.bookingUrl && !fields.bookingUrl) {
+    delete fields.bookingUrl;
+    delete fields.bookingPlatform;
+  } else if (existing?.bookingUrl && fields.bookingUrl && !fields.bookingPlatform && hostOf(fields.bookingUrl) === hostOf(existing.bookingUrl)) {
+    fields.bookingPlatform = existing.bookingPlatform;
+  }
   const city = fields.city ?? guessCity(slug, input.tz ?? existing?.tz) ?? existing?.city ?? null;
   const country = fields.country ?? countryOfTz(input.tz ?? existing?.tz) ?? existing?.country ?? null;
   const province = fields.province ?? existing?.province ?? (city ? (cityBySlug(city)?.name ?? null) : null);
@@ -493,12 +529,11 @@ async function listingUnderClaim(club: Club): Promise<DirectoryListing | null> {
 
 /**
  * Everything a claim may have written that a directory row does not have. The listing's own facts come
- * from the directory; these go back to nothing, whoever typed them.
+ * from the directory; these go back to nothing, whoever typed them. The booking link and its platform
+ * are the directory's own since 10 October 2026, so they come back from the listing instead.
  */
 const UNCLAIMED = {
   mapUrl: null,
-  bookingUrl: null,
-  bookingPlatform: null,
   opensAt: null,
   closesAt: null,
   availabilityUrl: null,
@@ -584,13 +619,14 @@ const hostOf = (u: string | null | undefined): string | null => {
  * The work email the claim can prove by itself: the contact is an email at the club's own domain —
  * its website, or its booking page when that is the club's own and not a platform's. A code to that
  * address confirms the person is inside the club; a public mailbox or a phone number confirms
- * nothing, and those the owner checks by hand.
+ * nothing, and those the owner checks by hand. A website that is the club's page on a booking
+ * platform (many directory rows carry their Playtomic page) is the platform's domain, never the club's.
  */
 export function claimEmailForCode(c: Pick<Club, "claimContact" | "website" | "bookingUrl" | "bookingPlatform">): string | null {
   const email = normalizeEmail(c.claimContact);
   const domain = email?.split("@")[1];
   if (!email || !domain || PUBLIC_MAIL.has(domain)) return null;
-  const hosts = [hostOf(c.website), c.bookingPlatform ? null : hostOf(c.bookingUrl)].filter((h): h is string => Boolean(h));
+  const hosts = [detectPlatform(c.website) ? null : hostOf(c.website), c.bookingPlatform || detectPlatform(c.bookingUrl) ? null : hostOf(c.bookingUrl)].filter((h): h is string => Boolean(h));
   return hosts.some((h) => h === domain || h.endsWith(`.${domain}`) || domain.endsWith(`.${h}`)) ? email : null;
 }
 

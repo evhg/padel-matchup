@@ -53,6 +53,8 @@ export type TgMessage = {
   /** A message forwarded from somewhere else: its words are somebody else's. */
   forward_origin?: unknown;
   forward_date?: number;
+  /** The buttons under a message: a tap is checked against the ones the bot actually put there. */
+  reply_markup?: InlineKeyboard;
   /** Service messages: the group's new title, and a basic group upgraded to a supergroup under a new id. */
   new_chat_title?: string;
   migrate_to_chat_id?: number;
@@ -161,6 +163,11 @@ export function unpinChatMessage(chatId: number, messageId: number) {
 /** Removes one of the bot's own messages (a finished prompt, for instance). */
 export function deleteMessage(chatId: number, messageId: number) {
   return tg<true>("deleteMessage", { chat_id: chatId, message_id: messageId });
+}
+
+/** Changes only the buttons under a message; an empty keyboard takes them away. Telegram allows it on a bot's own message of any age, where a delete stops at 48 hours. */
+export function editMessageReplyMarkup(chatId: number, messageId: number, keyboard: InlineKeyboard) {
+  return tg<TgMessage | true>("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: keyboard });
 }
 
 export function editMessageText(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard | null) {

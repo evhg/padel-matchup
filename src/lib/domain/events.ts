@@ -352,6 +352,12 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         calendarChanged = calendarChanged || Boolean(u);
       }
     }
+    // "Court booked" was for that day, hour, length and club: a new one of any of them clears it (src/lib/domain/courtBooked.ts).
+    // The club is its slug: "rawai padel" for "Rawai Padel" is the same court. A tournament's number of courts is its own business.
+    if (ev.courtBookedAt && ("startsAt" in set || "durationMinutes" in set || ("venueSlug" in set && set.venueSlug !== ev.venueSlug))) {
+      set.courtBookedAt = null;
+      set.courtBookedBy = null;
+    }
 
     const promotedPlayerIds: string[] = [];
     /** Moved up by `vacateSeats`, which writes their "promoted" lines itself. */

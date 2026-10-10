@@ -353,6 +353,50 @@ try {
   const bot = courtPage.locator("#bot");
   const botText = ((await bot.textContent({ timeout: 5000 }).catch(() => "")) ?? "").replace(/\s+/g, " ");
   check("/about says what KicksmashBot reads, how often, and where to write", /KicksmashBot/.test(botText) && /Playtomic/.test(botText) && /15/.test(botText) && (await bot.locator('a[href^="mailto:"]').count()) === 1, botText.slice(0, 160));
+  // ---- The best times, and a court a player books (DECIDING rule 36) ----
+  // Last in the suite, because it adds a feed and a match at the club that nothing above expects.
+  // The club shares a feed of its bookings: its own match calendar, which this build serves and the
+  // manage page's save reads once, as the hourly job would.
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  await page.getByRole("button", { name: "Free courts feed" }).click();
+  await page.locator('#feed input[type="url"]').fill(`${BASE}/v/${SLUG}/calendar.ics`);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText(/^Saved · \d+ free court-hours? today$/).waitFor({ timeout: 20000 });
+  // Whether a chip can exist depends on the hour this runs: the club shows free courts until 23:00
+  // its time, and the form offers only courts two hours out or more. The API reads the same cache, so
+  // the check asks it, and then the form must agree either way: a chip that fills the time, or none.
+  const feedNow = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
+  const reachable = (feedNow.freeCourts?.slots ?? []).filter((s) => new Date(s.start).getTime() >= Date.now() + 2 * 3600_000 + 5 * 60_000);
+  await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
+  await page.getByTestId("length-choice").getByRole("button", { name: "60 min" }).click();
+  if (reachable.length > 0) {
+    await page.getByTestId("free-times").waitFor({ timeout: 15000 });
+    const chip = page.getByTestId("free-chip").first();
+    const label = (await chip.innerText()).trim();
+    await chip.click();
+    // The club's own zone, as its feed was read: the claim took it from the claimant's phone, so it is not Bangkok here.
+    const clubTz = String(feedNow.freeCourts?.tz ?? "").replace(/_/g, " ");
+    const filled = [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: clubTz, exact: true }).count(), (await page.getByTestId("free-then").innerText()).trim()];
+    check("the create form offers the club's free time as a chip, and a tap fills the time and the club's zone", clubTz !== "" && label.endsWith(filled[0]) && filled[1] === 1 && filled[2] === "✓ The club shows a free court then.", JSON.stringify({ label, clubTz, filled }));
+  } else {
+    check("past the club's last free hour, the form offers no free time rather than a guess", (await page.getByTestId("free-times").count()) === 0);
+  }
+  await page.getByRole("button", { name: "Create & get the link" }).click();
+  await page.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const bookedCode = page.url().split("/").slice(-2)[0];
+  await page.goto(`${BASE}/${bookedCode}`);
+  // The organiser books in the club's own app: the link is the club's booking page, the slot beside it.
+  const book = page.getByTestId("book-court");
+  check("the organiser gets 'Book this court' to the club's own booking page, with the slot beside it", (await book.innerText()).includes("Book this court") && (await book.getAttribute("href")) === "https://playtomic.io/kata-center" && (await page.getByTestId("book-slot").innerText()).includes("60 min"), await page.getByTestId("court-booking").innerText());
+  await page.getByTestId("court-booked-mark").click();
+  await page.getByTestId("court-booked").waitFor({ timeout: 15000 });
+  check("'I booked it' shows 'Court booked ✓' with who booked it", (await page.getByTestId("court-booked").innerText()).includes("Court booked ✓ (by Nok)"), await page.getByTestId("court-booked").innerText());
+  // GET /api/v1/matches/{code} answers with the match itself, not wrapped as a create does.
+  const bookedApi = await fetch(`${BASE}/api/v1/matches/${bookedCode}`).then((r) => r.json());
+  check("and the API says so, with the booker's first name", (bookedApi.match ?? bookedApi).courtBooked?.by === "Nok", JSON.stringify((bookedApi.match ?? bookedApi).courtBooked));
+  await page.getByTestId("court-booked-undo").click();
+  await page.getByTestId("court-booked-mark").waitFor({ timeout: 15000 });
+  check("any player takes it back in one tap", (await page.getByTestId("court-booked").count()) === 0);
 } finally {
   await browser.close();
 }

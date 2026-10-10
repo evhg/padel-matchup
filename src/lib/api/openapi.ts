@@ -52,6 +52,7 @@ const publicMatch = {
     group: { type: ["object", "null"], properties: { code: { type: "string" }, name: { type: "string" }, url: { type: "string" } } },
     listed: { type: "boolean" },
     bookingUrl: { type: ["string", "null"] },
+    courtBooked: { type: ["object", "null"], description: "A player booked the court in the club's own app and said so. Null while not booked and on a cancelled match. Kicksmash never books or takes a payment.", properties: { at: { type: "string", format: "date-time" }, by: { type: ["string", "null"], description: "The booker's first name; null when the booker no longer holds a seat or their account is gone." } } },
     cost: { type: ["string", "null"], description: "What each player pays, free text." },
     note: { type: ["string", "null"] },
     result: { type: ["object", "null"], properties: { sets: { type: "array", items: { type: "object", properties: { a: { type: "integer" }, b: { type: "integer" } } } }, teamA: { type: "array", items: { type: "string" } }, teamB: { type: "array", items: { type: "string" } }, winner: { type: "string", enum: ["a", "b", "draw"], description: "Sets can be empty when only the winner was recorded." }, confirmed: { type: "boolean" } } },

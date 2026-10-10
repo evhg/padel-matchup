@@ -13,7 +13,8 @@ import { hoursAndMinutes, nightPlan } from "@/lib/domain/tournamentPlan";
 
 export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
 export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
-import { nextOccurrence } from "@/lib/dates";
+import { formatDayMonth, nextOccurrence } from "@/lib/dates";
+import { bestTimes, datesSharingAWeekday, freeLineMessage, freeLineOf, timeChipsOf } from "@/lib/domain/bestTimes";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
@@ -62,15 +63,12 @@ export type EventFormValues = {
 };
 
 export type TimePatternInput = { dow: number; time: string };
-type Chip = { key: string; date: string; time: string; label: string };
+/** A time to tap. A free court's chip carries the club's zone too: its hour is the club's. */
+type Chip = { key: string; date: string; time: string; tz?: string };
 
 /** Quick picks: the organizer's own recurring slots, projected to their next occurrence. Never guessed. */
-function historyChips(patterns: TimePatternInput[], tz: string, locale: string, label: (day: string, time: string) => string, now = new Date()): Chip[] {
-  const fmt = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
-  return patterns.map((p) => {
-    const next = nextOccurrence(p.dow, p.time, tz, now);
-    return { key: `${p.dow}-${p.time}`, ...next, label: label(fmt.format(new Date(`${next.date}T00:00:00Z`)), p.time) };
-  });
+function historyChips(patterns: TimePatternInput[], tz: string, now = new Date()): Chip[] {
+  return patterns.map((p) => ({ key: `${p.dow}-${p.time}`, ...nextOccurrence(p.dow, p.time, tz, now) }));
 }
 
 /**
@@ -146,7 +144,36 @@ export function EventFields({
   }, [venues, values.venueName, values.court, typingCourt]);
   const zones = useMemo(() => timeZones(values.tz), [values.tz]);
   const nearby = useMemo(() => likelyZones(values.tz), [values.tz]);
-  const chips = useMemo(() => historyChips(patterns, values.tz, locale, (day, time) => t("create.chipDay", { day, time })), [patterns, values.tz, locale, t]);
+  const chips = useMemo(() => historyChips(patterns, values.tz), [patterns, values.tz]);
+  // The picked club's free courts (its own feed, or the times a platform shows publicly), the owner's
+  // choice of 10 October 2026. Up to three times at the head of the row of time chips, the organiser's
+  // usual times first (`bestTimes`), and their usual times after them up to four (`timeChipsOf`):
+  // one row of chips, no new action (rule 1). A usual time stays even when the club shows it taken,
+  // because the organiser may have booked it. One line under the time says whether the club shows a
+  // court free then, in the club's hour when the form's zone is not the club's.
+  const pickedFree = useMemo(() => venues.find((v) => v.name.trim().toLowerCase() === values.venueName.trim().toLowerCase())?.free ?? null, [venues, values.venueName]);
+  const freeChips = useMemo<Chip[]>(() => {
+    if (!pickedFree) return [];
+    return bestTimes({ clubs: [{ slug: "picked", name: values.venueName, feed: pickedFree, usual: true }], patterns, lengthMinutes: values.durationMinutes, now: new Date() }).map((b) => ({ key: b.start.toISOString(), date: b.date, time: b.time, tz: b.tz }));
+  }, [pickedFree, patterns, values.durationMinutes, values.venueName]);
+  const timeChips = useMemo(() => {
+    const row = timeChipsOf(freeChips, chips);
+    // A weekday that shows twice is two weeks: those chips name the day and month instead.
+    const twice = datesSharingAWeekday(row);
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
+    return row.map((c) => {
+      const day = new Date(`${c.date}T00:00:00Z`);
+      return { ...c, label: t("create.chipDay", { day: twice.has(c.date) ? formatDayMonth(day, "UTC", locale) : weekday.format(day), time: c.time }) };
+    });
+  }, [freeChips, chips, locale, t]);
+  const freeCount = timeChips.filter((c) => c.free).length;
+  const freeThen = useMemo(() => {
+    try {
+      return freeLineMessage(freeLineOf(pickedFree, values, values.durationMinutes, new Date()));
+    } catch {
+      return null;
+    }
+  }, [pickedFree, values]);
   // "More" opens by itself only when something non-default is already set (editing a match).
   const [moreOpen, setMoreOpen] = useState(Boolean(values.haveNames || values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed"));
   // The level sits one tap from the form, behind its own chip: "looking for a fourth" carries the one
@@ -220,15 +247,15 @@ export function EventFields({
         </div>
       )}
 
-      {chips.length > 0 && (
-        <div>
-          <div className="label">{t("create.chipsLabel")}</div>
+      {timeChips.length > 0 && (
+        <div data-testid={freeCount > 0 ? "free-times" : undefined}>
+          <div className="label">{freeCount === 0 ? t("create.chipsLabel") : freeCount === timeChips.length ? t("create.freeLabel", { club: values.venueName.trim() }) : t("create.freeAndUsualLabel", { club: values.venueName.trim() })}</div>
           <div className="flex flex-wrap gap-2">
-          {chips.map((c) => {
-            const active = values.date === c.date && values.time === c.time;
+          {timeChips.map((c) => {
+            const active = values.date === c.date && values.time === c.time && (!c.tz || values.tz === c.tz);
             return (
-              <button key={c.key} type="button" aria-pressed={active} onClick={() => onChange({ date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
-                {c.label}
+              <button key={c.key} type="button" aria-pressed={active} data-testid={c.free ? "free-chip" : undefined} onClick={() => onChange(c.tz ? { date: c.date, time: c.time, tz: c.tz } : { date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
+                {c.free ? `✓ ${c.label}` : c.label}
               </button>
             );
           })}
@@ -269,6 +296,12 @@ export function EventFields({
           <button type="button" className="link" onClick={() => setTzOpen(true)}>
             {values.tz.replace(/_/g, " ")}
           </button>
+        )}
+        {/* Only where the club's feed speaks for the time picked; past it, nothing rather than a guess. */}
+        {freeThen && (
+          <p className={`mt-1 ${freeThen.key.startsWith("create.free") ? "font-semibold text-ok" : ""}`} data-testid="free-then">
+            {t(freeThen.key, freeThen.values)}
+          </p>
         )}
       </div>
 

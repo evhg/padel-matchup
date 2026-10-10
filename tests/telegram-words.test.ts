@@ -15,6 +15,8 @@ describe("readWords: join, leave, a score, a new match, or nothing", () => {
     ...cases("join", ["in", "IN", "In!", "I'm in", "i’m in 🎾", "IM IN!!!", "I am in.", "+1", "+ 1", "+", "+1 🙋‍♂️", "me", "Me!", "count me in", "Count me in 💪", "я", "Я!", "я в деле", "Я в деле 🔥", "в деле", "voy", "¡Voy!", "me apunto", "Me apunto 💪", "yo voy", "cuenta conmigo"]),
     ...cases("leave", ["out", "OUT", "I'm out", "im out 😔", "-1", "−1", "can't make it", "Can’t make it, sorry", "cant make it", "I can't make it", "count me out", "не смогу", "Не смогу 😔", "я не смогу", "минус", "Минус.", "пас", "no puedo", "No puedo 😢", "me bajo", "Me bajo!", "no voy"]),
     ...cases("score", ["6-4 6-3", "6:4, 3:6, 7-5", " 6-4 "]),
+    // The best times, asked for (DECIDING rule 36): a question, so the "?" is welcome here.
+    ...cases("times", ["times?", "Times?", "times", "free times?", "free courts?", "When can we play?", "when can we play", "guys, when can we play?", "Когда можем сыграть?", "свободные корты?", "¿Cuándo podemos jugar?", "cuando podemos jugar", "¿horarios?", "pistas libres?"]),
   ])("%s ← %j", (kind, line) => {
     expect(readWords(line)?.kind).toBe(kind);
   });
@@ -80,6 +82,15 @@ describe("readWords: join, leave, a score, a new match, or nothing", () => {
     "who's in tomorrow?",
     "кто играет?",
     "¿quién juega?",
+    // Near a question for the free courts, and not one: the whole message is the question or nothing.
+    "times are hard",
+    "what times work for you?",
+    "when can we play golf?",
+    "when can we play again, Bea?",
+    "free courts at the beach?",
+    "time?",
+    "horarios del bus?",
+    "когда можем сыграть в теннис?",
     // Nothing at all.
     "",
     "   ",

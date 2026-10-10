@@ -9,6 +9,9 @@ import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { visitorCity } from "@/lib/domain/countries";
 import { clubsOf, filterGames, findGames, homeCity, parsePlayFilters, playCities, playHref, playWindow, type PlayDay, type PlayFilters } from "@/lib/domain/findGame";
+import { courtOfferLink } from "@/lib/domain/courtOffers";
+import { courtsFreeInCity, PLAY_FEW_GAMES } from "@/lib/domain/freeCourts";
+import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -51,6 +54,11 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
   const level = me?.level ?? null;
   const shown = filterGames(rows, f, window, level);
   const clubs = clubsOf(rows);
+  // Few games to join: the courts the city's clubs show free, each row one link to the form at that
+  // club and hour (the owner's choice of 10 October 2026), below the games and their own primary
+  // action, never a button beside it (rule 1). One bounded read of the clubs' cache, and nothing at
+  // all when no court is free.
+  const free = rows.length < PLAY_FEW_GAMES ? await courtsFreeInCity(db, city, me?.id ?? null, now) : [];
 
   return (
     <>
@@ -123,6 +131,35 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
               {shown.map((g) => (
                 <li key={g.id}>
                   <EventRow ev={g} t={t} locale={locale} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {free.length > 0 && (
+          <section className="card" data-testid="play-free">
+            <h2 className="text-lg font-extrabold">{t("city.playFreeTitle")}</h2>
+            <p className="mt-0.5 text-xs text-muted">{t("city.playFreeHelp")}</p>
+            <ul className="mt-2 flex flex-col divide-y divide-line">
+              {free.map((b) => (
+                <li key={`${b.slug}-${b.start.toISOString()}`}>
+                  {/* The whole row is the link: the club on its own line, never cut, and whose times these are. */}
+                  <Link href={courtOfferLink("", { club: { name: b.name, tz: b.tz }, hour: { date: b.date, time: b.time } })} prefetch={false} className="-mx-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 hover:bg-bg" data-testid="play-free-row">
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-bold tabular-nums">
+                        {formatEventDay(b.start, b.tz, locale)} · {formatEventTime(b.start, b.tz, locale)}
+                      </span>
+                      <span className="block text-sm">{b.name}</span>
+                      <span className="block text-xs text-muted">
+                        {t("club.freeSlot", { count: b.free })}
+                        {b.platform ? ` · ${t("city.playFreeOn", { platform: b.platform })}` : ""}
+                      </span>
+                    </span>
+                    <span aria-hidden className="text-faint">
+                      ›
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -19,6 +19,9 @@ import { JoinInline } from "@/components/JoinInline";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { MatchPayments } from "@/components/MatchPayments";
+import { CourtBooking } from "@/components/CourtBooking";
+import { prepareBooking } from "@/lib/booking/prepare";
+import { courtBookedBy, mayMarkBooked } from "@/lib/domain/courtBooked";
 import { paymentsFor } from "@/lib/domain/slots";
 import { CreateGroupButton } from "@/components/GroupPanel";
 import { JoinRequests } from "@/components/JoinRequests";
@@ -54,7 +57,7 @@ import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
-import { venuesForPicking } from "@/lib/domain/clubs";
+import { getShownClub, venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
@@ -174,10 +177,14 @@ export default async function EventPage({ params, searchParams }: Props) {
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
   // Null unless a WhatsApp number is configured, so the block simply is not there (rule 4).
   const waJoin = joinLink(code);
+  // "Court booked ✓ (by Ana)": a player booked and paid in the club's own app and said so (DECIDING rule 36).
+  const booked = courtBookedBy(detail);
+  const bookedText = booked ? (booked.name ? t("event.courtBookedBy", { name: booked.name }) : t("event.courtBooked")) : null;
+  const shareVenue = bookedText ? `${venue} · ${bookedText}` : venue;
   const shareText =
     spotsLeft === 0 && ev.whenFull === "waitlist"
-      ? t("shareText.eventFull", { day, time, venue, url })
-      : t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
+      ? t("shareText.eventFull", { day, time, venue: shareVenue, url })
+      : t("shareText.event", { day, time, venue: shareVenue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
   // "Tell the group": once in, one tap carries the line-up back to the group the link came from
   // (src/lib/domain/groupLine.ts). The match's own link, tagged as a WhatsApp one; never a personal
   // link, because a message in a group can be forwarded.
@@ -285,6 +292,16 @@ export default async function EventPage({ params, searchParams }: Props) {
   // The organiser and every seated player may change the details (canEditMatchDetails), so both get the form.
   const canEdit = canEditMatchDetails(detail, { isCreator: viewer.isCreator, playerId: me?.id });
   const venues = canEdit ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
+  // The court: "Book this court" opens the club's own booking, prepared as far as its platform's public
+  // pages allow (src/lib/booking/prepare.ts), for the organiser and the players; the match's own
+  // booking link, when the organiser gave one, stays where it was. One read, only for them.
+  const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
+  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClub(db, ev.venueSlug) : null;
+  // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
+  const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
+  // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.
+  const clubTz = venueClub?.tz || ev.tz;
+  const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), ev.court ? (/^\d{1,3}$/.test(ev.court) ? courtNumber(ev.court) : ev.court) : null].filter(Boolean).join(", ");
   const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
@@ -600,6 +617,9 @@ export default async function EventPage({ params, searchParams }: Props) {
             </p>
           )}
           {ev.note && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
+          {(booked || canMarkBooked) && !cancelled && (
+            <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
+          )}
           {cancelled && (
             <div className="mt-4 rounded-2xl bg-danger-soft p-4">
               <div className="font-extrabold text-danger">{t("event.cancelled")}</div>
