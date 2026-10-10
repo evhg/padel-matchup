@@ -76,6 +76,8 @@ describe("who 'That's me' may sign in", () => {
   it("offers neither of two records of the same name, even when only one of them could be signed in", () => {
     const other = { ...bare, id: "00000000-0000-4000-8000-00000000000b", email: true, sameName: 2 };
     expect(thatsMeVerdict([{ ...bare, sameName: 2 }, other])).toEqual({ ok: false, reason: "namesake" });
+    // Two rows of the name are two people, whatever count came with them: the verdict counts them itself.
+    expect(thatsMeVerdict([bare, { ...bare, id: "00000000-0000-4000-8000-00000000000c" }])).toEqual({ ok: false, reason: "namesake" });
   });
 
   it("finds nobody for a name nobody here carries", () => {
@@ -267,6 +269,10 @@ describe("'That's me' on a real match", () => {
     await db.insert(groupMembers).values({ groupId: g.id, playerId: two.id, role: "member" });
     const { ev } = await match([one], { groupId: g.id });
     expect(await thatsMe(db, { code: ev.code, name: "Eve", viewerId: null, rateKey: key() })).toEqual({ ok: false, reason: "namesake" });
+    // And the page, which reads the whole match and crew at once, puts "That's me" on neither row.
+    const offer = await thatsMeOffer(db, ev, null, []);
+    expect([one.id, two.id].filter((id) => offer.ids.has(id))).toEqual([]);
+    expect(offer.names.filter((x) => /^eve$/i.test(x))).toEqual([]);
   });
 
   it("refuses the fold of a browser's own record that can be reached, and leaves both records as they were", async () => {
