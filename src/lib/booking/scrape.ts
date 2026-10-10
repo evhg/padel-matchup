@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, demandSignals, events, metricsDaily, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
@@ -42,6 +42,12 @@ export const SCRAPE = {
   perClub: 8,
   /** Today and the next two days, in the club's zone. */
   days: 3,
+  /**
+   * The next two days are read at most this often. In between, a club read every run (one people use)
+   * has today alone read, and keeps the later days of its last full read: half the requests (the
+   * decision of 10 October 2026 on this reader's review, to lower the load on a platform).
+   */
+  fullDueMs: 60 * 60_000,
   requestTimeoutMs: 10_000,
   maxBytes: 3_000_000,
   maxSlots: 1_000,
@@ -163,6 +169,9 @@ const clip = (s: string | null | undefined, n: number) => {
   const t = (s ?? "").replace(/\s+/g, " ").trim();
   return t ? t.slice(0, n) : null;
 };
+
+/** A zone we know, or null: never "UTC" in place of one nobody gave. */
+const zoneOf = (tz: string | null | undefined): string | null => (tz && isValidTimeZone(tz) ? tz : null);
 
 const nextDay = (day: string) => new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + 1)).toISOString().slice(0, 10);
 
@@ -380,7 +389,20 @@ async function bounded<T>(p: Promise<T>, ms: number): Promise<T> {
 
 /** A club a lane will read, the reader for it, and the link it reads. */
 type Picked = { club: DueClub; adapter: AvailabilityAdapter; link: string };
-type Outcome = { club: DueClub; platform: string; result: ScrapeResult };
+type Outcome = { club: DueClub; platform: string; result: ScrapeResult; todayOnly: boolean };
+
+/**
+ * Is a read of today alone enough for this club? Only when its last read covered all three days, read
+ * clean on this platform less than `fullDueMs` ago, and still covers the next two days in the zone it was
+ * read in (a midnight since then means a day it never read). Pure.
+ */
+export function todayOnlyRead(prev: DueClub["prev"], platform: string, now: Date): boolean {
+  if (!prev || prev.error !== null || prev.source !== `scrape:${platform}` || !prev.fullAt || !Array.isArray(prev.days)) return false;
+  const full = Date.parse(prev.fullAt);
+  if (!Number.isFinite(full) || full > now.getTime() || now.getTime() - full >= SCRAPE.fullDueMs) return false;
+  const zone = zoneOf(prev.tz);
+  return Boolean(zone) && scrapeDays(now, zone!).slice(1).every((d) => prev.days!.includes(d));
+}
 
 /** One platform's clubs, one after another, until the platform blocks, changes, or the time runs out. */
 async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typeof fetch; clock: Clock; deadline: number; now: Date }): Promise<Outcome[]> {
@@ -393,7 +415,8 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
       break;
     }
     // The club's zone as the row has it: never "UTC" in place of a zone nobody gave (readers F2).
-    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: SCRAPE.days };
+    const todayOnly = todayOnlyRead(club.prev, lane.platform, o.now);
+    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: todayOnly ? 1 : SCRAPE.days };
     const lf = laneFetch(lane, o);
     let result: ScrapeResult;
     try {
@@ -407,7 +430,7 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     if (lane.blocked !== null) result = { ok: false, status: lane.blocked, reason: "blocked", requests: lf.count(), detail: null };
     // Cut short by the deadline: nothing is written, and the club stays due.
     if (lane.outOfTime && lane.blocked === null) break;
-    out.push({ club, platform: lane.platform, result });
+    out.push({ club, platform: lane.platform, result, todayOnly });
     if (!result.ok && result.reason === "blocked") lane.blocked ??= result.status ?? 0;
     if (!result.ok && result.reason === "changed") {
       // One stale or mistyped link is that club's error. The platform stops when a second club in the
@@ -425,8 +448,6 @@ export type PlatformRun = { requests: number; ok: number; errors: number; blocke
 export type ScrapeRun = { clubs: number; fresh: number; requests: number; outOfTime: boolean; writeErrors: number; platforms: Record<string, PlatformRun> };
 export type ScrapeOptions = { adapters?: readonly AvailabilityAdapter[]; fetchImpl?: typeof fetch; clock?: Clock; budgetMs?: number; perLane?: number; disabled?: string };
 
-const zoneOf = (tz: string | null | undefined): string | null => (tz && isValidTimeZone(tz) ? tz : null);
-
 /**
  * The cache of a read that gave nothing to show: no slots and the reason. Its zone is the club's when it
  * has one; with none, the error row is dated in UTC, which no reader uses, because an error shows no time.
@@ -435,11 +456,23 @@ function failedCache(platform: string, now: Date, error: string, tz: string | nu
   return { ...availabilityFrom({ ok: false, status: null, reason: "error", requests: 0, detail: null }, { platform, tz: tz ?? "UTC", now }), error };
 }
 
+/**
+ * A clean read of today alone, as the part of the cache it replaces: today's pieces, the three days the
+ * cache still covers, and the time of the last full read. `keepFrom` is the club's next midnight: the
+ * row keeps its own pieces from there on (`writeToday` in `runScrape`). Pure.
+ */
+export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string }): { availability: ClubAvailability; keepFrom: string } {
+  const days = scrapeDays(o.now, o.tz);
+  const slots = freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days: days.slice(0, 1) });
+  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt };
+  return { availability, keepFrom: zonedTimeToUtc(days[1], "00:00", o.tz).toISOString() };
+}
+
 /** What a reader's answer becomes on the club row. `tz` is a zone we know. Pure. */
 export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
   const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform };
-  if (result.ok) return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null };
+  if (result.ok) return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt };
   return { ...base, slots: [], error: `${result.reason}${result.status ? ` ${result.status}` : ""}` };
 }
 
@@ -517,7 +550,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   for (const [platform, p] of Object.entries(run.platforms)) if (p.errors) await bumpMetric(db, scrapeCounter("error", platform), p.errors, day);
 
   // The club rows last. A feed the club shared since the pick still wins (`noFeed`).
-  const write = async (slug: string, availability: ClubAvailability): Promise<boolean> => {
+  const write = async (slug: string, availability: ClubAvailability | SQL): Promise<boolean> => {
     run.clubs++;
     try {
       const written = await db.update(clubs).set({ availability, availabilityAt: now }).where(and(eq(clubs.slug, slug), noFeed())).returning({ slug: clubs.slug });
@@ -527,9 +560,23 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       return false;
     }
   };
-  for (const { club, platform, result } of outcomes) {
+  /**
+   * A read of today alone: today's pieces from this read, and the later days' pieces from the cache
+   * already on the row, joined in the database so no old slot travels (AGENTS.md rule 12). Today's
+   * pieces end at the club's midnight and the kept ones start there, so they never overlap.
+   */
+  const writeToday = (slug: string, t: { availability: ClubAvailability; keepFrom: string }) =>
+    write(
+      slug,
+      sql`jsonb_set(${JSON.stringify(t.availability)}::jsonb, '{slots}', ${JSON.stringify(t.availability.slots)}::jsonb || coalesce((select jsonb_agg(s order by s->>'start') from jsonb_array_elements(case when jsonb_typeof(${clubs.availability}->'slots') = 'array' then ${clubs.availability}->'slots' else '[]'::jsonb end) s where s->>'start' >= ${t.keepFrom}), '[]'::jsonb))`,
+    );
+  for (const { club, platform, result, todayOnly } of outcomes) {
     // The zone the reader read the days in, else the club's own; a clean read in no known zone is an error.
     const zone = result.ok && result.tz && isValidTimeZone(result.tz) ? result.tz : zoneOf(club.tz);
+    if (result.ok && zone && todayOnly && club.prev?.fullAt) {
+      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt }))) run.fresh++;
+      continue;
+    }
     const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now });
     if ((await write(club.slug, availability)) && result.ok && zone) run.fresh++;
   }

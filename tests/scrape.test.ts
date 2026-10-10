@@ -483,6 +483,52 @@ describe("what a read writes", () => {
     expect((await row("no-zone")).availability).toMatchObject({ error: "no time zone", slots: [] });
   });
 
+  it("reads today every 15 minutes and the next two days at most hourly, and keeps those days in between", async () => {
+    const org = await makePlayer(db, "Org");
+    await club("busy-club");
+    await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(DAY), tz: "Asia/Bangkok", venueName: "busy club", whenFull: "waitlist" });
+    const seen: ScrapeTarget[] = [];
+    const slot = (from: number, court: string): ScrapedSlot => ({ start: iso(from), end: iso(from + HOUR), court, free: true, priceText: null, bookUrl: null });
+    const read = async (t: number, slots: ScrapedSlot[]) => {
+      const w = world(() => ({ status: 200, body: { slots } }));
+      await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
+      return (await row("busy-club")).availability!;
+    };
+    // NOW: all three days. Today 12:00 two courts, tomorrow and the day after one each.
+    const first = await read(0, [slot(2 * HOUR, "1"), slot(2 * HOUR, "2"), slot(DAY + 2 * HOUR, "1"), slot(2 * DAY + 2 * HOUR, "1")]);
+    expect(first.fullAt).toBe(iso(0));
+    // 15 minutes on: today only. A court went at 12:00; tomorrow's and the day after's stay as the full read left them.
+    const second = await read(15 * 60_000, [slot(2 * HOUR, "1"), slot(DAY + 5 * HOUR, "9")]);
+    expect(second.slots).toEqual([
+      { start: iso(2 * HOUR), end: iso(3 * HOUR), free: 1 },
+      { start: iso(DAY + 2 * HOUR), end: iso(DAY + 3 * HOUR), free: 1 },
+      { start: iso(2 * DAY + 2 * HOUR), end: iso(2 * DAY + 3 * HOUR), free: 1 },
+    ]);
+    expect(second).toMatchObject({ fetchedAt: iso(15 * 60_000), fullAt: iso(0), days: ["2026-10-10", "2026-10-11", "2026-10-12"], error: null });
+    await read(30 * 60_000, [slot(2 * HOUR, "1")]);
+    await read(45 * 60_000, [slot(2 * HOUR, "1")]);
+    // An hour after the full read: all three days again.
+    const fifth = await read(60 * 60_000, [slot(2 * HOUR, "1")]);
+    expect(fifth.fullAt).toBe(iso(60 * 60_000));
+    expect(fifth.slots).toHaveLength(1);
+    expect(seen.map((t) => t.days)).toEqual([3, 1, 1, 1, 3]);
+  });
+
+  it("reads all three days again after a read that failed", async () => {
+    const org = await makePlayer(db, "Org");
+    await club("busy-club");
+    await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(DAY), tz: "Asia/Bangkok", venueName: "busy club", whenFull: "waitlist" });
+    const seen: ScrapeTarget[] = [];
+    const run = async (t: number, status: number) => {
+      const w = world(() => ({ status, body: { slots: [] } }));
+      await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
+    };
+    await run(0, 200);
+    await run(15 * 60_000, 404);
+    await run(30 * 60_000, 200);
+    expect(seen.map((t) => t.days)).toEqual([3, 1, 3]);
+  });
+
   it("a feed the club shared wins over a read, even one that started before the club shared it", async () => {
     await club("shares-late");
     const w = world(() => ({ status: 200, body: { slots } }));
