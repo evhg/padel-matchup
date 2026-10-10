@@ -336,6 +336,12 @@ Wall clock first, credits second. What actually moved it, measured:
   clubs suite failed on a line the change never touched. Before adding a button, grep the suites
   for the page's existing button names; give the new one its own words ("Save courts"), and make
   the old locator `exact: true` where the new name still contains the old word.
+- **A list that repeats what a screen says is a second match for every text locator on it.** The
+  inbox on My matches (10 October 2026) wrote "New lesson with Olga" inside a closed `<details>`, and
+  the coach suite's `getByText("Lesson with Olga")` counted two: `getByText` is a case-insensitive
+  substring, and `count()` counts hidden elements too. The check was right about the lesson row, so it
+  is scoped to the row now (`getByTestId("lesson-row")`). Before adding a block that echoes other
+  blocks' sentences, grep the suites for `getByText` on that screen.
 
 - **Every browser suite is one visitor to a rate limit.** All twenty-one reach the server from the
   same address, so they share one `newid` bucket and `newIdentitiesPerIpPerDay` is 40. The run had
