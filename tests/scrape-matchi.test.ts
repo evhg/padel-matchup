@@ -151,7 +151,7 @@ const NOW = new Date("2026-10-10T08:00:00Z");
 describe("scrape()", () => {
   it("reads two days politely: the club page, then one list a day, one request a second", async () => {
     const h = harness(realMatchi);
-    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: true, requests: 3, slots: [...DAY1_SLOTS.slice(5), ...DAY2_SLOTS] });
+    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: true, tz: TZ, requests: 3, slots: [...DAY1_SLOTS.slice(5), ...DAY2_SLOTS] });
     expect(h.calls.map((c) => c.url)).toEqual([
       "/facilities/bluetree",
       "/book/listSlots?wl=&facility=2165&date=2026-10-10&sport=5&week=&year=",
@@ -218,7 +218,7 @@ describe("scrape()", () => {
   it("reads a club whose picker has no Padel as a club with nothing free, after one request", async () => {
     const tennisOnly = FACILITY.replace(/ Padel<\/option>/, " Tennis</option>").replace(/ma-5'><\/i> Padel/, "ma-1'></i> Tennis");
     const h = harness((url) => (url.pathname === "/facilities/bluetree" ? html(tennisOnly) : realMatchi(url)));
-    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: true, slots: [], requests: 1 });
+    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: true, tz: TZ, slots: [], requests: 1 });
   });
 
   it("calls a page without its fields changed: the club page, and a day's list", async () => {
@@ -232,6 +232,20 @@ describe("scrape()", () => {
     expect(MATCHI_TIMEOUT_MS).toBe(10_000);
     const h = harness(() => new Promise<Response>(() => undefined), { timeoutMs: 20 });
     expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toMatchObject({ ok: false, status: null, reason: "timeout", requests: 1 });
+  });
+
+  it("never guesses a zone: a club with none is an error before any request (readers F2)", async () => {
+    // MATCHi prints the club's wall clock and no zone; read as UTC, a 13:00 court in Bangkok would show at 20:00.
+    for (const tz of [null, "", "Bangkok"]) {
+      const h = harness(realMatchi);
+      expect(await h.adapter.scrape(target({ tz }), h.fetchImpl, NOW)).toEqual({ ok: false, status: null, reason: "error", requests: 0, detail: "no time zone" });
+      expect(h.calls).toHaveLength(0);
+    }
+  });
+
+  it("says which zone it read the times in", async () => {
+    const h = harness(realMatchi);
+    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toMatchObject({ ok: true, tz: TZ });
   });
 
   it("refuses a link that is not a MATCHi club page without asking anything", async () => {

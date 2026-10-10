@@ -392,8 +392,8 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
       lane.outOfTime = true;
       break;
     }
-    const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
-    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz, days: SCRAPE.days };
+    // The club's zone as the row has it: never "UTC" in place of a zone nobody gave (readers F2).
+    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: SCRAPE.days };
     const lf = laneFetch(lane, o);
     let result: ScrapeResult;
     try {
@@ -425,7 +425,17 @@ export type PlatformRun = { requests: number; ok: number; errors: number; blocke
 export type ScrapeRun = { clubs: number; fresh: number; requests: number; outOfTime: boolean; writeErrors: number; platforms: Record<string, PlatformRun> };
 export type ScrapeOptions = { adapters?: readonly AvailabilityAdapter[]; fetchImpl?: typeof fetch; clock?: Clock; budgetMs?: number; perLane?: number; disabled?: string };
 
-/** What a reader's answer becomes on the club row. Pure. */
+const zoneOf = (tz: string | null | undefined): string | null => (tz && isValidTimeZone(tz) ? tz : null);
+
+/**
+ * The cache of a read that gave nothing to show: no slots and the reason. Its zone is the club's when it
+ * has one; with none, the error row is dated in UTC, which no reader uses, because an error shows no time.
+ */
+function failedCache(platform: string, now: Date, error: string, tz: string | null = null): ClubAvailability {
+  return { ...availabilityFrom({ ok: false, status: null, reason: "error", requests: 0, detail: null }, { platform, tz: tz ?? "UTC", now }), error };
+}
+
+/** What a reader's answer becomes on the club row. `tz` is a zone we know. Pure. */
 export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
   const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform };
@@ -518,13 +528,12 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     }
   };
   for (const { club, platform, result } of outcomes) {
-    const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
-    if ((await write(club.slug, availabilityFrom(result, { platform, tz, now }))) && result.ok) run.fresh++;
+    // The zone the reader read the days in, else the club's own; a clean read in no known zone is an error.
+    const zone = result.ok && result.tz && isValidTimeZone(result.tz) ? result.tz : zoneOf(club.tz);
+    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now });
+    if ((await write(club.slug, availability)) && result.ok && zone) run.fresh++;
   }
-  for (const { club, platform } of unreadable) {
-    const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
-    await write(club.slug, { ...availabilityFrom({ ok: false, status: null, reason: "error", requests: 0, detail: null }, { platform, tz, now }), error: "unreadable link" });
-  }
+  for (const { club, platform } of unreadable) await write(club.slug, failedCache(platform, now, "unreadable link", zoneOf(club.tz)));
   if (run.fresh) await bumpMetric(db, SCRAPE_CLUBS_FRESH, run.fresh, day);
   return run;
 }

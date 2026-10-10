@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_REQUESTS, MIN_GAP_MS, parsePlaytomicAvailability, parsePlaytomicClubPage, PLAYTOMIC_UA, playtomicAdapter, playtomicBookUrl, playtomicClubPage, playtomicDay, REQUEST_TIMEOUT_MS, resetPlaytomicState } from "@/lib/booking/adapters/playtomic";
 import type { ScrapeTarget } from "@/lib/booking/adapters/types";
 import { PLATFORMS } from "@/lib/booking/platforms";
@@ -55,6 +55,22 @@ describe("parsePlaytomicClubPage", () => {
 describe("parsePlaytomicAvailability", () => {
   const club = parsePlaytomicClubPage(BKK_PAGE)!;
   const row = (start: string, end: string, court: string, price: string) => `${start} ${end} ${court} ${price}`;
+
+  // The machine's own zone is not UTC here, as on a laptop in Bangkok: a time read as local instead of
+  // UTC then gives the wrong instant and these tests say so, which on Vercel and CI (UTC) they could not.
+  let hostTz: string | undefined;
+  beforeAll(() => {
+    hostTz = process.env.TZ;
+    process.env.TZ = "Asia/Bangkok";
+  });
+  afterAll(() => {
+    if (hostTz === undefined) delete process.env.TZ;
+    else process.env.TZ = hostTz;
+  });
+
+  it("runs on a machine whose own zone is not UTC", () => {
+    expect(new Date("2026-10-11T00:00:00").toISOString()).toBe("2026-10-10T17:00:00.000Z");
+  });
 
   it("turns the Bangkok response into exact UTC slots, one per court, start and duration", () => {
     const slots = parsePlaytomicAvailability(BKK_DAY, club)!;
@@ -346,6 +362,20 @@ describe("playtomicAdapter.scrape", () => {
     expect(r).toMatchObject({ ok: false, status: null, reason: "timeout", requests: 1 });
     expect(Date.now() - started).toBeGreaterThanOrEqual(REQUEST_TIMEOUT_MS);
     expect(Date.now() - started).toBeLessThan(REQUEST_TIMEOUT_MS + 1_000);
+  });
+
+  it("reads the club's days in the page's own zone when the club row has none, and says which zone it used", async () => {
+    // 20:00 UTC on the 10th is already the 11th in Singapore: a reader that guessed UTC would ask for the 10th.
+    const r = await settle(playtomicAdapter.scrape(target({ tz: null }), site({ "2026-10-11": SG_DAY }), NOW));
+    expect(r).toMatchObject({ ok: true, tz: "Asia/Singapore" });
+    expect(calls.slice(1).map((c) => new URL(c.url).searchParams.get("date"))).toEqual(["2026-10-11", "2026-10-12"]);
+  });
+
+  it("gives up with 'no time zone' when neither the club row nor the page names one", async () => {
+    const page = SG_PAGE.replaceAll("Asia/Singapore", "Somewhere/Else");
+    expect(page).not.toBe(SG_PAGE);
+    const r = await settle(playtomicAdapter.scrape(target({ tz: null }), site({}, page), NOW));
+    expect(r).toEqual({ ok: false, status: null, reason: "error", requests: 1, detail: "no time zone" });
   });
 
   it("reports a network error as error, and makes no request for a link that is not Playtomic's", async () => {

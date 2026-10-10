@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq, like, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, type Club } from "@/db/schema";
-import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult } from "@/lib/booking/adapters";
+import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult, type ScrapeTarget } from "@/lib/booking/adapters";
 import { createMatchiAdapter, matchiAdapter } from "@/lib/booking/adapters/matchi";
 import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
 import { clubToPublic } from "@/lib/api/serialize";
@@ -62,10 +62,11 @@ function world(answer: (url: string) => Answer = () => ({ status: 200, body: { s
 }
 
 /** The test's reader: GETs the booking link and takes the JSON as it is. Parses nothing a real page would have. */
-const reader = (platform = "playtomic", o: { method?: string; cookie?: boolean; requests?: number; onRead?: (slug: string) => Promise<void> } = {}): AvailabilityAdapter => ({
+const reader = (platform = "playtomic", o: { method?: string; cookie?: boolean; requests?: number; onRead?: (slug: string) => Promise<void>; seen?: ScrapeTarget[] } = {}): AvailabilityAdapter => ({
   platform,
   matches: (url) => url.includes(`${platform}.`),
   async scrape(target, fetchImpl): Promise<ScrapeResult> {
+    o.seen?.push(target);
     await o.onRead?.(target.clubSlug);
     let res: Response | null = null;
     for (let i = 0; i < (o.requests ?? 1); i++) {
@@ -74,9 +75,10 @@ const reader = (platform = "playtomic", o: { method?: string; cookie?: boolean; 
     if (!res) return { ok: false, status: null, reason: "error", requests: 0, detail: null };
     if (res.status === 403 || res.status === 429 || res.status === 401) return { ok: false, status: res.status, reason: "blocked", requests: 1, detail: null };
     if (res.status === 404) return { ok: false, status: 404, reason: "not_found", requests: 1, detail: null };
-    const json = (await res.json()) as { slots?: ScrapedSlot[]; changed?: boolean };
+    const json = (await res.json()) as { slots?: ScrapedSlot[]; changed?: boolean; tz?: string };
     if (json.changed) return { ok: false, status: 200, reason: "changed", requests: 1, detail: "no slot table" };
-    return { ok: true, slots: json.slots ?? [], requests: 1 };
+    // A reader that found the club's zone on the page says so; with none, the frame uses the club's.
+    return { ok: true, slots: json.slots ?? [], requests: 1, ...(json.tz ? { tz: json.tz } : {}) };
   },
 });
 
@@ -462,6 +464,23 @@ describe("what a read writes", () => {
     expect(await metric("scrape_requests_playtomic")).toBe(1);
     expect(await metric("scrape_clubs_fresh")).toBe(1);
     expect((await scrapeBoard(db, NOW, [reader()]))[0]).toMatchObject({ state: "fresh", fresh: 1, requestsToday: 1 });
+  });
+
+  it("hands the reader the club's zone as it is, and keeps the zone the reader read in (readers F2)", async () => {
+    await club("no-zone", { tz: null });
+    const seen: ScrapeTarget[] = [];
+    // 13:00 in Singapore tomorrow; NOW is 11:00 in Singapore on the 10th.
+    const w = world(() => ({ status: 200, body: { slots: [{ start: iso(DAY + 2 * HOUR), end: iso(DAY + 3 * HOUR), court: "1", free: true, priceText: null, bookUrl: null }], tz: "Asia/Singapore" } }));
+    await runScrape(db, NOW, { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(seen.map((t) => t.tz)).toEqual([null]); // never "UTC" in place of a zone nobody gave
+    const a = (await row("no-zone")).availability!;
+    expect(a).toMatchObject({ tz: "Asia/Singapore", day: "2026-10-10", days: ["2026-10-10", "2026-10-11", "2026-10-12"], error: null });
+    expect(a.slots).toEqual([{ start: iso(DAY + 2 * HOUR), end: iso(DAY + 3 * HOUR), free: 1 }]);
+
+    // A reader that found no zone either, for a club that has none: an error, never a guess.
+    const w2 = world(() => ({ status: 200, body: { slots: [] } }));
+    await runScrape(db, at(2 * HOUR), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect((await row("no-zone")).availability).toMatchObject({ error: "no time zone", slots: [] });
   });
 
   it("a feed the club shared wins over a read, even one that started before the club shared it", async () => {

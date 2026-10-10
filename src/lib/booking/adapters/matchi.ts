@@ -226,25 +226,27 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
 
       const slug = matchiFacilitySlug(target.bookingUrl);
       if (!slug) return fail("error", "not a MATCHi club link");
-      if (!isValidTimeZone(target.tz)) return fail("error", `unknown time zone ${target.tz}`);
+      // The page prints the club's wall clock and no zone, so a club with no zone of its own cannot be read.
+      const tz = target.tz && isValidTimeZone(target.tz) ? target.tz : null;
+      if (!tz) return fail("error", "no time zone");
       const days = Math.max(1, Math.min(MATCHI_MAX_DAYS, Math.floor(target.days) || 1));
 
       try {
         const facility = parseMatchiFacility(await get(`/facilities/${encodeURIComponent(slug)}`, "text/html"));
         if (!facility) return fail("changed", "the club page no longer names its facility id");
-        if (!facility.sportId) return { ok: true, slots: [], requests };
+        if (!facility.sportId) return { ok: true, slots: [], requests, tz };
 
         const slots: ScrapedSlot[] = [];
         for (let i = 0; i < days; i++) {
-          const date = localDay(now, target.tz, i);
+          const date = localDay(now, tz, i);
           const q = new URLSearchParams({ wl: "", facility: facility.facilityId, date, sport: facility.sportId, week: "", year: "" });
-          const parsed = parseMatchiSlots(await get(`/book/listSlots?${q}`, "text/html"), date, target.tz);
+          const parsed = parseMatchiSlots(await get(`/book/listSlots?${q}`, "text/html"), date, tz);
           if (!parsed.ok) return fail("changed", `${date}: ${parsed.detail}`);
           // Today's list still shows an hour that has begun; nobody can play it any more.
           slots.push(...parsed.slots.filter((s) => Date.parse(s.start) >= now.getTime()));
         }
         slots.sort((a, b) => a.start.localeCompare(b.start) || (a.court ?? "").localeCompare(b.court ?? ""));
-        return { ok: true, slots, requests };
+        return { ok: true, slots, requests, tz };
       } catch (e) {
         if (e instanceof Stop) return { ok: false, status: e.status, reason: e.reason, requests, detail: e.message };
         return fail("error", e instanceof Error ? e.message : String(e));

@@ -21,6 +21,13 @@ import type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, Scr
  * Limits: an honest User-Agent, one request a second to Playtomic, at most 8 requests a call,
  * 10 seconds per request, the club page cached for a day. 401, 403 and 429 mean stop ("blocked").
  * No sign-in, no cookie, no booking: this file only reads.
+ *
+ * robots.txt: Playtomic's (read 10 October 2026) disallows /api, /*?*date= and /*?*sport=, and step 2
+ * above asks for exactly that. This reader reads those paths under the owner's decision of 10 October
+ * 2026 (DECIDING rule 32): "platforms forbid scraping in their terms but we are just testing ... So
+ * scraping at risk of being blocked is acceptable, just do it." robots.txt does not bind a reader under
+ * that rule; the frame keeps the load low instead (today every 15 minutes at most, the next two days at
+ * most hourly) and stops at the first sign of a block.
  */
 
 export const PLAYTOMIC_UA = "KicksmashBot/1.0 (+https://kicksma.sh/about)";
@@ -270,7 +277,9 @@ async function scrape(target: ScrapeTarget, fetchImpl: typeof fetch, now: Date):
     if (clubCache.size > CLUB_CACHE_MAX) clubCache.delete(clubCache.keys().next().value!);
   }
 
-  const tz = isValidTimeZone(target.tz) ? target.tz : (club.club.timezone ?? "UTC");
+  // The club row's zone, else the one the page gives (address.timezone); never a guess.
+  const tz = target.tz && isValidTimeZone(target.tz) ? target.tz : club.club.timezone;
+  if (!tz) return fail("error", null, requests, "no time zone");
   const days = Math.max(1, Math.min(MAX_REQUESTS - requests, Math.trunc(Number.isFinite(target.days) ? target.days : 1)));
   const seen = new Set<string>();
   const slots: ScrapedSlot[] = [];
@@ -291,7 +300,7 @@ async function scrape(target: ScrapeTarget, fetchImpl: typeof fetch, now: Date):
     }
   }
   slots.sort((a, b) => a.start.localeCompare(b.start) || (a.court ?? "").localeCompare(b.court ?? "") || a.end.localeCompare(b.end));
-  return { ok: true, slots, requests };
+  return { ok: true, slots, requests, tz };
 }
 
 export const playtomicAdapter: AvailabilityAdapter = {
