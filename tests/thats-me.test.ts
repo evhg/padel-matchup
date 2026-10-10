@@ -212,13 +212,15 @@ describe("'That's me' on a real match", () => {
     const a = await makePlayer(db, `Ann${++n}`);
     const b = await makePlayer(db, `Ben${++n}`);
     const mine = await makePlayer(db, "Gus");
+    const w = await makePlayer(db, `Wil${++n}`);
     const old = await makePlayer(db, "Gus");
-    // Seats 1-4: the organiser, Ann, Ben and Gus's new record; Gus's old record waits at 5.
-    const { ev } = await match([a, b, mine, old]);
-    expect(await placesOf(ev.id)).toEqual([expect.stringMatching(/^1 joined Organiser/), `2 joined ${a.displayName}`, `3 joined ${b.displayName}`, "4 joined Gus", "5 joined Gus"]);
+    // Seats 1-4: the organiser, Ann, Ben and Gus's new record; Wil waits at 5 and Gus's old record at 6,
+    // so only keeping the better place gives Gus his seat: freeing it would hand it to Wil.
+    const { ev } = await match([a, b, mine, w, old]);
+    expect(await placesOf(ev.id)).toEqual([expect.stringMatching(/^1 joined Organiser/), `2 joined ${a.displayName}`, `3 joined ${b.displayName}`, "4 joined Gus", `5 joined ${w.displayName}`, "6 joined Gus"]);
     const res = await thatsMe(db, { code: ev.code, name: "Gus", viewerId: mine.id, rateKey: key() });
     expect(res).toMatchObject({ ok: true, folded: true });
-    expect(await placesOf(ev.id)).toEqual([expect.stringMatching(/^1 joined Organiser/), `2 joined ${a.displayName}`, `3 joined ${b.displayName}`, "4 joined Gus"]);
+    expect(await placesOf(ev.id)).toEqual([expect.stringMatching(/^1 joined Organiser/), `2 joined ${a.displayName}`, `3 joined ${b.displayName}`, "4 joined Gus", `5 joined ${w.displayName}`]);
     expect(await seatsOf(ev.id, old.id)).toBe(1);
     expect((await db.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, old.id))))[0].position).toBe(4);
   });

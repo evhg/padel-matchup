@@ -54,6 +54,9 @@ describe("names from a group chat", () => {
       "[10/10/26, 18:06] Eve: Saturday works",
       "[10/10/26, 18:07] Fay: Ок",
       "[10/10/26, 18:08] Gil: Vale",
+      // No chat word in these two: only the rule that a copied message is a yes or a list keeps them out.
+      "[10/10/26, 18:09] Hal: Bring balls",
+      "[10/10/26, 18:10] Ivo: Rawai",
       "Lol",
       "Saturday",
     ].join("\n");
