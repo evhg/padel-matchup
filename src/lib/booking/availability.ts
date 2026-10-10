@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
@@ -229,4 +229,17 @@ export function todaySlots(a: Pick<ClubAvailability, "slots" | "tz">, now: Date)
 export function slotDay(start: string, tz: string): string {
   const d = new Date(start);
   return Number.isNaN(d.getTime()) ? "" : localDay(d, isValidTimeZone(tz) ? tz : "UTC");
+}
+
+/**
+ * The cache as a read that needs only a few hours selects it: every field but the slots, and only the
+ * slots that end after `from` and start before `until`. The days it does not need stay in the database,
+ * which is what keeps a list of clubs small now that a read from a platform holds three days (AGENTS.md
+ * rule 12, the Supabase egress in docs/OPERATING.md). Every writer stores instants from `toISOString()`,
+ * so comparing the text compares the times. Null where the row has no cache.
+ */
+export function cacheBetween(from: Date, until: Date): SQL<ClubAvailability | null> {
+  const lo = from.toISOString();
+  const hi = until.toISOString();
+  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
 }

@@ -8,7 +8,7 @@ import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResu
 import { createMatchiAdapter, matchiAdapter } from "@/lib/booking/adapters/matchi";
 import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
 import { clubToPublic } from "@/lib/api/serialize";
-import { freeCourtHours } from "@/lib/domain/clubs";
+import { freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { setMetric } from "@/lib/domain/metrics";
 import { SCRAPE, disabledPlatforms, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
@@ -464,6 +464,25 @@ describe("what a read writes", () => {
     expect(await metric("scrape_requests_playtomic")).toBe(1);
     expect(await metric("scrape_clubs_fresh")).toBe(1);
     expect((await scrapeBoard(db, NOW, [reader()]))[0]).toMatchObject({ state: "fresh", fresh: 1, requestsToday: 1 });
+  });
+
+  it("a list reads the next 26 hours of a club's slots and never the cache's later days (job F2)", async () => {
+    await club("days", { approvedAt: at(-DAY), source: "claim" });
+    const w = world(() => ({ status: 200, body: { slots } }));
+    await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    const full = await row("days");
+    expect(full.availability!.slots).toHaveLength(3);
+    for (const listed of [(await listShownClubs(db)).find((c) => c.slug === "days")!, (await listLiveClubs(db)).find((c) => c.slug === "days")!]) {
+      // Today's 12:00 only: tomorrow's 12:00 starts 26 hours after NOW, the day after's later still.
+      expect(listed.availability!.slots).toEqual([{ start: iso(2 * HOUR), end: iso(3 * HOUR), free: 2 }]);
+      expect(listed.availability).toMatchObject({ source: "scrape:playtomic", tz: "Asia/Bangkok", days: full.availability!.days, fetchedAt: full.availability!.fetchedAt });
+      expect(freeCourtHours(listed, NOW)).toBe(freeCourtHours(full, NOW));
+      expect(clubToPublic(listed, "https://kicksma.sh").freeCourts).toEqual(clubToPublic(full, "https://kicksma.sh").freeCourts);
+    }
+    // A picker never reads the cache at all.
+    const picked = (await listClubsForPicking(db)).find((c) => c.slug === "days")!;
+    expect(picked).toBeDefined();
+    expect("availability" in picked).toBe(false);
   });
 
   it("hands the reader the club's zone as it is, and keeps the zone the reader read in (readers F2)", async () => {
