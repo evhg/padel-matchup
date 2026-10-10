@@ -12,7 +12,7 @@ import { buildIcs, inviteFields } from "@/lib/calendar";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalEventUrl, personalUrl } from "@/lib/personal";
 import { APP_NAME, baseUrl, emailEnabled, emailFrom, REFILL_EMAIL_MAX, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventTime, formatEventTimeRange } from "@/lib/dates";
+import { formatEventDay, formatEventTime, formatEventTimeRange, utcToZonedParts } from "@/lib/dates";
 import { eventEnd } from "@/lib/domain/matchLength";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
@@ -393,9 +393,11 @@ export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise
 }
 
 /**
- * The club's own feed says a court is free at an hour and a club somebody asked for (the rules are in
- * `courtOffersDue`). They hear once, on the channel they have (`tell`: Telegram, else email, else push),
- * with one button: the match form at that club, that day and that hour. Unlike `notifyWanted`, the
+ * The club's free courts say a court is free at an hour and a club somebody asked for (the rules are in
+ * `courtOffersDue`): from the club's own feed, or from a read of its booking platform's public page. A
+ * read covers three days, so an hour after the club's midnight says "tomorrow". They hear once, through
+ * the notice gate (kind `spots`, sender `courtFree`), on the channel they have (`tell`: Telegram, else
+ * email, else push), with one button: the match form at that club, that day and that hour. Unlike `notifyWanted`, the
  * claim comes before the send, because it is what stops a second run from sending the same court; a
  * person nothing can reach is never claimed.
  */
@@ -414,7 +416,8 @@ export async function offerFreeCourts(db: Db, now = new Date(), say: typeof tell
     const vars = { club: offer.club.name, time: formatEventTime(offer.hour.start, offer.club.tz, locale) };
     const ticket = reach.telegram && offer.player.telegramId ? chatTicket(offer.player.telegramId, now) : null;
     const button = { text: t("want.courtButton"), url: courtOfferLink(baseUrl(), offer, ticket) };
-    await say(db, offer.player, `${t("want.courtTitle", vars)}\n${t("want.courtBody", vars)}`, { inline_keyboard: [[button]] }, { notice: { released: released.get(offer.player.id) ?? "now" }, label: button.text }).catch(() => undefined);
+    const title = offer.hour.date === utcToZonedParts(now, offer.club.tz).date ? t("want.courtTitle", vars) : t("want.courtTitleTomorrow", vars);
+    await say(db, offer.player, `${title}\n${t("want.courtBody", vars)}`, { inline_keyboard: [[button]] }, { notice: { released: released.get(offer.player.id) ?? "now" }, label: button.text }).catch(() => undefined);
   }
   return { offered: claimed.length };
 }

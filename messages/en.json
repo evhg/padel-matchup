@@ -19,7 +19,8 @@
     "at": "at",
     "courtTitle": "A court is free at {club} today at {time}",
     "courtBody": "You said you want to play around this time at {club}. Book the court with the club, make the match here, and share the link. To stop these, remove the request on your own page.",
-    "courtButton": "Make the match"
+    "courtButton": "Make the match",
+    "courtTitleTomorrow": "A court is free at {club} tomorrow at {time}"
   },
   "common": {
     "appName": "Kicksmash",

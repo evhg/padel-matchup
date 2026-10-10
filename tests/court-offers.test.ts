@@ -64,6 +64,36 @@ describe("which free hour answers which want", () => {
   });
 });
 
+/**
+ * A read from a booking platform keeps pieces of any length, cut where the count of free courts changes
+ * (`freeSlotsFromScrape`). An offer walks them: every half hour inside the window where a court stays
+ * free for an hour, across neighbouring pieces, with the fewest courts free over that hour.
+ */
+describe("an offer from a platform's read, whose pieces are longer than an hour", () => {
+  const READ: ClubAvailability = {
+    ...FEED,
+    source: "scrape:playtomic",
+    platform: "playtomic",
+    days: ["2026-09-15", "2026-09-16", "2026-09-17"],
+    slots: [
+      // 11:00-13:00 Bangkok two courts, then 13:00-14:30 one court; 18:00-20:00 two.
+      { start: "2026-09-15T04:00:00.000Z", end: "2026-09-15T06:00:00.000Z", free: 2 },
+      { start: "2026-09-15T06:00:00.000Z", end: "2026-09-15T07:30:00.000Z", free: 1 },
+      { start: "2026-09-15T11:00:00.000Z", end: "2026-09-15T13:00:00.000Z", free: 2 },
+    ],
+  };
+
+  it("offers each half hour in the window where a court stays free for an hour, even inside a piece that began earlier", () => {
+    // NOW is 10:00 Bangkok: the window is 12:00 to 16:00.
+    expect(offerableHours(READ, NOW).map((h) => [h.time, h.free, h.end.toISOString()])).toEqual([
+      ["12:00", 2, "2026-09-15T06:00:00.000Z"],
+      ["12:30", 1, "2026-09-15T06:30:00.000Z"],
+      ["13:00", 1, "2026-09-15T07:00:00.000Z"],
+      ["13:30", 1, "2026-09-15T07:30:00.000Z"],
+    ]);
+  });
+});
+
 describe("a free court offered to the players who asked for that hour", () => {
   let db: Db;
   let close: () => Promise<void>;
@@ -153,6 +183,17 @@ describe("a free court offered to the players who asked for that hour", () => {
     expect(told).toEqual([]);
     // Nobody was reached, so nobody's want went quiet for nothing.
     expect((await db.select().from(demandSignals)).every((w) => w.notifiedAt === null)).toBe(true);
+  });
+
+  it("says tomorrow for a court after the club's midnight (docs-rules F13)", async () => {
+    // 20:30 Bangkok. A read from a platform covers three days, so the court two to six hours ahead can be past midnight.
+    const late = at(10.5 * HOUR);
+    const read: ClubAvailability = { ...FEED, fetchedAt: late.toISOString(), source: "scrape:playtomic", platform: "playtomic", days: ["2026-09-15", "2026-09-16", "2026-09-17"], slots: [{ start: "2026-09-15T17:30:00.000Z", end: "2026-09-15T19:00:00.000Z", free: 1 }] };
+    await db.update(clubs).set({ availability: read, availabilityAt: late }).where(eq(clubs.slug, slug));
+    await want(await player("Owl"), { weekday: null, onDate: "2026-09-16", fromTime: null, toTime: null });
+    expect(await offer(late)).toBe(1);
+    expect(told[0].text).toContain("A court is free at Rawai Padel Club tomorrow at 00:30");
+    expect(new URL(told[0].url).searchParams.get("date")).toBe("2026-09-16");
   });
 
   it("stays quiet when a club's feed is stale or the club no longer runs its page", async () => {
