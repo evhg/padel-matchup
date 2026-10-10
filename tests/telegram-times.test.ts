@@ -15,7 +15,7 @@ import { freezeClock } from "./helpers/clock";
 import { createTestDb, HOUR, makePlayer } from "./helpers/db";
 
 /**
- * "times?": the best times in the chat, only when somebody asks (DECIDING rules 5 and 34). A crew's own
+ * "times?": the best times in the chat, only when somebody asks (DECIDING rules 5 and 36). A crew's own
  * group, a private chat, and /times anywhere: one reply with up to three free courts as buttons; a tap
  * makes the match the way "who's in Thursday 7pm Rawai?" does, the card appears, and the answer is
  * taken down. Every Bot API call is stubbed and read back from `calls`.

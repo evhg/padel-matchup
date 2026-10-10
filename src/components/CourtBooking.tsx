@@ -7,7 +7,7 @@ import { setCourtBookedAction } from "@/actions/slots";
 /**
  * The court on the match page: "Book this court" for the organiser and the players, the chosen day,
  * hour, length and court beside it, and "I booked it" once a player has booked and paid in the club's
- * own app (DECIDING rule 34). Booked, everyone reads "Court booked ✓ (by Ana)", and a player can take it
+ * own app (DECIDING rule 36). Booked, everyone reads "Court booked ✓ (by Ana)", and a player can take it
  * back. The link opens in the player's browser; it carries nobody's identity and signs nobody in.
  */
 export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: string; book: { url: string; checkout: boolean } | null; slotLine: string; booked: { name: string | null } | null; canMark: boolean }) {

@@ -344,7 +344,7 @@ export async function setPaidAction(code: string, slotId: string, paid: boolean)
 /**
  * "I booked it", or taken back: the organiser or a player in a seat (the domain refuses anyone else).
  * The player booked and paid in the club's own app; this only tells the others. The cards follow in
- * `after()`, edited in place (DECIDING rules 5 and 34).
+ * `after()`, edited in place (DECIDING rules 5 and 36).
  */
 export async function setCourtBookedAction(code: string, booked: boolean): Promise<ActionResult<null>> {
   return runA(async () => {

@@ -16,7 +16,7 @@ import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
  * Pure, and safe in a browser: the create form runs it on the feed it was handed. No database, no
  * clock of its own, no fetch (rule 12: the hourly job reads the feeds; a request reads the cache).
  * `freeFeedOf` is the one reader of that cache. A player books and pays in the club's own app;
- * Kicksmash never signs in as a player and never pays (DECIDING rule 34).
+ * Kicksmash never signs in as a player and never pays (DECIDING rule 36).
  */
 const HOUR_MS = 3600_000;
 const MINUTE_MS = 60_000;

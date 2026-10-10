@@ -101,7 +101,7 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   if (isPrivate && !cmd && msg.text && !msg.reply_to_message) {
     const word = playerMenuWord(msg.text);
     if (word) return playerMenu(db, msg, chat, from, word, ctx);
-    // "times?" in the private chat: the free courts at the player's clubs this week, asked for (DECIDING rule 34).
+    // "times?" in the private chat: the free courts at the player's clubs, asked for (DECIDING rule 36).
     if (readWords(msg.text)?.kind === "times") return timesInChat(db, msg, chat, from, "word");
   }
   if (cmd) {

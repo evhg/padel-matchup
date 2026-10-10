@@ -262,6 +262,12 @@ with 20 such clubs. The picker lists and the Telegram place keyboard read no cac
 court offers read the slots two to seven hours ahead for at most 30 clubs: at most about 25 MB a month.
 A club's own page reads its whole row: about 2 to 8 KB. Before the review of 10 October 2026, the pick
 alone would have read about 2 GB a month, and each `/clubs` render about 0.6 MB.
+The best times (DECIDING rule 36) read the slots of the next seven days, cut in the database
+(`clubFeedColumns`): about 2 KB for a club with a typical three-day read, 8 KB at the worst. The
+create form reads at most 12 clubs, the person's own and the nearby ones, so a landing view in
+Bangkok costs about 25 KB of egress and carries about the same to the browser (about 100 KB at the
+worst). /play reads at most 30 clubs, and only while a city has fewer than three open games. A
+"times?" reads at most 42, once a minute in a chat at most.
 
 **The switches.** Two, and the first needs no deploy at all:
 `POST /api/admin/metrics {"key":"scrape_off_playtomic","value":1}` (or `scrape_off_all`) stops that

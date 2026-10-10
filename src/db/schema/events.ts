@@ -103,7 +103,7 @@ export const events = pgTable(
     /**
      * The court is booked: a player in the match booked and paid in the club's own app, and said so
      * with one tap ("I booked it"); any player may take it back. Who and when, nothing else: never an
-     * amount, a payment or a reference, because no payment passes through Kicksmash (DECIDING rule 34).
+     * amount, a payment or a reference, because no payment passes through Kicksmash (DECIDING rule 36).
      * A new day, hour, length or club clears both, because that booking was for another court.
      */
     courtBookedAt: timestamp("court_booked_at", { withTimezone: true }),

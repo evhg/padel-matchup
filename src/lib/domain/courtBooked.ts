@@ -11,7 +11,7 @@ import { DELETED_PLAYER_NAME } from "./result";
  * "I booked it": the court is booked, and who said so. The owner's choice of 10 October 2026: "Book"
  * opens the club's own app, where a player books and pays; Kicksmash then marks the match as booked.
  * One tap by a player in the match (a seat, or the organiser) records who and when; any of them can
- * take it back. Nothing else is kept: no amount, no payment, no reference (DECIDING rule 34). A change
+ * take it back. Nothing else is kept: no amount, no payment, no reference (DECIDING rule 36). A change
  * of day, hour, length or club clears it (`updateEvent`), because that booking was for another court.
  */
 

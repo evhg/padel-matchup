@@ -198,7 +198,7 @@ const STRINGS = {
     crewAdminOnly: "Only an admin of this group can tie it to a crew.",
     crewNeedsAdmin: "Tied to the crew. Make me an admin who may pin messages, and I start.",
     whichMatch: "Which match?",
-    // The best times, only when somebody asks ("times?", /times): DECIDING rule 34. "From" names whose
+    // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. "From" names whose
     // times they are: a platform's, or the clubs' own (DECIDING rule 35); never "this week", because a
     // club's own feed holds today.
     timesFree: (from: string) => `Free courts at your clubs, from ${from}. Tap one and I make the match; you book and pay in the club's own app.`,
@@ -625,7 +625,7 @@ export function pairCardLines(detail: EventDetail, locale: BotLocale, f: { text:
 
 /**
  * "🎟 Court booked ✓ (by Ana)": a player booked and paid in the club's own app and said so (DECIDING
- * rule 34). Plain text; the name is the booker's first name. Null while not booked, and on a match
+ * rule 36). Plain text; the name is the booker's first name. Null while not booked, and on a match
  * that is off or played. Telegram, Discord and LINE all print this line.
  */
 export function bookedLine(detail: EventDetail, locale: BotLocale): string | null {

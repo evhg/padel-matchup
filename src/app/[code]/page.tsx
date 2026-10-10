@@ -177,7 +177,7 @@ export default async function EventPage({ params, searchParams }: Props) {
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
   // Null unless a WhatsApp number is configured, so the block simply is not there (rule 4).
   const waJoin = joinLink(code);
-  // "Court booked ✓ (by Ana)": a player booked and paid in the club's own app and said so (DECIDING rule 34).
+  // "Court booked ✓ (by Ana)": a player booked and paid in the club's own app and said so (DECIDING rule 36).
   const booked = courtBookedBy(detail);
   const bookedText = booked ? (booked.name ? t("event.courtBookedBy", { name: booked.name }) : t("event.courtBooked")) : null;
   const shareVenue = bookedText ? `${venue} · ${bookedText}` : venue;

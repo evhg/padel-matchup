@@ -19,7 +19,7 @@ import { createMatchInChat } from "./new";
 import { REACTION } from "./words";
 
 /**
- * The best times, in a chat, only when somebody asks (DECIDING rules 5 and 34): "times?", "when can we
+ * The best times, in a chat, only when somebody asks (DECIDING rules 5 and 36): "times?", "when can we
  * play?" or /times, in a crew's own group, a player's private chat, or (as /times) any group the bot is
  * in. The bot answers once, as a reply, with up to three free courts as buttons; a button makes the
  * match the way "who's in Thursday 7pm Rawai?" does (`createMatchInChat`), so its card appears, and the

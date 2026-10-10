@@ -1,4 +1,4 @@
--- The directory's booking links (DECIDING rule 34): which platform each listed club books on, and
+-- The directory's booking links (DECIDING rule 36): which platform each listed club books on, and
 -- its public booking page, from data/clubs.json. Only rows the directory owns and nobody claimed, so
 -- every value here replaces the directory's own older one (Bangkok Padel left MATCHi for Playtomic);
 -- a value the file leaves null never clears one.

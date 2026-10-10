@@ -5,7 +5,7 @@ import { detectPlatform, platformById } from "./platforms";
 /**
  * The booking hand-off: where "Book this court" sends a player, prepared as far as a platform's public
  * pages allow. The owner, 10 October 2026: Kicksmash prepares everything up to payment, and a player
- * books and pays in the club's own app (DECIDING rule 34). Kicksmash never signs in as a player, never
+ * books and pays in the club's own app (DECIDING rule 36). Kicksmash never signs in as a player, never
  * books and never pays.
  *
  * - "checkout": the platform's own payment step with the club, court, day, time and length chosen.

@@ -42,9 +42,10 @@ const LEAVE = [
 ];
 
 /**
- * "times?", "when can we play?": somebody asks for the free courts this week, and the bot answers once
- * with the best times as buttons (DECIDING rule 34). A question, so the "?" is allowed here; the whole
- * message is still the question, and "times are hard" or "when can we play golf" are not it.
+ * "times?", "when can we play?": somebody asks for the free courts, and the bot answers once
+ * with the best times as buttons (DECIDING rule 36). A question, so the "?" is allowed here; the whole
+ * message is still the question, and "times are hard" or "when can we play golf" are not it. In a group
+ * the question mark is required (`heardInGroup`): "free courts" there says something and asks nothing.
  */
 const TIMES = [
   // en

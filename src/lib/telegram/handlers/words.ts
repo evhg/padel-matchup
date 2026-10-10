@@ -160,7 +160,7 @@ export async function listenInGroup(db: Db, msg: TgMessage, chat: TelegramChat, 
   // and "+" take a seat only as a reply to a card; a forward is somebody else's words.
   const said = heardInGroup(msg);
   if (!said) return null;
-  // "times?": the free courts, asked for, so answered once (DECIDING rule 34).
+  // "times?": the free courts, asked for, so answered once (DECIDING rule 36).
   if (said.kind === "times") return timesInChat(db, msg, chat, from, "word", now);
   const open = await openCards(db, chat.chatId, now);
   if (said.kind === "ask") return askForMatch(db, msg, chat, from, said.text, open, ctx, now);

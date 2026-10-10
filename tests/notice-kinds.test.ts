@@ -162,7 +162,7 @@ describe("the kind map covers every sender", () => {
     "src/lib/telegram/handlers/want.ts": "a reply in the chat the person is writing in",
     "src/lib/telegram/handlers/crew.ts": "the crew's own group: its pinned notice and replies in the room (DECIDING rule 31)",
     "src/lib/telegram/handlers/words.ts": "an answer in the crew's group to the person who just wrote, seen by them alone",
-    "src/lib/telegram/handlers/times.ts": "one reply to the person who asked (\"times?\", /times) in the chat they asked in (DECIDING rule 34)",
+    "src/lib/telegram/handlers/times.ts": "one reply to the person who asked (\"times?\", /times) in the chat they asked in (DECIDING rule 36)",
     "src/lib/telegram/player.ts": "a reply to the person's own tap",
     "src/lib/telegram/coach.ts": "the coach's assistant answering the coach or student who wrote",
     "src/lib/telegram/taps.ts": "a reply to the person's own tap",

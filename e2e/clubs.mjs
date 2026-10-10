@@ -353,7 +353,7 @@ try {
   const bot = courtPage.locator("#bot");
   const botText = ((await bot.textContent({ timeout: 5000 }).catch(() => "")) ?? "").replace(/\s+/g, " ");
   check("/about says what KicksmashBot reads, how often, and where to write", /KicksmashBot/.test(botText) && /Playtomic/.test(botText) && /15/.test(botText) && (await bot.locator('a[href^="mailto:"]').count()) === 1, botText.slice(0, 160));
-  // ---- The best times, and a court a player books (DECIDING rule 34) ----
+  // ---- The best times, and a court a player books (DECIDING rule 36) ----
   // Last in the suite, because it adds a feed and a match at the club that nothing above expects.
   // The club shares a feed of its bookings: its own match calendar, which this build serves and the
   // manage page's save reads once, as the hourly job would.

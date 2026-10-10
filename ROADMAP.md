@@ -843,8 +843,8 @@ Everything in this list is live. The README describes each in detail.
   row switches a platform off with no deploy, and `SCRAPE_DISABLED` does it at the next redeploy. The
   service board has a line for each platform: fresh, resting until, stopped, or off. It never signs
   in, never books and never pays; the player books and pays on the platform. The club page, the
-  lists and the API show today and name the platform; proposing the best times from the three days
-  is the next step.
+  lists and the API show today and name the platform; the best times read the three days (the
+  entry on the best times below).
 - **The two WhatsApp pains (10 October 2026, no migration).** The owner: "you have to leave the chat
   group; you have to basically log in each and every time you click a link from within the whatsapp
   group." A link in a group opens the phone's default browser, and each browser keeps its own cookies,
@@ -887,15 +887,21 @@ Everything in this list is live. The README describes each in detail.
   - **What was untrue, corrected:** WhatsApp's own browser does not open group links; a number is
     not proof to `foldSameNameRows`; replies inside the window are charged from 1 October 2026.
 - **The best times, and a court a player books (10 October 2026, migrations 0095, 0096 and 0097).** The
-  owner's choice, "Best times + one-tap booking by a player" (DECIDING rule 34). The free courts clubs
-  share, or that a platform shows publicly, are cached on the club's row; `src/lib/domain/bestTimes.ts`
-  ranks them: a usual club at a usual time first, then the soonest, one time per club and day, at least
-  two hours out, within seven days. They show where people pick a time: on the create form the row of
-  time chips becomes "Free at Rawai Padel" (a tap fills the day, the hour and the club's zone), and a
-  line under the time says whether the club shows a court free then; on /play, while a city has fewer
-  than three open games, "Courts free this week" with "Organise a game here"; and in a crew's Telegram
-  group or a private chat only when somebody asks ("times?", "when can we play?", /times), as one reply
-  whose buttons make the match and post its card. On the match page the organiser and the players get
+  owner's choice, "Best times + one-tap booking by a player" (DECIDING rule 36). The free courts clubs
+  share, or that a platform shows publicly (DECIDING rule 35), are cached on the club's row;
+  `src/lib/domain/bestTimes.ts` ranks them: a usual club at a usual time first, then the soonest, one
+  time per club and day, at least two hours out, up to the end of the sixth day, inside every free
+  stretch. A club's own feed wins over a platform's read, a platform's read is shown for two hours as on
+  the club page, and a platform's times are named as its own ("on Playtomic"). They show where people
+  pick a time: on the create form the club's free times lead the row of time chips, the person's usual
+  times after them (a tap fills the day, the hour and the club's zone), and a line under the time says
+  whether the club or the platform shows a court free then, in the club's hour when the zones differ;
+  on /play, below the games while a city has fewer than three open games, "Free courts", each row one
+  link to the form; and in a crew's Telegram group or a private chat only when somebody asks ("times?"
+  with its question mark in a group, "when can we play?", /times), as one reply a minute at most
+  whose buttons make the match and post its card. Each read is bounded: the create form reads the
+  feeds of the twelve clubs a person is likely to pick, /play thirty of the city's own clubs first, and
+  every read cuts the cache to seven days in the database. On the match page the organiser and the players get
   "Book this court" (Playtomic and MATCHi open on the match's day; every other platform on the club's
   page), with the court, day, time and length beside it, and "I booked it", which the page, the cards,
   the share text and the API then show as "Court booked ✓ (by Ana)" (`events.court_booked_at`,
