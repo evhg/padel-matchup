@@ -58,6 +58,23 @@ export const SCRAPE = {
 /** Statuses that mean "stop": the platform does not want this visitor now. */
 const BLOCK_STATUSES = new Set([401, 403, 429]);
 
+/**
+ * A response that is a challenge, not a page: AWS WAF answers a Challenge with 202 and a CAPTCHA with
+ * 405, both with `x-amzn-waf-action`, and Cloudflare marks its own with `cf-mitigated`. Playtomic runs
+ * behind CloudFront. Each is a block: the platform rests, and nothing here answers a challenge.
+ */
+export function isBlock(method: string, res: Pick<Response, "status" | "headers">): boolean {
+  if (BLOCK_STATUSES.has(res.status)) return true;
+  if (res.headers.has("x-amzn-waf-action") || res.headers.has("cf-mitigated")) return true;
+  return method === "GET" && (res.status === 202 || res.status === 405);
+}
+
+/** A response rebuilt from the run's cache keeps the address it ended on, so a reader can tell a redirect to a sign-in page. */
+function withUrl(res: Response, url: string): Response {
+  if (url) Object.defineProperty(res, "url", { value: url });
+  return res;
+}
+
 const keyRest = (p: string) => `scrape_rest_until_${p}`;
 const keyLevel = (p: string) => `scrape_rest_level_${p}`;
 const keyStop = (p: string) => `scrape_stop_${p}`;
@@ -298,8 +315,12 @@ export class ScrapeStop extends Error {
 export type Clock = { now: () => number; sleep: (ms: number) => Promise<void> };
 const realClock: Clock = { now: () => performance.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
 
-/** One platform's lane for a run: its pace, its block, its cache and its request count. */
-type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; outOfTime: boolean; requests: number; cache: Map<string, { status: number; body: string; type: string | null }> };
+/**
+ * One platform's lane for a run: its pace, its block, its cache and its request count. `changedAt` holds
+ * the clubs that said "changed" in this run: one club alone is that club's error, and the platform stops
+ * only at a second club, or at a club that read clean before.
+ */
+type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; changedAt: Set<string>; outOfTime: boolean; requests: number; cache: Map<string, { status: number; body: string; type: string | null; url: string }> };
 
 /** The only fetch a reader gets. Every limit that stays is enforced here, not trusted to the reader. */
 function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadline: number }): { fetch: typeof fetch; count: () => number } {
@@ -313,7 +334,7 @@ function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadl
     if (given.has("authorization") || given.has("cookie")) throw new ScrapeStop("credentials");
     if (lane.blocked !== null) throw new ScrapeStop("blocked");
     const hit = method === "GET" ? lane.cache.get(url) : undefined;
-    if (hit) return new Response(hit.body, { status: hit.status, headers: hit.type ? { "content-type": hit.type } : {} });
+    if (hit) return withUrl(new Response(hit.body, { status: hit.status, headers: hit.type ? { "content-type": hit.type } : {} }), hit.url);
     if (n >= SCRAPE.perClub) throw new ScrapeStop("cap");
     const wait = Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now());
     if (o.clock.now() + wait >= o.deadline) {
@@ -329,15 +350,17 @@ function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadl
     if (!headers.has("accept")) headers.set("accept", "text/html,application/json;q=0.9,*/*;q=0.8");
     const timeout = Math.max(1_000, Math.min(SCRAPE.requestTimeoutMs, o.deadline - o.clock.now()));
     const res = await o.fetchImpl(url, { method, headers, redirect: "follow", signal: AbortSignal.timeout(timeout) });
-    if (BLOCK_STATUSES.has(res.status)) {
+    if (isBlock(method, res)) {
       lane.blocked = res.status;
       return res;
     }
     if (method !== "GET" || res.status !== 200) return res;
     const body = (await res.text()).slice(0, SCRAPE.maxBytes);
     const type = res.headers.get("content-type");
-    lane.cache.set(url, { status: 200, body, type });
-    return new Response(body, { status: 200, headers: type ? { "content-type": type } : {} });
+    // Where a redirect ended: a reader reads `url` to tell a sign-in page or a "no such club" index from the page it asked for.
+    const final = res.url || url;
+    lane.cache.set(url, { status: 200, body, type, url: final });
+    return withUrl(new Response(body, { status: 200, headers: type ? { "content-type": type } : {} }), final);
   };
   return { fetch: f as typeof fetch, count: () => n };
 }
@@ -386,7 +409,13 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     if (lane.outOfTime && lane.blocked === null) break;
     out.push({ club, platform: lane.platform, result });
     if (!result.ok && result.reason === "blocked") lane.blocked ??= result.status ?? 0;
-    if (!result.ok && result.reason === "changed") lane.changed = true;
+    if (!result.ok && result.reason === "changed") {
+      // One stale or mistyped link is that club's error. The platform stops when a second club in the
+      // run says the same, or when this club read clean last time: then it is the page, not the link.
+      const readClean = club.prev !== null && club.prev.error === null && club.prev.source === `scrape:${lane.platform}`;
+      lane.changedAt.add(club.slug);
+      if (readClean || lane.changedAt.size >= 2) lane.changed = true;
+    }
   }
   return out;
 }
@@ -439,7 +468,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       if (link && adapter) queue.push({ club, adapter, link });
       else unreadable.push({ club, platform: s.platform });
     }
-    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, outOfTime: false, requests: 0, cache: new Map() }, queue });
+    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, changedAt: new Set(), outOfTime: false, requests: 0, cache: new Map() }, queue });
   }
 
   const fetchImpl = o.fetchImpl ?? fetch;
@@ -469,8 +498,9 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     if (lane.changed) {
       p.changed = true;
       await setMetric(db, keyStop(lane.platform), deployKey(), day);
-      await bumpMetric(db, scrapeCounter("changed", lane.platform), 1, day);
     }
+    // Every club that said "changed", whether or not the platform stopped for it.
+    if (lane.changedAt.size) await bumpMetric(db, scrapeCounter("changed", lane.platform), lane.changedAt.size, day);
     if (p.ok) await bumpMetric(db, scrapeCounter("ok", lane.platform), p.ok, day);
     if (lane.requests) await bumpMetric(db, scrapeCounter("requests", lane.platform), lane.requests, day);
   }

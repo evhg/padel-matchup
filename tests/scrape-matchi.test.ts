@@ -56,6 +56,25 @@ describe("MATCHi parsers on real responses", () => {
     expect(parseMatchiFacility("<html><title>Down for maintenance</title></html>")).toBeNull();
   });
 
+  // readers F6: a renamed or reordered field reads as "changed", never as "no free courts".
+  it("finds Padel in the sport picker whatever the order of the option's attributes", () => {
+    const reordered = FACILITY.replace(/<option value="5" selected\s+data-content="([^"]*)">/, '<option data-content="$1" selected value="5">');
+    expect(reordered).not.toBe(FACILITY);
+    expect(parseMatchiFacility(reordered)).toEqual({ facilityId: "2165", sportId: "5" });
+  });
+
+  it("calls a club page with no sport picker at all a change, and one whose picker has no Padel a club with no padel", () => {
+    const noPicker = FACILITY.replace(/<select id="sport-picker-mobile"[\s\S]*?<\/select>/, "").replace(/var sport = '5';/, "");
+    expect(parseMatchiFacility(noPicker)).toBeNull();
+    const tennisOnly = FACILITY.replace(/ Padel<\/option>/, " Tennis</option>").replace(/ma-5'><\/i> Padel/, "ma-1'></i> Tennis");
+    expect(parseMatchiFacility(tennisOnly)).toEqual({ facilityId: "2165", sportId: null });
+  });
+
+  it("falls back to the page's own sport when the picker's options cannot be read", () => {
+    const unreadable = FACILITY.replace(/<option[\s\S]*?<\/option>/g, "");
+    expect(parseMatchiFacility(unreadable)).toEqual({ facilityId: "2165", sportId: "5" });
+  });
+
   it("reads every free court of a day, in UTC, with its length and its Book link", () => {
     expect(parseMatchiSlots(DAY1, "2026-10-10", TZ)).toEqual({ ok: true, slots: DAY1_SLOTS });
   });
@@ -177,6 +196,29 @@ describe("scrape()", () => {
   it("calls a club MATCHi no longer has not_found", async () => {
     const h = harness(() => html("Not found", 404));
     expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toMatchObject({ ok: false, status: 404, reason: "not_found", requests: 1 });
+  });
+
+  it("calls a facility that redirects to the list of facilities not_found, not a changed page (job F3)", async () => {
+    // Checked on 10 October 2026: GET /facilities/<unknown> redirects to /facilities/index and answers 200.
+    const h = harness(() => {
+      const res = html("<html><body>All facilities</body></html>");
+      Object.defineProperty(res, "url", { value: "https://www.matchi.se/facilities/index" });
+      return res;
+    });
+    expect(await h.adapter.scrape(target({ bookingUrl: "https://www.matchi.se/facilities/typo" }), h.fetchImpl, NOW)).toMatchObject({ ok: false, status: 200, reason: "not_found", requests: 1 });
+  });
+
+  it("never asks for a path MATCHi's robots.txt names, /facilities/matchitk among them (readers F8)", async () => {
+    expect(MATCHI_DISALLOWED).toContain("/facilities/matchitk");
+    const h = harness(realMatchi);
+    expect(await h.adapter.scrape(target({ bookingUrl: "https://www.matchi.se/facilities/matchitk" }), h.fetchImpl, NOW)).toMatchObject({ ok: false, requests: 0 });
+    expect(h.calls).toHaveLength(0);
+  });
+
+  it("reads a club whose picker has no Padel as a club with nothing free, after one request", async () => {
+    const tennisOnly = FACILITY.replace(/ Padel<\/option>/, " Tennis</option>").replace(/ma-5'><\/i> Padel/, "ma-1'></i> Tennis");
+    const h = harness((url) => (url.pathname === "/facilities/bluetree" ? html(tennisOnly) : realMatchi(url)));
+    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: true, slots: [], requests: 1 });
   });
 
   it("calls a page without its fields changed: the club page, and a day's list", async () => {

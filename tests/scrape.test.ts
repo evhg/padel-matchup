@@ -5,7 +5,7 @@ import { and, eq, like, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, type Club } from "@/db/schema";
 import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult } from "@/lib/booking/adapters";
-import { matchiAdapter } from "@/lib/booking/adapters/matchi";
+import { createMatchiAdapter, matchiAdapter } from "@/lib/booking/adapters/matchi";
 import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeCourtHours } from "@/lib/domain/clubs";
@@ -36,8 +36,11 @@ const iso = (ms: number) => at(ms).toISOString();
 
 type Call = { url: string; at: number; headers: Headers; method: string };
 
+/** What the stubbed network answers: JSON (`body`) or HTML (`text`), extra headers, and the URL a redirect ended on. */
+type Answer = { status: number; body?: unknown; text?: string; headers?: Record<string, string>; url?: string };
+
 /** A fake clock for the run, and a stubbed network that answers by URL. */
-function world(answer: (url: string) => { status: number; body?: unknown } = () => ({ status: 200, body: { slots: [] } }), costMs = 200) {
+function world(answer: (url: string) => Answer = () => ({ status: 200, body: { slots: [] } }), costMs = 200) {
   let t = 0;
   const calls: Call[] = [];
   const clock: Clock = {
@@ -51,7 +54,9 @@ function world(answer: (url: string) => { status: number; body?: unknown } = () 
     calls.push({ url, at: t, headers: new Headers(init?.headers), method: init?.method ?? "GET" });
     t += costMs;
     const a = answer(url);
-    return new Response(a.body === undefined ? "" : JSON.stringify(a.body), { status: a.status, headers: { "content-type": "application/json" } });
+    const res = new Response(a.text ?? (a.body === undefined ? "" : JSON.stringify(a.body)), { status: a.status, headers: { "content-type": a.text ? "text/html" : "application/json", ...a.headers } });
+    if (a.url) Object.defineProperty(res, "url", { value: a.url });
+    return res;
   }) as typeof fetch;
   return { clock, fetchImpl, calls, advance: (ms: number) => (t += ms), time: () => t };
 }
@@ -328,15 +333,16 @@ describe("back-off and switches", () => {
     expect(w.calls.length).toBe(2);
   });
 
-  it("a changed page stops the platform until the next deploy, and is counted", async () => {
+  it("a page changed at two clubs in one run stops the platform until a deploy of new code, and is counted", async () => {
     process.env.VERCEL_GIT_COMMIT_SHA = "aaaaaaa";
     await club("moved");
     await club("moved-two");
+    await club("moved-three", { availabilityAt: at(-HOUR * 2) });
     const w = world(() => ({ status: 200, body: { changed: true } }));
     const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
     expect(run.platforms.playtomic.changed).toBe(true);
-    expect(w.calls.length).toBe(1);
-    expect(await metric("scrape_changed_playtomic")).toBe(1);
+    expect(w.calls.length).toBe(2); // the second club that says "changed" stops the lane; the third is not read
+    expect(await metric("scrape_changed_playtomic")).toBe(2);
     expect((await scrapeBoard(db, NOW, [reader()]))[0].state).toBe("stopped");
 
     const w2 = world();
@@ -346,6 +352,62 @@ describe("back-off and switches", () => {
     process.env.VERCEL_GIT_COMMIT_SHA = "bbbbbbb"; // the next deploy
     await runScrape(db, at(2 * HOUR), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
     expect(w2.calls.length).toBeGreaterThan(0);
+  });
+
+  it("one club's odd page is that club's error, never the platform's stop", async () => {
+    await club("typo-link");
+    await club("good-club", { availabilityAt: at(-HOUR * 2) });
+    const w = world((url) => ({ status: 200, body: url.endsWith("/typo-link") ? { changed: true } : { slots: [] } }));
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(run.platforms.playtomic.changed).toBe(false);
+    expect(w.calls.map((c) => new URL(c.url).pathname)).toEqual(["/typo-link", "/good-club"]);
+    expect((await row("typo-link")).availability?.error).toBe("changed 200");
+    expect((await scrapeBoard(db, NOW, [reader()]))[0].state).toBe("fresh");
+  });
+
+  it("a club that read clean before and now says 'changed' stops the platform on its own", async () => {
+    await club("was-fine");
+    const clean = world(() => ({ status: 200, body: { slots: [] } }));
+    await runScrape(db, NOW, { adapters: [reader()], fetchImpl: clean.fetchImpl, clock: clean.clock });
+    expect((await row("was-fine")).availability?.error).toBeNull();
+    const w = world(() => ({ status: 200, body: { changed: true } }));
+    const run = await runScrape(db, at(2 * HOUR), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(run.platforms.playtomic.changed).toBe(true);
+    expect((await scrapeBoard(db, at(2 * HOUR), [reader()]))[0].state).toBe("stopped");
+  });
+
+  it("calls a challenge or a captcha a block: a WAF header, a 202 or a 405 on a GET", async () => {
+    const answers: { status: number; headers?: Record<string, string> }[] = [{ status: 202 }, { status: 405 }, { status: 200, headers: { "x-amzn-waf-action": "challenge" } }, { status: 200, headers: { "cf-mitigated": "challenge" } }];
+    for (const [i, answer] of answers.entries()) {
+      const slug = `waf-${i}`;
+      await club(slug);
+      await club(`${slug}-next`, { availabilityAt: at(-HOUR * 2) });
+      const w = world(() => ({ ...answer, body: { slots: [] } }));
+      const run = await runScrape(db, at(i * 7 * DAY), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+      expect([JSON.stringify(answer), run.platforms.playtomic.blocked]).toEqual([JSON.stringify(answer), true]);
+      expect(w.calls.length).toBe(1); // nothing more is asked of a platform that challenged us
+      expect((await row(slug)).availability?.error).toBe(`blocked ${answer.status}`);
+      await db.delete(metricsDaily).where(like(metricsDaily.key, "scrape_rest_%"));
+      await db.delete(clubs);
+    }
+  });
+
+  it("MATCHi through the frame: a redirect to sign in is a block, a club MATCHi no longer has is not found", async () => {
+    const matchi = createMatchiAdapter({ sleep: async () => undefined, clock: () => 0 });
+    const page = (path: string, final: string) => ({ status: 200, text: `<html>${path}</html>`, url: `https://www.matchi.se${final}` });
+    // A club that left MATCHi: /facilities/<slug> answers 200 from /facilities/index, which names no facility.
+    await club("left-matchi", { bookingUrl: "https://www.matchi.se/facilities/leftmatchi", bookingPlatform: "matchi" });
+    const gone = world(() => page("index", "/facilities/index"));
+    const r1 = await runScrape(db, NOW, { adapters: [matchi], fetchImpl: gone.fetchImpl, clock: gone.clock });
+    expect(r1.platforms.matchi).toMatchObject({ changed: false, blocked: false, errors: 1 });
+    expect((await row("left-matchi")).availability?.error).toBe("not_found 200");
+    await db.delete(clubs);
+    // A login wall: the reader stops, and the platform rests.
+    await club("walled", { bookingUrl: "https://www.matchi.se/facilities/walled", bookingPlatform: "matchi" });
+    const wall = world(() => page("login", "/login/auth?returnUrl=%2Ffacilities%2Fwalled"));
+    const r2 = await runScrape(db, NOW, { adapters: [matchi], fetchImpl: wall.fetchImpl, clock: wall.clock });
+    expect(r2.platforms.matchi.blocked).toBe(true);
+    expect(r2.platforms.matchi.restUntil).toBe(iso(6 * HOUR));
   });
 
   it("runs every third push tick, and costs nothing while no reader exists", async () => {

@@ -21,10 +21,18 @@ import type { AvailabilityAdapter, ScrapedSlot, ScrapeResult, ScrapeTarget } fro
  * Booked courts are not in that fragment. They are only in /book/schedule, which MATCHi's
  * robots.txt disallows, so this reader never asks for it: every slot it returns is free.
  * The `start=` epoch inside the Book link is the club's wall clock read as Stockholm time, so it is
- * never used for the time; the hour comes from the text and the club's own zone.
+ * never used for the time; the hour comes from the text and the club's own zone. So a club with no
+ * zone of its own is an error ("no time zone"), never a guess.
+ *
+ * robots.txt does not bind a reader under DECIDING rule 32: the owner accepted the risk of a block on
+ * 10 October 2026, and the Playtomic reader reads paths Playtomic's robots.txt disallows. This reader
+ * keeps out of the paths MATCHi's robots.txt names (`MATCHI_DISALLOWED`) as a courtesy only, because
+ * it needs none of them.
  *
  * Manners (the owner's decision of 10 October 2026, AGENTS.md): no sign-in, no cookie kept, an honest
- * User-Agent, one request a second, at most eight a call, and a 401, 403 or 429 stops the call.
+ * User-Agent, one request a second, at most eight a call, and a 401, 403 or 429 stops the call. A
+ * redirect to the sign-in page is a block; a redirect from a club's page to the list of facilities
+ * (`/facilities/index`, what MATCHi does for a club it no longer has) is "not found".
  */
 
 export const MATCHI_ORIGIN = "https://www.matchi.se";
@@ -35,8 +43,8 @@ export const MATCHI_MIN_GAP_MS = 1_000;
 /** One facility page plus one list a day: seven days fill the budget. */
 export const MATCHI_MAX_DAYS = MATCHI_MAX_REQUESTS - 1;
 
-/** Paths MATCHi's robots.txt disallows (read 10 October 2026). The reader refuses to request them. */
-export const MATCHI_DISALLOWED = ["/book/findFacilities", "/book/schedule", "/j_spring_security_check", "/registration", "/login", "/user", "/profile", "/forms"] as const;
+/** Paths MATCHi's robots.txt disallows (read 10 October 2026). The reader refuses to request them, as a courtesy (see above). */
+export const MATCHI_DISALLOWED = ["/book/findFacilities", "/book/schedule", "/facilities/matchitk", "/j_spring_security_check", "/registration", "/login", "/user", "/profile", "/forms"] as const;
 
 const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -56,15 +64,32 @@ const textOf = (html: string) => decodeEntities(html.replace(/<[^>]*>/g, " ")).r
 export function matchiFacilitySlug(url: string): string | null {
   if (detectPlatform(url)?.id !== "matchi") return null;
   const m = new URL(url).pathname.match(/^\/facilities\/([A-Za-z0-9_-]+)\/?$/);
-  return m ? m[1] : null;
+  // "index" is MATCHi's list of facilities, not a club.
+  return m && m[1].toLowerCase() !== "index" ? m[1] : null;
 }
 
-/** The facility id and the padel sport id from the public club page. Pure. */
+/**
+ * The facility id and the padel sport id from the public club page, or null when the page no longer
+ * carries what the reader needs (a "changed"). The sport picker's options are read whatever the order
+ * of their attributes; an option is padel when its text or its icon's label says so. A picker with no
+ * padel option is a club with no padel (`sportId: null`, nothing free); a page with no picker at all is
+ * a changed page, never "no free courts". When the picker is there but none of its options can be
+ * read, the page's own `var sport = 'N'` stands in. Pure.
+ */
 export function parseMatchiFacility(html: string): { facilityId: string; sportId: string | null } | null {
   const id = html.match(/listSlots\?[^"']*?facility=(\d+)/) ?? html.match(/facilityId[=:]\s*["']?(\d+)/);
   if (!id) return null;
-  const padel = html.match(/<option value="(\d+)"(?:[^>"]|"[^"]*")*>\s*Padel\s*<\/option>/i);
-  return { facilityId: id[1], sportId: padel ? padel[1] : null };
+  const picker = html.match(/<select\b(?=[^>]*\bname="sport")[^>]*>([\s\S]*?)<\/select>/i);
+  if (!picker) return null;
+  const options = [...picker[1].matchAll(/<option\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/option>/gi)].map(([, attrs, text]) => ({
+    value: attrs.match(/\bvalue\s*=\s*["']?(\d+)/i)?.[1] ?? null,
+    label: `${textOf(text)} ${textOf(decodeEntities(attrs.match(/\bdata-content\s*=\s*"([^"]*)"/i)?.[1] ?? ""))}`,
+  }));
+  const padel = options.find((o) => o.value && /\bp[aá]del\b/i.test(o.label));
+  if (padel) return { facilityId: id[1], sportId: padel.value };
+  if (options.some((o) => o.value)) return { facilityId: id[1], sportId: null };
+  const own = html.match(/\bvar\s+sport\s*=\s*['"](\d+)['"]/);
+  return own ? { facilityId: id[1], sportId: own[1] } : null;
 }
 
 export type MatchiParse = { ok: true; slots: ScrapedSlot[] } | { ok: false; detail: string };
@@ -179,8 +204,12 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
           if (res.status === 401 || res.status === 403 || res.status === 429) throw new Stop("blocked", res.status, `${res.status} on ${path}`);
           if (res.status === 404) throw new Stop("not_found", 404, `404 on ${path}`);
           if (!res.ok) throw new Stop("error", res.status, `${res.status} on ${path}`);
+          // Where a redirect ended (the frame keeps it on `url`).
+          const final = res.url ? new URL(res.url, MATCHI_ORIGIN).pathname : null;
           // A redirect to the sign-in page is a login wall: stop, never sign in.
-          if (res.url && /^\/login(\/|$)/.test(new URL(res.url, MATCHI_ORIGIN).pathname)) throw new Stop("blocked", res.status, `sent to sign in from ${path}`);
+          if (final && /^\/login(\/|$)/.test(final)) throw new Stop("blocked", res.status, `sent to sign in from ${path}`);
+          // A club MATCHi no longer has: its page redirects to the list of facilities, with a 200.
+          if (final && /^\/facilities\/index\/?$/.test(final) && final !== path.split("?")[0]) throw new Stop("not_found", res.status, `${path} went to the list of facilities`);
           return res.text();
         })();
         try {
