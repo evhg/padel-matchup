@@ -851,13 +851,17 @@ Everything in this list is live. The README describes each in detail.
   email code and Telegram, the ways back, reached 2 of 21 players. No link can keep a player inside a
   group. What shipped:
   - **"That's me" signs in** (the owner's decision, DECIDING rule 33). On the match page a browser
-    that knows nobody sees "That's me" beside each record the rule allows, and on the open spot when
-    the name typed is one of them, from this match or its crew; one tap signs in as that record. A
-    browser that already made its own new record folds it into the old one (`mergePlayers`, never
-    `proved`), and the seat moves with it. Never the organiser or a crew admin, never a record with
-    an address, a phone, a chat account, a push device, a coach's book, a claimed club, a public
-    profile or a series of its own, never a member of a group that asks to join, never a record with
-    no part in this match or crew, never one of two of the same name. Ten taps a day per address.
+    that knows nobody sees "That's me" beside each record of this line-up the rule allows, and on the
+    open spot when the name typed is one of them; one tap signs in as that record. A browser that
+    already made its own new record folds it into the old one (`mergePlayers`, never `proved`) when
+    that record is in the match or crew too, so a crew member not on this line-up joins first and is
+    then offered the fold; the old record keeps the better place, and a freed seat goes to the first
+    player waiting. Never the organiser or a crew admin, never a record with an address, a phone, a
+    chat account, a push device, a coach's book, a claimed club or a public profile, never one that
+    organises any match, crew, series or competition, never a coach's student, never a member of a
+    group that asks to join, never a record with no part in this match or crew, never one of two of
+    the same name ("José" typed two ways is one name). Twenty taps a day per address, three sign-ins
+    a day per record. The session it starts shows no personal link until the record proves something.
     `src/lib/domain/thatsMe.ts`, proven in `tests/thats-me.test.ts`.
   - **Counters that find the jar.** Every WhatsApp button that carries a match link tags it `?s=wa`;
     each record made from a name counts its browser class (`newid_ua_*`), its source and whether its
@@ -865,11 +869,12 @@ Everything in this list is live. The README describes each in detail.
     docs/OPERATING.md names them all.
   - **Tell the group.** Once in, a ghost button beside Leave opens WhatsApp's share with the line-up
     ("🎾 Sat 18:00 · Rawai · 3/4: Ana, Bo, Cy · 1 spot") and the match link; never a personal link.
-    The link preview under a pasted match link says the same: first names, open spots, day and time.
+    The link preview under a pasted match link says the same: the names of the players who are in,
+    as the page shows them, how many spots are held (no names), the open spots, day and time.
     `src/lib/domain/groupLine.ts`.
   - **Paste the names from the group.** On the organiser's panel: the replies copied from the group
     ("1. Ana 2. Bo", "+1 Cy", one name per line, copied messages, emoji, three languages) become one
-    reserved spot per name through `reserveAction`, names already in skipped, the names shown before
+    reserved spot per name in one request (`reserveManyAction`), names already in skipped, the names shown before
     anything is held. `src/lib/domain/pasteNames.ts`.
   - **The iPhone's home-screen card** says that links from WhatsApp open in Safari, not in the icon.
   - **The WhatsApp bot, still off:** JOIN (`JOIN-7KQ2` or `JOIN 7KQ2`) takes the seat at once and

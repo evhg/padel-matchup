@@ -110,8 +110,9 @@ player's country, with no volume tiers (Meta's page for non-template messages,
 `developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages`,
 read on 10 October 2026). One reseller, 360dialog, reports the first 1,000 service messages a month
 per number free and no delivery for an account with no payment method on file; Meta's own page says
-neither, so neither is a figure to plan on. A WhatsApp join costs us two or three replies (the seat
-and the line-up, then a tap or two). The channel is off on this deployment (no `WHATSAPP_TOKEN`), so
+neither, so neither is a figure to plan on. A WhatsApp join costs us one reply (the seat with the
+line-up), or two when a ranged match asks the level first; each later tap costs one more. The
+channel is off on this deployment (no `WHATSAPP_TOKEN`), so
 today it costs nothing at all. GitHub Actions: free on a public repository.
 
 ## WhatsApp templates: what they cost
@@ -163,8 +164,12 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
 - **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
   tags it `?s=wa` (`tagForWhatsapp` in `src/lib/share.ts`, and "Tell the group"); the match page
-  keeps the tag for a day in the `ks_src` cookie. Every other tag counts the same way
-  (`newid_src_<tag>`).
+  keeps the tag for a day in the `ks_src` cookie. The other tags the app writes count the same way
+  (`ig`, `poster`, `card`, `moment`, `series`, `gen`, `tg`, `story`: `MATCH_SOURCES` in
+  `src/lib/source.ts`); any other word somebody typed after `?s=` counts as `other`, so no counter
+  ever carries a word a person chose (a name, say), for `join_src_` as for `newid_src_`. The
+  WhatsApp bot counts `newid_name_here` too, for a new number whose profile name is already in the
+  match.
 - **Which browser made the record.** `newid_ua_<class>`, one per record made from a name alone
   (`requirePlayer`), with the class from the user agent (`browserClass` in
   `src/lib/domain/browserClass.ts`): `ios_safari`, `ios_chrome`, `ios_other`, `ios_webview` (the
@@ -180,7 +185,10 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   `signin_restore` (the saved id brought back without proof); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
   counts only when the cookie changes to another record; a link to a browser already signed in
-  counts nothing. `thats_me_refused` counts a "That's me" the rule turned down.
+  counts nothing. `thats_me_refused` counts a "That's me" the rule turned down. "That's me" takes
+  at most 20 taps a day from one address (`thatsMePerIpPerDay`, raised from 10 for a club's Wi-Fi)
+  and 3 sign-ins a day into one record from anywhere (`thatsMePerRecordPerDay`). Every counter
+  here is written after the answer (`later`), never in the path a person waits on.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.
