@@ -1,15 +1,27 @@
 import type { Player } from "@/db/schema";
+import { shortHost } from "@/lib/config";
+import { isValidShareCode } from "@/lib/codes";
 import { mintTicket, readTicket, uuidSubject } from "@/lib/ticket";
 import { whatsappAppSecret, whatsappLinkable, whatsappNumber } from "./api";
 
 /**
  * The hand-off. A bot cannot be in the crew's group, so a person carries the message across instead:
  * the organiser pastes this link into the chat they already have, and each tap opens a thread with
- * our number and `JOIN-7KQ2` already typed — sent only when the player presses send themselves.
+ * our number and `JOIN-7KQ2` already typed — sent only when the player presses send themselves. The
+ * send takes the seat (`handleWhatsappMessage`): two taps, the link and Send. The player still leaves
+ * the group for a chat with us, and the group sees nothing of it; no link can keep a player inside a
+ * group, because Meta sells no bot that sits in one.
  *
- * That is what makes it their message rather than ours, and it is worth three things at once: the
- * next 24 hours of replies are free and need no template, the daily limit is not spent (it counts
- * unique numbers messaged *outside* an open window), and their number arrives with consent attached.
+ * That is what makes it their message rather than ours, and it is worth three things: the 24-hour
+ * window opens without a template, the daily limit is not spent (it counts unique numbers messaged
+ * *outside* an open window), and their number arrives with consent attached. The replies are not
+ * free: from 1 October 2026 Meta charges each message we send inside the window at the utility rate
+ * of the player's country, with no volume tiers (Meta's pricing page for non-template messages, read
+ * 10 October 2026); one reseller (360dialog) reports the first 1,000 a month per number free, which
+ * Meta's own pages do not say. A message the player sends us costs nothing. docs/OPERATING.md.
+ *
+ * Offered only where a reply can come back (`whatsappLinkable`): a number with no send token behind
+ * it would open a chat that nobody answers.
  *
  * Click-to-chat is a documented Meta product, not a workaround. Nothing here bends a rule; it just
  * declines to use the one API that is closed.
@@ -18,19 +30,31 @@ export const JOIN_PREFIX = "JOIN-";
 
 export function joinLink(code: string): string | null {
   const number = whatsappNumber();
-  return number ? `https://wa.me/${number}?text=${encodeURIComponent(`${JOIN_PREFIX}${code}`)}` : null;
+  return number && whatsappLinkable() ? `https://wa.me/${number}?text=${encodeURIComponent(`${JOIN_PREFIX}${code}`)}` : null;
 }
 
 /**
- * The match code inside an opening message, or null when the text is something else entirely.
+ * The match code inside a JOIN message, or null when the text is something else entirely: the
+ * link's own `JOIN-7KQ2`, and what a person types by hand, `JOIN 7KQ2` or `join7KQ2`.
  *
  * The code is returned exactly as it was typed. `CODE_ALPHABET` is mixed case, so "7kq2" and "7KQ2"
  * are two different matches; normalising the case here would look tidy and would find the wrong
- * match, or none. Only the JOIN- prefix is matched case-insensitively, because that part is ours.
+ * match, or none. Only the JOIN word is matched case-insensitively, because that part is ours.
  */
 export function codeInJoinText(text: string): string | null {
-  const m = new RegExp(`${JOIN_PREFIX}([A-Za-z0-9]{4})\\b`, "i").exec(text.trim());
-  return m ? m[1] : null;
+  const m = /(?:^|\s)join[-\s]?([A-Za-z0-9]{4})\b/i.exec(text.trim());
+  return m && isValidShareCode(m[1]) ? m[1] : null;
+}
+
+/**
+ * The match code in a match link pasted into the thread ("https://kicksma.sh/7KQ2?s=wa", or the
+ * "kicksma.sh/7KQ2" the page prints), on this deployment's own address only. A link elsewhere, or a
+ * path that is not a match, is not a code.
+ */
+export function codeInMatchUrl(text: string, host = shortHost()): string | null {
+  const bare = host.replace(/^www\./, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = new RegExp(`(?:https?://)?(?:www\\.)?${bare}/([A-Za-z0-9]{4})(?=$|[/?#\\s.,!)])`, "i").exec(text);
+  return m && isValidShareCode(m[1]) ? m[1] : null;
 }
 
 /**

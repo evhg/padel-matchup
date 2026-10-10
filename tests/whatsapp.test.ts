@@ -6,7 +6,7 @@ import { players, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { getRolodex } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
-import { bindInText, bindLink, codeInJoinText, joinLink, verifyBindTicket } from "@/lib/whatsapp/link";
+import { bindInText, bindLink, codeInJoinText, codeInMatchUrl, joinLink, verifyBindTicket } from "@/lib/whatsapp/link";
 import { LIMITS, readInbound, verifySignature, whatsappEnabled, whatsappLinkable, type WaInboundMessage } from "@/lib/whatsapp/api";
 import { handleWhatsappMessage } from "@/lib/whatsapp/bot";
 import { findOrCreateWhatsappPlayer } from "@/lib/whatsapp/identity";
@@ -30,8 +30,8 @@ const tap = (from: string, id: string, title: string): WaInboundMessage => ({ fr
 describe("the WhatsApp channel", () => {
   let db: Db;
   let close: () => Promise<void>;
-  /** Every outbound call, so a test can read what the player was actually told. */
-  let sent: { to: string; type: string; body: string }[] = [];
+  /** Every outbound call, so a test can read what the player was actually told, and which buttons came with it. */
+  let sent: { to: string; type: string; body: string; buttons: { id: string; title: string }[] }[] = [];
 
   beforeAll(async () => {
     ({ db, close } = await createTestDb());
@@ -45,8 +45,8 @@ describe("the WhatsApp channel", () => {
     process.env.WHATSAPP_APP_SECRET = SECRET;
     sent = [];
     vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
-      const b = JSON.parse(init.body) as { to: string; type: string; text?: { body: string }; interactive?: { body: { text: string } } };
-      sent.push({ to: b.to, type: b.type, body: b.text?.body ?? b.interactive?.body.text ?? "" });
+      const b = JSON.parse(init.body) as { to: string; type: string; text?: { body: string }; interactive?: { body: { text: string }; action?: { buttons?: { reply: { id: string; title: string } }[] } } };
+      sent.push({ to: b.to, type: b.type, body: b.text?.body ?? b.interactive?.body.text ?? "", buttons: (b.interactive?.action?.buttons ?? []).map((x) => x.reply) });
       return new Response(JSON.stringify({ messages: [{ id: "wamid.out" }] }), { status: 200 });
     });
   });
@@ -70,13 +70,34 @@ describe("the WhatsApp channel", () => {
 
   it("builds the hand-off link a person pastes into their own group, and reads it back", () => {
     expect(joinLink("7KQ2")).toBe("https://wa.me/66812345678?text=JOIN-7KQ2");
-    delete process.env.WHATSAPP_NUMBER;
-    expect(joinLink("7KQ2")).toBe(null);
     expect(codeInJoinText("JOIN-7KQ2")).toBe("7KQ2");
+    // Typed by hand, with a space or with nothing between.
+    expect(codeInJoinText("JOIN 7KQ2")).toBe("7KQ2");
+    expect(codeInJoinText("please join7KQ2")).toBe("7KQ2");
     // The prefix is ours and matches either way; the code is handed back exactly as typed, because
     // CODE_ALPHABET is mixed case and "7kq2" is not the same match as "7KQ2".
     expect(codeInJoinText("  join-7kq2  ")).toBe("7kq2");
     expect(codeInJoinText("hello there")).toBe(null);
+    expect(codeInJoinText("rejoin later")).toBe(null);
+  });
+
+  it("offers the hand-off only where a reply can come back: no page offers a chat nobody answers", () => {
+    for (const key of ["WHATSAPP_NUMBER", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID", "WHATSAPP_APP_SECRET"]) {
+      const was = process.env[key];
+      delete process.env[key];
+      expect({ key, link: joinLink("7KQ2") }).toEqual({ key, link: null });
+      process.env[key] = was;
+    }
+    expect(joinLink("7KQ2")).not.toBeNull();
+  });
+
+  it("reads a match link pasted into the thread, on this deployment's address only", () => {
+    expect(codeInMatchUrl("https://kicksma.sh/7KQ2?s=wa", "kicksma.sh")).toBe("7KQ2");
+    expect(codeInMatchUrl("look: kicksma.sh/7KQ2.", "kicksma.sh")).toBe("7KQ2");
+    expect(codeInMatchUrl("https://www.kicksma.sh/7KQ2/i/abc123", "kicksma.sh")).toBe("7KQ2");
+    expect(codeInMatchUrl("https://example.com/7KQ2", "kicksma.sh")).toBe(null);
+    expect(codeInMatchUrl("https://kicksma.sh/coaches", "kicksma.sh")).toBe(null);
+    expect(codeInMatchUrl("https://kicksma.sh/play", "kicksma.sh")).toBe(null);
   });
 
   it("hears a tapped button as the id behind it, not the words on it", () => {
@@ -91,25 +112,59 @@ describe("the WhatsApp channel", () => {
     expect(first.displayName).toBe("Somchai");
   });
 
-  it("shows the match, then puts the player in it, then takes them out", async () => {
+  it("takes the seat on JOIN at once: two taps, the link and Send, and the reply is the line-up with three buttons", async () => {
     const org = await makePlayer(db, "Organiser");
     const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
     await joinEvent(db, { eventId: ev.id, playerId: org.id });
 
-    expect(await handleWhatsappMessage(db, textMessage("66810000002", `JOIN-${ev.code}`), { wa_id: "66810000002", profile: { name: "Nok" } })).toBe("wa:match");
-    expect(sent.at(-1)?.type).toBe("interactive");
-    expect(sent.at(-1)?.body).toContain("Rawai Padel");
+    expect(await handleWhatsappMessage(db, textMessage("66810000002", `JOIN-${ev.code}`), { wa_id: "66810000002", profile: { name: "Nok" } })).toBe("wa:joined");
+    const nok = await findOrCreateWhatsappPlayer(db, "66810000002");
+    expect((await db.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, nok.id)))).length).toBe(1);
+    const reply = sent.at(-1)!;
+    expect(reply.type).toBe("interactive");
+    expect(reply.body).toContain("You are in");
+    expect(reply.body).toContain("Rawai Padel");
+    expect(reply.body).toContain("In so far: Organiser, Nok. 2 to find.");
+    expect(reply.body).toContain(`/${ev.code}`);
+    expect(reply.buttons.map((b) => b.id)).toEqual([`wl:${ev.code}`, `ww:${ev.code}`, `wc:${ev.code}`]);
+    expect(reply.buttons.map((b) => b.title)).toEqual(["Can't make it", "Who else is in?", "Add to calendar"]);
 
-    expect(await handleWhatsappMessage(db, tap("66810000002", `wj:${ev.code}`, "I'm in"))).toBe("wa:joined");
-    expect(sent.at(-1)?.body).toContain("You are in");
-
-    expect(await handleWhatsappMessage(db, tap("66810000002", `wj:${ev.code}`, "I'm in"))).toBe("wa:already_in");
+    // Sent again, typed by hand with a space: the seat is already theirs.
+    expect(await handleWhatsappMessage(db, textMessage("66810000002", `JOIN ${ev.code}`))).toBe("wa:already_in");
+    expect(sent.at(-1)?.body).toContain("You are already in this one.");
+    expect(await handleWhatsappMessage(db, tap("66810000002", `ww:${ev.code}`, "Who else is in?"))).toBe("wa:lineup");
     expect(await handleWhatsappMessage(db, tap("66810000002", `wl:${ev.code}`, "Can't make it"))).toBe("wa:left");
     expect(await handleWhatsappMessage(db, tap("66810000002", `wl:${ev.code}`, "Can't make it"))).toBe("wa:not_in");
+    // "I'm in" under a shown match takes the seat the same way.
+    expect(await handleWhatsappMessage(db, tap("66810000002", `wj:${ev.code}`, "I'm in"))).toBe("wa:joined");
   });
 
-  it("answers a code it cannot place with help, and a cancelled match by saying so", async () => {
+  it("shows a pasted match link or a bare code without taking a seat: a link is not a yes", async () => {
+    process.env.APP_BASE_URL = "https://kicksma.sh";
+    const org = await makePlayer(db, "Link organiser");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    expect(await handleWhatsappMessage(db, textMessage("66810000006", `hey https://kicksma.sh/${ev.code}?s=wa`))).toBe("wa:match");
+    expect(sent.at(-1)?.buttons.map((b) => b.id)).toEqual([`wj:${ev.code}`, `wl:${ev.code}`, `ww:${ev.code}`]);
+    expect(await handleWhatsappMessage(db, textMessage("66810000006", ev.code))).toBe("wa:match");
+    const p = await findOrCreateWhatsappPlayer(db, "66810000006");
+    expect((await db.select().from(slots).where(eq(slots.playerId, p.id))).length).toBe(0);
+  });
+
+  it("answers the calendar button with the player's own calendar page, never a personal link", async () => {
+    const org = await makePlayer(db, "Calendar organiser");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist" });
+    expect(await handleWhatsappMessage(db, textMessage("66810000007", `JOIN-${ev.code}`))).toBe("wa:joined");
+    expect(await handleWhatsappMessage(db, tap("66810000007", `wc:${ev.code}`, "Add to calendar"))).toBe("wa:calendar");
+    const reply = sent.at(-1)!;
+    expect(reply.body).toMatch(/\/p\/[0-9a-f]{52}\/calendar/);
+    const p = await findOrCreateWhatsappPlayer(db, "66810000007");
+    const [row] = await db.select().from(players).where(eq(players.id, p.id));
+    expect(reply.body).not.toContain(row.personalToken!);
+  });
+
+  it("answers what it cannot place with help that says what the bot does, and a cancelled match by saying so", async () => {
     expect(await handleWhatsappMessage(db, textMessage("66810000003", "good morning"))).toBe("wa:help");
+    expect(sent.at(-1)?.body).toMatch(/JOIN 7KQ2.*put you in at once.*match link.*can't make it.*who is in.*calendar/s);
     expect(await handleWhatsappMessage(db, textMessage("66810000003", "ZZZZ"))).toBe("wa:gone");
   });
 
@@ -117,8 +172,19 @@ describe("the WhatsApp channel", () => {
     const org = await makePlayer(db, "Ranged organiser");
     const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist", levelMin: 3, levelMax: 4 });
     await joinEvent(db, { eventId: ev.id, playerId: org.id });
-    // A player whose level nobody knows is asked for it, not quietly admitted.
+    // A player whose level nobody knows is asked for it, not quietly admitted: three buttons, no link out of the chat.
     expect(await handleWhatsappMessage(db, tap("66810000004", `wj:${ev.code}`, "I'm in"))).toBe("wa:level_required");
+    const ask = sent.at(-1)!;
+    expect(ask.body).toContain("3.0–4.0");
+    expect(ask.body).not.toMatch(/https?:/);
+    expect(ask.buttons.map((b) => b.id)).toEqual([`wv:${ev.code}:beginner`, `wv:${ev.code}:intermediate`, `wv:${ev.code}:advanced`]);
+    // The tap saves the middle of the band as the player's own declaration, and joins: 3.0 is inside 3–4.
+    expect(await handleWhatsappMessage(db, tap("66810000004", `wv:${ev.code}:intermediate`, "Intermediate"))).toBe("wa:joined");
+    const four = await findOrCreateWhatsappPlayer(db, "66810000004");
+    expect(four.level).toBe(3);
+    expect(four.levelSource).toBe("self");
+    // A band nobody offered is not a level.
+    expect(await handleWhatsappMessage(db, tap("66810000004", `wv:${ev.code}:wizard`, "Wizard"))).toBe("wa:help");
     // And one outside the range becomes a request the organiser answers. This is the whole reason the
     // rules live in the domain: a second copy here would be a way around the first.
     const low = await findOrCreateWhatsappPlayer(db, "66810000005", "Low");
@@ -185,8 +251,7 @@ describe("the WhatsApp channel", () => {
   it("folds a row this number already had into the web player, one seat where both held one", async () => {
     const { web, ev } = await webPlayerInAMatch("Ploy", "Py2kLm5nPq6r");
     // Earlier, from the crew's group: JOIN- made a WhatsApp row for this number and took a seat with it.
-    expect(await handleWhatsappMessage(db, textMessage("66810000021", `JOIN-${ev.code}`), { wa_id: "66810000021", profile: { name: "Ploy" } })).toBe("wa:match");
-    expect(await handleWhatsappMessage(db, tap("66810000021", `wj:${ev.code}`, "I'm in"))).toBe("wa:joined");
+    expect(await handleWhatsappMessage(db, textMessage("66810000021", `JOIN-${ev.code}`), { wa_id: "66810000021", profile: { name: "Ploy" } })).toBe("wa:joined");
     const waRow = await findOrCreateWhatsappPlayer(db, "66810000021");
     expect(waRow.id).not.toBe(web.id);
     expect(await seatsOf(ev.id, waRow.id)).toBe(1);
