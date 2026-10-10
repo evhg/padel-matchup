@@ -184,6 +184,11 @@ writes the free courts into `clubs.availability` and `availability_at` as pieces
 for each piece, the courts free for the whole of it. A link no reader can read is written as an error
 with no request, so it moves to the back. A feed the club shared always wins.
 
+**The readers.** Playtomic, MATCHi and Book & Go, one file each in `src/lib/booking/adapters/`.
+Book & Go clubs book on their own domain, so `BOOKANDGO_APPS` in `bookandgo.ts` maps each booking
+host to the club's app (Prime Padel 39, MBP Sports 51, Sterling 83). A new Book & Go club needs one
+line there, and its club row needs `booking_platform = 'bookandgo'`, because no link names the platform.
+
 **The cost.** No invocation of its own: it rides the push job's 288 invocations a day. It adds no
 migration and no table. A run with nothing to read costs one read of `metrics_daily` and one small
 query for each platform. At most it is 96 runs a day of up to 45 seconds each: 72 minutes of function

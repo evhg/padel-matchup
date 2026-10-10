@@ -826,10 +826,12 @@ Everything in this list is live. The README describes each in detail.
   `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.
 - **Free court times read from the booking platforms, every 15 minutes (10 October 2026, no
   migration).** The owner's decision (DECIDING rule 35): "scraping at risk of being blocked is
-  acceptable, just do it." Built: `src/lib/booking/scrape.ts` is the frame, and the Playtomic and
-  MATCHi readers (`src/lib/booking/adapters/`) read the public club pages; The Padel Society shows
-  free courts only inside its app, so it has no reader. Each platform picks its own clubs, at most
-  eight a run, by the booking link or, with none, a website on the platform (most directory clubs).
+  acceptable, just do it." Built: `src/lib/booking/scrape.ts` is the frame, and three readers
+  (`src/lib/booking/adapters/`) read the free courts: Playtomic and MATCHi from their public club
+  pages, and Book & Go, the system behind the club apps of Prime Padel, MBP Sports and Sterling, from
+  the public feed those clubs' own web apps load. The Padel Society shows free courts only inside its
+  app, so it has no reader. Each platform picks its own clubs, at most eight a run, by the booking
+  link or, with none, a website on the platform (most directory clubs).
   A club people use is read every 15 minutes, any other club hourly, and the next two days at most
   hourly. Each platform has its own lane at one request a second, the run stops before 45 seconds,
   and the cache keeps three days of free courts in `clubs.availability` (`source:

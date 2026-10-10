@@ -212,8 +212,9 @@ export function freeSlotsFromScrape(slots: readonly ScrapedSlot[], o: { tz: stri
     const lo = Math.max(a, from);
     const hi = Math.min(b, until);
     if (hi <= lo) continue;
-    // A court with no name counts as a court of its own: two such rows at one time are two courts.
-    const key = clip(s.court, 80) ?? `\u0000${unnamed++}`;
+    // The platform's id for the court, else its name. A court with neither counts as a court of its own: two such rows at one time are two courts.
+    const id = clip(s.courtId, 80);
+    const key = id ? `id:${id}` : (clip(s.court, 80) ?? `\u0000${unnamed++}`);
     const list = byCourt.get(key) ?? [];
     list.push([lo, hi]);
     byCourt.set(key, list);

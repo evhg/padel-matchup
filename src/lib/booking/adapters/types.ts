@@ -1,4 +1,9 @@
-export type ScrapedSlot = { start: string; end: string; court: string | null; free: boolean; priceText: string | null; bookUrl: string | null };
+/**
+ * One free (or booked) court at one time, as a reader found it. `courtId` is the platform's own id for
+ * the court when it has one: the frame counts courts apart by it, else by `court`, the name, so two
+ * courts with one name stay two.
+ */
+export type ScrapedSlot = { start: string; end: string; court: string | null; courtId?: string | null; free: boolean; priceText: string | null; bookUrl: string | null };
 /**
  * `tz` is the club row's zone as it is, null or not valid included: the frame never puts "UTC" in for a
  * zone nobody gave. A reader that finds the club's zone on the platform's page may use it; one that

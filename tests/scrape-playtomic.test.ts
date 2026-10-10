@@ -297,6 +297,7 @@ describe("playtomicAdapter.scrape", () => {
       start: "2026-10-10T23:00:00.000Z",
       end: "2026-10-11T00:00:00.000Z",
       court: "Blue Court",
+      courtId: "d4a841b2-6c90-450d-aeb6-df5c31f9fea9",
       free: true,
       priceText: "100 SGD",
       bookUrl: playtomicBookUrl(SG.tenantId, "d4a841b2-6c90-450d-aeb6-df5c31f9fea9", new Date("2026-10-10T23:00:00Z"), 60),

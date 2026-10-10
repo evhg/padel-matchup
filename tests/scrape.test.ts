@@ -584,6 +584,15 @@ describe("what a read writes", () => {
     ]);
   });
 
+  it("keys a court on its id when the reader gives one: two courts with one name stay two", () => {
+    const s = (court: string, courtId: string | undefined, from: number, to: number): ScrapedSlot => ({ start: iso(from), end: iso(to), court, courtId, free: true, priceText: null, bookUrl: null });
+    const out = freeSlotsFromScrape([s("Court", "1", HOUR, 2 * HOUR), s("Court", "2", HOUR, 2 * HOUR), s("Court", "1", HOUR, 3 * HOUR)], { tz: "Asia/Bangkok", now: NOW, days: ["2026-10-10"] });
+    expect(out).toEqual([
+      { start: iso(HOUR), end: iso(2 * HOUR), free: 2 },
+      { start: iso(2 * HOUR), end: iso(3 * HOUR), free: 1 },
+    ]);
+  });
+
   it("the service board has one line per platform", async () => {
     await db.delete(metricsDaily).where(like(metricsDaily.key, "scrape_%"));
     expect(await scrapeBoard(db, NOW, [])).toEqual([]);

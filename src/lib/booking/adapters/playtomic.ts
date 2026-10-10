@@ -182,6 +182,7 @@ export function parsePlaytomicAvailability(text: string, club: Pick<PlaytomicClu
         start: start.toISOString(),
         end: end.toISOString(),
         court: names.get(e.resource_id) ?? e.resource_id,
+        courtId: e.resource_id,
         free: true,
         priceText: typeof s.price === "string" && s.price.trim() ? s.price.trim().slice(0, 40) : null,
         bookUrl: playtomicBookUrl(club.tenantId, e.resource_id, start, minutes),
