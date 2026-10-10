@@ -70,6 +70,10 @@ export const groupMembers = pgTable(
  * from `decided_at`; before then the person sees the kind "not this time" and nothing reaches the
  * admins (`nextAsk` in `src/lib/domain/groupAccess.ts`). The note is the person's own words for
  * the admins, at most 200 characters, and never leaves the group page's admin view.
+ *
+ * `group_requests_player_idx` is for the readers that start from the person, not the group: a merge
+ * (`mergePlayers`), an account deletion (`anonymizePlayer`) and the daily cleanup of disposable
+ * players, up to 500 a day, each look the rows up by `player_id` (rule 12).
  */
 export const groupRequests = pgTable(
   "group_requests",
@@ -87,7 +91,11 @@ export const groupRequests = pgTable(
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     decidedByPlayerId: uuid("decided_by_player_id").references(() => players.id, { onDelete: "set null" }),
   },
-  (t) => [uniqueIndex("group_requests_group_player_idx").on(t.groupId, t.playerId), index("group_requests_group_status_idx").on(t.groupId, t.status)],
+  (t) => [
+    uniqueIndex("group_requests_group_player_idx").on(t.groupId, t.playerId),
+    index("group_requests_group_status_idx").on(t.groupId, t.status),
+    index("group_requests_player_idx").on(t.playerId),
+  ],
 );
 
 export type Group = typeof groups.$inferSelect;

@@ -1,6 +1,7 @@
 // Groups: form one from a match, member creates the next match from the group page (prefilled,
 // linked back), anyone with the link joins, admin sets the weekly slot, a member leaves; a visitor
-// sees names but no levels, and a group that asks to join takes an ask the admin approves.
+// sees names but no levels, and a group that asks to join takes an ask: withdrawn and asked again,
+// approved for one person, declined for another, who then sees the day she may ask again.
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot, sitsInside } from "./lib.mjs";
 
 const browser = await launch();
@@ -133,7 +134,7 @@ try {
   await dee.goto(`${BASE}/g/${gcode}`);
   check(
     "a visitor sees the members by name and the count, and no level on any member row",
-    (await dee.locator("li", { hasText: "Bea" }).count()) >= 1 && (await dee.getByText("3.5", { exact: true }).count()) === 0 && (await dee.getByText("2 members").count()) > 0 && (await dee.getByText("Levels show to members only.").count()) === 1,
+    (await dee.locator("li", { hasText: "Bea" }).count()) >= 1 && (await dee.getByText("3.5", { exact: true }).count()) === 0 && (await dee.getByText("2 members").count()) > 0 && (await dee.getByText("Members see levels here.", { exact: true }).count()) === 1,
   );
 
   // Bea switches on Ask to join in the settings. The checkbox is set where the walk needs it, at the end.
@@ -155,16 +156,52 @@ try {
   await shot(dee, "g5-asked");
   check("Dee asked: not a member yet, and she can take it back", (await dee.getByText("2 members").count()) > 0 && (await dee.getByRole("button", { name: "Withdraw", exact: true }).count()) === 1);
 
-  // Bea sees the ask with its note and approves it; Dee is listed and now sees the levels.
+  // Dee takes the ask back: the waiting line goes and "Ask to join" comes back.
+  await dee.getByRole("button", { name: "Withdraw", exact: true }).click();
+  await dee.getByTestId("group-asked").waitFor({ state: "detached", timeout: 20000 });
+  check("withdrawn: Ask to join is back and nothing waits", (await dee.getByRole("button", { name: "Ask to join", exact: true }).count()) >= 1 && (await dee.getByRole("button", { name: "Withdraw", exact: true }).count()) === 0);
+  // She asks again, from a fresh page so the form starts closed, with her note again (a new ask carries the new note).
+  await dee.goto(`${BASE}/g/${gcode}`);
+  await dee.getByRole("button", { name: "Ask to join", exact: true }).click();
+  await dee.getByLabel("A note for the admins (optional)", { exact: true }).fill("Ladies' night regular, Tuesdays");
+  await dee.getByRole("button", { name: "Ask to join", exact: true }).click();
+  await dee.getByTestId("group-asked").waitFor({ timeout: 20000 });
+
+  // Eve, a second visitor, asks too; Bea will say no to her.
+  const eve = await newPage();
+  await eve.goto(`${BASE}/g/${gcode}`);
+  await eve.getByRole("button", { name: "Ask to join", exact: true }).click();
+  await eve.getByPlaceholder("e.g. Alex", { exact: true }).fill("Eve");
+  await eve.getByRole("button", { name: "Ask to join", exact: true }).click();
+  await eve.getByTestId("group-asked").waitFor({ timeout: 20000 });
+
+  // Bea sees both asks, Dee's with its note. She declines Eve, then approves Dee; Dee is listed and now sees the levels.
   await bea.goto(`${BASE}/g/${gcode}`);
   const asks = bea.getByTestId("group-asks");
   check("the admin sees Dee's ask with her note", (await asks.getByText("Dee", { exact: true }).count()) === 1 && (await asks.getByText(/Ladies' night regular/).count()) === 1);
+  check("the admin sees Eve's ask too", (await asks.getByText("Eve", { exact: true }).count()) === 1);
   await shot(bea, "g3-asks");
-  await asks.getByRole("button", { name: "Approve", exact: true }).click();
+  const askOf = (who) => asks.locator("li").filter({ has: bea.getByText(who, { exact: true }) });
+  await askOf("Eve").getByRole("button", { name: "Decline", exact: true }).click();
+  await asks.getByText("Eve", { exact: true }).waitFor({ state: "detached", timeout: 20000 });
+  check("declined: Eve's ask is gone and she is not a member", (await bea.getByText("2 members").count()) > 0 && (await bea.locator("li").filter({ has: bea.getByText("Eve", { exact: true }) }).count()) === 0);
+  await askOf("Dee").getByRole("button", { name: "Approve", exact: true }).click();
   await bea.getByText("3 members").first().waitFor({ timeout: 20000 });
   check("approved: Dee is listed among the members and the ask is gone", (await bea.locator("li", { hasText: "Dee" }).count()) >= 1 && (await bea.getByTestId("group-asks").count()) === 0);
   await dee.goto(`${BASE}/g/${gcode}`);
   check("Dee is in the group and sees Bea's level now", (await dee.getByText("You're in this group").count()) === 1 && (await dee.locator("li", { hasText: "Bea" }).getByText("3.5", { exact: true }).count()) === 1);
+
+  // Eve opens the group again: "Not this time", with the day she may ask again, and no way to ask before it.
+  await eve.goto(`${BASE}/g/${gcode}`);
+  const declined = eve.getByTestId("group-ask-declined");
+  await declined.waitFor({ timeout: 20000 });
+  await shot(eve, "g6-declined");
+  const declinedText = (await declined.textContent()) ?? "";
+  check(
+    "declined: Eve sees Not this time and the date she may ask again, and no Ask to join",
+    (await declined.getByText("Not this time", { exact: true }).count()) === 1 && /You can ask again from \S.*\.$/.test(declinedText) && (await eve.getByRole("button", { name: "Ask to join", exact: true }).count()) === 0,
+    declinedText,
+  );
 } catch (e) {
   await crashed(browser, results, e);
 } finally {

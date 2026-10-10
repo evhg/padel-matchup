@@ -18,6 +18,7 @@ import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/d
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { refillRecipients } from "@/lib/domain/refill";
 import { groupAdmins } from "@/lib/domain/groups";
+import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
 import { claimCourtOffer, COURT_OFFERS, courtOfferLink, courtOffersDue } from "@/lib/domain/courtOffers";
 import { chatTicket } from "@/lib/telegram/identity";
@@ -206,9 +207,10 @@ export async function notifyRequestDecided(db: Db, ev: Event, player: Player, ap
 }
 
 /**
- * A new ask to join a group reaches its admins the way a match's join request reaches its organiser:
- * through the person's own channel (Telegram, else email, else push, by `tell()`), with one button to
- * the group page where Approve and Decline sit. Called from `after()`, never in the request path.
+ * A new ask to join a group reaches its admins by `tell()`: Telegram, else email, else push, with one
+ * button to the group page where Approve and Decline sit. Never WhatsApp: `tell()` sends there only
+ * with a template, and no template carries a group's ask. Called from `after()`, never in the
+ * request path, and through `notifyGroupAskCapped`, which holds the day's ceiling.
  */
 export async function notifyGroupAsk(db: Db, group: Pick<Group, "id" | "code" | "name">, asker: Pick<Player, "id" | "displayName">, note: string | null): Promise<number> {
   const admins = await groupAdmins(db, group.id);
@@ -222,6 +224,18 @@ export async function notifyGroupAsk(db: Db, group: Pick<Group, "id" | "code" | 
     told++;
   }
   return told;
+}
+
+/**
+ * The ceiling on the admins' ask notices: `LIMITS.groupAskNoticesPerGroupPerDay` a day for each
+ * group, counted on `metrics_daily` like every other limit. Past it the ask still stands and waits on
+ * the group page; only the notice is skipped, so a script that makes names and asks cannot turn an
+ * admin's phone into a pager. Returns how many admins were told, or null when the day's notices are
+ * used up.
+ */
+export async function notifyGroupAskCapped(db: Db, group: Pick<Group, "id" | "code" | "name">, asker: Pick<Player, "id" | "displayName">, note: string | null, now = new Date()): Promise<number | null> {
+  if (!(await takeRate(db, "group_ask_notice", group.id, LIMITS.groupAskNoticesPerGroupPerDay, "day", now))) return null;
+  return notifyGroupAsk(db, group, asker, note);
 }
 
 /** The asker hears the answer either way: a yes with the door to the group, a no kindly, with when they may ask again. */

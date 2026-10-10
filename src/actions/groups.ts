@@ -11,7 +11,7 @@ import { recordFact } from "@/lib/domain/facts";
 import { createGroupFromEvent, decideGroupRequest, deleteGroup, getGroupByCode, getGroupMember, handOverGroup, joinGroup, leaveGroup, removeGroupMember, updateGroup, weeklyGroupFromEvent, withdrawGroupRequest } from "@/lib/domain/groups";
 import { ASK_NOTE_MAX } from "@/lib/domain/groupAccess";
 import { LIMITS } from "@/lib/domain/ratelimit";
-import { notifyGroupAsk, notifyGroupAskDecided } from "@/lib/notify";
+import { notifyGroupAskCapped, notifyGroupAskDecided } from "@/lib/notify";
 import { getPlayer } from "@/lib/domain/players";
 import { translatorFor } from "@/lib/email/templates";
 import { isValidInviteCode } from "@/lib/codes";
@@ -58,7 +58,8 @@ export async function joinGroupAction(code: string, name?: string, note?: string
       const request = res.request;
       after(async () => {
         await recordFact(db, { kind: "group.asked", channel: "web", actorPlayerId: me.id, subject: { type: "group", id: group.id }, code: group.code });
-        if (res.notify) await notifyGroupAsk(db, group, me, request.note);
+        // At most LIMITS.groupAskNoticesPerGroupPerDay notices a day per group; past that the ask stands, unannounced.
+        if (res.notify) await notifyGroupAskCapped(db, group, me, request.note);
       });
     }
     revalidatePath(`/g/${code}`);

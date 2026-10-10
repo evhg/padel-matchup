@@ -1,13 +1,15 @@
 /**
  * Who sees what on a group, and what a join does to it. Pure: no database, no clock of its own.
  *
- * The owner's decision E, 9 October 2026: "names visible, levels hidden, optional Ask to join". A
+ * The owner's decision E, 9 October 2026: "names visible, levels hidden, optional Ask to join". On
+ * the group's member list (the group page, `GET /api/v1/groups/{code}`, the MCP tool `get_group`) a
  * visitor sees a crew's first names and how many they are — that is the social proof — and never a
  * member's level, which is a person's own data. A group may switch on "Ask to join" (a ladies' crew,
- * a level crew): new people ask and an admin says yes.
+ * a level crew): new people ask and an admin decides.
  *
  * The group's own level range is not hidden by any of this. It says what level the crew plays, which
- * is the group describing itself, not a person.
+ * is the group describing itself, not a person. Nor is a match's own roster: it shows the levels of
+ * its seated players to anybody, by the match page's own rule, and the group page links to it.
  */
 
 /** How far the viewer is inside the group: their member row's role, or nothing for a visitor. */
@@ -32,7 +34,7 @@ export function memberLevelFor(level: number | null, viewer: GroupViewer): numbe
  *   - `self`: the person taps Join (or Ask to join) on the group page.
  *   - `match`: a seat in one of the group's matches — the web, the chats, the API, an invite, an
  *     approved level request, a confirmed level. The seat follows the match's own rules.
- *   - `admin`: an admin adds or approves.
+ *   - `admin`: an admin approving an ask (`decideGroupRequest`). No other path adds as admin.
  */
 export type JoinVia = "self" | "match" | "admin";
 

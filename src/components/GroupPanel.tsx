@@ -161,25 +161,28 @@ function GroupAsk({ code, hasIdentity, ask }: { code: string; hasIdentity: boole
   const [pending, start] = useTransition();
   if (ask?.status === "pending") {
     return (
-      <div className="flex items-center justify-between gap-3" data-testid="group-asked">
-        <div className="min-w-0">
-          <div className="font-extrabold">✋ {t("group.asked")}</div>
-          <div className="text-xs text-muted">{t("group.askedHelp")}</div>
+      <div data-testid="group-asked">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-extrabold">✋ {t("group.asked")}</div>
+            <div className="text-xs text-muted">{t("group.askedHelp")}</div>
+          </div>
+          <button
+            type="button"
+            className="btn-ghost btn-sm shrink-0"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                setError(null);
+                const r = await withdrawGroupRequestAction(code);
+                if (!r.ok) setError(t("errors.generic"));
+              })
+            }
+          >
+            {pending ? t("common.working") : t("level.withdraw")}
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn-ghost btn-sm shrink-0"
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const r = await withdrawGroupRequestAction(code);
-              if (!r.ok) setError(t("errors.generic"));
-            })
-          }
-        >
-          {pending ? t("common.working") : t("level.withdraw")}
-        </button>
-        {error && <span className="text-sm text-danger">{error}</span>}
+        {error && <p className="mt-1 text-sm text-danger">{error}</p>}
       </div>
     );
   }
@@ -383,7 +386,7 @@ export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, 
       <div>
         <label className="flex items-center gap-3 text-sm font-semibold">
           <input type="checkbox" className="h-4 w-4 accent-ink" checked={ask} onChange={(e) => setAsk(e.target.checked)} />
-          {t("group.askToJoin")}
+          {t("group.askToJoinSetting")}
         </label>
         <p className="mt-1 text-xs text-faint">{t("group.askToJoinHelp")}</p>
       </div>

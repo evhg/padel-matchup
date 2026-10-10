@@ -6,10 +6,12 @@ import { joinAsPlayer, NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { groupToPublic } from "@/lib/api/serialize";
 import { createEvent } from "@/lib/domain/events";
 import { ASK_AGAIN_DAYS, askAgainFrom, canSeeMemberLevels, cleanAskNote, joinDoor, memberLevelFor, nextAsk } from "@/lib/domain/groupAccess";
-import { createGroup, decideGroupRequest, getGroupByCode, getGroupDetail, getGroupMember, getGroupRequest, joinGroup, pendingGroupRequests, updateGroup, withdrawGroupRequest } from "@/lib/domain/groups";
+import { anonymizePlayer } from "@/lib/domain/anonymize";
+import { createGroup, decideGroupRequest, getGroupByCode, getGroupDetail, getGroupMember, getGroupRequest, joinGroup, leaveGroup, pendingGroupRequests, updateGroup, withdrawGroupRequest } from "@/lib/domain/groups";
 import { joinWithPolicy } from "@/lib/domain/joining";
 import { getEventByCode } from "@/lib/domain/queries";
-import { notifyGroupAsk, notifyGroupAskDecided } from "@/lib/notify";
+import { LIMITS } from "@/lib/domain/ratelimit";
+import { notifyGroupAsk, notifyGroupAskCapped, notifyGroupAskDecided } from "@/lib/notify";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
@@ -240,6 +242,71 @@ describe("a group that asks to join", () => {
     await updateGroup(db, g.id, olga.id, { askToJoin: false });
     expect((await joinGroup(db, g.id, lea.id, "self", { now: NOW })).outcome).toBe("joined");
     expect(await pendingGroupRequests(db, g.id)).toHaveLength(0);
+  });
+
+  it("joining another way closes the waiting ask as approved, so leaving later does not bring the old question back", async () => {
+    const { olga, g } = await askingGroup("Stale ask");
+    const ona = await makePlayer(db, "Ona");
+    expect((await joinGroup(db, g.id, ona.id, "self", { note: "Tuesdays", now: NOW })).outcome).toBe("requested");
+    // The door opens, and a seat in one of the group's matches makes Ona a member.
+    await updateGroup(db, g.id, olga.id, { askToJoin: false });
+    const later = new Date(NOW.getTime() + HOUR);
+    expect((await joinGroup(db, g.id, ona.id, "match", { now: later })).outcome).toBe("joined");
+    expect(await getGroupRequest(db, g.id, ona.id)).toMatchObject({ status: "approved", decidedAt: later, decidedByPlayerId: null });
+    // She leaves, and the group asks again: the admins have no question from her waiting.
+    await leaveGroup(db, g.id, ona.id);
+    await updateGroup(db, g.id, olga.id, { askToJoin: true });
+    expect(await pendingGroupRequests(db, g.id)).toHaveLength(0);
+    // Asking again is a fresh question, on the same row.
+    expect(await joinGroup(db, g.id, ona.id, "self", { now: new Date(NOW.getTime() + 2 * DAY) })).toMatchObject({ outcome: "requested", notify: true });
+    expect(await pendingGroupRequests(db, g.id)).toHaveLength(1);
+  });
+
+  it("the admins' list still leaves out a pending ask of a member, for a row written before joining closed it", async () => {
+    const { g } = await askingGroup("Second guard");
+    const pia = await makePlayer(db, "Pia");
+    expect((await joinGroup(db, g.id, pia.id, "admin", { now: NOW })).outcome).toBe("joined");
+    // A pending row for somebody who is already a member, as the table could hold before this fix.
+    await db.insert(groupRequests).values({ groupId: g.id, playerId: pia.id, note: "old", status: "pending", createdAt: NOW });
+    expect(await pendingGroupRequests(db, g.id)).toHaveLength(0);
+  });
+
+  it("account deletion takes the person's asks with them, note and all, from every group", async () => {
+    const { olga, g } = await askingGroup("Gone crew");
+    const other = await askingGroup("Other crew");
+    const nia = await makePlayer(db, "Nia");
+    expect((await joinGroup(db, g.id, nia.id, "self", { note: "MYOWNWORDS ladies night", now: NOW })).outcome).toBe("requested");
+    const ask = await joinGroup(db, other.g.id, nia.id, "self", { note: "another note", now: NOW });
+    if (ask.outcome !== "requested") throw new Error(`expected an ask, got ${ask.outcome}`);
+    await decideGroupRequest(db, { groupId: other.g.id, requestId: ask.request.id, approve: false, actorPlayerId: other.olga.id, now: NOW });
+    expect(await pendingGroupRequests(db, g.id)).toHaveLength(1);
+
+    await anonymizePlayer(db, nia.id, NOW);
+    // Nothing on the admins' list under "Deleted player", and no row anywhere holding her words.
+    expect(await pendingGroupRequests(db, g.id)).toHaveLength(0);
+    expect(await db.select().from(groupRequests).where(eq(groupRequests.playerId, nia.id))).toHaveLength(0);
+    expect(await getGroupMember(db, g.id, olga.id)).not.toBeNull();
+  });
+
+  it(`the admins hear at most ${LIMITS.groupAskNoticesPerGroupPerDay} asks a day for one group; past that the ask stands, unannounced`, async () => {
+    const { olga, g } = await askingGroup("Busy crew");
+    captureTelegram();
+    for (let i = 0; i < LIMITS.groupAskNoticesPerGroupPerDay; i++) {
+      const p = await makePlayer(db, `Asker ${i}`);
+      expect((await joinGroup(db, g.id, p.id, "self", { now: NOW })).outcome).toBe("requested");
+      expect(await notifyGroupAskCapped(db, g, p, null, NOW)).toBe(1);
+    }
+    const late = await makePlayer(db, "Late");
+    expect((await joinGroup(db, g.id, late.id, "self", { note: "eleventh", now: NOW })).outcome).toBe("requested");
+    expect(await notifyGroupAskCapped(db, g, late, "eleventh", NOW)).toBeNull();
+    expect(sent).toHaveLength(LIMITS.groupAskNoticesPerGroupPerDay);
+    expect(sent.every((m) => m.chatId === olga.telegramId)).toBe(true);
+    // The ask itself is kept: it waits on the group page like any other.
+    expect((await pendingGroupRequests(db, g.id)).map((r) => r.player.displayName)).toContain("Late");
+    // Another group's admins are not held back by this one's count, and the next day starts again.
+    const calm = await askingGroup("Calm crew");
+    expect(await notifyGroupAskCapped(db, calm.g, late, null, NOW)).toBe(1);
+    expect(await notifyGroupAskCapped(db, g, late, "eleventh", new Date(NOW.getTime() + DAY))).toBe(1);
   });
 
   it("with Ask to join off, every caller adds, as before", async () => {

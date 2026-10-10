@@ -36,8 +36,10 @@ const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new
 /**
  * A crew's home: members, the next matches, one button to create the next one, and under the matches
  * the season once two results are in. Anyone with the link joins, or asks to when the group asks to
- * join (decision E). A visitor sees the members' first names and the count, never their levels
- * (`canSeeMemberLevels`); the group's own range stays, because it describes the crew.
+ * join (decision E). On the member list a visitor sees the members' first names and the count, never
+ * their levels (`canSeeMemberLevels`); the group's own range stays, because it describes the crew.
+ * Each match row links to that match's roster, which shows its seated players' levels to anybody by
+ * the match page's own rule, so the line under the list says only that members see levels here.
  */
 export default async function GroupPage({ params }: Props) {
   const { code } = await params;

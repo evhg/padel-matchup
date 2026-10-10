@@ -57,8 +57,15 @@ const count = (r: unknown) => (Array.isArray(r) ? r.length : ((r as { rows?: unk
  * freed), a player id inside a tournament round's resting list or an event's standings (arrays,
  * not foreign keys), and a want (`demand_signals`, no foreign key either). Everything else that points at a player moves, table by table from the schema.
  * Where a unique key would clash — both in the same group, both students of one coach — the
- * survivor's row stays and the source's goes. Then the sources are deleted, and the survivor takes
- * any address or chat account it lacked, with the facts that belong to them: an address comes with
+ * survivor's row stays and the source's goes. That holds for `group_requests` too, whatever the two
+ * statuses: when both rows asked to join one group, the survivor's ask stays as it is (a pending one
+ * stays pending, a declined one keeps its seven days) and the source's goes, even if the source's
+ * was the newer or the approved one. Accepted on purpose (October 2026): a clash needs one person
+ * under two names asking one crew, a rule of its own is not worth it at today's size, and the worst
+ * case is a person who asks again. Membership is not decided here: `group_members` moves by its own
+ * key, and the admins' list leaves out a pending ask of somebody who is a member. Then the sources
+ * are deleted, and the survivor takes any address or chat account it lacked, with the facts that
+ * belong to them: an address comes with
  * its proof (`emailVerifiedAt`), and a level comes with its source, log and confirmation. The
  * recovery address and the home-screen mark come across when the survivor has none.
  *

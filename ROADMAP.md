@@ -624,12 +624,14 @@ Everything in this list is live. The README describes each in detail.
   scored match, so nobody sees the table yet.
 - **A group page shows names, not levels, and a crew can ask to join (9 October 2026, decision E,
   migration 0085).** The owner: "names visible, levels hidden, optional Ask to join", for social
-  proof and privacy. A visitor sees the members' first names and the count; members see each other's
-  levels; the API and the MCP server never carry them. An admin switches on Ask to join in the
+  proof and privacy. On the group page's member list a visitor sees the members' first names and
+  the count, and members see each other's levels; `GET /api/v1/groups/{code}` and the MCP tool
+  `get_group` carry the names and the count, never a level. A match's own roster still shows the
+  levels of its seated players, as every match page does. An admin switches on Ask to join in the
   group's settings (a ladies' crew, a level crew): a newcomer asks with an optional note, the admins
-  hear it on their own channel and approve or decline on the group page, the person hears the
-  answer, and a declined person may ask again after seven days. A seat in such a group's match is a
-  seat, never a membership.
+  hear it by Telegram, email or push, and see it on the group page, where they approve or decline;
+  the person hears the answer, and a declined person may ask again after seven days. A seat in such
+  a group's match is a seat, never a membership.
 - **A channel the moment a player joins, and a calendar that keeps itself (25 September 2026).** The
   owner: "When a player joins a game, we need to capture a channel to contact them right away in a
   very smooth way and give something in return", WhatsApp, Telegram or email, and never push or SMS.
