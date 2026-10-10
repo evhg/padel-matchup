@@ -273,8 +273,10 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **What a run leaves for the next run goes first in the next run.** The court-time frame left a club
   that its deadline cut short unwritten and due, and the oldest cache goes first, so a club too slow
   for the budget was cut on every run and no club behind it was read. A deferral needs a next visit
-  that can end another way: the lane's first club had the whole budget, so it is written as
-  "timeout" and goes to the back (`tests/scrape.test.ts`, "never starves").
+  that can end another way: the lane's first club in a run with the whole budget is written as
+  "timeout" and goes to the back (`tests/scrape.test.ts`, "never starves"). Only with the whole
+  budget: a busy tick runs shorter, and writing its first club erased a good cache for an hour
+  ("cut on a busy tick").
 - **A fetch signal aborts the body too, not only the call.** The court-time frame caught its own
   deadline around `fetch()` alone, so a page whose headers came in time and whose body did not was
   written as a plain failure and lost its cache, while the test of a request that never answers stayed

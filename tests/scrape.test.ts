@@ -276,14 +276,14 @@ describe("the slice: which clubs a run reads", () => {
   });
 
   it("a lane's first club that the deadline cuts is written as a timeout, so it never starves the clubs behind it", async () => {
-    // slow-head has the oldest cache and needs five requests at 4 s each; 15 s of budget fits four. It
-    // had the run's whole budget and did not fit: a later run would only do the same, and fast-a,
-    // fast-b and fast-c behind it would never be read.
+    // slow-head has the oldest cache and needs five requests at 12 s each; the whole budget (45 s) fits
+    // four. It had the run's whole budget and did not fit: a later run would only do the same, and
+    // fast-a, fast-b and fast-c behind it would never be read.
     await club("slow-head", { availabilityAt: at(-3 * HOUR) });
     for (const s of ["fast-a", "fast-b", "fast-c"]) await club(s, { availabilityAt: at(-2 * HOUR) });
     const r = reader("playtomic", { requests: (slug) => (slug === "slow-head" ? 5 : 1) });
-    const w = world(undefined, 4_000);
-    const first = await runScrape(db, NOW, { adapters: [r], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 15_000 });
+    const w = world(undefined, 12_000);
+    const first = await runScrape(db, NOW, { adapters: [r], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: SCRAPE.budgetMs });
     expect(w.calls.map((c) => c.url.replace(/\?.*/, ""))).toEqual(Array(4).fill("https://playtomic.io/slow-head"));
     expect(first.outOfTime).toBe(true);
     expect((await row("slow-head")).availability).toMatchObject({ error: "timeout", why: "frame: budget", slots: [] });
@@ -291,11 +291,27 @@ describe("the slice: which clubs a run reads", () => {
     expect(await metric("scrape_cut_playtomic")).toBe(1);
 
     // Fifteen minutes on, slow-head is at the back and not yet due again: the three behind it are read.
-    const w2 = world(undefined, 4_000);
-    const next = await runScrape(db, at(15 * 60_000), { adapters: [r], fetchImpl: w2.fetchImpl, clock: w2.clock, budgetMs: 15_000 });
+    const w2 = world(undefined, 12_000);
+    const next = await runScrape(db, at(15 * 60_000), { adapters: [r], fetchImpl: w2.fetchImpl, clock: w2.clock, budgetMs: SCRAPE.budgetMs });
     expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/fast-a", "https://playtomic.io/fast-b", "https://playtomic.io/fast-c"]);
     expect(next.platforms.playtomic).toMatchObject({ ok: 3, errors: 0 });
     for (const s of ["fast-a", "fast-b", "fast-c"]) expect((await row(s)).availabilityAt?.toISOString()).toBe(iso(15 * 60_000));
+  });
+
+  it("a lane's first club cut on a busy tick keeps its last good read and stays due", async () => {
+    // A busy push tick leaves the read 5 s, not the whole 45 s. healthy-head read clean 61 minutes ago
+    // and still shows; it needs four requests at 1.5 s each and is cut after three. A full run would
+    // read it, so nothing is written: its free times keep showing and it stays first for the next run.
+    const prev = { fetchedAt: at(-61 * 60_000).toISOString(), day: "2026-10-10", days: ["2026-10-10"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", error: null, fullAt: at(-61 * 60_000).toISOString(), slots: [{ start: at(2 * HOUR).toISOString(), end: at(3 * HOUR).toISOString(), free: 1 }] };
+    await club("healthy-head", { availabilityAt: at(-61 * 60_000), availability: prev as never });
+    const w = world(undefined, 1_500);
+    const run = await runScrape(db, NOW, { adapters: [reader("playtomic", { requests: 4 })], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 5_000 });
+    expect(run.outOfTime).toBe(true);
+    expect(run.failed).toEqual([]);
+    expect(await metric("scrape_cut_playtomic")).toBe(1);
+    const after = await row("healthy-head");
+    expect(after.availabilityAt?.toISOString()).toBe(at(-61 * 60_000).toISOString());
+    expect(after.availability).toMatchObject({ error: null, source: "scrape:playtomic", slots: [{ free: 1 }] });
   });
 
   it("counts each club the deadline cuts short, whether it stays due or is the lane's first and is written", async () => {
@@ -304,8 +320,8 @@ describe("the slice: which clubs a run reads", () => {
     // First run: a-quick is read, slow-pages is cut after it and stays due. Second run: a-quick is not
     // due yet, so slow-pages is the lane's first club, is cut again, and is written as a timeout.
     for (const t of [0, 15 * 60_000]) {
-      const w = world(undefined, 10_000);
-      await runScrape(db, at(t), { adapters: [reader("playtomic", slowAfterQuick)], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+      const w = world(undefined, 12_000);
+      await runScrape(db, at(t), { adapters: [reader("playtomic", slowAfterQuick)], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: SCRAPE.budgetMs });
       if (t === 0) expect((await row("slow-pages")).availabilityAt).toBeNull();
     }
     expect((await row("slow-pages")).availability).toMatchObject({ error: "timeout", why: "frame: budget" });
@@ -640,6 +656,23 @@ describe("a clock with fractions, as performance.now() gives it", () => {
       }
     });
   }
+
+  it("a Playtomic error whose name or code carries a link or an address keeps only the plain class", async () => {
+    resetPlaytomicState();
+    await ptClub("crafted-pt");
+    const spy = wallClock();
+    try {
+      const w = world(playtomic, 200.123, 0.25);
+      const crafted = (async () => {
+        throw Object.assign(new Error("connect to https://playtomic.com/api?token=abc failed"), { name: "https://evil.example/x?token=abc", cause: { code: "10.0.0.1" } });
+      }) as typeof fetch;
+      await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: crafted, clock: w.clock });
+      expect((await row("crafted-pt")).availability).toMatchObject({ error: "error", why: "club page: Error" });
+    } finally {
+      spy.mockRestore();
+      resetPlaytomicState();
+    }
+  });
 
   it("a Playtomic request that times out keeps the error's class as its why, never a word of the message", async () => {
     resetPlaytomicState();

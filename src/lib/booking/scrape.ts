@@ -443,7 +443,7 @@ export function todayOnlyRead(prev: DueClub["prev"], platform: string, now: Date
 }
 
 /** One platform's clubs, one after another, until the platform blocks, changes, or the time runs out. */
-async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typeof fetch; clock: Clock; deadline: number; now: Date }): Promise<Outcome[]> {
+async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typeof fetch; clock: Clock; deadline: number; now: Date; full: boolean }): Promise<Outcome[]> {
   const out: Outcome[] = [];
   for (const { club, adapter, link } of queue) {
     if (lane.blocked !== null || lane.changed || lane.outOfTime) break;
@@ -472,13 +472,15 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
       else if (stop) result = { ...result, detail: `frame: ${stop}` };
     }
     if (lane.blocked !== null) result = { ok: false, status: lane.blocked, reason: "blocked", requests: lf.count(), detail: null };
-    // Cut short by the deadline, and counted (`scrape_cut_<platform>`). A club after the lane's first is
-    // not written and stays due: the next run starts with it. The lane's first club had the run's whole
-    // budget and still did not fit, and a later run would do the same, so it would be cut on every run
-    // and no club behind it would be read. It is written as a timeout, and so goes to the back.
+    // Cut short by the deadline, and counted (`scrape_cut_<platform>`). A cut club is not written and
+    // stays due, so the next run starts with it and its last good read keeps showing. One exception: the
+    // lane's first club in a run that had the whole budget (45 s) did not fit even then, and a later run
+    // would do the same, so no club behind it would ever be read. Only then is it written as a timeout,
+    // which sends it to the back. A busy push tick passes less than the whole budget, and a first club
+    // cut in such a run keeps its cache: a full run reads it.
     if (lane.outOfTime && lane.blocked === null) {
       lane.cut++;
-      if (out.length > 0) break;
+      if (out.length > 0 || !o.full) break;
       result = { ok: false, status: null, reason: "timeout", requests: lf.count(), detail: "frame: budget" };
       out.push({ club, platform: lane.platform, result, todayOnly });
       break;
@@ -582,7 +584,8 @@ export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz
 export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {}): Promise<ScrapeRun> {
   const adapters = o.adapters ?? ADAPTERS;
   const clock = o.clock ?? realClock;
-  const deadline = clock.now() + Math.min(o.budgetMs ?? SCRAPE.budgetMs, SCRAPE.budgetMs);
+  const budget = Math.min(o.budgetMs ?? SCRAPE.budgetMs, SCRAPE.budgetMs);
+  const deadline = clock.now() + budget;
   const run: ScrapeRun = { clubs: 0, fresh: 0, requests: 0, outOfTime: false, writeErrors: 0, platforms: {}, failed: [] };
   const day = dayKey(now);
   await setMetric(db, SCRAPE_RUN_AT, Math.floor(now.getTime() / 1000), day);
@@ -610,7 +613,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   }
 
   const fetchImpl = o.fetchImpl ?? fetch;
-  const outcomes = (await Promise.all(lanes.map(({ lane, queue }) => runLane(lane, queue, { fetchImpl, clock, deadline, now })))).flat();
+  const outcomes = (await Promise.all(lanes.map(({ lane, queue }) => runLane(lane, queue, { fetchImpl, clock, deadline, now, full: budget >= SCRAPE.budgetMs })))).flat();
 
   const tally = (platform: string) => (run.platforms[platform] ??= { requests: 0, ok: 0, errors: 0, blocked: false, changed: false, restUntil: null });
   for (const { platform, result } of outcomes) {
