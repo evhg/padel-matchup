@@ -694,7 +694,11 @@
     "leaveKeepsPartner": "¿Salir? {name} sigue dentro y necesitará otra pareja.",
     "invitedBy": "{partner} te ha apuntado como su pareja.",
     "inviteWaiting": "Estáis los dos en la lista de espera como pareja: entráis juntos cuando se liberen dos plazas.",
-    "shareWaiting": "🎾 ¡Hola {name}! Nos he apuntado como pareja para pádel {day} a las {time} en {venue}. De momento estamos en la lista de espera. Confirma tu plaza aquí: {url}"
+    "shareWaiting": "🎾 ¡Hola {name}! Nos he apuntado como pareja para pádel {day} a las {time} en {venue}. De momento estamos en la lista de espera. Confirma tu plaza aquí: {url}",
+    "requestPartner": "Tu pareja aún no está apuntada: cuando estés dentro, añádela con «Añadir pareja».",
+    "useJoin": "Esta noche pide tu nivel: apúntate primero con el botón Apuntarme.",
+    "autoShrink": "{count, plural, one {Empezar con # pareja cierra las plazas que quedan.} other {Empezar con # parejas cierra las plazas que quedan.}}",
+    "planRotation": "{rounds, plural, one {# ronda para la liguilla completa} other {# rondas para la liguilla completa}}"
   },
   "americano": {
     "title": "Americano",

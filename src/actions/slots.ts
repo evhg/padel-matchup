@@ -89,7 +89,9 @@ export async function bePartnerAction(code: string, slotId: string, name?: strin
     const me = await requirePlayer(db, name);
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     const ev = detail.event;
-    if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && me.id !== ev.creatorPlayerId) {
+    // Somebody already in (the organiser let them in) pairs without a second check of the range.
+    const seated = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
+    if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && me.id !== ev.creatorPlayerId && !seated) {
       const fit = admission(ev, me);
       if (fit === "unknown") throw new ActionFailure("level_required");
       if (fit !== "ok") throw new ActionFailure("forbidden");

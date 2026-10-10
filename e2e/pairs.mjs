@@ -38,7 +38,7 @@ try {
   check("Fixed pairs is off by default", !(await org.getByTestId("fixed-pairs").isChecked()));
   await org.getByTestId("fixed-pairs").check();
   const plan = await org.getByTestId("night-plan").innerText();
-  check("the form speaks of pairs: 4 pairs, 2 courts, 3 rounds", plan.startsWith("4 pairs · Needs 2 courts · 3 rounds for a full rotation"), plan);
+  check("the form speaks of pairs: 4 pairs, 2 courts, 3 rounds of the round robin", plan.startsWith("4 pairs · Needs 2 courts · 3 rounds for the full round robin"), plan);
   await org.getByRole("button", { name: "Create & get the link" }).click();
   await org.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code = org.url().split("/").slice(-2)[0];
@@ -58,24 +58,33 @@ try {
   check("Ana holds Bo's link", Boolean(boLink), boLink);
   await shot(ana, "p1-pair");
 
-  // Bo claims the spot by link, typing his name.
+  // Bo claims the spot by link: the page knows his name, and says who named him.
   const bo = await newPage();
   await bo.goto(boLink);
-  check("the link is addressed to Bo", (await bo.getByText("Reserved for Bo").count()) > 0);
+  check("the link is addressed to Bo, from Ana", (await bo.getByText("Reserved for Bo").count()) > 0 && (await bo.getByText("Ana named you as their partner.").count()) === 1);
   await bo.getByRole("button", { name: /I'm in/ }).click();
   await bo.getByText("You're confirmed").waitFor({ timeout: 20000 });
   await bo.goto(`${BASE}/${code}`);
   check("Bo is in with Ana", (await bo.getByText("You're in with Ana").count()) === 1);
 
+  // The organiser reserves a spot for Rex, a name: Rex is a single nobody else may pair with.
+  await org.reload();
+  await org.getByRole("button", { name: /Open spot/ }).first().click();
+  await org.getByPlaceholder("Name").fill("Rex");
+  await org.getByRole("button", { name: "Done", exact: true }).click();
+  await org.getByText("Reserved for Rex").first().waitFor({ timeout: 20000 });
+
   // Cy comes alone; Di is their partner.
   const cy = await newPage();
   await cy.goto(`${BASE}/${code}`);
+  check("a stranger holds no partner's link", (await cy.getByRole("button", { name: /^Send .* the link$/ }).count()) === 0);
   await joinAs(cy, "Cy", "");
   await cy.getByText("You're in · Partner needed").waitFor({ timeout: 30000 });
   const di = await newPage();
   await di.goto(`${BASE}/${code}`);
   const cyRow = di.getByTestId("single-row").filter({ hasText: "Cy" });
   check("Cy reads Partner needed, with Be their partner", (await cyRow.getByText("Partner needed").count()) === 1 && (await cyRow.getByRole("button", { name: "Be their partner" }).count()) === 1);
+  check("a reserved name offers no Be their partner", (await di.getByTestId("single-row").filter({ hasText: "Rex" }).getByRole("button", { name: "Be their partner" }).count()) === 0);
   await cyRow.getByRole("button", { name: "Be their partner" }).click();
   await cyRow.getByPlaceholder("e.g. Alex").fill("Di");
   await cyRow.getByRole("button", { name: "Be their partner" }).click();
@@ -88,12 +97,14 @@ try {
   await org.getByLabel("Your partner's name (optional)").fill("Zed");
   await org.getByRole("button", { name: "Save partner" }).click();
   await org.getByText("You're in with Zed").waitFor({ timeout: 30000 });
-  check("three pairs on the list, nobody alone", (await org.getByTestId("pair-row").count()) === 3 && (await org.getByTestId("single-row").count()) === 0);
+  check("three pairs on the list, and Rex alone", (await org.getByTestId("pair-row").count()) === 3 && (await org.getByTestId("single-row").count()) === 1);
   await shot(org, "p2-list");
 
-  // Who is here: one tick a pair. Three pairs, one court, one pair rests.
+  // Who is here: one tick a pair. Rex, ticked and alone, holds the start until he is unticked.
   const here = org.getByTestId("check-in");
-  check("the check-in ticks pairs", (await here.getByRole("checkbox").count()) === 3 && (await here.getByRole("checkbox", { name: "Ana & Bo" }).isChecked()));
+  check("the check-in ticks pairs, and Rex alone", (await here.getByRole("checkbox").count()) === 4 && (await here.getByRole("checkbox", { name: "Ana & Bo" }).isChecked()));
+  check("a ticked player without a partner holds the start", (await org.getByRole("button", { name: "Start with 3 pairs" }).isDisabled()) && (await org.getByText("1 player has no partner. Pair them in the list below, or untick them.").count()) === 1);
+  await here.getByRole("checkbox", { name: /Rex/ }).uncheck();
   check("the sample speaks of pairs", (await org.getByTestId("night-sample").innerText()).includes("3 pairs: 1 court, two pairs per court, 1 pair rests each round, in turn."));
   await org.getByRole("button", { name: "Start with 3 pairs" }).click();
   await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
@@ -102,7 +113,7 @@ try {
   const resting = (await score.getByText(/Sitting out:/).innerText()).replace("Sitting out: ", "");
   check("round 1 rests one pair, partners together", pairs.includes(resting), resting);
   // The match card reads "Court 1 / a1 / a2 / vs / b1 / b2": each side must be one of the pairs, and neither the one resting.
-  const lines = (await score.locator(".rounded-xl.bg-bg").first().innerText()).split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = (await score.getByTestId("match-card").first().innerText()).split("\n").map((l) => l.trim()).filter(Boolean);
   const vs = lines.findIndex((l) => /^vs$/i.test(l));
   const sideA = `${lines[vs - 2]} & ${lines[vs - 1]}`;
   const sideB = `${lines[vs + 1]} & ${lines[vs + 2]}`;

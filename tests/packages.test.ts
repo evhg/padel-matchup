@@ -31,6 +31,12 @@ describe("npm packages", () => {
     expect(typeof americano.planMexicanoRound).toBe("function");
     expect(typeof americano.planKingRound).toBe("function");
     expect(americano.formatOf("king")).toBe("king");
+    // Fixed pairs: the draw and the table, by name; the app-shaped helpers (seats, snapshot places) stay out.
+    const pairs = americano as unknown as typeof import("@/lib/domain/fixedPairs");
+    expect(pairs.drawPairRound({ eventId: "pkg", format: "americano", pairs: [["a", "b"], ["c", "d"], ["e", "f"]], courts: null, rounds: [] }).matches).toHaveLength(1);
+    expect(pairs.pairRotationRounds(5, 1)).toBe(10);
+    expect(typeof pairs.computePairStandings).toBe("function");
+    expect("placesOf" in americano || "seatUnits" in americano).toBe(false);
     const levels = (await import(dist("levels"))) as typeof import("@/lib/domain/levels");
     expect(levels.bandOf(3.5)).toBe(bandOf(3.5));
     expect(levels.formatLevel(3.25)).toBe(formatLevel(3.25));

@@ -98,7 +98,8 @@ export async function mergePlayers(db: Db, into: string, from: string[], o: { pr
         else
           await tx
             .update(slots)
-            .set({ playerId: null, status: "empty", kind: "open", inviteCode: null, invitedName: null, invitedEmail: null, invitedPhone: null, invitedAt: null, lastRemindedAt: null, joinedAt: null, team: null })
+            // An emptied seat is nobody's partner (a fixed-pairs night's key goes with it, as `VACANT` clears it).
+            .set({ playerId: null, status: "empty", kind: "open", inviteCode: null, invitedName: null, invitedEmail: null, invitedPhone: null, invitedAt: null, lastRemindedAt: null, joinedAt: null, team: null, pairId: null })
             .where(eq(slots.id, s.id));
       } else {
         await tx.update(slots).set({ playerId: into }).where(eq(slots.id, s.id));
@@ -106,16 +107,23 @@ export async function mergePlayers(db: Db, into: string, from: string[], o: { pr
       }
     }
 
-    const rounds = await tx.select({ id: tournamentRounds.id, resting: tournamentRounds.resting }).from(tournamentRounds);
+    // A fixed-pairs night writes partners side by side, in a round's rests and in the finalised snapshot,
+    // and is read two by two (`pairsOfRounds`, `placesOf`): a de-duplicated list would pair every later
+    // player with the wrong partner, so there the ids are mapped and nothing is dropped.
+    const keep = (ids: readonly string[], pairs: boolean) => {
+      const mapped = ids.map((id) => (sources.includes(id) ? into : id));
+      return pairs ? mapped : [...new Set(mapped)];
+    };
+    const rounds = await tx.select({ id: tournamentRounds.id, resting: tournamentRounds.resting, pairs: events.fixedPairs }).from(tournamentRounds).innerJoin(events, eq(events.id, tournamentRounds.eventId));
     for (const r of rounds) {
       if (r.resting.some((id) => sources.includes(id))) {
-        await tx.update(tournamentRounds).set({ resting: [...new Set(r.resting.map((id) => (sources.includes(id) ? into : id)))] }).where(eq(tournamentRounds.id, r.id));
+        await tx.update(tournamentRounds).set({ resting: keep(r.resting, r.pairs) }).where(eq(tournamentRounds.id, r.id));
       }
     }
-    const withStandings = await tx.select({ id: events.id, standings: events.standings }).from(events).where(sql`${events.standings} is not null`);
+    const withStandings = await tx.select({ id: events.id, standings: events.standings, pairs: events.fixedPairs }).from(events).where(sql`${events.standings} is not null`);
     for (const e of withStandings) {
       if (e.standings?.some((id) => sources.includes(id))) {
-        await tx.update(events).set({ standings: [...new Set(e.standings.map((id) => (sources.includes(id) ? into : id)))] }).where(eq(events.id, e.id));
+        await tx.update(events).set({ standings: keep(e.standings, e.pairs) }).where(eq(events.id, e.id));
       }
     }
 

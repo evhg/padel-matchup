@@ -185,6 +185,7 @@ export function JoinBar({
               <div className="min-w-0 flex-1">
                 <div className="text-base font-extrabold">✋ {t("level.requestSent")}</div>
                 <div className="text-xs text-muted">{t("level.requestSentHelp", { name: organizerName })}</div>
+                {fixedPairs && <div className="text-xs text-muted">{t("pairs.requestPartner")}</div>}
                 {unverified &&
                   (verifiers.length > 0 ? (
                     <div className="mt-1.5 flex flex-wrap gap-1.5" data-testid="ask-verifiers">

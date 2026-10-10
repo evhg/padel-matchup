@@ -235,7 +235,9 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
             ? "This match takes confirmed levels only. The player's level is inside the range but nobody has confirmed it, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
             : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
         const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
-        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, partner: null, group: line, next };
+        // The ask carries no partner: say so, so nobody believes the pair is in.
+        const pairNote = ev.fixedPairs && partnerName ? " The partner was not reserved: once the organizer says yes, call join_match again with partner." : "";
+        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, partner: null, group: line, next: next + pairNote };
       }
     }
   }

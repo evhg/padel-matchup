@@ -522,6 +522,22 @@ describe("a night played", () => {
     expect(rows.map((r) => r.points).sort()).toEqual([1, 1, 2, 2, 3, 3]);
   });
 
+  it("a merge keeps a finalised fixed-pairs night's partners side by side", async () => {
+    const { org, ev } = await pairsNight(8);
+    const [a, b, c, dup, e, f] = await Promise.all(["Ma", "Mb", "Mc", "Mb2", "Me", "Mf"].map((n) => makePlayer(db, n)));
+    // One person with two accounts in one night (their own seat and a placeholder elsewhere): the snapshot names both.
+    await db.update(events).set({ standings: [a.id, b.id, c.id, dup.id, e.id, f.id], scoreLockedByCreator: true }).where(eq(events.id, ev.id));
+    const { mergePlayers } = await import("@/lib/domain/merge");
+    await db.transaction(async (tx) => mergePlayers(tx, b.id, [dup.id]));
+    const [after] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(placesOf(after)).toEqual([
+      [a.id, b.id],
+      [c.id, b.id],
+      [e.id, f.id],
+    ]);
+    void org;
+  });
+
   it("the pure rule: each pair rated as a side, its partners moved together, an unrated partner left alone", () => {
     const d = pairTournamentDeltas([
       { ids: ["a", "b"], levels: [3, null], rank: 1 },

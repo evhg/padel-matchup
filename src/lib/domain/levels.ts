@@ -164,10 +164,12 @@ export function tournamentDeltas(rows: readonly { id: string; level: number | nu
 }
 
 /**
- * Fixed pairs (decision F): the pair's finishing rank among the pairs, first place 1 and last 0. The
- * pair is rated by the average of its partners' known levels against the field of pairs, and both
- * partners move by the same step, as `matchDeltas` moves the two players of a side. A partner without
- * a level neither moves nor counts; a pair with no level at all is left out of the field.
+ * Fixed pairs (decision F, "pair results still move levels as today"): the pair's place in the night's
+ * table moves each partner's level once, as `tournamentDeltas` moves a player's on a night of rotating
+ * partners. First place scores 1 and last 0; the pair is rated by the average of its partners' known
+ * levels against the field of pairs, and both partners move by the same step. Not a step per match: a
+ * night is one result. A partner without a level neither moves nor counts; a pair with no level at all
+ * is left out of the field.
  */
 export function pairTournamentDeltas(rows: readonly { ids: readonly [string, string]; levels: readonly [number | null, number | null]; rank: number }[]): Map<string, number> {
   const out = new Map<string, number>();

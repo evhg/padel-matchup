@@ -183,7 +183,7 @@ export function EventFields({
     ? [
         plan.pairs ? t("pairs.planPairs", { pairs: plan.pairs }) : null,
         t("create.planCourts", { courts: plan.courts }),
-        plan.rotation ? t("create.planRotation", { rounds: plan.rotation }) : plan.fits ? t("create.planFits", { rounds: plan.fits, minutes: values.durationMinutes }) : null,
+        plan.rotation ? t(plan.pairs ? "pairs.planRotation" : "create.planRotation", { rounds: plan.rotation }) : plan.fits ? t("create.planFits", { rounds: plan.fits, minutes: values.durationMinutes }) : null,
         plan.rotationMinutes ? (values.gamesTo ? t("create.planTimeGames", { time: hm(plan.rotationMinutes), n: values.gamesTo }) : t("create.planTimePoints", { time: hm(plan.rotationMinutes), n: values.pointsPerMatch ?? 0 })) : null,
       ]
         .filter(Boolean)

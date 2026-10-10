@@ -792,16 +792,18 @@ Everything in this list is live. The README describes each in detail.
   and the organiser can switch it in the panel until round 1. Pairs sign up together: the join takes a
   partner's name, which becomes a reserved spot with its own link that the partner opens to claim it
   (rule 24). A player alone is listed as "Ana · Partner needed", and anybody taps "Be their partner".
-  One partner leaves and the other needs a partner again, or the pair leaves together; the waiting
-  list moves up by pairs, a single past a pair that does not fit yet, with the promotion notices that
-  already exist. The organiser pairs two singles and splits a pair before round 1, a walk-in may bring
+  One partner leaves and the other needs a partner again; a partner who is still only the name the
+  leaver gave goes with them, and nobody takes a player out. The waiting list moves up by pairs, a
+  single past a pair that does not fit yet, with the promotion notices that already exist. The organiser pairs two singles and splits a pair before round 1, a walk-in may bring
   a partner, and "Who is here?" ticks a pair at a time. The pair is the unit of the draw: americano
   rotates the opponents (the circle method, so every pair meets every other pair once in P − 1 rounds,
-  or P with an odd field), mexicano puts the pairs on courts by the pairs' table and King of the Court
-  moves pairs up and down; round 1 takes two complete pairs or more, and nobody's pair rests twice
-  before every pair has rested once. The table ranks pairs, the chips and the create form's line count
-  them, the Telegram, Discord and LINE cards list one pair a line, and a finalised night moves each
-  partner's level by the pair's result. `events.fixed_pairs` and `slots.pair_id`, the key two seats of
+  or P with an odd field; on fewer courts each round is planned ahead, so four pairs on one court meet
+  each other once in six rounds), mexicano puts the pairs on courts by the pairs' table and King of the
+  Court moves pairs up and down; round 1 takes two complete pairs or more, nobody's pair rests twice
+  before every pair has rested once, and the pairs lock at round 1. The table, the ranking and the
+  podium rank pairs; the night's chips carry a Fixed pairs chip and count rounds and courts by pairs;
+  the Telegram, Discord and LINE cards list one pair a line; and a finalised night moves each partner's
+  level once by the pair's place. `events.fixed_pairs` and `slots.pair_id`, the key two seats of
   a pair share. The rules are `src/lib/domain/fixedPairs.ts` (the draw, pure) and `pairSeats.ts` (the
   seats), proven over whole nights of 2 to 8 pairs in `tests/fixed-pairs.test.ts`, on the database in
   `tests/fixed-pairs-night.test.ts`, and as six players on a phone in `e2e/pairs.mjs`. The API and the

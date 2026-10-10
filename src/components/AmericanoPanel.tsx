@@ -420,7 +420,7 @@ export function AmericanoPanel({
               ) : advice?.kind === "fours" ? (
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: advice.count, up: advice.up, down: advice.down })}</p>
               ) : firstRound && startCount < capacity ? (
-                <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: startCount })}</p>
+                <p className="text-center text-xs text-muted">{pairAdvice ? t("pairs.autoShrink", { count: pairAdvice.count }) : t("americano.autoShrink", { count: startCount })}</p>
               ) : rotationLength && rounds.length >= rotationLength ? (
                 <p className="text-center text-xs text-muted">{t(fixedPairs ? "pairs.rotationDone" : "americano.rotationDone", { n: rotationLength })}</p>
               ) : rotationLength ? (
@@ -505,7 +505,7 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }
   };
 
   return (
-    <div className="rounded-xl bg-bg p-3">
+    <div className="rounded-xl bg-bg p-3" data-testid="match-card">
       <div className="mb-2 text-2xs font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
       <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] items-center gap-2">
         <div className={`text-sm font-bold leading-tight ${aWon ? "" : match.sideA != null ? "text-muted" : ""}`}>

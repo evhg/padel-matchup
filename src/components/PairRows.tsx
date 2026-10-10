@@ -15,6 +15,8 @@ import { ShareButtons } from "./ShareSheet";
 function useErrorText() {
   const t = useTranslations();
   return (r: { error: string; detail?: string }) => {
+    // A ranged night: the level is asked by the Join button, which this row has no room for.
+    if (r.error === "level_required" || r.error === "forbidden") return t("pairs.useJoin");
     const key = r.detail && ["taken", "already_paired", "pairs_locked", "partner_needed", "need_2_pairs"].includes(r.detail) ? r.detail : r.error === "name_required" ? null : r.error === "no_identity" ? "generic" : r.error;
     return key ? t(`errors.${key}` as "errors.generic") : t("identity.nameRequired");
   };

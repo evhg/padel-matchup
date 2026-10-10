@@ -694,7 +694,11 @@
     "leaveKeepsPartner": "Leave? {name} stays in and needs a new partner.",
     "invitedBy": "{partner} named you as their partner.",
     "inviteWaiting": "You two are on the waiting list, as a pair: you move up together when two spots free up.",
-    "shareWaiting": "🎾 Hey {name}! I put us down as a pair for padel {day} at {time} at {venue}. We're on the waiting list for now. Claim your spot here: {url}"
+    "shareWaiting": "🎾 Hey {name}! I put us down as a pair for padel {day} at {time} at {venue}. We're on the waiting list for now. Claim your spot here: {url}",
+    "requestPartner": "Your partner is not reserved yet: once you're in, add them with Add your partner.",
+    "useJoin": "This night asks for your level: join with the Join button first.",
+    "autoShrink": "{count, plural, one {Starting with # pair closes the remaining spots.} other {Starting with # pairs closes the remaining spots.}}",
+    "planRotation": "{rounds, plural, one {# round for the full round robin} other {# rounds for the full round robin}}"
   },
   "americano": {
     "title": "Americano",
