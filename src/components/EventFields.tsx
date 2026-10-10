@@ -151,7 +151,7 @@ export function EventFields({
   // fact the fourth needs. The presets stay folded (rule 1); the chip reads what is set.
   const [levelOpen, setLevelOpen] = useState(false);
   const tagLabel = useId();
-  const pill = (on: boolean) => `min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${on ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`;
+  const pill = (on: boolean) => `min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${on ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`;
   const range = { min: values.levelMin, max: values.levelMax };
   const preset = presetFor(range);
   const [customOpen, setCustomOpen] = useState(preset === "custom");
