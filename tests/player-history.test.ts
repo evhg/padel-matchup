@@ -76,10 +76,16 @@ describe("getPlayerHistory", () => {
     ] as const) {
       const { sql: text0, params } = q.toSQL();
       const text = params.reduce<string>((t, p, i) => t.replace(new RegExp(`\\$${i + 1}(?!\\d)`, "g"), `'${String(p)}'`), text0);
-      const plan = ((await db.execute(sql.raw(`explain (analyze, costs off, timing off) ${text}`))) as unknown as { rows: Record<string, string>[] }).rows.map((r) => Object.values(r)[0]).join("\n");
+      // PGlite answers { rows }, postgres-js (CI's real Postgres) an array of rows; and real Postgres plans
+      // from statistics, so they are gathered first, as autovacuum would on a live table.
+      await db.execute(sql`analyze events`);
+      await db.execute(sql`analyze slots`);
+      const res = (await db.execute(sql.raw(`explain (analyze, costs off, timing off) ${text}`))) as unknown as Record<string, string>[] | { rows: Record<string, string>[] };
+      const plan = (Array.isArray(res) ? res : res.rows).map((r) => Object.values(r)[0]).join("\n");
       const touched = [...plan.matchAll(/actual rows=(\d+)/g)].map((m) => Number(m[1]));
       const removed = [...plan.matchAll(/Rows Removed by Filter: (\d+)/g)].map((m) => Number(m[1]));
-      expect(plan).toContain(`Index Scan using ${index}`);
+      // An index scan, an index-only scan or a bitmap scan of the same index all start from the player's rows.
+      expect(plan).toMatch(new RegExp(`(Index Scan using|Index Only Scan using|Bitmap Index Scan on) ${index}\\b`));
       expect(Math.max(...touched), plan).toBeLessThan(50);
       expect(Math.max(0, ...removed), plan).toBeLessThan(50);
     }
