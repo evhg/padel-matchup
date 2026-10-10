@@ -16,7 +16,7 @@ import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 export const LEGAL_OPERATOR = "Kicksmash, Phuket, Thailand";
 
 /** The day /privacy or /terms last changed. Move it in the same commit as the words. */
-export const LEGAL_UPDATED = "2026-10-09";
+export const LEGAL_UPDATED = "2026-10-10";
 
 /** That day in the reader's language: "9 October 2026", "9 октября 2026 г.", "9 de octubre de 2026". */
 export function legalDate(locale: string, iso: string = LEGAL_UPDATED): string {

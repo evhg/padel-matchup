@@ -58,7 +58,9 @@ Everything in this list is live. The README describes each in detail.
   Thailand", the feedback form as the contact, Thailand's PDPA as the law. The figures on the page come
   from the constants that enforce them (`src/lib/legal.ts`), and `tests/legal.test.ts` checks the cookie
   names and the figures. Deleting an account now also unlinks Telegram, Discord and LINE and takes the
-  public page down.
+  public page down. Each night the backup repository's history is rebuilt with only the last sixty days,
+  so a deleted account leaves the backups after about sixty days (the owner's decision of 10 October
+  2026; `docs/OPERATING.md` has the guards and the way back).
 - **Every padel club in Thailand and Singapore, listed.** 67 clubs from public sources — 40 in Thailand
   across eight provinces, 27 in Singapore — with the indoor and outdoor court split where a source said
   it, which is also the first capacity number the app has. Where two sources disagree the club's own
