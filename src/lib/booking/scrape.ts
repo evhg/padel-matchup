@@ -390,8 +390,12 @@ function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadl
     const timeout = Math.min(SCRAPE.requestTimeoutMs, left);
     const signal = AbortSignal.timeout(timeout);
     let res: Response;
+    let body: string | null = null;
+    // The signal aborts the body download too, so the body is read inside the same catch: a page whose
+    // headers came in time and whose body did not is the same cut as one that never answered.
     try {
       res = await o.fetchImpl(url, { method, headers, redirect: "follow", signal });
+      if (!isBlock(method, res) && method === "GET" && res.status === 200) body = (await res.text()).slice(0, SCRAPE.maxBytes);
     } catch (e) {
       if (signal.aborted) {
         timedOut = true;
@@ -404,8 +408,7 @@ function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadl
       lane.blocked = res.status;
       return res;
     }
-    if (method !== "GET" || res.status !== 200) return res;
-    const body = (await res.text()).slice(0, SCRAPE.maxBytes);
+    if (body === null) return res;
     const type = res.headers.get("content-type");
     // Where a redirect ended: a reader reads `url` to tell a sign-in page or a "no such club" index from the page it asked for.
     const final = res.url || url;

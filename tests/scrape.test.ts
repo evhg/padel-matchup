@@ -526,6 +526,37 @@ describe("a clock with fractions, as performance.now() gives it", () => {
     }
   });
 
+  // The deadline's signal also aborts the body download. A real club page is large, so its headers can
+  // arrive in time and its body not: that cut is the run's too, and the club stays due, unwritten.
+  for (const p of ["playtomic", "matchi"] as const) {
+    it(`a ${p} body that the deadline cuts after the headers came is not written either`, async () => {
+      resetPlaytomicState();
+      if (p === "playtomic") await ptClub("padel-cnx");
+      else await club("padel-cnx", { bookingUrl: "https://www.matchi.se/facilities/padelcnx", bookingPlatform: "matchi" });
+      const spy = wallClock();
+      try {
+        const w = world(() => ({ status: 200 }), 0, 0.25);
+        // Headers at once, then a body that never comes: it ends only when the frame's signal aborts it (a real 1.5 s).
+        const stalling = (async (input: RequestInfo | URL, init?: RequestInit) => {
+          void w.fetchImpl(input, init);
+          const signal = init!.signal!;
+          const body = new ReadableStream<Uint8Array>({ start: (c) => signal.addEventListener("abort", () => c.error(signal.reason)) });
+          return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
+        }) as typeof fetch;
+        const adapter = p === "playtomic" ? playtomicAdapter : createMatchiAdapter({ sleep: async () => undefined, clock: () => 0 });
+        const run = await runScrape(db, at(60_000), { adapters: [adapter], fetchImpl: stalling, clock: w.clock, budgetMs: 1_500.5 });
+        expect(w.calls).toHaveLength(1);
+        expect(run.outOfTime).toBe(true);
+        expect(run.clubs).toBe(0);
+        expect(run.failed).toEqual([]);
+        expect((await row("padel-cnx")).availability).toBeNull();
+      } finally {
+        spy.mockRestore();
+        resetPlaytomicState();
+      }
+    });
+  }
+
   it("MATCHi reads clean when its first request starts with 8.5 s left", async () => {
     const page = (name: string) => fixture("matchi", name);
     await club("blue-tree", { bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: "matchi" });

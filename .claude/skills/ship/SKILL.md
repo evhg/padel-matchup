@@ -268,6 +268,11 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **A failure that keeps no cause costs a day to explain.** The cache said "error" and nothing else,
   so three diagnoses argued over a network fault, an abort and a timer. A failed row now keeps `why`,
   the step and the error's class or status, and never the message: a message can carry a link.
+- **A fetch signal aborts the body too, not only the call.** The court-time frame caught its own
+  deadline around `fetch()` alone, so a page whose headers came in time and whose body did not was
+  written as a plain failure and lost its cache, while the test of a request that never answers stayed
+  green. Catch an abort around every `await` that the signal reaches (`res.text()` included), and test
+  a response whose body stalls after the headers (`tests/scrape.test.ts`, "cuts after the headers").
 - **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
   MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
   a stub that set `url`, passed. Test a reader through the frame that production calls it through.
