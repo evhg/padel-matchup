@@ -600,13 +600,20 @@ export async function setClubNotifyMessage(db: Db, slug: string, messageId: numb
   await db.update(clubs).set({ notifyMessageId: messageId }).where(eq(clubs.slug, slug));
 }
 
-/** Slots of "free courts today" as a short count, for chips and lists. */
+/**
+ * "Free courts today" as one count of court-hours, for chips and lists; null when there is nothing to
+ * say. A club's feed gives one row an hour, so its rows are counted as they come. A read from a booking
+ * platform gives pieces of any length (`freeSlotsFromScrape`), so each counts its courts times what is
+ * left of it, to the half hour.
+ */
 export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined, now = new Date()): number | null {
   const a = c?.availability;
   if (!a || a.error) return null;
+  if (!isScraped(a)) return todaySlots(a, now).reduce((sum, s) => sum + s.free, 0);
   // A read from a booking platform covers several days and goes stale when the platform rests (DECIDING rule 32).
-  if (isScraped(a) && !scrapeFresh(a, now)) return null;
-  return todaySlots(a, now).reduce((sum, s) => sum + s.free, 0);
+  if (!scrapeFresh(a, now)) return null;
+  const ms = todaySlots(a, now).reduce((sum, s) => sum + s.free * Math.max(0, Date.parse(s.end) - Math.max(Date.parse(s.start), now.getTime())), 0);
+  return Math.round(ms / 1_800_000) / 2;
 }
 
 /** The club's time zone, set from the manage page when the claim came without one (the week cannot make matches without it). */

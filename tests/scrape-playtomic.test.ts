@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_REQUESTS, MIN_GAP_MS, parsePlaytomicAvailability, parsePlaytomicClubPage, PLAYTOMIC_UA, playtomicAdapter, playtomicBookUrl, playtomicClubPage, playtomicDay, REQUEST_TIMEOUT_MS, resetPlaytomicState } from "@/lib/booking/adapters/playtomic";
 import type { ScrapeTarget } from "@/lib/booking/adapters/types";
 import { PLATFORMS } from "@/lib/booking/platforms";
+import { todaySlots } from "@/lib/booking/availability";
+import { availabilityFrom } from "@/lib/booking/scrape";
 import { utcToZonedParts } from "@/lib/dates";
+import { freeCourtHours } from "@/lib/domain/clubs";
 
 /**
  * Fixtures are real anonymous responses from 10 October 2026, trimmed to what the parser reads:
@@ -112,6 +115,69 @@ describe("parsePlaytomicAvailability", () => {
     expect(parsePlaytomicAvailability(BKK_DAY.replaceAll('"resource_id"', '"resourceId"'), club)).toBeNull();
     expect(parsePlaytomicAvailability(BKK_DAY.replaceAll('"duration":60', '"duration":"60"'), club)).toBeNull();
     expect(parsePlaytomicAvailability("[]", club)).toEqual([]);
+  });
+});
+
+/**
+ * What the cache keeps from a Playtomic day. Playtomic lists every free start once for each length it
+ * offers (60, 90, 120) and a new start every 30 minutes, so one free hour of one court is many rows.
+ * The cache keeps the union of each court's free time, cut where the count of free courts changes,
+ * so a court-hour counts once and every start is unique (readers F1, job F5, docs-rules F1).
+ */
+describe("the cache a Playtomic day becomes", () => {
+  const club = parsePlaytomicClubPage(BKK_PAGE)!;
+  // 03:00 on Sunday 11 October in Bangkok: the whole fixture day is still to come.
+  const NOW = new Date("2026-10-10T20:00:00Z");
+
+  /**
+   * A full day as Playtomic writes it for The Padel Co. (2 courts, open 07:00-22:00 Bangkok, which is
+   * 00:00-15:00 UTC): a start every 30 minutes, each length that fits before closing. Padel 2 is booked
+   * 10:00-11:30 Bangkok (03:00-04:30 UTC), so no slot of it touches that time.
+   */
+  const fullDay = () => {
+    const hm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}:00`;
+    const court = (id: string, busy: [number, number] | null) => ({
+      resource_id: id,
+      start_date: "2026-10-11",
+      slots: Array.from({ length: 29 }, (_, i) => i * 30).flatMap((start) =>
+        [60, 90, 120].filter((d) => start + d <= 15 * 60 && !(busy && start < busy[1] && start + d > busy[0])).map((d) => ({ start_time: hm(start), duration: d, price: `${d * 17} THB` })),
+      ),
+    });
+    return JSON.stringify([court(BKK.padel1, null), court(BKK.padel2, [180, 270])]);
+  };
+
+  const cacheOf = (text: string) => availabilityFrom({ ok: true, slots: parsePlaytomicAvailability(text, club)!, requests: 2 }, { platform: "playtomic", tz: "Asia/Bangkok", now: NOW });
+
+  it("counts each court-hour once: at most courts x opening hours", () => {
+    const raw = parsePlaytomicAvailability(fullDay(), club)!;
+    expect(raw.length).toBeGreaterThan(100); // what the page lists: every start at every length
+    const a = cacheOf(fullDay());
+    // 07:00-10:00 both courts, 10:00-11:30 one, 11:30-22:00 both: 6 + 1.5 + 21.
+    expect(a.slots).toEqual([
+      { start: "2026-10-11T00:00:00.000Z", end: "2026-10-11T03:00:00.000Z", free: 2 },
+      { start: "2026-10-11T03:00:00.000Z", end: "2026-10-11T04:30:00.000Z", free: 1 },
+      { start: "2026-10-11T04:30:00.000Z", end: "2026-10-11T15:00:00.000Z", free: 2 },
+    ]);
+    const hours = freeCourtHours({ availability: a }, NOW)!;
+    expect(hours).toBe(28.5);
+    expect(hours).toBeLessThanOrEqual(2 * 15);
+  });
+
+  it("gives every start once, no row overlaps the next, and keeps no link, price or court name", () => {
+    const a = cacheOf(fullDay());
+    const today = todaySlots(a, NOW);
+    expect(new Set(today.map((s) => s.start)).size).toBe(today.length);
+    for (let i = 1; i < a.slots.length; i++) expect(a.slots[i].start >= a.slots[i - 1].end).toBe(true);
+    for (const s of a.slots) expect(Object.keys(s).sort()).toEqual(["end", "free", "start"]);
+  });
+
+  it("the real fixtures: 4 court-hours at The Padel Co., 21.5 at The Cage", () => {
+    expect(freeCourtHours({ availability: cacheOf(BKK_DAY) }, NOW)).toBe(4);
+    const sg = parsePlaytomicClubPage(SG_PAGE)!;
+    const cage = availabilityFrom({ ok: true, slots: parsePlaytomicAvailability(SG_DAY, sg)!, requests: 2 }, { platform: "playtomic", tz: "Asia/Singapore", now: NOW });
+    expect(freeCourtHours({ availability: cage }, NOW)).toBe(21.5);
+    const starts = todaySlots(cage, NOW).map((s) => s.start);
+    expect(new Set(starts).size).toBe(starts.length);
   });
 });
 

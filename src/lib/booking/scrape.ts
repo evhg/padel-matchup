@@ -1,12 +1,11 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, demandSignals, events, metricsDaily, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
-import { isValidTimeZone } from "@/lib/dates";
+import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { LISTED_SOURCES } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
 import { ADAPTERS, adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeFailure, type ScrapeResult, type ScrapeTarget } from "./adapters";
 import { AVAILABILITY_KINDS, localDay } from "./availability";
-import { cleanUrl, detectPlatform } from "./platforms";
 
 /**
  * Free court times read from the booking platforms' public club pages, every fifteen minutes.
@@ -144,40 +143,75 @@ const clip = (s: string | null | undefined, n: number) => {
   return t ? t.slice(0, n) : null;
 };
 
+const nextDay = (day: string) => new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + 1)).toISOString().slice(0, 10);
+
 /**
- * A reader's slots as the cache keeps them: the free courts counted per time, inside the days the read
- * covers and not yet over, soonest first. A booked court counts for nothing. A booking link is kept
- * only when it is https on the same platform, so a reader cannot put any other address on our pages.
- * Pure.
+ * A reader's slots as the cache keeps them. A platform lists one free start for each length it offers
+ * (Playtomic: 60, 90 and 120 minutes, a new start every 30), so one free hour of one court comes as
+ * several rows that overlap. The cache keeps, for each court, the union of its free time; cuts that on
+ * the platform's grid (wherever a court becomes free or busy, which on Playtomic and MATCHi is the half
+ * hour) and at each of the club's midnights; and counts the courts free for the whole of each piece.
+ * Neighbours with the same count on the same day merge. So the rows never overlap, every start is
+ * unique, and `free x length` adds up to the true court-hours (DECIDING rule 32; the decision of 10
+ * October 2026 on the review of this reader).
+ *
+ * Only `{ start, end, free }` is kept: a link, a price or a court name for each row was most of the
+ * bytes on a row every list reads, and nothing shows them (AGENTS.md rule 12). A booked court counts for
+ * nothing. Time past the last day the read covers is cut off, so the cache never claims a day it did not
+ * read. Pure.
  */
-export function freeSlotsFromScrape(slots: readonly ScrapedSlot[], o: { platform: string; tz: string; now: Date; days: readonly string[] }): ClubFreeSlot[] {
-  const byTime = new Map<string, { start: string; end: string; named: Set<string>; unnamed: number; price: string | null; bookUrl: string | null }>();
+export function freeSlotsFromScrape(slots: readonly ScrapedSlot[], o: { tz: string; now: Date; days: readonly string[] }): ClubFreeSlot[] {
+  if (!o.days.length || !isValidTimeZone(o.tz)) return [];
+  // The club's midnights: the start of each day read, and the end of the last.
+  const cuts = [...o.days, nextDay(o.days[o.days.length - 1])].map((d) => zonedTimeToUtc(d, "00:00", o.tz).getTime());
+  const from = cuts[0];
+  const until = cuts[cuts.length - 1];
+  const byCourt = new Map<string, [number, number][]>();
+  let unnamed = 0;
   for (const s of slots.slice(0, 5_000)) {
     if (!s || s.free !== true) continue;
-    const start = new Date(s.start);
-    const end = new Date(s.end);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start || end <= o.now) continue;
-    if (end.getTime() - start.getTime() > 6 * 3600_000) continue;
-    if (!o.days.includes(localDay(start, o.tz))) continue;
-    const key = `${start.toISOString()}|${end.toISOString()}`;
-    const row = byTime.get(key) ?? { start: start.toISOString(), end: end.toISOString(), named: new Set<string>(), unnamed: 0, price: null, bookUrl: null };
-    const court = clip(s.court, 40);
-    if (court) row.named.add(court);
-    else row.unnamed++;
-    row.price ??= clip(s.priceText, 40);
-    if (!row.bookUrl && s.bookUrl) {
-      const url = cleanUrl(s.bookUrl);
-      if (url?.startsWith("https://") && detectPlatform(url)?.id === o.platform) row.bookUrl = url;
-    }
-    byTime.set(key, row);
+    const a = Date.parse(s.start);
+    const b = Date.parse(s.end);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a || b - a > 6 * 3600_000 || b <= o.now.getTime()) continue;
+    const lo = Math.max(a, from);
+    const hi = Math.min(b, until);
+    if (hi <= lo) continue;
+    // A court with no name counts as a court of its own: two such rows at one time are two courts.
+    const key = clip(s.court, 80) ?? `\u0000${unnamed++}`;
+    const list = byCourt.get(key) ?? [];
+    list.push([lo, hi]);
+    byCourt.set(key, list);
   }
-  return [...byTime.values()]
-    .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end))
-    .slice(0, SCRAPE.maxSlots)
-    .map((r) => {
-      const courts = [...r.named].slice(0, 16);
-      return { start: r.start, end: r.end, free: Math.min(64, r.named.size + r.unnamed), ...(courts.length ? { courts } : {}), price: r.price, bookUrl: r.bookUrl };
-    });
+  // A sweep over the edges of each court's union: +1 where a court becomes free, -1 where it stops.
+  const delta = new Map<number, number>(cuts.map((c) => [c, 0]));
+  const add = (t: number, d: number) => delta.set(t, (delta.get(t) ?? 0) + d);
+  for (const list of byCourt.values()) {
+    list.sort((x, y) => x[0] - y[0]);
+    let [lo, hi] = list[0];
+    for (const [a, b] of list.slice(1)) {
+      if (a <= hi) hi = Math.max(hi, b);
+      else {
+        add(lo, 1);
+        add(hi, -1);
+        [lo, hi] = [a, b];
+      }
+    }
+    add(lo, 1);
+    add(hi, -1);
+  }
+  const midnight = new Set(cuts);
+  const times = [...delta.keys()].sort((x, y) => x - y);
+  const out: ClubFreeSlot[] = [];
+  let free = 0;
+  for (let i = 0; i < times.length - 1 && out.length < SCRAPE.maxSlots; i++) {
+    free += delta.get(times[i])!;
+    if (free <= 0) continue;
+    const n = Math.min(64, free);
+    const last = out[out.length - 1];
+    if (last && last.free === n && Date.parse(last.end) === times[i] && !midnight.has(times[i])) last.end = new Date(times[i + 1]).toISOString();
+    else out.push({ start: new Date(times[i]).toISOString(), end: new Date(times[i + 1]).toISOString(), free: n });
+  }
+  return out;
 }
 
 /** No feed the club shared: a shared feed always wins over a read (`refreshAllAvailability` keeps those rows). */
@@ -323,7 +357,7 @@ export type ScrapeOptions = { adapters?: readonly AvailabilityAdapter[]; fetchIm
 export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
   const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform };
-  if (result.ok) return { ...base, slots: freeSlotsFromScrape(result.slots, { platform: o.platform, tz: o.tz, now: o.now, days }), error: null };
+  if (result.ok) return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null };
   return { ...base, slots: [], error: `${result.reason}${result.status ? ` ${result.status}` : ""}` };
 }
 

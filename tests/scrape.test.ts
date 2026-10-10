@@ -300,7 +300,8 @@ describe("what a read writes", () => {
       [iso(DAY + 2 * HOUR), 1],
       [iso(2 * DAY + 2 * HOUR), 1],
     ]);
-    expect(a.slots[0]).toMatchObject({ courts: ["Court 1", "Court 2"], price: "1,200 ฿", bookUrl: "https://playtomic.io/book/1" });
+    // No link, price or court name for each slot: they were most of the bytes, and nothing reads them (job F2).
+    expect(a.slots[0]).toEqual({ start: iso(2 * HOUR), end: iso(3 * HOUR), free: 2 });
     expect(c.availabilityAt?.toISOString()).toBe(NOW.toISOString());
     // Readers that say "today" see today only.
     expect(freeCourtHours(c, NOW)).toBe(2);
@@ -331,19 +332,21 @@ describe("what a read writes", () => {
     expect(w2.calls).toEqual([]);
   });
 
-  it("keeps a booking link only on the platform's own https host", () => {
+  it("keeps each court's free time once, cut where the count changes and at the club's midnight", () => {
+    // Bangkok times: 11:00 is NOW+1h. Court A is listed at 11:00 for 60 and 120 minutes and at 12:00 for
+    // 60 (one free stretch, 11:00-13:00); court B is free 12:00-13:00; court C 23:00-01:00 crosses
+    // midnight; court D at 23:30 on the last day runs past the end of what the read covers.
+    const s = (from: number, to: number, court: string): ScrapedSlot => ({ start: iso(from), end: iso(to), court, free: true, priceText: "x", bookUrl: "https://playtomic.io/book" });
     const out = freeSlotsFromScrape(
-      [
-        { start: iso(HOUR), end: iso(2 * HOUR), court: "A", free: true, priceText: null, bookUrl: "http://playtomic.io/x" },
-        { start: iso(HOUR), end: iso(2 * HOUR), court: "B", free: true, priceText: null, bookUrl: "javascript:alert(1)" },
-        { start: iso(3 * HOUR), end: iso(4 * HOUR), court: "A", free: true, priceText: null, bookUrl: "https://playtomic.io.evil.example/x" },
-        { start: iso(3 * HOUR), end: iso(4 * HOUR), court: "B", free: true, priceText: null, bookUrl: "https://playtomic.io/book/b" },
-      ],
-      { platform: "playtomic", tz: "Asia/Bangkok", now: NOW, days: ["2026-10-10"] },
+      [s(HOUR, 2 * HOUR, "A"), s(HOUR, 3 * HOUR, "A"), s(2 * HOUR, 3 * HOUR, "A"), s(2 * HOUR, 3 * HOUR, "B"), s(13 * HOUR, 15 * HOUR, "C"), s(DAY + 13.5 * HOUR, DAY + 14.5 * HOUR, "D")],
+      { tz: "Asia/Bangkok", now: NOW, days: ["2026-10-10", "2026-10-11"] },
     );
     expect(out).toEqual([
-      { start: iso(HOUR), end: iso(2 * HOUR), free: 2, courts: ["A", "B"], price: null, bookUrl: null },
-      { start: iso(3 * HOUR), end: iso(4 * HOUR), free: 2, courts: ["A", "B"], price: null, bookUrl: "https://playtomic.io/book/b" },
+      { start: iso(HOUR), end: iso(2 * HOUR), free: 1 },
+      { start: iso(2 * HOUR), end: iso(3 * HOUR), free: 2 },
+      { start: iso(13 * HOUR), end: iso(14 * HOUR), free: 1 }, // 23:00-00:00 on the 10th
+      { start: iso(14 * HOUR), end: iso(15 * HOUR), free: 1 }, // 00:00-01:00 on the 11th: the same count, but another day
+      { start: iso(DAY + 13.5 * HOUR), end: iso(DAY + 14 * HOUR), free: 1 }, // clipped at the end of the 11th
     ]);
   });
 

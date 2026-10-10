@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
-import { scrapeFresh, todaySlots } from "@/lib/booking/availability";
+import { isScraped, scrapeFresh, todaySlots } from "@/lib/booking/availability";
 import { formatEventTime } from "@/lib/dates";
 import { isClubLive, freeCourtHours } from "@/lib/domain/clubs";
 
@@ -52,8 +52,10 @@ export async function FreeCourts({ club, now = new Date(), whenUnconfigured }: {
           <p className="text-sm font-bold">{t("club.freeHours", { count: hours })}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {slots.slice(0, 12).map((s) => (
-              <span key={s.start} className="chip-muted tabular-nums">
-                {formatEventTime(new Date(s.start), a.tz, locale)} · {t("club.freeSlot", { count: s.free })}
+              // A read from a platform keeps pieces of any length, so its chip says when the piece ends too.
+              <span key={`${s.start}|${s.end}`} className="chip-muted tabular-nums">
+                {formatEventTime(new Date(s.start), a.tz, locale)}
+                {isScraped(a) ? `–${formatEventTime(new Date(s.end), a.tz, locale)}` : ""} · {t("club.freeSlot", { count: s.free })}
               </span>
             ))}
             {slots.length > 12 && <span className="chip-muted">…</span>}
