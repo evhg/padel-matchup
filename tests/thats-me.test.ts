@@ -7,6 +7,8 @@ import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { commitThatsMe, decideThatsMe, nameOnlySession, placeRank, thatsMe, thatsMeOffer, thatsMeRows, thatsMeVerdict, whyNot, type ThatsMeRefusal, type ThatsMeRow } from "@/lib/domain/thatsMe";
+import { normalName } from "@/lib/domain/dupes";
+import { normalizeName } from "@/lib/domain/players";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
 
@@ -128,6 +130,14 @@ describe("who 'That's me' may sign in", () => {
     expect(nameOnlySession(true, { ...none, discordId: "d" })).toBe(false);
     expect(nameOnlySession(true, { ...none, lineId: "l" })).toBe(false);
     expect(nameOnlySession(true, { ...none, phone: "+66810000000" })).toBe(false);
+  });
+
+  it("stores and compares a name composed, without invisible characters, and keeps an emoji whole", () => {
+    expect(normalizeName("Jose\u0301")).toBe("Jos\u00e9");
+    expect(normalizeName("A\u200Bna\u00AD")).toBe("Ana");
+    expect(normalizeName("Ana \u{1F468}\u200D\u{1F469}")).toBe("Ana \u{1F468}\u200D\u{1F469}");
+    expect(normalName("Jose\u0301")).toBe(normalName("JOS\u00c9"));
+    expect(normalName("A\u200Bna")).toBe("ana");
   });
 
   it("treats a cookie whose record is gone as a browser that knows nobody", () => {
