@@ -288,9 +288,36 @@ commit keeps it.
 
 **The counters**, one a day in `metrics_daily`: `scrape_ok_<platform>`, `scrape_blocked_<platform>`,
 `scrape_changed_<platform>`, `scrape_error_<platform>`, `scrape_requests_<platform>`,
-`scrape_clubs_fresh`, and `cron_scrape_at` for the last run. The service board has one line for
+`scrape_cut_<platform>`, `scrape_clubs_fresh`, and `cron_scrape_at` for the last run. The service board has one line for
 each platform: fresh (the clubs read clean in the last hour), resting until, stopped, or off. A
 stopped platform is red, and the owner hears once a month.
+
+**When a club's read fails.** The club's cache keeps `error` as the reason and the status
+("error", "timeout", "blocked 403"), which is what the pages and the counters read. Beside it,
+`why` holds the cause in a few safe words, built only from known parts: the reader's step ("club
+page", "availability <day>", "locations", "frame") and the error's class or HTTP status
+("availability 2026-10-10: RangeError", "club page: HTTP 500"). Anything else in the message is
+dropped, so it never holds a link, an address, a body or a token. Only the Playtomic reader names its
+steps; MATCHi and Book & Go keep a `why` only for the frame's own stops ("frame: cap", "frame:
+budget"), and their other failures show `error` alone. No page, no API shape and no list read of
+free courts shows `why`. Ask
+`select slug, availability->>'error', availability->>'why' from clubs where availability->>'error'
+is not null`. The push job's answer also lists every club the run wrote as failed (`scrape.failed`),
+and pg_net keeps that answer for about six hours in `net._http_response`, which outlives Vercel's
+hour of logs. A request that the run's own deadline cuts short is not the club's failure: the club is
+not written and stays due for the next run, and its last good read keeps showing. The one exception
+is the lane's first club in a fair run (30 s or more; the push job passes 50 s less its own work): it
+did not fit even then, so the next run would cut it again and read no club behind it. It is written as
+"timeout" with `why` "frame: budget", and goes to the back of the queue. A run on a very busy tick has
+less than 30 s, and a first club it cuts is not written: the next fair run reads it.
+
+**When clubs are cut.** `scrape_cut_<platform>` counts the clubs whose read the run's deadline cut
+short, at most one a lane a run. A few cuts a day are normal: a lane of eight clubs can run out of
+its 45 s, and the push job leaves the read less time on a busy tick. A "frame: budget" row means that
+one club did not fit in a fair run, so read that club's requests (the platform was slow, or the club
+needs more requests than its neighbours). Ask
+`select day, key, value from metrics_daily where key like 'scrape_cut_%' order by day desc limit 14`,
+and `select slug, availability_at from clubs where availability->>'why' = 'frame: budget'`.
 
 **When a platform blocks us.** Do nothing that gets around it: no other address, no browser
 disguise, no captcha service, no sign-in. Let the rest run out. If it blocks again after a week,

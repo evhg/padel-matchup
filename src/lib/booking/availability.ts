@@ -271,10 +271,11 @@ export function slotDay(start: string, tz: string): string {
  * slots that end after `from` and start before `until`. The days it does not need stay in the database,
  * which is what keeps a list of clubs small now that a read from a platform holds three days (AGENTS.md
  * rule 12, the Supabase egress in docs/OPERATING.md). Every writer stores instants from `toISOString()`,
- * so comparing the text compares the times. Null where the row has no cache.
+ * so comparing the text compares the times. `why` stays behind too: no list reads it, only the row and
+ * the run's answer (`failureWhy` in `scrape.ts`). Null where the row has no cache.
  */
 export function cacheBetween(from: Date, until: Date): SQL<ClubAvailability | null> {
   const lo = from.toISOString();
   const hi = until.toISOString();
-  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
+  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
 }

@@ -1,18 +1,21 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
-import { and, eq, like, sql } from "drizzle-orm";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, type Club } from "@/db/schema";
 import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult, type ScrapeTarget } from "@/lib/booking/adapters";
 import { createMatchiAdapter, matchiAdapter } from "@/lib/booking/adapters/matchi";
-import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
+import { playtomicAdapter, resetPlaytomicState } from "@/lib/booking/adapters/playtomic";
+import { createBookandgoAdapter } from "@/lib/booking/adapters/bookandgo";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeCourtsCardShown, freeCourtsState } from "@/lib/booking/availability";
 import { freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { setMetric } from "@/lib/domain/metrics";
-import { SCRAPE, disabledPlatforms, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
+import { SCRAPE, disabledPlatforms, dueClubs, failureWhy, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 
@@ -41,8 +44,8 @@ type Call = { url: string; at: number; headers: Headers; method: string };
 type Answer = { status: number; body?: unknown; text?: string; headers?: Record<string, string>; url?: string };
 
 /** A fake clock for the run, and a stubbed network that answers by URL. */
-function world(answer: (url: string) => Answer = () => ({ status: 200, body: { slots: [] } }), costMs = 200) {
-  let t = 0;
+function world(answer: (url: string) => Answer = () => ({ status: 200, body: { slots: [] } }), costMs = 200, start = 0) {
+  let t = start;
   const calls: Call[] = [];
   const clock: Clock = {
     now: () => t,
@@ -63,14 +66,15 @@ function world(answer: (url: string) => Answer = () => ({ status: 200, body: { s
 }
 
 /** The test's reader: GETs the booking link and takes the JSON as it is. Parses nothing a real page would have. */
-const reader = (platform = "playtomic", o: { method?: string; cookie?: boolean; requests?: number; onRead?: (slug: string) => Promise<void>; seen?: ScrapeTarget[] } = {}): AvailabilityAdapter => ({
+const reader = (platform = "playtomic", o: { method?: string; cookie?: boolean; requests?: number | ((slug: string) => number); onRead?: (slug: string) => Promise<void>; seen?: ScrapeTarget[] } = {}): AvailabilityAdapter => ({
   platform,
   matches: (url) => url.includes(`${platform}.`),
   async scrape(target, fetchImpl): Promise<ScrapeResult> {
     o.seen?.push(target);
     await o.onRead?.(target.clubSlug);
     let res: Response | null = null;
-    for (let i = 0; i < (o.requests ?? 1); i++) {
+    const requests = typeof o.requests === "function" ? o.requests(target.clubSlug) : (o.requests ?? 1);
+    for (let i = 0; i < requests; i++) {
       res = await fetchImpl(i ? `${target.bookingUrl}?day=${i}` : target.bookingUrl, { method: o.method ?? "GET", headers: o.cookie ? { cookie: "session=abc" } : {} });
     }
     if (!res) return { ok: false, status: null, reason: "error", requests: 0, detail: null };
@@ -145,6 +149,27 @@ describe("the slice: which clubs a run reads", () => {
     expect(await urls(61 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
   });
 
+  it("a quiet club read in full is read in full again at its next due run, never today alone", async () => {
+    // Nobody uses this club, so it is due once an hour, and its next read must cover all three days:
+    // its cache and its full read are the same instant. The ticks drift a second earlier each time, as
+    // real ones do. Run k is at k × 15 minutes − k seconds:
+    //   k = 0   0:00:00   full read
+    //   k = 4   0:59:56   not an hour since 0:00:00: not due
+    //   k = 5   1:14:55   due, and a full read (an hour since the full read)
+    //   k = 10  2:29:50   due, and a full read
+    await club("quiet-club");
+    const seen: ScrapeTarget[] = [];
+    const readAt: number[] = [];
+    for (let k = 0; k <= 10; k++) {
+      const t = k * 15 * 60_000 - k * 1_000;
+      const w = world();
+      await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
+      if (w.calls.length) readAt.push(k);
+    }
+    expect(readAt).toEqual([0, 5, 10]);
+    expect(seen.map((s) => s.days)).toEqual([SCRAPE.days, SCRAPE.days, SCRAPE.days]);
+  });
+
   it("gives each platform its own slice, so one platform's clubs never crowd out another's", async () => {
     for (let i = 0; i < 10; i++) await club(`pt-${i}`, { availabilityAt: at(-DAY + i * 60_000) });
     await club("mt-a", { bookingUrl: "https://matchi.se/mt-a", bookingPlatform: "matchi" });
@@ -172,6 +197,15 @@ describe("the slice: which clubs a run reads", () => {
     const w2 = world();
     await runScrape(db, at(61 * 60_000), { adapters: [strict], fetchImpl: w2.fetchImpl, clock: w2.clock, perLane: 1 });
     expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/next-one"]);
+  });
+
+  it("names a link no reader can read among the run's failed clubs", async () => {
+    await club("app-link", { bookingUrl: "https://playtomic.com/", bookingPlatform: "playtomic" });
+    const strict = { ...reader(), matches: (url: string) => /^https:\/\/playtomic\.io\/[a-z-]+$/.test(url) };
+    const w = world();
+    const run = await runScrape(db, NOW, { adapters: [strict], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls).toEqual([]);
+    expect(run.failed).toEqual([{ slug: "app-link", platform: "playtomic", error: "unreadable link", why: null }]);
   });
 
   it("reads the directory's clubs as the import writes them: the booking link on the platform", async () => {
@@ -225,14 +259,108 @@ describe("the slice: which clubs a run reads", () => {
     expect(read.sort()).toEqual(["a-club", "b-club", "c-club"]);
   });
 
+  // A club after the lane's first: the first one (`a-quick`, one request) is read, then the deadline
+  // cuts `slow-pages` (five requests) after two. A lone first club is the next test's case.
+  const slowAfterQuick = { requests: (slug: string) => (slug === "slow-pages" ? 5 : 1) };
+
   it("a club whose read the deadline cuts short is not written, and stays due", async () => {
+    await club("a-quick");
     await club("slow-pages");
     const w = world(undefined, 10_000);
-    const run = await runScrape(db, NOW, { adapters: [reader("playtomic", { requests: 5 })], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+    const run = await runScrape(db, NOW, { adapters: [reader("playtomic", slowAfterQuick)], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
     expect(w.calls.length).toBe(3);
     expect(run.outOfTime).toBe(true);
-    expect(run.clubs).toBe(0);
+    expect(run.clubs).toBe(1);
+    expect(run.failed).toEqual([]);
     expect((await row("slow-pages")).availabilityAt).toBeNull();
+  });
+
+  it("a lane's first club that the deadline cuts is written as a timeout, so it never starves the clubs behind it", async () => {
+    // slow-head has the oldest cache and needs five requests at 12 s each; the whole budget (45 s) fits
+    // four. It had the run's whole budget and did not fit: a later run would only do the same, and
+    // fast-a, fast-b and fast-c behind it would never be read.
+    await club("slow-head", { availabilityAt: at(-3 * HOUR) });
+    for (const s of ["fast-a", "fast-b", "fast-c"]) await club(s, { availabilityAt: at(-2 * HOUR) });
+    const r = reader("playtomic", { requests: (slug) => (slug === "slow-head" ? 5 : 1) });
+    const w = world(undefined, 12_000);
+    const first = await runScrape(db, NOW, { adapters: [r], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: SCRAPE.budgetMs });
+    expect(w.calls.map((c) => c.url.replace(/\?.*/, ""))).toEqual(Array(4).fill("https://playtomic.io/slow-head"));
+    expect(first.outOfTime).toBe(true);
+    expect((await row("slow-head")).availability).toMatchObject({ error: "timeout", why: "frame: budget", slots: [] });
+    expect(first.failed).toEqual([{ slug: "slow-head", platform: "playtomic", error: "timeout", why: "frame: budget" }]);
+    expect(await metric("scrape_cut_playtomic")).toBe(1);
+
+    // Fifteen minutes on, slow-head is at the back and not yet due again: the three behind it are read.
+    const w2 = world(undefined, 12_000);
+    const next = await runScrape(db, at(15 * 60_000), { adapters: [r], fetchImpl: w2.fetchImpl, clock: w2.clock, budgetMs: SCRAPE.budgetMs });
+    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/fast-a", "https://playtomic.io/fast-b", "https://playtomic.io/fast-c"]);
+    expect(next.platforms.playtomic).toMatchObject({ ok: 3, errors: 0 });
+    for (const s of ["fast-a", "fast-b", "fast-c"]) expect((await row(s)).availabilityAt?.toISOString()).toBe(iso(15 * 60_000));
+  });
+
+  it("a lane's first club cut on a busy tick keeps its last good read and stays due", async () => {
+    // A busy push tick leaves the read 5 s, not the whole 45 s. healthy-head read clean 61 minutes ago
+    // and still shows; it needs four requests at 1.5 s each and is cut after three. A full run would
+    // read it, so nothing is written: its free times keep showing and it stays first for the next run.
+    const prev = { fetchedAt: at(-61 * 60_000).toISOString(), day: "2026-10-10", days: ["2026-10-10"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", error: null, fullAt: at(-61 * 60_000).toISOString(), slots: [{ start: at(2 * HOUR).toISOString(), end: at(3 * HOUR).toISOString(), free: 1 }] };
+    await club("healthy-head", { availabilityAt: at(-61 * 60_000), availability: prev as never });
+    const w = world(undefined, 1_500);
+    const run = await runScrape(db, NOW, { adapters: [reader("playtomic", { requests: 4 })], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 5_000 });
+    expect(run.outOfTime).toBe(true);
+    expect(run.failed).toEqual([]);
+    expect(await metric("scrape_cut_playtomic")).toBe(1);
+    const after = await row("healthy-head");
+    expect(after.availabilityAt?.toISOString()).toBe(at(-61 * 60_000).toISOString());
+    expect(after.availability).toMatchObject({ error: null, source: "scrape:playtomic", slots: [{ free: 1 }] });
+  });
+
+  it("a tick a little slower than 5 s still moves a slow first club to the back", async () => {
+    // The push job passes 50 s less its own work: a tick that took 5.1 s leaves 44,899.6 ms, under the
+    // 45 s budget but a fair run. slow-head needs five requests at 12 s each and is cut; it is written as a
+    // timeout, so the next run reads fast-a and fast-b behind it rather than cutting slow-head again.
+    await club("slow-head", { availabilityAt: at(-3 * HOUR) });
+    for (const s of ["fast-a", "fast-b"]) await club(s, { availabilityAt: at(-2 * HOUR) });
+    const r = reader("playtomic", { requests: (slug) => (slug === "slow-head" ? 5 : 1) });
+    const w = world(undefined, 12_000, 0.25);
+    await runScrape(db, NOW, { adapters: [r], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 44_899.6 });
+    expect((await row("slow-head")).availability).toMatchObject({ error: "timeout", why: "frame: budget" });
+    const w2 = world(undefined, 12_000, 0.25);
+    await runScrape(db, at(15 * 60_000), { adapters: [r], fetchImpl: w2.fetchImpl, clock: w2.clock, budgetMs: 44_899.6 });
+    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/fast-a", "https://playtomic.io/fast-b"]);
+  });
+
+  it("a club the run never starts is not counted as cut, even in the run's last second", async () => {
+    // 600 ms a request from 0.25: a-quick is read by 600.25, and 1,900.5 ms of budget leave under the
+    // second a request needs, so b-late never starts. Nothing was cut.
+    await club("a-quick");
+    await club("b-late");
+    const w = world(undefined, 600, 0.25);
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 1_900.5 });
+    expect(w.calls).toHaveLength(1);
+    expect(run.outOfTime).toBe(true);
+    expect(await metric("scrape_cut_playtomic")).toBe(0);
+  });
+
+  it("counts each club the deadline cuts short, whether it stays due or is the lane's first and is written", async () => {
+    await club("a-quick");
+    await club("slow-pages");
+    // First run: a-quick is read, slow-pages is cut after it and stays due. Second run: a-quick is not
+    // due yet, so slow-pages is the lane's first club, is cut again, and is written as a timeout.
+    for (const t of [0, 15 * 60_000]) {
+      const w = world(undefined, 12_000);
+      await runScrape(db, at(t), { adapters: [reader("playtomic", slowAfterQuick)], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: SCRAPE.budgetMs });
+      if (t === 0) expect((await row("slow-pages")).availabilityAt).toBeNull();
+    }
+    expect((await row("slow-pages")).availability).toMatchObject({ error: "timeout", why: "frame: budget" });
+    expect(await metric("scrape_cut_playtomic")).toBe(2);
+    // A club that never started is not cut: it only waits for the next run.
+    await db.update(clubs).set({ bookingUrl: null, bookingPlatform: null }).where(inArray(clubs.slug, ["a-quick", "slow-pages"]));
+    for (const s of ["a-club", "b-club", "c-club", "d-club"]) await club(s);
+    const w = world(undefined, 10_000);
+    const run = await runScrape(db, at(30 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+    expect(run.outOfTime).toBe(true);
+    expect(w.calls).toHaveLength(3);
+    expect(await metric("scrape_cut_playtomic")).toBe(2);
   });
 
   it("caps one club's read at eight requests, and refuses anything but a GET without a cookie", async () => {
@@ -425,6 +553,323 @@ describe("back-off and switches", () => {
     expect(await scrapeIfDue(db, at(10 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "not_due" });
     const third = await scrapeIfDue(db, at(15 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
     expect("clubs" in third).toBe(true);
+  });
+});
+
+/**
+ * The run's clock in production is `performance.now()`, which always carries a fraction. On 10 October
+ * 2026 four Playtomic clubs a run wrote a cache whose whole error was "error": the request timeout was
+ * the time left to the deadline, a fraction, and `AbortSignal.timeout` throws on anything but a whole
+ * number, so the last one or two clubs of an eight-club lane failed before a request left. Every clock
+ * above counts in whole milliseconds, which is why no test saw it. These start and step with fractions.
+ */
+describe("a clock with fractions, as performance.now() gives it", () => {
+  const fixture = (dir: string, name: string) => readFileSync(path.join(import.meta.dirname, "fixtures/scrape", dir, name), "utf8");
+  const PT_PAGE = fixture("playtomic", "club-the-padel-co.html");
+  const PT_DAY = fixture("playtomic", "availability-the-padel-co-2026-10-11.json");
+  /** Each club its own tenant, so the run's page cache never serves one club's days to another. */
+  const ptPage = (pathname: string) => PT_PAGE.replaceAll("b692a586-2e22-4fca-add7-272f73c98aa7", `b692a586-2e22-4fca-add7-${createHash("md5").update(pathname).digest("hex").slice(0, 12)}`);
+  const playtomic = (url: string): Answer => {
+    const u = new URL(url);
+    if (u.pathname.startsWith("/clubs/")) return { status: 200, text: ptPage(u.pathname) };
+    if (u.pathname === "/api/clubs/availability") return { status: 200, text: PT_DAY, headers: { "content-type": "application/json" } };
+    return { status: 404 };
+  };
+  /** The Playtomic reader keeps its own second between requests on `Date.now()`: move that clock on, so no real second passes. */
+  const wallClock = () => {
+    let wall = NOW.getTime();
+    return vi.spyOn(Date, "now").mockImplementation(() => (wall += 5_000));
+  };
+  const ptClub = (slug: string) => club(slug, { bookingUrl: `https://playtomic.com/clubs/${slug}`, website: `https://playtomic.com/clubs/${slug}`, availabilityAt: at(-61 * 60_000) });
+
+  // The runs of 10 October: at 1.19 s a request (10:50) the lane's eighth club wrote "error"; at 1.43 s
+  // (11:50 and 12:20) its seventh and eighth did. At 1.43 s thirty-two requests no longer fit in 45
+  // seconds, so the eighth club is cut short and stays due for the next run, unwritten.
+  for (const c of [
+    { cost: 1190.123, requests: 32, ok: 8, outOfTime: false, unread: [] as string[] },
+    { cost: 1430.123, requests: 31, ok: 7, outOfTime: true, unread: ["padel-cnx"] },
+  ]) {
+    it(`reads every Playtomic club of a lane clean at ${c.cost} ms a request, the last ones too`, async () => {
+      resetPlaytomicState();
+      const slugs = ["baan-padel", "bangkok-padel", "bel-club-padel", "destination-padel-club", "koh-tao-athletic-club", "love-all-sports", "madison-house-padel", "padel-cnx"];
+      for (const s of slugs) await ptClub(s);
+      const w = world(playtomic, c.cost, 1234.567);
+      const spy = wallClock();
+      try {
+        const run = await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: w.fetchImpl, clock: w.clock });
+        expect(run.platforms.playtomic).toMatchObject({ requests: c.requests, ok: c.ok, errors: 0 });
+        expect(run.outOfTime).toBe(c.outOfTime);
+        expect(run.failed).toEqual([]);
+        // Every request the frame counted went out: none died before it left.
+        expect(w.calls).toHaveLength(c.requests);
+        const rows = await db.select({ slug: clubs.slug, a: clubs.availability, at: clubs.availabilityAt }).from(clubs);
+        expect(rows.filter((r) => r.a !== null && r.a.error !== null).map((r) => [r.slug, r.a?.error])).toEqual([]);
+        expect(rows.filter((r) => r.at!.getTime() < NOW.getTime()).map((r) => r.slug)).toEqual(c.unread);
+      } finally {
+        spy.mockRestore();
+        resetPlaytomicState();
+      }
+    });
+  }
+
+  it("never starts a request with under a second left, and a request the deadline cuts short is not written", async () => {
+    resetPlaytomicState();
+    await ptClub("padel-cnx");
+    const spy = wallClock();
+    try {
+      // 0.9 s of budget: not one request fits, so none starts.
+      const none = world(playtomic, 300, 0.25);
+      const short = await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: none.fetchImpl, clock: none.clock, budgetMs: 900.5 });
+      expect(none.calls).toEqual([]);
+      expect(short.outOfTime).toBe(true);
+      expect((await row("padel-cnx")).availability).toBeNull();
+
+      // 2.5 s of budget. baan-padel goes first and is one request (a club page the platform does not
+      // know). Then the platform never answers for padel-cnx, which starts with 1.5 s left: the frame's
+      // own deadline aborts that request (a real 1.5 s). The club is cut short, never written as an
+      // error, and stays due for the next run. (A lane's first club is written: see "never starves" above.)
+      await ptClub("baan-padel");
+      const hang = world(() => ({ status: 404 }), 0, 0.25);
+      const hanging = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (!String(input).includes("padel-cnx")) return hang.fetchImpl(input, init);
+        void hang.fetchImpl(input, init);
+        return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+      }) as typeof fetch;
+      const cut = await runScrape(db, at(60_000), { adapters: [playtomicAdapter], fetchImpl: hanging, clock: hang.clock, budgetMs: 2_500.5 });
+      expect(hang.calls).toHaveLength(2);
+      expect(cut.outOfTime).toBe(true);
+      expect(cut.clubs).toBe(1);
+      expect(cut.failed.map((f) => f.slug)).toEqual(["baan-padel"]);
+      expect((await row("padel-cnx")).availability).toBeNull();
+    } finally {
+      spy.mockRestore();
+      resetPlaytomicState();
+    }
+  });
+
+  // The deadline's signal also aborts the body download. A real club page is large, so its headers can
+  // arrive in time and its body not: that cut is the run's too, and the club stays due, unwritten.
+  for (const p of ["playtomic", "matchi"] as const) {
+    it(`a ${p} body that the deadline cuts after the headers came is not written either`, async () => {
+      resetPlaytomicState();
+      // A club goes first (one request, a page the platform does not know), so padel-cnx is not the
+      // lane's first: a lane's first club that the deadline cuts is written (see "never starves" above).
+      if (p === "playtomic") await ptClub("baan-padel");
+      else await club("a-head", { bookingUrl: "https://www.matchi.se/facilities/ahead", bookingPlatform: "matchi" });
+      if (p === "playtomic") await ptClub("padel-cnx");
+      else await club("padel-cnx", { bookingUrl: "https://www.matchi.se/facilities/padelcnx", bookingPlatform: "matchi" });
+      const spy = wallClock();
+      try {
+        const w = world(() => ({ status: 404 }), 0, 0.25);
+        // Headers at once, then a body that never comes: it ends only when the frame's signal aborts it
+        // (a real 1.5 s: padel-cnx starts one second in, with 1.5 s left).
+        const stalling = (async (input: RequestInfo | URL, init?: RequestInit) => {
+          if (!/padel-?cnx/.test(String(input))) return w.fetchImpl(input, init);
+          void w.fetchImpl(input, init);
+          const signal = init!.signal!;
+          const body = new ReadableStream<Uint8Array>({ start: (c) => signal.addEventListener("abort", () => c.error(signal.reason)) });
+          return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
+        }) as typeof fetch;
+        const adapter = p === "playtomic" ? playtomicAdapter : createMatchiAdapter({ sleep: async () => undefined, clock: () => 0 });
+        const run = await runScrape(db, at(60_000), { adapters: [adapter], fetchImpl: stalling, clock: w.clock, budgetMs: 2_500.5 });
+        expect(w.calls).toHaveLength(2);
+        expect(run.outOfTime).toBe(true);
+        expect(run.clubs).toBe(1);
+        expect(run.failed.map((f) => f.slug)).toEqual([p === "playtomic" ? "baan-padel" : "a-head"]);
+        expect((await row("padel-cnx")).availability).toBeNull();
+      } finally {
+        spy.mockRestore();
+        resetPlaytomicState();
+      }
+    });
+  }
+
+  it("a Playtomic error whose name or code carries a link or an address keeps only the plain class", async () => {
+    resetPlaytomicState();
+    await ptClub("crafted-pt");
+    const spy = wallClock();
+    try {
+      const w = world(playtomic, 200.123, 0.25);
+      const crafted = (async () => {
+        throw Object.assign(new Error("connect to https://playtomic.com/api?token=abc failed"), { name: "https://evil.example/x?token=abc", cause: { code: "10.0.0.1" } });
+      }) as typeof fetch;
+      await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: crafted, clock: w.clock });
+      expect((await row("crafted-pt")).availability).toMatchObject({ error: "error", why: "club page: Error" });
+    } finally {
+      spy.mockRestore();
+      resetPlaytomicState();
+    }
+  });
+
+  it("a Playtomic request that times out keeps the error's class as its why, never a word of the message", async () => {
+    resetPlaytomicState();
+    await ptClub("slow-pt");
+    const spy = wallClock();
+    // The platform's ten seconds run out at once, while the run's deadline is far off: the club is written.
+    const timer = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => AbortSignal.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError")));
+    try {
+      const w = world(playtomic, 200.123, 0.25);
+      const aborting = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const res = await w.fetchImpl(input, init);
+        if (init?.signal?.aborted) throw init.signal.reason;
+        return res;
+      }) as typeof fetch;
+      const run = await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: aborting, clock: w.clock });
+      expect((await row("slow-pt")).availability).toMatchObject({ error: "timeout", why: "club page: TimeoutError", slots: [] });
+      expect(run.failed).toEqual([{ slug: "slow-pt", platform: "playtomic", error: "timeout", why: "club page: TimeoutError" }]);
+    } finally {
+      timer.mockRestore();
+      spy.mockRestore();
+      resetPlaytomicState();
+    }
+  });
+
+  it("MATCHi reads clean when its first request starts with 8.5 s left", async () => {
+    const page = (name: string) => fixture("matchi", name);
+    await club("blue-tree", { bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: "matchi" });
+    const w = world((url) => {
+      const u = new URL(url);
+      if (u.pathname === "/facilities/bluetree") return { status: 200, text: page("facility-bluetree.html") };
+      if (u.pathname === "/book/listSlots") return { status: 200, text: page(u.searchParams.get("date") === "2026-10-10" ? "list-slots-bluetree-2026-10-10.html" : u.searchParams.get("date") === "2026-10-11" ? "list-slots-bluetree-2026-10-11.html" : "list-slots-empty.html") };
+      return { status: 404 };
+    }, 200.123, 0.25);
+    const matchi = createMatchiAdapter({ sleep: async () => undefined, clock: () => 0 });
+    const run = await runScrape(db, NOW, { adapters: [matchi], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 8_500.5 });
+    expect(run.platforms.matchi).toMatchObject({ ok: 1, errors: 0 });
+    expect((await row("blue-tree")).availability).toMatchObject({ error: null, source: "scrape:matchi" });
+  });
+
+  it("Book & Go reads clean when its first request starts with 8.5 s left", async () => {
+    const bg = (name: string) => fixture("bookandgo", name);
+    await club("prime-padel-havelock", { bookingUrl: "https://app.primepadelsport.com/", bookingPlatform: "bookandgo", tz: "Asia/Singapore" });
+    const w = world((url) => {
+      const m = new URL(url).pathname.match(/^\/api\/v1\/apps\/39\/(locations|court-bookings)$/);
+      if (!m) return { status: 404 };
+      if (m[1] === "locations") return { status: 200, text: bg("locations-39.json"), headers: { "content-type": "application/json" } };
+      const date = new URL(url).searchParams.get("date");
+      return { status: 200, text: bg(`court-bookings-39-${date}.json`), headers: { "content-type": "application/json" } };
+    }, 200.123, 0.25);
+    const bookandgo = createBookandgoAdapter({ sleep: async () => undefined, clock: () => 0 });
+    const run = await runScrape(db, NOW, { adapters: [bookandgo], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 8_500.5 });
+    expect(run.platforms.bookandgo).toMatchObject({ ok: 1, errors: 0 });
+    expect((await row("prime-padel-havelock")).availability).toMatchObject({ error: null, source: "scrape:bookandgo" });
+  });
+});
+
+describe("a failed read says why, in a few words that are safe to keep", () => {
+  it("keeps a known step and the error's class or status, and drops everything else", () => {
+    // What each reader gives, kept as it is.
+    for (const kept of ["availability 2026-10-10: RangeError", "club page: HTTP 500", "club page: TypeError ECONNRESET", "club page: TypeError UND_ERR_CONNECT_TIMEOUT", "locations: HTTP 503", "frame: cap", "frame: budget", "club page: TimeoutError"]) expect(failureWhy(kept)).toBe(kept);
+    // A word of a message is not a class: Playtomic's "no answer in 10 s" once kept "no".
+    expect(failureWhy("club page: no answer in 10 s")).toBeNull();
+    expect(failureWhy("availability 2026-10-10: no answer in 10 s")).toBeNull();
+    expect(failureWhy("club page: localhost refused")).toBeNull();
+    // The frame names only its own stops.
+    expect(failureWhy("frame: TypeError")).toBeNull();
+    expect(failureWhy("frame: localhost")).toBeNull();
+    // A link, a token, an address and a body in the message: only the step and the class or status stay.
+    expect(failureWhy("club page: TypeError https://playtomic.com/clubs/x?token=abc123")).toBe("club page: TypeError");
+    expect(failureWhy("availability 2026-10-10: HTTP 500 Bearer eyJhbGciOi.e30.abc")).toBe("availability 2026-10-10: HTTP 500");
+    expect(failureWhy("club page: TypeError ECONNREFUSED 10.0.0.12:443")).toBe("club page: TypeError ECONNREFUSED");
+    expect(failureWhy("club page: sk7Live9abc123")).toBeNull(); // a token under 24 characters
+    expect(failureWhy("club page: 10.0.0.12")).toBeNull();
+    expect(failureWhy('club page: {"secret":"abc"}')).toBeNull();
+    expect(failureWhy("club page: TypeError ec0nn.reset")).toBe("club page: TypeError"); // a code not in capitals is not a code
+    expect(failureWhy("club page: HTTP 5000")).toBeNull();
+    // A step that is not one of the readers' own is dropped with the rest.
+    expect(failureWhy("500 on /book/listSlots?facility=2165&date=2026-10-10")).toBeNull();
+    expect(failureWhy("https://x.example/a?k=1: TypeError")).toBeNull();
+    expect(failureWhy("10.0.0.12: HTTP 500")).toBeNull();
+    expect(failureWhy("frame: x".repeat(10))).toBeNull();
+    expect(failureWhy(`club page: ${"x".repeat(41)}`)).toBeNull();
+    expect(failureWhy(null)).toBeNull();
+  });
+
+  it("writes it beside the error, names the club in the run's answer, and never shows it in public", async () => {
+    await club("broken");
+    const leaky: AvailabilityAdapter = { ...reader(), scrape: async (t, f) => ((await f(t.bookingUrl)), { ok: false, status: 500, reason: "error", requests: 1, detail: `club page: HTTP 500 at ${t.bookingUrl}?key=abcdefabcdefabcdefabcdefabcdef` }) };
+    const w = world(() => ({ status: 500 }));
+    const run = await runScrape(db, NOW, { adapters: [leaky], fetchImpl: w.fetchImpl, clock: w.clock });
+    const a = (await row("broken")).availability!;
+    expect(a).toMatchObject({ error: "error 500", why: "club page: HTTP 500", slots: [] });
+    expect(run.failed).toEqual([{ slug: "broken", platform: "playtomic", error: "error 500", why: "club page: HTTP 500" }]);
+    expect(JSON.stringify(clubToPublic(await row("broken"), "https://kicksma.sh", undefined, NOW))).not.toContain("HTTP 500");
+  });
+
+  it("a reader that swallows the frame's own stop still gets the frame's word for it", async () => {
+    await club("greedy-swallower");
+    // A reader that catches everything, as the three real readers did with the frame's errors.
+    const swallower: AvailabilityAdapter = {
+      ...reader(),
+      async scrape(t, f) {
+        try {
+          for (let i = 0; i < 12; i++) await f(`${t.bookingUrl}?day=${i}`);
+          return { ok: true, slots: [], requests: 12 };
+        } catch (e) {
+          return { ok: false, status: null, reason: "error", requests: 0, detail: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    };
+    const w = world();
+    const run = await runScrape(db, NOW, { adapters: [swallower], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls).toHaveLength(SCRAPE.perClub);
+    expect((await row("greedy-swallower")).availability).toMatchObject({ error: "error", why: "frame: cap" });
+    expect(run.failed).toEqual([{ slug: "greedy-swallower", platform: "playtomic", error: "error", why: "frame: cap" }]);
+  });
+
+  it("a reader that swallows the frame's own abort still gets 'timeout', not 'error'", async () => {
+    await club("abort-swallower");
+    // A reader that catches everything and calls it an error.
+    const swallower: AvailabilityAdapter = {
+      ...reader(),
+      async scrape(t, f) {
+        try {
+          await f(t.bookingUrl);
+          return { ok: true, slots: [], requests: 1 };
+        } catch (e) {
+          return { ok: false, status: null, reason: "error", requests: 1, detail: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    };
+    // The platform's own ten seconds run out at once (the run's deadline is far off, so the club is
+    // written): the frame's timer aborts the request, as fetch does, with the signal's reason.
+    const timeouts: number[] = [];
+    const spy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+      timeouts.push(ms);
+      return AbortSignal.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+    });
+    try {
+      const w = world();
+      const aborting = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const res = await w.fetchImpl(input, init);
+        if (init?.signal?.aborted) throw init.signal.reason;
+        return res;
+      }) as typeof fetch;
+      const run = await runScrape(db, NOW, { adapters: [swallower], fetchImpl: aborting, clock: w.clock });
+      expect(timeouts).toEqual([SCRAPE.requestTimeoutMs]);
+      expect(run.outOfTime).toBe(false);
+      expect((await row("abort-swallower")).availability).toMatchObject({ error: "timeout", slots: [] });
+      expect(run.failed).toEqual([{ slug: "abort-swallower", platform: "playtomic", error: "timeout", why: null }]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("no list and no pick carries `why`: only the row and the run's answer do (rule 12)", async () => {
+    await club("broken-listed", { approvedAt: at(-DAY), source: "claim" });
+    const leaky: AvailabilityAdapter = { ...reader(), scrape: async (t, f) => ((await f(t.bookingUrl)), { ok: false, status: 500, reason: "error", requests: 1, detail: "club page: HTTP 500" }) };
+    const w = world(() => ({ status: 500 }));
+    await runScrape(db, NOW, { adapters: [leaky], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect((await row("broken-listed")).availability).toMatchObject({ error: "error 500", why: "club page: HTTP 500" });
+    const listed = [(await listShownClubs(db, null, 400, NOW)).find((c) => c.slug === "broken-listed")!, (await listLiveClubs(db, null, 200, NOW)).find((c) => c.slug === "broken-listed")!];
+    for (const l of listed) {
+      expect(l.availability).toMatchObject({ error: "error 500", source: "scrape:playtomic" });
+      expect(l.availability).not.toHaveProperty("why");
+    }
+    const [due] = await dueClubs(db, at(2 * HOUR), "playtomic", 8);
+    expect(due.slug).toBe("broken-listed");
+    expect(due.prev).toMatchObject({ error: "error 500" });
+    expect(due.prev).not.toHaveProperty("why");
   });
 });
 

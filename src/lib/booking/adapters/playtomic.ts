@@ -222,6 +222,18 @@ async function pace(): Promise<void> {
 
 type Got = { kind: "response"; status: number; text: string } | { kind: "timeout" } | { kind: "error"; detail: string };
 
+/**
+ * What failed, as the error's class and the network's code ("TypeError ECONNRESET"), never its message:
+ * a message may carry the address it failed on. The shapes are `failureWhy`'s in `scrape.ts`, which
+ * keeps nothing else when this lands in the club's cache.
+ */
+function errorClass(e: unknown): string {
+  if (!(e instanceof Error)) return "Error";
+  const name = /^[A-Z][A-Za-z]{0,39}$/.test(e.name) ? e.name : "Error";
+  const code = (e as { cause?: { code?: unknown } }).cause?.code ?? (e as { code?: unknown }).code;
+  return `${name}${typeof code === "string" && /^[A-Z_]{1,30}$/.test(code) ? ` ${code}` : ""}`;
+}
+
 async function get(url: string, fetchImpl: typeof fetch, accept: string): Promise<Got> {
   await pace();
   const ctrl = new AbortController();
@@ -238,7 +250,11 @@ async function get(url: string, fetchImpl: typeof fetch, accept: string): Promis
       const text = res.ok ? (await res.text()).slice(0, MAX_BYTES) : "";
       return { kind: "response", status: res.status, text };
     } catch (e) {
-      return { kind: "error", detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
+      // The frame's own stop (budget, cap, a block) is the frame's to judge, not this club's error.
+      if (e instanceof Error && e.name === "ScrapeStop") throw e;
+      // An abort, ours or the frame's deadline, is a timeout.
+      if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return { kind: "timeout" };
+      return { kind: "error", detail: errorClass(e) };
     }
   })();
   try {
@@ -252,7 +268,8 @@ const fail = (reason: ScrapeFailure, status: number | null, requests: number, de
 
 /** A failed response, or null when the status is a success. */
 function failureOf(got: Got, requests: number, what: string): ScrapeResult | null {
-  if (got.kind === "timeout") return fail("timeout", null, requests, `${what}: no answer in ${REQUEST_TIMEOUT_MS / 1000} s`);
+  // The class, never a sentence: `failureWhy` keeps only a class or a status after the step.
+  if (got.kind === "timeout") return fail("timeout", null, requests, `${what}: TimeoutError`);
   if (got.kind === "error") return fail("error", null, requests, `${what}: ${got.detail}`);
   if (got.status === 401 || got.status === 403 || got.status === 429) return fail("blocked", got.status, requests, `${what}: HTTP ${got.status}`);
   if (got.status === 404 || got.status === 410) return fail("not_found", got.status, requests, `${what}: HTTP ${got.status}`);

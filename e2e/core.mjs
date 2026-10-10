@@ -577,9 +577,13 @@ try {
   check("invite page reflects cancellation", (await b.getByText("This match was cancelled").count()) > 0);
 
   // ---- 404 + past result ----
-  await a.goto(`${BASE}/ZZZZ`);
+  // The words are a paint, so they are waited for, as in venues.mjs. Counted at one instant after goto
+  // they were missing once on 10 October 2026, while all 22 suites loaded the machine, and present when
+  // the suite ran alone on the same build.
+  const missing = await a.goto(`${BASE}/ZZZZ`);
+  const notFoundShown = await a.getByText("Link not found").waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
   await shot(a, "16-notfound");
-  check("invalid code → real page", (await a.getByText("Link not found").count()) > 0);
+  check("invalid code → real page", notFoundShown, String(missing?.status()));
   await a.goto(`${BASE}/PAST`);
   await shot(a, "17-past-result");
   check("past match shows organizer-confirmed result", (await a.getByText("Confirmed by organizer").count()) > 0);

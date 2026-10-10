@@ -258,6 +258,31 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and `booking_platform` by hand, and the directory import writes neither, so fifty green tests
   described a job that read almost no club (10 October 2026). Run the import's own statement in the
   test (`node scripts/import-clubs.mjs --sql`) before asking which rows a query finds.
+- **A fake clock in whole numbers hides what the real one does.** The court-time frame gave each
+  request the time left to its deadline as its timeout, and `AbortSignal.timeout` throws on anything
+  but a whole number. `performance.now()` always carries a fraction, so every request that started in a
+  lane's last ten seconds died before it left, and four Playtomic clubs an hour showed "not available
+  just now" (10 October 2026). Every test clock counted in whole milliseconds and saw nothing. A fake
+  clock starts and steps with a fraction (`1234.567`, `1190.123`) wherever the real one is
+  `performance.now()`, and a value that goes to a timer API is `Math.floor`ed where it is made.
+- **A failure that keeps no cause costs a day to explain.** The cache said "error" and nothing else,
+  so three diagnoses argued over a network fault, an abort and a timer. A failed row now keeps `why`,
+  the step and the error's class or status, and never the message: a message can carry a link. A
+  class has a class's shape (a capital, then letters): a rule of "any word" kept "no" out of
+  Playtomic's "club page: no answer in 10 s".
+- **What a run leaves for the next run goes first in the next run.** The court-time frame left a club
+  that its deadline cut short unwritten and due, and the oldest cache goes first, so a club too slow
+  for the budget was cut on every run and no club behind it was read. A deferral needs a next visit
+  that can end another way: the lane's first club in a fair run (30 s or more) is written as
+  "timeout" and goes to the back (`tests/scrape.test.ts`, "never starves"). Not on a very short run:
+  writing its first club erased a good cache for an hour ("cut on a busy tick"). And not "the whole
+  45 s" either: the push job passes 50 s less its own work, so a tick over 5 s never counted as whole
+  and the starving came back ("a tick a little slower").
+- **A fetch signal aborts the body too, not only the call.** The court-time frame caught its own
+  deadline around `fetch()` alone, so a page whose headers came in time and whose body did not was
+  written as a plain failure and lost its cache, while the test of a request that never answers stayed
+  green. Catch an abort around every `await` that the signal reaches (`res.text()` included), and test
+  a response whose body stalls after the headers (`tests/scrape.test.ts`, "cuts after the headers").
 - **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
   MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
   a stub that set `url`, passed. Test a reader through the frame that production calls it through.
