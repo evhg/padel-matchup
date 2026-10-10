@@ -221,6 +221,9 @@ try {
   await org.locator('input[aria-label="A"]').nth(0).fill("4");
   await org.locator('input[aria-label="A"]').nth(0).blur();
   await org.getByText("✓ Saved").first().waitFor({ timeout: 15000 });
+  // "✓ Saved" is the panel's own state, set when the action answers; the standings come with the page's
+  // next render, which a loaded machine delivers a moment later. Wait for the row, then read it.
+  await org.locator("section#score tbody tr").first().locator("td").nth(4).filter({ hasText: /^1$/ }).waitFor({ timeout: 15000 }).catch(() => {});
   check("the games table ranks by matches won", (await org.locator("section#score th").filter({ hasText: "Games" }).count()) === 1 && (await org.locator("section#score tbody tr").first().locator("td").nth(4).innerText()) === "1" && (await org.locator("section#score tbody tr").first().locator("td").nth(2).innerText()) === "4");
 
   // ---- Five names, one rests: round 1 at any count of four or more (October 2026) ----
