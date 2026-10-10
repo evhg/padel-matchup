@@ -6,6 +6,7 @@ import { DomainError } from "./errors";
 import { confirmLevel } from "./verify";
 import { clampLevel, isLevelVerified, VERIFIED_TOLERANCE } from "./levels";
 import { tally } from "./scores";
+import { placesOf } from "./fixedPairs";
 
 export { isLevelVerified, VERIFIED_TOLERANCE } from "./levels";
 
@@ -132,15 +133,18 @@ export async function getRanking(db: Db, scope: RankingScope, now = new Date()):
       }
     } else if (ev.standings && ev.standings.length >= 4) {
       counted++;
-      ev.standings.forEach((p, i) => {
-        const r = row(p);
-        r.played++;
-        if (i < RANKING_POINTS.podium.length) {
-          r.podiums++;
-          r.points += RANKING_POINTS.podium[i];
+      // By place, not by index: a fixed-pairs night's two partners share theirs (`placesOf`).
+      placesOf(ev).forEach((ids, i) => {
+        for (const p of ids) {
+          const r = row(p);
+          r.played++;
+          if (i < RANKING_POINTS.podium.length) {
+            r.podiums++;
+            r.points += RANKING_POINTS.podium[i];
+          }
+          if (i === 0) r.wins++;
+          else r.losses++;
         }
-        if (i === 0) r.wins++;
-        else r.losses++;
       });
     }
   }

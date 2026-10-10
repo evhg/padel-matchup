@@ -342,6 +342,43 @@ describe("a night played", () => {
     expect(podium).toMatch(/1\. (Org & Top1|Top1 & Org) {2}2\. (Mid1 & Mid2|Mid2 & Mid1) {2}3\. (Low1 & Low2|Low2 & Low1)/);
   });
 
+  it("the club and city ranking gives both partners of a pair the pair's place", async () => {
+    const { org, ev } = await pairsNight(8, { venueName: "Pair Club" });
+    const people = await Promise.all(["Ra", "Sa", "Ta", "Ua", "Va"].map((n) => makePlayer(db, n, { rankingOptIn: true })));
+    await db.update(players).set({ rankingOptIn: true }).where(eq(players.id, org.id));
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    const seatOf = async (id: string) => (await seats(ev)).rows.find((s) => s.playerId === id)!.id;
+    await bePartner(db, { eventId: ev.id, playerId: people[0].id, slotId: await seatOf(org.id) });
+    await joinEvent(db, { eventId: ev.id, playerId: people[1].id });
+    await bePartner(db, { eventId: ev.id, playerId: people[2].id, slotId: await seatOf(people[1].id) });
+    await joinEvent(db, { eventId: ev.id, playerId: people[3].id });
+    await bePartner(db, { eventId: ev.id, playerId: people[4].id, slotId: await seatOf(people[3].id) });
+    const top = [org.id, people[0].id].sort().join("|");
+    for (let n = 1; n <= 3; n++) {
+      const r = await generateRound(db, { eventId: ev.id, actorPlayerId: org.id });
+      const m = r.matches[0];
+      const a = [m.a1, m.a2].sort().join("|");
+      await saveTournamentMatchScore(db, { eventId: ev.id, matchId: m.id, sideA: a === top ? 21 : 10, sideB: a === top ? 10 : 21, playerId: org.id, isCreator: true });
+    }
+    await setTournamentLock(db, { eventId: ev.id, locked: true, actorPlayerId: org.id });
+    const { getRanking } = await import("@/lib/domain/ranking");
+    const [done] = await db.select().from(events).where(eq(events.id, ev.id));
+    const { rows } = await getRanking(db, { venueSlug: done.venueSlug! }, new Date(NOW.getTime() + 3 * DAY));
+    const of = (id: string) => rows.find((r) => r.playerId === id)!;
+    // The winning pair: both first, three points and a win each.
+    expect([of(org.id), of(people[0].id)].map((r) => [r.points, r.wins, r.podiums])).toEqual([
+      [3, 1, 1],
+      [3, 1, 1],
+    ]);
+    // Every pair's partners carry the same row.
+    for (const [x, y] of [
+      [people[1], people[2]],
+      [people[3], people[4]],
+    ])
+      expect([of(x.id).points, of(x.id).losses]).toEqual([of(y.id).points, of(y.id).losses]);
+    expect(rows.map((r) => r.points).sort()).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
   it("the pure rule: each pair rated as a side, its partners moved together, an unrated partner left alone", () => {
     const d = pairTournamentDeltas([
       { ids: ["a", "b"], levels: [3, null], rank: 1 },
