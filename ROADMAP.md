@@ -58,7 +58,9 @@ Everything in this list is live. The README describes each in detail.
   Thailand", the feedback form as the contact, Thailand's PDPA as the law. The figures on the page come
   from the constants that enforce them (`src/lib/legal.ts`), and `tests/legal.test.ts` checks the cookie
   names and the figures. Deleting an account now also unlinks Telegram, Discord and LINE and takes the
-  public page down.
+  public page down. Each night the backup repository's history is rebuilt with only the last sixty days,
+  so a deleted account leaves the backups after about sixty days (the owner's decision of 10 October
+  2026; `docs/OPERATING.md` has the guards and the way back).
 - **Every padel club in Thailand and Singapore, listed.** 67 clubs from public sources — 40 in Thailand
   across eight provinces, 27 in Singapore — with the indoor and outdoor court split where a source said
   it, which is also the first capacity number the app has. Where two sources disagree the club's own
@@ -546,9 +548,12 @@ Everything in this list is live. The README describes each in detail.
   linking Telegram, a row of the same name that nobody can reach is folded in automatically if the
   two also share a match, an organiser or a club. Otherwise My matches asks "Are these yours?" and
   shows those matches (the day, the club, who else played), with "Yes, these are mine" and "Not me";
-  "Not me" is remembered in that browser only. A row with an address, a phone, a chat account or a
-  push subscription is never merged by name. A merge now also moves the person's wants, which point
-  at a player without a foreign key and were left behind on the folded row until now.
+  "Not me" is remembered in that browser only. A row that is a member of a group that asks to join
+  needs the shared context for that answer too (the owner, 10 October 2026: "Need a shared match
+  first"); without it the card says so and offers only "Not me". A row with an address, a phone,
+  a chat account or a push subscription is never merged by name. A merge now also moves the
+  person's wants, which point at a player without a foreign key and were left behind on the folded
+  row until now.
 - **Three players can score from Telegram (24 September 2026).** Erik's note of 15 September (match
   9wjp): with three players seated, the nudge's 🏁 said "the result needs four players", and a bare
   "6-4 6-3" in reply said "tap 🏁 on the card first", while the web took the score from three. Two of
@@ -622,6 +627,16 @@ Everything in this list is live. The README describes each in detail.
   first. It counts a match with a score and both pairs set. One bounded read,
   and a crew with fewer than two matches behind it never makes it. Production's one crew has one
   scored match, so nobody sees the table yet.
+- **A group page shows names, not levels, and a crew can ask to join (9 October 2026, decision E,
+  migration 0085).** The owner: "names visible, levels hidden, optional Ask to join", for social
+  proof and privacy. On the group page's member list a visitor sees the members' first names and
+  the count, and members see each other's levels; `GET /api/v1/groups/{code}` and the MCP tool
+  `get_group` carry the names and the count, never a level. A match's own roster still shows the
+  levels of its seated players, as every match page does. An admin switches on Ask to join in the
+  group's settings (a ladies' crew, a level crew): a newcomer asks with an optional note, the admins
+  hear it by Telegram, email or push, and see it on the group page, where they approve or decline;
+  the person hears the answer, and a declined person may ask again after seven days. A seat in such
+  a group's match is a seat, never a membership.
 - **A channel the moment a player joins, and a calendar that keeps itself (25 September 2026).** The
   owner: "When a player joins a game, we need to capture a channel to contact them right away in a
   very smooth way and give something in return", WhatsApp, Telegram or email, and never push or SMS.

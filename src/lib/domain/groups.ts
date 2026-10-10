@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { timePatternOf } from "@/lib/dates";
-import { events, groupMembers, groups, players, slots, type Event, type Group, type GroupMember, type Player } from "@/db/schema";
+import { events, groupMembers, groupRequests, groups, players, slots, type Event, type Group, type GroupMember, type GroupRequest, type Player } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isValidTimeZone, nextOccurrence, zonedTimeToUtc } from "@/lib/dates";
 import { createEvent, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
+import { cleanAskNote, joinDoor, nextAsk, type JoinVia } from "./groupAccess";
 import { normalizeRange } from "./levels";
 import { joinEvent } from "./slots";
 
@@ -143,8 +144,162 @@ export async function getGroupMember(db: Db, groupId: string, playerId: string):
   return m ?? null;
 }
 
-export async function joinGroup(db: Db, groupId: string, playerId: string): Promise<void> {
-  await db.insert(groupMembers).values({ groupId, playerId, role: "member" }).onConflictDoNothing();
+/**
+ * What a join did.
+ *   - `joined`: a member now. `already`: was one.
+ *   - `requested`: a new ask, or one reopened; the admins hear about it when `notify` is set.
+ *   - `pending`: an ask was already waiting, so nothing changed and nobody hears twice.
+ *   - `declined`: declined less than seven days ago; nothing changed until `askAgainFrom`.
+ *   - `skipped`: a match seat in a group that asks to join; nobody was added and nothing was asked.
+ */
+export type GroupJoinResult =
+  | { outcome: "joined" | "already" | "pending" | "skipped" }
+  | { outcome: "requested"; request: GroupRequest; notify: boolean }
+  | { outcome: "declined"; askAgainFrom: Date };
+
+/**
+ * The one way into a group, for every caller, which says who is acting (`via`, see `joinDoor`).
+ * With "Ask to join" off every caller adds, as before decision E. With it on only an admin adds,
+ * the person's own tap asks, and a match seat adds nobody: the seat follows the match's rules and
+ * the crew stays the crew's to choose. One read of the group by its key, then one write at most,
+ * and a second only when a member row was really added.
+ *
+ * That second write closes the person's waiting ask in this group, if there is one, as approved:
+ * they got in another way (the door was opened, a match seat in an open group), so the question is
+ * answered. Left pending, the ask hid behind the admins' list's member check only while they stayed;
+ * once they left, the old question came back to the admins as if new. `decideGroupRequest` writes
+ * its own decision over this one straight after, inside the same transaction.
+ */
+export async function joinGroup(db: Db, groupId: string, playerId: string, via: JoinVia, o: { note?: string | null; now?: Date } = {}): Promise<GroupJoinResult> {
+  const [g] = await db.select({ askToJoin: groups.askToJoin }).from(groups).where(eq(groups.id, groupId)).limit(1);
+  if (!g) throw new DomainError("not_found");
+  const door = joinDoor(g, via);
+  if (door === "add") {
+    const added = await db.insert(groupMembers).values({ groupId, playerId, role: "member" }).onConflictDoNothing().returning({ playerId: groupMembers.playerId });
+    if (added.length === 0) return { outcome: "already" };
+    await db
+      .update(groupRequests)
+      .set({ status: "approved", decidedAt: o.now ?? new Date() })
+      .where(and(eq(groupRequests.groupId, groupId), eq(groupRequests.playerId, playerId), eq(groupRequests.status, "pending")));
+    return { outcome: "joined" };
+  }
+  if (await getGroupMember(db, groupId, playerId)) return { outcome: "already" };
+  if (door === "none") return { outcome: "skipped" };
+  return askToJoinGroup(db, groupId, playerId, o.note ?? null, o.now ?? new Date());
+}
+
+/**
+ * A person asks to join (`nextAsk` decides what that does to their row). One row per person and
+ * group: a reopened ask is the same row back at pending, with the new note and a new `created_at`.
+ * Each write is conditional on the status it read, so a double tap cannot open two asks or reopen a
+ * row an admin decided a moment ago.
+ */
+async function askToJoinGroup(db: Db, groupId: string, playerId: string, rawNote: string | null, now: Date): Promise<GroupJoinResult> {
+  const note = cleanAskNote(rawNote);
+  const [existing] = await db.select().from(groupRequests).where(and(eq(groupRequests.groupId, groupId), eq(groupRequests.playerId, playerId))).limit(1);
+  const step = nextAsk(existing, now);
+  if (step.kind === "keep") return { outcome: "pending" };
+  if (step.kind === "wait") return { outcome: "declined", askAgainFrom: step.from };
+  if (step.kind === "insert") {
+    const [row] = await db.insert(groupRequests).values({ groupId, playerId, note, status: "pending", createdAt: now }).onConflictDoNothing().returning();
+    // Somebody else's insert won the race (a second tab): theirs is the ask, already told.
+    return row ? { outcome: "requested", request: row, notify: true } : { outcome: "pending" };
+  }
+  const [row] = await db
+    .update(groupRequests)
+    .set({ status: "pending", note, createdAt: now, decidedAt: null, decidedByPlayerId: null })
+    .where(and(eq(groupRequests.id, existing!.id), eq(groupRequests.status, existing!.status)))
+    .returning();
+  return row ? { outcome: "requested", request: row, notify: step.notify } : { outcome: "pending" };
+}
+
+/**
+ * Account deletion (`anonymizePlayer`): every ask the person made, in every group, goes. An ask is a
+ * request to be let in, and its note is the person's own words; neither may stay on an admin's list
+ * beside "Deleted player". Down `group_requests_player_idx`. Returns how many went.
+ */
+export async function dropGroupRequestsFor(db: Db, playerId: string): Promise<number> {
+  const rows = await db.delete(groupRequests).where(eq(groupRequests.playerId, playerId)).returning({ id: groupRequests.id });
+  return rows.length;
+}
+
+/** The asker takes it back. Only a pending ask; true when one was withdrawn. */
+export async function withdrawGroupRequest(db: Db, groupId: string, playerId: string, now = new Date()): Promise<boolean> {
+  const rows = await db
+    .update(groupRequests)
+    .set({ status: "withdrawn", decidedAt: now })
+    .where(and(eq(groupRequests.groupId, groupId), eq(groupRequests.playerId, playerId), eq(groupRequests.status, "pending")))
+    .returning({ id: groupRequests.id });
+  return rows.length > 0;
+}
+
+/**
+ * An admin says yes (the person becomes a member through `joinGroup` with `via: "admin"`) or no.
+ * Only a pending ask can be decided, and only by an admin of that group; the row is locked so two
+ * admins tapping at once decide it once.
+ */
+export async function decideGroupRequest(
+  db: Db,
+  input: { groupId: string; requestId: string; approve: boolean; actorPlayerId: string; now?: Date },
+): Promise<{ request: GroupRequest; player: Player | null }> {
+  const now = input.now ?? new Date();
+  const actor = await getGroupMember(db, input.groupId, input.actorPlayerId);
+  if (!actor || actor.role !== "admin") throw new DomainError("forbidden");
+  return db.transaction(async (tx) => {
+    const [req] = await tx.select().from(groupRequests).where(and(eq(groupRequests.id, input.requestId), eq(groupRequests.groupId, input.groupId))).for("update");
+    if (!req) throw new DomainError("not_found");
+    if (req.status !== "pending") throw new DomainError("invalid", "not_pending");
+    if (input.approve) await joinGroup(tx, input.groupId, req.playerId, "admin", { now });
+    const [request] = await tx
+      .update(groupRequests)
+      .set({ status: input.approve ? "approved" : "declined", decidedAt: now, decidedByPlayerId: input.actorPlayerId })
+      .where(eq(groupRequests.id, req.id))
+      .returning();
+    const [player] = await tx.select().from(players).where(eq(players.id, req.playerId)).limit(1);
+    return { request, player: player ?? null };
+  });
+}
+
+export type PendingGroupRequest = { id: string; note: string | null; createdAt: Date; player: Pick<Player, "id" | "displayName" | "level"> };
+
+/**
+ * The admins' list: pending asks, oldest first, down `group_requests_group_status_idx`, capped. A
+ * person who became a member some other way meanwhile is left out rather than shown as a question
+ * nobody needs to answer. `joinGroup` already closes such an ask as approved; the member check here
+ * is the second guard, for a row written before it did.
+ */
+export async function pendingGroupRequests(db: Db, groupId: string, limit = 50): Promise<PendingGroupRequest[]> {
+  const rows = await db
+    .select({ id: groupRequests.id, note: groupRequests.note, createdAt: groupRequests.createdAt, player: { id: players.id, displayName: players.displayName, level: players.level } })
+    .from(groupRequests)
+    .innerJoin(players, eq(players.id, groupRequests.playerId))
+    .where(
+      and(
+        eq(groupRequests.groupId, groupId),
+        eq(groupRequests.status, "pending"),
+        sql`not exists (select 1 from ${groupMembers} m where m.group_id = ${groupRequests.groupId} and m.player_id = ${groupRequests.playerId})`,
+      ),
+    )
+    .orderBy(asc(groupRequests.createdAt))
+    .limit(limit);
+  return rows;
+}
+
+/** The viewer's own ask in this group, if any (one read down the unique index). */
+export async function getGroupRequest(db: Db, groupId: string, playerId: string): Promise<GroupRequest | null> {
+  const [r] = await db.select().from(groupRequests).where(and(eq(groupRequests.groupId, groupId), eq(groupRequests.playerId, playerId))).limit(1);
+  return r ?? null;
+}
+
+/** The admins who hear about a new ask: every admin of the group, bounded (a group has one today). */
+export async function groupAdmins(db: Db, groupId: string): Promise<Player[]> {
+  const rows = await db
+    .select({ player: players })
+    .from(groupMembers)
+    .innerJoin(players, eq(players.id, groupMembers.playerId))
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.role, "admin")))
+    .limit(5);
+  return rows.map((r) => r.player);
 }
 
 export async function leaveGroup(db: Db, groupId: string, playerId: string): Promise<void> {
@@ -211,6 +366,8 @@ export type UpdateGroupInput = {
   recurTime?: string | null;
   recurLeadDays?: number;
   tz?: string;
+  /** New people ask and an admin approves (decision E). */
+  askToJoin?: boolean;
 };
 
 /** An admin disbands the group: members and the weekly slot go; matches stay, unlinked; chats keep their cards. */
@@ -264,6 +421,7 @@ export async function updateGroup(db: Db, groupId: string, actorPlayerId: string
     }
   }
   if (patch.recurLeadDays !== undefined) set.recurLeadDays = Math.min(14, Math.max(1, Math.round(patch.recurLeadDays)));
+  if (patch.askToJoin !== undefined) set.askToJoin = patch.askToJoin;
   if (Object.keys(set).length === 0) return g;
   const [updated] = await db.update(groups).set(set).where(eq(groups.id, groupId)).returning();
   return updated;

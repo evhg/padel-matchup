@@ -5,6 +5,7 @@ import { isClaimable, isOccupied } from "@/lib/domain/events";
 import { isClubLive } from "@/lib/domain/clubs";
 import type { GroupDetail } from "@/lib/domain/groups";
 import { cleanAgeMin, cleanCategory, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
+import { memberLevelFor, type GroupViewer } from "@/lib/domain/groupAccess";
 import { formatOf } from "@/lib/domain/formats";
 import { hasRange, presetFor } from "@/lib/domain/levels";
 import type { Club } from "@/db/schema";
@@ -124,11 +125,21 @@ export type PublicGroup = {
   capacity: number;
   level: PublicMatch["level"];
   weekly: { weekday: number; time: string; leadDays: number } | null;
+  /** New people ask and an admin approves (decision E); off, anyone with the link joins. */
+  askToJoin: boolean;
+  memberCount: number;
+  /** First names, and a level only for a viewer inside the group (`canSeeMemberLevels`): never in the API or the MCP server, which read anonymously. */
   members: { name: string; level: number | null; admin: boolean }[];
   upcoming: { code: string; url: string; startsAt: string; title: string | null; category: PublicMatch["category"]; ageMin: PublicMatch["ageMin"] }[];
 };
 
-export function groupToPublic(detail: GroupDetail, base: string): PublicGroup {
+/**
+ * A group as the public may see it. `viewer` is who is reading, as the group sees them; every
+ * public caller (the API, the MCP server) passes nobody, so members' levels are null there: the
+ * owner's decision E, "names visible, levels hidden". The group's own range stays — it describes
+ * the crew, not a person.
+ */
+export function groupToPublic(detail: GroupDetail, base: string, viewer: GroupViewer = null): PublicGroup {
   const g = detail.group;
   const range = { min: g.levelMin, max: g.levelMax };
   return {
@@ -142,7 +153,9 @@ export function groupToPublic(detail: GroupDetail, base: string): PublicGroup {
     capacity: g.capacity,
     level: hasRange(range) ? { min: range.min, max: range.max, preset: presetFor(range) } : null,
     weekly: g.recurDow != null && g.recurTime ? { weekday: g.recurDow, time: g.recurTime, leadDays: g.recurLeadDays } : null,
-    members: detail.members.map((m) => ({ name: m.player.displayName, level: m.player.level, admin: m.role === "admin" })),
+    askToJoin: g.askToJoin,
+    memberCount: detail.members.length,
+    members: detail.members.map((m) => ({ name: m.player.displayName, level: memberLevelFor(m.player.level, viewer), admin: m.role === "admin" })),
     upcoming: detail.upcoming.map((e: Event) => ({ code: e.code, url: `${base}/${e.code}`, startsAt: e.startsAt.toISOString(), title: e.title, ...tagOf(e) })),
   };
 }

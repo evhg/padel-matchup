@@ -91,6 +91,27 @@ describe("the service board", () => {
     expect(hot).not.toContain("supabase_db");
   });
 
+  it("says whether the backup's history was rebuilt, and turns yellow after three nights that kept it", async () => {
+    // The nightly rebuild (src/lib/backup.ts, owner's decision of 10 October 2026) counts each night as
+    // backup_history_rebuilt or backup_history_kept. Dates after every other test's, so the latest rows are these.
+    const backupRow = async (at: string) => (await serviceBoard(db, new Date(at))).rows.find((r) => r.key === "backup")!;
+    await setMetric(db, "backup_done", 1, "2026-11-01");
+    await setMetric(db, "backup_history_rebuilt", 1, "2026-11-01");
+    expect(await backupRow("2026-11-01T12:00:00Z")).toMatchObject({ state: "ok", usage: "last on 2026-11-01 · history rebuilt on 2026-11-01" });
+    // One night kept (the branch moved, say): said, not yet a warning.
+    await setMetric(db, "backup_done", 1, "2026-11-02");
+    await setMetric(db, "backup_history_kept", 1, "2026-11-02");
+    expect(await backupRow("2026-11-02T12:00:00Z")).toMatchObject({ state: "ok", usage: "last on 2026-11-02 · history kept on 2026-11-02, last rebuilt 2026-11-01" });
+    // Three nights kept in a row: yellow.
+    await setMetric(db, "backup_done", 1, "2026-11-04");
+    await setMetric(db, "backup_history_kept", 1, "2026-11-04");
+    expect((await backupRow("2026-11-04T12:00:00Z")).state).toBe("warn");
+    // A rebuild clears it.
+    await setMetric(db, "backup_done", 1, "2026-11-05");
+    await setMetric(db, "backup_history_rebuilt", 1, "2026-11-05");
+    expect(await backupRow("2026-11-05T12:00:00Z")).toMatchObject({ state: "ok", usage: "last on 2026-11-05 · history rebuilt on 2026-11-05" });
+  });
+
   it("reads a month of real traffic as the few percent of Vercel's allowance it is", async () => {
     // 2,022 page renders is what the app counted by 24 September 2026. Against the 2,500 the board
     // used to assume, that was a warning at 81%; against Hobby's real 50,000 it is 4%.

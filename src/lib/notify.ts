@@ -17,6 +17,8 @@ import { eventEnd } from "@/lib/domain/matchLength";
 import { getEventDetail, participantsWithEmail, type EventDetail } from "@/lib/domain/queries";
 import { isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { refillRecipients } from "@/lib/domain/refill";
+import { groupAdmins } from "@/lib/domain/groups";
+import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
 import { claimCourtOffer, COURT_OFFERS, courtOfferLink, courtOffersDue } from "@/lib/domain/courtOffers";
 import { chatTicket } from "@/lib/telegram/identity";
@@ -202,6 +204,46 @@ export async function notifyRequestDecided(db: Db, ev: Event, player: Player, ap
   const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
   const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel, telegram: c.telegram });
   await sendEmail({ to: player.email, subject: c.t("email.requestDeclined.subject", vars), html, text });
+}
+
+/**
+ * A new ask to join a group reaches its admins by `tell()`: Telegram, else email, else push, with one
+ * button to the group page where Approve and Decline sit. Never WhatsApp: `tell()` sends there only
+ * with a template, and no template carries a group's ask. Called from `after()`, never in the
+ * request path, and through `notifyGroupAskCapped`, which holds the day's ceiling.
+ */
+export async function notifyGroupAsk(db: Db, group: Pick<Group, "id" | "code" | "name">, asker: Pick<Player, "id" | "displayName">, note: string | null): Promise<number> {
+  const admins = await groupAdmins(db, group.id);
+  const url = `${baseUrl()}/g/${group.code}`;
+  let told = 0;
+  for (const admin of admins) {
+    if (admin.id === asker.id) continue;
+    const { t } = await translatorFor(admin.locale);
+    const lines = [t("group.askNotice", { name: asker.displayName, group: group.name }), ...(note ? [`💬 ${note}`] : []), t("group.askNoticeHelp")];
+    await tell(db, admin, lines.join("\n"), { inline_keyboard: [[{ text: t("group.open"), url }]] }, { label: t("group.open") }).catch(() => undefined);
+    told++;
+  }
+  return told;
+}
+
+/**
+ * The ceiling on the admins' ask notices: `LIMITS.groupAskNoticesPerGroupPerDay` a day for each
+ * group, counted on `metrics_daily` like every other limit. Past it the ask still stands and waits on
+ * the group page; only the notice is skipped, so a script that makes names and asks cannot turn an
+ * admin's phone into a pager. Returns how many admins were told, or null when the day's notices are
+ * used up.
+ */
+export async function notifyGroupAskCapped(db: Db, group: Pick<Group, "id" | "code" | "name">, asker: Pick<Player, "id" | "displayName">, note: string | null, now = new Date()): Promise<number | null> {
+  if (!(await takeRate(db, "group_ask_notice", group.id, LIMITS.groupAskNoticesPerGroupPerDay, "day", now))) return null;
+  return notifyGroupAsk(db, group, asker, note);
+}
+
+/** The asker hears the answer either way: a yes with the door to the group, a no kindly, with when they may ask again. */
+export async function notifyGroupAskDecided(db: Db, group: Pick<Group, "code" | "name">, player: Player, approved: boolean): Promise<void> {
+  const { t } = await translatorFor(player.locale);
+  const url = `${baseUrl()}/g/${group.code}`;
+  const text = approved ? t("group.askApprovedNotice", { group: group.name }) : t("group.askDeclinedNotice", { group: group.name });
+  await tell(db, player, text, { inline_keyboard: [[{ text: t("group.open"), url }]] }, { label: t("group.open") }).catch(() => undefined);
 }
 
 /** A group got a new match (by a member or the weekly slot): email + push to every other member. */

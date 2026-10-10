@@ -14,10 +14,10 @@ Add `https://kicksma.sh/mcp` (streamable HTTP, no auth). Tools:
 - `about_kicksmash` — read once.
 - `get_match {code}` — a match by its 4-character code.
 - `find_matches {venue}` — open matches at a venue (its public board).
-- `get_group {code}` — a crew: members, weekly slot, upcoming.
+- `get_group {code}` — a crew: members' first names (levels are for members only), weekly slot, whether it asks to join, upcoming.
 - `generate_schedule {players | names, courts?, rounds?}` — exact americano rotation, nothing stored. Mexicano and King of the Court rounds depend on scores, so they are generated live on the match page (pass `format` to `create_match`).
 - `create_match {startsAt, tz, durationMinutes? (60, 90 or 120; 90 by default), venue?, organizer:{name, token?, email?, level?}, levelMin?, levelMax?, category? (men, women or mixed), ageMin? (35, 45 or 55), …}` — returns `shareUrl` for the players and the organizer's `personalUrl` and `manageUrl` (private).
-- `join_match {code, name | token, level?, email?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range).
+- `join_match {code, name | token, level?, email?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range). For a group's match the answer carries `group`: `group.member` says whether the person is in the group now, and `member: false` with `askToJoin: true` means a seat never made them a member: they ask on `group.url`, and an admin decides.
 - `create_api_key {name, agent?}` — optional, for roomier limits and webhooks.
 - `find_clubs {city?}` — live club pages by city: booking link, platform, website, free courts today where the club shares a feed.
 - `find_series {city?}` — recurring Opens by city, with the next edition to sign up for and the past podiums.

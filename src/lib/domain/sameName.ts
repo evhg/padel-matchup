@@ -16,7 +16,9 @@ import { mergePlayers } from "./merge";
  *     account was linked), when the row of the same name can be reached by nothing, and it shares a
  *     match, an organiser or a club with the person proving. The shared context is what makes a name
  *     enough: two strangers called Alex rarely also share a court and an organiser.
- *   - **Otherwise the person decides**: "Are these yours?" on My matches, with the matches shown.
+ *   - **Otherwise the person decides**: "Are these yours?" on My matches, with the matches shown;
+ *     except a row that is a member of a group that asks to join, which needs the shared context
+ *     too (the owner, 10 October 2026: "Need a shared match first"; `mayClaim`).
  *   - **Never** a row that can be reached (an address, a phone, a chat account, a push subscription):
  *     that is somebody, and a name does not say it is the same somebody.
  *
@@ -24,16 +26,33 @@ import { mergePlayers } from "./merge";
  * guard in front of the existing rule and never widens it. Not on a nightly sweep: `dupes.ts` says why.
  */
 
-export type SameNameRow = { id: string; displayName: string; matches: number; shared: boolean; createdAt: Date };
+/**
+ * `shared`: the row shares a match, an organiser or a club with the person (the automatic fold's
+ * test). `inAskingGroup`: the row is a member, admin or not, of a group with `ask_to_join` on.
+ */
+export type SameNameRow = { id: string; displayName: string; matches: number; shared: boolean; inAskingGroup: boolean; createdAt: Date };
 
 /** Proved: an address that came back with a code, or a Telegram account. */
 export const proved = (p: Pick<Player, "emailVerifiedAt" | "telegramId">) => Boolean(p.emailVerifiedAt || p.telegramId);
 
+/**
+ * May the person fold this row in by saying "these are mine"? The owner, 10 October 2026, on a row
+ * that is a member of a group that asks to join: "Need a shared match first". A merge moves the row's
+ * memberships, the admin role with them, so a name alone would be a way into such a crew that no admin
+ * approved (DECIDING rule 30). Such a row is claimed only when it shares a match, an organiser or a
+ * club with the person, the test the automatic fold already uses; every other row is claimed as
+ * before. Pure: the card and `claimSameNameRow` both ask it, so they cannot disagree.
+ */
+export const mayClaim = (row: Pick<SameNameRow, "shared" | "inAskingGroup">): boolean => row.shared || !row.inAskingGroup;
+
 const rowsOf = (r: unknown): Record<string, unknown>[] => (Array.isArray(r) ? r : ((r as { rows?: Record<string, unknown>[] }).rows ?? []));
+const yes = (v: unknown) => v === true || v === "t" || v === "true";
 
 /**
  * Rows of the same name that nobody can reach and that hold at least one match, with whether each
- * shares a match, an organiser or a club with this player. Bounded: five rows.
+ * shares a match, an organiser or a club with this player, and whether it is a member of a group that
+ * asks to join (one more column of the same bounded read, down `group_members_player_idx`). Bounded:
+ * five rows.
  *
  * Two reads on purpose (rule 12). The first finds rows of the same name that nobody can reach, which
  * is almost always none, and the page stops there. Only for the few it finds does the second look at
@@ -72,7 +91,8 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
           select 1 from events e
           where (e.creator_player_id = o.id or e.id in (select s.event_id from slots s where s.player_id = o.id))
             and (e.id in (select id from mine) or e.creator_player_id in (select id from orgs) or e.venue_slug in (select slug from clubs))
-        ) as shared
+        ) as shared,
+        exists (select 1 from group_members gm join groups g on g.id = gm.group_id where gm.player_id = o.id and g.ask_to_join) as in_asking_group
       from players o
       where o.id in (${ids})`),
   );
@@ -80,7 +100,14 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
   return found
     .map((x) => {
       const f = byId.get(String(x.id));
-      return { id: String(x.id), displayName: String(x.display_name), createdAt: new Date(String(x.created_at)), matches: Number(f?.matches ?? 0), shared: f?.shared === true || f?.shared === "t" || f?.shared === "true" };
+      return {
+        id: String(x.id),
+        displayName: String(x.display_name),
+        createdAt: new Date(String(x.created_at)),
+        matches: Number(f?.matches ?? 0),
+        shared: yes(f?.shared),
+        inAskingGroup: yes(f?.in_asking_group),
+      };
     })
     .filter((r) => r.matches > 0);
 }
@@ -110,14 +137,16 @@ export async function foldSameNameRows(db: Db, playerId: string): Promise<string
 
 /**
  * "These are mine": the person folds one row in themselves. Checked again here, whatever the screen
- * showed: the person proved who they are, the row still carries their name, and still nobody can
- * reach it. Returns false when any of that no longer holds.
+ * showed: the person proved who they are, the row still carries their name, still nobody can reach
+ * it, and it is no way into a group that asks to join (`mayClaim`: such a row needs a shared match,
+ * organiser or club first). Returns false when any of that no longer holds, and the row, its
+ * memberships and any admin role stay where they were.
  */
 export async function claimSameNameRow(db: Db, playerId: string, rowId: string): Promise<boolean> {
   const [me] = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
   if (!me || !proved(me)) return false;
   const row = (await sameNameRows(db, playerId)).find((r) => r.id === rowId);
-  if (!row) return false;
+  if (!row || !mayClaim(row)) return false;
   const [other] = await db.select().from(players).where(eq(players.id, rowId)).limit(1);
   if (!other || !safeToMerge(me, other).ok) return false;
   await mergePlayers(db, playerId, [rowId]);

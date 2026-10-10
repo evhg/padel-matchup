@@ -69,13 +69,17 @@ describe("the privacy page tells the truth about the code", () => {
     }
   });
 
-  it("promises no end date for a backup, because the repository's history keeps every copy", () => {
-    // runBackup prunes an old day with the GitHub contents API, and that is a new commit: the file
-    // leaves the folder, not the history (src/lib/backup.ts). Until 9 October 2026 the page said the
-    // copies "expire". The days a file stays are fine to give; a date when you are gone from them is not.
+  it("gives a deleted account about the days the backups keep, never an exact date", () => {
+    // Until 10 October 2026 an old day left the backup folder but not the repository's history, so the
+    // page promised no end at all. Since the owner's decision of that day, runBackup rebuilds the history
+    // each night with only BACKUP_KEEP_DAYS of files (tests/backup-history.test.ts), and GitHub removes
+    // the older, unreachable copies at a time it does not give. So the page says "about" and names GitHub.
+    const ABOUT = { en: "about", ru: "примерно", es: "unos" } as const;
     for (const l of LOCALES) {
-      const m = messagesOf(l).privacy;
-      expect(m.deleteBody, l).not.toContain("{backupDays");
+      expect(messagesOf(l).privacy.deleteBody, l).toContain("{backupDays");
+      const del = render(l, "privacy.deleteBody");
+      expect(del, l).toMatch(new RegExp(`${ABOUT[l]}\\D*${BACKUP_KEEP_DAYS}\\s`));
+      expect(del, l).toContain("GitHub");
       expect(render(l, "privacy.keepBody"), l).toContain("GitHub");
     }
   });

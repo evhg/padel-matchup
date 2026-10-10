@@ -46,6 +46,8 @@ export const LIMITS = {
   inviteResendsPerPlayerPerDay: 6,
   /** "Confirm my level" asks a player may send in a day (coaches and clubs together). */
   levelChecksPerPlayerPerDay: 6,
+  /** Notices of new asks to join that one group's admins hear in a day; past it the asks wait on the group page, unannounced. */
+  groupAskNoticesPerGroupPerDay: 10,
   restoreCodesPerIpPerDay: 20,
   clientErrorReportsPerIpPerDay: 60,
   feedbackPerIpPerDay: 5,

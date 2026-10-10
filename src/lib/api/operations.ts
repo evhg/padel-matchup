@@ -6,7 +6,7 @@ import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { buildSchedule, type ScheduleResult } from "@/lib/domain/schedule";
 import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
-import { getGroupById, joinGroup } from "@/lib/domain/groups";
+import { getGroupById, getGroupMember, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { admission, hasRange } from "@/lib/domain/levels";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
@@ -179,8 +179,24 @@ export type JoinMatchResult = {
   outcome: "joined" | "waitlisted" | "already_in" | "full" | "requested";
   match: PublicMatch;
   player: { name: string; personalToken: string; personalUrl: string };
+  /**
+   * The match's group, when it has one, and whether the player is a member of it now. A seat in a
+   * group that lets anyone in makes a member; a group that asks to join (`askToJoin`) is never
+   * joined through a match: `member` stays false and the player asks on the group page.
+   */
+  group: { code: string; url: string; askToJoin: boolean; member: boolean } | null;
   next: string;
 };
+
+/** The group line of a join's answer: one read of the group, one of the membership (both by key). */
+async function groupOfJoin(db: Db, groupId: string | null, playerId: string, base: string): Promise<{ row: Awaited<ReturnType<typeof getGroupById>>; line: JoinMatchResult["group"] }> {
+  const row = groupId ? await getGroupById(db, groupId) : null;
+  if (!row) return { row: null, line: null };
+  const member = Boolean(await getGroupMember(db, row.id, playerId));
+  return { row, line: { code: row.code, url: `${base}/g/${row.code}`, askToJoin: row.askToJoin, member } };
+}
+
+const ASKING_GROUP_NEXT = " The match belongs to a group that asks to join, so the seat did not make the player a member: they ask on the group page and an admin decides.";
 
 export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "en"): Promise<JoinMatchResult> {
   const input = joinMatchSchema.parse(raw);
@@ -211,13 +227,15 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
           fit === "unverified"
             ? "This match takes confirmed levels only. The player's level is inside the range but nobody has confirmed it, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
             : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
-        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, next };
+        const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
+        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, group: line, next };
       }
     }
   }
   const res = await joinEvent(db, { eventId: ev.id, playerId: player.id });
   if (res.outcome === "joined" || res.outcome === "waitlisted") {
-    if (ev.groupId) await joinGroup(db, ev.groupId, player.id).catch(() => undefined);
+    // A match seat (`via: "match"`): a member of a group that lets anyone in, of no group that asks to join.
+    if (ev.groupId) await joinGroup(db, ev.groupId, player.id, "match").catch(() => undefined);
     ctx.afterwards(async () => {
       await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", player.displayName, player.id);
       const fresh = await notifyLineupChange(db, res.event, before, player.id);
@@ -227,7 +245,7 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
     if (res.event.status === "full") ctx.emit("match.full", ev.code);
   }
   const fresh = (await getEventByCode(db, ev.code))!;
-  const group = fresh.event.groupId ? await getGroupById(db, fresh.event.groupId) : null;
+  const { row: group, line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
   const nextText: Record<JoinMatchResult["outcome"], string> = {
     joined: "In. The player can open personalUrl to see the match, add it to a calendar or leave.",
     waitlisted: "The match is full; the player is on the waitlist and moves up automatically when someone leaves.",
@@ -235,7 +253,8 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
     full: "The match is full and its waitlist is closed.",
     requested: "Waiting for the organizer's approval.",
   };
-  return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, next: nextText[res.outcome] };
+  const asking = line && line.askToJoin && !line.member && (res.outcome === "joined" || res.outcome === "waitlisted" || res.outcome === "already_in") ? ASKING_GROUP_NEXT : "";
+  return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, group: line, next: nextText[res.outcome] + asking };
 }
 
 export const leaveMatchSchema = z.object({

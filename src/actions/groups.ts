@@ -8,13 +8,16 @@ import { getDb } from "@/db";
 import { tell } from "@/lib/coach/notify";
 import { baseUrl } from "@/lib/config";
 import { recordFact } from "@/lib/domain/facts";
-import { createGroupFromEvent, deleteGroup, getGroupByCode, getGroupMember, handOverGroup, joinGroup, leaveGroup, removeGroupMember, updateGroup, weeklyGroupFromEvent } from "@/lib/domain/groups";
+import { createGroupFromEvent, decideGroupRequest, deleteGroup, getGroupByCode, getGroupMember, handOverGroup, joinGroup, leaveGroup, removeGroupMember, updateGroup, weeklyGroupFromEvent, withdrawGroupRequest } from "@/lib/domain/groups";
+import { ASK_NOTE_MAX } from "@/lib/domain/groupAccess";
+import { LIMITS } from "@/lib/domain/ratelimit";
+import { notifyGroupAskCapped, notifyGroupAskDecided } from "@/lib/notify";
 import { getPlayer } from "@/lib/domain/players";
 import { translatorFor } from "@/lib/email/templates";
 import { isValidInviteCode } from "@/lib/codes";
 import { suggestGroupName } from "@/lib/domain/groupNames";
 import { getSessionPlayer } from "@/lib/session";
-import { ActionFailure, loadEvent, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, loadEvent, requirePlayer, runA, type ActionResult } from "./shared";
 
 async function loadGroup(code: string) {
   if (!isValidInviteCode(code)) throw new ActionFailure("not_found");
@@ -40,13 +43,57 @@ export async function createGroupFromEventAction(code: string, name?: string, we
   });
 }
 
-export async function joinGroupAction(code: string, name?: string): Promise<ActionResult<null>> {
+/**
+ * The group page's own door (`via: "self"`): one tap in, or, when the group asks to join, an ask
+ * with an optional note that the admins hear about after the response. The outcome tells the
+ * screen which of the two happened; the page itself then renders the state.
+ */
+export async function joinGroupAction(code: string, name?: string, note?: string): Promise<ActionResult<{ outcome: "joined" | "already" | "requested" | "pending" | "declined" | "skipped" }>> {
   return runA(async () => {
     const { db, group } = await loadGroup(code);
     const me = await requirePlayer(db, name);
-    await joinGroup(db, group.id, me.id);
+    await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
+    const res = await joinGroup(db, group.id, me.id, "self", { note: note?.slice(0, ASK_NOTE_MAX * 4) ?? null });
+    if (res.outcome === "requested") {
+      const request = res.request;
+      after(async () => {
+        await recordFact(db, { kind: "group.asked", channel: "web", actorPlayerId: me.id, subject: { type: "group", id: group.id }, code: group.code });
+        // At most LIMITS.groupAskNoticesPerGroupPerDay notices a day per group; past that the ask stands, unannounced.
+        if (res.notify) await notifyGroupAskCapped(db, group, me, request.note);
+      });
+    }
     revalidatePath(`/g/${code}`);
-    revalidatePath("/me");
+    if (res.outcome === "joined") revalidatePath("/me");
+    return { outcome: res.outcome };
+  });
+}
+
+/** The asker takes their ask back. */
+export async function withdrawGroupRequestAction(code: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, group } = await loadGroup(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    await withdrawGroupRequest(db, group.id, me.id);
+    revalidatePath(`/g/${code}`);
+    return null;
+  });
+}
+
+/** Admin only: approve (a member now, through `joinGroup` with `via: "admin"`) or decline. The person hears either way, after the response. */
+export async function decideGroupRequestAction(code: string, requestId: string, approve: boolean): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const parsed = z.string().uuid().safeParse(requestId);
+    if (!parsed.success) throw new ActionFailure("invalid");
+    const { db, group } = await loadGroup(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const res = await decideGroupRequest(db, { groupId: group.id, requestId: parsed.data, approve, actorPlayerId: me.id });
+    after(async () => {
+      await recordFact(db, { kind: approve ? "group.ask_approved" : "group.ask_declined", channel: "web", actorPlayerId: me.id, subject: { type: "group", id: group.id }, code: group.code });
+      if (res.player) await notifyGroupAskDecided(db, group, res.player, approve);
+    });
+    revalidatePath(`/g/${code}`);
     return null;
   });
 }
@@ -103,6 +150,7 @@ export async function handOverGroupAction(code: string, playerId: string): Promi
 
 const updateSchema = z.object({
   name: z.string().min(1).max(60).optional(),
+  askToJoin: z.boolean().optional(),
   recurDow: z.number().int().min(0).max(6).nullable().optional(),
   recurTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   recurLeadDays: z.number().int().min(1).max(14).optional(),

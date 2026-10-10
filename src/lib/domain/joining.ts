@@ -46,9 +46,10 @@ export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player
     }
   }
   const result = await joinEvent(db, { eventId: ev.id, playerId: player.id });
-  // Joining a crew's match makes you part of the crew, so the next one reaches you too.
+  // Joining a crew's match makes you part of the crew, so the next one reaches you too — unless the
+  // crew asks to join, where the seat is the match's and the crew stays the admins' to choose.
   if ((result.outcome === "joined" || result.outcome === "waitlisted") && ev.groupId) {
-    await joinGroup(db, ev.groupId, player.id).catch(() => undefined);
+    await joinGroup(db, ev.groupId, player.id, "match").catch(() => undefined);
   }
   return { kind: "joined", result };
 }

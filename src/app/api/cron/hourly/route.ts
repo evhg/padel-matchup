@@ -255,7 +255,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Once a day: every table into the owner's private backup repository (when configured).
+    // Once a day: every table into the owner's private backup repository (when configured), then that
+    // repository's history rebuilt with only the kept days. The answer's `backup.history` says "rebuilt"
+    // or "kept", with `historyReason`; a kept night is not an error, and the service board counts them.
     summary.backup = await runBackup(db, now);
     if (summary.backup.status === "failed") summary.errors.push(`backup: ${summary.backup.error}`);
   } catch (e) {

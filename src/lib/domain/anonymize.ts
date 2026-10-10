@@ -6,6 +6,7 @@ import { dropCoachWantsFor } from "./coachWants";
 import { dropWantsFor } from "./demand";
 import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching";
 import { withdrawEntriesOf } from "./competitions";
+import { dropGroupRequestsFor } from "./groups";
 import { getPlayer } from "./players";
 import { cancelEvent } from "./events";
 import { leaveEvent, type Promotion } from "./slots";
@@ -78,6 +79,9 @@ export async function anonymizePlayer(
   // one thing an account deletion must not leave behind is a reason to send somebody a message.
   await dropWantsFor(db, playerId);
   await dropCoachWantsFor(db, playerId);
+  // An ask to join a group is the same kind of standing request, and its note is their own words:
+  // left behind, it sat on the admins' list under "Deleted player", note and all.
+  await dropGroupRequestsFor(db, playerId);
   // The chat accounts and the public page go too. They are ways to reach a person and a page with
   // their level on it, and /privacy promises that deletion takes them: until 9 October 2026 the row
   // kept its Telegram, Discord and LINE ids, so the bot still knew a "Deleted player" by their account.

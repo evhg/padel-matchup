@@ -258,6 +258,30 @@ subscriptions are dropped, always; addresses, phone numbers and messenger ids ar
 `--keep-contacts`. The file and the folder are personal data, kept out of git by `.gitignore`. A
 table that reached the backup's row cap is named in the file and turns the board's backup row yellow.
 
+**The nightly history rebuild** (the owner's decision of 10 October 2026). A night that prunes an old
+file with the contents API only adds a commit, so the old copies stayed in the history for ever. Now,
+after the night's file is written and the old days are pruned, `runBackup` reads the default branch's
+head, makes one new commit with the same tree and no parent ("backups as of <day>"; its body names the
+commit it replaces), and forces the branch onto it. Every older commit is then unreachable, and GitHub
+removes it at a time it does not give, which is why /privacy says "about 60 days". The guards, each
+proven in `tests/backup-history.test.ts`: no rebuild when tonight's write failed; the tree must be read
+whole and hold nothing but night files under `backups/` (a README, LICENSE, `.gitignore` or
+`.gitattributes` at the root is allowed, anything else means the token points at the wrong
+repository), at most `BACKUP_MAX_FILES` (62) of them, and today's file, the very blob just written;
+the branch must not move between the first read and a second read just before the update; and a
+refused, failed or odd answer at any step stops before the update. A night that stops keeps the
+history as it was, still reports the backup as done, and says why in `backup.history` and
+`backup.historyReason` of the hourly job's answer and in its `[backup]` log line. The daily metrics
+`backup_history_rebuilt` and `backup_history_kept` count the nights, and the board's backup row names
+the last of each and turns yellow when a night kept the history and the last rebuild is more than two
+days older, or there was none. A branch protection rule or ruleset that blocks force pushes on that
+branch makes every night `github 422 at move the branch`. **To undo a rebuild**, take the commit the branch pointed at before
+it: the log line (`history rebuilt, <repo> main moved from <old> to <new>; to undo, point main back at
+<old>`), `backup.historyFrom` in the job's answer, or the body of the new commit. Then, while GitHub
+still holds that commit, point the branch back with the backup token:
+`curl -X PATCH -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" -d '{"sha":"<old>","force":true}' https://api.github.com/repos/$BACKUP_GITHUB_REPO/git/refs/heads/main`.
+Fix the cause before the next night, because the next rebuild cuts the history again.
+
 **Bounces and complaints.** Resend's webhook (`/api/inbound/resend`, the same one that carries
 mail to `claude@`) also sends `email.bounced` and `email.complained`. A hard bounce or a complaint
 marks the address at once, three soft bounces mark it, and a marked address gets no more mail

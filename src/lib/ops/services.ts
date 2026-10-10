@@ -115,6 +115,8 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const pushSubs = (await latest(db, "push_subs"))?.value ?? 0;
   const backup = await latest(db, "backup_done");
   const backupCapped = await latest(db, "backup_capped");
+  const historyRebuilt = await latest(db, "backup_history_rebuilt");
+  const historyKept = await latest(db, "backup_history_kept");
   const domainExp = (await latest(db, "domain_expires_at"))?.value ?? 0;
   const costReported = (await latest(db, "anthropic_cost_cents"))?.value ?? 0;
   const incidents = await openUptimeIncidents(db);
@@ -195,7 +197,13 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const backupAgeH = backup ? Math.round((now.getTime() - new Date(`${backup.day}T23:59:59Z`).getTime()) / 3_600_000) : null;
   // A table that filled its cap was cut short: the file is still a backup, but not of everything.
   const cutShort = backup && backupCapped && backupCapped.day === backup.day ? backupCapped.value : 0;
-  push({ key: "backup", name: "GitHub backup", role: "nightly export to the private repository", used: null, limit: null, usage: backup ? `last on ${backup.day}${cutShort ? ` · ${cutShort} table(s) cut at ${BACKUP_ROW_CAP.toLocaleString("en")} rows` : ""}` : "never", ceiling: `under ${CEILINGS.backupMaxAgeHours} h old`, note: "Sixty days kept. Token expiry would show here first. Restore one on a laptop with scripts/restore-backup.ts.", state: !backup || backupAgeH === null || backupAgeH > CEILINGS.backupMaxAgeHours ? "alert" : cutShort ? "warn" : "ok" });
+  // Each night rebuilds the repository's history with only the kept days (src/lib/backup.ts). One night
+  // that keeps the old history is harmless; more than two in a row and /privacy's "about sixty days" stops
+  // being true, so the row turns yellow and the job's log line says why.
+  const keptLast = historyKept && (!historyRebuilt || historyKept.day > historyRebuilt.day) ? historyKept.day : null;
+  const historyStale = keptLast !== null && (!historyRebuilt || Date.parse(keptLast) - Date.parse(historyRebuilt.day) > 2 * 86_400_000);
+  const historyText = keptLast ? ` · history kept on ${keptLast}, last rebuilt ${historyRebuilt?.day ?? "never"}` : historyRebuilt ? ` · history rebuilt on ${historyRebuilt.day}` : "";
+  push({ key: "backup", name: "GitHub backup", role: "nightly export to the private repository", used: null, limit: null, usage: backup ? `last on ${backup.day}${cutShort ? ` · ${cutShort} table(s) cut at ${BACKUP_ROW_CAP.toLocaleString("en")} rows` : ""}${historyText}` : "never", ceiling: `under ${CEILINGS.backupMaxAgeHours} h old`, note: "Sixty days kept, and each night the history is rebuilt with only those days (docs/OPERATING.md says how to undo one). Token expiry would show here first. Restore one on a laptop with scripts/restore-backup.ts.", state: !backup || backupAgeH === null || backupAgeH > CEILINGS.backupMaxAgeHours ? "alert" : cutShort || historyStale ? "warn" : "ok" });
   push({ key: "uptime", name: "GitHub Actions uptime probe", role: "outside check every ten minutes", used: null, limit: null, usage: incidents === 0 ? "no open incident" : `${incidents} open incident${incidents > 1 ? "s" : ""}`, ceiling: "public repository: free minutes", note: "Opens an issue and messages you while the site is down.", link: process.env.UPTIME_REPO ? `https://github.com/${process.env.UPTIME_REPO}/issues?q=label%3Auptime` : undefined, state: incidents === 0 ? "ok" : "alert" });
 
   // Domain

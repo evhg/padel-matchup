@@ -60,9 +60,9 @@ describe("groups", () => {
     const m1 = await makePlayer(db, "M1");
     const m2 = await makePlayer(db, "M2");
     const g = await createGroup(db, { name: "Crew", creatorPlayerId: admin.id, tz: "UTC" });
-    await joinGroup(db, g.id, m1.id);
-    await joinGroup(db, g.id, m1.id);
-    await joinGroup(db, g.id, m2.id);
+    await joinGroup(db, g.id, m1.id, "self");
+    await joinGroup(db, g.id, m1.id, "self");
+    await joinGroup(db, g.id, m2.id, "self");
     expect((await getGroupDetail(db, g)).members).toHaveLength(3);
     await expect(leaveGroup(db, g.id, admin.id)).rejects.toMatchObject({ code: "forbidden" });
     await expect(removeGroupMember(db, g.id, m1.id, m2.id)).rejects.toMatchObject({ code: "forbidden" });

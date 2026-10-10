@@ -88,7 +88,8 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
     const before = wasComplete(detail);
     const res = await decideJoinRequest(db, { eventId: detail.event.id, requestId, approve, actorPlayerId: viewer.player?.id ?? null });
     const player = res.player;
-    if (approve && player && detail.event.groupId) await joinGroup(db, detail.event.groupId, player.id).catch(() => undefined);
+    // A seat approved by the organiser is a match seat (`via: "match"`): it makes a member of a group that lets anyone in, and of no group that asks to join.
+    if (approve && player && detail.event.groupId) await joinGroup(db, detail.event.groupId, player.id, "match").catch(() => undefined);
     after(async () => {
       if (!player) return;
       if (approve) {
@@ -174,7 +175,8 @@ export async function confirmInviteAction(
     const before = found ? wasComplete(await getEventDetail(db, found.event)) : false;
     const me = await requirePlayer(db, input.name);
     const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email });
-    if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id).catch(() => undefined);
+    // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
+    if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
     if (res.outcome === "confirmed") {
       after(async () => {
         const fresh = (await getPlayer(db, me.id)) ?? me;
