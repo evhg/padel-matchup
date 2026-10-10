@@ -221,7 +221,7 @@ describe("WhatsApp carries the match to a player whose channel it is", () => {
 
   it("tell(): a player with no Telegram gets the template, and no email besides", async () => {
     const nok = await waPlayer("Nok", { email: "nok@example.com" });
-    await tell(db, nok, "The match moved\nNow Sat at 18:00", { inline_keyboard: [[{ text: "Open", url: "https://kicksma.sh/p/secret/7KQ2" }]] }, { whatsapp: notice("7KQ2") });
+    await tell(db, nok, "The match moved\nNow Sat at 18:00", { inline_keyboard: [[{ text: "Open", url: "https://kicksma.sh/p/secret/7KQ2" }]] }, { notice: { released: "now" }, whatsapp: notice("7KQ2") });
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ to: digits(nok), name: "ks_match_update", language: "en", url: "7KQ2" });
     expect(mails()).toHaveLength(0);
@@ -231,14 +231,14 @@ describe("WhatsApp carries the match to a player whose channel it is", () => {
   it("tell(): a template Meta will not deliver falls through to email, as the notice did before WhatsApp", async () => {
     const pim = await waPlayer("Pim", { email: "pim@example.com", locale: "ru" });
     refuse = true;
-    await tell(db, pim, "Матч перенесли\nТеперь в субботу", undefined, { whatsapp: notice("7KQ2") });
+    await tell(db, pim, "Матч перенесли\nТеперь в субботу", undefined, { notice: { released: "now" }, whatsapp: notice("7KQ2") });
     expect(sent).toHaveLength(0);
     expect(mails().map((m) => m.to)).toEqual(["pim@example.com"]);
   });
 
   it("tell(): a notice without a template never tries WhatsApp (a coach's notices have none)", async () => {
     const tai = await waPlayer("Tai", { email: "tai@example.com" });
-    await tell(db, tai, "Lesson booked\nMonday 10:00");
+    await tell(db, tai, "Lesson booked\nMonday 10:00", undefined, { notice: { sender: "lessonBooked" } });
     expect(sent).toHaveLength(0);
     expect(mails().map((m) => m.to)).toEqual(["tai@example.com"]);
   });
@@ -247,8 +247,8 @@ describe("WhatsApp carries the match to a player whose channel it is", () => {
     process.env.WHATSAPP_TEMPLATES_PER_DAY = "1";
     const a = await waPlayer("Cap A", { email: "cap-a@example.com" });
     const b = await waPlayer("Cap B", { email: "cap-b@example.com" });
-    await tell(db, a, "One\ntwo", undefined, { whatsapp: notice("7KQ2") });
-    await tell(db, b, "One\ntwo", undefined, { whatsapp: notice("7KQ2") });
+    await tell(db, a, "One\ntwo", undefined, { notice: { released: "now" }, whatsapp: notice("7KQ2") });
+    await tell(db, b, "One\ntwo", undefined, { notice: { released: "now" }, whatsapp: notice("7KQ2") });
     expect(sent.map((s) => s.to)).toEqual([digits(a)]);
     expect(mails().map((m) => m.to)).toEqual(["cap-b@example.com"]);
     const counted = await db.select().from(metricsDaily).where(eq(metricsDaily.day, dayKey(NOW)));
@@ -257,7 +257,7 @@ describe("WhatsApp carries the match to a player whose channel it is", () => {
     // Zero switches template sends off altogether: WhatsApp is not even tried.
     process.env.WHATSAPP_TEMPLATES_PER_DAY = "0";
     await db.delete(metricsDaily);
-    await tell(db, a, "One\ntwo", undefined, { whatsapp: notice("7KQ2") });
+    await tell(db, a, "One\ntwo", undefined, { notice: { released: "now" }, whatsapp: notice("7KQ2") });
     expect(sent).toHaveLength(1);
     expect(mails().map((m) => m.to)).toEqual(["cap-b@example.com", "cap-a@example.com"]);
     expect(await db.select().from(metricsDaily)).toEqual([]);

@@ -69,7 +69,7 @@ export const HIDDEN_COLUMNS: readonly string[] = [
  */
 export const REVIEWED_SAFE: readonly string[] = [
   "code", // events, groups: the public 4-6 character code in the URL
-  "key", // metrics_daily, research_runs: the name of a metric or a stored query
+  "key", // metrics_daily, research_runs, notices: the name of a metric, a stored query or a message
   "query_key",
   "thread_key",
   "hash", // research_cache: a hash of a search question, so the same question is not paid for twice

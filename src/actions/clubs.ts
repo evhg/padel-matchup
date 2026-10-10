@@ -178,7 +178,7 @@ export async function confirmClaimCodeAction(token: string, code: string): Promi
       after(async () => {
         await tellOwnerClaimLive(live, email);
         const claimant = live.claimedBy ? await getPlayer(db, live.claimedBy) : null;
-        if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, live, true), { inline_keyboard: [[{ text: "Open the page", url: `${baseUrlOf()}/v/${live.slug}` }]] }).catch(() => undefined);
+        if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, live, true), { inline_keyboard: [[{ text: "Open the page", url: `${baseUrlOf()}/v/${live.slug}` }]] }, { notice: { receipt: "clubClaimDecision" } }).catch(() => undefined);
       });
     }
     revalidatePath(`/v/${club.slug}`);

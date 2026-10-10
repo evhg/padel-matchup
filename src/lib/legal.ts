@@ -1,6 +1,7 @@
 import { BACKUP_KEEP_DAYS } from "@/lib/backup";
 import { DISPOSABLE_AFTER_DAYS } from "@/lib/domain/disposable";
 import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
+import { INBOX_DAYS } from "@/lib/domain/noticeKinds";
 
 /**
  * What /privacy and /terms say where the code decides it.
@@ -32,5 +33,6 @@ export function legalValues(locale: string) {
     disposableDays: DISPOSABLE_AFTER_DAYS,
     rateDays: RATE_ROWS_KEEP_DAYS,
     backupDays: BACKUP_KEEP_DAYS,
+    inboxDays: INBOX_DAYS,
   };
 }

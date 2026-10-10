@@ -14,7 +14,7 @@ import type { Db } from "@/db";
  * and it led to a page that said "Not approved" and pointed at GitHub Discussions. The person is
  * a player again, so the header says My matches and nothing else.
  *
- * One query, five indexed lookups inside it, a small row back (rule 12). It runs on a page
+ * One query, six indexed lookups inside it, a small row back (rule 12). It runs on a page
  * render, so it must stay one round trip: the pooler stalls on pipelined bursts (rule 8), and
  * five separate awaits is exactly that burst.
  */
@@ -29,9 +29,15 @@ export type RoleSet = {
   series: RoleSeries[];
   /** Coaches this person is an accepted student of. */
   studentOf: number;
+  /**
+   * Unread notices in their inbox, counted to ten at most: the header's My matches carries "9+", never a
+   * scan of ninety days. Not a role, but the same one round trip on every page, which is why it is here
+   * (`notices_player_created_idx`; the owner's decision D).
+   */
+  unread: number;
 };
 
-export const NO_ROLES: RoleSet = { coach: null, clubs: [], series: [], studentOf: 0 };
+export const NO_ROLES: RoleSet = { coach: null, clubs: [], series: [], studentOf: 0, unread: 0 };
 
 /** How many doors besides Play this person holds; the header changes shape on it. */
 export const roleCount = (r: RoleSet): number => (r.coach ? 1 : 0) + r.clubs.length + r.series.length;
@@ -73,7 +79,9 @@ export async function rolesFor(db: Db, playerId: string | null | undefined): Pro
          from series s
         where s.organizer_player_id = ${playerId} and s.active), '[]'::json) as series,
       (select count(*) from coach_students cs
-        where cs.player_id = ${playerId} and cs.status = 'accepted') as student_of
+        where cs.player_id = ${playerId} and cs.status = 'accepted') as student_of,
+      (select count(*) from (select 1 from notices n
+        where n.player_id = ${playerId} and n.read_at is null limit 10) u) as unread
   `);
   const row = rowOf(res);
   if (!row) return NO_ROLES;
@@ -83,5 +91,6 @@ export async function rolesFor(db: Db, playerId: string | null | undefined): Pro
     clubs: asJson<RoleClub[]>(row.clubs, []),
     series: asJson<RoleSeries[]>(row.series, []),
     studentOf: Number(row.student_of ?? 0),
+    unread: Number(row.unread ?? 0),
   };
 }

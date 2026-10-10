@@ -45,9 +45,16 @@ export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?
       {d.label}
     </Link>
   );
+  // Unread notices ride on the door itself, as a dot with a number: no new control and no width on a
+  // phone (absolute), and hidden from the link's name, so "My matches" is still exactly what it is called.
   const play = (
-    <Link href="/me" prefetch={false} className={chip} data-testid="nav-play">
+    <Link href="/me" prefetch={false} className={`${chip} relative`} data-testid="nav-play">
       {labels.myMatches}
+      {roles.unread > 0 && (
+        <span aria-hidden="true" data-testid="nav-unread" className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11px] font-extrabold leading-none text-night">
+          {roles.unread > 9 ? "9+" : roles.unread}
+        </span>
+      )}
     </Link>
   );
   // The menu is one short glyph, so the header keeps its one word beside it on a phone. Inside: the

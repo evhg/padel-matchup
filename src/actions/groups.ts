@@ -140,7 +140,7 @@ export async function handOverGroupAction(code: string, playerId: string): Promi
       if (!admin) return;
       const { t } = await translatorFor(admin.locale);
       const url = `${baseUrl()}/g/${handed.code}`;
-      await tell(db, admin, t("group.handedOver", { from: me.displayName, name: handed.name }), { inline_keyboard: [[{ text: t("group.open"), url }]] }, { label: t("group.open") }).catch(() => undefined);
+      await tell(db, admin, t("group.handedOver", { from: me.displayName, name: handed.name }), { inline_keyboard: [[{ text: t("group.open"), url }]] }, { notice: { sender: "groupHandover", params: { name: me.displayName, group: handed.name } }, label: t("group.open") }).catch(() => undefined);
     });
     revalidatePath(`/g/${code}`);
     revalidatePath("/me");

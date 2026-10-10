@@ -125,6 +125,49 @@ try {
   check("and it says who answered it, and with what", /Entered by Dana/.test(scored) && /Team A\s*6/.test(scored), scored.slice(0, 160));
   await shot(dana, "player-match-scored");
 
+  // ------------------------------------------------- the inbox, and the notice switches (the owner's decision D)
+  // Dana organises a match tomorrow and Kai joins it, both by the tokens they already hold, so the walk
+  // makes no new name (every suite shares the new-identity limit). Kai's join is a notice to Dana.
+  const kaiToken = made.organizer?.personalToken ?? "";
+  const mine = await api("/api/v1/matches", { startsAt: new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Dana", token } });
+  const kaiIn = await api(`/api/v1/matches/${mine.match?.code}/join`, { token: kaiToken });
+  check("Kai joins the match Dana organises", kaiIn.outcome === "joined", JSON.stringify(kaiIn).slice(0, 160));
+  // The notice is written after the response: look a few times, never for long.
+  const inbox = dana.getByTestId("inbox");
+  for (let i = 0; i < 10; i++) {
+    await dana.goto(BASE + "/me");
+    await dana.waitForLoadState("networkidle").catch(() => {});
+    if ((await inbox.count()) > 0) break;
+    await dana.waitForTimeout(500);
+  }
+  check("the inbox appears on My matches with its new notices counted", (await inbox.count()) === 1 && /^\d+ new$/.test((await inbox.getByTestId("inbox-new").innerText()).toLowerCase()));
+  // The count rides on the door and stays out of its name: "My matches" is still exactly what the link is called.
+  check("the header's My matches carries the unread count", /^[1-9]\+?$/.test(await dana.getByTestId("nav-unread").innerText()) && (await dana.getByRole("link", { name: "My matches", exact: true }).count()) > 0);
+  await inbox.locator("summary").click();
+  check("the inbox lists the notice: Kai joined Dana's match", (await inbox.locator("li").filter({ hasText: "Kai joined" }).count()) === 1 && (await inbox.locator(`a[href="/${mine.match?.code}"]`).count()) === 1);
+  check("opening the inbox reads it", (await inbox.getByTestId("inbox-new").count()) === 0 && (await inbox.locator("li[data-unread]").count()) === 0);
+  await shot(dana, "player-inbox");
+
+  const notices = dana.getByTestId("notice-settings");
+  check("Notices is one line that says what is set", (await notices.getByTestId("notice-summary").innerText()) === "6 of 7 on · no quiet hours");
+  await notices.locator("summary").click();
+  await notices.getByLabel("Open spots", { exact: true }).uncheck();
+  await notices.getByLabel("From", { exact: true }).selectOption("22:00");
+  await notices.getByLabel("To", { exact: true }).selectOption("08:00");
+  await notices.getByRole("button", { name: "Save notices" }).click();
+  await notices.getByRole("status").waitFor({ timeout: 20000 });
+  await dana.reload();
+  await dana.waitForLoadState("networkidle").catch(() => {});
+  const kept = dana.getByTestId("notice-settings");
+  check("after a reload the line says what was set", (await kept.getByTestId("notice-summary").innerText()) === "5 of 7 on · quiet 22:00–08:00", await kept.getByTestId("notice-summary").innerText());
+  await kept.locator("summary").click();
+  check(
+    "and the switches and the quiet hours stayed",
+    !(await kept.getByLabel("Open spots", { exact: true }).isChecked()) && (await kept.getByLabel("Match changes", { exact: true }).isChecked()) && !(await kept.getByLabel("Club matches", { exact: true }).isChecked()) && (await kept.getByLabel("From", { exact: true }).inputValue()) === "22:00" && (await kept.getByLabel("To", { exact: true }).inputValue()) === "08:00",
+  );
+  check("and the header's count is gone", (await dana.getByTestId("nav-unread").count()) === 0);
+  await shot(dana, "player-notices");
+
   // ------------------------------------------------- the same screens at desk width
   await dana.setViewportSize({ width: 1280, height: 900 });
   await dana.goto(BASE + "/me");

@@ -19,6 +19,8 @@ import { TelegramLogin } from "./TelegramLogin";
 import { markOf } from "@/lib/domain/emailMarks";
 import { TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
 import { TextSizeSwitch } from "./TextSizeSwitch";
+import { NoticeSettings } from "./NoticeSettings";
+import { kindOn, NOTICE_KINDS, noticeSummary, type NoticeKind } from "@/lib/domain/noticeKinds";
 
 /**
  * Everything a player sets rather than reads: reminders, the link that is their way back in, the
@@ -35,10 +37,16 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
   // Mail to this address stopped arriving: the one place the person can fix it is here, so it says so here.
   const mark = emailEnabled() && player.email ? await markOf(db, player.email) : null;
   const markedOn = mark ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: "UTC" }).format(mark.markedAt) : "";
+  const settings = { kinds: player.noticeKinds, quietFrom: player.quietFrom, quietTo: player.quietTo, quietTz: player.quietTz };
+  const sum = noticeSummary(settings);
+  const summary = `${t("notices.summary", { on: sum.on, total: sum.total })} · ${sum.quiet ? t("notices.summaryQuiet", sum.quiet) : t("notices.summaryNoQuiet")}`;
+  const on = Object.fromEntries(NOTICE_KINDS.map((k) => [k, kindOn(player.noticeKinds, k)])) as Record<NoticeKind, boolean>;
   return (
     <>
       {/* The toggle draws its own card: a phone that cannot do push sees no card, not an empty one. */}
       <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />
+      {/* What reaches this player and when: one line here, the switches behind it (the owner's decision D). */}
+      <NoticeSettings on={on} quietFrom={player.quietFrom} quietTo={player.quietTo} summary={summary} />
       <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />
       <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
       <section className="card">

@@ -7,7 +7,8 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import webpush from "web-push";
 import type { Db } from "@/db";
-import { pushSubscriptions } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { notices, players, pushSubscriptions } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { mayEmailClubMatch, notifyClubMatch } from "@/lib/notify";
@@ -15,10 +16,10 @@ import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 
 /**
- * A club's weekly programme makes a match, and the club's recent players hear about it. They did
- * not ask to, so it goes by push only: the email stopped on 9 October 2026 (owner's decision) and
- * comes back as an opt-in with the per-kind notice settings. Until then `mayEmailClubMatch` says no
- * to everybody, and these tests hold both halves: no email, and the push still goes.
+ * A club's weekly programme makes a match, and the club's recent players may hear about it. They did
+ * not ask to, so the email stopped on 9 October 2026 (decision B), and decision D made the whole
+ * notice one kind, "club matches", off by default: everybody it is for finds it in their inbox, and
+ * only a player who switched it on hears it, by push and (with activity emails on) by email.
  */
 const NOW = new Date("2026-10-09T03:00:00.000Z");
 freezeClock(NOW);
@@ -73,11 +74,12 @@ describe("the club programme's notice", () => {
     await close();
   });
 
-  it("asks nobody for the email yet, not even a player with an address and notices on", () => {
-    expect(mayEmailClubMatch({ id: "p", email: "ana@example.com", emailNotifications: true })).toBe(false);
+  it("asks nobody for the email by default, and a player who switched club matches on", () => {
+    expect(mayEmailClubMatch({ noticeKinds: {} })).toBe(false);
+    expect(mayEmailClubMatch({ noticeKinds: { clubMatches: true } })).toBe(true);
   });
 
-  it("pushes to a recent player of the club and sends them no email", async () => {
+  it("by default tells a recent player of the club nothing, and keeps it in their inbox", async () => {
     const club = await makePlayer(db, "Club desk");
     const ana = await makePlayer(db, "Ana", { email: "ana@example.com", emailNotifications: true });
     const sub = fakeSubscription(`http://127.0.0.1:${port}/push/ana`);
@@ -90,8 +92,18 @@ describe("the club programme's notice", () => {
     expect(next.venueSlug).toBe(today.venueSlug);
 
     const r = await notifyClubMatch(db, { slug: next.venueSlug!, name: "Rawai Padel" }, next, NOW);
-    expect(r).toEqual({ emails: 0, pushes: 1, told: 1 });
-    expect(pushed).toEqual(["/push/ana"]);
+    expect(r).toEqual({ emails: 0, pushes: 0, told: 0 });
+    expect(pushed).toEqual([]);
     expect(mails()).toHaveLength(0);
+    const kept = await db.select().from(notices).where(eq(notices.playerId, ana.id));
+    expect(kept.map((n) => [n.kind, n.key, n.deliveredAt])).toEqual([["clubMatches", "noticeItem.clubMatch", null]]);
+
+    // Switched on: the push and the email both go, and the row says it was delivered.
+    await db.update(players).set({ noticeKinds: { clubMatches: true } }).where(eq(players.id, ana.id));
+    const again = await createEvent(db, { creatorPlayerId: club.id, type: "match", startsAt: new Date(NOW.getTime() + 54 * HOUR), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    const r2 = await notifyClubMatch(db, { slug: again.venueSlug!, name: "Rawai Padel" }, again, NOW);
+    expect(r2).toEqual({ emails: 1, pushes: 1, told: 1 });
+    expect(pushed).toEqual(["/push/ana"]);
+    expect(mails().map((m) => m.to)).toEqual(["ana@example.com"]);
   });
 });
