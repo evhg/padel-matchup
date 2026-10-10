@@ -151,7 +151,8 @@ describe("fixed pairs: fairness for 2 to 8 pairs", () => {
 
   it("one court: four pairs meet each other once in six rounds and five pairs in ten, whatever the event, with fair rests", () => {
     // The reviewer's measured nights: before the night was planned ahead, 4 pairs met 4 of 6 times and 5 pairs 6 of 10.
-    for (const eventId of ["ev-1", "ev-2", "ev-3", "night-a", "night-b", "phuket-friday"]) {
+    // ev-14, ev-22 and ev-30 are nights a round-by-round choice still gets wrong: only the look-ahead meets them all.
+    for (const eventId of ["ev-1", "ev-2", "ev-3", "night-a", "night-b", "phuket-friday", "ev-14", "ev-22", "ev-30"]) {
       for (const [n, rounds] of [
         [4, 6],
         [5, 10],

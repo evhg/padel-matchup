@@ -334,6 +334,11 @@ describe("the waiting list, the invitation and the capacity, by pairs", () => {
     const res = await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Bo" });
     const { namedByOf } = await import("@/lib/domain/pairSeats");
     expect(await namedByOf(db, res.partner!)).toBe("Ana");
+    // Bo claims, then Ana leaves: Bo's seat keeps the key, and nobody else named him; his own name is not the answer.
+    const bo = await makePlayer(db, "Bo");
+    await confirmInvite(db, { inviteCode: res.partner!.inviteCode!, playerId: bo.id });
+    await leaveEvent(db, { eventId: ev.id, playerId: ana.id });
+    expect(await namedByOf(db, (await seats(ev)).rows.find((s) => s.playerId === bo.id)!)).toBeNull();
     const { reserveSlot } = await import("@/lib/domain/slots");
     const { slot } = await reserveSlot(db, { eventId: ev.id, actorPlayerId: null, name: "Cal" });
     expect(await namedByOf(db, slot)).toBeNull();
