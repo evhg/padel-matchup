@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
+import { activity, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
@@ -76,6 +76,8 @@ async function reservePartner(tx: Db, ev: Event, input: { actorPlayerId: string 
 export type PairJoinOutcome = JoinOutcome & {
   /** The partner's reserved seat, with the invite link's code, when a name was given and it found a place. */
   partner?: Slot | null;
+  /** A player already on the list named a partner and no seat was free beside them: they stay in, alone. */
+  noSeatForPartner?: boolean;
 };
 
 /**
@@ -87,7 +89,7 @@ export type PairJoinOutcome = JoinOutcome & {
  *   night says full when it keeps no list).
  * - Already in as a single, with a name: the name becomes their partner, in a free seat beside them
  *   on the roster, or behind them on the waiting list. With no free seat the roster single stays a
- *   single and hears `full`.
+ *   single (`already_in` with `noSeatForPartner`).
  * - Already in a pair: `already_in`.
  */
 export async function joinPair(db: Db, input: { eventId: string; playerId: string; partnerName?: string | null; now?: Date }): Promise<PairJoinOutcome> {
@@ -107,7 +109,8 @@ export async function joinPair(db: Db, input: { eventId: string; playerId: strin
       // From round 1 the pairs are the field: a new pair mid-night would put one player in two rows.
       await assertBeforeRound1(tx, ev);
       const onRoster = mine.position <= ev.capacity;
-      if (onRoster && free.length === 0) return { outcome: "full", event: ev };
+      // Still in, alone: "full" would tell a seated player they did not get in.
+      if (onRoster && free.length === 0) return { outcome: "already_in", slot: mine, event: ev, partner: null, noSeatForPartner: true };
       const partner = await reservePartner(tx, ev, { actorPlayerId: input.playerId, name: partnerName, slotId: onRoster ? free[0].id : null, pairId, now });
       const [slot] = await tx.update(slots).set({ pairId }).where(eq(slots.id, mine.id)).returning();
       const status = await recomputeStatus(tx, ev);
@@ -236,4 +239,19 @@ export async function pairInOrder(db: Db, input: { eventId: string }): Promise<n
     }
     return made;
   });
+}
+
+/**
+ * For the invite page: the first name of the player who named this reserved seat as their partner, or
+ * null when nobody did (an organiser's reserve). One read by the event's own seats.
+ */
+export async function namedByOf(db: Db, seat: Pick<Slot, "id" | "eventId" | "pairId">): Promise<string | null> {
+  if (!seat.pairId) return null;
+  const [row] = await db
+    .select({ name: players.displayName })
+    .from(slots)
+    .innerJoin(players, eq(players.id, slots.playerId))
+    .where(and(eq(slots.eventId, seat.eventId), eq(slots.pairId, seat.pairId), ne(slots.id, seat.id), inArray(slots.status, ["joined", "confirmed"])))
+    .limit(1);
+  return row?.name ?? null;
 }

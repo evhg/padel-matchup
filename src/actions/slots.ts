@@ -240,11 +240,23 @@ export async function confirmInviteAction(
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
     if (res.outcome === "confirmed") {
+      // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no
+      // invitation yet. The organiser hears that they wait, and the promotion sends the invitation.
+      const listed = res.slot.position <= res.event.capacity;
       after(async () => {
         const fresh = (await getPlayer(db, me.id)) ?? me;
-        await notifyCreator(db, res.event, "confirmed", fresh.displayName, fresh.id);
+        await notifyCreator(db, res.event, listed ? "confirmed" : "waitlisted", fresh.displayName, fresh.id);
+        if (!listed) return;
         const ev = await notifyLineupChange(db, res.event, before, fresh.id);
         await sendCalendarInvite(db, ev ?? res.event, fresh);
+      });
+    }
+    // The named partner was in already: the reserved spot they leave can move the waiting list up.
+    if (res.outcome === "already_in" && res.promotion) {
+      const promotion = res.promotion;
+      after(async () => {
+        const fresh = await notifyLineupChange(db, res.event, before, promotedOf(promotion).map((p) => p.playerId));
+        await notifyPromotion(db, fresh ?? res.event, promotion);
       });
     }
     revalidatePath(`/${code}`);

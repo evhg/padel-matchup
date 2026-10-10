@@ -135,6 +135,16 @@ export async function setTournamentSettings(
     if (input.fixedPairs !== undefined && input.fixedPairs !== ev.fixedPairs) {
       // The pairs are the field once round 1 is drawn. Turned off, the seats keep their keys and a night of rotating partners never reads them.
       if ((await loadRounds(tx, ev.id)).length > 0) throw new DomainError("invalid", "pairs_locked");
+      // A night of rotating partners moves up only players who joined: a partner who waits as a claimed
+      // or reserved name would wait for ever. The organiser takes them off the waiting list first.
+      if (!input.fixedPairs) {
+        const [stuck] = await tx
+          .select({ id: slots.id })
+          .from(slots)
+          .where(and(eq(slots.eventId, ev.id), sql`${slots.position} > ${ev.capacity}`, inArray(slots.status, ["confirmed", "invited"])))
+          .limit(1);
+        if (stuck) throw new DomainError("invalid", "pairs_waiting");
+      }
       set.fixedPairs = input.fixedPairs;
     }
     if (input.courts !== undefined) {

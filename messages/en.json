@@ -645,7 +645,8 @@
     "pairs_locked": "The pairs can't change once round 1 exists.",
     "taken": "That player already has a partner.",
     "already_paired": "You already have a partner.",
-    "not_fixed_pairs": "This tournament doesn't use fixed pairs."
+    "not_fixed_pairs": "This tournament doesn't use fixed pairs.",
+    "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -686,11 +687,14 @@
     "needPairs": "Round 1 needs two complete pairs ({count} so far). Reserved partners count too.",
     "partnerAdvice": "{singles, plural, one {# player has} other {# players have}} no partner. Pair them in the list below, or untick them.",
     "walkInPartner": "Their partner (optional)",
-    "rotationInfo": "{n} rounds complete the round robin (every pair meets every other pair once). {left} to go.",
-    "rotationDone": "Round robin complete after {n} rounds: every pair has met every other. Extra rounds repeat from round 1.",
+    "rotationInfo": "{n, plural, one {# round completes} other {# rounds complete}} the round robin (every pair meets every other pair once). {left} to go.",
+    "rotationDone": "Round robin complete after {n, plural, one {# round} other {# rounds}}: every pair has met every other. Extra rounds repeat from round 1.",
     "remove": "Remove {name}",
     "leaveWithName": "Leave? The spot you saved for {name} goes too.",
-    "leaveKeepsPartner": "Leave? {name} stays in and needs a new partner."
+    "leaveKeepsPartner": "Leave? {name} stays in and needs a new partner.",
+    "invitedBy": "{partner} named you as their partner.",
+    "inviteWaiting": "You two are on the waiting list, as a pair: you move up together when two spots free up.",
+    "shareWaiting": "🎾 Hey {name}! I put us down as a pair for padel {day} at {time} at {venue}. We're on the waiting list for now. Claim your spot here: {url}"
   },
   "americano": {
     "title": "Americano",

@@ -42,6 +42,8 @@ export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player
     if (fit !== "ok") {
       // Already on the roster or the waitlist: asking again would open a request for a spot they hold.
       const held = [...detail.roster, ...detail.waitlist].find((s) => s.playerId === player.id);
+      // Already in (the organiser said yes): naming a partner is not a new ask.
+      if (held && ev.fixedPairs && partnerName) return { kind: "joined", result: await joinPair(db, { eventId: ev.id, playerId: player.id, partnerName }) };
       if (held) return { kind: "joined", result: { outcome: "already_in", slot: held, event: ev } };
       await createJoinRequest(db, { eventId: ev.id, playerId: player.id, level });
       return { kind: "requested" };

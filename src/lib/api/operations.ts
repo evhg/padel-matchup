@@ -265,7 +265,13 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
   };
   const asking = line && line.askToJoin && !line.member && (res.outcome === "joined" || res.outcome === "waitlisted" || res.outcome === "already_in") ? ASKING_GROUP_NEXT : "";
   // Fixed pairs: the partner's link is how the partner claims the spot; nothing is sent to a name (DECIDING rule 24).
-  const pairNext = partner ? ` Send partner.inviteUrl to ${partner.name}: opening it claims their spot, signed in or by typing their name.` : ev.fixedPairs && (res.outcome === "joined" || res.outcome === "waitlisted") ? " This is a fixed-pairs night and the player joined alone: they are listed as needing a partner until somebody taps Be their partner on the match page, or they join_match again with partner." : "";
+  const pairNext = partner
+    ? ` Send partner.inviteUrl to ${partner.name}: opening it claims their spot, signed in or by typing their name.`
+    : res.noSeatForPartner
+      ? ` The player is still in, alone: no spot is free beside them for ${partnerName}, so they stay listed as needing a partner.`
+      : ev.fixedPairs && (res.outcome === "joined" || res.outcome === "waitlisted")
+        ? " This is a fixed-pairs night and the player joined alone: they are listed as needing a partner until somebody taps Be their partner on the match page, or they join_match again with partner."
+        : "";
   return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, partner, group: line, next: nextText[res.outcome] + pairNext + asking };
 }
 

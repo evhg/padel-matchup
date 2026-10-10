@@ -297,6 +297,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const venueOptions = venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames }));
   const inviteTextTemplate = t("shareText.invite", { name: "__NAME__", day, time, venue, url: "__URL__" });
   const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue, url: "__URL__" });
+  // A pair that waits says so: "I saved you a spot" would not be true yet.
+  const waitingInviteTemplate = t("pairs.shareWaiting", { name: "__NAME__", day, time, venue, url: "__URL__" });
   const pendingInvites = roster.filter((s) => s.status === "invited" && s.inviteCode);
   const groupInviteText =
     pendingInvites.length > 0
@@ -432,7 +434,7 @@ export default async function EventPage({ params, searchParams }: Props) {
         </div>
         {/* Whoever named the partner holds their link, and nobody else: the partner claims the spot by opening it. */}
         {invited?.inviteCode && mine && partnerGoes && !viewer.isCreator && !cancelled && !over && (
-          <PartnerLink name={personName(invited)} url={inviteUrl(base, code, invited.inviteCode)} text={inviteTextTemplate.replace("__NAME__", personName(invited)).replace("__URL__", inviteUrl(base, code, invited.inviteCode))} />
+          <PartnerLink name={personName(invited)} url={inviteUrl(base, code, invited.inviteCode)} text={(invited.position > ev.capacity ? waitingInviteTemplate : inviteTextTemplate).replace("__NAME__", personName(invited)).replace("__URL__", inviteUrl(base, code, invited.inviteCode))} />
         )}
         {canBePartner && <BePartnerButton code={code} slotId={u.seat.id} hasIdentity={Boolean(me)} />}
         {/* The organiser: split or pair before round 1, a partner off by name; a reserved name keeps its forward-and-cancel, a single its remove. */}

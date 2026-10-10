@@ -60,7 +60,8 @@ const RULES = [
   [/^src\/lib\/domain\/(levels|rating|requests)\.ts$/, ["levels", "passport"], "the level, which the passport draws"],
   [/^src\/lib\/domain\/groups\.ts$/, ["groups"], "groups"],
   [/^src\/lib\/domain\/formats\.ts$/, ["formats", "americano", "pairs"], "the tournament formats"],
-  [/^src\/(lib\/domain\/(fixedPairs|pairSeats)\.ts|components\/PairRows\.tsx)$/, ["pairs", "americano"], "fixed pairs: the draw, the seats and their controls"],
+  // Only the controls: fixedPairs.ts and pairSeats.ts are read by every join, leave, podium and card, so they stay unclaimed and run every suite.
+  [/^src\/components\/PairRows\.tsx$/, ["pairs", "americano"], "fixed pairs' controls on the match page"],
   [/^src\/lib\/(api|embed)\//, ["agents", "embeds"], "the public API and the embeds over it"],
   [/^src\/app\/(mcp|developers|agents)\//, ["agents"], "the agent-native surfaces"],
   [/^src\/app\/embed\//, ["embeds"], "the embeds"],

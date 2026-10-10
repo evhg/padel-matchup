@@ -645,7 +645,8 @@
     "pairs_locked": "Las parejas no pueden cambiar una vez creada la ronda 1.",
     "taken": "Ese jugador ya tiene pareja.",
     "already_paired": "Ya tienes pareja.",
-    "not_fixed_pairs": "Este torneo no usa parejas fijas."
+    "not_fixed_pairs": "Este torneo no usa parejas fijas.",
+    "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -686,11 +687,14 @@
     "needPairs": "La ronda 1 necesita dos parejas completas ({count} de momento). Los compañeros reservados también cuentan.",
     "partnerAdvice": "{singles, plural, one {# jugador no tiene} other {# jugadores no tienen}} pareja. Emparéjalos en la lista de abajo, o desmárcalos.",
     "walkInPartner": "Su pareja (opcional)",
-    "rotationInfo": "{n} rondas completan la liguilla (cada pareja se enfrenta una vez a todas las demás). Faltan {left}.",
-    "rotationDone": "Liguilla completa tras {n} rondas: cada pareja se ha enfrentado a todas. Las rondas extra repiten desde la 1.",
+    "rotationInfo": "{n, plural, one {# ronda completa} other {# rondas completan}} la liguilla (cada pareja se enfrenta una vez a todas las demás). Faltan {left}.",
+    "rotationDone": "Liguilla completa tras {n, plural, one {# ronda} other {# rondas}}: cada pareja se ha enfrentado a todas. Las rondas extra repiten desde la 1.",
     "remove": "Quitar a {name}",
     "leaveWithName": "¿Salir? La plaza que guardaste para {name} también se libera.",
-    "leaveKeepsPartner": "¿Salir? {name} sigue dentro y necesitará otra pareja."
+    "leaveKeepsPartner": "¿Salir? {name} sigue dentro y necesitará otra pareja.",
+    "invitedBy": "{partner} te ha apuntado como su pareja.",
+    "inviteWaiting": "Estáis los dos en la lista de espera como pareja: entráis juntos cuando se liberen dos plazas.",
+    "shareWaiting": "🎾 ¡Hola {name}! Nos he apuntado como pareja para pádel {day} a las {time} en {venue}. De momento estamos en la lista de espera. Confirma tu plaza aquí: {url}"
   },
   "americano": {
     "title": "Americano",

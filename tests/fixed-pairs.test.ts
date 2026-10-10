@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "@/lib/domain/americano";
 import { drawRound, type DrawnRound } from "@/lib/domain/formats";
-import { computeKingPairStandings, computePairStandings, pairCourts, pairKey, pairRotation, pairRotationRounds, pairRowsToPlayers, pairsRefusal, seatUnits, type Pair } from "@/lib/domain/fixedPairs";
+import { computeKingPairStandings, computePairStandings, pairCourts, pairKey, pairRotation, pairRotationRounds, pairRowsToPlayers, pairsOfRounds, pairsRefusal, seatUnits, type Pair } from "@/lib/domain/fixedPairs";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 
 /**
@@ -287,6 +287,13 @@ describe("fixed pairs: the table ranks pairs", () => {
       expect(mine.map((p) => p.rank)).toEqual([row.rank, row.rank]);
       expect(mine.map((p) => p.points)).toEqual([row.points, row.points]);
     }
+  });
+
+  it("a player belongs to one pair in the table, the pair the rounds played", () => {
+    // A second pair for p1a, which no write makes any more: the table keeps the one with results.
+    const rounds = [{ roundNumber: 1, resting: [], matches: [{ court: 1, a1: "p1a", a2: "p1b", b1: "p2a", b2: "p2b", sideA: 21, sideB: 10 }] }];
+    const pairs = pairsOfRounds(rounds, [["p1a", "pXa"] as const, ["p3a", "p3b"] as const]);
+    expect(pairs.map((p) => pairKey(p))).toEqual([pairKey(["p1a", "p1b"]), pairKey(["p2a", "p2b"]), pairKey(["p3a", "p3b"])]);
   });
 
   it("first to N games ranks pairs by wins", () => {

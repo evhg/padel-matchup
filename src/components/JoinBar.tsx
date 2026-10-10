@@ -85,8 +85,9 @@ export function JoinBar({
       const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined);
       startTransition(() => {
         if (!r.ok) setError(r.error === "name_required" ? t("identity.nameRequired") : r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-        // A player already in alone named a partner and no seat was free.
-        else if (withPartner && r.data.outcome === "full") setError(t("pairs.noSeat"));
+        // A player already in alone named a partner and no seat was free: still in, alone.
+        else if (withPartner && r.data.outcome === "already_in" && !r.data.partner) setError(t("pairs.noSeat"));
+        else if (r.data.outcome === "full") setError(t("errors.full"));
         else {
           setInline(false);
           setAddingPartner(false);

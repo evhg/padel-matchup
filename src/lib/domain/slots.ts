@@ -1,11 +1,11 @@
-import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, players, slots, type Event, type Slot } from "@/db/schema";
+import { activity, events, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isOver } from "./matchLength";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
-import { partnerOf, seatUnits } from "./fixedPairs";
+import { isNamedSeat, partnerOf, seatUnits } from "./fixedPairs";
 import { mergePlayers } from "./merge";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
 
@@ -158,10 +158,13 @@ export async function vacateSeats(tx: Db, ev: Event, seats: readonly Slot[]): Pr
   const all = await tx.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(asc(slots.position));
   const free = all.filter((s) => s.position <= ev.capacity && (s.status === "empty" || s.status === "declined"));
   const waiting = seatUnits(all.filter((s) => s.position > ev.capacity));
+  // Once round 1 is drawn the pairs are the field: a pair may still move up and be drawn, a single
+  // could never be (nobody pairs after round 1), so a single is not moved in to sit out the night.
+  const drawn = waiting.length > 0 && (await tx.select({ id: tournamentRounds.id }).from(tournamentRounds).where(eq(tournamentRounds.eventId, ev.id)).limit(1)).length > 0;
   const promotions: Promotion[] = [];
   for (const unit of waiting) {
     const movers = unit.kind === "pair" ? unit.seats : [unit.seat];
-    if (movers.length > free.length) continue;
+    if (movers.length > free.length || (drawn && unit.kind === "single")) continue;
     for (const w of movers) {
       const to = free.shift()!;
       // The waiting row goes first: its invite code and its player are unique per event.
@@ -362,7 +365,8 @@ export async function reserveLocked(
 export type ConfirmOutcome =
   | { outcome: "confirmed"; slot: Slot; event: Event }
   | { outcome: "already_confirmed"; slot: Slot; event: Event }
-  | { outcome: "already_in"; slot: Slot; event: Event }
+  /** Already in by another door. On a fixed-pairs night the freed reserved spot may move the waiting list up (`promotion`). */
+  | { outcome: "already_in"; slot: Slot; event: Event; promotion?: Promotion | null }
   | { outcome: "gone"; event: Event };
 
 export async function confirmInvite(
@@ -391,6 +395,21 @@ export async function confirmInvite(
       .limit(1);
     const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
     if (elsewhere) {
+      if (ev.fixedPairs) {
+        // A fixed-pairs night: the partner somebody named was in already, alone. The pair forms where
+        // they sit (same side of the list, before round 1, nobody else's partner), and the reserved
+        // spot goes: a waiting row is deleted, a seat on the list frees for the waiting list.
+        const all = await tx.select().from(slots).where(eq(slots.eventId, ev.id));
+        const namer = slot.pairId ? all.find((s) => s.id !== slot.id && s.pairId === slot.pairId && isNamedSeat(s)) : undefined;
+        const [drawn] = await tx.select({ id: tournamentRounds.id }).from(tournamentRounds).where(eq(tournamentRounds.eventId, ev.id)).limit(1);
+        const sameSide = namer && (namer.position <= ev.capacity) === (elsewhere.position <= ev.capacity);
+        let mine = elsewhere;
+        if (namer && sameSide && !drawn && !partnerOf(all, elsewhere)) [mine] = await tx.update(slots).set({ pairId: slot.pairId }).where(eq(slots.id, elsewhere.id)).returning();
+        const [first, ...also] = await vacateSeats(tx, ev, [slot]);
+        if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
+        const status = await recomputeStatus(tx, ev);
+        return { outcome: "already_in", slot: mine, event: { ...ev, status }, promotion: first ? { ...first, also } : null };
+      }
       // Player already got in through the public link: release the reservation.
       await tx.update(slots).set(VACANT).where(eq(slots.id, slot.id));
       if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
@@ -444,7 +463,8 @@ export async function declineInvite(db: Db, input: { inviteCode: string; now?: D
     const [next] = await tx
       .select({ id: slots.id })
       .from(slots)
-      .where(and(eq(slots.eventId, ev.id), gt(slots.position, ev.capacity), eq(slots.status, "joined")))
+      // A fixed-pairs night's waiting list also holds partners who claimed their spot or are still a name.
+      .where(and(eq(slots.eventId, ev.id), gt(slots.position, ev.capacity), ev.fixedPairs ? inArray(slots.status, ["joined", "confirmed", "invited"]) : eq(slots.status, "joined")))
       .limit(1);
     if (next) promotion = await vacateAndPromote(tx, ev, declined);
 
@@ -459,7 +479,8 @@ export async function promoteWaitlists(db: Db, now = new Date()): Promise<Promot
     .selectDistinct({ eventId: slots.eventId })
     .from(slots)
     .innerJoin(events, eq(events.id, slots.eventId))
-    .where(and(gt(slots.position, events.capacity), eq(slots.status, "joined"), inArray(events.status, ["open", "full"]), gt(events.startsAt, now)));
+    // A fixed-pairs night's waiting list also holds claimed and reserved partners (`vacateSeats` decides who fits).
+    .where(and(gt(slots.position, events.capacity), or(eq(slots.status, "joined"), and(eq(events.fixedPairs, true), inArray(slots.status, ["confirmed", "invited"]))), inArray(events.status, ["open", "full"]), gt(events.startsAt, now)));
   const promotions: Promotion[] = [];
   for (const { eventId } of candidates) {
     await db.transaction(async (tx) => {

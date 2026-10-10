@@ -226,6 +226,120 @@ describe("leaving and the waiting list", () => {
   });
 });
 
+describe("the waiting list, the invitation and the capacity, by pairs", () => {
+  it("after round 1 a freed seat takes a waiting pair, never a single who could not be drawn", async () => {
+    const { org, ev } = await pairsNight(4);
+    const [ann, ben, wes, ida] = await Promise.all(["Ann", "Ben", "Wes", "Ida"].map((n) => makePlayer(db, n)));
+    await joinPair(db, { eventId: ev.id, playerId: ann.id, partnerName: "Amy" });
+    await joinPair(db, { eventId: ev.id, playerId: ben.id, partnerName: "Bea" });
+    await joinEvent(db, { eventId: ev.id, playerId: wes.id });
+    await generateRound(db, { eventId: ev.id, actorPlayerId: org.id });
+    const { removeFromSlot } = await import("@/lib/domain/slots");
+    // Bea goes mid-night: one seat frees, and Wes, alone, waits on.
+    const r = await removeFromSlot(db, { eventId: ev.id, slotId: (await seats(ev)).rows.find((s) => s.invitedName === "Bea")!.id, actorPlayerId: org.id });
+    expect(r.promotion).toBeNull();
+    expect((await seats(ev)).waiting).toEqual(["Wes · single"]);
+    // A pair that waits moves up when two seats are free.
+    await joinPair(db, { eventId: ev.id, playerId: ida.id, partnerName: "Ivo" });
+    await removeFromSlot(db, { eventId: ev.id, slotId: (await seats(ev)).rows.find((s) => s.playerId === ben.id)!.id, actorPlayerId: org.id });
+    expect((await seats(ev)).listed).toContain("Ida & Ivo");
+  });
+
+  it("a declined spot is handed to a partner who waits as a claimed name, and the sweep finds such a night", async () => {
+    const { org, ev } = await pairsNight(4);
+    const [a, b, c, ben, bo] = await Promise.all(["A3", "B3", "C3", "Ben", "Bo"].map((n) => makePlayer(db, n)));
+    for (const p of [a, b, c]) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    const { reserveSlot } = await import("@/lib/domain/slots");
+    const { slot: rex } = await reserveSlot(db, { eventId: ev.id, actorPlayerId: org.id, name: "Rex" });
+    const res = await joinPair(db, { eventId: ev.id, playerId: ben.id, partnerName: "Bo" });
+    await confirmInvite(db, { inviteCode: res.partner!.inviteCode!, playerId: bo.id });
+    // Ben leaves; Bo is a player and stays, waiting alone.
+    await leaveEvent(db, { eventId: ev.id, playerId: ben.id });
+    expect((await seats(ev)).waiting).toEqual(["Bo · single"]);
+    const declined = await declineInvite(db, { inviteCode: rex.inviteCode! });
+    expect(declined.outcome === "declined" && declined.promotion?.playerId).toBe(bo.id);
+    expect((await seats(ev)).waiting).toEqual([]);
+    // The hourly sweep reads the same waiting list: a hole on the list with a claimed partner waiting is filled.
+    const cy = await makePlayer(db, "Cy");
+    const more = await joinPair(db, { eventId: ev.id, playerId: cy.id, partnerName: "Cyn" });
+    await confirmInvite(db, { inviteCode: more.partner!.inviteCode!, playerId: (await makePlayer(db, "Cyn")).id });
+    await leaveEvent(db, { eventId: ev.id, playerId: cy.id });
+    await db.update(slots).set({ status: "empty", playerId: null }).where(eq(slots.id, (await seats(ev)).rows.find((s) => s.playerId === a.id)!.id));
+    const swept = await promoteWaitlists(db, NOW);
+    expect(swept.map((p) => p.slot.eventId)).toContain(ev.id);
+    expect((await seats(ev)).waiting).toEqual([]);
+  });
+
+  it("the partner somebody named was in already: opening the link pairs them where they sit", async () => {
+    const { ev } = await pairsNight(8);
+    const [ana, bo] = await Promise.all(["Ana", "Bo"].map((n) => makePlayer(db, n)));
+    await joinEvent(db, { eventId: ev.id, playerId: ana.id });
+    await joinEvent(db, { eventId: ev.id, playerId: bo.id });
+    const res = await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Bo" });
+    expect((await confirmInvite(db, { inviteCode: res.partner!.inviteCode!, playerId: bo.id })).outcome).toBe("already_in");
+    const after = await seats(ev);
+    expect(after.listed).toEqual(["Ana & Bo"]);
+    expect(after.rows.filter((s) => s.status !== "empty")).toHaveLength(2);
+  });
+
+  it("a waiting reserved spot taken by somebody already in is deleted, not left empty on the waiting list", async () => {
+    const { ev } = await pairsNight(4);
+    const people = await Promise.all(["A4", "B4", "C4", "Ana", "Ben"].map((n) => makePlayer(db, n)));
+    for (const p of people.slice(0, 4)) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    const res = await joinPair(db, { eventId: ev.id, playerId: people[4].id, partnerName: "Ana" });
+    expect(res.outcome).toBe("waitlisted");
+    await confirmInvite(db, { inviteCode: res.partner!.inviteCode!, playerId: people[3].id });
+    const detail = (await getEventByCode(db, ev.code))!;
+    expect(detail.waitlist.map((s) => s.status)).toEqual(["joined"]);
+  });
+
+  it("a night that grows moves the waiting list up by pairs, and never splits a pair across the line", async () => {
+    const { org, ev } = await pairsNight(4);
+    const people = await Promise.all(["A6", "B6", "C6", "D6", "E6", "F6", "H6"].map((n) => makePlayer(db, n)));
+    for (const p of people.slice(0, 5)) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    await joinPair(db, { eventId: ev.id, playerId: people[5].id, partnerName: "Fo" });
+    await joinPair(db, { eventId: ev.id, playerId: people[6].id, partnerName: "Ho" });
+    const { updateEvent } = await import("@/lib/domain/events");
+    const res = await updateEvent(db, ev.id, org.id, { capacity: 8 });
+    expect(res.promotedPlayerIds).toEqual([people[4].id, people[5].id]);
+    const after = await seats(ev);
+    expect(after.listed.slice(-2)).toEqual(["E6 · single", "F6 & Fo"]);
+    expect(after.waiting).toEqual(["H6 & Ho"]);
+  });
+
+  it("fixed pairs cannot be switched off while a partner waits as a name or a claimed spot", async () => {
+    const { org, ev } = await pairsNight(4);
+    const people = await Promise.all(["A7", "B7", "C7", "D7", "F7"].map((n) => makePlayer(db, n)));
+    for (const p of people.slice(0, 4)) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    await joinPair(db, { eventId: ev.id, playerId: people[4].id, partnerName: "Fo7" });
+    await expect(setTournamentSettings(db, { eventId: ev.id, actorPlayerId: org.id, fixedPairs: false })).rejects.toMatchObject({ message: "pairs_waiting" });
+  });
+
+  it("a player in alone who names a partner with no free seat is told they are still in, alone", async () => {
+    const { ev } = await pairsNight(4);
+    const people = await Promise.all(["A8", "B8", "C8", "D8"].map((n) => makePlayer(db, n)));
+    for (const p of people) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    const res = await joinPair(db, { eventId: ev.id, playerId: people[0].id, partnerName: "Zed" });
+    expect(res).toMatchObject({ outcome: "already_in", partner: null, noSeatForPartner: true });
+    const { joinMatch, NO_SIDE_EFFECTS } = await import("@/lib/api/operations");
+    const { getOrCreatePersonalToken } = await import("@/lib/domain/identity");
+    const answer = await joinMatch(db, { code: ev.code, token: await getOrCreatePersonalToken(db, people[1].id), partner: "Yan" }, NO_SIDE_EFFECTS);
+    expect(answer.outcome).toBe("already_in");
+    expect(answer.next).toContain("still in, alone");
+  });
+
+  it("the invitation names the player who named them, not the organiser", async () => {
+    const { ev } = await pairsNight(8);
+    const ana = await makePlayer(db, "Ana");
+    const res = await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Bo" });
+    const { namedByOf } = await import("@/lib/domain/pairSeats");
+    expect(await namedByOf(db, res.partner!)).toBe("Ana");
+    const { reserveSlot } = await import("@/lib/domain/slots");
+    const { slot } = await reserveSlot(db, { eventId: ev.id, actorPlayerId: null, name: "Cal" });
+    expect(await namedByOf(db, slot)).toBeNull();
+  });
+});
+
 describe("the organiser's tools and round 1", () => {
   it("pairs two singles, splits a pair, adds a walk-in pair by two seats, and keeps the field even", async () => {
     const { org, ev } = await pairsNight(4);

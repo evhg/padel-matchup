@@ -646,13 +646,20 @@ export function placeOf(ev: { standings: readonly string[] | null; fixedPairs: b
  * seats this way: a pair one partner of which left after round 3 still has its row.
  */
 export function pairsOfRounds(rounds: readonly RoundRef[], pairs: readonly Pair[] = []): Pair[] {
-  const out = new Map<string, Pair>(pairs.map((p) => [pairKey(p), p]));
+  const out = new Map<string, Pair>();
+  const seen = new Set<string>();
+  // A player belongs to one pair: the first that names them, the rounds played before the list. No
+  // write makes a second (pairs lock at round 1); if one ever did, the table, the snapshot and the
+  // levels would list that player twice, and a result already played is what the table is about.
   const add = (p: Pair) => {
-    if (!out.has(pairKey(p))) out.set(pairKey(p), p);
+    if (out.has(pairKey(p)) || seen.has(p[0]) || seen.has(p[1])) return;
+    out.set(pairKey(p), p);
+    seen.add(p[0]).add(p[1]);
   };
   for (const r of rounds) {
     for (const m of r.matches) for (const p of [[m.a1, m.a2], [m.b1, m.b2]] as Pair[]) add(p);
     for (let i = 0; i + 1 < r.resting.length; i += 2) add([r.resting[i], r.resting[i + 1]]);
   }
+  for (const p of pairs) add(p);
   return [...out.values()];
 }

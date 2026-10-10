@@ -117,7 +117,7 @@ export function AmericanoPanel({
       setError(null);
       const r = await fn();
       if (!r.ok) {
-        const key = r.detail === "scores_missing" || r.detail === "format_locked" || r.detail === "roster_changed" || r.detail === "partner_needed" || r.detail === "need_2_pairs" || r.detail === "pairs_locked" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
+        const key = r.detail === "scores_missing" || r.detail === "format_locked" || r.detail === "roster_changed" || r.detail === "partner_needed" || r.detail === "need_2_pairs" || r.detail === "pairs_locked" || r.detail === "pairs_waiting" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
         setError(t(`errors.${key}` as "errors.generic"));
         // The list moved under the check-in: show the one there is now.
         if (r.detail === "roster_changed") router.refresh();
