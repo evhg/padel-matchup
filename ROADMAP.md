@@ -771,7 +771,7 @@ Everything in this list is live. The README describes each in detail.
   board row carries them. Filters on a listing come later.
 - **A crew's own Telegram group (9 October 2026, migrations 0085 and 0086).** The owner's decision:
   a crew can run its own Telegram group with the bot as an admin, opted in group by group (DECIDING
-  rule 30). A crew's admin finds "Run a Telegram group for this crew" on its page: one link picks
+  rule 31). A crew's admin finds "Run a Telegram group for this crew" on its page: one link picks
   or makes a group and adds the bot as an admin with two rights (pin, invite links).
   The bot ties the group to the crew, pins its notice ("It reads messages in this group … It never
   keeps the text"), and makes the invite link the crew page then shows its members ("Join the crew's

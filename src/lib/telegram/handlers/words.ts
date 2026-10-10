@@ -19,7 +19,7 @@ import { readWords, type Word } from "../words";
 import { createMatchInChat, knownVenues } from "./new";
 
 /**
- * A seat by a word: "+1" in reply to a card in any group, and in a crew's own group (DECIDING rule 30)
+ * A seat by a word: "+1" in reply to a card in any group, and in a crew's own group (DECIDING rule 31)
  * a plain "in", "out" or "who's in Thursday 7pm Rawai?". The seat goes through the same calls as the
  * card's buttons, the card is edited in place, and the bot answers with one reaction on the person's
  * message: never a message of its own (rule 5). The exceptions go to that person alone as an ephemeral

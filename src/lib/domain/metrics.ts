@@ -41,7 +41,7 @@ export async function snapshotMetrics(db: Db): Promise<void> {
   const nEvents = await count(db.select({ n: sql<number>`count(*)` }).from(events));
   const nSlots = await count(db.select({ n: sql<number>`count(*)` }).from(slots).where(inArray(slots.status, ["joined", "confirmed"])));
   const nPush = await count(db.select({ n: sql<number>`count(*)` }).from(pushSubscriptions));
-  // The crews' own Telegram groups the bot reads now (DECIDING rule 30): each one sends every message to
+  // The crews' own Telegram groups the bot reads now (DECIDING rule 31): each one sends every message to
   // the webhook, which is what the invocation budget needs (docs/OPERATING.md). `tg_groups_started` counts starts.
   const nCrewGroups = await count(db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNotNull(telegramChats.listeningSince), isNull(telegramChats.leftAt))));
   await setMetric(db, "db_bytes", dbBytes);

@@ -81,7 +81,7 @@ export default async function GroupPage({ params }: Props) {
   // rows, after the detail rather than beside it (rules 8 and 12).
   const fills = new Map((await withCounts(db, detail.upcoming)).map((b) => [b.event.id, fillOf(b)]));
   // A member's way into the crew's own Telegram group, and for the crew's admins the link that makes one
-  // while the bot reads no group of the crew's (DECIDING rule 30). The link is signed for that admin and
+  // while the bot reads no group of the crew's (DECIDING rule 31). The link is signed for that admin and
   // dies when they stop being one. A visitor sees neither, and the read waits for a member on a
   // deployment with a bot (rules 4, 8 and 12).
   const doors = crewTelegramDoors(member?.role ?? null, member && telegramEnabled() ? await crewTelegramInvite(db, group.id) : null);

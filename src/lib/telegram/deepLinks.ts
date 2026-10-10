@@ -30,7 +30,7 @@ export function readBindPayload(rest: string): { ticket: string; code: string | 
 }
 
 /**
- * A crew's own Telegram group (DECIDING rule 30). The bot cannot make a group; this link lets a crew's
+ * A crew's own Telegram group (DECIDING rule 31). The bot cannot make a group; this link lets a crew's
  * admin pick one, or make one, and add the bot to it as an admin in one step, with the rights below
  * already ticked. Telegram then sends `/start crew_<ticket>` into that group, and the ticket ties it to
  * the crew.

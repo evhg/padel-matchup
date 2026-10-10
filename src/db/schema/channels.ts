@@ -25,7 +25,7 @@ export const telegramChats = pgTable(
     /** Bot removed from the chat: keep the row, stop posting. */
     leftAt: timestamp("left_at", { withTimezone: true }),
     /**
-     * A crew's own group (the owner's decision of 9 October 2026, DECIDING rule 30): since when the bot
+     * A crew's own group (the owner's decision of 9 October 2026, DECIDING rule 31): since when the bot
      * reads the plain messages here for "in", "out" and "who's in …?". Set only where a group admin
      * opted in from the crew page and the bot is an admin: claimed the moment before the notice is
      * pinned, and cleared again if the pin fails. Null everywhere else, and again after /quiet, a lost

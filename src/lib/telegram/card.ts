@@ -186,7 +186,7 @@ const STRINGS = {
     spotsShort: (n: number, cap: number) => `${n}/${cap}`,
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} is in · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} joined the waitlist` : kind === "left" ? `↩️ ${name} left · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} asks to join (outside the level range)` : kind === "confirmed" ? `✅ ${name} confirmed · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declined` : `⬆️ ${name} moved in from the waitlist · ${n}/${cap}`,
-    // A crew's own group, run by the bot as an admin (DECIDING rule 30). The notice is the pinned message, and it names
+    // A crew's own group, run by the bot as an admin (DECIDING rule 31). The notice is the pinned message, and it names
     // exactly what the code keeps: players.display_name and players.telegram_username, the seats, the court and the score.
     crewNotice: "Kicksmash runs matches here. It reads messages in this group to do that. It keeps first names, Telegram usernames, who is in or out, the court and the score. It never keeps the text. A group admin can type /quiet, or remove the bot, to stop.",
     crewHow: "Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm Rawai?” and I post the card.",

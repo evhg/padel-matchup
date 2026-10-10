@@ -17,7 +17,7 @@ import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 /**
- * A seat by a word, and a crew's own Telegram group run by the bot as an admin (DECIDING rule 30).
+ * A seat by a word, and a crew's own Telegram group run by the bot as an admin (DECIDING rule 31).
  *
  * Every Bot API call is stubbed: the stub answers getChatMember from `members`, makes an invite link
  * named after the chat, and refuses an ephemeral message when `ephemeralFails` is set. What the bot
@@ -541,7 +541,7 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     const owner = await makePlayer(db, "Ana");
     const bea = await makePlayer(db, "Bea");
     const crew = await createGroup(db, { name: "Handover crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok" });
-    await joinGroup(db, crew.id, bea.id);
+    await joinGroup(db, crew.id, bea.id, "self");
     members.set(`${chat.id}:1`, { status: "creator" });
     members.set(`${chat.id}:${BOT.id}`, ADMIN_RIGHTS);
     // A member of the crew is no admin of it: a link signed for her ties nothing.

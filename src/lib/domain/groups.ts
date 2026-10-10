@@ -537,7 +537,7 @@ export async function getGroupById(db: Db, id: string): Promise<Group | null> {
 }
 
 /**
- * The way into a crew's own Telegram group (DECIDING rule 30): the invite link the bot made there, for
+ * The way into a crew's own Telegram group (DECIDING rule 31): the invite link the bot made there, for
  * the crew page to hand its members, while the bot is still in the group (after /quiet too: the group
  * is still the crew's), and whether the bot reads it now. One indexed read (`telegram_chats_group_idx`).
  * The first group the bot reads stays the crew's group: a group it reads comes first, then a group
@@ -554,7 +554,7 @@ export async function crewTelegramInvite(db: Db, groupId: string): Promise<{ inv
 }
 
 /**
- * Which Telegram doors the crew page shows (DECIDING rule 30): the way into the crew's group to every
+ * Which Telegram doors the crew page shows (DECIDING rule 31): the way into the crew's group to every
  * member, and the link that makes one to the crew's admins only, while the bot reads no group of the
  * crew's. A visitor sees neither.
  */

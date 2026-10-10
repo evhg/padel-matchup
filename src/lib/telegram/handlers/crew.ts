@@ -12,7 +12,7 @@ import { REACTION } from "./words";
 
 /**
  * A crew's own Telegram group, run by the bot as an admin: the owner's decision of 9 October 2026
- * (DECIDING rule 30). The crew page's link, which only the crew's admins see, adds the bot to a group
+ * (DECIDING rule 31). The crew page's link, which only the crew's admins see, adds the bot to a group
  * they pick or make, with `/start crew_<ticket>`; that ties the group to the crew and records the
  * opt-in (`notice_version`). The bot starts reading only once it is an admin there and its notice is
  * pinned (`listening_since`). /quiet from a group admin, or the bot losing its admin rights or the

@@ -57,7 +57,7 @@ try {
   // Bea is a member (she was in the match): creates the next match from the group page.
   await bea.goto(`${BASE}/g/${gcode}`);
   check("Bea is in the group", (await bea.getByText("You're in this group").count()) === 1);
-  // Only the crew's admin sets up the crew's own Telegram group (DECIDING rule 30): a member is not offered it.
+  // Only the crew's admin sets up the crew's own Telegram group (DECIDING rule 31): a member is not offered it.
   check("a member is not offered a Telegram group for the crew", (await bea.getByRole("link", { name: "Run a Telegram group for this crew", exact: true }).count()) === 0);
   await bea.getByRole("link", { name: /Create the next match/ }).click();
   await bea.waitForURL(/\/\?group=/, { timeout: 20000 });
