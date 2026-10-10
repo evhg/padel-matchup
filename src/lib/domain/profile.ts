@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { players, type Player } from "@/db/schema";
+import { notices, players, type Player } from "@/db/schema";
 import { clubStatus, listClubsClaimedBy } from "./clubs";
 import { placesOf } from "./fixedPairs";
 import { getPlayerGroups } from "./groups";
@@ -119,6 +119,8 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
     outcome: m.outcome,
   });
   const stats = statsFromEvents(player, past);
+  // What they set and what they were told: theirs to download like the rest, and nobody else's to read.
+  const inbox = await db.select({ kind: notices.kind, key: notices.key, params: notices.params, createdAt: notices.createdAt, deliveredAt: notices.deliveredAt, readAt: notices.readAt }).from(notices).where(eq(notices.playerId, player.id)).orderBy(desc(notices.createdAt));
   return {
     exportedAt: now.toISOString(),
     format: "kicksmash-export/1",
@@ -143,6 +145,7 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
     matches: { upcoming: upcoming.map(match), past: past.map(match) },
     groups: groups.map((g) => ({ code: g.group.code, name: g.group.name, url: `${base}/g/${g.group.code}` })),
     clubs: clubs.map((c) => ({ slug: c.slug, name: c.name, status: clubStatus(c), url: `${base}/v/${c.slug}` })),
+    notices: { kinds: player.noticeKinds ?? {}, quietFrom: player.quietFrom, quietTo: player.quietTo, quietTz: player.quietTz, inbox },
     passport: await issuePassport(player, stats, base, now),
   };
 }

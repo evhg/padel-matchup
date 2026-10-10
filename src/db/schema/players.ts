@@ -1,6 +1,7 @@
 // A person: identity without an account, the ways to reach them, the level someone confirmed, the moments they earned.
 import { relations, sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, real, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { NoticeKind } from "@/lib/domain/noticeKinds";
 import { type LevelLogEntry } from "./enums";
 import { events, slots } from "./events";
 import { clubs } from "./clubs";
@@ -26,8 +27,23 @@ export const players = pgTable(
     previousToken: text("previous_token"),
     /** First visit from a home-screen shortcut: the prompt is no longer needed. */
     homescreenAt: timestamp("homescreen_at", { withTimezone: true }),
-    /** Activity emails (players join/leave/respond, line-up changes, score reminder). Calendar/cancellation emails always go out. */
+    /**
+     * Activity emails (players join/leave/respond, line-up changes, score reminder). Calendar/cancellation emails always go out.
+     * A switch on the email channel, not on a kind of notice: it predates `notice_kinds` and keeps
+     * exactly its old meaning beside them (`channelFor` in src/lib/coach/notify.ts reads it).
+     */
     emailNotifications: boolean("email_notifications").notNull().default(true),
+    /**
+     * The player's switch for each kind of notice (src/lib/domain/noticeKinds.ts), only the kinds that
+     * differ from the default: `{}` is "as the app ships", `{"clubMatches": true}` one opt-in. The
+     * owner's decision D, 9 October 2026.
+     */
+    noticeKinds: jsonb("notice_kinds").$type<Partial<Record<NoticeKind, boolean>>>().notNull().default({}),
+    /** Quiet hours, minutes after midnight in `quiet_tz`: from is inside, to is not. Both null: no quiet hours. */
+    quietFrom: smallint("quiet_from"),
+    quietTo: smallint("quiet_to"),
+    /** The zone the player's browser named when they set quiet hours; else the match's zone, else Asia/Bangkok. */
+    quietTz: text("quiet_tz"),
     /** Padel level 0–7 (quarter steps when self-declared, two decimals once results nudge it). Null = not set. */
     level: real("level"),
     /** "self" (declared by the player) or "adjusted" (results moved it). */

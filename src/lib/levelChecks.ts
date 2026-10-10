@@ -11,6 +11,7 @@ import { sendEmail } from "@/lib/email/send";
 import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { notifyCreator, notifyLineupChange, notifyRequestDecided } from "@/lib/notify";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
+import { recordNotice } from "@/lib/domain/notices";
 
 /**
  * Two quiet lines around a level check: the coach or club hears that someone
@@ -50,6 +51,8 @@ async function verifierOf(db: Db, check: LevelCheck): Promise<{ player: Player; 
 export async function notifyLevelCheckAsked(db: Db, check: LevelCheck, asker: Player): Promise<void> {
   const v = await verifierOf(db, check);
   if (!v) return;
+  // The club's door in `v.url` carries its manage token: it goes on the channel, never into the row.
+  if ((await recordNotice(db, { playerId: v.player.id, sender: "levelCheckAsked", params: { name: asker.displayName } })) !== "now") return;
   const { t } = await translatorFor(v.player.locale);
   const vars = { name: asker.displayName, level: check.level != null ? formatLevel(check.level) : "?", app: APP_NAME };
   await reach(v.player, {
@@ -64,6 +67,7 @@ export async function notifyLevelCheckAsked(db: Db, check: LevelCheck, asker: Pl
 }
 
 export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; player: Player; verifierName: string; approve: boolean; admitted: Admitted[] }): Promise<void> {
+  if ((await recordNotice(db, { playerId: n.player.id, sender: n.approve ? "levelConfirmed" : "levelDeclined", params: { name: n.verifierName } })) !== "now") return;
   const { t, locale } = await translatorFor(n.player.locale);
   const base = baseUrl();
   const level = n.player.levelVerifiedLevel ?? n.player.level;

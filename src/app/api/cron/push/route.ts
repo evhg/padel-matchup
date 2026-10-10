@@ -19,6 +19,7 @@ import { tellMatchSoon } from "@/lib/tournament/notify";
 import { lessonPackages } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { channels, sendReminders } from "@/lib/channels";
+import { matchParams, recordNotices } from "@/lib/domain/notices";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -85,9 +86,13 @@ export async function GET(req: Request) {
       const detail = await getEventDetail(db, ev);
       const participants = detail.roster.filter((s) => isOccupied(s) && s.player).map((s) => s.player!);
       const subs = await subscriptionsFor(db, participants.map((p) => p.id));
-      for (const player of participants) {
+      // The reminder is a notice to the people it reaches, so their inboxes keep it, in one insert. The
+      // match is within the hour, so quiet hours never hold it; a player who switched reminders off does not get it.
+      const reached = participants.filter((p) => subs.some((s) => s.playerId === p.id));
+      const released = await recordNotices(db, reached.map((p) => ({ playerId: p.id, sender: "matchReminder", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })), now);
+      for (const player of reached) {
         const mine = subs.filter((s) => s.playerId === player.id);
-        if (mine.length === 0) continue;
+        if (mine.length === 0 || released.get(player.id) !== "now") continue;
         summary.players++;
         const { t, locale } = await translatorFor(player.locale);
         const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });

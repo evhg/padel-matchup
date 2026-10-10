@@ -155,7 +155,7 @@ export async function emitMatchEvent(db: Db, event: WebhookEvent, code: string, 
       const detail = await getEventByCode(db, code);
       if (detail) {
         const awarded = await awardMilestones(db, detail.event.id);
-        if (awarded.length) await notifyMilestones(awarded);
+        if (awarded.length) await notifyMilestones(db, awarded);
       }
     } catch (e) {
       console.warn("[moments] award failed", code, e);

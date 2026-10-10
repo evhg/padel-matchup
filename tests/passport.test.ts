@@ -128,6 +128,8 @@ describe("public profile, passport and export (db)", () => {
     expect(data.matches.past).toHaveLength(1);
     expect(data.matches.past[0]).toMatchObject({ code: ev.code, organizer: true, seat: 1, venue: "Rawai Padel Club" });
     expect(data.passport.alg).toBe("Ed25519");
+    // The notice settings and the inbox are the player's own, so the export carries them (decision D).
+    expect(data.notices).toEqual({ kinds: {}, quietFrom: null, quietTo: null, quietTz: null, inbox: [] });
     const raw = JSON.stringify(data);
     expect(raw).not.toContain("personalToken");
     expect(raw).not.toContain("manageCode");

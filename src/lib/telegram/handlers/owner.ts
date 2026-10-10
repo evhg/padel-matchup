@@ -63,7 +63,7 @@ async function handleClubCallback(db: Db, cb: NonNullable<TgUpdate["callback_que
   // A refused claimant used to get one button to GitHub Discussions, where a club manager has no
   // account. The note that reaches the owner is a page on this site, so that is the button.
   const door = action === "ca" ? { text: "Open the page", url: `${baseUrl()}/v/${row.slug}` } : { text: "Tell us", url: `${baseUrl()}/feedback?s=clubclaim` };
-  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca", reason), { inline_keyboard: [[door]] }).catch(() => undefined);
+  if (claimant) await tell(db, claimant, claimDecisionText(claimant.locale, row, action === "ca", reason), { inline_keyboard: [[door]] }, { notice: { receipt: "clubClaimDecision" } }).catch(() => undefined);
   if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(text), { inline_keyboard: [[{ text: "Open page", url: `${baseUrl()}/v/${row.slug}` }]] });
   return action === "ca" ? "club:approved" : "club:rejected";
 }

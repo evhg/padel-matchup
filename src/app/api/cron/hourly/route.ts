@@ -33,10 +33,11 @@ import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
 import { relayUptimeIssues } from "@/lib/uptime";
 import { alertOnServices, refreshAnthropicCost } from "@/lib/ops/alerts";
 import { askOwnerOutreach } from "@/lib/outreach/desk";
-import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
+import { bumpMetric, setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promotedOf, promoteWaitlists } from "@/lib/domain/slots";
 import { getPlayer } from "@/lib/domain/players";
-import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, notifyWanted, offerFreeCourts, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
+import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, notifyWanted, offerFreeCourts, sendCalendarInvite, sendInviteReminder, sendQuietSummaries } from "@/lib/notify";
+import { pruneNotices } from "@/lib/domain/notices";
 import { findRefillsDue } from "@/lib/domain/refill";
 import { pruneCoachWants } from "@/lib/domain/coachWants";
 import { claimWantsNotice, findWantsDue, pruneWants } from "@/lib/domain/demand";
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, noticeSummaries: 0, noticesPruned: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -270,6 +271,20 @@ export async function GET(req: Request) {
     summary.disposed = (await removeDisposableDaily(db, now))?.length ?? 0;
   } catch (e) {
     summary.errors.push(`disposable: ${String(e)}`);
+  }
+
+  try {
+    // Quiet hours that ended since the last tick: one short message per channel to each person whose
+    // notices waited ("3 updates while you were away"), then those notices count as delivered. After
+    // every step above, so a notice held this very hour is in the count.
+    const away = await sendQuietSummaries(db, now);
+    summary.noticeSummaries = away.people;
+    if (away.people) await bumpMetric(db, "notice_summaries", away.people);
+    // The inbox keeps ninety days: older rows go, a bounded batch an hour.
+    summary.noticesPruned = await pruneNotices(db, now);
+    if (summary.noticesPruned) await bumpMetric(db, "notices_pruned", summary.noticesPruned);
+  } catch (e) {
+    summary.errors.push(`notices: ${String(e)}`);
   }
 
   try {

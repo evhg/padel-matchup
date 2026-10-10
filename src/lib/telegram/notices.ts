@@ -8,6 +8,7 @@ import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import type { CreatorKind } from "@/lib/notify";
 import { personalEventUrl } from "@/lib/personal";
+import { releasesFor } from "@/lib/domain/notices";
 import { editMessageText, editOk, esc, messageGone, sendMessage, telegramEnabled } from "./api";
 import { botLocale, cardTitle, strings, whenLine, whereLine, type BotLocale } from "./card";
 
@@ -63,7 +64,12 @@ export async function postTelegramNotice(db: Db, code: string, kind: "updated" |
     }
     let dms = 0;
     const base = baseUrl();
+    // The same notice as the email beside it, whose row notifyEventUpdated or notifyEventCancelled
+    // wrote: here only the gate's answer is read, so a player who switched match changes off, or is
+    // inside quiet hours, gets no private note either. The reply under the card is the room's, not theirs.
+    const released = await releasesFor(db, people.map((p) => p.playerId), kind === "cancelled" ? "matchCancelled" : "matchUpdated", { startsAt: ev.startsAt, tz: ev.tz });
     for (const p of people) {
+      if ((released.get(p.playerId) ?? "now") !== "now") continue;
       const token = await getOrCreatePersonalToken(db, p.playerId);
       const res = await sendMessage(p.telegramId, esc(text(p.locale)), { keyboard: { inline_keyboard: [[{ text: strings(p.locale).open, url: personalEventUrl(base, token, ev.code) }]] } });
       if (res.ok) dms++;

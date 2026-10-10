@@ -35,10 +35,18 @@ import { isOptedOut, optOutPath } from "@/lib/domain/optouts";
 import { eventUrl, inviteUrl } from "@/lib/share";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { sendWaTemplate, waLocale, waMatchLine } from "@/lib/whatsapp/templates";
+import { markHeldDelivered, matchParams, quietSummariesDue, recordNotice, recordNotices, type NoticeInput } from "@/lib/domain/notices";
+import { kindOn, type Sender } from "@/lib/domain/noticeKinds";
 
 /**
  * All outbound notifications live here. Every function is safe to call when
  * email is disabled (no-ops) and never throws into the request path.
+ *
+ * Every notice to a player passes the gate first (`recordNotices` in src/lib/domain/notices.ts): its
+ * row goes into the player's inbox, in one insert for a whole fan-out, and the sender delivers only to
+ * the people the gate released — their switch for that kind is on, and it is not their quiet hours, or
+ * the match starts within three hours. What a person asked for themselves (the calendar invitation of
+ * a match they just joined, a code, their link) is not a notice and passes no gate.
  *
  * Links: a recipient with an identity always gets their *private* event link
  * (/p/{token}/{code}) — it signs the device in and opens the match — plus the
@@ -172,6 +180,9 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
   if (actorPlayerId && actorPlayerId === ev.creatorPlayerId) return;
   const creator = await getPlayer(db, ev.creatorPlayerId);
   if (!creator) return;
+  // The organiser's feed is a notice like any other: kept in the inbox, held at night, off when they say so.
+  const release = await recordNotice(db, { playerId: creator.id, sender: "organizerFeed", eventId: ev.id, params: { ...matchParams(ev), what: kind, name: actorName }, startsAt: ev.startsAt, tz: ev.tz });
+  if (release !== "now") return;
   if (emailEnabled() && creator.email && creator.emailNotifications) {
     const c = await ctx(db, ev, creator.locale, creator);
     const vars = { ...c.vars, name: actorName };
@@ -194,7 +205,8 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
 
 /** Join request decided: approved players get their calendar invite, declined ones a short, kind note. */
 export async function notifyRequestDecided(db: Db, ev: Event, player: Player, approved: boolean): Promise<void> {
-  if (!emailEnabled()) return;
+  const release = await recordNotice(db, { playerId: player.id, sender: approved ? "requestApproved" : "requestDeclined", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz });
+  if (release !== "now" || !emailEnabled()) return;
   if (approved) {
     await sendCalendarInvite(db, ev, player);
     return;
@@ -213,14 +225,15 @@ export async function notifyRequestDecided(db: Db, ev: Event, player: Player, ap
  * request path, and through `notifyGroupAskCapped`, which holds the day's ceiling.
  */
 export async function notifyGroupAsk(db: Db, group: Pick<Group, "id" | "code" | "name">, asker: Pick<Player, "id" | "displayName">, note: string | null): Promise<number> {
-  const admins = await groupAdmins(db, group.id);
+  const admins = (await groupAdmins(db, group.id)).filter((a) => a.id !== asker.id);
   const url = `${baseUrl()}/g/${group.code}`;
+  // The note is the asker's own words for the admins: it goes on their channel, never into a row.
+  const released = await recordNotices(db, admins.map((a) => ({ playerId: a.id, sender: "groupAsk", params: { name: asker.displayName, group: group.name } })));
   let told = 0;
   for (const admin of admins) {
-    if (admin.id === asker.id) continue;
     const { t } = await translatorFor(admin.locale);
     const lines = [t("group.askNotice", { name: asker.displayName, group: group.name }), ...(note ? [`💬 ${note}`] : []), t("group.askNoticeHelp")];
-    await tell(db, admin, lines.join("\n"), { inline_keyboard: [[{ text: t("group.open"), url }]] }, { label: t("group.open") }).catch(() => undefined);
+    await tell(db, admin, lines.join("\n"), { inline_keyboard: [[{ text: t("group.open"), url }]] }, { notice: { released: released.get(admin.id) ?? "now" }, label: t("group.open") }).catch(() => undefined);
     told++;
   }
   return told;
@@ -243,7 +256,7 @@ export async function notifyGroupAskDecided(db: Db, group: Pick<Group, "code" | 
   const { t } = await translatorFor(player.locale);
   const url = `${baseUrl()}/g/${group.code}`;
   const text = approved ? t("group.askApprovedNotice", { group: group.name }) : t("group.askDeclinedNotice", { group: group.name });
-  await tell(db, player, text, { inline_keyboard: [[{ text: t("group.open"), url }]] }, { label: t("group.open") }).catch(() => undefined);
+  await tell(db, player, text, { inline_keyboard: [[{ text: t("group.open"), url }]] }, { notice: { sender: approved ? "groupAskApproved" : "groupAskDeclined", params: { group: group.name } }, label: t("group.open") }).catch(() => undefined);
 }
 
 /** A group got a new match (by a member or the weekly slot): email + push to every other member. */
@@ -251,10 +264,12 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
   const rows = await db.select({ player: playersTable }).from(groupMembersTable).innerJoin(playersTable, eq(playersTable.id, groupMembersTable.playerId)).where(eq(groupMembersTable.groupId, group.id));
   const organizer = await getPlayer(db, ev.creatorPlayerId);
   const detail = await getEventDetail(db, ev);
+  const members = rows.map((r) => r.player).filter((p) => !(excludePlayerId && p.id === excludePlayerId));
+  const released = await recordNotices(db, members.map((p) => ({ playerId: p.id, sender: "crewMatch", eventId: ev.id, params: { ...matchParams(ev), group: group.name }, startsAt: ev.startsAt, tz: ev.tz })));
   let emails = 0;
   let pushes = 0;
-  for (const { player: p } of rows) {
-    if (excludePlayerId && p.id === excludePlayerId) continue;
+  for (const p of members) {
+    if (released.get(p.id) !== "now") continue;
     const c = await ctx(db, ev, p.locale, p, detail);
     const vars = { ...c.vars, group: group.name, organizer: organizer?.displayName ?? "" };
     if (emailEnabled() && p.email && p.emailNotifications) {
@@ -274,15 +289,14 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
 }
 
 /**
- * May this player get the club programme's email about a new match? Nobody may, today.
- *
- * The email becomes an opt-in, and its switch arrives with the per-kind notice settings (a
- * decision still to come). Until then the answer is no for everybody, so push carries the notice
- * alone. When the setting exists, read it here and nowhere else: the email path in
- * `notifyClubMatch` is kept whole behind this one answer.
+ * May this player get the club programme's email about a new match? Only a player who switched
+ * "club matches" on: the owner's decision B (9 October 2026) made it an opt-in, and decision D made
+ * the opt-in one of the notice kinds, off by default (`KIND_DEFAULTS`). The gate in `notifyClubMatch`
+ * already holds every channel behind the same switch; this is the email path's own answer, kept so
+ * the email can never be the one channel that forgets it.
  */
-export function mayEmailClubMatch(_p: Pick<Player, "id" | "email" | "emailNotifications">): boolean {
-  return false;
+export function mayEmailClubMatch(p: Pick<Player, "noticeKinds">): boolean {
+  return kindOn(p.noticeKinds, "clubMatches");
 }
 
 /**
@@ -294,9 +308,10 @@ export function mayEmailClubMatch(_p: Pick<Player, "id" | "email" | "emailNotifi
  * the match admits. Bounded on purpose (rule 12) — one indexed read on (venue_slug, starts_at), a
  * hard cap on recipients, and it runs in the cron tick, never in a path a person waits on.
  *
- * By push only, for now. The email went to up to forty past players who never asked for it, and
- * /about promises that emails go out only for things a player asked for. The owner stopped it on
- * 9 October 2026; it comes back as an opt-in (`mayEmailClubMatch`).
+ * Only to the players who switched "club matches" on: the email went to up to forty past players who
+ * never asked for it, and /about promises that emails go out only for things a player asked for. The
+ * owner stopped it on 9 October 2026 (decision B), and decision D made the whole notice one kind, off
+ * by default (`mayEmailClubMatch`). Everybody it was for still finds it in their inbox.
  */
 export async function notifyClubMatch(db: Db, club: { slug: string; name: string }, ev: Event, now = new Date()): Promise<{ emails: number; pushes: number; told: number }> {
   const since = new Date(now.getTime() - 90 * 24 * 3600_000);
@@ -308,18 +323,18 @@ export async function notifyClubMatch(db: Db, club: { slug: string; name: string
     .limit(400);
   const ids = [...new Set(rows.map((r) => r.playerId).filter((id): id is string => Boolean(id)))].filter((id) => id !== ev.creatorPlayerId).slice(0, CLUB_FANOUT_MAX);
   if (ids.length === 0) return { emails: 0, pushes: 0, told: 0 };
-  const people = await db.select().from(playersTable).where(inArray(playersTable.id, ids));
+  // A match with a level range is for the people it admits; an unrated player is not chased.
+  const admitted = (await db.select().from(playersTable).where(inArray(playersTable.id, ids))).filter(
+    (p) => (ev.levelMin === null && ev.levelMax === null) || (p.level !== null && (ev.levelMin === null || p.level >= ev.levelMin) && (ev.levelMax === null || p.level <= ev.levelMax)),
+  );
   const detail = await getEventDetail(db, ev);
+  // Off by default (decision B): every one of them finds it in the inbox, and only those who switched club matches on hear it.
+  const released = await recordNotices(db, admitted.map((p) => ({ playerId: p.id, sender: "clubMatch", eventId: ev.id, params: { ...matchParams(ev), club: club.name }, startsAt: ev.startsAt, tz: ev.tz })), now);
   let emails = 0;
   let pushes = 0;
   let told = 0;
-  for (const p of people) {
-    // A match with a level range is for the people it admits; an unrated player is not chased.
-    if (ev.levelMin !== null || ev.levelMax !== null) {
-      if (p.level === null) continue;
-      if (ev.levelMin !== null && p.level < ev.levelMin) continue;
-      if (ev.levelMax !== null && p.level > ev.levelMax) continue;
-    }
+  for (const p of admitted) {
+    if (released.get(p.id) !== "now") continue;
     told++;
     const c = await ctx(db, ev, p.locale, p, detail);
     const vars = { ...c.vars, club: club.name };
@@ -352,9 +367,11 @@ export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise
   const { players: people, signalIds } = await wantAudience(db, ev, now);
   if (people.length === 0) return { emails: 0, pushes: 0, told: 0 };
   const detail = await getEventDetail(db, ev);
+  const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "wanted", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })), now);
   let emails = 0;
   let pushes = 0;
   for (const p of people) {
+    if (released.get(p.id) !== "now") continue;
     const c = await ctx(db, ev, p.locale, p, detail);
     if (emailEnabled() && p.email && p.emailNotifications) {
       const { html, text } = layout({ heading: c.t("email.wanted.heading", c.vars), body: c.t("email.wanted.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
@@ -384,18 +401,22 @@ export async function notifyWanted(db: Db, ev: Event, now = new Date()): Promise
  */
 export async function offerFreeCourts(db: Db, now = new Date(), say: typeof tell = tell): Promise<{ offered: number }> {
   const reach = { telegram: telegramEnabled(), email: emailEnabled(), push: pushEnabled() };
-  let offered = 0;
+  const claimed: Awaited<ReturnType<typeof courtOffersDue>> = [];
   for (const offer of await courtOffersDue(db, now, reach)) {
-    if (offered >= COURT_OFFERS.perRun) break;
+    if (claimed.length >= COURT_OFFERS.perRun) break;
     if ((await claimCourtOffer(db, offer, now)).length === 0) continue;
+    claimed.push(offer);
+  }
+  // Claimed first, then one insert for the run's offers, then the sends (rule 12).
+  const released = await recordNotices(db, claimed.map((o) => ({ playerId: o.player.id, sender: "courtFree", params: { club: o.club.name, at: o.hour.start.toISOString(), tz: o.club.tz ?? undefined }, startsAt: o.hour.start, tz: o.club.tz })), now);
+  for (const offer of claimed) {
     const { t, locale } = await translatorFor(offer.player.locale);
     const vars = { club: offer.club.name, time: formatEventTime(offer.hour.start, offer.club.tz, locale) };
     const ticket = reach.telegram && offer.player.telegramId ? chatTicket(offer.player.telegramId, now) : null;
     const button = { text: t("want.courtButton"), url: courtOfferLink(baseUrl(), offer, ticket) };
-    await say(db, offer.player, `${t("want.courtTitle", vars)}\n${t("want.courtBody", vars)}`, { inline_keyboard: [[button]] }, { label: button.text }).catch(() => undefined);
-    offered++;
+    await say(db, offer.player, `${t("want.courtTitle", vars)}\n${t("want.courtBody", vars)}`, { inline_keyboard: [[button]] }, { notice: { released: released.get(offer.player.id) ?? "now" }, label: button.text }).catch(() => undefined);
   }
-  return { offered };
+  return { offered: claimed.length };
 }
 
 /**
@@ -420,7 +441,9 @@ export async function notifyRefill(db: Db, eventId: string, now = new Date()): P
   const left = detail.roster.filter(isClaimable).length;
   // First names only (rule 7), and the public link: a forwarded message keeps its buttons.
   const who = seated.map((x) => (x.player?.displayName ?? x.invitedName ?? "").trim().split(/\s+/)[0]).filter(Boolean).join(", ");
+  const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "spotOpen", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })), now);
   for (const p of people) {
+    if (released.get(p.id) !== "now") continue;
     let via = channelFor(p, reach);
     if (via === "telegram" && p.telegramId) {
       const locale = botLocale(p.locale);
@@ -469,25 +492,43 @@ export async function notifyRefill(db: Db, eventId: string, now = new Date()): P
  * up, one after another: a fixed-pairs night moves a pair, or a single and a single, in one write.
  */
 export async function notifyPromotion(db: Db, ev: Event, promotion: Promotion | null): Promise<void> {
+  // Every player it moved up, in one insert (rule 12); each hears it once, and the organiser's feed as before.
+  const moved: Player[] = [];
   for (const p of promotedOf(promotion)) {
     const promoted = await getPlayer(db, p.playerId);
-    if (!promoted) continue;
-    await Promise.all([sendCalendarInvite(db, ev, promoted, "promoted"), notifyCreator(db, ev, "promoted", promoted.displayName, promoted.id)]);
+    if (promoted) moved.push(promoted);
   }
+  const released = await recordNotices(db, moved.map((p) => ({ playerId: p.id, sender: "movedUp", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })));
+  for (const promoted of moved) {
+    await Promise.all([released.get(promoted.id) === "now" ? sendCalendarInvite(db, ev, promoted, "promoted") : null, notifyCreator(db, ev, "promoted", promoted.displayName, promoted.id)]);
+  }
+}
+
+/**
+ * The gate for a notice to a whole line-up: one row for each seated player but `except` (the person
+ * who made the change, or who hears of it another way), in one insert. A seat with no player row (an
+ * invitee known only by an address) is nobody's inbox and is told as before; so is `except`, whose
+ * calendar still has to follow their own change.
+ */
+async function gateRoster(db: Db, ev: Event, detail: EventDetail, sender: Sender, except: readonly string[] = []): Promise<(playerId: string | null | undefined) => boolean> {
+  const ids = [...new Set(detail.roster.filter((s) => (s.status === "joined" || s.status === "confirmed") && s.playerId && !except.includes(s.playerId)).map((s) => s.playerId!))];
+  const released = await recordNotices(db, ids.map((playerId): NoticeInput => ({ playerId, sender, eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })));
+  return (playerId) => !playerId || (released.get(playerId) ?? "now") === "now";
 }
 
 /** Time/venue changed → updated .ics (same UID, bumped SEQUENCE) to everyone with an email. */
 export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
   const detail = await getEventDetail(db, ev);
+  const goes = await gateRoster(db, ev, detail, "matchUpdated", [ev.creatorPlayerId]);
   if (emailEnabled())
     await Promise.all(
-      participantsWithEmail(detail.roster).map(async (r) => {
+      participantsWithEmail(detail.roster).filter((r) => goes(r.playerId)).map(async (r) => {
         const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
         const { html, text } = layout({ heading: c.t("email.updated.heading"), body: c.t("email.updated.body", c.vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
         await sendEmail({ to: r.email, subject: c.t("email.updated.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(ev, c, { name: r.name, email: r.email }, "REQUEST") } });
       }),
     );
-  await tellTheRest(db, ev, detail, "updated");
+  await tellTheRest(db, ev, detail, "updated", goes);
 }
 
 /**
@@ -502,9 +543,10 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
  * changed, and a button to the public match page.
  *
  * Only people with no address. Somebody who turned activity emails off made a choice, and a push
- * instead of the email they refused is not a fix, it is a way around them.
+ * instead of the email they refused is not a fix, it is a way around them. And only the people the
+ * caller's gate released (`goes`): the rows were written once, for the whole line-up.
  */
-async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupComplete" | "lineupOpen" | "updated" | "cancelled", excludePlayerIds: readonly string[] = []): Promise<number> {
+async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupComplete" | "lineupOpen" | "updated" | "cancelled", goes: (playerId: string) => boolean, excludePlayerIds: readonly string[] = []): Promise<number> {
   let told = 0;
   // An address that bounced or complained is no address: sendEmail refuses it, so its owner is told
   // here, on the channel they do have (src/lib/domain/emailMarks.ts).
@@ -516,12 +558,12 @@ async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupC
     // nobody falls between the two.
     if (works(slot.player?.email) || works(slot.invitedEmail)) continue;
     const player = slot.player;
-    if (!player || excludePlayerIds.includes(player.id)) continue;
+    if (!player || excludePlayerIds.includes(player.id) || !goes(player.id)) continue;
     const c = await ctx(db, ev, player.locale, player, detail);
     const heading = c.t(`push.${key}Title` as "push.lineupCompleteTitle", c.vars);
     const body = c.t(`push.${key}Body` as "push.lineupCompleteBody", c.vars);
     const wa = waLocale(player.locale);
-    await tell(db, player, `${heading}\n${body}`, { inline_keyboard: [[{ text: c.openLabel, url: c.url }]] }, { whatsapp: { template: "ks_match_update", body: [waMatchLine(c.detail, wa), heading], button: ev.code } });
+    await tell(db, player, `${heading}\n${body}`, { inline_keyboard: [[{ text: c.openLabel, url: c.url }]] }, { notice: { released: "now" }, whatsapp: { template: "ks_match_update", body: [waMatchLine(c.detail, wa), heading], button: ev.code } });
     told++;
   }
   return told;
@@ -547,10 +589,11 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
   if (!fresh) return null;
   const freshDetail = { ...detail, event: fresh };
   const ns = complete ? "email.lineupComplete" : "email.lineupOpen";
+  const goes = await gateRoster(db, fresh, freshDetail, complete ? "lineupComplete" : "lineupOpen", [...excluded]);
   if (emailEnabled())
     await Promise.all(
       participantsWithEmail(detail.roster)
-        .filter((r) => !r.playerId || !excluded.has(r.playerId))
+        .filter((r) => (!r.playerId || !excluded.has(r.playerId)) && goes(r.playerId))
         .map(async (r) => {
           const player = r.playerId ? await getPlayer(db, r.playerId) : null;
           if (player && !player.emailNotifications) return;
@@ -568,21 +611,22 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
           await sendEmail({ to: r.email, subject: c.t(`${ns}.subject` as "email.lineupComplete.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(fresh, c, { name: r.name, email: r.email }, "REQUEST") } });
         }),
     );
-  await tellTheRest(db, fresh, freshDetail, complete ? "lineupComplete" : "lineupOpen", [...excluded]);
+  await tellTheRest(db, fresh, freshDetail, complete ? "lineupComplete" : "lineupOpen", goes, [...excluded]);
   return fresh;
 }
 
 export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
   const detail = await getEventDetail(db, ev);
+  const goes = await gateRoster(db, ev, detail, "matchCancelled", [ev.creatorPlayerId]);
   if (emailEnabled())
     await Promise.all(
-      participantsWithEmail(detail.roster).map(async (r) => {
+      participantsWithEmail(detail.roster).filter((r) => goes(r.playerId)).map(async (r) => {
         const c = await ctx(db, ev, r.locale, r.playerId ? await getPlayer(db, r.playerId) : null, detail);
         const { html, text } = layout({ heading: c.t("email.cancelled.heading"), body: c.t("email.cancelled.body", { ...c.vars, organizer: detail.creator.displayName }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
         await sendEmail({ to: r.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: r.name, email: r.email }, "CANCEL") } });
       }),
     );
-  await tellTheRest(db, ev, detail, "cancelled");
+  await tellTheRest(db, ev, detail, "cancelled", goes);
 }
 
 /** Removed by the organizer → cancel their calendar entry (courtesy). */
@@ -592,7 +636,9 @@ export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
  * rather than that they were struck off.
  */
 export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string | null, opts: { absent?: boolean } = {}): Promise<void> {
-  if (!emailEnabled() || !removedPlayerId) return;
+  if (!removedPlayerId) return;
+  if ((await recordNotice(db, { playerId: removedPlayerId, sender: "removed", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })) !== "now") return;
+  if (!emailEnabled()) return;
   const p = await getPlayer(db, removedPlayerId);
   if (!p?.email) return;
   const c = await ctx(db, ev, p.locale, p);
@@ -645,14 +691,6 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
   return sendEmail({ to: slot.invitedEmail, subject: c.t("email.inviteReminder.subject", c.vars), html, text });
 }
 
-/** The single post-match score reminder to the creator (decision 13). */
-export async function sendScoreReminder(db: Db, ev: Event, creator: Player): Promise<boolean> {
-  if (!emailEnabled() || !creator.email || !creator.emailNotifications) return false;
-  const c = await ctx(db, ev, creator.locale, creator);
-  const { html, text } = layout({ heading: c.t("email.scoreReminder.heading"), body: c.t("email.scoreReminder.body", c.vars), meta: c.meta, cta: { label: c.t("email.scoreReminder.cta"), url: `${c.url}#score` }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
-  return sendEmail({ to: creator.email, subject: c.t("email.scoreReminder.subject"), html, text });
-}
-
 /** One-time code for restoring history on a new device. */
 export async function sendEmailCode(email: string, code: string, localeLike: string | null | undefined): Promise<boolean> {
   if (!emailEnabled()) return false;
@@ -683,4 +721,44 @@ export async function sendClaimCodeEmail(email: string, code: string, club: stri
     openLabel: t("common.clubs"),
   });
   return sendEmail({ to: email, subject: t("email.claimCode.subject", { code, club }), html, text, proof: true });
+}
+
+/**
+ * Quiet hours are over and notices waited through them: each person hears once, one short message on
+ * each channel they have ("3 updates while you were away", with the way to My matches), never the
+ * notices one by one. The hourly job calls this; the rows then count as delivered, so the next hour
+ * does not send it again. A kind switched off never waits here (`releaseOf`), so it is never sent late.
+ *
+ * WhatsApp gets no summary: outside a conversation it carries only a template Meta approved, and
+ * there is none for this. A player whose only channel it is reads the inbox.
+ */
+export async function sendQuietSummaries(db: Db, now = new Date()): Promise<{ people: number; messages: number }> {
+  const due = await quietSummariesDue(db, now);
+  if (due.length === 0) return { people: 0, messages: 0 };
+  const people = await db.select().from(playersTable).where(inArray(playersTable.id, due.map((d) => d.playerId)));
+  const subs = pushEnabled() ? await subscriptionsFor(db, people.map((p) => p.id)) : [];
+  const url = `${baseUrl()}/me#inbox`;
+  let messages = 0;
+  for (const p of people) {
+    const count = due.find((d) => d.playerId === p.id)?.count ?? 0;
+    const { t } = await translatorFor(p.locale);
+    const title = t("notices.awayTitle", { count });
+    const body = t("notices.awayBody");
+    const open = t("common.myMatches");
+    if (telegramEnabled() && p.telegramId) {
+      const res = await sendMessage(p.telegramId, esc(`${title}\n${body}`), { silent: true, keyboard: { inline_keyboard: [[{ text: open, url }]] } }).catch(() => null);
+      if (res?.ok) messages++;
+    }
+    if (emailEnabled() && p.email && p.emailNotifications) {
+      const { html, text } = layout({ heading: title, body, cta: { label: open, url }, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: open, telegram: telegramLine(t("email.telegramLine"), p) });
+      if (await sendEmail({ to: p.email, subject: title, html, text }).catch(() => false)) messages++;
+    }
+    for (const sub of subs.filter((x) => x.playerId === p.id)) {
+      const r = await sendPush(sub, { title, body, url, tag: "notices-away" }).catch(() => "failed" as const);
+      if (r === "sent") messages++;
+      if (r === "gone") await removePushSubscription(db, sub.endpoint).catch(() => undefined);
+    }
+  }
+  await markHeldDelivered(db, due.map((d) => d.playerId), now);
+  return { people: due.length, messages };
 }

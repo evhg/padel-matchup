@@ -51,9 +51,9 @@ Everything in this list is live. The README describes each in detail.
   "Warehaus" stopped being two different places.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
-  quiet hours from a weekly programme. A programme match reaches the club's recent players by push; the
-  email that went with it stopped on 9 October 2026 and comes back as an opt-in with the per-kind
-  notice settings (`mayEmailClubMatch` in `src/lib/notify.ts`).
+  quiet hours from a weekly programme. A programme match reaches the club's recent players who switched "club matches" on, by push and
+  email; the kind is off by default (decisions B and D, 9 October 2026), and everybody it was for
+  finds it in their inbox (`mayEmailClubMatch` in `src/lib/notify.ts`).
 - **Privacy and terms in full.** `/privacy` and `/terms` in three languages, operator "Kicksmash, Phuket,
   Thailand", the feedback form as the contact, Thailand's PDPA as the law. The figures on the page come
   from the constants that enforce them (`src/lib/legal.ts`), and `tests/legal.test.ts` checks the cookie
@@ -809,6 +809,21 @@ Everything in this list is live. The README describes each in detail.
   `tests/fixed-pairs-night.test.ts`, and as six players on a phone in `e2e/pairs.mjs`. The API and the
   MCP take `fixedPairs` on create and `partner` on join, and every match object carries `pairs`.
   Later: the /americano generator with fixed pairs, and a series or a club slot that keeps them.
+- **A switch for each notice kind, quiet hours, and an inbox (10 October 2026, migrations 0093 and
+  0094).** The owner's decision D. "Notices" on My matches is one line that says what is set ("6 of 7
+  on · quiet 22:00–08:00") and opens to seven switches with one line each (match changes, reminders,
+  open spots, club matches, scores and results, the crew, lessons) and quiet hours from and to. Every
+  notice to a player goes through one gate (`src/lib/domain/notices.ts`, the rules in
+  `noticeKinds.ts`): its row lands in the inbox first, one insert for a whole fan-out, and it is
+  delivered only when the kind is on and it is not the player's quiet hours, unless the match starts
+  within three hours. A switched-off kind stays in the inbox and is never sent; what quiet hours held
+  goes as one short message per channel when they end, from the hourly job. The inbox on My matches
+  shows the latest twenty, newest first, in the reader's own language (the rows keep a message key
+  and plain facts, never words and never a link), reads itself when opened, and counts the unread on
+  the header's My matches. Club matches are off by default (decision B), for push as well as email.
+  Every existing player keeps every other notice; the old activity-email switch keeps its meaning as
+  a switch on the email channel. Ninety days, then the hourly job prunes. Proven in
+  `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.
 
 ## The finish line
 

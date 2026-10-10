@@ -8,6 +8,7 @@ import { coachCity } from "./coaching";
 import { DomainError } from "./errors";
 import { LEVEL_STEPS } from "./levels";
 import { getPlayer } from "./players";
+import { recordNotices } from "./notices";
 
 /**
  * "I want a coach": the other half of the coaches' directory. A city's list used to end on "no
@@ -118,16 +119,17 @@ export async function tellCoachListed(db: Db, coach: Coach, now = new Date(), te
   if (!city) return { city: null, told: 0 };
   const rows = await coachWantsToTell(db, city.slug, now);
   const url = `${baseUrl()}/c/${coach.handle}`;
-  for (const { want, player } of rows) {
-    if (player.id === coach.playerId) continue;
-    await tell(db, player, coachListedText(player.locale, coach, city), { inline_keyboard: [[{ text: coach.displayName, url }]] }).catch(() => undefined);
-    void want;
+  const wanters = rows.map((r) => r.player).filter((p) => p.id !== coach.playerId);
+  // One insert for everybody told (rule 12), then the sends.
+  const released = await recordNotices(db, wanters.map((p) => ({ playerId: p.id, sender: "coachListed", params: { name: coach.displayName, title: city.name } })), now);
+  for (const player of wanters) {
+    await tell(db, player, coachListedText(player.locale, coach, city), { inline_keyboard: [[{ text: coach.displayName, url }]] }, { notice: { released: released.get(player.id) ?? "now" } }).catch(() => undefined);
   }
   await markCoachWantsNotified(db, rows.map((r) => r.want.id), now);
   const told = rows.filter((r) => r.player.id !== coach.playerId).length;
   if (told > 0) {
     const me = await getPlayer(db, coach.playerId);
-    if (me) await tell(db, me, waitingToldText(me.locale, told, city), { inline_keyboard: [[{ text: "Kicksmash", url: `${baseUrl()}/coach` }]] }).catch(() => undefined);
+    if (me) await tell(db, me, waitingToldText(me.locale, told, city), { inline_keyboard: [[{ text: "Kicksmash", url: `${baseUrl()}/coach` }]] }, { notice: { sender: "wantersTold", params: { count: told, title: city.name } } }).catch(() => undefined);
   }
   return { city: city.slug, told };
 }

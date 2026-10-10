@@ -25,6 +25,7 @@ import { matchResult } from "@/lib/domain/result";
 import { cardTitle } from "@/lib/telegram/card";
 import { recordFact } from "@/lib/domain/facts";
 import { sendWaTemplate, waLocale, waMatchLine, whatsappNotices } from "@/lib/whatsapp/templates";
+import { matchParams, recordNotices } from "@/lib/domain/notices";
 
 /**
  * After the final point. Every player, not only the organizer, hears "how did it go?" on the channel
@@ -56,8 +57,11 @@ async function warm(url: string): Promise<void> {
 
 export async function nudgeForScore(db: Db, ev: Event, detail?: EventDetail): Promise<NudgeSummary> {
   const d = detail ?? (await getEventDetail(db, ev));
-  const players = d.roster.filter((s) => isOccupied(s) && s.player).map((s) => s.player!) as Player[];
-  const out: NudgeSummary = { players: players.length, telegram: 0, whatsapp: 0, push: 0, email: 0 };
+  const seated = d.roster.filter((s) => isOccupied(s) && s.player).map((s) => s.player!) as Player[];
+  // Through the gate first: every player's inbox keeps the ask, one insert for the four of them.
+  const released = await recordNotices(db, seated.map((p) => ({ playerId: p.id, sender: "scoreAsk", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })));
+  const players = seated.filter((p) => released.get(p.id) === "now");
+  const out: NudgeSummary = { players: seated.length, telegram: 0, whatsapp: 0, push: 0, email: 0 };
   const base = baseUrl();
   const whatsapp = whatsappNotices();
   const subs = pushEnabled() ? await subscriptionsFor(db, players.map((p) => p.id)) : [];
@@ -219,7 +223,10 @@ export async function sendWaResults(db: Db, code: string, now = new Date()): Pro
     .from(facts)
     .where(and(eq(facts.subjectType, "match"), eq(facts.subjectId, detail.event.id), eq(facts.kind, WA_RESULT_FACT), inArray(facts.actorPlayerId, seats.map((s) => s.playerId!))));
   const already = new Set(told.map((r) => r.playerId));
-  const due = seats.filter((s) => !already.has(s.playerId));
+  const fresh = seats.filter((s) => !already.has(s.playerId));
+  if (fresh.length === 0) return 0;
+  const released = await recordNotices(db, fresh.map((s) => ({ playerId: s.playerId!, sender: "result", eventId: detail.event.id, params: matchParams(detail.event) })), now);
+  const due = fresh.filter((s) => released.get(s.playerId!) === "now");
   if (due.length === 0) return 0;
   const picture = `${baseUrl()}${cardImagePath(code, cardVersion(detail, await getEventPhotoMeta(db, detail.event.id).catch(() => null)))}`;
   // Meta fetches the picture when it delivers the message: render it once first, as for Telegram.
@@ -279,13 +286,14 @@ export function scoreFormButton(code: string, label: string): InlineKeyboard["in
   return app ? { text: label, url: app } : { text: label, web_app: { url: `${baseUrl()}/tg?startapp=${encodeURIComponent(start)}` } };
 }
 
-/** A moment, once, to the player who earned it: the picture and one button, silent. Web and email players find it on My matches. */
-export async function notifyMilestones(awarded: Awarded[]): Promise<number> {
+/** A moment, once, to the player who earned it: the picture and one button, silent. Web and email players find it on My matches, and every player in the inbox. */
+export async function notifyMilestones(db: Db, awarded: Awarded[]): Promise<number> {
+  const released = await recordNotices(db, awarded.map(({ player }) => ({ playerId: player.id, sender: "moment" })));
   if (!telegramEnabled()) return 0;
   const base = baseUrl();
   let sent = 0;
   for (const { milestone, player } of awarded) {
-    if (!player.telegramId) continue;
+    if (!player.telegramId || released.get(player.id) !== "now") continue;
     const line = await momentLine(milestone, player.locale);
     const url = `${base}/m/${milestone.id}`;
     const keyboard = { inline_keyboard: [[{ text: player.locale === "ru" ? "Открыть" : player.locale === "es" ? "Abrir" : "Open", url }]] };
