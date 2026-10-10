@@ -314,6 +314,33 @@ describe("the slice: which clubs a run reads", () => {
     expect(after.availability).toMatchObject({ error: null, source: "scrape:playtomic", slots: [{ free: 1 }] });
   });
 
+  it("a tick a little slower than 5 s still moves a slow first club to the back", async () => {
+    // The push job passes 50 s less its own work: a tick that took 5.1 s leaves 44,899.6 ms, under the
+    // 45 s budget but a fair run. slow-head needs five requests at 12 s each and is cut; it is written as a
+    // timeout, so the next run reads fast-a and fast-b behind it rather than cutting slow-head again.
+    await club("slow-head", { availabilityAt: at(-3 * HOUR) });
+    for (const s of ["fast-a", "fast-b"]) await club(s, { availabilityAt: at(-2 * HOUR) });
+    const r = reader("playtomic", { requests: (slug) => (slug === "slow-head" ? 5 : 1) });
+    const w = world(undefined, 12_000, 0.25);
+    await runScrape(db, NOW, { adapters: [r], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 44_899.6 });
+    expect((await row("slow-head")).availability).toMatchObject({ error: "timeout", why: "frame: budget" });
+    const w2 = world(undefined, 12_000, 0.25);
+    await runScrape(db, at(15 * 60_000), { adapters: [r], fetchImpl: w2.fetchImpl, clock: w2.clock, budgetMs: 44_899.6 });
+    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/fast-a", "https://playtomic.io/fast-b"]);
+  });
+
+  it("a club the run never starts is not counted as cut, even in the run's last second", async () => {
+    // 600 ms a request from 0.25: a-quick is read by 600.25, and 1,900.5 ms of budget leave under the
+    // second a request needs, so b-late never starts. Nothing was cut.
+    await club("a-quick");
+    await club("b-late");
+    const w = world(undefined, 600, 0.25);
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 1_900.5 });
+    expect(w.calls).toHaveLength(1);
+    expect(run.outOfTime).toBe(true);
+    expect(await metric("scrape_cut_playtomic")).toBe(0);
+  });
+
   it("counts each club the deadline cuts short, whether it stays due or is the lane's first and is written", async () => {
     await club("a-quick");
     await club("slow-pages");

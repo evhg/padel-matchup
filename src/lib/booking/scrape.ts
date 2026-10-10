@@ -42,6 +42,12 @@ export const SCRAPE = {
   /** The clubs one platform's lane takes in a run. Each lane has its own 45 seconds, so one platform never crowds out another. */
   perLane: 8,
   budgetMs: 45_000,
+  /**
+   * A run this long or longer is a fair run for a lane's first club: one that a deadline cuts even then is
+   * written as a timeout and goes to the back. The push job passes 50 s less its own work, so this is not
+   * the whole 45 s: a tick a little slower than 5 s must still move a slow first club along.
+   */
+  fairRunMs: 30_000,
   /** One request a second per platform. */
   gapMs: 1_000,
   /** The most requests one club's read may make (the adapter contract says the same). */
@@ -474,10 +480,10 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     if (lane.blocked !== null) result = { ok: false, status: lane.blocked, reason: "blocked", requests: lf.count(), detail: null };
     // Cut short by the deadline, and counted (`scrape_cut_<platform>`). A cut club is not written and
     // stays due, so the next run starts with it and its last good read keeps showing. One exception: the
-    // lane's first club in a run that had the whole budget (45 s) did not fit even then, and a later run
+    // lane's first club in a fair run (30 s or more, `fairRunMs`) did not fit even then, and a later run
     // would do the same, so no club behind it would ever be read. Only then is it written as a timeout,
-    // which sends it to the back. A busy push tick passes less than the whole budget, and a first club
-    // cut in such a run keeps its cache: a full run reads it.
+    // which sends it to the back. A very busy push tick leaves less than that, and a first club cut in
+    // such a run keeps its cache: the next fair run reads it.
     if (lane.outOfTime && lane.blocked === null) {
       lane.cut++;
       if (out.length > 0 || !o.full) break;
@@ -613,7 +619,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   }
 
   const fetchImpl = o.fetchImpl ?? fetch;
-  const outcomes = (await Promise.all(lanes.map(({ lane, queue }) => runLane(lane, queue, { fetchImpl, clock, deadline, now, full: budget >= SCRAPE.budgetMs })))).flat();
+  const outcomes = (await Promise.all(lanes.map(({ lane, queue }) => runLane(lane, queue, { fetchImpl, clock, deadline, now, full: budget >= SCRAPE.fairRunMs })))).flat();
 
   const tally = (platform: string) => (run.platforms[platform] ??= { requests: 0, ok: 0, errors: 0, blocked: false, changed: false, restUntil: null });
   for (const { platform, result } of outcomes) {

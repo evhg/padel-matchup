@@ -26,10 +26,11 @@ export type ClubFreeSlot = { start: string; end: string; free: number };
 /**
  * `why`, on a failed read from a booking platform only: one of the readers' fixed steps and the error's
  * class or HTTP status ("availability 2026-10-10: RangeError"), built from those parts alone, so never a
- * link, an address, a body or a token (`failureWhy` in `src/lib/booking/scrape.ts`). No page and no API
- * shape shows it, and the list reads of free courts leave it behind (`cacheBetween`); two reads of
- * whole club rows still carry it (the monthly wrap, a claimant's clubs) and never output it. It is how
- * we find the cause.
+ * link, an address, a body or a token (`failureWhy` in `src/lib/booking/scrape.ts`). The list reads of
+ * free courts leave it behind (`cacheBetween`). Every read of a whole club row (`select()`, `getClub`,
+ * `getClubByToken`) still carries it, and none of their callers outputs it: `clubToPublic` and the club
+ * components pick their fields. Never pass a whole club row, or its `availability`, to a client
+ * component. It is how we find the cause.
  */
 export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string };
 
