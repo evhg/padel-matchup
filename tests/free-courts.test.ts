@@ -183,6 +183,9 @@ describe("who the best times read, and how much", () => {
     const venues = await venuesForPicking(db, null, { tz: TZ, city: "Phuket" }, NOW);
     expect(venues.filter((v) => v.free).map((v) => v.slug)).toEqual(["phuket-padel-1", "phuket-padel-2"]);
     expect(venues.find((v) => v.slug === "madrid-padel")?.free).toBeNull();
+    // A link that names the club (a row on /play, a free court offered) brings that club's times along.
+    const linked = await venuesForPicking(db, null, { tz: TZ, city: "Phuket" }, NOW, "Madrid Padel");
+    expect(linked.find((v) => v.slug === "madrid-padel")?.free?.tz).toBe("Europe/Madrid");
   });
 
   it("the create form: twelve clubs' free courts at most, the ones first on the person's list", async () => {

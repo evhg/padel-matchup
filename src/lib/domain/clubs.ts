@@ -259,7 +259,7 @@ const same = (a: string | null | undefined, b: string | null | undefined) => Boo
  * A place appears once. "Warehaus" on their own list and "WAREHAUS.club" in the directory are one
  * club, because both answer to the slug `warehaus`.
  */
-export async function venuesForPicking(db: Db, playerId: string | null, at: Whereabouts | string | null = null, now = new Date()): Promise<PickableVenue[]> {
+export async function venuesForPicking(db: Db, playerId: string | null, at: Whereabouts | string | null = null, now = new Date(), linked: string | null = null): Promise<PickableVenue[]> {
   // A time zone on its own is still accepted, so a caller that only has one keeps working.
   const { tz = null, city = null } = typeof at === "string" ? { tz: at, city: null } : (at ?? {});
   // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8). All are bounded.
@@ -313,8 +313,10 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
   // The courts by name, one read for every listed club that has rows (few do), so the form can offer "Centre" rather than 1…n.
   const names = await courtNamesBySlug(db, all.flatMap((v) => (v.slug ? [v.slug] : [])));
   for (const v of all) if (v.slug && names.has(v.slug)) v.courtNames = names.get(v.slug)!;
-  // The free courts of the clubs this person is likely to pick, one bounded read (AGENTS.md rule 12).
-  const likely = [...new Set([...out, ...here, ...nearby].flatMap((v) => (v.slug ? [v.slug] : [])))].slice(0, FREE_FOR_PICKING);
+  // The free courts of the clubs this person is likely to pick, one bounded read (AGENTS.md rule 12):
+  // the club a link named first (a row on /play, a free court offered), then their own, here and nearby.
+  const named = linked ? all.find((v) => same(v.name, linked)) : undefined;
+  const likely = [...new Set([named, ...out, ...here, ...nearby].flatMap((v) => (v?.slug ? [v.slug] : [])))].slice(0, FREE_FOR_PICKING);
   const feeds = await clubFeeds(db, likely, now);
   for (const v of all) if (v.slug && feeds.has(v.slug)) v.free = feeds.get(v.slug)!;
   return all;

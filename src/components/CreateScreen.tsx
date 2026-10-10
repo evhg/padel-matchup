@@ -37,7 +37,7 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
   // The time zone alone puts Phuket and Bangkok in the same bucket, and Bangkok has twice the clubs
   // and sorts first, so the city the edge reports is what makes the list start where the person is.
   const headerCity = hdrs.get("x-vercel-ip-city");
-  const venues = await venuesForPicking(db, me?.id ?? null, { tz: tzFromHeader ? headerTz : null, city: headerCity ? decodeURIComponent(headerCity) : null });
+  const venues = await venuesForPicking(db, me?.id ?? null, { tz: tzFromHeader ? headerTz : null, city: headerCity ? decodeURIComponent(headerCity) : null }, new Date(), prefill?.venue ?? null);
   const patterns = me ? await getPlayerTimePatterns(db, me.id) : [];
 
   // From a group page: the group's usual settings prefill the form and every member gets pinged on create.
