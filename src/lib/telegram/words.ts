@@ -14,7 +14,7 @@ import { SETS_ONLY_RE } from "./text";
  * "can't make it", and "yo" is a greeting in English. A question is never a seat: "in?" asks, it
  * does not answer.
  */
-export type Word = { kind: "join"; onlyAsReply: boolean } | { kind: "leave" } | { kind: "score" } | { kind: "ask"; text: string };
+export type Word = { kind: "join"; onlyAsReply: boolean } | { kind: "leave" } | { kind: "score" } | { kind: "ask"; text: string } | { kind: "times" };
 
 const JOIN = [
   // en
@@ -41,12 +41,27 @@ const LEAVE = [
   "no puedo", "yo no puedo", "me bajo", "no voy", "yo no voy", "no podré", "no podre", "bájame", "bajame", "me borro",
 ];
 
+/**
+ * "times?", "when can we play?": somebody asks for the free courts this week, and the bot answers once
+ * with the best times as buttons (DECIDING rule 34). A question, so the "?" is allowed here; the whole
+ * message is still the question, and "times are hard" or "when can we play golf" are not it.
+ */
+const TIMES = [
+  // en
+  "times", "free times", "best times", "free courts", "any free courts", "when can we play", "when could we play",
+  // ru
+  "когда можем играть", "когда можем сыграть", "когда можно играть", "когда можно сыграть", "свободные корты", "есть свободные корты", "свободное время",
+  // es
+  "cuándo podemos jugar", "cuando podemos jugar", "horarios", "horarios libres", "pistas libres", "hay pistas libres", "hay pistas",
+];
+
 /** A word of courtesy around a phrase does not change it: "can't make it, sorry", "ребят, не смогу". */
 const COURTESY = ["sorry", "sry", "guys", "folks", "сорри", "извините", "простите", "ребят", "ребята", "lo siento", "perdón", "perdon", "chicos", "gente"];
 
 const JOIN_SET = new Set(JOIN);
 const JOIN_AS_REPLY_SET = new Set(JOIN_AS_REPLY);
 const LEAVE_SET = new Set(LEAVE);
+const TIMES_SET = new Set(TIMES);
 
 /**
  * "who's in Thursday 7pm Rawai?" and its sisters: a question that asks for players at a time. The parser
@@ -95,9 +110,11 @@ export function readWords(text: string | null | undefined): Word | null {
   const ask = ASK_RE.exec(normalizeWords(question));
   // A time, or at least an hour, is what makes a question into a match; "who's in?" is about the card.
   if (ask) return /\d/.test(ask[1]) ? { kind: "ask", text: question } : null;
+  const phrase = bare(line);
+  // "times?" is a question by nature: asked, it is answered; it takes nobody's seat.
+  if (TIMES_SET.has(phrase)) return { kind: "times" };
   // "in?" asks whether somebody is in; it takes nobody's seat.
   if (/[?¿]/.test(text)) return null;
-  const phrase = bare(line);
   if (JOIN_SET.has(phrase)) return { kind: "join", onlyAsReply: false };
   if (JOIN_AS_REPLY_SET.has(phrase)) return { kind: "join", onlyAsReply: true };
   if (LEAVE_SET.has(phrase)) return { kind: "leave" };

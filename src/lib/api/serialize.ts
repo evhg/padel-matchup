@@ -2,6 +2,7 @@ import type { Coach, Event, Player, Series } from "@/db/schema";
 import type { SeriesPage } from "@/lib/domain/series";
 import { eventEnd } from "@/lib/domain/matchLength";
 import { isClaimable, isOccupied } from "@/lib/domain/events";
+import { courtBookedBy } from "@/lib/domain/courtBooked";
 import { isClubLive } from "@/lib/domain/clubs";
 import type { GroupDetail } from "@/lib/domain/groups";
 import { cleanAgeMin, cleanCategory, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
@@ -56,6 +57,8 @@ export type PublicMatch = {
   group: { code: string; name: string; url: string } | null;
   listed: boolean;
   bookingUrl: string | null;
+  /** A player booked the court in the club's own app and said so: when, and the booker's first name (null once they left). Null while not booked. */
+  courtBooked: { at: string; by: string | null } | null;
   /** What each player pays, free text. How to pay stays between the players. */
   cost: string | null;
   note: string | null;
@@ -77,6 +80,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     .map((s) => ({ name: playerName(s.player, s.invitedName), level: s.player?.level ?? null, organizer: s.playerId === ev.creatorPlayerId, status: s.status as PublicPlayer["status"] }));
   const range = { min: ev.levelMin, max: ev.levelMax };
   const res = ev.type === "match" ? matchResult(detail.scores, detail.roster.map((s) => ({ team: s.team, status: s.status, name: playerName(s.player, s.invitedName) }))) : null;
+  const booked = courtBookedBy(detail);
   return {
     code: ev.code,
     url: `${base}/${ev.code}`,
@@ -104,6 +108,7 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     group: group ? { code: group.code, name: group.name, url: `${base}/g/${group.code}` } : null,
     listed: ev.publicListing,
     bookingUrl: ev.bookingUrl,
+    courtBooked: booked ? { at: booked.at.toISOString(), by: booked.name } : null,
     cost: ev.cost,
     note: ev.note,
     result: res ? { sets: res.sets.map((s) => ({ a: s.sideA, b: s.sideB })), teamA: res.a, teamB: res.b, winner: res.winner, confirmed: ev.scoreLockedByCreator } : null,

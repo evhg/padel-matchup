@@ -100,6 +100,14 @@ export const events = pgTable(
     venueSlug: text("venue_slug"),
     /** Optional link to the club's booking page or confirmation. */
     bookingUrl: text("booking_url"),
+    /**
+     * The court is booked: a player in the match booked and paid in the club's own app, and said so
+     * with one tap ("I booked it"); any player may take it back. Who and when, nothing else: never an
+     * amount, a payment or a reference, because no payment passes through Kicksmash (DECIDING rule 34).
+     * A new day, hour, length or club clears both, because that booking was for another court.
+     */
+    courtBookedAt: timestamp("court_booked_at", { withTimezone: true }),
+    courtBookedBy: uuid("court_booked_by").references(() => players.id, { onDelete: "set null" }),
     /** What each player pays, as the organizer wrote it ("400 ฿", "€8"). */
     cost: text("cost"),
     /** How to pay the organizer (PromptPay number, Revolut tag…). For the players: on the page and the cards, never in the public API. */

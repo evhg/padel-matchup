@@ -26,6 +26,8 @@ import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainS
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
 import { crewLeft, crewRightsChanged, crewStart, mayPinNotice, migrateChat, quietCommand } from "./handlers/crew";
 import { countSeat, heardInGroup, isListening, listenInGroup, repliedTo, replyToCard } from "./handlers/words";
+import { handleTimesCallback, timesInChat, TIMES_CALLBACK } from "./handlers/times";
+import { readWords } from "./words";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { cancelEvent } from "@/lib/domain/events";
 import { notifyEventCancelled } from "@/lib/notify";
@@ -99,12 +101,15 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   if (isPrivate && !cmd && msg.text && !msg.reply_to_message) {
     const word = playerMenuWord(msg.text);
     if (word) return playerMenu(db, msg, chat, from, word, ctx);
+    // "times?" in the private chat: the free courts at the player's clubs this week, asked for (DECIDING rule 34).
+    if (readWords(msg.text)?.kind === "times") return timesInChat(db, msg, chat, from, "word");
   }
   if (cmd) {
     if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);
     if (cmd.command === "new") return startGuidedNew(db, msg, chat);
     if (cmd.command === "score") return scoreFromChat(db, msg, chat, from, cmd.args, ctx);
     if (cmd.command === "games") return gamesFromChat(db, msg, chat, from, cmd.args);
+    if (cmd.command === "times") return timesInChat(db, msg, chat, from, "command");
     if (cmd.command === "tz") {
       const zone = resolveZone(cmd.args);
       if (!zone) {
@@ -217,6 +222,8 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (owner) return owner;
   const guided = data.match(/^n:([zdtv]):(.+)$/);
   if (guided) return handleGuidedNew(db, cb, guided[1], guided[2], ctx);
+  // A free court from "times?": the match at that club and hour.
+  if (TIMES_CALLBACK.test(data)) return handleTimesCallback(db, cb, data, ctx);
   const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);

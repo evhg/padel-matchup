@@ -203,7 +203,10 @@
     "planTimePoints": "about {time} at {n} points",
     "planTimeGames": "about {time} at first to {n} games",
     "planHm": "{m, plural, =0 {{h}h} other {{h}h {m}m}}",
-    "planTooLong": "A full rotation runs past your {minutes} min. Play shorter matches, book longer, or stop early: the table counts every round played."
+    "planTooLong": "A full rotation runs past your {minutes} min. Play shorter matches, book longer, or stop early: the table counts every round played.",
+    "freeLabel": "Free at {club}",
+    "freeThen": "✓ The club shows a free court then.",
+    "busyThen": "The club shows no free court then."
   },
   "share": {
     "title": "Your match is live",
@@ -310,7 +313,14 @@
     "until": "until {time}",
     "changeDetails": "Change the details",
     "changeDetailsHelp": "Anyone playing can change the time, the place or the note. Everybody hears about it.",
-    "tellGroup": "Tell the group"
+    "tellGroup": "Tell the group",
+    "bookCourt": "Book this court",
+    "bookAndPay": "Book and pay",
+    "bookedIt": "I booked it",
+    "courtBooked": "Court booked ✓",
+    "courtBookedBy": "Court booked ✓ (by {name})",
+    "courtBookedUndo": "Not booked",
+    "bookYourself": "You book and pay in the club's own app, then tell the others here."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -1351,7 +1361,10 @@
     "playEmptyCta": "Organize one in 30 seconds",
     "playNoneFit": "{count, plural, one {# game is open, but not with these filters.} other {# games are open, but not with these filters.}}",
     "playClear": "Show them all",
-    "playBy": "by {name}"
+    "playBy": "by {name}",
+    "playFreeTitle": "Courts free this week",
+    "playFreeHelp": "As the clubs show them now. You book and pay in the club's own app.",
+    "playFreeCta": "Organise a game here"
   },
   "telegram": {
     "title": "Telegram",

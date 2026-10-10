@@ -203,7 +203,10 @@
     "planTimePoints": "{time} aprox. a {n} puntos",
     "planTimeGames": "{time} aprox. a {n} juegos",
     "planHm": "{m, plural, =0 {{h} h} other {{h} h {m} min}}",
-    "planTooLong": "La rotación completa no cabe en tus {minutes} min. Juega partidos más cortos, reserva más tiempo o termina antes: la tabla cuenta cada ronda jugada."
+    "planTooLong": "La rotación completa no cabe en tus {minutes} min. Juega partidos más cortos, reserva más tiempo o termina antes: la tabla cuenta cada ronda jugada.",
+    "freeLabel": "Libre en {club}",
+    "freeThen": "✓ El club muestra una pista libre a esa hora.",
+    "busyThen": "El club no muestra ninguna pista libre a esa hora."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -310,7 +313,14 @@
     "until": "hasta las {time}",
     "changeDetails": "Cambiar los detalles",
     "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
-    "tellGroup": "Avisar al grupo"
+    "tellGroup": "Avisar al grupo",
+    "bookCourt": "Reservar esta pista",
+    "bookAndPay": "Reservar y pagar",
+    "bookedIt": "Ya reservé la pista",
+    "courtBooked": "Pista reservada ✓",
+    "courtBookedBy": "Pista reservada ✓ (por {name})",
+    "courtBookedUndo": "No reservada",
+    "bookYourself": "Reservas y pagas tú, en la app del club, y luego lo marcas aquí."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -1351,7 +1361,10 @@
     "playEmptyCta": "Organiza uno en 30 segundos",
     "playNoneFit": "{count, plural, one {Hay # partido abierto, pero no con estos filtros.} other {Hay # partidos abiertos, pero no con estos filtros.}}",
     "playClear": "Ver todos",
-    "playBy": "organiza {name}"
+    "playBy": "organiza {name}",
+    "playFreeTitle": "Pistas libres esta semana",
+    "playFreeHelp": "Tal como las muestran ahora los clubs. Reservas y pagas tú, en la app del club.",
+    "playFreeCta": "Organiza un partido aquí"
   },
   "telegram": {
     "title": "Telegram",

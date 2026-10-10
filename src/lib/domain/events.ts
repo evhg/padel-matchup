@@ -352,6 +352,11 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         calendarChanged = calendarChanged || Boolean(u);
       }
     }
+    // "Court booked" was for that day, hour, length and club: a new one of any of them clears it (src/lib/domain/courtBooked.ts).
+    if (ev.courtBookedAt && ("startsAt" in set || "durationMinutes" in set || "venueName" in set)) {
+      set.courtBookedAt = null;
+      set.courtBookedBy = null;
+    }
 
     const promotedPlayerIds: string[] = [];
     /** Moved up by `vacateSeats`, which writes their "promoted" lines itself. */

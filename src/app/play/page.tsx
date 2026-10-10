@@ -9,6 +9,9 @@ import { baseUrl } from "@/lib/config";
 import { CITIES, cityBySlug } from "@/lib/domain/cities";
 import { visitorCity } from "@/lib/domain/countries";
 import { clubsOf, filterGames, findGames, homeCity, parsePlayFilters, playCities, playHref, playWindow, type PlayDay, type PlayFilters } from "@/lib/domain/findGame";
+import { courtOfferLink } from "@/lib/domain/courtOffers";
+import { courtsFreeInCity, PLAY_FEW_GAMES } from "@/lib/domain/freeCourts";
+import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -51,6 +54,10 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
   const level = me?.level ?? null;
   const shown = filterGames(rows, f, window, level);
   const clubs = clubsOf(rows);
+  // Few games to join: the courts the city's clubs show free this week, each a door to the form at
+  // that club and hour (the owner's choice of 10 October 2026). One bounded read of the clubs' cache,
+  // and nothing at all when no court is free.
+  const free = rows.length < PLAY_FEW_GAMES ? await courtsFreeInCity(db, city, me?.id ?? null, now) : [];
 
   return (
     <>
@@ -123,6 +130,30 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
               {shown.map((g) => (
                 <li key={g.id}>
                   <EventRow ev={g} t={t} locale={locale} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {free.length > 0 && (
+          <section className="card" data-testid="play-free">
+            <h2 className="text-lg font-extrabold">{t("city.playFreeTitle")}</h2>
+            <p className="mt-0.5 text-xs text-muted">{t("city.playFreeHelp")}</p>
+            <ul className="mt-3 flex flex-col divide-y divide-line">
+              {free.map((b) => (
+                <li key={`${b.slug}-${b.start.toISOString()}`} className="flex items-center gap-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold tabular-nums">
+                      {formatEventDay(b.start, b.tz, locale)} · {formatEventTime(b.start, b.tz, locale)}
+                    </div>
+                    <div className="truncate text-sm text-muted">
+                      {b.name} · {t("club.freeSlot", { count: b.free })}
+                    </div>
+                  </div>
+                  <Link href={courtOfferLink("", { club: { name: b.name, tz: b.tz }, hour: { date: b.date, time: b.time } })} prefetch={false} className="btn-ghost btn-sm shrink-0" data-testid="play-free-organise">
+                    {t("city.playFreeCta")}
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -210,13 +210,26 @@ export type TimePattern = { dow: number; time: string; count: number; last: Date
  * picks on the create form: never guessed, always from history.
  */
 export async function getPlayerTimePatterns(db: Db, playerId: string, limit = 4): Promise<TimePattern[]> {
-  const rows = await db
-    .select({ startsAt: events.startsAt, tz: events.tz })
+  return timePatternsOf(await getPlayerHistory(db, playerId), limit);
+}
+
+/**
+ * The matches a player made or played (not cancelled), newest first: when, in which zone, where and for
+ * how long. One bounded read; the usual times (`timePatternsOf`) and the usual clubs (the best times,
+ * `src/lib/domain/freeCourts.ts`) are both read off it.
+ */
+export async function getPlayerHistory(db: Db, playerId: string, limit = 200): Promise<{ startsAt: Date; tz: string; venueSlug: string | null; durationMinutes: number }[]> {
+  return db
+    .select({ startsAt: events.startsAt, tz: events.tz, venueSlug: events.venueSlug, durationMinutes: events.durationMinutes })
     .from(events)
     .leftJoin(slots, and(eq(slots.eventId, events.id), eq(slots.playerId, playerId), inArray(slots.status, ["joined", "confirmed"])))
     .where(and(ne(events.status, "cancelled"), or(eq(events.creatorPlayerId, playerId), sql`${slots.id} is not null`)))
     .orderBy(desc(events.startsAt))
-    .limit(200);
+    .limit(limit);
+}
+
+/** The weekday + time slots in a list of matches, most frequent first, then most recent. Pure. */
+export function timePatternsOf(rows: readonly { startsAt: Date | string; tz: string }[], limit = 4): TimePattern[] {
   const buckets = new Map<string, TimePattern>();
   for (const r of rows) {
     const startsAt = r.startsAt instanceof Date ? r.startsAt : new Date(r.startsAt);

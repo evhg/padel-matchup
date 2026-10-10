@@ -4,7 +4,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { formatLevel } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, levelLine, pairCardLines, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { bookedLine, cardTitle, levelLine, pairCardLines, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import { md, type DcActionRow, type DcEmbed } from "./api";
 
 /**
@@ -32,6 +32,8 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
   const level = levelLine(ev, locale);
   if (level) head.push(level);
   if (ev.cost) head.push(`💸 ${md(ev.cost)}${ev.payNote ? ` · ${md(ev.payNote)}` : ""}`);
+  const booked = bookedLine(detail, locale);
+  if (booked) head.push(md(booked));
   const lines: string[] = [];
   const shown = ev.fixedPairs ? [] : seats.slice(0, MAX_LINES);
   // A fixed-pairs night lists its pairs, one line each (decision F).

@@ -2,8 +2,9 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useMemo, useState } from "react";
+import type { FreeFeed } from "@/lib/domain/bestTimes";
 
-export type VenueOption = { name: string; mapUrl: string | null; where?: "yours" | "here" | "nearby" | "elsewhere"; country?: string | null; province?: string | null; courts?: number | null; /** The club's courts by name, when it listed them. */ courtNames?: string[] };
+export type VenueOption = { name: string; mapUrl: string | null; where?: "yours" | "here" | "nearby" | "elsewhere"; country?: string | null; province?: string | null; courts?: number | null; /** The club's courts by name, when it listed them. */ courtNames?: string[]; /** The club's free courts for the week: the create form's free times. Only the create form passes it. */ free?: FreeFeed | null };
 
 /** Before a letter is typed the list is a glance, not a directory; typing one opens it up. */
 const SHOWN_AT_REST = 6;

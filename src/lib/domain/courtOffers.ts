@@ -256,7 +256,7 @@ export async function claimCourtOffer(db: Db, offer: CourtOffer, now: Date): Pro
  * (`venueSlugFor`), and the form lists the match on the club's board. From Telegram it carries the
  * chat's ticket as well, so the card of the match comes back to this chat, as from the button of /new.
  */
-export function courtOfferLink(base: string, offer: Pick<CourtOffer, "club" | "hour">, telegramTicket?: string | null): string {
+export function courtOfferLink(base: string, offer: { club: Pick<CourtOfferClub, "name" | "tz">; hour: Pick<FreeHour, "date" | "time"> }, telegramTicket?: string | null): string {
   const q = new URLSearchParams({ venue: offer.club.name, date: offer.hour.date, time: offer.hour.time, tz: offer.club.tz });
   if (telegramTicket) q.set("tg", telegramTicket);
   return `${base}/?${q.toString()}`;

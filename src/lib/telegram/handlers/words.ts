@@ -17,6 +17,7 @@ import { namesAPlace, parseNewCommand, tzHintFor } from "../parse";
 import { syncTelegram } from "../post";
 import { readWords, type Word } from "../words";
 import { createMatchInChat, knownVenues } from "./new";
+import { timesInChat } from "./times";
 
 /**
  * A seat by a word: "+1" in reply to a card in any group, and in a crew's own group (DECIDING rule 31)
@@ -156,6 +157,8 @@ export async function listenInGroup(db: Db, msg: TgMessage, chat: TelegramChat, 
   // and "+" take a seat only as a reply to a card; a forward is somebody else's words.
   const said = heardInGroup(msg);
   if (!said) return null;
+  // "times?": the free courts this week, asked for, so answered once (DECIDING rule 34).
+  if (said.kind === "times") return timesInChat(db, msg, chat, from, "word", now);
   const open = await openCards(db, chat.chatId, now);
   if (said.kind === "ask") return askForMatch(db, msg, chat, from, said.text, open, ctx, now);
   let targets = open;
