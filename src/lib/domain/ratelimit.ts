@@ -49,6 +49,8 @@ export const LIMITS = {
   /** Notices of new asks to join that one group's admins hear in a day; past it the asks wait on the group page, unannounced. */
   groupAskNoticesPerGroupPerDay: 10,
   restoreCodesPerIpPerDay: 20,
+  /** "That's me" taps from one address in a day, refused ones too: a name is tried, never guessed in a loop (DECIDING rule 32). */
+  thatsMePerIpPerDay: 10,
   clientErrorReportsPerIpPerDay: 60,
   feedbackPerIpPerDay: 5,
   // Public API and MCP: open without a key, roomier with one.

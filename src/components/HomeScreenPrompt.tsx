@@ -16,6 +16,11 @@ type Mode = "hidden" | "prompt" | "ios-steps" | "android-steps" | "done";
  * saw a shortcut visit for this player (`installed`), when Android reports the
  * PWA installed, or once the user walked through the steps on this browser.
  * No "Not now": either add it or ignore it.
+ *
+ * On an iPhone the icon keeps its own cookies, apart from Safari's, and a link tapped in WhatsApp
+ * always opens Safari (or the default browser), never the icon (Apple, WWDC 2023). So the card says
+ * it in one line: a player who only ever signed in inside the icon is a stranger to every link from
+ * their group.
  */
 export function HomeScreenPrompt({ personalPath, installed = false }: { personalPath?: string | null; installed?: boolean }) {
   const t = useTranslations();
@@ -128,6 +133,7 @@ export function HomeScreenPrompt({ personalPath, installed = false }: { personal
           <>
             <div className="font-bold">{t("homescreen.title")}</div>
             <p className="mt-0.5 text-sm text-muted">{t("homescreen.body")}</p>
+            {platform === "ios" && <p className="mt-0.5 text-xs text-muted" data-testid="homescreen-whatsapp">{t("homescreen.iosWhatsapp")}</p>}
             <button type="button" className="btn-secondary btn-sm mt-2" onClick={add}>
               {t("homescreen.add")}
             </button>
@@ -137,6 +143,7 @@ export function HomeScreenPrompt({ personalPath, installed = false }: { personal
           <>
             <div className="font-bold">{mode === "ios-steps" ? t("homescreen.iosTitle") : t("homescreen.title")}</div>
             <p className="mt-0.5 text-sm text-muted">{mode === "ios-steps" ? (safari ? t("homescreen.iosSteps") : `${t("homescreen.notSafari")} ${t("homescreen.iosSteps")}`) : t("homescreen.androidSteps")}</p>
+            {mode === "ios-steps" && <p className="mt-0.5 text-xs text-muted" data-testid="homescreen-whatsapp">{t("homescreen.iosWhatsapp")}</p>}
             <div className="mt-2 flex gap-2">
               {deferred && (
                 <button type="button" className="btn-secondary btn-sm" onClick={add}>

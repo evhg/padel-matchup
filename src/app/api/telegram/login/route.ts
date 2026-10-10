@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
+import { countSignIn } from "@/lib/domain/signins";
 import { getSessionPlayer, setSessionPlayer } from "@/lib/session";
 import { telegramEnabled, verifyLoginWidget } from "@/lib/telegram/api";
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/bot";
@@ -32,6 +33,8 @@ export async function GET(req: Request) {
   const player = me ? await linkTelegram(db, me.id, user) : await findOrCreateTelegramPlayer(db, user);
   // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
+  // A browser that knew nobody is signed in; one that was signed in only linked an account.
+  if (!me) await countSignIn(db, "telegram");
   const dest = new URL(loginNext(url.searchParams.get("next")), url.origin);
   // My matches says "Telegram linked"; any other page shows it by being signed in.
   if (dest.pathname === "/me") dest.searchParams.set("telegram", "linked");

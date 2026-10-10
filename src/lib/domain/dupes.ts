@@ -78,9 +78,10 @@ export function safeToMerge(into: MergeCandidate, from: MergeCandidate): MergeVe
 /**
  * Does the name somebody is typing already belong to a person in this match?
  *
- * The match page is where duplicates are born. A friend's link opens in WhatsApp's or Instagram's
- * own browser, which has never seen this person; the page asks "What's your name?"; they type the
- * name they always type, and become a second row with none of their history on it. Micky was invited
+ * The match page is where duplicates are born. A friend's link in a chat opens in the phone's default
+ * browser, or in Instagram's or Telegram's own, and that may not be the browser that knows this
+ * person; the page asks "What's your name?"; they type the name they always type, and become a second
+ * row with none of their history on it. Micky was invited
  * to a match by email on 23 September, the mail did not reach her, and the next thing she would have
  * done is exactly this.
  *

@@ -128,6 +128,11 @@ export function formatEventTime(date: Date, tz: string, locale: string): string 
     hourCycle: locale.startsWith("en") ? "h23" : undefined,
   }).format(date);
 }
+/** "Sat 18:00": the weekday and the time in the event's zone, what a line in a group chat needs (src/lib/domain/groupLine.ts). */
+export function formatWeekdayTime(date: Date, tz: string, locale: string): string {
+  return `${new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: "short" }).format(date)} ${formatEventTime(date, tz, locale)}`;
+}
+
 /** "09:30–11:00": the start and the end, the way the cards and the emails say when a match is. */
 export function formatEventTimeRange(start: Date, end: Date, tz: string, locale: string): string {
   return `${formatEventTime(start, tz, locale)}–${formatEventTime(end, tz, locale)}`;

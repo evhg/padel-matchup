@@ -44,7 +44,9 @@ export async function joinAction(code: string, name?: string, level?: number | n
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
-    const me = await requirePlayer(db, name);
+    // Everybody already in it, held spots too: a new record that takes one of these names is counted (`newid_name_here`).
+    const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName);
+    const me = await requirePlayer(db, name, { namesHere });
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     // A level given while joining is the player's declaration (ranged events ask for it once).
     const myLevel = level != null ? await setPlayerLevel(db, me.id, level) : me.level;

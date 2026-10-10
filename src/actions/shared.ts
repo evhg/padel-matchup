@@ -1,6 +1,6 @@
 import "server-only";
 import { getLocale } from "next-intl/server";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { clientKeyFrom } from "@/lib/ipKey";
 import { later, reportError } from "@/lib/alerts";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
@@ -10,6 +10,8 @@ import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { canEditMatchDetails } from "@/lib/domain/events";
 import { createPlayer, normalizeName } from "@/lib/domain/players";
+import { countNewRecord } from "@/lib/domain/signins";
+import { cleanSource, SOURCE_COOKIE } from "@/lib/source";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer } from "@/lib/session";
 
 export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required";
@@ -52,8 +54,12 @@ export async function runA<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   }
 }
 
-/** Returns the current player, creating one from `name` when there is no identity yet. */
-export async function requirePlayer(db: Db, name?: string | null): Promise<Player> {
+/**
+ * Returns the current player, creating one from `name` when there is no identity yet. A record made
+ * here counts its browser, the link it came through and, with `namesHere` (everybody already in the
+ * match it joins), whether its name was already there (`countNewRecord`).
+ */
+export async function requirePlayer(db: Db, name?: string | null, o: { namesHere?: readonly (string | null | undefined)[] } = {}): Promise<Player> {
   const existing = await getSessionPlayer(db);
   if (existing) return existing;
   const clean = normalizeName(name ?? "");
@@ -62,6 +68,8 @@ export async function requirePlayer(db: Db, name?: string | null): Promise<Playe
   const locale = await getLocale();
   const player = await createPlayer(db, { displayName: clean, locale });
   await setSessionPlayer(player.id);
+  const [h, jar] = [await headers(), await cookies()];
+  await countNewRecord(db, { ua: h.get("user-agent"), source: cleanSource(jar.get(SOURCE_COOKIE)?.value), name: clean, namesHere: o.namesHere });
   return player;
 }
 

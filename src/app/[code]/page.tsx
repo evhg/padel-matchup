@@ -32,6 +32,7 @@ import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { StayUpdated } from "@/components/StayUpdated";
+import { ThatsMeButton, ThatsMeLine } from "@/components/ThatsMe";
 import { LevelAfterJoin } from "@/components/LevelAfterJoin";
 import { getDb } from "@/db";
 import { feedKeyFor, feedLinks, stayChannels } from "@/lib/calendarFeed";
@@ -41,7 +42,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
-import { formatEventDay, formatEventDayLong, formatEventTime, formatEventTimeRange, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { canEditMatchDetails, isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
@@ -65,9 +66,11 @@ import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
-import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
+import { eventUrl, inviteUrl, manageUrl, whatsappShareUrl } from "@/lib/share";
+import { lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
+import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
 
@@ -81,9 +84,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const locale = await getLocale();
   const ev = detail.event;
   const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
-  const occupied = detail.roster.filter(isOccupied).length;
-  const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
-  const description = `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTimeRange(ev.startsAt, eventEnd(ev), ev.tz, locale)} · ${venue} · ${t("event.players", { count: occupied, capacity: ev.capacity })}`;
+  // The preview under a link pasted in a group: who is in and how many spots are left, so "who's in?"
+  // is answered without a tap. First names as the page shows them, never a level (decision E).
+  const when = formatWeekdayTime(ev.startsAt, ev.tz, locale);
+  const cancelled = ev.status === "cancelled";
+  const open = !cancelled && ev.status !== "past" && !isOver(ev, new Date());
+  const description = cancelled
+    ? [t("og.cancelled"), when, ev.venueName].filter(Boolean).join(" · ")
+    : previewText({
+        when,
+        venue: ev.venueName,
+        names: lineupNames(detail.roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }))),
+        capacity: ev.capacity,
+        spots: open ? t("shareText.spots", { count: detail.roster.filter(isClaimable).length }) : null,
+      });
   return {
     title,
     description,
@@ -160,6 +174,24 @@ export default async function EventPage({ params, searchParams }: Props) {
     spotsLeft === 0 && ev.whenFull === "waitlist"
       ? t("shareText.eventFull", { day, time, venue, url })
       : t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
+  // "Tell the group": once in, one tap carries the line-up back to the group the link came from
+  // (src/lib/domain/groupLine.ts). The match's own link, tagged as a WhatsApp one; never a personal
+  // link, because a message in a group can be forwarded.
+  const tellGroup =
+    joinState === "leave"
+      ? whatsappShareUrl(
+          tellGroupText(
+            {
+              when: formatWeekdayTime(ev.startsAt, ev.tz, locale),
+              venue: ev.venueName,
+              names: lineupNames(roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }))),
+              capacity: ev.capacity,
+              spots: t("shareText.spots", { count: spotsLeft }),
+            },
+            taggedUrl(url, "wa"),
+          ),
+        )
+      : null;
 
   const participants = roster.filter(isOccupied);
   const isTournament = ev.type === "tournament";
@@ -255,6 +287,12 @@ export default async function EventPage({ params, searchParams }: Props) {
   const namesHere = [...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
   const inEventNames = new Set(namesHere.map((n) => n.trim().toLowerCase()));
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
+  // "That's me" (DECIDING rule 32): a browser that knows nobody signs in as a record of this match or
+  // its crew by name, inside the owner's limits; a browser that already made its own new record folds
+  // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
+  // organiser, a manage link included, has their own way in).
+  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere);
+  const offerOnRoster = (id: string | null) => Boolean(id) && (offer.ids.has(id!) || offer.fold?.id === id);
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
@@ -362,11 +400,17 @@ export default async function EventPage({ params, searchParams }: Props) {
                 rolodex={viewer.isCreator ? rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone })) : []}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
+                claimable={offer.names}
                 levelRange={ranged ? levelRange : null}
                 myLevel={me?.level ?? null}
               />
             )}
           </div>
+          {occupiedSlot && offerOnRoster(s.playerId) && (
+            <div className="shrink-0 text-right">
+              <ThatsMeButton code={code} name={name} />
+            </div>
+          )}
         </div>
         {viewer.isCreator && !cancelled && !over && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
           <SlotActions
@@ -663,13 +707,17 @@ export default async function EventPage({ params, searchParams }: Props) {
             </>
           )}
           {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t("event.fullHelp")}</p>}
+          {offer.fold && ![...roster, ...waitlist].some((s) => s.playerId === offer.fold!.id) && <ThatsMeLine code={code} name={offer.fold.name} />}
           {/*
-            A friend's link opens in WhatsApp's own browser, which has never seen this person: the
-            page asks "What's your name?" and somebody who has played before becomes a second row
-            with none of their matches on it. In one week 29 players arrived and 3 joined anything,
-            and 15 of 55 rows were a name that already existed. The way back in was built — it was
-            just never on the screen every shared link opens. Closed by default, so a real
-            first-timer reads one line and the name field above is untouched.
+            A friend's link in a chat opens in the phone's default browser (WhatsApp's own browser is
+            only for the buttons of business templates), and that browser may not be the one the
+            player first joined in: another app's browser, the home-screen icon on an iPhone, Chrome
+            beside Safari, another phone. Each keeps its own cookies, so the page asks "What's your
+            name?" and somebody who has played before becomes a second row with none of their matches
+            on it. In one week 29 players arrived and 3 joined anything, and 15 of 55 rows were a name
+            that already existed. "That's me" on the roster is the way back for a record with nothing
+            to prove it (DECIDING rule 32); this fold is the way for one that can prove itself. Closed
+            by default, so a real first-timer reads one line and the name field above is untouched.
           */}
           {!me && (
             <div data-testid="event-back-in">
@@ -725,6 +773,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             manageUrl={manageUrl(base, code, ev.manageCode)}
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
+            paste={!cancelled && !over ? { namesHere, spots: spotsLeft } : null}
           />
         )}
 
@@ -772,6 +821,7 @@ export default async function EventPage({ params, searchParams }: Props) {
         partnerName={myPartner ? (myPartner.player?.displayName ?? myPartner.invitedName ?? "") : null}
         partnerGoes={partnerGoes}
         pairsLocked={(tstate?.rounds.length ?? 0) > 0}
+        tellGroupHref={tellGroup}
       />
     </>
   );

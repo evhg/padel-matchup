@@ -1,7 +1,7 @@
 {
   "wa": {
     "handoff": "Coger sitio dentro de WhatsApp",
-    "handoffHelp": "Pega esto en tu grupo en lugar del enlace de arriba. Al tocarlo se abre un chat con nosotros y pueden coger sitio sin salir de WhatsApp.",
+    "handoffHelp": "Pega esto en tu grupo debajo del enlace del partido. Al tocarlo se abre un chat con nosotros con el código ya escrito, y con enviarlo se coge la plaza: sin navegador y sin escribir el nombre. El grupo no ve quién se apuntó.",
     "copy": "Copiar la línea de WhatsApp"
   },
   "want": {
@@ -91,7 +91,11 @@
     "emailKeepNote": "Puedes cambiar tu email pero no quitarlo: es tu forma de volver a entrar. La dirección anterior sigue sirviendo para recuperar la cuenta.",
     "usedBefore": "¿Jugaste antes? Recupera tus partidos.",
     "alreadyHere": "{name} ya está en este partido.",
-    "thatsMe": "Soy yo — recuperar mis partidos"
+    "thatsMe": "Soy yo — recuperar mis partidos",
+    "thatsMeIn": "Soy yo",
+    "knownCrew": "{name} ya juega en este grupo.",
+    "thatsMeCrew": "En este grupo ya juega {name}. ¿Eres tú?",
+    "thatsMeNo": "Con este nombre no ha funcionado."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -305,7 +309,8 @@
     "minutes": "{minutes} min",
     "until": "hasta las {time}",
     "changeDetails": "Cambiar los detalles",
-    "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran."
+    "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
+    "tellGroup": "Avisar al grupo"
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -347,7 +352,16 @@
     "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma.",
     "banter": "Bromas en el chat",
     "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública.",
-    "scoreReminderTournament": "La ronda {n} espera los resultados. Introdúcelos en la tarjeta de abajo."
+    "scoreReminderTournament": "La ronda {n} espera los resultados. Introdúcelos en la tarjeta de abajo.",
+    "pasteTitle": "Pegar los nombres del grupo",
+    "pasteHelp": "¿Quién ha dicho que viene? Copia las respuestas del chat del grupo y pégalas aquí: «1. Ana 2. Bo», «+1 Lucía» o un nombre por línea. Cada nombre recibe una plaza reservada y nadie recibe ningún mensaje.",
+    "pastePlaceholder": "1. Ana\n2. Bo\n+1 Lucía",
+    "pasteWillHold": "Reserva plaza para: {names}",
+    "pasteAlreadyIn": "Ya están, se saltan: {names}",
+    "pasteNoSpot": "No quedan plazas para: {names}",
+    "pasteNone": "No hay nombres. Funciona mejor un nombre por línea.",
+    "pasteHold": "{count, plural, one {Reservar # plaza} other {Reservar # plazas}}",
+    "pasteDone": "Reservado: {names}"
   },
   "score": {
     "title": "Resultado",
@@ -448,7 +462,8 @@
     "spotsLeft": "{count, plural, =0 {No quedan plazas} one {Queda # plaza} other {Quedan # plazas}}",
     "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}",
     "result": "🎾 {line} · {day}\n{url}",
-    "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}"
+    "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}",
+    "spots": "{count, plural, =0 {completo} one {# plaza} other {# plazas}}"
   },
   "og": {
     "players": "{count}/{capacity} jugadores",
@@ -659,7 +674,8 @@
     "iosTitle": "Dos toques en Safari",
     "notSafari": "Abre esta página en Safari para añadirla a tu pantalla de inicio.",
     "androidSteps": "Abre el menú del navegador (⋮) y luego \"Añadir a pantalla de inicio\" o \"Instalar app\".",
-    "gotIt": "Entendido"
+    "gotIt": "Entendido",
+    "iosWhatsapp": "Los enlaces de WhatsApp se abren en Safari, no en este icono."
   },
   "pairs": {
     "fixed": "Parejas fijas",

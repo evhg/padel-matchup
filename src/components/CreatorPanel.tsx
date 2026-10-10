@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { cancelEventAction, setBanterAction } from "@/actions/events";
 import { EmailField } from "./EmailField";
 import { EditMatch } from "./EditMatch";
+import { PasteNames } from "./PasteNames";
 import type { EventFormValues } from "./EventFields";
 import { CopyButton, ShareButtons } from "./ShareSheet";
 import type { VenueOption } from "./VenueCombobox";
@@ -20,6 +21,7 @@ export function CreatorPanel({
   manageUrl,
   isCancelled,
   groupInvite,
+  paste = null,
 }: {
   code: string;
   initial: EventFormValues;
@@ -32,6 +34,8 @@ export function CreatorPanel({
   manageUrl: string;
   isCancelled: boolean;
   groupInvite: { text: string; count: number; url: string } | null;
+  /** The names already in the match and the open spots, while there are any: "Paste the names from the group". */
+  paste?: { namesHere: readonly string[]; spots: number } | null;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
@@ -58,6 +62,8 @@ export function CreatorPanel({
         <span className="chip bg-ink text-on-ink">{t("common.organizer")}</span>
         <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
       </div>
+
+      {!isCancelled && paste && paste.spots > 0 && <PasteNames code={code} namesHere={paste.namesHere} spots={paste.spots} />}
 
       {!isCancelled && groupInvite && groupInvite.count > 1 && (
         <div className="mt-4 border-t border-line pt-4">

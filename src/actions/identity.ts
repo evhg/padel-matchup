@@ -20,6 +20,8 @@ import { LIMITS } from "@/lib/domain/ratelimit";
 import { removeOptOut } from "@/lib/domain/optouts";
 import { liftOnConsent } from "@/lib/domain/emailMarks";
 import { claimSameNameRow } from "@/lib/domain/sameName";
+import { countSignIn } from "@/lib/domain/signins";
+import { thatsMe } from "@/lib/domain/thatsMe";
 
 export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
 
@@ -117,6 +119,7 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
     const currentId = await getSessionPlayerId();
     const player = await restoreByEmail(db, verified, currentId);
     await setSessionPlayer(player.id);
+    if (player.id !== currentId) await countSignIn(db, "email_code");
     revalidatePath("/", "layout");
     return pub(player);
   });
@@ -135,6 +138,24 @@ export async function claimSameNameAction(rowId: string): Promise<ActionResult<n
     if (!/^[0-9a-f-]{36}$/i.test(rowId ?? "") || !(await claimSameNameRow(db, me.id, rowId))) throw new ActionFailure("invalid");
     revalidatePath("/me");
     return null;
+  });
+}
+
+/**
+ * "That's me" on a match page (DECIDING rule 32): this browser signs in as the record of that name in
+ * this match or its crew, without proof, inside the owner's limits (`thatsMe`). A browser that already
+ * made its own new record folds it into the old one. Refused as `invalid` whatever the reason, so the
+ * answer says nothing about the record beyond what the page already showed; `too_many` past the rate.
+ */
+export async function thatsMeAction(code: string, name: string): Promise<ActionResult<PublicPlayer & { folded: boolean }>> {
+  return runA(async () => {
+    if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
+    const db = await getDb();
+    const res = await thatsMe(db, { code, name, viewerId: await getSessionPlayerId(), rateKey: await clientKey() });
+    if (!res.ok) throw new ActionFailure(res.reason === "too_many" ? "too_many" : "invalid");
+    await setSessionPlayer(res.player.id);
+    revalidatePath("/", "layout");
+    return { ...pub(res.player), folded: res.folded };
   });
 }
 
@@ -246,7 +267,10 @@ export async function adoptPersonalToken(token: string): Promise<ActionResult<Pu
     const p = await findPlayerByPersonalToken(db, token);
     if (!p) return null;
     const currentId = await getSessionPlayerId();
-    if (currentId !== p.id) await setSessionPlayer(p.id);
+    if (currentId !== p.id) {
+      await setSessionPlayer(p.id);
+      await countSignIn(db, "personal_link");
+    }
     return pub(p);
   });
 }
@@ -261,6 +285,7 @@ export async function restoreIdentity(playerId: string): Promise<ActionResult<Pu
     const p = await getPlayer(db, playerId);
     if (!p) return null;
     await setSessionPlayer(p.id);
+    await countSignIn(db, "restore");
     return pub(p);
   });
 }

@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { tagForWhatsapp, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
 
 export function CopyButton({ value, label, className = "btn-ghost", copiedLabel }: { value: string; label: string; className?: string; copiedLabel?: string }) {
   const t = useTranslations();
@@ -54,7 +54,8 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
   };
   return (
     <div className={`grid gap-2 ${size === "sm" ? "grid-cols-3" : "grid-cols-2"}`}>
-      <a href={whatsappShareUrl(text, phone)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#25D366] text-white hover:brightness-95`}>
+      {/* A match link sent by WhatsApp says so (`?s=wa`), so what starts from a tap in a group is counted as such. */}
+      <a href={whatsappShareUrl(tagForWhatsapp(text, url), phone)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#25D366] text-white hover:brightness-95`}>
         <WhatsAppIcon /> {t("share.whatsapp")}
       </a>
       <a href={telegramShareUrl(url, text)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
