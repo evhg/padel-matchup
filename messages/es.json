@@ -206,7 +206,10 @@
     "planTooLong": "La rotación completa no cabe en tus {minutes} min. Juega partidos más cortos, reserva más tiempo o termina antes: la tabla cuenta cada ronda jugada.",
     "freeLabel": "Libre en {club}",
     "freeThen": "✓ El club muestra una pista libre a esa hora.",
-    "busyThen": "El club no muestra ninguna pista libre a esa hora."
+    "busyThen": "El club no muestra ninguna pista libre a esa hora.",
+    "freeThenClub": "✓ El club muestra una pista libre a esa hora (las {time} en el club).",
+    "busyThenClub": "El club no muestra ninguna pista libre a esa hora (las {time} en el club).",
+    "freeAndUsualLabel": "✓ Libre en {club}, y tus horarios habituales"
   },
   "share": {
     "title": "Tu partido está en marcha",

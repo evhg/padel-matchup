@@ -71,7 +71,8 @@ describe("the best times, read from the clubs' cache", () => {
     const venues = await venuesForPicking(db, nok.id, { tz: TZ }, NOW);
     const by = new Map(venues.map((v) => [v.slug, v]));
     expect(by.get(slug["Rawai Padel Club"])?.where).toBe("yours");
-    expect(by.get(slug["Rawai Padel Club"])?.free?.slots.map((s) => s.start)).toEqual([hour("2026-10-10", "15:00").start, hour("2026-10-10", "16:00").start, hour("2026-10-15", "19:00").start, hour("2026-10-15", "20:00").start]);
+    // Touching hours with the same count read as one stretch.
+    expect(by.get(slug["Rawai Padel Club"])?.free?.slots.map((s) => `${s.start} ${s.end}`)).toEqual([`${hour("2026-10-10", "15:00").start} ${hour("2026-10-10", "16:00").end}`, `${hour("2026-10-15", "19:00").start} ${hour("2026-10-15", "20:00").end}`]);
     expect(by.get(slug["Chalong Padel Club"])?.free?.tz).toBe(TZ);
     expect(by.get(slug["Kata Padel Club"])?.free).toBeNull();
     expect(by.get(slug["Patong Padel Club"])?.free).toBeNull();

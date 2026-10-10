@@ -206,7 +206,10 @@
     "planTooLong": "A full rotation runs past your {minutes} min. Play shorter matches, book longer, or stop early: the table counts every round played.",
     "freeLabel": "Free at {club}",
     "freeThen": "✓ The club shows a free court then.",
-    "busyThen": "The club shows no free court then."
+    "busyThen": "The club shows no free court then.",
+    "freeThenClub": "✓ The club shows a free court then ({time} at the club).",
+    "busyThenClub": "The club shows no free court then ({time} at the club).",
+    "freeAndUsualLabel": "✓ Free at {club}, and your usual times"
   },
   "share": {
     "title": "Your match is live",
