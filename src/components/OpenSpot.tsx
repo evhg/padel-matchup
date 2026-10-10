@@ -200,7 +200,7 @@ export function OpenSpot({
           <p data-testid="already-here" className="text-sm text-muted">
             {t("identity.alreadyHere", { name: name.trim() })}{" "}
             {nameIsHere(name, claimable) ? (
-              <ThatsMeButton code={code} name={name.trim()} className="link font-semibold" />
+              <ThatsMeButton code={code} name={name.trim()} className="link font-semibold" armedClassName="link font-extrabold text-ink" />
             ) : (
               <button type="button" className="link font-semibold" onClick={() => requestBackIn()}>
                 {t("identity.thatsMe")}

@@ -240,7 +240,7 @@ try {
   await w.close();
 
   // "That's me" (DECIDING rule 34; the owner, 10 October 2026): the browser a WhatsApp tap opens sees
-  // Jordi on the line-up and is Jordi in one tap, with no email, no code and no second row. Dana
+  // Jordi on the line-up and is Jordi in two taps, with no email, no code and no second row. Dana
   // organises this match, so her row carries no such button.
   const j2 = await newPage();
   await j2.goto(`${BASE}/${code}`);
@@ -249,8 +249,33 @@ try {
     "a browser that knows nobody sees \"That's me\" on the one row the rule allows: Jordi's, not the organiser's",
     (await thatsMe.count()) === 1 && (await j2.locator("main li", { has: thatsMe }).getByText("Jordi", { exact: true }).count()) === 1,
   );
+  // Two taps, not one (the owner, 10 October 2026): the first only arms the row and asks, and a tap
+  // anywhere else disarms it, so a thumb on the wrong row signs nobody in. Nothing reaches the server
+  // until the second tap.
+  let thatsMeSends = 0;
+  j2.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) thatsMeSends += 1;
+  });
+  const jordiRow = j2.locator("main li", { hasText: "Jordi" });
+  const sure = j2.getByRole("button", { name: "Sign in as Jordi?", exact: true });
   await thatsMe.click();
-  await j2.locator("main li", { hasText: "Jordi" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  await sure.waitFor({ timeout: 10000 });
+  await j2.waitForTimeout(1000);
+  check(
+    "the first tap on \"That's me\" signs nobody in: the button asks \"Sign in as Jordi?\" and nothing is sent",
+    thatsMeSends === 0 && (await jordiRow.getByText("you", { exact: true }).count()) === 0 && (await sure.count()) === 1,
+    `sends=${thatsMeSends}`,
+  );
+  await j2.locator("main h1").first().click();
+  await thatsMe.waitFor({ timeout: 10000 });
+  check(
+    "a tap anywhere else disarms it: the button says \"That's me\" again, and still nothing is sent",
+    thatsMeSends === 0 && (await sure.count()) === 0 && (await thatsMe.count()) === 1,
+    `sends=${thatsMeSends}`,
+  );
+  await thatsMe.click();
+  await sure.click();
+  await jordiRow.getByText("you", { exact: true }).waitFor({ timeout: 20000 });
   const lineup = await j2.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
   const jordis = (lineup.players ?? []).filter((p) => p.name === "Jordi").length;
   check(

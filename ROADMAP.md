@@ -852,8 +852,9 @@ Everything in this list is live. The README describes each in detail.
   group. What shipped:
   - **"That's me" signs in** (the owner's decision, DECIDING rule 34). On the match page a browser
     that knows nobody sees "That's me" beside each record of this line-up the rule allows, and on the
-    open spot when the name typed is one of them; one tap signs in as that record. A browser that
-    already made its own new record folds it into the old one (`mergePlayers`, never `proved`) when
+    open spot when the name typed is one of them; two taps sign in as that record (the first asks
+    "Sign in as Ana?" and sends nothing, and a tap anywhere else takes the question back). A browser
+    that already made its own new record folds it into the old one (`mergePlayers`, never `proved`) when
     that record is in the match or crew too, so a crew member not on this line-up joins first and is
     then offered the fold; the old record keeps the better place, and a freed seat goes to the first
     player waiting. Never the organiser or a crew admin, never a record with an address, a phone, a

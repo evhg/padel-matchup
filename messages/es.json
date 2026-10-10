@@ -94,7 +94,8 @@
     "thatsMe": "Soy yo — recuperar mis partidos",
     "thatsMeIn": "Soy yo",
     "thatsMeCrew": "En este grupo ya juega {name}. ¿Eres tú?",
-    "thatsMeNo": "Con este nombre no ha funcionado."
+    "thatsMeNo": "Con este nombre no ha funcionado.",
+    "thatsMeSure": "¿Entrar como {name}?"
   },
   "landing": {
     "headline": "Pádel en un enlace.",

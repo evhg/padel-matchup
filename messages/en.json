@@ -94,7 +94,8 @@
     "thatsMe": "That's me — get my matches back",
     "thatsMeIn": "That's me",
     "thatsMeCrew": "{name} already plays with this crew. Is that you?",
-    "thatsMeNo": "That did not work for this name."
+    "thatsMeNo": "That did not work for this name.",
+    "thatsMeSure": "Sign in as {name}?"
   },
   "landing": {
     "headline": "Padel in one link.",
