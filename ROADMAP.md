@@ -844,6 +844,41 @@ Everything in this list is live. The README describes each in detail.
   in, never books and never pays; the player books and pays on the platform. The club page, the
   lists and the API show today and name the platform; proposing the best times from the three days
   is the next step.
+- **The two WhatsApp pains (10 October 2026, no migration).** The owner: "you have to leave the chat
+  group; you have to basically log in each and every time you click a link from within the whatsapp
+  group." A link in a group opens the phone's default browser, and each browser keeps its own cookies,
+  so a player in a browser that did not know them typed their name and became a new record; the
+  email code and Telegram, the ways back, reached 2 of 21 players. No link can keep a player inside a
+  group. What shipped:
+  - **"That's me" signs in** (the owner's decision, DECIDING rule 33). On the match page a browser
+    that knows nobody sees "That's me" beside each record the rule allows, and on the open spot when
+    the name typed is one of them, from this match or its crew; one tap signs in as that record. A
+    browser that already made its own new record folds it into the old one (`mergePlayers`, never
+    `proved`), and the seat moves with it. Never the organiser or a crew admin, never a record with
+    an address, a phone, a chat account, a push device, a coach's book, a claimed club, a public
+    profile or a series of its own, never a member of a group that asks to join, never a record with
+    no part in this match or crew, never one of two of the same name. Ten taps a day per address.
+    `src/lib/domain/thatsMe.ts`, proven in `tests/thats-me.test.ts`.
+  - **Counters that find the jar.** Every WhatsApp button that carries a match link tags it `?s=wa`;
+    each record made from a name counts its browser class (`newid_ua_*`), its source and whether its
+    name was already in the match; each way a browser signs in counts itself (`signin_*`).
+    docs/OPERATING.md names them all.
+  - **Tell the group.** Once in, a ghost button beside Leave opens WhatsApp's share with the line-up
+    ("🎾 Sat 18:00 · Rawai · 3/4: Ana, Bo, Cy · 1 spot") and the match link; never a personal link.
+    The link preview under a pasted match link says the same: first names, open spots, day and time.
+    `src/lib/domain/groupLine.ts`.
+  - **Paste the names from the group.** On the organiser's panel: the replies copied from the group
+    ("1. Ana 2. Bo", "+1 Cy", one name per line, copied messages, emoji, three languages) become one
+    reserved spot per name through `reserveAction`, names already in skipped, the names shown before
+    anything is held. `src/lib/domain/pasteNames.ts`.
+  - **The iPhone's home-screen card** says that links from WhatsApp open in Safari, not in the icon.
+  - **The WhatsApp bot, still off:** JOIN (`JOIN-7KQ2` or `JOIN 7KQ2`) takes the seat at once and
+    answers with the line-up and three buttons (can't make it, who is in, add to calendar); a pasted
+    match link shows the match; a ranged match asks the level with three buttons, not a link; the
+    help says what the bot does. The match page offers the hand-off only where a reply can come back
+    (`whatsappLinkable`).
+  - **What was untrue, corrected:** WhatsApp's own browser does not open group links; a number is
+    not proof to `foldSameNameRows`; replies inside the window are charged from 1 October 2026.
 
 ## The finish line
 
@@ -890,9 +925,10 @@ linked and four have an email address.
    loop: reply buttons to take or give up a spot, a list message to pick a time, Flows for a form the
    Mini App cannot match, the court as a map pin, a template for a reminder outside the window. The
    group part is carried by a person rather than a bot — the organiser pastes a link into the crew's
-   chat, and each tap opens a conversation the player started, which is free, opens a 24-hour window,
-   and is not counted against the 250-a-day limit, because that limit rations only the messages we
-   start. That first message also hands over the phone number with permission, so nothing has to be
+   chat, and each tap opens a conversation the player started, which costs nothing to receive, opens
+   a 24-hour window, and is not counted against the 250-a-day limit, because that limit rations only
+   the messages we start. Our replies in that window are charged from 1 October 2026 (Meta, read 10
+   October 2026; docs/OPERATING.md). Since 10 October 2026 the JOIN message takes the seat at once. That first message also hands over the phone number with permission, so nothing has to be
    collected in advance. Explicitly **never** a card channel: Meta's Groups API only makes its own
    groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
    and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.

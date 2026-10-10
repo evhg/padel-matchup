@@ -102,9 +102,17 @@ is the hourly count of the groups the bot reads now; `tg_groups_started` counts 
 where the bot is an admin without the opt-in, or after /quiet, sends every message too, and nothing
 counts it: no column records the bot's admin rights. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
 unverified tier — and the definition is the whole of it, because Meta counts only numbers messaged
-*outside* an open 24-hour window. A player who writes to us first costs nothing, and neither does
-anything we reply for the next day; only templates to people who have gone quiet are rationed.
-GitHub Actions: free on a public repository.
+*outside* an open 24-hour window, so only templates to people who have gone quiet spend that limit.
+Counted is not the same as free. A message a player sends us costs nothing. Every message we send
+back inside the window does cost money from 1 October 2026: "Effective October 1, 2026, Meta will
+charge on a per-message basis for service messages", at the rate of a utility message in the
+player's country, with no volume tiers (Meta's page for non-template messages,
+`developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages`,
+read on 10 October 2026). One reseller, 360dialog, reports the first 1,000 service messages a month
+per number free and no delivery for an account with no payment method on file; Meta's own page says
+neither, so neither is a figure to plan on. A WhatsApp join costs us two or three replies (the seat
+and the line-up, then a tap or two). The channel is off on this deployment (no `WHATSAPP_TOKEN`), so
+today it costs nothing at all. GitHub Actions: free on a public repository.
 
 ## WhatsApp templates: what they cost
 
@@ -114,10 +122,12 @@ ask and the result card. Outside the 24-hour window a person opens by writing to
 delivers nothing else.
 
 - **What Meta charges.** Since 1 July 2025 Meta charges per delivered template, by category and by
-  the recipient's country (Thailand is in "Rest of Asia Pacific"). A utility template is free inside
-  an open window; a marketing template is charged in every window. All four of ours are utility, so
-  the code does not track the window: inside it a template costs nothing, and outside it nothing else
-  could arrive at all. Read the price per message on Meta's rate card; this page does not copy it.
+  the recipient's country (Thailand is in "Rest of Asia Pacific"). A marketing template is charged in
+  every window. A utility template inside an open window was free until 30 September 2026; from 1
+  October 2026 it is charged there too, as every reply in the window is (the WhatsApp line under
+  "Ceilings we live under" above). All four of ours are utility, and the code does not track the window: every
+  template costs one utility message. Read the price per message on Meta's rate card; this page does
+  not copy it.
 - **Meta may change the category.** Meta reads each template and can move a utility template to
   marketing when the text looks like promotion. A free spot is the likeliest one. After approval, and
   now and then, run `node scripts/whatsapp-templates.mjs --list`: the last column is the category
@@ -138,6 +148,42 @@ delivers nothing else.
   header needs a sample picture: `--header-handle <h>`, or `--sample <png> --app-id <id>` to upload
   one, or create that template by hand in WhatsApp Manager. A template Meta already holds is left
   alone: a change to an approved text is a new review, done in WhatsApp Manager.
+
+## Finding the jar: the counters for a player who signs in again
+
+The owner, 10 October 2026: "you have to basically log in each and every time you click a link from
+within the whatsapp group." A link in a WhatsApp group opens the phone's default browser, and each
+browser keeps its own cookies (Safari, Chrome, an app's own browser, the iPhone's home-screen icon).
+Which of these makes the second record is a question for the numbers, so these day counters in
+`metrics_daily` answer it. None holds a name, an address or a token. Read them through
+`/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
+current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'join_src_%' or key =
+'thats_me_refused') group by 1 order by 1`.
+
+- **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
+  name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
+  tags it `?s=wa` (`tagForWhatsapp` in `src/lib/share.ts`, and "Tell the group"); the match page
+  keeps the tag for a day in the `ks_src` cookie. Every other tag counts the same way
+  (`newid_src_<tag>`).
+- **Which browser made the record.** `newid_ua_<class>`, one per record made from a name alone
+  (`requirePlayer`), with the class from the user agent (`browserClass` in
+  `src/lib/domain/browserClass.ts`): `ios_safari`, `ios_chrome`, `ios_other`, `ios_webview` (the
+  iPhone's home-screen icon, or an app's own view that names no app: the two look the same),
+  `android_chrome`, `android_samsung`, `android_webview`, `android_other`, `app_whatsapp`,
+  `app_telegram`, `app_instagram`, `app_facebook`, `app_line`, `desktop`, `other`. An iPad says
+  "Macintosh" and counts as `desktop`.
+- **A name that was already there.** `newid_name_here`: the new record took a name already in the
+  match it joined, held spots included. Most of these are somebody who has played before, in a
+  browser that does not know them.
+- **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 32), with
+  `signin_thats_me_fold` when it folded the browser's own new record into the old one;
+  `signin_restore` (the saved id brought back without proof); `signin_personal_link`;
+  `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
+  counts only when the cookie changes to another record; a link to a browser already signed in
+  counts nothing. `thats_me_refused` counts a "That's me" the rule turned down.
+- **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
+  A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
+  app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.
 
 ## The research desk (Tavily)
 
