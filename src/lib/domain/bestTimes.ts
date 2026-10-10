@@ -1,12 +1,14 @@
 import type { ClubAvailability, ClubFreeSlot } from "@/db/schema";
+import { platformById } from "@/lib/booking/platforms";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 
 /**
  * The best times to play: free courts ranked for a person or a crew.
  *
  * The owner's choice of 10 October 2026, "Best times + one-tap booking by a player": the free times a
- * club shares or a platform shows publicly, cached on the club's row by the hourly job
- * (`clubs.availability`, `src/lib/booking/availability.ts`), offered where people decide when to play
+ * club shares (read hourly, `src/lib/booking/availability.ts`) or a platform shows publicly (read
+ * every 15 minutes, `src/lib/booking/scrape.ts`, DECIDING rule 35), cached on the club's row
+ * (`clubs.availability`), offered where people decide when to play
  * (the create form, /play, the crew's Telegram group), best first. A free court at a usual club at a
  * usual time comes first, then the soonest. One time per club and day, so three chips are three
  * choices and not three hours in a row at one club.
@@ -25,8 +27,10 @@ export const BEST_TIMES = {
   horizonMs: 7 * 24 * HOUR_MS,
   /** Closer than this, four people cannot get there (the free court offer's own lead). */
   minLeadMs: 2 * HOUR_MS,
-  /** A feed read longer ago than this may have lost its courts to bookings since; the job reads hourly. */
+  /** A club's own feed read longer ago than this may have lost its courts to bookings since; the job reads it hourly. */
   freshMs: 3 * HOUR_MS,
+  /** A platform's read is shown this long and no longer, here as on the club page (`SCRAPE_SHOWN_MS`, which a test keeps equal). */
+  platformShownMs: 2 * HOUR_MS,
   /** A read stamped further ahead than this is a clock gone wrong, not a fresh read. */
   skewMs: 5 * MINUTE_MS,
   /** A usual time is a usual weekday within this many minutes of the hour the person plays. */
@@ -47,6 +51,8 @@ export type FreeFeed = {
   /** The feed speaks up to this instant and no further: a time past it is unknown, never "free". */
   until: string;
   slots: ClubFreeSlot[];
+  /** The platform whose public page these times were read from ("Playtomic"); null for the club's own feed. */
+  platform: string | null;
 };
 
 /** A usual weekday and time: 0 = Sunday, "19:00" in the zone the person plays in. */
@@ -66,6 +72,8 @@ export type BestTime = {
   free: number;
   /** A usual club at a usual time. */
   usual: boolean;
+  /** Whose times these are: the platform's name, or null for the club's own feed (DECIDING rule 35 names the platform). */
+  platform: string | null;
 };
 
 const addDays = (date: string, days: number) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10) + days)).toISOString().slice(0, 10);
@@ -98,39 +106,61 @@ function piecesOf(slots: readonly { a: number; b: number; free: number }[]): Pie
   return out;
 }
 
+/** Read within `maxAgeMs` of now, and not stamped further ahead than clock skew allows. */
+const readWithin = (at: string | null | undefined, now: Date, maxAgeMs: number) => {
+  const t = new Date(at ?? "").getTime();
+  return Number.isFinite(t) && now.getTime() - t <= maxAgeMs && t - now.getTime() <= BEST_TIMES.skewMs;
+};
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * The one reader of a club's cached free times: what every screen of the best times reads, so the
- * cache can change shape in one place. A feed a screen may use, or null: read in the last three hours
- * (and not stamped in the future), without an error, in a zone we know, from any source (a club's own
- * feed, or a platform's public times, `source: "scrape:<platform>"`). `slots` may hold today only (a
- * club's feed as the hourly job reads it) or several days: the feed speaks from now to the end of the
- * last local day it holds (at least its own `day`), never past the end of the sixth day after today,
- * and never past a stretch it had to leave out for room.
+ * cache can change shape in one place. A feed a screen may use, or null: clean, in a zone we know, and
+ * fresh (not stamped in the future either). Which cache wins for a club, its own feed or a platform's
+ * read, is decided before this (`freeCourtsState`); this reads the one it is handed.
+ *
+ * - A club's own feed (`ics_bookings`, `json_free`) holds today, read hourly: fresh for three hours,
+ *   and it speaks from now to the end of the last local day it holds (at least its own `day`).
+ * - A platform's read (`source: "scrape:<platform>"`) is shown for two hours, as on the club page. It
+ *   covers `days` (today first); today is as fresh as the last read (`fetchedAt`), and the later days
+ *   only as fresh as the last read of them all (`fullAt`). It speaks to the end of the last day it
+ *   covered, so a day booked solid reads "busy", not "unknown".
+ *
+ * Either way never past the end of the sixth day after today (one weekday never shows twice), and
+ * never past a stretch it had to leave out for room.
  */
 export function freeFeedOf(a: ClubAvailability | null | undefined, now: Date): FreeFeed | null {
   if (!a || a.error || !isValidTimeZone(a.tz)) return null;
-  const fetched = new Date(a.fetchedAt).getTime();
-  if (!Number.isFinite(fetched) || now.getTime() - fetched > BEST_TIMES.freshMs || fetched - now.getTime() > BEST_TIMES.skewMs) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(a.day) || !Array.isArray(a.slots)) return null;
+  const scraped = typeof a.source === "string" && a.source.startsWith("scrape:");
+  if (!readWithin(a.fetchedAt, now, scraped ? BEST_TIMES.platformShownMs : BEST_TIMES.freshMs)) return null;
+  if (!DAY_RE.test(a.day) || !Array.isArray(a.slots)) return null;
   const read = a.slots.flatMap((s) => {
     const start = new Date(s?.start).getTime();
     const end = new Date(s?.end).getTime();
     const free = Number(s?.free);
     return Number.isFinite(start) && Number.isFinite(end) && end > start ? [{ a: start, b: end, free: Number.isFinite(free) ? Math.min(64, Math.trunc(free)) : 0 }] : [];
   });
-  // A day the feed lists, even fully booked, is a day it speaks for; the day after its last is not.
-  const lastDay = read.reduce((d, s) => {
-    const day = utcToZonedParts(new Date(s.a), a.tz).date;
-    return day > d ? day : d;
-  }, a.day);
   const today = utcToZonedParts(now, a.tz).date;
+  const days = scraped && Array.isArray(a.days) ? a.days.filter((d) => typeof d === "string" && DAY_RE.test(d)) : null;
+  // A platform's read speaks for the days it read: all of them while the full read is fresh, else the
+  // day of its last read alone. A club's feed for every day it lists, even fully booked.
+  const lastDay = days
+    ? readWithin(a.fullAt, now, BEST_TIMES.platformShownMs)
+      ? days.reduce((d, x) => (x > d ? x : d), a.day)
+      : a.day
+    : read.reduce((d, s) => {
+        const day = utcToZonedParts(new Date(s.a), a.tz).date;
+        return day > d ? day : d;
+      }, a.day);
+  if (lastDay < today) return null;
   let until = Math.min(zonedTimeToUtc(addDays(lastDay, 1), "00:00", a.tz).getTime(), now.getTime() + BEST_TIMES.horizonMs, zonedTimeToUtc(addDays(today, 7), "00:00", a.tz).getTime());
   const pieces = piecesOf(read.filter((s) => s.free >= 1)).filter((p) => p.b > now.getTime() && p.a < until);
   // Room for so many stretches and no more: the feed then speaks only up to the first one left out,
   // so a court it could not keep never reads as "no free court".
   if (pieces.length > BEST_TIMES.maxSlots) until = Math.min(until, pieces[BEST_TIMES.maxSlots].a);
   const slots = pieces.slice(0, BEST_TIMES.maxSlots).map((p) => ({ start: new Date(p.a).toISOString(), end: new Date(p.b).toISOString(), free: p.free }));
-  return { tz: a.tz, fetchedAt: a.fetchedAt, until: new Date(until).toISOString(), slots };
+  const platformId = scraped ? (a.platform ?? a.source.slice("scrape:".length)) : null;
+  return { tz: a.tz, fetchedAt: a.fetchedAt, until: new Date(until).toISOString(), slots, platform: platformId ? (platformById(platformId)?.name ?? platformId) : null };
 }
 
 /** The feed's stretches as epochs, once. */
@@ -246,7 +276,7 @@ export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: re
       const { date, time } = utcToZonedParts(new Date(start), feed.tz);
       const distance = distanceToUsual(date, time, input.patterns);
       const usual = Boolean(club.usual) && distance <= BEST_TIMES.nearMinutes;
-      const c: Candidate = { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, tier: usual ? 0 : 1, distance: usual ? distance : Infinity };
+      const c: Candidate = { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, platform: feed.platform ?? null, tier: usual ? 0 : 1, distance: usual ? distance : Infinity };
       const key = `${club.slug}|${date}`;
       const held = bestOfDay.get(key);
       if (!held || c.tier < held.tier || (c.tier === held.tier && (c.distance < held.distance || (c.distance === held.distance && start < held.start.getTime())))) bestOfDay.set(key, c);

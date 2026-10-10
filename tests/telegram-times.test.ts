@@ -88,7 +88,8 @@ describe("\"times?\" in the chat", () => {
       const owner = await makePlayer(db, `Owner of ${name}`);
       const c = await claimClub(db, { name, playerId: owner.id, tz: TZ, courts: 4 });
       await decideClub(db, c.slug, true, NOW);
-      await db.update(clubs).set({ availability: feed([...slots]), availabilityAt: NOW }).where(eq(clubs.slug, c.slug));
+      // The club shares a calendar feed of its bookings, read by the hourly job: the cache it wrote.
+      await db.update(clubs).set({ availabilityUrl: `https://${c.slug}.example/bookings.ics`, availabilityKind: "ics_bookings", availability: feed([...slots]), availabilityAt: NOW }).where(eq(clubs.slug, c.slug));
       if (name === "Rawai Padel Club") rawai = c.slug;
     }
   });

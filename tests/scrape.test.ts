@@ -174,18 +174,19 @@ describe("the slice: which clubs a run reads", () => {
     expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/next-one"]);
   });
 
-  it("reads the directory's clubs as the import writes them: a website on the platform, no booking link", async () => {
-    // The import's own statement, as production ran it: `source = 'directory'`, `website`, no booking link or platform.
+  it("reads the directory's clubs as the import writes them: the booking link on the platform", async () => {
+    // The import's own statement: `source = 'directory'`, and the booking link and platform the file
+    // names (migration 0097 wrote the same to production's rows). Blue Tree books on MATCHi and has no website.
     await db.execute(sql.raw(execFileSync("node", [path.resolve("scripts/import-clubs.mjs"), "--sql"], { encoding: "utf8" })));
-    const listed = await db.select({ slug: clubs.slug, website: clubs.website, bookingUrl: clubs.bookingUrl, bookingPlatform: clubs.bookingPlatform, source: clubs.source }).from(clubs).where(eq(clubs.slug, "bangkok-padel"));
-    expect(listed).toEqual([{ slug: "bangkok-padel", website: "https://www.matchi.se/facilities/bangkokpadel", bookingUrl: null, bookingPlatform: null, source: "directory" }]);
+    const listed = await db.select({ slug: clubs.slug, website: clubs.website, bookingUrl: clubs.bookingUrl, bookingPlatform: clubs.bookingPlatform, source: clubs.source }).from(clubs).where(eq(clubs.slug, "blue-tree"));
+    expect(listed).toEqual([{ slug: "blue-tree", website: null, bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: "matchi", source: "directory" }]);
     const real = (r: AvailabilityAdapter, matches: (url: string) => boolean): AvailabilityAdapter => ({ ...r, matches });
     const w = world(undefined, 10);
     const run = await runScrape(db, NOW, { adapters: [real(reader(), playtomicAdapter.matches), real(reader("matchi"), matchiAdapter.matches)], fetchImpl: w.fetchImpl, clock: w.clock });
     expect(w.calls.filter((c) => c.url.startsWith("https://playtomic.com/clubs/"))).toHaveLength(SCRAPE.perLane);
-    expect(w.calls.filter((c) => c.url === "https://www.matchi.se/facilities/bangkokpadel")).toHaveLength(1);
+    expect(w.calls.filter((c) => c.url === "https://www.matchi.se/facilities/bluetree")).toHaveLength(1);
     expect(run.platforms.playtomic.ok).toBe(SCRAPE.perLane);
-    expect((await row("bangkok-padel")).availability?.source).toBe("scrape:matchi");
+    expect((await row("blue-tree")).availability?.source).toBe("scrape:matchi");
     // A club whose website is its own site is never read.
     expect(w.calls.every((c) => /playtomic\.com|matchi\.se/.test(c.url))).toBe(true);
   });

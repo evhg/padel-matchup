@@ -13,7 +13,8 @@ import { countryOfTz, isCountryCode } from "./countries";
 import { normalizeEmail } from "./players";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
-import { freeFeedOf, type FreeFeed } from "./bestTimes";
+import type { FreeFeed } from "./bestTimes";
+import { clubFeeds } from "./freeCourts";
 import { courtNamesBySlug } from "./courts";
 import { isValidVenueSlug, venueSlug } from "./venueBoard";
 import type { DirectoryListing } from "./directory";
@@ -216,12 +217,16 @@ export type PickableVenue = {
   /** The club's courts by name when it listed them; the form offers these instead of 1…n. */
   courtNames: string[];
   where: "yours" | "here" | "nearby" | "elsewhere";
-  /** The club's free courts for the week, from the feed it shares (read lately), or null: the form's free times. */
+  /**
+   * The club's free courts (its own feed, or a platform's fresh read), for the form's free times. Only
+   * the person's own, here and nearby clubs carry them, twelve at most (`clubFeeds`); null elsewhere,
+   * so the landing page never carries the feeds of every club in the world.
+   */
   free: FreeFeed | null;
 };
 
-/** A live club's free courts for the week, from the row already read: no read of its own. */
-const freeOf = (c: Club | null | undefined, now: Date): FreeFeed | null => (c && isClubLive(c) ? freeFeedOf(c.availability, now) : null);
+/** The most clubs whose free courts the form carries: the ones a person is likely to pick. */
+const FREE_FOR_PICKING = 12;
 
 /**
  * Where to find a club on a map when nobody has published a link for it: a search for the club by
@@ -289,7 +294,7 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
     if (seen.has(key)) continue;
     seen.add(key);
     // Their own name for it, not the directory's: it is what their matches already say.
-    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, courtNames: [], where: "yours", free: freeOf(club, now) });
+    out.push({ name: v.name, slug: club?.slug ?? null, mapUrl: v.mapUrl ?? club?.mapUrl ?? (club ? mapSearchUrl(club) : null), country: club?.country ?? null, province: club ? provinceOf(club) : null, courts: club?.courts ?? null, courtNames: [], where: "yours", free: null });
   }
   const here: PickableVenue[] = [];
   const nearby: PickableVenue[] = [];
@@ -302,12 +307,16 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
     // slug we already keep. Either is a far finer signal than the time zone, which cannot tell one
     // Thai province from another.
     const bucket = same(city, province) || same(city, c.city) ? here : tz && c.tz === tz ? nearby : elsewhere;
-    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, courtNames: [], where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere", free: freeOf(c, now) });
+    bucket.push({ name: c.name, slug: c.slug, mapUrl: c.mapUrl ?? mapSearchUrl(c), country: c.country, province, courts: c.courts, courtNames: [], where: bucket === here ? "here" : bucket === nearby ? "nearby" : "elsewhere", free: null });
   }
   const all = [...out, ...here, ...nearby, ...elsewhere];
   // The courts by name, one read for every listed club that has rows (few do), so the form can offer "Centre" rather than 1…n.
   const names = await courtNamesBySlug(db, all.flatMap((v) => (v.slug ? [v.slug] : [])));
   for (const v of all) if (v.slug && names.has(v.slug)) v.courtNames = names.get(v.slug)!;
+  // The free courts of the clubs this person is likely to pick, one bounded read (AGENTS.md rule 12).
+  const likely = [...new Set([...out, ...here, ...nearby].flatMap((v) => (v.slug ? [v.slug] : [])))].slice(0, FREE_FOR_PICKING);
+  const feeds = await clubFeeds(db, likely, now);
+  for (const v of all) if (v.slug && feeds.has(v.slug)) v.free = feeds.get(v.slug)!;
   return all;
 }
 

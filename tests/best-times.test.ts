@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ClubAvailability, ClubFreeSlot } from "@/db/schema";
+import { SCRAPE_SHOWN_MS } from "@/lib/booking/availability";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { BEST_TIMES, bestTimes, datesSharingAWeekday, freeAt, freeFeedOf, freeLineOf, timeChipsOf, type FreeFeed } from "@/lib/domain/bestTimes";
 import { freezeClock } from "./helpers/clock";
@@ -103,9 +104,9 @@ describe("bestTimes: a usual club at a usual time first, then the soonest", () =
     expect(said(bestTimes({ clubs: clubs.slice(0, 1), patterns: [THU_7PM], lengthMinutes: 60, now: NOW, limit: 1 }))).toEqual(["Rawai Padel 2026-10-15 19:00 *"]);
   });
 
-  it("carries what a button needs: the instant, the club's own day and hour, its zone and the courts free", () => {
+  it("carries what a button needs: the instant, the club's own day and hour, its zone, the courts free and whose times they are", () => {
     const [first] = bestTimes({ clubs, patterns: [THU_7PM], lengthMinutes: 90, now: NOW, limit: 1 });
-    expect(first).toEqual({ slug: "rawai-padel", name: "Rawai Padel", tz: TZ, start: at("2026-10-15", "19:00"), date: "2026-10-15", time: "19:00", free: 2, usual: true });
+    expect(first).toEqual({ slug: "rawai-padel", name: "Rawai Padel", tz: TZ, start: at("2026-10-15", "19:00"), date: "2026-10-15", time: "19:00", free: 2, usual: true, platform: "Playtomic" });
   });
 
   it("stays inside seven days, never shows one weekday twice and never offers a court too close to reach", () => {
@@ -282,5 +283,48 @@ describe("freeLineOf: the line under the time, in the club's hour when the form'
     expect(freeLineOf(null, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW).state).toBe("unknown");
     expect(freeLineOf(f, { date: "", time: "19:00", tz: TZ }, 90, NOW).state).toBe("unknown");
     expect(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: "Mars/Olympus" }, 90, NOW).state).toBe("unknown");
+  });
+});
+
+describe("freeFeedOf on a platform's read: the days it covered, each as fresh as its own read", () => {
+  // A read of the platform's public page covers today and the next two days (`days`); `fullAt` is when
+  // all three were last read, and a read of today alone in between keeps the later days of that one.
+  const DAYS = ["2026-10-10", "2026-10-11", "2026-10-12"];
+  const SUNDAY = hour("2026-10-11", "09:00");
+  const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
+  const read = (o: Partial<ClubAvailability>) => feed([hour("2026-10-10", "15:00"), SUNDAY], { days: DAYS, platform: "playtomic", fetchedAt: minutesAgo(10), fullAt: minutesAgo(10), ...o });
+
+  it("speaks to the end of the last day it read, so a fully booked day is busy, not unknown", () => {
+    const f = freeFeedOf(read({}), NOW) as FreeFeed;
+    expect(f.until).toBe(at("2026-10-13", "00:00").toISOString());
+    expect(freeAt(f, at("2026-10-12", "10:00"), 60, NOW)).toBe("busy");
+    expect(freeAt(f, at("2026-10-13", "10:00"), 60, NOW)).toBe("unknown");
+  });
+
+  it("names the platform, so every screen can say whose times these are", () => {
+    expect(freeFeedOf(read({}), NOW)?.platform).toBe("Playtomic");
+    expect(bestTimes({ clubs: [{ slug: "r", name: "Rawai", feed: freeFeedOf(read({}), NOW) }], patterns: [], lengthMinutes: 60, now: NOW, limit: 1 })[0].platform).toBe("Playtomic");
+    expect(freeFeedOf(feed(TODAY_ONLY, { source: "ics_bookings" }), NOW)?.platform).toBeNull();
+  });
+
+  it("the later days only while the full read is fresh: today's own read does not make them new", () => {
+    const f = freeFeedOf(read({ fullAt: minutesAgo(150) }), NOW) as FreeFeed;
+    expect(f.until).toBe(at("2026-10-11", "00:00").toISOString());
+    expect(f.slots.map((s) => s.start)).toEqual([hour("2026-10-10", "15:00").start]);
+    expect(freeAt(f, new Date(SUNDAY.start), 60, NOW)).toBe("unknown");
+  });
+
+  it("is shown for as long as the platform's read is shown anywhere else, and a club's own feed for its hourly read", () => {
+    expect(BEST_TIMES.platformShownMs).toBe(SCRAPE_SHOWN_MS);
+    expect(freeFeedOf(read({ fetchedAt: minutesAgo(121), fullAt: minutesAgo(121) }), NOW)).toBeNull();
+    expect(freeFeedOf(feed(TODAY_ONLY, { source: "ics_bookings", fetchedAt: minutesAgo(150) }), NOW)).not.toBeNull();
+  });
+
+  it("after the club's midnight, the new day counts only if the full read covered it and is fresh", () => {
+    // 00:20 on Sunday: the last read was of Saturday alone at 23:50; the full read of Sat to Mon was at 22:10 or at 23:00.
+    const late = at("2026-10-11", "00:20");
+    const lastRead = (fullAt: string) => read({ fetchedAt: at("2026-10-10", "23:50").toISOString(), fullAt: at("2026-10-10", fullAt).toISOString() });
+    expect(freeFeedOf(lastRead("22:10"), late)).toBeNull();
+    expect(freeFeedOf(lastRead("23:00"), late)?.until).toBe(at("2026-10-13", "00:00").toISOString());
   });
 });
