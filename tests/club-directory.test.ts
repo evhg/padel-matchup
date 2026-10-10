@@ -10,10 +10,11 @@ import { addClubSlot } from "@/lib/domain/clubWeek";
 import { replaceCourts } from "@/lib/domain/courts";
 import { directoryListing } from "@/lib/domain/directory";
 import { venueSlug } from "@/lib/domain/venueBoard";
+import { detectPlatform, platformById } from "@/lib/booking/platforms";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 const root = (p: string) => path.resolve(process.cwd(), p);
-type Row = { slug: string; name: string; country: string; province: string; city: string | null; tz: string; courts: number | null; courtsIndoor: number | null; courtsOutdoor: number | null; website: string | null; sources: string[] };
+type Row = { slug: string; name: string; country: string; province: string; city: string | null; tz: string; courts: number | null; courtsIndoor: number | null; courtsOutdoor: number | null; website: string | null; bookingUrl?: string | null; bookingPlatform?: string | null; sources: string[] };
 const file = JSON.parse(readFileSync(root("data/clubs.json"), "utf8")) as { clubs: Row[] };
 
 /**
@@ -49,6 +50,28 @@ describe("the club directory as a file", () => {
     }
   });
 
+  it("names a booking platform Kicksmash knows, and never one its link's host contradicts", () => {
+    const withPlatform = file.clubs.filter((c) => c.bookingPlatform);
+    expect(withPlatform.length).toBeGreaterThan(30);
+    for (const c of file.clubs) {
+      if (c.bookingUrl) expect(c.bookingUrl, c.slug).toMatch(/^https:\/\//);
+      // A link without its platform is the host's job: every link in the file says which it is.
+      if (c.bookingUrl) expect(c.bookingPlatform, c.slug).toBeTruthy();
+      if (!c.bookingPlatform) continue;
+      expect(platformById(c.bookingPlatform), c.slug).not.toBeNull();
+      // Written down for a custom domain; where the host tells, the two must agree.
+      const byHost = detectPlatform(c.bookingUrl);
+      if (byHost) expect(byHost.id, c.slug).toBe(c.bookingPlatform);
+    }
+    // The corrections of 10 October 2026: Bangkok Padel moved to Playtomic, Blue Tree books on MATCHi,
+    // and Pop Padel's own domain is Playbypoint, which its host does not say.
+    const by = new Map(file.clubs.map((c) => [c.slug, c]));
+    expect(by.get("bangkok-padel")).toMatchObject({ bookingUrl: "https://playtomic.com/clubs/bangkok-padel", bookingPlatform: "playtomic" });
+    expect(by.get("blue-tree")).toMatchObject({ bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: "matchi" });
+    expect(by.get("pop-padel")).toMatchObject({ bookingPlatform: "playbypoint" });
+    expect(detectPlatform(by.get("pop-padel")?.bookingUrl)).toBeNull();
+  });
+
   it("keeps the slug the live data already carries", () => {
     // Production keys on "warehaus": eight matches and both coaches' clubs. One match is at
     // "blue-tree", one at "sterling". A tidier "warehaus-club" here would be a second page for the
@@ -69,6 +92,11 @@ describe("the club directory as a file", () => {
     expect(sql).toContain("where clubs.source = 'directory' and clubs.claimed_by is null;");
     // Every club in the file reaches the statement, by the slug everything else keys on.
     for (const c of file.clubs) expect(sql, c.slug).toContain(`('${c.slug}', `);
+    // The booking link and its platform: the file's value wins over an older one, and a null in the
+    // file never clears one (the guard above keeps a claimed club's own entry).
+    expect(sql).toContain("booking_url = coalesce(excluded.booking_url, clubs.booking_url),");
+    expect(sql).toContain("booking_platform = coalesce(excluded.booking_platform, clubs.booking_platform),");
+    expect(sql).toContain("'https://www.matchi.se/facilities/bluetree', 'matchi'");
   });
 });
 
