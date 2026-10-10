@@ -420,7 +420,8 @@ Everything in this list is live. The README describes each in detail.
 - **The clubs that were there all along, and three cuts in the organiser's way (21 September 2026).**
   The audit's club owner spent seven of his ten minutes proving an absence: no search box anywhere
   on the site, `/clubs` telling him no club had claimed a page, and every URL he guessed a 404. The
-  database held sixty-six clubs with names, provinces, court counts and booking links, and every
+  database held sixty-six clubs with names, provinces, court counts and websites (no booking link: one
+  read of production on 10 October 2026 found none; the directory's import now carries them), and every
   page hid all of it behind a claim nobody had made. A listed club now shows what we know, says
   plainly that Kicksmash listed it from public sources and that the club does not manage the page,
   and carries both doors: the one that makes it theirs and the one that says something is wrong.
@@ -885,6 +886,23 @@ Everything in this list is live. The README describes each in detail.
     (`whatsappLinkable`).
   - **What was untrue, corrected:** WhatsApp's own browser does not open group links; a number is
     not proof to `foldSameNameRows`; replies inside the window are charged from 1 October 2026.
+- **The best times, and a court a player books (10 October 2026, migrations 0095, 0096 and 0097).** The
+  owner's choice, "Best times + one-tap booking by a player" (DECIDING rule 34). The free courts clubs
+  share, or that a platform shows publicly, are cached on the club's row; `src/lib/domain/bestTimes.ts`
+  ranks them: a usual club at a usual time first, then the soonest, one time per club and day, at least
+  two hours out, within seven days. They show where people pick a time: on the create form the row of
+  time chips becomes "Free at Rawai Padel" (a tap fills the day, the hour and the club's zone), and a
+  line under the time says whether the club shows a court free then; on /play, while a city has fewer
+  than three open games, "Courts free this week" with "Organise a game here"; and in a crew's Telegram
+  group or a private chat only when somebody asks ("times?", "when can we play?", /times), as one reply
+  whose buttons make the match and post its card. On the match page the organiser and the players get
+  "Book this court" (Playtomic and MATCHi open on the match's day; every other platform on the club's
+  page), with the court, day, time and length beside it, and "I booked it", which the page, the cards,
+  the share text and the API then show as "Court booked ✓ (by Ana)" (`events.court_booked_at`,
+  `court_booked_by`; any player takes it back, and a new hour clears it). The club directory gained
+  booking links and platforms (Book & Go, PodPlay and The Padel Society are recognised now), which
+  migration 0097 writes to the directory's own rows. Nothing books or pays: a player does, in the
+  club's own app.
 
 ## The finish line
 
@@ -1002,7 +1020,8 @@ compared with production (rows the old merge dropped that morning stay dropped).
 ## Deliberately not
 
 - **No accounts, no passwords**, for players, coaches or clubs. A coach is a player with a role.
-- **No money through Kicksmash.** No payments, no commissions, no marketplace.
+- **No money through Kicksmash.** No payments, no commissions, no marketplace. A player books and pays
+  a court in the club's own app; Kicksmash prepares it up to payment and never signs in as anybody.
 - **No paid tiers** while the free plans hold. Free for every stakeholder, for good.
 - **No loud bots.** No bumps, no nags, nothing about Kicksmash beyond the card's footer.
 - **Nothing closed.** The API, the data and the code stay open, and every crawler is welcome.
