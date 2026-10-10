@@ -1,6 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_REQUESTS, MIN_GAP_MS, parsePlaytomicAvailability, parsePlaytomicClubPage, PLAYTOMIC_UA, playtomicAdapter, playtomicBookUrl, playtomicClubPage, playtomicDay, REQUEST_TIMEOUT_MS, resetPlaytomicState } from "@/lib/booking/adapters/playtomic";
 import type { ScrapeTarget } from "@/lib/booking/adapters/types";
 import { PLATFORMS } from "@/lib/booking/platforms";
@@ -56,20 +57,21 @@ describe("parsePlaytomicAvailability", () => {
   const club = parsePlaytomicClubPage(BKK_PAGE)!;
   const row = (start: string, end: string, court: string, price: string) => `${start} ${end} ${court} ${price}`;
 
-  // The machine's own zone is not UTC here, as on a laptop in Bangkok: a time read as local instead of
-  // UTC then gives the wrong instant and these tests say so, which on Vercel and CI (UTC) they could not.
-  let hostTz: string | undefined;
-  beforeAll(() => {
-    hostTz = process.env.TZ;
-    process.env.TZ = "Asia/Bangkok";
-  });
-  afterAll(() => {
-    if (hostTz === undefined) delete process.env.TZ;
-    else process.env.TZ = hostTz;
-  });
-
-  it("runs on a machine whose own zone is not UTC", () => {
-    expect(new Date("2026-10-11T00:00:00").toISOString()).toBe("2026-10-10T17:00:00.000Z");
+  // On a machine whose own zone is not UTC, as on a laptop in Bangkok, a time read as local instead of UTC
+  // gives the wrong instant. Vercel and CI run in UTC and could not see it, so the parser also runs in a
+  // child process that starts in Asia/Bangkok, and must give exactly the instants it gives here.
+  it("gives the same instants on a machine whose own zone is not UTC", () => {
+    const run = spawnSync(path.join(process.cwd(), "node_modules/.bin/tsx"), [path.join(import.meta.dirname, "helpers/playtomic-in-zone.ts")], {
+      encoding: "utf8",
+      env: { ...process.env, TZ: "Asia/Bangkok" },
+      timeout: 60_000,
+    });
+    expect(run.status, run.stderr).toBe(0);
+    const there = JSON.parse(run.stdout) as { hostMidnight: string; slots: string[][] | null };
+    // The child really is in Bangkok: its own midnight is 17:00 UTC the day before.
+    expect(there.hostMidnight).toBe("2026-10-10T17:00:00.000Z");
+    const here = parsePlaytomicAvailability(BKK_DAY, club)!.map((s) => [s.start, s.end, s.court]);
+    expect(there.slots).toEqual(here);
   });
 
   it("turns the Bangkok response into exact UTC slots, one per court, start and duration", () => {

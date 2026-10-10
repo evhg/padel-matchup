@@ -385,6 +385,12 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### Editing that keeps going wrong
 
+- **A time zone set inside a running test is not a time zone.** `process.env.TZ = "Asia/Bangkok"` in a
+  `beforeAll` passed the local gate and failed CI's real-Postgres run: a worker thread ignores the
+  assignment outright, and a long-lived test process cannot be trusted to honour it either. A test that
+  needs the host in another zone starts a child process with `TZ` in its environment
+  (`tests/helpers/playtomic-in-zone.ts`) and compares its answer with the one in UTC.
+
 - **Never round-trip `messages/*.json`.** Loading and re-serialising reformats the compact single-line
   blocks and turns a three-key change into fifty-seven changed lines; a hand-rolled comma fix corrupted
   `en.json` once. Use `node scripts/i18n.mjs add <dotted.key> "<en>" "<ru>" "<es>"` — one line per file,
