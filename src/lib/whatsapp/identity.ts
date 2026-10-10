@@ -31,12 +31,20 @@ export function sameNumber(phone: string | null | undefined, waId: string): bool
   return phone === plus || phone === digits;
 }
 
-export async function findOrCreateWhatsappPlayer(db: Db, waId: string, profileName?: string | null): Promise<Player> {
+/** The record this number already belongs to, or null for a number that never wrote to us. */
+export async function findWhatsappPlayer(db: Db, waId: string): Promise<Player | null> {
   const { plus, digits } = shapes(waId);
   for (const candidate of [plus, digits]) {
     const [hit] = await db.select().from(players).where(eq(players.phone, candidate)).limit(1);
     if (hit) return hit;
   }
+  return null;
+}
+
+export async function findOrCreateWhatsappPlayer(db: Db, waId: string, profileName?: string | null): Promise<Player> {
+  const hit = await findWhatsappPlayer(db, waId);
+  if (hit) return hit;
+  const { plus } = shapes(waId);
   const name = (profileName ?? "").trim().slice(0, 40) || plus;
   return createPlayer(db, { displayName: name, locale: "en", phone: plus });
 }

@@ -1,4 +1,4 @@
-import { LEVEL_BANDS, normalizeLevel, type BandKey } from "./levels";
+import { LEVEL_BANDS, LEVEL_MAX, LEVEL_MIN, normalizeLevel, type BandKey } from "./levels";
 
 /**
  * "Your level?" — the one optional card a player meets on the match page right after they join,
@@ -30,3 +30,16 @@ export function askLevelAfterJoin(o: { seated: boolean; level: number | null; ra
 
 /** The device's "Skip", per player, so a second person on a shared phone is still asked. */
 export const levelAskSkipKey = (playerId: string): string => `km_level_ask_skip:${playerId}`;
+
+/**
+ * The levels a chat offers for a match with a range, as buttons: the range's bottom, middle and top,
+ * or, with one end open, that end and the two half-steps beyond it. Each is a quarter step inside the
+ * range, so a tap can only say "I fit", and the number tapped is the number saved. Never the fixed
+ * bands above: for a range of 4.5–7 none of them would let anybody in, and saving the middle of a band
+ * would put a 3.5 player at 3.0, below a range of 3.5–4.5. Pure; at most three, no repeats.
+ */
+export function rangeChoices(min: number | null, max: number | null): number[] {
+  const picks = min != null && max != null ? [min, (min + max) / 2, max] : min != null ? [min, min + 0.5, min + 1] : max != null ? [max - 1, max - 0.5, max] : [];
+  const levels = picks.map((n) => normalizeLevel(n)).filter((n): n is number => n != null && n >= LEVEL_MIN && n <= LEVEL_MAX);
+  return [...new Set(levels)];
+}

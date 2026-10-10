@@ -2,10 +2,10 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
 import { and, eq } from "drizzle-orm";
-import { players, slots } from "@/db/schema";
+import { metricsDaily, players, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { getRolodex } from "@/lib/domain/queries";
-import { joinEvent } from "@/lib/domain/slots";
+import { joinEvent, reserveSlot } from "@/lib/domain/slots";
 import { bindInText, bindLink, codeInJoinText, codeInMatchUrl, joinLink, verifyBindTicket } from "@/lib/whatsapp/link";
 import { LIMITS, readInbound, verifySignature, whatsappEnabled, whatsappLinkable, type WaInboundMessage } from "@/lib/whatsapp/api";
 import { handleWhatsappMessage } from "@/lib/whatsapp/bot";
@@ -24,14 +24,18 @@ freezeClock(NOW);
 const SECRET = "app-secret-for-tests";
 const signed = (body: string) => `sha256=${createHmac("sha256", SECRET).update(body, "utf8").digest("hex")}`;
 
-const textMessage = (from: string, body: string): WaInboundMessage => ({ from, id: "wamid.1", timestamp: "0", type: "text", text: { body } });
-const tap = (from: string, id: string, title: string): WaInboundMessage => ({ from, id: "wamid.2", timestamp: "0", type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } });
+// Every message its own id, as Meta sends them: the thread answers one id once.
+let msgSeq = 0;
+const textMessage = (from: string, body: string): WaInboundMessage => ({ from, id: `wamid.t${++msgSeq}`, timestamp: "0", type: "text", text: { body } });
+const tap = (from: string, id: string, title: string): WaInboundMessage => ({ from, id: `wamid.b${++msgSeq}`, timestamp: "0", type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } });
 
 describe("the WhatsApp channel", () => {
   let db: Db;
   let close: () => Promise<void>;
   /** Every outbound call, so a test can read what the player was actually told, and which buttons came with it. */
   let sent: { to: string; type: string; body: string; buttons: { id: string; title: string }[] }[] = [];
+  /** Every address fetched: a note to an organiser on Telegram goes out beside the WhatsApp replies. */
+  let urls: string[] = [];
 
   beforeAll(async () => {
     ({ db, close } = await createTestDb());
@@ -44,7 +48,9 @@ describe("the WhatsApp channel", () => {
     process.env.WHATSAPP_NUMBER = "+66 81 234 5678";
     process.env.WHATSAPP_APP_SECRET = SECRET;
     sent = [];
+    urls = [];
     vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      urls.push(String(_url));
       const b = JSON.parse(init.body) as { to: string; type: string; text?: { body: string }; interactive?: { body: { text: string }; action?: { buttons?: { reply: { id: string; title: string } }[] } } };
       sent.push({ to: b.to, type: b.type, body: b.text?.body ?? b.interactive?.body.text ?? "", buttons: (b.interactive?.action?.buttons ?? []).map((x) => x.reply) });
       return new Response(JSON.stringify({ messages: [{ id: "wamid.out" }] }), { status: 200 });
@@ -79,6 +85,12 @@ describe("the WhatsApp channel", () => {
     expect(codeInJoinText("  join-7kq2  ")).toBe("7kq2");
     expect(codeInJoinText("hello there")).toBe(null);
     expect(codeInJoinText("rejoin later")).toBe(null);
+    // A JOIN takes a seat, so only a message that is a JOIN and nothing more: these words are valid codes.
+    expect(codeInJoinText("Can I join this?")).toBe(null);
+    expect(codeInJoinText("I want to join next Saturday")).toBe(null);
+    expect(codeInJoinText("join next week")).toBe(null);
+    expect(codeInJoinText("join your game")).toBe(null);
+    expect(codeInJoinText("please join 7KQ2!")).toBe("7KQ2");
   });
 
   it("offers the hand-off only where a reply can come back: no page offers a chat nobody answers", () => {
@@ -164,7 +176,9 @@ describe("the WhatsApp channel", () => {
 
   it("answers what it cannot place with help that says what the bot does, and a cancelled match by saying so", async () => {
     expect(await handleWhatsappMessage(db, textMessage("66810000003", "good morning"))).toBe("wa:help");
-    expect(sent.at(-1)?.body).toMatch(/JOIN 7KQ2.*put you in at once.*match link.*can't make it.*who is in.*calendar/s);
+    expect(sent.at(-1)?.body).toMatch(/JOIN 7KQ2.*put you in at once.*match link.*Once you are in.*can't make it.*who is in.*calendar/s);
+    // "Can I join this?" is a question, not a JOIN: help, never a stranger's match.
+    expect(await handleWhatsappMessage(db, textMessage("66810000003", "Can I join this?"))).toBe("wa:help");
     expect(await handleWhatsappMessage(db, textMessage("66810000003", "ZZZZ"))).toBe("wa:gone");
   });
 
@@ -172,24 +186,84 @@ describe("the WhatsApp channel", () => {
     const org = await makePlayer(db, "Ranged organiser");
     const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist", levelMin: 3, levelMax: 4 });
     await joinEvent(db, { eventId: ev.id, playerId: org.id });
-    // A player whose level nobody knows is asked for it, not quietly admitted: three buttons, no link out of the chat.
+    // A player whose level nobody knows is asked for it, not quietly admitted: buttons from the match's own range, no link out of the chat.
     expect(await handleWhatsappMessage(db, tap("66810000004", `wj:${ev.code}`, "I'm in"))).toBe("wa:level_required");
     const ask = sent.at(-1)!;
     expect(ask.body).toContain("3.0–4.0");
     expect(ask.body).not.toMatch(/https?:/);
-    expect(ask.buttons.map((b) => b.id)).toEqual([`wv:${ev.code}:beginner`, `wv:${ev.code}:intermediate`, `wv:${ev.code}:advanced`]);
-    // The tap saves the middle of the band as the player's own declaration, and joins: 3.0 is inside 3–4.
-    expect(await handleWhatsappMessage(db, tap("66810000004", `wv:${ev.code}:intermediate`, "Intermediate"))).toBe("wa:joined");
+    expect(ask.buttons.map((b) => b.id)).toEqual([`wv:${ev.code}:300`, `wv:${ev.code}:350`, `wv:${ev.code}:400`]);
+    expect(ask.buttons.map((b) => b.title)).toEqual(["3.0", "3.5", "4.0"]);
+    // The tap saves the number tapped as the player's own declaration, and joins.
+    expect(await handleWhatsappMessage(db, tap("66810000004", `wv:${ev.code}:350`, "3.5"))).toBe("wa:joined");
     const four = await findOrCreateWhatsappPlayer(db, "66810000004");
-    expect(four.level).toBe(3);
+    expect(four.level).toBe(3.5);
     expect(four.levelSource).toBe("self");
-    // A band nobody offered is not a level.
+    // A button that names no level is not a level.
     expect(await handleWhatsappMessage(db, tap("66810000004", `wv:${ev.code}:wizard`, "Wizard"))).toBe("wa:help");
     // And one outside the range becomes a request the organiser answers. This is the whole reason the
     // rules live in the domain: a second copy here would be a way around the first.
     const low = await findOrCreateWhatsappPlayer(db, "66810000005", "Low");
-    await db.update((await import("@/db/schema")).players).set({ level: 1 }).where((await import("drizzle-orm")).eq((await import("@/db/schema")).players.id, low.id));
+    await db.update(players).set({ level: 1 }).where(eq(players.id, low.id));
     expect(await handleWhatsappMessage(db, tap("66810000005", `wj:${ev.code}`, "I'm in"))).toBe("wa:requested");
+  });
+
+  it("offers levels a 4.5–7 match can take, keeps a level set since, and asks the organiser when the match wants confirmed levels", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = "1:test";
+    const org = await makePlayer(db, "Platinum organiser", { telegramId: 4242 });
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist", levelMin: 4.5, levelMax: 7 });
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    expect(await handleWhatsappMessage(db, tap("66810000030", `wj:${ev.code}`, "I'm in"))).toBe("wa:level_required");
+    // A range with no top is stored as "4.5 and up": its bottom and the two half-steps above, every one of them a way in.
+    expect(sent.at(-1)!.buttons.map((b) => b.title)).toEqual(["4.5", "5.0", "5.5"]);
+    expect(await handleWhatsappMessage(db, tap("66810000030", `wv:${ev.code}:550`, "5.5"))).toBe("wa:joined");
+    expect((await findOrCreateWhatsappPlayer(db, "66810000030")).level).toBe(5.5);
+    // An old button from another match never overwrites the level the player has now.
+    expect(await handleWhatsappMessage(db, tap("66810000030", `wv:${ev.code}:450`, "4.5"))).toBe("wa:already_in");
+    expect((await findOrCreateWhatsappPlayer(db, "66810000030")).level).toBe(5.5);
+    // Confirmed levels only: a declared level inside the range is a request, and the organiser hears of it, as the reply promises.
+    const strict = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist", levelMin: 4.5, levelMax: 7, levelVerifiedOnly: true });
+    await joinEvent(db, { eventId: strict.id, playerId: org.id });
+    urls = [];
+    expect(await handleWhatsappMessage(db, tap("66810000031", `wj:${strict.code}`, "I'm in"))).toBe("wa:level_required");
+    expect(await handleWhatsappMessage(db, tap("66810000031", `wv:${strict.code}:450`, "4.5"))).toBe("wa:requested");
+    expect(sent.filter((x) => x.to === "66810000031").at(-1)?.body).toContain("organiser decides");
+    expect(urls.some((u) => u.includes("api.telegram.org"))).toBe(true);
+  });
+
+  it("says a played match is over before it asks or saves anything", async () => {
+    const org = await makePlayer(db, "Last week organiser");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() - 48 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist", levelMin: 3, levelMax: 4.5 });
+    expect(await handleWhatsappMessage(db, textMessage("66810000032", `JOIN-${ev.code}`))).toBe("wa:past");
+    expect(await handleWhatsappMessage(db, tap("66810000032", `wv:${ev.code}:350`, "3.5"))).toBe("wa:past");
+    expect((await findOrCreateWhatsappPlayer(db, "66810000032")).level).toBeNull();
+  });
+
+  it("gives a number the seat the organiser held for it, and counts a new number whose name is already in", async () => {
+    const org = await makePlayer(db, "Holding organiser");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist" });
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    const held = await reserveSlot(db, { eventId: ev.id, actorPlayerId: org.id, name: "Pim", phone: "+66 81 000 0033" });
+    expect(await handleWhatsappMessage(db, textMessage("66810000033", `JOIN-${ev.code}`), { wa_id: "66810000033", profile: { name: "Pim" } })).toBe("wa:confirmed");
+    const pim = await findOrCreateWhatsappPlayer(db, "66810000033");
+    const [slot] = await db.select().from(slots).where(eq(slots.id, held.slot.id));
+    expect(slot.playerId).toBe(pim.id);
+    expect(slot.status).toBe("confirmed");
+    // Another number whose WhatsApp name is a name already in the match: a second Pim, counted as the web counts it.
+    const day = NOW.toISOString().slice(0, 10);
+    const count = async () => Number((await db.select().from(metricsDaily).where(and(eq(metricsDaily.day, day), eq(metricsDaily.key, "newid_name_here"))))[0]?.value ?? 0);
+    const before = await count();
+    expect(await handleWhatsappMessage(db, textMessage("66810000034", `JOIN-${ev.code}`), { wa_id: "66810000034", profile: { name: "Pim" } })).toBe("wa:joined");
+    expect(await count()).toBe(before + 1);
+  });
+
+  it("answers one message once, however many times Meta delivers it", async () => {
+    const org = await makePlayer(db, "Twice organiser");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 24 * HOUR), tz: "Asia/Bangkok", whenFull: "waitlist" });
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    const msg = textMessage("66810000035", `JOIN-${ev.code}`);
+    const [first, second] = await Promise.all([handleWhatsappMessage(db, msg, { wa_id: "66810000035", profile: { name: "Nok" } }), handleWhatsappMessage(db, msg, { wa_id: "66810000035", profile: { name: "Nok" } })]);
+    expect([first, second].sort()).toEqual(["wa:duplicate", "wa:joined"]);
+    expect((await db.select().from(players).where(eq(players.phone, "+66810000035"))).length).toBe(1);
   });
 
   it("cuts a button title to what Meta accepts rather than being refused for it", () => {

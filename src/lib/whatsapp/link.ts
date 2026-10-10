@@ -34,15 +34,18 @@ export function joinLink(code: string): string | null {
 }
 
 /**
- * The match code inside a JOIN message, or null when the text is something else entirely: the
- * link's own `JOIN-7KQ2`, and what a person types by hand, `JOIN 7KQ2` or `join7KQ2`.
+ * The match code of a JOIN message, or null when the text is something else: the link's own
+ * `JOIN-7KQ2`, and what a person types by hand, `JOIN 7KQ2`, `join7KQ2`, "please join 7KQ2". The whole
+ * message has to be that and nothing more, because a JOIN takes a seat at once: in "Can I join this?"
+ * or "join next week", "this" and "next" are valid codes, and a reader that looked anywhere in a line
+ * would put the player in a stranger's match.
  *
  * The code is returned exactly as it was typed. `CODE_ALPHABET` is mixed case, so "7kq2" and "7KQ2"
  * are two different matches; normalising the case here would look tidy and would find the wrong
  * match, or none. Only the JOIN word is matched case-insensitively, because that part is ours.
  */
 export function codeInJoinText(text: string): string | null {
-  const m = /(?:^|\s)join[-\s]?([A-Za-z0-9]{4})\b/i.exec(text.trim());
+  const m = /^\s*(?:please\s+)?join[-\s]?([A-Za-z0-9]{4})\s*[.!]?\s*$/i.exec(text);
   return m && isValidShareCode(m[1]) ? m[1] : null;
 }
 

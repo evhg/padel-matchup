@@ -5,21 +5,26 @@ import { formatEventDateTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
 import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
-import { leaveEvent } from "@/lib/domain/slots";
+import { confirmInvite, leaveEvent } from "@/lib/domain/slots";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
 import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { isValidShareCode } from "@/lib/codes";
 import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
-import { bandLevel, QUICK_BANDS } from "@/lib/domain/levelAsk";
-import { formatLevel } from "@/lib/domain/levels";
+import { rangeChoices } from "@/lib/domain/levelAsk";
+import { formatLevel, normalizeLevel } from "@/lib/domain/levels";
+import { isOver } from "@/lib/domain/matchLength";
+import { nameIsHere } from "@/lib/domain/dupes";
+import { joinGroup } from "@/lib/domain/groups";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { setPlayerLevel } from "@/lib/domain/rating";
+import { takeRate } from "@/lib/domain/ratelimit";
+import { notifyCreator, notifyLineupChange, sendCalendarInvite } from "@/lib/notify";
 import { getPlayer } from "@/lib/domain/players";
 import type { EventDetail } from "@/lib/domain/queries";
 import { subjectUuid } from "@/lib/ticket";
 import { readInbound, sendButtons, sendText, type WaContact, type WaInboundMessage } from "./api";
 import { bindInText, codeInJoinText, codeInMatchUrl, verifyBindTicket } from "./link";
-import { findOrCreateWhatsappPlayer, linkWhatsapp, sameNumber } from "./identity";
+import { findOrCreateWhatsappPlayer, findWhatsappPlayer, linkWhatsapp, sameNumber } from "./identity";
 
 /**
  * The conversation. One person, one thread, and the whole of a player's loop inside it: see the
@@ -36,7 +41,7 @@ const localeOf = (p: Player): Locale => (p.locale?.startsWith("ru") ? "ru" : p.l
 
 const S = {
   en: {
-    help: "Send JOIN and the match code (JOIN 7KQ2) and I put you in at once, then tell you who else is in. Send a match link to see the match first. Under each match you can say you can't make it, ask who is in, or add it to your calendar.",
+    help: "Send JOIN and the match code (JOIN 7KQ2) and I put you in at once, then tell you who else is in. Send a match link to see the match first. Once you are in, you can say you can't make it, ask who is in, or add the match to your calendar.",
     gone: "I cannot find that match. It may have been cancelled.",
     joined: (when: string, left: number) => `You are in. ${when}.${left > 0 ? "" : " That is everyone — the match is on."}`,
     waitlisted: (when: string) => `The match is full, so you are on the waitlist. ${when}. I will tell you if a spot opens.`,
@@ -54,12 +59,11 @@ const S = {
     calendarOne: (url: string) => `📅 This match for your calendar: ${url}`,
     requested: "This match has a level range, so the organiser decides. I have asked them and will tell you either way.",
     levelAsk: (range: string) => `This match is for levels ${range}. Which is yours? I save it and put you in.`,
-    bands: { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" },
     linked: (match: string | null, calendar: string | null) => `Linked: this number is yours on Kicksmash now. Send a match link here any time to join or to see who is in.${match ? `\n\n${match}` : ""}${calendar ? `\n\n📅 Your matches in your calendar, updating themselves: ${calendar}` : ""}`,
     linkBad: "This link is too old. Open the match page and tap WhatsApp again.",
   },
   ru: {
-    help: "Пришлите JOIN и код матча (JOIN 7KQ2), и я сразу запишу вас и скажу, кто ещё играет. Пришлите ссылку на матч, чтобы сначала посмотреть его. Под каждым матчем можно отказаться, узнать, кто играет, или добавить матч в календарь.",
+    help: "Пришлите JOIN и код матча (JOIN 7KQ2), и я сразу запишу вас и скажу, кто ещё играет. Пришлите ссылку на матч, чтобы сначала посмотреть его. Когда вы записаны, можно отказаться, узнать, кто играет, или добавить матч в календарь.",
     gone: "Не нахожу такой матч. Возможно, его отменили.",
     joined: (when: string, left: number) => `Вы в игре. ${when}.${left > 0 ? "" : " Все в сборе — матч состоится."}`,
     waitlisted: (when: string) => `Мест нет, вы в листе ожидания. ${when}. Сообщу, если место освободится.`,
@@ -77,12 +81,11 @@ const S = {
     calendarOne: (url: string) => `📅 Этот матч для вашего календаря: ${url}`,
     requested: "У матча есть диапазон уровня, решает организатор. Я спросил и сообщу вам ответ.",
     levelAsk: (range: string) => `Матч для уровня ${range}. Какой у вас? Я сохраню его и запишу вас.`,
-    bands: { beginner: "Начинающий", intermediate: "Средний", advanced: "Продвинутый" },
     linked: (match: string | null, calendar: string | null) => `Готово: этот номер теперь ваш в Kicksmash. Присылайте сюда ссылку на матч, чтобы записаться или узнать, кто играет.${match ? `\n\n${match}` : ""}${calendar ? `\n\n📅 Ваши матчи в календаре, обновляются сами: ${calendar}` : ""}`,
     linkBad: "Эта ссылка устарела. Откройте страницу матча и снова нажмите WhatsApp.",
   },
   es: {
-    help: "Mándame JOIN y el código del partido (JOIN 7KQ2) y te apunto al momento, y te digo quién más va. Mándame el enlace de un partido para verlo antes. Debajo de cada partido puedes decir que no puedes, ver quién va o añadirlo a tu calendario.",
+    help: "Mándame JOIN y el código del partido (JOIN 7KQ2) y te apunto al momento, y te digo quién más va. Mándame el enlace de un partido para verlo antes. Cuando ya estás dentro, puedes decir que no puedes, ver quién va o añadir el partido a tu calendario.",
     gone: "No encuentro ese partido. Puede que lo cancelaran.",
     joined: (when: string, left: number) => `Estás dentro. ${when}.${left > 0 ? "" : " Ya estáis todos — el partido va."}`,
     waitlisted: (when: string) => `Está completo, así que estás en la lista de espera. ${when}. Te aviso si se libera una plaza.`,
@@ -100,7 +103,6 @@ const S = {
     calendarOne: (url: string) => `📅 Este partido para tu calendario: ${url}`,
     requested: "Este partido tiene un rango de nivel, así que decide el organizador. Se lo he preguntado y te diré la respuesta.",
     levelAsk: (range: string) => `Este partido es para nivel ${range}. ¿Cuál es el tuyo? Lo guardo y te apunto.`,
-    bands: { beginner: "Principiante", intermediate: "Intermedio", advanced: "Avanzado" },
     linked: (match: string | null, calendar: string | null) => `Listo: este número ya es tuyo en Kicksmash. Mándame aquí un enlace de partido cuando quieras para apuntarte o ver quién va.${match ? `\n\n${match}` : ""}${calendar ? `\n\n📅 Tus partidos en tu calendario, se actualizan solos: ${calendar}` : ""}`,
     linkBad: "Este enlace es demasiado antiguo. Abre la página del partido y toca WhatsApp otra vez.",
   },
@@ -146,9 +148,11 @@ function rangeWords(min: number | null, max: number | null): string {
 }
 
 /**
- * A ranged match and no level on file: three buttons, the bands `LevelAfterJoin` offers on the web,
- * instead of a link out of the chat. The tap saves the middle of the band as the player's own
- * declaration (`bandLevel`, `setPlayerLevel`) and joins, through the same rules as every other door.
+ * A ranged match and no level on file: up to three buttons with levels drawn from the match's own range
+ * (`rangeChoices`: its bottom, middle and top), instead of a link out of the chat. The tap saves the
+ * number tapped as the player's own declaration, and only when they have none (`setPlayerLevel`), then
+ * joins through the same rules as every other door: a match that takes confirmed levels only still
+ * makes it a request to the organiser.
  */
 async function askLevel(to: string, detail: EventDetail, locale: Locale): Promise<void> {
   const s = S[locale];
@@ -156,7 +160,7 @@ async function askLevel(to: string, detail: EventDetail, locale: Locale): Promis
   await sendButtons(
     to,
     s.levelAsk(rangeWords(detail.event.levelMin, detail.event.levelMax)),
-    QUICK_BANDS.map((band) => ({ id: `wv:${code}:${band}`, title: s.bands[band as keyof typeof s.bands] })),
+    rangeChoices(detail.event.levelMin, detail.event.levelMax).map((level) => ({ id: `wv:${code}:${Math.round(level * 100)}`, title: formatLevel(level) })),
   );
 }
 
@@ -200,19 +204,25 @@ async function bindFromPage(db: Db, from: string, bind: { ticket: string; code: 
  *     who is in, add to calendar.
  *   - a pasted match link, or the code alone: the match and its three buttons, I'm in among them; a
  *     link is not a request to join until the player says so.
- *   - a tap: `wj:` in, `wl:` out, `ww:` who is in, `wc:` the calendar, `wv:` a level band, then in.
+ *   - a tap: `wj:` in, `wl:` out, `ww:` who is in, `wc:` the calendar, `wv:` a level, then in.
  *   - anything else: the help, which says all of the above.
+ *
+ * Meta can deliver one message twice, and a JOIN takes a seat, so a message id is answered once
+ * (`wa:duplicate` the second time); the guard is a rate row, so it needs no table of its own.
  */
 export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, contact?: WaContact): Promise<string> {
+  if (msg.id && !(await takeRate(db, "wamsg", msg.id, 1))) return "wa:duplicate";
   const bind = msg.type === "text" ? bindInText(readInbound(msg).text) : null;
   if (bind) return bindFromPage(db, msg.from, bind);
-  let player = await findOrCreateWhatsappPlayer(db, msg.from, contact?.profile?.name);
+  // A number writing for the first time becomes a record named by its WhatsApp profile; known for the count below.
+  const known = await findWhatsappPlayer(db, msg.from);
+  let player = known ?? (await findOrCreateWhatsappPlayer(db, msg.from, contact?.profile?.name));
   const locale = localeOf(player);
   const s = S[locale];
   const { text, tappedId } = readInbound(msg);
 
   const tap = tappedId ? /^(wj|wl|ww|wc):([A-Za-z0-9]{4})$/.exec(tappedId) : null;
-  const band = tappedId ? /^wv:([A-Za-z0-9]{4}):([a-z]+)$/.exec(tappedId) : null;
+  const band = tappedId ? /^wv:([A-Za-z0-9]{4}):(\d{1,3})$/.exec(tappedId) : null;
   // Never re-cased: the code alphabet is mixed case, so changing it finds a different match or none.
   const joinCode = tap || band ? null : codeInJoinText(text);
   const lookCode = tap || band || joinCode ? null : (codeInMatchUrl(text) ?? (isValidShareCode(text.trim()) ? text.trim() : null));
@@ -256,16 +266,47 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
     return "wa:left";
   }
 
+  // Over: said before anything is asked or saved, so an old JOIN never asks a level for a match that was played.
+  if (detail.event.status === "past" || isOver(detail.event, new Date())) {
+    await sendText(msg.from, s.past);
+    return "wa:past";
+  }
+
   if (band) {
-    if (!(QUICK_BANDS as readonly string[]).includes(band[2])) {
+    const level = normalizeLevel(Number(band[2]) / 100);
+    if (level == null) {
       await sendText(msg.from, s.help);
       return "wa:help";
     }
-    await setPlayerLevel(db, player.id, bandLevel(band[2] as (typeof QUICK_BANDS)[number]));
-    player = (await getPlayer(db, player.id)) ?? player;
+    // The player's own number, saved once: a tap on an old button never overwrites a level set since.
+    if (player.level == null) {
+      await setPlayerLevel(db, player.id, level);
+      player = (await getPlayer(db, player.id)) ?? player;
+    }
   }
 
-  // JOIN, the "I'm in" tap, and a level band just chosen: the seat, through the domain's own rules.
+  // A seat the organiser held for this very number (a name and the phone typed on the web): it is theirs.
+  const heldForMe = detail.roster.find((x) => x.status === "invited" && x.inviteCode && sameNumber(x.invitedPhone, msg.from));
+  if (heldForMe) {
+    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id }).catch(() => null);
+    if (res?.outcome === "confirmed") {
+      if (res.event.groupId) await joinGroup(db, res.event.groupId, player.id, "match").catch(() => undefined);
+      const now = (await getEventByCode(db, code)) ?? detail;
+      await showSeat(msg.from, now, locale, s.joined(`${whenOf(now, locale)}${whereOf(now)}`, spotsLeft(now)));
+      await notifyCreator(db, res.event, "confirmed", player.displayName, player.id).catch(() => undefined);
+      const ev = await notifyLineupChange(db, res.event, before, player.id).catch(() => null);
+      await sendCalendarInvite(db, ev ?? res.event, player).catch(() => undefined);
+      return "wa:confirmed";
+    }
+  }
+
+  // A new number whose profile name is already in the match: counted as the web counts it (`newid_name_here`).
+  if (!known) {
+    const namesHere = [...detail.roster, ...detail.waitlist].filter((x) => x.status !== "empty" && x.status !== "declined").map((x) => x.player?.displayName ?? x.invitedName);
+    if (nameIsHere(player.displayName, namesHere)) await bumpMetric(db, "newid_name_here").catch(() => undefined);
+  }
+
+  // JOIN, the "I'm in" tap, and a level just chosen: the seat, through the domain's own rules.
   try {
     const decision = await joinWithPolicy(db, detail, player, player.level);
     if (decision.kind === "level_required") {
@@ -274,6 +315,8 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
     }
     if (decision.kind === "requested") {
       await sendText(msg.from, s.requested);
+      // What the reply promises: the organiser hears it, as from the web and the API.
+      await notifyCreator(db, detail.event, "requested", player.level != null ? `${player.displayName} (${formatLevel(player.level)})` : player.displayName, player.id).catch(() => undefined);
       return "wa:requested";
     }
     const out = decision.result;
