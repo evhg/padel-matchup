@@ -1,7 +1,7 @@
 import type { Db } from "@/db";
 import type { Player } from "@/db/schema";
 import { emitMatchEvent } from "@/lib/api/webhooks";
-import type { JoinOutcome, LeaveResult } from "@/lib/domain/slots";
+import { promotedOf, type JoinOutcome, type LeaveResult } from "@/lib/domain/slots";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite } from "@/lib/notify";
 
 /**
@@ -32,7 +32,7 @@ export async function afterJoin(
 
 export async function afterLeave(db: Db, res: LeaveResult, player: Player, o: { wasComplete: boolean; code: string }): Promise<void> {
   if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", player.displayName, player.id);
-  const fresh = await notifyLineupChange(db, res.event, o.wasComplete, res.promotion?.playerId);
+  const fresh = await notifyLineupChange(db, res.event, o.wasComplete, promotedOf(res.promotion).map((p) => p.playerId));
   await notifyPromotion(db, fresh ?? res.event, res.promotion);
   await emitMatchEvent(db, "match.left", o.code, { player: { name: player.displayName } });
   // Nobody was waiting, so the spot is still open: the crew, the club's regulars and whoever asked

@@ -676,9 +676,6 @@
     "youAreInAlone": "Estás dentro · Buscas pareja",
     "addPartner": "Añadir pareja",
     "savePartner": "Guardar pareja",
-    "leaveWho": "¿Quién se va?",
-    "leaveMe": "Solo yo",
-    "leaveBoth": "Los dos",
     "noSeat": "Ahora no hay plaza libre para tu pareja.",
     "howAmericano": "Los dos compañeros juegan juntos todas las rondas y solo cambian los rivales. Cada pareja se enfrenta a todas las demás, gana quien sume más puntos y, si el número de parejas es impar, una pareja descansa cada ronda, por turnos.",
     "howMexicano": "Los dos compañeros juegan juntos todas las rondas. La ronda 1 es al azar; después la tabla de parejas decide las pistas: la primera contra la segunda en la pista 1, la tercera contra la cuarta en la pista 2. Introduce todos los resultados antes de la siguiente ronda.",
@@ -691,7 +688,9 @@
     "walkInPartner": "Su pareja (opcional)",
     "rotationInfo": "{n} rondas completan la liguilla (cada pareja se enfrenta una vez a todas las demás). Faltan {left}.",
     "rotationDone": "Liguilla completa tras {n} rondas: cada pareja se ha enfrentado a todas. Las rondas extra repiten desde la 1.",
-    "remove": "Quitar a {name}"
+    "remove": "Quitar a {name}",
+    "leaveWithName": "¿Salir? La plaza que guardaste para {name} también se libera.",
+    "leaveKeepsPartner": "¿Salir? {name} sigue dentro y necesitará otra pareja."
   },
   "americano": {
     "title": "Americano",

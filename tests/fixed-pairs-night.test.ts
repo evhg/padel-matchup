@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -7,10 +10,10 @@ import { createEvent } from "@/lib/domain/events";
 import { placeOf, placesOf, seatUnits } from "@/lib/domain/fixedPairs";
 import { joinWithPolicy } from "@/lib/domain/joining";
 import { pairTournamentDeltas } from "@/lib/domain/levels";
-import { bePartner, joinPair, leavePair, pairInOrder, pairSingles, splitPair } from "@/lib/domain/pairSeats";
+import { bePartner, joinPair, pairInOrder, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { getEventByCode } from "@/lib/domain/queries";
 import { applyEventLevels } from "@/lib/domain/rating";
-import { confirmInvite, declineInvite, joinEvent, leaveEvent, promoteWaitlists, seatNames } from "@/lib/domain/slots";
+import { confirmInvite, declineInvite, joinEvent, leaveEvent, promotedOf, promoteWaitlists, seatNames } from "@/lib/domain/slots";
 import { addWalkIn, generateRound, getTournamentState, pairsOfSeats, saveTournamentMatchScore, setTournamentLock, setTournamentSettings } from "@/lib/domain/tournament";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer, DAY } from "./helpers/db";
@@ -88,6 +91,33 @@ describe("joining a fixed-pairs night", () => {
     await expect(bePartner(db, { eventId: ev.id, playerId: di.id, slotId: eveSeat.id })).rejects.toMatchObject({ code: "invalid", message: "already_paired" });
   });
 
+  it("a reserved name is nobody's to be partner of: Be their partner refuses it, so its link stays with whoever gave it", async () => {
+    const { ev } = await pairsNight();
+    const ana = await makePlayer(db, "Ana");
+    const res = await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Bo" });
+    // A player paired with a name leaves Bo a single only if somebody else gave it; here the organiser reserves Cal.
+    const { reserveSlot } = await import("@/lib/domain/slots");
+    const { slot: cal } = await reserveSlot(db, { eventId: ev.id, actorPlayerId: null, name: "Cal" });
+    const eve = await makePlayer(db, "Eve");
+    await expect(bePartner(db, { eventId: ev.id, playerId: eve.id, slotId: cal.id })).rejects.toMatchObject({ code: "invalid", message: "taken" });
+    await expect(bePartner(db, { eventId: ev.id, playerId: eve.id, slotId: res.partner!.id })).rejects.toMatchObject({ code: "invalid", message: "taken" });
+  });
+
+  it("from round 1 the pairs are the field: no Be their partner, no partner named later", async () => {
+    const { org, ev } = await pairsNight(8);
+    const [ann, ben, cat, dan] = await Promise.all(["Ann", "Ben", "Cat", "Dan"].map((n) => makePlayer(db, n)));
+    await joinPair(db, { eventId: ev.id, playerId: ann.id, partnerName: "Amy" });
+    await joinPair(db, { eventId: ev.id, playerId: ben.id, partnerName: "Bea" });
+    await generateRound(db, { eventId: ev.id, actorPlayerId: org.id });
+    // The organiser takes Bea's place out mid-night: Ben is a single now, with a free seat beside him.
+    const { removeFromSlot } = await import("@/lib/domain/slots");
+    await removeFromSlot(db, { eventId: ev.id, slotId: (await seats(ev)).rows.find((s) => s.invitedName === "Bea")!.id, actorPlayerId: org.id });
+    const benSeat = (await seats(ev)).rows.find((s) => s.playerId === ben.id)!;
+    await expect(bePartner(db, { eventId: ev.id, playerId: cat.id, slotId: benSeat.id })).rejects.toMatchObject({ message: "pairs_locked" });
+    await expect(joinPair(db, { eventId: ev.id, playerId: ben.id, partnerName: "Dan" })).rejects.toMatchObject({ message: "pairs_locked" });
+    void dan;
+  });
+
   it("a single already in names a partner later, and two singles pair where they sit", async () => {
     const { org, ev } = await pairsNight();
     await joinEvent(db, { eventId: ev.id, playerId: org.id });
@@ -139,9 +169,8 @@ describe("leaving and the waiting list", () => {
     expect(left.promotion?.playerId).toBe(jo.id);
     expect(await seats(ev)).toMatchObject({ listed: ["Ana & Bo", "Cy · single", "Jo · single"], waiting: ["Hal & Ivy"] });
 
-    // Ana takes the pair out (Bo is still only a name): two seats free, and the waiting pair moves up together.
-    const out = await leavePair(db, { eventId: ev.id, playerId: ana.id });
-    expect(out.partner?.invitedName).toBe("Bo");
+    // Ana leaves while Bo is still only the name she gave: his spot goes with her, two seats free, and the waiting pair moves up together.
+    const out = await leaveEvent(db, { eventId: ev.id, playerId: ana.id });
     expect(out.promotion?.playerId).toBe(hal.id);
     // Ivy is a reserved name, so nobody is told for her (nothing is sent to a placeholder), and her link moves with her.
     expect(out.promotion?.also ?? []).toEqual([]);
@@ -395,15 +424,85 @@ describe("a night played", () => {
   });
 });
 
-describe("activity", () => {
-  it("records a pair leaving together as the leaver's exit and the partner's removal", async () => {
+describe("leaving, and who leaves with whom", () => {
+  it("a name the leaver gave goes with them, recorded as the leaver's exit and the name's removal", async () => {
     const { ev } = await pairsNight(4);
     const yan = await makePlayer(db, "Yan");
     await joinPair(db, { eventId: ev.id, playerId: yan.id, partnerName: "Yul" });
-    await leavePair(db, { eventId: ev.id, playerId: yan.id });
+    await leaveEvent(db, { eventId: ev.id, playerId: yan.id });
     const verbs = (await db.select({ v: activity.verb }).from(activity).where(and(eq(activity.eventId, ev.id)))).map((r) => r.v);
     expect(verbs).toEqual(expect.arrayContaining(["left", "removed"]));
     expect((await seats(ev)).listed).toEqual([]);
+  });
+
+  it("nobody takes out a partner who is a player: a stranger who paired with the organiser leaves alone", async () => {
+    const { org, ev } = await pairsNight(4);
+    await joinEvent(db, { eventId: ev.id, playerId: org.id });
+    const eve = await makePlayer(db, "Eve");
+    await bePartner(db, { eventId: ev.id, playerId: eve.id, slotId: (await seats(ev)).rows.find((s) => s.playerId === org.id)!.id });
+    expect((await seats(ev)).listed).toEqual(["Org & Eve"]);
+    await leaveEvent(db, { eventId: ev.id, playerId: eve.id });
+    // The organiser keeps their seat in their own tournament, as Partner needed.
+    expect((await seats(ev)).listed).toEqual(["Org · single"]);
+  });
+
+  it("a name somebody else gave stays: the organiser's reserved name paired with a player is not the player's to take", async () => {
+    const { org, ev } = await pairsNight(4);
+    const kim = await makePlayer(db, "Kim");
+    await joinEvent(db, { eventId: ev.id, playerId: kim.id });
+    const { reserveSlot } = await import("@/lib/domain/slots");
+    const { slot: zed } = await reserveSlot(db, { eventId: ev.id, actorPlayerId: org.id, name: "Zed" });
+    await pairSingles(db, { eventId: ev.id, slotIds: [(await seats(ev)).rows.find((s) => s.playerId === kim.id)!.id, zed.id], actorPlayerId: org.id });
+    await leaveEvent(db, { eventId: ev.id, playerId: kim.id });
+    expect((await seats(ev)).listed).toEqual(["Zed · single"]);
+  });
+
+  it("leaving alone takes the unclaimed name along, so the waiting list moves up past nobody's seat", async () => {
+    // The reviewer's case: four seats full, F joins with "Ghost" and waits, W waits behind them.
+    const { ev } = await pairsNight(4);
+    const [a, b, c, d, f, w] = await Promise.all(["A1", "B1", "C1", "D1", "F1", "W1"].map((n) => makePlayer(db, n)));
+    for (const p of [a, b, c, d]) await joinEvent(db, { eventId: ev.id, playerId: p.id });
+    expect((await joinPair(db, { eventId: ev.id, playerId: f.id, partnerName: "Ghost" })).outcome).toBe("waitlisted");
+    await joinEvent(db, { eventId: ev.id, playerId: w.id });
+    await leaveEvent(db, { eventId: ev.id, playerId: f.id });
+    expect((await seats(ev)).waiting).toEqual(["W1 · single"]);
+    const left = await leaveEvent(db, { eventId: ev.id, playerId: a.id });
+    expect(left.promotion?.playerId).toBe(w.id);
+    expect((await seats(ev)).rows.some((s) => s.invitedName === "Ghost")).toBe(false);
+  });
+
+  it("the organiser who removes a player removes the name that player gave", async () => {
+    const { org, ev } = await pairsNight(4);
+    const ana = await makePlayer(db, "Ana");
+    await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Bo" });
+    const { removeFromSlot } = await import("@/lib/domain/slots");
+    await removeFromSlot(db, { eventId: ev.id, slotId: (await seats(ev)).rows.find((s) => s.playerId === ana.id)!.id, actorPlayerId: org.id });
+    expect((await seats(ev)).listed).toEqual([]);
+  });
+
+  it("everybody a pair's leaving moves up is told: two singles, two calendar invitations", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "pairs-mail-"));
+    process.env.RESEND_API_KEY = "re_test_only";
+    process.env.EMAIL_SINK_FILE = path.join(dir, "mail.jsonl");
+    try {
+      const { ev } = await pairsNight(4);
+      const [a, c, x, y] = await Promise.all(["Aa", "Cc", "Xx", "Yy"].map((n) => makePlayer(db, n, { email: `${n.toLowerCase()}@example.com` })));
+      await joinPair(db, { eventId: ev.id, playerId: a.id, partnerName: "Ao" });
+      await joinPair(db, { eventId: ev.id, playerId: c.id, partnerName: "Co" });
+      await joinEvent(db, { eventId: ev.id, playerId: x.id });
+      await joinEvent(db, { eventId: ev.id, playerId: y.id });
+      const res = await leaveEvent(db, { eventId: ev.id, playerId: a.id });
+      expect(promotedOf(res.promotion).map((p) => p.playerId)).toEqual([x.id, y.id]);
+      const { notifyPromotion } = await import("@/lib/notify");
+      await notifyPromotion(db, res.event, res.promotion);
+      const to = readFileSync(process.env.EMAIL_SINK_FILE, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l).to as string);
+      expect(to).toEqual(expect.arrayContaining(["xx@example.com", "yy@example.com"]));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

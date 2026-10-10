@@ -4,10 +4,10 @@ import { activity, slots, tournamentRounds, type Event, type Slot } from "@/db/s
 import { newInviteCode } from "@/lib/codes";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
-import { isNamedSeat, seatUnits } from "./fixedPairs";
+import { isNamedSeat, partnerOf, seatUnits } from "./fixedPairs";
 import { isOver } from "./matchLength";
 import { normalizeName } from "./players";
-import { joinEvent, lockEvent, reserveLocked, vacateSeats, type JoinOutcome, type Promotion } from "./slots";
+import { joinEvent, lockEvent, reserveLocked, type JoinOutcome } from "./slots";
 
 /**
  * The seats of a fixed-pairs night (the owner's decision F, 9 October 2026): pairs sign up together,
@@ -21,9 +21,10 @@ import { joinEvent, lockEvent, reserveLocked, vacateSeats, type JoinOutcome, typ
  * with its own invite link, the same row the organiser's "reserve for someone" makes, and whoever
  * opens that link confirms it, signed in or by typing their name. Nothing is sent to the name.
  *
- * Leaving needs nothing new for one partner: `leaveEvent` empties the seat, its key goes with it, and
- * the other half reads as a single. `vacateAndPromote` lets the waiting list in by pairs on such a
- * night (`vacateSeats`), and the notices are the ones every promotion and every removal already sends.
+ * Leaving is `leaveEvent`: the seat empties, its key goes with it, and a partner who is a player reads
+ * as a single. A partner who is still only a name the leaver gave goes too (`namedPartnerOf`), because
+ * only the leaver holds its link. `vacateAndPromote` lets the waiting list in by pairs on such a night
+ * (`vacateSeats`), and the notices are the ones every promotion and every removal already sends.
  */
 
 function assertOpen(ev: Event, now: Date) {
@@ -39,12 +40,6 @@ const newPairId = () => crypto.randomUUID();
 
 async function seatsOf(tx: Db, ev: Event): Promise<Slot[]> {
   return tx.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(asc(slots.position));
-}
-
-/** The seat's partner: the other named seat with its key, or null for a single. */
-export function partnerOf<T extends { id: string; pairId: string | null; status: string; position: number }>(seats: readonly T[], seat: T): T | null {
-  for (const u of seatUnits(seats)) if (u.kind === "pair" && u.seats.some((s) => s.id === seat.id)) return u.seats.find((s) => s.id !== seat.id)!;
-  return null;
 }
 
 /** An invite code nobody holds, for a reserved seat on the waiting list (`reserveLocked` makes one for a roster seat). */
@@ -109,6 +104,8 @@ export async function joinPair(db: Db, input: { eventId: string; playerId: strin
     const pairId = newPairId();
     if (mine) {
       if (partnerOf(seats, mine)) return { outcome: "already_in", slot: mine, event: ev };
+      // From round 1 the pairs are the field: a new pair mid-night would put one player in two rows.
+      await assertBeforeRound1(tx, ev);
       const onRoster = mine.position <= ev.capacity;
       if (onRoster && free.length === 0) return { outcome: "full", event: ev };
       const partner = await reservePartner(tx, ev, { actorPlayerId: input.playerId, name: partnerName, slotId: onRoster ? free[0].id : null, pairId, now });
@@ -140,7 +137,9 @@ export async function joinPair(db: Db, input: { eventId: string; playerId: strin
  *
  * Somebody already in as a single pairs with them where they sit (`joined` false); somebody on the
  * waiting list, or not in at all, takes a free seat (`full` when there is none) and `joined` is true.
- * The single must be on the list and still single, else `taken`. The pair gets a fresh key.
+ * The single must be a player on the list (a reserved name is not offered: its link belongs to whoever
+ * gave it) and still single, else `taken`; and only before round 1 (`pairs_locked`). The pair gets a
+ * fresh key.
  */
 export async function bePartner(db: Db, input: { eventId: string; playerId: string; slotId: string; now?: Date }): Promise<{ slot: Slot; partner: Slot; event: Event; joined: boolean }> {
   const now = input.now ?? new Date();
@@ -149,8 +148,10 @@ export async function bePartner(db: Db, input: { eventId: string; playerId: stri
     assertOpen(ev, now);
     assertPairs(ev);
     const seats = await seatsOf(tx, ev);
+    await assertBeforeRound1(tx, ev);
     const single = seats.find((s) => s.id === input.slotId);
-    if (!single || !isNamedSeat(single) || single.position > ev.capacity || single.playerId === input.playerId || partnerOf(seats, single)) throw new DomainError("invalid", "taken");
+    // A reserved name is somebody's: whoever named it, or the organiser. Its link is theirs to send, never a stranger's to take.
+    if (!single || !isNamedSeat(single) || single.status === "invited" || single.position > ev.capacity || single.playerId === input.playerId || partnerOf(seats, single)) throw new DomainError("invalid", "taken");
     const mine = seats.find((s) => s.playerId === input.playerId);
     if (mine && partnerOf(seats, mine)) throw new DomainError("invalid", "already_paired");
     const pairId = newPairId();
@@ -175,33 +176,6 @@ export async function bePartner(db: Db, input: { eventId: string; playerId: stri
     const [partner] = await tx.update(slots).set({ pairId }).where(eq(slots.id, single.id)).returning();
     const status = await recomputeStatus(tx, ev);
     return { slot, partner, event: { ...ev, status }, joined };
-  });
-}
-
-export type PairLeaveResult = { wasWaitlisted: boolean; promotion: Promotion | null; event: Event; /** The partner taken out with them, when the pair left together. */ partner: Slot | null };
-
-/**
- * The pair leaves together: both seats empty in one write, then the waiting list moves up into both,
- * so a waiting pair fits. Either partner may take the pair out, as either may enter it. One partner
- * leaving alone is `leaveEvent`, which leaves the other as a single.
- */
-export async function leavePair(db: Db, input: { eventId: string; playerId: string; now?: Date }): Promise<PairLeaveResult> {
-  const now = input.now ?? new Date();
-  return db.transaction(async (tx) => {
-    const ev = await lockEvent(tx, input.eventId);
-    if (ev.status === "cancelled") throw new DomainError("cancelled");
-    if (ev.startsAt.getTime() <= now.getTime()) throw new DomainError("past");
-    assertPairs(ev);
-    const seats = await seatsOf(tx, ev);
-    const mine = seats.find((s) => s.playerId === input.playerId);
-    if (!mine) throw new DomainError("not_member");
-    const partner = partnerOf(seats, mine);
-    const wasWaitlisted = mine.position > ev.capacity;
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "left", meta: wasWaitlisted ? { waitlist: 1 } : null, createdAt: now });
-    if (partner) await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "removed", meta: { name: partner.invitedName, targetPlayerId: partner.playerId }, createdAt: now });
-    const [first, ...also] = await vacateSeats(tx, ev, partner ? [mine, partner] : [mine]);
-    const status = await recomputeStatus(tx, ev);
-    return { wasWaitlisted, promotion: first ? { ...first, also } : null, event: { ...ev, status }, partner };
   });
 }
 

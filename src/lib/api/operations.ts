@@ -16,7 +16,7 @@ import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest } from "@/lib/domain/requests";
 import { joinPair, type PairJoinOutcome } from "@/lib/domain/pairSeats";
-import { joinEvent, leaveEvent } from "@/lib/domain/slots";
+import { joinEvent, leaveEvent, promotedOf } from "@/lib/domain/slots";
 import { lineupComplete } from "@/lib/lineup";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
@@ -295,7 +295,7 @@ export async function leaveAsPlayer(db: Db, detail: EventDetail, player: Player,
   const res = await leaveEvent(db, { eventId: ev.id, playerId: player.id });
   ctx.afterwards(async () => {
     if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", player.displayName, player.id);
-    const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+    const fresh = await notifyLineupChange(db, res.event, before, promotedOf(res.promotion).map((p) => p.playerId));
     await notifyPromotion(db, fresh ?? res.event, res.promotion);
     await notifyRefill(db, res.event.id);
   });

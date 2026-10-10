@@ -676,9 +676,6 @@
     "youAreInAlone": "You're in · Partner needed",
     "addPartner": "Add your partner",
     "savePartner": "Save partner",
-    "leaveWho": "Who leaves?",
-    "leaveMe": "Just me",
-    "leaveBoth": "Both of us",
     "noSeat": "No free spot for your partner right now.",
     "howAmericano": "Two partners play every round together; only the opponents change. Every pair meets every other pair, most points wins, and an odd number of pairs rests one pair a round, in turn.",
     "howMexicano": "Two partners play every round together. Round 1 is random; then the pairs' table sets the courts: first against second on court 1, third against fourth on court 2. Enter all scores before the next round.",
@@ -691,7 +688,9 @@
     "walkInPartner": "Their partner (optional)",
     "rotationInfo": "{n} rounds complete the round robin (every pair meets every other pair once). {left} to go.",
     "rotationDone": "Round robin complete after {n} rounds: every pair has met every other. Extra rounds repeat from round 1.",
-    "remove": "Remove {name}"
+    "remove": "Remove {name}",
+    "leaveWithName": "Leave? The spot you saved for {name} goes too.",
+    "leaveKeepsPartner": "Leave? {name} stays in and needs a new partner."
   },
   "americano": {
     "title": "Americano",

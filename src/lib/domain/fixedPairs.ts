@@ -89,6 +89,12 @@ export function seatUnits<T extends SeatLike>(seats: readonly T[]): SeatUnit<T>[
   return units;
 }
 
+/** The seat's partner: the other named seat with its key, or null for a single. */
+export function partnerOf<T extends SeatLike>(seats: readonly T[], seat: T): T | null {
+  for (const u of seatUnits(seats)) if (u.kind === "pair" && u.seats.some((s) => s.id === seat.id)) return u.seats.find((s) => s.id !== seat.id)!;
+  return null;
+}
+
 /** The complete pairs and the singles, counted. */
 export function unitCounts(units: readonly SeatUnit<unknown>[]): { pairs: number; singles: number } {
   const pairs = units.filter((u) => u.kind === "pair").length;

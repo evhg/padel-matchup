@@ -5,7 +5,7 @@ import { newInviteCode } from "@/lib/codes";
 import { isOver } from "./matchLength";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
-import { seatUnits } from "./fixedPairs";
+import { partnerOf, seatUnits } from "./fixedPairs";
 import { mergePlayers } from "./merge";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
 
@@ -18,9 +18,12 @@ export type JoinOutcome =
 export type Promotion = {
   slot: Slot;
   playerId: string;
-  /** A fixed-pairs night moves a pair up together, so one freed spot can seat more than one player: the others, told the same way. */
+  /** A fixed-pairs night moves a pair up together, so one freed spot can seat more than one player: the others, told the same way (`promotedOf`). */
   also?: Promotion[];
 };
+
+/** Everybody a promotion moved up, the first and then `also`: whoever reads a promotion tells each of them. */
+export const promotedOf = (p: Promotion | null | undefined): Promotion[] => (p ? [p, ...(p.also ?? [])] : []);
 
 /** Locks the event row so every slot mutation for one event is serialized. */
 export async function lockEvent(tx: Db, eventId: string): Promise<Event> {
@@ -176,6 +179,40 @@ export async function vacateSeats(tx: Db, ev: Event, seats: readonly Slot[]): Pr
   return promotions;
 }
 
+/**
+ * On a fixed-pairs night, the partner this seat's player named who has not claimed the spot yet: a
+ * reserved name the player gave (`joinPair`, read from the "invited" line the reservation wrote). It
+ * goes when they go, because only they hold its link; left behind it would be a seat nobody can claim
+ * that moves up ahead of real people. A partner who is a player, or a name somebody else gave (the
+ * organiser's), stays. The lock is the caller's.
+ */
+async function namedPartnerOf(tx: Db, ev: Event, seat: Slot): Promise<Slot | null> {
+  if (!ev.fixedPairs || !seat.playerId) return null;
+  const all = await tx.select().from(slots).where(eq(slots.eventId, ev.id));
+  const partner = partnerOf(all, seat);
+  if (!partner || partner.status !== "invited" || !partner.invitedName) return null;
+  const [named] = await tx
+    .select({ id: activity.id })
+    .from(activity)
+    .where(and(eq(activity.eventId, ev.id), eq(activity.verb, "invited"), eq(activity.actorPlayerId, seat.playerId), sql`${activity.meta}->>'name' = ${partner.invitedName}`))
+    .limit(1);
+  return named ? partner : null;
+}
+
+/** For a screen: whether this player's leaving takes their partner's reserved spot with it (`namedPartnerOf`). */
+export async function partnerGoesWith(db: Db, ev: Event, seat: Slot): Promise<boolean> {
+  return Boolean(await namedPartnerOf(db, ev, seat));
+}
+
+/** Empties a seat, and on a fixed-pairs night the unclaimed name its player gave with it; then the waiting list moves up once. */
+async function vacateWithNamed(tx: Db, ev: Event, seat: Slot, actorPlayerId: string | null, now: Date): Promise<Promotion | null> {
+  const named = await namedPartnerOf(tx, ev, seat);
+  if (!named) return vacateAndPromote(tx, ev, seat);
+  await tx.insert(activity).values({ eventId: ev.id, actorPlayerId, verb: "removed", meta: { name: named.invitedName, targetPlayerId: null }, createdAt: now });
+  const [first, ...also] = await vacateSeats(tx, ev, [seat, named]);
+  return first ? { ...first, also } : null;
+}
+
 export type LeaveResult = { left: boolean; wasWaitlisted: boolean; promotion: Promotion | null; event: Event };
 
 export async function leaveEvent(db: Db, input: { eventId: string; playerId: string; now?: Date }): Promise<LeaveResult> {
@@ -194,7 +231,8 @@ export async function leaveEvent(db: Db, input: { eventId: string; playerId: str
     // The moment and the seat are facts the late pull-out line reads (`src/lib/domain/banter.ts`): an
     // exit from the waitlist opened no spot, so it says so, the way a join to the waitlist does.
     await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "left", meta: wasWaitlisted ? { waitlist: 1 } : null, createdAt: now });
-    const promotion = await vacateAndPromote(tx, ev, mine);
+    // A fixed-pairs night: a partner who is still only the name this player gave leaves with them.
+    const promotion = await vacateWithNamed(tx, ev, mine, input.playerId, now);
     const status = await recomputeStatus(tx, ev);
     return { left: true, wasWaitlisted, promotion, event: { ...ev, status } };
   });
@@ -223,7 +261,8 @@ export async function removeFromSlot(
       verb: "removed",
       meta: { name: removedName, targetPlayerId: slot.playerId },
     });
-    const promotion = await vacateAndPromote(tx, ev, slot);
+    // The removed player's unclaimed partner goes too: nobody else holds its link.
+    const promotion = await vacateWithNamed(tx, ev, slot, input.actorPlayerId, now);
     const status = await recomputeStatus(tx, ev);
     return { removedPlayerId: slot.playerId, removedName, promotion, event: { ...ev, status } };
   });

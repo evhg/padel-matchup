@@ -58,8 +58,8 @@ import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/qu
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
-import { seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
-import { partnerOf } from "@/lib/domain/pairSeats";
+import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
+import { partnerGoesWith } from "@/lib/domain/slots";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
@@ -191,6 +191,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const pairCount = unitCounts(rosterUnits).pairs;
   const myPartner = fixedPairs && mySlot ? partnerOf([...roster, ...waitlist], mySlot) : null;
   const tstate = isTournament ? await getTournamentState(db, ev, participantIds, fixedPairs ? pairsOfSeats(namedSlots) : []) : null;
+  // Leaving takes the partner along only when they are still the name this player gave (one read, only then).
+  const partnerGoes = myPartner?.status === "invited" && mySlot ? await partnerGoesWith(db, ev, mySlot) : false;
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
@@ -402,7 +404,8 @@ export default async function EventPage({ params, searchParams }: Props) {
     // Singles on the same side of the line, for the organiser's "Pair with…".
     const others = u.kind === "single" ? seatUnits(isWaitlist ? waitlist : roster).flatMap((x) => (x.kind === "single" && x.seat.id !== u.seat.id ? [{ id: x.seat.id, name: personName(x.seat) }] : [])) : [];
     // "Be their partner": a single on the list, before round 1, for somebody who is not in a pair and has a place to sit.
-    const canBePartner = u.kind === "single" && !isWaitlist && beforeRound1 && u.seat.playerId !== me?.id && !myPartner && (mySingleOnList || (!isMember && spotsLeft > 0));
+    // Never on a reserved name: its link is for whoever gave it.
+    const canBePartner = u.kind === "single" && u.seat.status !== "invited" && !isWaitlist && beforeRound1 && u.seat.playerId !== me?.id && !myPartner && (mySingleOnList || (!isMember && spotsLeft > 0));
     return (
       <li key={seatsOf[0].id} className={`rounded-2xl border px-4 py-3 ${u.kind === "pair" ? "border-line bg-card" : "border-dashed border-warn/50 bg-warn-soft/40"}`} data-testid={u.kind === "pair" ? "pair-row" : "single-row"}>
         <div className="flex items-center gap-3">
@@ -427,8 +430,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             {invited && <div className="text-xs font-semibold text-warn">{t("event.reservedFor", { name: personName(invited) })} · {t("event.inviteNotAccepted")}</div>}
           </div>
         </div>
-        {/* Whoever named the partner holds their link: the partner claims the spot by opening it. */}
-        {invited?.inviteCode && mine && !viewer.isCreator && !cancelled && !over && (
+        {/* Whoever named the partner holds their link, and nobody else: the partner claims the spot by opening it. */}
+        {invited?.inviteCode && mine && partnerGoes && !viewer.isCreator && !cancelled && !over && (
           <PartnerLink name={personName(invited)} url={inviteUrl(base, code, invited.inviteCode)} text={inviteTextTemplate.replace("__NAME__", personName(invited)).replace("__URL__", inviteUrl(base, code, invited.inviteCode))} />
         )}
         {canBePartner && <BePartnerButton code={code} slotId={u.seat.id} hasIdentity={Boolean(me)} />}
@@ -765,6 +768,8 @@ export default async function EventPage({ params, searchParams }: Props) {
         asked={askedKeys}
         fixedPairs={fixedPairs}
         partnerName={myPartner ? (myPartner.player?.displayName ?? myPartner.invitedName ?? "") : null}
+        partnerGoes={partnerGoes}
+        pairsLocked={(tstate?.rounds.length ?? 0) > 0}
       />
     </>
   );

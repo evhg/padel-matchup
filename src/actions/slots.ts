@@ -14,6 +14,7 @@ import {
   confirmInvite,
   declineInvite,
   leaveEvent,
+  promotedOf,
   removeFromSlot,
   reserveSlot,
   setSlotPaid,
@@ -25,7 +26,7 @@ import { joinGroup } from "@/lib/domain/groups";
 import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
 import { admission, hasRange } from "@/lib/domain/levels";
-import { bePartner, leavePair, pairSingles, splitPair } from "@/lib/domain/pairSeats";
+import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
@@ -141,25 +142,16 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
 }
 
 /**
- * Leaving. On a fixed-pairs night `withPartner` takes the pair out together; without it the partner
- * stays as a single, "Partner needed". The partner taken out hears it as a removal, the notice that
- * already exists for a name taken off the list.
+ * Leaving. On a fixed-pairs night a partner who is a player stays, as "Partner needed"; a partner who
+ * is still only the name this player gave goes with them (`leaveEvent`), because nobody else holds
+ * that link. Nobody takes out a player who joined by themselves.
  */
-export async function leaveAction(code: string, withPartner = false): Promise<ActionResult<null>> {
+export async function leaveAction(code: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("not_member");
-    if (withPartner && detail.event.fixedPairs) {
-      const res = await leavePair(db, { eventId: detail.event.id, playerId: me.id });
-      after(async () => {
-        await afterLeave(db, { left: true, wasWaitlisted: res.wasWaitlisted, promotion: res.promotion, event: res.event }, me, { wasComplete: before, code });
-        if (res.partner?.playerId) await notifyRemoved(db, res.event, res.partner.playerId);
-      });
-      revalidatePath(`/${code}`);
-      return null;
-    }
     const res = await leaveEvent(db, { eventId: detail.event.id, playerId: me.id });
     after(async () => {
       await afterLeave(db, res, me, { wasComplete: before, code });
@@ -198,7 +190,7 @@ export async function removeAction(code: string, slotId: string): Promise<Action
     const res = await removeFromSlot(db, { eventId: detail.event.id, slotId, actorPlayerId: viewer.player?.id ?? null });
     after(async () => {
       await notifyRemoved(db, res.event, res.removedPlayerId);
-      const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+      const fresh = await notifyLineupChange(db, res.event, before, promotedOf(res.promotion).map((p) => p.playerId));
       await notifyPromotion(db, fresh ?? res.event, res.promotion);
       await notifyRefill(db, res.event.id);
     });
@@ -271,7 +263,7 @@ export async function declineInviteAction(code: string, inviteCode: string): Pro
       const name = res.slot.invitedName ?? "";
       after(async () => {
         await notifyCreator(db, res.event, "declined", name, null);
-        const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+        const fresh = await notifyLineupChange(db, res.event, before, promotedOf(res.promotion).map((p) => p.playerId));
         await notifyPromotion(db, fresh ?? res.event, res.promotion);
       });
     }
