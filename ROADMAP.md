@@ -826,19 +826,22 @@ Everything in this list is live. The README describes each in detail.
   `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.
 - **Free court times read from the booking platforms, every 15 minutes (10 October 2026, no
   migration).** The owner's decision (DECIDING rule 32): "scraping at risk of being blocked is
-  acceptable, just do it." The frame is built: `src/lib/booking/scrape.ts` picks at most 12 clubs a
-  run (the clubs people use first, then the oldest cache), gives each platform its own lane at one
-  request a second, stops before 45 seconds, and writes three days of free courts into
-  `clubs.availability` (`source: "scrape:<platform>"`). A feed the club shared always wins. It rides
+  acceptable, just do it." Built: `src/lib/booking/scrape.ts` is the frame, and the Playtomic and
+  MATCHi readers (`src/lib/booking/adapters/`) read the public club pages; The Padel Society shows
+  free courts only inside its app, so it has no reader. Each platform picks its own clubs, at most
+  eight a run, by the booking link or, with none, a website on the platform (most directory clubs).
+  A club people use is read every 15 minutes, any other club hourly, and the next two days at most
+  hourly. Each platform has its own lane at one request a second, the run stops before 45 seconds,
+  and the cache keeps three days of free courts in `clubs.availability` (`source:
+  "scrape:<platform>"`) as pieces that never overlap. A feed the club shared always wins. It rides
   the five-minute push job, every third tick, so it costs no invocation and no migration. A 401, 403
-  or 429 stops the platform: it rests six hours, then a day, then a week. A page that changed stops
-  its reader until the next deploy. A `scrape_off_<platform>` row switches a platform off with no
-deploy, and `SCRAPE_DISABLED` does it at the next redeploy. The
+  or 429, or a challenge, stops the platform: it rests six hours, then a day, then a week. A page
+  that changed at two clubs stops its reader until a deploy of new code. A `scrape_off_<platform>`
+  row switches a platform off with no deploy, and `SCRAPE_DISABLED` does it at the next redeploy. The
   service board has a line for each platform: fresh, resting until, stopped, or off. It never signs
-  in, never books and never pays; the player books and pays on the platform. The readers, one file
-  for each platform in `src/lib/booking/adapters/`, come next; until one lands the job reads nothing.
-  The clubs and the API still show today only; proposing the best times from the three days is the
-  next step.
+  in, never books and never pays; the player books and pays on the platform. The club page, the
+  lists and the API show today and name the platform; proposing the best times from the three days
+  is the next step.
 
 ## The finish line
 

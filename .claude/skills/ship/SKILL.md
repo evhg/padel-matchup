@@ -249,6 +249,18 @@ learning can be a test, a gate step or a script, make it one and put the story i
   brief for the court-times read asked for a switch "with no deploy"; the one that does that is a
   row the code reads each run (`scrape_off_<platform>` through `POST /api/admin/metrics`). When a
   switch must act now, put it in the database and keep the variable as the slow one.
+- **A platform sells one free hour as several rows.** Playtomic lists each free start once for every
+  length it offers (60, 90 and 120 minutes) and a new start every 30 minutes, so adding up the rows
+  said 156 court-hours for a club that has 30, and drew one start as three chips. A cache of free time
+  keeps each court's union and counts the courts in each piece (`freeSlotsFromScrape`). The trimmed
+  fixture of four rows a court could not show it; a full day in the platform's own shape did.
+- **Seed the row the way production made it.** Every test of the court-times job seeded `booking_url`
+  and `booking_platform` by hand, and the directory import writes neither, so fifty green tests
+  described a job that read almost no club (10 October 2026). Run the import's own statement in the
+  test (`node scripts/import-clubs.mjs --sql`) before asking which rows a query finds.
+- **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
+  MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
+  a stub that set `url`, passed. Test a reader through the frame that production calls it through.
 
 ### Wall clock
 

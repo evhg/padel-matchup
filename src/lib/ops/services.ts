@@ -142,18 +142,18 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
 
   // Free court times read from the booking platforms' public pages (DECIDING rule 32): one line per platform with a reader.
   const scrapeLines = await scrapeBoard(db, now);
-  if (!scrapeLines.length) push({ key: "scrape", name: "Court times from platforms", role: "free courts read from the booking platforms' public pages", used: null, limit: null, usage: "no platform reader yet", ceiling: "1 request / second / platform · 12 clubs / run · 45 s", note: "A reader per platform goes in src/lib/booking/adapters/. Until one exists the job reads nothing.", state: "off" });
+  if (!scrapeLines.length) push({ key: "scrape", name: "Court times from platforms", role: "free courts read from the booking platforms' public pages", used: null, limit: null, usage: "no platform reader yet", ceiling: "1 request / second / platform · 8 clubs / platform / run · 45 s", note: "A reader per platform goes in src/lib/booking/adapters/. Until one exists the job reads nothing.", state: "off" });
   for (const l of scrapeLines) {
     const name = platformById(l.platform)?.name ?? l.platform;
     const usage =
       l.state === "off"
         ? "off (switched off: scrape_off_* row or SCRAPE_DISABLED)"
         : l.state === "stopped"
-          ? "stopped: the page changed; the reader needs a fix, and the next deploy starts it again"
+          ? "stopped: the page changed at two clubs; the reader needs a fix, and a deploy of new code starts it again"
           : l.state === "resting"
             ? `resting until ${l.restUntil!.toISOString().slice(0, 16).replace("T", " ")} UTC after a block`
             : `fresh: ${fmt(l.fresh)} club${l.fresh === 1 ? "" : "s"} read in the last hour`;
-    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Read every 15 minutes by the push job. A 401, 403 or 429 stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" ? "warn" : "ok" });
+    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Read every 15 minutes by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" ? "warn" : "ok" });
   }
 
   // Mail

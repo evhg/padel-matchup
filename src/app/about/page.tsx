@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("about.title"), alternates: localeAlternates("/about", locale) };
 }
 
-/** The fine print: privacy, terms, open source. Short, honest, slightly cheeky. */
+/** The fine print: privacy, terms, open source, and KicksmashBot (the reader of court times). Short, honest, slightly cheeky. */
 export default async function AboutPage() {
   const t = await getTranslations();
   const contact = emailFrom().match(/<([^>]+)>/)?.[1] ?? emailFrom();
@@ -46,6 +46,14 @@ export default async function AboutPage() {
             )}
           </section>
         ))}
+        {/* The User-Agent every booking platform sees names this page (DECIDING rule 32): what the bot reads, how often, that it stops, and where to write. */}
+        <section id="bot" className="card">
+          <h2 className="font-extrabold">{t("about.botTitle")}</h2>
+          <p className="mt-1 text-sm text-ink-soft">{t("about.botBody")}</p>
+          <a className="link mt-1 inline-block text-sm" href={`mailto:${contact}`}>
+            {contact}
+          </a>
+        </section>
         <section className="card">
           <h2 className="font-extrabold">💬 {t("feedback.title")}</h2>
           <p className="mt-1 text-sm text-ink-soft">{t("feedback.sub")}</p>

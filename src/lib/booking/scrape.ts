@@ -20,8 +20,14 @@ import { platformById } from "./platforms";
  *     books, reserves, pays or posts anything;
  *   - an honest User-Agent, one request a second per platform, at most eight a club, and a cache of
  *     every page for the run;
- *   - the first 401, 403 or 429 stops that platform for the run, and the platform rests for six hours,
- *     then a day, then a week. Nothing here rotates an address, fakes a browser or answers a challenge.
+ *   - the first 401, 403 or 429, or a challenge (`isBlock`), stops that platform for the run, and the
+ *     platform rests for six hours, then a day, then a week. Nothing here rotates an address, fakes a
+ *     browser or answers a challenge;
+ *   - the club's zone as the row has it: a reader that cannot know the zone says so, never guesses.
+ *
+ * robots.txt does not bind a reader under rule 32 (the owner accepted the risk of a block); the frame
+ * keeps the load low instead: each platform's own slice of at most eight clubs a run, today every 15
+ * minutes for a club people use, the next two days at most hourly. `/about#bot` says who we are.
  *
  * The job rides the five-minute push job (`/api/cron/push`), which calls `scrapeIfDue`: it costs no
  * invocation of its own and no migration. It runs when the last run is fourteen minutes old or more.
@@ -103,7 +109,7 @@ export function disabledPlatforms(raw: string | undefined = process.env.SCRAPE_D
   return ids.includes("all") ? "all" : new Set(ids);
 }
 
-/** This deployment, as a number: a "changed" stop holds until the next deploy, which has another. FNV-1a, 32 bits. Pure. */
+/** This deployment's code, as a number: a "changed" stop holds until a deploy of a new commit, which has another (a redeploy of the same commit keeps it). FNV-1a, 32 bits. Pure. */
 export function deployKey(env: Record<string, string | undefined> = process.env): number {
   const id = env.VERCEL_GIT_COMMIT_SHA || env.VERCEL_DEPLOYMENT_ID || "local";
   let h = 0x811c9dc5;

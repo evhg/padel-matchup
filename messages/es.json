@@ -872,7 +872,9 @@
     "openBody": "Kicksmash es código abierto bajo licencia Apache 2.0. Léelo, ejecútalo, construye encima. El nombre y el logo siguen siendo nuestros.",
     "contact": "Preguntas, solicitudes de datos, cartas de amor:",
     "privacyLink": "La página completa de privacidad →",
-    "termsLink": "Las condiciones completas →"
+    "termsLink": "Las condiciones completas →",
+    "botTitle": "KicksmashBot",
+    "botBody": "KicksmashBot lee las horas de pista libres que las plataformas de reservas, como Playtomic y MATCHi, muestran en la página pública de un club, para que los jugadores vean cuándo hay una pista libre. Lee las horas de hoy como mucho cada 15 minutos y las de los dos días siguientes como mucho una vez por hora, con una petición por segundo y su nombre en cada petición. Nunca inicia sesión, ni reserva, ni paga, y se detiene si una plataforma lo bloquea. Para pedirle que lea menos o que pare, escríbenos:"
   },
   "notices": {
     "title": "Avisos",
