@@ -293,7 +293,7 @@ export default async function EventPage({ params, searchParams }: Props) {
   const namesHere = [...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
   const inEventNames = new Set(namesHere.map((n) => n.trim().toLowerCase()));
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
-  // "That's me" (DECIDING rule 33): a browser that knows nobody signs in as a record of this match or
+  // "That's me" (DECIDING rule 34): a browser that knows nobody signs in as a record of this match or
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
   // organiser, a manage link included, has their own way in).
@@ -722,7 +722,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             name?" and somebody who has played before becomes a second row with none of their matches
             on it. In one week 29 players arrived and 3 joined anything, and 15 of 55 rows were a name
             that already existed. "That's me" on the roster is the way back for a record with nothing
-            to prove it (DECIDING rule 33); this fold is the way for one that can prove itself. Closed
+            to prove it (DECIDING rule 34); this fold is the way for one that can prove itself. Closed
             by default, so a real first-timer reads one line and the name field above is untouched.
           */}
           {!me && (

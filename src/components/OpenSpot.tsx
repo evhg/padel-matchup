@@ -41,7 +41,7 @@ export function OpenSpot({
   emailEnabled: boolean;
   /** Everybody already in this match, so a returning player is recognised before they become a second row. */
   namesHere?: readonly string[];
-  /** Names on this line-up that "That's me" signs in by name (DECIDING rule 33): the page asked the rule already, and those rows wear the button too. */
+  /** Names on this line-up that "That's me" signs in by name (DECIDING rule 34): the page asked the rule already, and those rows wear the button too. */
   claimable?: readonly string[];
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
@@ -193,7 +193,7 @@ export function OpenSpot({
           become a second row with none of their history on it. If that name is already in this match,
           say so and offer the door instead — quietly, under the field, with the name field untouched,
           because a real namesake must still be able to join. A record the rule lets in by name signs
-          in with one tap (DECIDING rule 33); any other opens the way back in that needs proof. A crew
+          in with one tap (DECIDING rule 34); any other opens the way back in that needs proof. A crew
           member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
         {mode === "join" && !hasIdentity && nameIsHere(name, namesHere) && (

@@ -61,7 +61,7 @@ export default async function MePage({ searchParams }: Props) {
     );
   }
 
-  // A session that came in by "That's me" and has proved nothing since gets no personal link, and none is minted for it (DECIDING rule 33).
+  // A session that came in by "That's me" and has proved nothing since gets no personal link, and none is minted for it (DECIDING rule 34).
   const byName = await nameOnly(me);
   const [token, myClubs, t, asCoach, shipped] = await Promise.all([byName ? null : getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id), countShipped(db)]);
   // Sequential, not folded into the batch above: the pooler stalls on pipelined bursts (rule 8).

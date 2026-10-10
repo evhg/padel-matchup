@@ -76,7 +76,7 @@ export async function clearSessionPlayer(): Promise<void> {
 }
 
 /**
- * A session that came in by "That's me" (DECIDING rule 33), marked beside the session cookie and
+ * A session that came in by "That's me" (DECIDING rule 34), marked beside the session cookie and
  * signed for that one record, so it cannot be copied onto another and says nothing once the browser
  * signs in as anybody else. What it holds back, and until when, is `nameOnlySession`
  * (src/lib/domain/thatsMe.ts): no personal link and no home-screen card until the record proves

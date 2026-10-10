@@ -77,7 +77,7 @@ export async function requirePlayer(db: Db, name?: string | null, o: { namesHere
 }
 
 /**
- * A session that came in by "That's me" and has proved nothing since (DECIDING rule 33): My matches
+ * A session that came in by "That's me" and has proved nothing since (DECIDING rule 34): My matches
  * shows it no personal link and no home-screen card, the manifest gives it no personal start page, and
  * the link can be neither rotated nor mailed from it.
  */

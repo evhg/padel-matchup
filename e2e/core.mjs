@@ -239,7 +239,7 @@ try {
 
   await w.close();
 
-  // "That's me" (DECIDING rule 33; the owner, 10 October 2026): the browser a WhatsApp tap opens sees
+  // "That's me" (DECIDING rule 34; the owner, 10 October 2026): the browser a WhatsApp tap opens sees
   // Jordi on the line-up and is Jordi in one tap, with no email, no code and no second row. Dana
   // organises this match, so her row carries no such button.
   const j2 = await newPage();
@@ -259,7 +259,7 @@ try {
     JSON.stringify((lineup.players ?? []).map((p) => p.name)),
   );
   await shot(j2, "12a-thats-me");
-  // A sign-in by name hands over no lasting key (DECIDING rule 33): until Jordi proves something, My
+  // A sign-in by name hands over no lasting key (DECIDING rule 34): until Jordi proves something, My
   // matches shows that browser no personal link and no way to mail it, and the manifest gives it the
   // plain start page instead of the personal link.
   await j2.goto(`${BASE}/me`);

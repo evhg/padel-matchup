@@ -850,7 +850,7 @@ Everything in this list is live. The README describes each in detail.
   so a player in a browser that did not know them typed their name and became a new record; the
   email code and Telegram, the ways back, reached 2 of 21 players. No link can keep a player inside a
   group. What shipped:
-  - **"That's me" signs in** (the owner's decision, DECIDING rule 33). On the match page a browser
+  - **"That's me" signs in** (the owner's decision, DECIDING rule 34). On the match page a browser
     that knows nobody sees "That's me" beside each record of this line-up the rule allows, and on the
     open spot when the name typed is one of them; one tap signs in as that record. A browser that
     already made its own new record folds it into the old one (`mergePlayers`, never `proved`) when
