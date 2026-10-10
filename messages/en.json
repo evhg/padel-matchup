@@ -428,7 +428,8 @@
     "sameNotMe": "Not me",
     "sameFailed": "These could not be added. Reload the page and try again.",
     "biggerTextHelp": "Larger words everywhere in the app, on this device.",
-    "sameAskingGroup": "This name is a member of a group that asks to join. First play one match at the same club or with the same organiser. Then you can add these matches."
+    "sameAskingGroup": "This name is a member of a group that asks to join. First play one match at the same club or with the same organiser. Then you can add these matches.",
+    "identityByName": "You came in by tapping your name, so your personal link stays hidden until you confirm an email with a code or link Telegram."
   },
   "notFound": {
     "title": "Link not found",

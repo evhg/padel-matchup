@@ -92,10 +92,12 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
             />
           </div>
         )}
-        <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
+        <p className="mt-3 text-xs text-faint" data-testid="identity-help">
+          {personalToken ? t("me.identityHelp") : t("me.identityByName")}
+        </p>
       </section>
-      {/* Only for somebody with nothing yet: a player with matches already has their link above. */}
-      {!hasMatches && emailEnabled() && (
+      {/* For somebody with nothing yet, and for a session that came in by name: the code is how it proves itself. A player with matches already has their link above. */}
+      {(!hasMatches || !personalToken) && emailEnabled() && (
         <section className="card">
           <RestoreWithEmail initialEmail={player.email ?? ""} />
         </section>

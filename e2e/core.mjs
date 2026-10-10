@@ -266,7 +266,10 @@ try {
   const byNameManifest = await j2.request.get(`${BASE}/manifest.webmanifest`).then((r) => r.json());
   check(
     "after \"That's me\", My matches shows no personal link and the manifest no personal start page",
-    (await j2.getByText("Your personal link").count()) === 0 && (await j2.getByRole("button", { name: /Email me this link/ }).count()) === 0 && byNameManifest.start_url === "/?source=homescreen",
+    (await j2.getByRole("heading", { name: /Your personal link/ }).count()) === 0 &&
+      (await j2.getByRole("button", { name: /Email me this link/ }).count()) === 0 &&
+      /came in by tapping your name/.test((await j2.getByTestId("identity-help").textContent()) ?? "") &&
+      byNameManifest.start_url === "/?source=homescreen",
     byNameManifest.start_url,
   );
   await j2.close();
