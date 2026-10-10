@@ -35,18 +35,44 @@ export type InlineKeyboard = { inline_keyboard: { text: string; callback_data?: 
 export type ReplyKeyboard = { keyboard: { text: string }[][]; is_persistent?: boolean; resize_keyboard?: boolean; input_field_placeholder?: string };
 export type TgUser = { id: number; is_bot?: boolean; first_name: string; last_name?: string; username?: string; language_code?: string };
 export type TgChat = { id: number; type: "private" | "group" | "supergroup" | "channel"; title?: string; username?: string };
-export type TgMessage = { message_id: number; date: number; chat: TgChat; from?: TgUser; text?: string; caption?: string; photo?: { file_id: string }[]; message_thread_id?: number; reply_to_message?: TgMessage; entities?: { type: string; offset: number; length: number; url?: string }[] };
+export type TgMessage = {
+  message_id: number;
+  date: number;
+  chat: TgChat;
+  from?: TgUser;
+  text?: string;
+  caption?: string;
+  photo?: { file_id: string }[];
+  message_thread_id?: number;
+  reply_to_message?: TgMessage;
+  entities?: { type: string; offset: number; length: number; url?: string }[];
+  /** Posted as a chat, not a person: an anonymous admin (the group itself) or a channel. */
+  sender_chat?: TgChat;
+  /** A linked channel's post copied into its discussion group by Telegram (sent from 777000). */
+  is_automatic_forward?: boolean;
+  /** A message forwarded from somewhere else: its words are somebody else's. */
+  forward_origin?: unknown;
+  forward_date?: number;
+  /** Service messages: the group's new title, and a basic group upgraded to a supergroup under a new id. */
+  new_chat_title?: string;
+  migrate_to_chat_id?: number;
+  migrate_from_chat_id?: number;
+};
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
   /** A tap on a button: under a message the bot sent, or (inline_message_id) under a card sent through inline mode. */
   callback_query?: { id: string; from: TgUser; message?: TgMessage; inline_message_id?: string; data?: string };
-  my_chat_member?: { chat: TgChat; from: TgUser; old_chat_member: { status: string }; new_chat_member: { status: string } };
+  /** The bot's own membership changed: added, made an admin (with which rights), demoted, removed. */
+  my_chat_member?: { chat: TgChat; from: TgUser; old_chat_member: TgChatMember; new_chat_member: TgChatMember };
   /** "@bot query" typed in any chat. */
   inline_query?: { id: string; from: TgUser; query: string; offset: string; chat_type?: string };
   /** The user picked one of our inline results (sent when inline feedback is on in BotFather; carries the message id only when the result has buttons). */
   chosen_inline_result?: { result_id: string; from: TgUser; query: string; inline_message_id?: string };
 };
+
+/** Somebody's place in a chat. An administrator carries the rights they were given; the others carry none of these. */
+export type TgChatMember = { status: string; user?: TgUser; can_pin_messages?: boolean; can_change_info?: boolean; can_invite_users?: boolean };
 
 /** One article in the inline results: what the picker shows, and the message it sends when chosen. */
 export type InlineArticle = { id: string; title: string; description: string; text: string; keyboard: InlineKeyboard };
@@ -87,7 +113,12 @@ export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 export type ReplyKeyboardRemove = { remove_keyboard: true };
 /** Makes the person's next message a reply to this one: the one typed step in a flow of taps carries its context this way. */
 export type ForceReply = { force_reply: true; input_field_placeholder?: string; selective?: boolean };
-export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | ForceReply | null; replyTo?: number | null; threadId?: number | null; silent?: boolean };
+/**
+ * `onlyFor`: an ephemeral message (Bot API 10.3), which one member of a group sees and nobody else.
+ * An admin bot may send one to any member at any time; Telegram does not promise delivery, so nothing
+ * that matters may depend on one arriving.
+ */
+export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | ForceReply | null; replyTo?: number | null; threadId?: number | null; silent?: boolean; onlyFor?: number | null };
 
 export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendMessage", {
@@ -99,7 +130,32 @@ export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
     ...(o.keyboard ? { reply_markup: o.keyboard } : {}),
     ...(o.replyTo ? { reply_parameters: { message_id: o.replyTo, allow_sending_without_reply: true } } : {}),
     ...(o.threadId ? { message_thread_id: o.threadId } : {}),
+    ...(o.onlyFor ? { ephemeral_message_parameters: { receiver_user_id: o.onlyFor } } : {}),
   });
+}
+
+/**
+ * One emoji under somebody's message: the bot's whole answer to a word in a crew's chat, which adds
+ * no message (DECIDING rule 5). Bots may use only Telegram's fixed list of reactions, and 👋 and ✋ are
+ * not on it (checked 9 October 2026), which is why "out" is 👌 and "no seat" is 🤷.
+ */
+export function setMessageReaction(chatId: number, messageId: number, emoji: string) {
+  return tg<true>("setMessageReaction", { chat_id: chatId, message_id: messageId, reaction: [{ type: "emoji", emoji }] });
+}
+
+/** Somebody's place in a chat: whether they may opt a group in, and whether the bot itself is an admin there. */
+export function getChatMember(chatId: number, userId: number) {
+  return tg<TgChatMember>("getChatMember", { chat_id: chatId, user_id: userId });
+}
+
+/** A named invite link to the group; needs the can_invite_users right. */
+export function createChatInviteLink(chatId: number, name: string) {
+  return tg<{ invite_link: string }>("createChatInviteLink", { chat_id: chatId, name: name.slice(0, 32) });
+}
+
+/** Unpins one message in a group: only ours, never everything somebody else pinned. */
+export function unpinChatMessage(chatId: number, messageId: number) {
+  return tg<true>("unpinChatMessage", { chat_id: chatId, message_id: messageId });
 }
 
 /** Removes one of the bot's own messages (a finished prompt, for instance). */
@@ -209,7 +265,7 @@ export function setChatCommands(chatId: number, commands: { command: string; des
   return tg<true>("setMyCommands", { commands, scope: { type: "chat", chat_id: chatId } });
 }
 
-/** Pins a message at the top of a private chat, quietly (bots may pin in private chats). */
+/** Pins a message at the top of a chat, quietly (a private chat, or a group where the bot may pin). */
 export function pinChatMessage(chatId: number, messageId: number) {
   return tg<true>("pinChatMessage", { chat_id: chatId, message_id: messageId, disable_notification: true });
 }

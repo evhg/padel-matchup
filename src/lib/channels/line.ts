@@ -95,8 +95,12 @@ export const lineChannel: CardChannel<LinePayload, LineRoom, LineCard> = {
   async markRendered(db, card, rendered) {
     await db.update(lineCards).set({ rendered, updatedAt: new Date() }).where(eq(lineCards.id, card.id));
   },
-  async markCompleteNoted(db, card) {
-    await db.update(lineCards).set({ completeNotedAt: new Date() }).where(eq(lineCards.id, card.id));
+  async claimCompleteNote(db, card) {
+    const won = await db.update(lineCards).set({ completeNotedAt: new Date() }).where(and(eq(lineCards.id, card.id), isNull(lineCards.completeNotedAt))).returning({ id: lineCards.id });
+    return won.length > 0;
+  },
+  async releaseCompleteNote(db, card) {
+    await db.update(lineCards).set({ completeNotedAt: null }).where(eq(lineCards.id, card.id));
   },
   async bindGroup(db, room, groupId) {
     await db.update(lineRooms).set({ groupId }).where(and(eq(lineRooms.roomId, room.raw.roomId), isNull(lineRooms.groupId)));

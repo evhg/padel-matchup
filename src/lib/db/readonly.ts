@@ -49,6 +49,8 @@ export const HIDDEN_COLUMNS: readonly string[] = [
   "manager_code",
   "manage_token",
   "invite_code",
+  // A door into a crew's Telegram group (telegram_chats): whoever holds it joins the chat the bot reads
+  "invite_link",
   // Claims a partner's place in a tournament pair
   "claim_token",
   // One-time login codes and API credentials, hashed — a six-digit hash is not a secret for long

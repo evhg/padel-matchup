@@ -24,13 +24,15 @@ import { handleWantCallback, wantCommand } from "./handlers/want";
 import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
+import { crewLeft, crewRightsChanged, crewStart, mayPinNotice, migrateChat, quietCommand } from "./handlers/crew";
+import { countSeat, heardInGroup, isListening, listenInGroup, repliedTo, replyToCard } from "./handlers/words";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { cancelEvent } from "@/lib/domain/events";
 import { notifyEventCancelled } from "@/lib/notify";
 import { findOrCreateTelegramPlayer } from "./identity";
 import { resolveZone } from "./parse";
 import { postCard, syncTelegram } from "./post";
-import { CODE_RE, codesInText, parseCommand } from "./text";
+import { CODE_RE, codesInText, parseCommand, SETS_ONLY_RE } from "./text";
 
 /**
  * The bot, quiet by design. It posts a new message only for: the match card,
@@ -47,11 +49,22 @@ import { CODE_RE, codesInText, parseCommand } from "./text";
 
 async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<string> {
   const from = msg.from;
-  if (!from || from.is_bot) return "ignored";
   const isPrivate = msg.chat.type === "private";
   if (!isPrivate && !GROUP_TYPES.has(msg.chat.type)) return "ignored";
   const cmd = parseCommand(msg.text);
+  // An admin who posts anonymously speaks as the group itself (sender_chat is the chat; from is Telegram's
+  // GroupAnonymousBot): from them only the crew link and /quiet are read, as from any admin of the group.
+  const asGroup = !isPrivate && msg.sender_chat?.id === msg.chat.id && Boolean(cmd && ((cmd.command === "start" && /^crew_/.test(cmd.args.trim())) || cmd.command === "quiet"));
+  if (!from || (from.is_bot && !asGroup)) return "ignored";
   const base = baseUrl();
+  // An admin bot receives every message in its groups. A line there that is no command, no reply, no
+  // service message the chat's row must see, no kicksma.sh link and no word the bot acts on is dropped
+  // before any database read (rule 12): nothing below would act on it, and the row waits for a line that
+  // matters. In a forum every message "answers" its topic's first message; of those, only a score is read.
+  const answers = Boolean(repliedTo(msg)) || (Boolean(msg.reply_to_message) && SETS_ONLY_RE.test(msg.text ?? ""));
+  if (!isPrivate && !cmd && !answers && !msg.new_chat_title && !msg.migrate_to_chat_id && !heardInGroup(msg) && codesInText(msg.text, base).length === 0) return "ignored";
+  // A basic group upgraded to a supergroup: the crew, its opt-in and its invite link move to the new id.
+  if (!isPrivate && msg.migrate_to_chat_id) return migrateChat(db, msg.chat.id, msg.migrate_to_chat_id);
   // The private chat gets a row too: a card can live there and be shared onwards with 📤.
   const { chat } = await upsertChat(db, msg.chat, from);
   const locale = chatLocale(chat);
@@ -119,6 +132,9 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
       return "lang";
     }
     if (cmd.command === "feedback" || cmd.command === "idea" || cmd.command === "bug") return feedbackFromChat(db, msg, chat, from, cmd.args, locale, ctx);
+    // A crew's own group: the crew page's link arrives as /start crew_<ticket>; /quiet stops the bot reading.
+    if (cmd.command === "start" && !isPrivate && /^crew_/.test(cmd.args.trim())) return crewStart(db, msg, chat, from, cmd.args.trim(), asGroup);
+    if (cmd.command === "quiet" && !isPrivate) return quietCommand(db, msg, chat, from, asGroup);
     if (ROLE_COMMANDS.has(cmd.command) && isPrivate) return roleCommand(db, msg, chat, from, cmd.command);
     if (cmd.command === "want") return wantCommand(db, msg, chat, from, cmd.args);
     if (cmd.command === "coach" && isPrivate) return coachCommand(db, chat, from);
@@ -129,7 +145,12 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
   // "6-4 6-3" as a reply to a card or a nudge is the score; a reply to the thank-you joins the note.
   const scored = await plainScore(db, msg, chat, from, ctx);
   if (scored) return scored;
-  const appended = await feedbackReply(db, msg, chat, from, locale);
+  // "+1" or "can't make it" in reply to a card takes or frees the seat, as its buttons do.
+  const seated = await replyToCard(db, msg, chat, from, ctx);
+  if (seated) return seated;
+  // Where the bot reads a crew's group it keeps no text, so a reply there never joins a feedback note
+  // (DECIDING rule 17 names this exception; /feedback there still makes a note).
+  const appended = isListening(chat) ? null : await feedbackReply(db, msg, chat, from, locale);
   if (appended) return appended;
   // A pasted kicksma.sh link becomes a live card (in groups this needs admin rights or privacy mode off); in the private chat a bare code works too.
   const codes = codesInText(msg.text, base);
@@ -159,6 +180,9 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     posted++;
   }
   if (codes.length || posted) return "card";
+  // A crew's own group: "in", "out" and "who's in Thursday 7pm Rawai?" as plain messages. Anything else stays unread.
+  const heard = await listenInGroup(db, msg, chat, from, ctx);
+  if (heard) return heard;
   if (isPrivate && player) {
     // The book could not read the word and no match answers to it: the book's help.
     if (resolved?.kind === "coach") return coachHelp(player, chat.chatId);
@@ -267,6 +291,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   }
   await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") });
   await syncTelegram(db, code);
+  await countSeat(db, "tap", outcome, player.id, detail.event);
   return `${action === "j" ? "join" : "leave"}:${outcome}`;
 }
 
@@ -274,13 +299,24 @@ async function handleMyChatMember(db: Db, u: NonNullable<TgUpdate["my_chat_membe
   if (!GROUP_TYPES.has(u.chat.type)) return "ignored";
   const status = u.new_chat_member.status;
   if (status === "left" || status === "kicked") {
-    await db.update(telegramChats).set({ leftAt: new Date() }).where(eq(telegramChats.chatId, u.chat.id));
+    await db.update(telegramChats).set({ leftAt: new Date(), ...crewLeft }).where(eq(telegramChats.chatId, u.chat.id));
     return "left";
+  }
+  // Restricted is not an admin: whatever else it means, the bot stops reading a crew's group.
+  if (status === "restricted") {
+    await db.update(telegramChats).set({ listeningSince: null }).where(eq(telegramChats.chatId, u.chat.id));
+    return "ignored";
   }
   if (status === "member" || status === "administrator") {
     const { chat, created } = await upsertChat(db, u.chat, u.from);
-    if (created) await sendMessage(chat.chatId, strings(chatLocale(chat)).welcome, { silent: true });
-    return created ? "welcome" : "rejoined";
+    // Added straight in as an admin that may pin is how the crew link adds the bot, and its pinned notice
+    // says what the welcome would: the group gets one message from the bot at the start, not two.
+    const welcomed = created && !mayPinNotice(u.new_chat_member);
+    if (welcomed) await sendMessage(chat.chatId, strings(chatLocale(chat)).welcome, { silent: true });
+    // A crew's own group starts when the bot may pin its notice there, and stops when it is no longer an admin.
+    const crew = await crewRightsChanged(db, chat, u.new_chat_member);
+    if (crew) return crew;
+    return created ? (welcomed ? "welcome" : "joined") : "rejoined";
   }
   return "ignored";
 }

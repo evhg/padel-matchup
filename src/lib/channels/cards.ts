@@ -87,10 +87,11 @@ export async function syncCards<P, R, C>(ch: CardChannel<P, R, C>, db: Db, code:
         }
         edits++;
       }
-      if (r.complete && !card.completeNotedAt && detail.event.status !== "cancelled") {
+      // Claimed before it is sent: two syncs at once (a seat word and the event it emits) note it once, not twice.
+      if (r.complete && !card.completeNotedAt && detail.event.status !== "cancelled" && (await ch.claimCompleteNote(db, card))) {
         const s = strings(room.locale);
         const noted = await ch.note(db, room, s.completeNote(occupiedOf(detail), formatEventTime(detail.event.startsAt, detail.event.tz, room.locale)), { replyTo: card.messageId, silent: true });
-        if (noted) await ch.markCompleteNoted(db, card);
+        if (!noted) await ch.releaseCompleteNote(db, card);
       }
     }
     if (ch.syncExtra) edits += await ch.syncExtra(db, detail, now);

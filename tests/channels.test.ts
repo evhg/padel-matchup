@@ -28,6 +28,9 @@ function fakeChannel(o: { canEdit: boolean; enabled?: boolean }) {
   const reminded = new Set<string>();
   let nextId = 1;
   let failPosts = false;
+  let failNotes = false;
+  /** Two webhook calls at once: each reads the cards, then the other reads them too before either writes. */
+  let overlapReads = false;
   const roomOf = (r: FakeRoom): Room<FakeRoom> => ({ id: r.key, locale: r.locale, groupId: r.groupId, raw: r });
   const cardOf = (c: FakeCard): Card<FakeCard> => ({ id: c.id, kind: c.kind, messageId: c.messageId, rendered: c.rendered, completeNotedAt: c.completeNotedAt, raw: c });
   const ch: CardChannel<Payload, FakeRoom, FakeCard> = {
@@ -38,7 +41,9 @@ function fakeChannel(o: { canEdit: boolean; enabled?: boolean }) {
       return rooms.filter((r) => r.groupId === groupId).map(roomOf);
     },
     async cardsOf(_db, eventId, kinds) {
-      return cards.filter((c) => c.eventId === eventId && (!kinds?.length || kinds.includes(c.kind))).map((c) => ({ card: cardOf(c), room: roomOf(rooms.find((r) => r.key === c.roomKey)!) }));
+      const read = cards.filter((c) => c.eventId === eventId && (!kinds?.length || kinds.includes(c.kind))).map((c) => ({ card: cardOf(c), room: roomOf(rooms.find((r) => r.key === c.roomKey)!) }));
+      if (overlapReads) await new Promise((r) => setTimeout(r, 40));
+      return read;
     },
     render(detail: EventDetail, locale) {
       const occupied = detail.roster.filter((x) => x.position <= detail.event.capacity && (x.status === "joined" || x.status === "confirmed")).length;
@@ -55,6 +60,7 @@ function fakeChannel(o: { canEdit: boolean; enabled?: boolean }) {
       return true;
     },
     async note(_db, room, text, po = {}) {
+      if (failNotes) return false;
       sent.push({ room: room.id, kind: "note", text, silent: po.silent });
       return true;
     },
@@ -70,8 +76,13 @@ function fakeChannel(o: { canEdit: boolean; enabled?: boolean }) {
     async markRendered(_db, card, rendered) {
       card.raw.rendered = rendered;
     },
-    async markCompleteNoted(_db, card) {
+    async claimCompleteNote(_db, card) {
+      if (card.raw.completeNotedAt) return false;
       card.raw.completeNotedAt = new Date();
+      return true;
+    },
+    async releaseCompleteNote(_db, card) {
+      card.raw.completeNotedAt = null;
     },
     async bindGroup(_db, room, groupId) {
       if (room.raw.type === "group") room.raw.groupId = groupId;
@@ -86,7 +97,7 @@ function fakeChannel(o: { canEdit: boolean; enabled?: boolean }) {
       reminded.add(eventId);
     },
   };
-  return { ch, rooms, cards, sent, setFailPosts: (v: boolean) => (failPosts = v) };
+  return { ch, rooms, cards, sent, setFailPosts: (v: boolean) => (failPosts = v), setFailNotes: (v: boolean) => (failNotes = v), setOverlapReads: (v: boolean) => (overlapReads = v) };
 }
 
 describe("the card algorithm on a channel of its own", () => {
@@ -120,6 +131,25 @@ describe("the card algorithm on a channel of its own", () => {
     expect(kinds).toEqual(["post", "edit", "note"]);
     expect(f.sent[2].silent).toBe(true);
     expect(f.cards[0].completeNotedAt).not.toBeNull();
+  });
+
+  it("two syncs at once note a complete line-up once; a note that could not be sent is tried again", async () => {
+    const f = fakeChannel({ canEdit: true });
+    f.rooms.push({ key: "r1", locale: "en", groupId: null, type: "group" });
+    const { org, ev, detail } = await match();
+    await postCard(f.ch, db, await detail(), { id: "r1", locale: "en", groupId: null, raw: f.rooms[0] }, {}, NOW);
+    await joinEvent(db, { eventId: ev.id, playerId: org.id, now: NOW });
+    for (const name of ["Eve", "Fay", "Gus"]) await joinEvent(db, { eventId: ev.id, playerId: (await makePlayer(db, name)).id, now: NOW });
+    // The chat refuses the note: the claim is given back, and the next sync sends it.
+    f.setFailNotes(true);
+    await syncCards(f.ch, db, ev.code, NOW);
+    expect(f.cards[0].completeNotedAt).toBeNull();
+    f.setFailNotes(false);
+    // A seat word syncs the card, and so does the event it emits, at the same moment: both read the card
+    // before either has noted the line-up, and still one note goes out between them.
+    f.setOverlapReads(true);
+    await Promise.all([syncCards(f.ch, db, ev.code, NOW), syncCards(f.ch, db, ev.code, NOW)]);
+    expect(f.sent.filter((x) => x.kind === "note")).toHaveLength(1);
   });
 
   it("a group's match lands in every room tied to the group; the first card binds a group room, never a private one", async () => {

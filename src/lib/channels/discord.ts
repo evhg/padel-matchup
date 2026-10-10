@@ -79,8 +79,12 @@ export const discordChannel: CardChannel<DiscordPayload, DiscordChannel, Discord
   async markRendered(db, card, rendered) {
     await db.update(discordCards).set({ rendered, updatedAt: new Date() }).where(eq(discordCards.id, card.id));
   },
-  async markCompleteNoted(db, card) {
-    await db.update(discordCards).set({ completeNotedAt: new Date() }).where(eq(discordCards.id, card.id));
+  async claimCompleteNote(db, card) {
+    const won = await db.update(discordCards).set({ completeNotedAt: new Date() }).where(and(eq(discordCards.id, card.id), isNull(discordCards.completeNotedAt))).returning({ id: discordCards.id });
+    return won.length > 0;
+  },
+  async releaseCompleteNote(db, card) {
+    await db.update(discordCards).set({ completeNotedAt: null }).where(eq(discordCards.id, card.id));
   },
   async bindGroup(db, room, groupId) {
     await db.update(discordChannels).set({ groupId }).where(and(eq(discordChannels.channelId, room.raw.channelId), isNull(discordChannels.groupId)));

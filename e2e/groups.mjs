@@ -47,7 +47,7 @@ try {
   await olga.waitForURL(/\/g\/[^/]{6}$/, { timeout: 30000 });
   const gcode = olga.url().split("/").pop();
   await shot(olga, "g1-group");
-  check("group page: named as typed, 2 members, admin chip", (await olga.getByRole("heading", { name: "Club Nine" }).count()) === 1 && (await olga.getByText("2 members").count()) > 0 && (await olga.getByText("Admin").count()) === 1);
+  check("group page: named as typed, 2 members, admin chip", (await olga.getByRole("heading", { name: "Club Nine" }).count()) === 1 && (await olga.getByText("2 members").count()) > 0 && (await olga.getByText("Admin", { exact: true }).count()) === 1);
   check("the original match is listed as upcoming", (await olga.locator("a[href='/" + code + "']").count()) >= 1);
   // Rule 3: the season table waits for the crew's second scored match; a new crew has none.
   check("no season table before any result", (await olga.getByTestId("crew-season").count()) === 0);
@@ -57,6 +57,8 @@ try {
   // Bea is a member (she was in the match): creates the next match from the group page.
   await bea.goto(`${BASE}/g/${gcode}`);
   check("Bea is in the group", (await bea.getByText("You're in this group").count()) === 1);
+  // Only the crew's admin sets up the crew's own Telegram group (DECIDING rule 31): a member is not offered it.
+  check("a member is not offered a Telegram group for the crew", (await bea.getByRole("link", { name: "Run a Telegram group for this crew", exact: true }).count()) === 0);
   await bea.getByRole("link", { name: /Create the next match/ }).click();
   await bea.waitForURL(/\/\?group=/, { timeout: 20000 });
   check("create form is prefilled for the group", (await bea.getByRole("heading", { name: "For Club Nine" }).count()) === 1 && (await bea.locator("input[value='Club Nine']").count()) === 1);
@@ -77,6 +79,10 @@ try {
   const box = await sitsInside(olga, crowded.getByTestId("tag-chip"), crowded);
   check("the group row names who the match is for, and the chip sits inside the row at 390px", tagText === "Mixed · 45+" && box.ok, `${tagText} ${box.detail}`);
   await shot(olga, "g1b-group-tagged");
+  // The crew's admin is offered one link that adds the bot as an admin with two rights, signed for her.
+  const runTg = olga.getByRole("link", { name: "Run a Telegram group for this crew", exact: true });
+  const runHref = (await runTg.count()) === 1 ? await runTg.getAttribute("href") : null;
+  check("the admin is offered a Telegram group for the crew", /^https:\/\/t\.me\/kicksmash_bot\?startgroup=crew_[0-9a-f]{32}_[0-9a-z]+_[0-9a-f]{16}&admin=invite_users\+pin_messages$/.test(runHref ?? ""), runHref);
   // Each upcoming row says whether there is room. Chips are set in capitals by CSS, so read textContent.
   const firstFill = ((await olga.locator("a[href='/" + code + "']").getByTestId("group-row-chips").first().textContent()) ?? "").toLowerCase();
   check("an upcoming row shows the spots left on one line of chips", /\d spots? left/.test(firstFill), firstFill);
@@ -85,6 +91,7 @@ try {
   const cal = await newPage();
   await cal.goto(`${BASE}/g/${gcode}`);
   check("non-members see the join button and the member-only hint", (await cal.getByRole("button", { name: "Join this group" }).count()) === 1 && (await cal.getByText("Join the group first").count()) === 1);
+  check("a visitor is not offered the crew's Telegram group", (await cal.getByRole("link", { name: "Run a Telegram group for this crew", exact: true }).count()) === 0 && (await cal.getByRole("link", { name: "Join the crew's Telegram group", exact: true }).count()) === 0);
   await cal.getByRole("button", { name: "Join this group" }).click();
   await cal.getByPlaceholder("e.g. Alex").fill("Cal");
   await cal.getByRole("button", { name: "Join this group" }).click();

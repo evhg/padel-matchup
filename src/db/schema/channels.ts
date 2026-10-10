@@ -1,5 +1,5 @@
 // Where a card lives: the rooms a bot is in and the cards it keeps in them, one pair of tables per channel.
-import { bigint, boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { events } from "./events";
 import { groups } from "./groups";
 
@@ -8,22 +8,40 @@ import { groups } from "./groups";
 // edited there. Quiet by design: joins and leaves edit the card, new messages
 // only for the card itself, a complete line-up, the reminder and the result.
 // ---------------------------------------------------------------------------
-export const telegramChats = pgTable("telegram_chats", {
-  /** Telegram chat id (negative for groups). */
-  chatId: bigint("chat_id", { mode: "number" }).primaryKey(),
-  type: text("type").notNull(),
-  title: text("title"),
-  /** Locale the bot speaks in this chat: en or ru. */
-  locale: text("locale").notNull().default("en"),
-  /** Defaults for matches created from the chat. */
-  tz: text("tz"),
-  venueName: text("venue_name"),
-  /** The group behind this chat, learned from the first group match carded here: its weekly matches land here by themselves, and /new here makes group matches. */
-  groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
-  /** Bot removed from the chat: keep the row, stop posting. */
-  leftAt: timestamp("left_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const telegramChats = pgTable(
+  "telegram_chats",
+  {
+    /** Telegram chat id (negative for groups). */
+    chatId: bigint("chat_id", { mode: "number" }).primaryKey(),
+    type: text("type").notNull(),
+    title: text("title"),
+    /** Locale the bot speaks in this chat: en or ru. */
+    locale: text("locale").notNull().default("en"),
+    /** Defaults for matches created from the chat. */
+    tz: text("tz"),
+    venueName: text("venue_name"),
+    /** The group behind this chat, learned from the first group match carded here: its weekly matches land here by themselves, and /new here makes group matches. */
+    groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
+    /** Bot removed from the chat: keep the row, stop posting. */
+    leftAt: timestamp("left_at", { withTimezone: true }),
+    /**
+     * A crew's own group (the owner's decision of 9 October 2026, DECIDING rule 31): since when the bot
+     * reads the plain messages here for "in", "out" and "who's in …?". Set only where a group admin
+     * opted in from the crew page and the bot is an admin: claimed the moment before the notice is
+     * pinned, and cleared again if the pin fails. Null everywhere else, and again after /quiet, a lost
+     * admin right or the bot's removal. No message text is kept anywhere.
+     */
+    listeningSince: timestamp("listening_since", { withTimezone: true }),
+    /** The version of the notice the group opted in under (`CREW_NOTICE_VERSION`); null where it never did, or after it opted out. */
+    noticeVersion: integer("notice_version"),
+    /** The pinned notice, so /quiet unpins that message and nothing somebody else pinned, and a promotion after a demotion pins it again instead of posting another. */
+    noticeMessageId: bigint("notice_message_id", { mode: "number" }),
+    /** The invite link the bot made for the crew's members, shown on the crew page while the bot is in the group (after /quiet too: the group is still the crew's). A door into the group, so the reader role never sees it. */
+    inviteLink: text("invite_link"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("telegram_chats_group_idx").on(t.groupId)],
+);
 
 export const telegramCards = pgTable(
   "telegram_cards",
@@ -45,7 +63,8 @@ export const telegramCards = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("telegram_cards_event_chat_kind_idx").on(t.eventId, t.chatId, t.kind), index("telegram_cards_event_idx").on(t.eventId)],
+  // A reply to a card finds it by chat and message; a crew's own chat lists its open cards by chat.
+  (t) => [uniqueIndex("telegram_cards_event_chat_kind_idx").on(t.eventId, t.chatId, t.kind), index("telegram_cards_event_idx").on(t.eventId), index("telegram_cards_chat_message_idx").on(t.chatId, t.messageId)],
 );
 
 /**

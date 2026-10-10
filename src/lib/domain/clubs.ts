@@ -169,6 +169,17 @@ export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> 
     .limit(limit);
 }
 
+/** The names of the clubs shown in one time zone: what a chat's free text is matched against (`matchVenue` in the bot's parser). */
+export async function listedClubNames(db: Db, tz: string, limit = 200): Promise<string[]> {
+  const rows = await db
+    .select({ name: clubs.name })
+    .from(clubs)
+    .where(and(eq(clubs.tz, tz), isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), listedSource())))
+    .orderBy(asc(clubs.name))
+    .limit(limit);
+  return rows.map((r) => r.name);
+}
+
 /**
  * A place somebody can pick, in the order a person reads a list when the app knows a little about
  * them. `slug` is the club's own address when the pick is a listed club, so a match made here lands

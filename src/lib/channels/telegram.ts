@@ -69,8 +69,12 @@ export const telegramChannel: CardChannel<TelegramPayload, TelegramChat, Telegra
   async markRendered(db, card, rendered) {
     await db.update(telegramCards).set({ rendered, updatedAt: new Date() }).where(eq(telegramCards.id, card.id));
   },
-  async markCompleteNoted(db, card) {
-    await db.update(telegramCards).set({ completeNotedAt: new Date() }).where(eq(telegramCards.id, card.id));
+  async claimCompleteNote(db, card) {
+    const won = await db.update(telegramCards).set({ completeNotedAt: new Date() }).where(and(eq(telegramCards.id, card.id), isNull(telegramCards.completeNotedAt))).returning({ id: telegramCards.id });
+    return won.length > 0;
+  },
+  async releaseCompleteNote(db, card) {
+    await db.update(telegramCards).set({ completeNotedAt: null }).where(eq(telegramCards.id, card.id));
   },
   async bindGroup(db, room, groupId) {
     if (!GROUP_TYPES.has(room.raw.type)) return;

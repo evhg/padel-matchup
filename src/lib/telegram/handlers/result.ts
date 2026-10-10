@@ -18,7 +18,7 @@ import { answerCallbackQuery, botDeepLink, editMessageText, esc, sendMessage, ty
 import { cardTitle, strings, type BotLocale, type BotStrings } from "../card";
 import { playingSeats, scoreFormButton, scoreLine } from "@/lib/afterMatch";
 import { findOrCreateTelegramPlayer } from "../identity";
-import { CODE_RE, codesInText, parseSets } from "../text";
+import { CODE_RE, codesInText, parseSets, SETS_ONLY_RE } from "../text";
 
 /** The result: a score typed in the chat, the 🏁 tap on the card and the winners' pair, the organizer's confirmation, "same time next week?". */
 
@@ -260,12 +260,6 @@ async function handleSameTime(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     return `group:error:${isDomainError(e) ? e.code : "unknown"}`;
   }
 }
-
-/**
- * Sets and nothing else. Any number of them: six or more reach `scoreFromChat`, which refuses them in
- * words, rather than falling through here as if the message were not a score at all.
- */
-const SETS_ONLY_RE = /^\s*\d{1,2}\s*[-:]\s*\d{1,2}(?:[\s,;/]+\d{1,2}\s*[-:]\s*\d{1,2})*\s*$/;
 
 /** A bare "6-4 6-3": as a reply it scores the card or nudge it answers; in the private chat, the player's freshest finished match. */
 export

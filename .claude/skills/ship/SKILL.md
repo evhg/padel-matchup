@@ -208,6 +208,15 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and the wrong answer, then break the guard and watch that named test go red.
 - **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
   the bug back, watch it catch it, then restore.
+- **A frozen clock makes every write the same instant, and a fake that reads late hides a race.** Two
+  guards of the crew group passed with the code broken (10 October 2026): "the first group stays the
+  crew's" ordered by `listening_since`, which `freezeClock` gave both groups to the millisecond, and two
+  syncs "at once" never overlapped because the fake read the card after the first one wrote. Set the
+  timestamps apart by hand, in both directions, and make the fake read, then wait, then return.
+- **A reader of free text falls through to silence, never to "keep the rest".** The crew group's
+  "who's in …?" kept whatever words were left as the match's venue, so "who's in for beers at 8?" made
+  a match at "for beers" and showed it on the card and the crew page. When a parser meets chat, what it
+  does not recognise must refuse the whole line; only a known value may be stored.
 - **Nothing but the browser step parses `e2e/*.mjs`.** A page named `d` in a file that already
   declared `d` further down made the whole core suite fail to load — typecheck does not read `.mjs`,
   lint did not catch the redeclaration, and the gate spent a build and 179 seconds of browser time

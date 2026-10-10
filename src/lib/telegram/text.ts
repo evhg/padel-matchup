@@ -18,6 +18,13 @@ export function parseSets(text: string): SetScore[] {
   return out;
 }
 
+/**
+ * A message that is a score and nothing else: "6-4 6-3", "6:4, 3:6, 7-5". The score reader and the word reader both ask this one.
+ * Any number of sets: six or more reach `scoreFromChat`, which refuses them in words, rather than falling through as if the
+ * message were not a score at all.
+ */
+export const SETS_ONLY_RE = /^\s*\d{1,2}\s*[-:]\s*\d{1,2}(?:[\s,;/]+\d{1,2}\s*[-:]\s*\d{1,2})*\s*$/;
+
 export
 const CODE_RE = /(?:^|\/|\s)([A-Za-z0-9]{4})(?=$|[\s/?#])/;
 const LINK_RE = /https?:\/\/[^\s/]+\/([A-Za-z0-9]{4})(?=$|[\s/?#])/g;

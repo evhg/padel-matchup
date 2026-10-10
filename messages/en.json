@@ -1118,7 +1118,10 @@
     "askNoticeHelp": "Open the group to approve or decline.",
     "askApprovedNotice": "You're in {group}\nThe admins said yes. The group's next matches reach you too.",
     "askDeclinedNotice": "No place in {group} for now\nThanks for asking. The admins said no this time. You can ask again in a week.",
-    "askToJoinSetting": "Ask to join"
+    "askToJoinSetting": "Ask to join",
+    "telegramRun": "Run a Telegram group for this crew",
+    "telegramRunHelp": "Kicksmash joins it as an admin, keeps one card per match there and reads the chat to take “in” and “out”. It keeps first names, Telegram usernames, who is in or out, the court and the score, never the text. A group admin can type /quiet, or remove the bot, to stop.",
+    "telegramJoin": "Join the crew's Telegram group"
   },
   "venue": {
     "board": "Venue board",

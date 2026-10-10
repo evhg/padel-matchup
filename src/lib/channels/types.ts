@@ -58,7 +58,10 @@ export interface CardChannel<P = unknown, R = unknown, C = unknown> {
   result(db: Db, room: Room<R>, summary: ResultSummary, o?: PostOptions): Promise<Sent>;
   saveCard(db: Db, eventId: string, room: Room<R>, messageId: MessageId, kind: "card" | "result", rendered: string | null): Promise<void>;
   markRendered(db: Db, card: Card<C>, rendered: string): Promise<void>;
-  markCompleteNoted(db: Db, card: Card<C>): Promise<void>;
+  /** Claims the one "line-up complete" note before it is sent: true for the one sync that gets it, false when another sync already has. */
+  claimCompleteNote(db: Db, card: Card<C>): Promise<boolean>;
+  /** Gives the claim back when the note could not be sent, so the next sync tries again. */
+  releaseCompleteNote(db: Db, card: Card<C>): Promise<void>;
   /** Ties the room to the group behind its first group match, where the channel allows it. */
   bindGroup(db: Db, room: Room<R>, groupId: string): Promise<void>;
   /** Events starting between now and soon that carry a card here and were not reminded yet. */
