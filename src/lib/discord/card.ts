@@ -4,7 +4,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { formatLevel } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, levelLine, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { cardTitle, levelLine, pairCardLines, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import { md, type DcActionRow, type DcEmbed } from "./api";
 
 /**
@@ -33,7 +33,9 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
   if (level) head.push(level);
   if (ev.cost) head.push(`💸 ${md(ev.cost)}${ev.payNote ? ` · ${md(ev.payNote)}` : ""}`);
   const lines: string[] = [];
-  const shown = seats.slice(0, MAX_LINES);
+  const shown = ev.fixedPairs ? [] : seats.slice(0, MAX_LINES);
+  // A fixed-pairs night lists its pairs, one line each (decision F).
+  if (ev.fixedPairs) lines.push(...pairCardLines(detail, locale, { text: md, level: (x) => `*${x}*`, note: (x) => `*(${x})*`, and: "&" }, MAX_LINES));
   for (const seat of shown) {
     if (isOccupied(seat)) {
       const name = seat.player?.displayName ?? seat.invitedName ?? "?";
@@ -46,7 +48,7 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
       lines.push(`${seat.position}. —`);
     }
   }
-  if (seats.length > shown.length) lines.push(`… +${seats.length - shown.length}`);
+  if (!ev.fixedPairs && seats.length > shown.length) lines.push(`… +${seats.length - shown.length}`);
   if (detail.waitlist.length > 0) lines.push(s.waitlist(detail.waitlist.length));
   const spotsLeft = Math.max(0, ev.capacity - occupied - seats.filter((x) => x.status === "invited").length);
   const status = cancelled ? `❌ **${s.cancelled}**` : past ? s.past : complete ? `**${s.complete}**` : spotsLeft > 0 ? `**${s.spots(spotsLeft)}**` : ev.whenFull === "waitlist" ? s.full : s.closed;

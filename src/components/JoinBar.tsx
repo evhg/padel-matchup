@@ -27,6 +27,8 @@ export function JoinBar({
   verified = false,
   verifiers = [],
   asked = [],
+  fixedPairs = false,
+  partnerName = null,
 }: {
   code: string;
   state: JoinState;
@@ -47,6 +49,10 @@ export function JoinBar({
   verifiers?: VerifierDTO[];
   /** Keys of verifiers the viewer already asked. */
   asked?: string[];
+  /** A fixed-pairs night (decision F): the join takes a partner's name, and leaving asks who leaves. */
+  fixedPairs?: boolean;
+  /** The viewer's partner on such a night, or null while they have none. */
+  partnerName?: string | null;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
@@ -55,6 +61,10 @@ export function JoinBar({
   const [error, setError] = useState<string | null>(null);
   const [askedKeys, setAskedKeys] = useState<string[]>(asked);
   const [pending, start] = useTransition();
+  // Fixed pairs: the partner's name on the way in, or later for a player who came alone; and who leaves.
+  const [partner, setPartner] = useState("");
+  const [addingPartner, setAddingPartner] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const fit = levelFit(levelRange, myLevel);
   const needsLevel = Boolean(levelRange) && myLevel == null;
@@ -64,25 +74,50 @@ export function JoinBar({
 
   // State updates after an awaited server action are wrapped in startTransition
   // so they join the router's transition instead of interrupting it (React 19).
-  const join = (withName?: string, withLevel?: number | null) =>
+  const join = (withName?: string, withLevel?: number | null, withPartner?: string) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName, withLevel ?? undefined);
+      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined);
       startTransition(() => {
         if (!r.ok) setError(r.error === "name_required" ? t("identity.nameRequired") : r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-        else setInline(false);
+        // A player already in alone named a partner and no seat was free.
+        else if (withPartner && r.data.outcome === "full") setError(t("pairs.noSeat"));
+        else {
+          setInline(false);
+          setAddingPartner(false);
+          setPartner("");
+        }
       });
     });
 
-  const leave = () => {
-    if (!confirm(t("event.leaveConfirm"))) return;
+  const leave = (withPartner = false) => {
+    // With a partner the choice is the question; alone, the old confirm.
+    if (!(fixedPairs && partnerName) && !confirm(t("event.leaveConfirm"))) return;
     start(async () => {
-      const r = await leaveAction(code);
+      const r = await leaveAction(code, withPartner);
       startTransition(() => {
+        setLeaving(false);
         if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" || r.error === "level_required" ? "generic" : r.error}` as "errors.generic"));
       });
     });
   };
+  const onLeave = () => (fixedPairs && partnerName ? setLeaving(true) : leave());
+  const leaveChoice = leaving && (
+    <div className="flex w-full flex-col gap-2" data-testid="leave-choice">
+      <div className="text-base font-extrabold">{t("pairs.leaveWho")}</div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn-secondary btn-sm" disabled={pending} onClick={() => leave(false)}>
+          {t("pairs.leaveMe")}
+        </button>
+        <button type="button" className="btn-danger btn-sm" disabled={pending} onClick={() => leave(true)}>
+          {t("pairs.leaveBoth")}
+        </button>
+        <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => setLeaving(false)}>
+          {t("common.cancel")}
+        </button>
+      </div>
+    </div>
+  );
 
   const withdraw = () =>
     start(async () => {
@@ -108,6 +143,8 @@ export function JoinBar({
   // No identity yet (or no level yet on a ranged event): expand an in-flow spot
   // instead of opening a sheet (fixed overlays drift off screen on iOS once the keyboard shows).
   const onJoin = () => {
+    // A fixed-pairs night always asks for the partner's name first (it may stay empty).
+    if (fixedPairs) return setInline(true);
     if (hasIdentity && !needsLevel) return join();
     if (!requestJoin()) setInline(true);
   };
@@ -126,9 +163,15 @@ export function JoinBar({
                     e.preventDefault();
                     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
                     if (levelRange && level == null) return setError(t("errors.level_required"));
-                    join(hasIdentity ? undefined : name, level);
+                    join(hasIdentity ? undefined : name, level, fixedPairs ? partner : undefined);
                   }}
                 >
+                  {fixedPairs && (
+                    <>
+                      <input className="input" autoFocus={hasIdentity} value={partner} onChange={(e) => setPartner(e.target.value)} placeholder={t("pairs.partnerName")} aria-label={t("pairs.partnerName")} autoComplete="off" maxLength={40} data-testid="partner-name" />
+                      <p className="text-xs text-muted">{t("pairs.joinHint")}</p>
+                    </>
+                  )}
                   <div className="flex gap-2">
                     {!hasIdentity && <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} enterKeyHint="go" />}
                     {levelRange && <LevelSelect value={level} onChange={setLevel} />}
@@ -179,25 +222,46 @@ export function JoinBar({
             </>
           )}
           {state === "request_declined" && <div className="flex-1 text-sm font-bold text-muted">{t("level.requestDeclined", { name: organizerName })}</div>}
-          {state === "leave" && (
+          {state === "leave" && leaveChoice}
+          {state === "leave" && !leaving && (
             <>
-              <div className="flex-1">
-                <div className="text-base font-extrabold text-ok">✓ {t("event.youAreIn")}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-base font-extrabold text-ok">✓ {fixedPairs ? (partnerName ? t("pairs.youAreInWith", { name: partnerName }) : t("pairs.youAreInAlone")) : t("event.youAreIn")}</div>
+                {/* Came alone: the partner's name now, the way the join takes it. */}
+                {fixedPairs && !partnerName && (addingPartner ? (
+                  <form
+                    className="mt-1 flex gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (partner.trim()) join(undefined, undefined, partner);
+                    }}
+                  >
+                    <input className="input min-h-10 min-w-0 flex-1 text-sm" autoFocus value={partner} onChange={(e) => setPartner(e.target.value)} placeholder={t("pairs.partnerName")} aria-label={t("pairs.partnerName")} maxLength={40} />
+                    <button type="submit" className="btn-secondary btn-sm shrink-0" disabled={pending || !partner.trim()}>
+                      {t("pairs.savePartner")}
+                    </button>
+                  </form>
+                ) : (
+                  <button type="button" className="link text-xs font-semibold" onClick={() => setAddingPartner(true)}>
+                    {t("pairs.addPartner")}
+                  </button>
+                ))}
                 {error && <div className="text-xs text-danger">{error}</div>}
               </div>
-              <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={leave}>
+              <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={onLeave}>
                 {t("event.leave")}
               </button>
             </>
           )}
           {state === "member_live" && <div className="flex-1 text-base font-extrabold text-court">● {t("event.inProgress")}</div>}
-          {state === "leave_waitlist" && (
+          {state === "leave_waitlist" && leaveChoice}
+          {state === "leave_waitlist" && !leaving && (
             <>
               <div className="flex-1">
                 <div className="text-base font-extrabold">{t("event.youAreOnWaitlist", { position: waitlistPosition })}</div>
                 <div className="text-xs text-muted">{t("event.waitlistHelp")}</div>
               </div>
-              <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={leave}>
+              <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={onLeave}>
                 {t("event.leaveWaitlist")}
               </button>
             </>

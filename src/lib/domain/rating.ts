@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots, type LevelLogEntry } from "@/db/schema";
-import { clampLevel, LEVEL_LOG_CAP, matchDeltas, normalizeLevel, tournamentDeltas, VERIFIED_TOLERANCE } from "./levels";
+import { clampLevel, LEVEL_LOG_CAP, matchDeltas, normalizeLevel, pairTournamentDeltas, tournamentDeltas, VERIFIED_TOLERANCE } from "./levels";
 import { tally } from "./scores";
 import { lockEvent } from "./slots";
 import { getTournamentState } from "./tournament";
@@ -48,7 +48,10 @@ export async function applyEventLevels(db: Db, eventId: string, now = new Date()
       const ids = state.standings.map((r) => r.playerId);
       const levelRows = ids.length ? await tx.select({ id: players.id, level: players.level }).from(players).where(inArray(players.id, ids)) : [];
       const levelOf = new Map(levelRows.map((r) => [r.id, r.level]));
-      deltas = tournamentDeltas(state.standings.map((r) => ({ id: r.playerId, level: levelOf.get(r.playerId) ?? null, rank: r.rank })));
+      // Fixed pairs: the pairs' table, each pair rated as a side is (`pairTournamentDeltas`).
+      deltas = state.pairStandings
+        ? pairTournamentDeltas(state.pairStandings.map((r) => ({ ids: r.pair, levels: [levelOf.get(r.pair[0]) ?? null, levelOf.get(r.pair[1]) ?? null] as const, rank: r.rank })))
+        : tournamentDeltas(state.standings.map((r) => ({ id: r.playerId, level: levelOf.get(r.playerId) ?? null, rank: r.rank })));
     }
 
     const changes: LevelChange[] = [];

@@ -63,6 +63,12 @@ export const events = pgTable(
     pointsPerMatch: integer("points_per_match"),
     /** The other way social tournaments score: first to N games (4, 6, 8). With it the table ranks by matches won; points_per_match is then null. */
     gamesTo: integer("games_to"),
+    /**
+     * Fixed pairs: two partners play every round together, and the pair is the unit of the draw, the
+     * rests and the table (`src/lib/domain/fixedPairs.ts`). The owner's decision F of 9 October 2026,
+     * "as Phuket nights often do". Off: partners rotate, as every social tournament did before it.
+     */
+    fixedPairs: boolean("fixed_pairs").notNull().default(false),
     /** Tournament: final standings snapshot (ordered player ids) written on finalize. */
     standings: jsonb("standings").$type<string[]>(),
     /** Tournament: organizer-given court names by index (court 1 = [0]); null/empty entry = "Court n". */
@@ -140,6 +146,14 @@ export const slots = pgTable(
     position: integer("position").notNull(),
     /** Team assignment chosen at score entry (optional). */
     team: teamEnum("team"),
+    /**
+     * A fixed-pairs night's partner: the two named seats of one event that share this key are a pair
+     * (`seatUnits` in `src/lib/domain/fixedPairs.ts`). A key on one named seat only is a player with
+     * no partner yet. A key, not a pointer to the other seat, so a seat that is emptied or moved
+     * cannot leave the other half pointing at a stranger: emptying clears it, and the partner reads
+     * as a single by itself. Null on every seat of a night with rotating partners.
+     */
+    pairId: uuid("pair_id"),
     joinedAt: timestamp("joined_at", { withTimezone: true }),
     invitedAt: timestamp("invited_at", { withTimezone: true }),
     lastRemindedAt: timestamp("last_reminded_at", { withTimezone: true }),

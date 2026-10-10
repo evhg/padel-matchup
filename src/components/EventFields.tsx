@@ -40,6 +40,8 @@ export type EventFormValues = {
   gamesTo: number | null;
   /** Tournament format. */
   format: TournamentFormat;
+  /** Tournament: two partners play every round together (decision F). Off by default. */
+  fixedPairs: boolean;
   /** Level range; both null = open to everyone. */
   levelMin: number | null;
   levelMax: number | null;
@@ -172,13 +174,14 @@ export function EventFields({
 
   // The tournament's night in one line under Players, from the same function as the match page's
   // chips: courts, the rounds a full rotation takes, and how long that is at the chosen score.
-  const plan = values.type === "tournament" ? nightPlan({ players: values.capacity, courts: values.courts, format: values.format, pointsPerMatch: values.pointsPerMatch, gamesTo: values.gamesTo, durationMinutes: values.durationMinutes }) : null;
+  const plan = values.type === "tournament" ? nightPlan({ players: values.capacity, courts: values.courts, format: values.format, pointsPerMatch: values.pointsPerMatch, gamesTo: values.gamesTo, durationMinutes: values.durationMinutes, fixedPairs: values.fixedPairs }) : null;
   const hm = (minutes: number) => {
     const { h, m } = hoursAndMinutes(minutes);
     return h === 0 ? t("event.minutes", { minutes: m }) : t("create.planHm", { h, m });
   };
   const planLine = plan
     ? [
+        plan.pairs ? t("pairs.planPairs", { pairs: plan.pairs }) : null,
         t("create.planCourts", { courts: plan.courts }),
         plan.rotation ? t("create.planRotation", { rounds: plan.rotation }) : plan.fits ? t("create.planFits", { rounds: plan.fits, minutes: values.durationMinutes }) : null,
         plan.rotationMinutes ? (values.gamesTo ? t("create.planTimeGames", { time: hm(plan.rotationMinutes), n: values.gamesTo }) : t("create.planTimePoints", { time: hm(plan.rotationMinutes), n: values.pointsPerMatch ?? 0 })) : null,
@@ -339,7 +342,15 @@ export function EventFields({
                   </button>
                 ))}
               </div>
-              <p className="mt-1.5 text-sm text-muted">{t(FORMAT_HELP_KEYS[values.format])}</p>
+              <p className="mt-1.5 text-sm text-muted">{values.fixedPairs ? t(({ americano: "pairs.howAmericano", mexicano: "pairs.howMexicano", king: "pairs.howKing" } as const)[values.format]) : t(FORMAT_HELP_KEYS[values.format])}</p>
+              {/* Fixed pairs (decision F): off by default, the same engine with the pair as the unit. */}
+              <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
+                <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.fixedPairs} onChange={(e) => onChange({ fixedPairs: e.target.checked })} data-testid="fixed-pairs" />
+                <span className="min-w-0">
+                  <span className="block font-bold">{t("pairs.fixed")}</span>
+                  <span className="block text-xs text-muted">{t("pairs.fixedHelp")}</span>
+                </span>
+              </label>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -499,6 +510,7 @@ export function EventFields({
         <label className="label">{t("create.haveAlready")}</label>
         <textarea className="textarea" rows={3} value={values.haveNames} maxLength={600} onChange={(e) => onChange({ haveNames: e.target.value })} data-testid="have-already" />
         <p className="mt-1 text-xs text-muted">{t("create.haveAlreadyHelp")}</p>
+        {values.type === "tournament" && values.fixedPairs && <p className="mt-1 text-xs text-muted">{t("pairs.namesHelp")}</p>}
       </div>
       <div>
         <label className="label">{t("create.whenFull")}</label>

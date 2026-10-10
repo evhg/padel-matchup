@@ -5,6 +5,7 @@ import { newInviteCode } from "@/lib/codes";
 import { isOver } from "./matchLength";
 import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
+import { seatUnits } from "./fixedPairs";
 import { mergePlayers } from "./merge";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
 
@@ -14,7 +15,12 @@ export type JoinOutcome =
   | { outcome: "already_in"; slot: Slot; event: Event }
   | { outcome: "full"; event: Event };
 
-export type Promotion = { slot: Slot; playerId: string };
+export type Promotion = {
+  slot: Slot;
+  playerId: string;
+  /** A fixed-pairs night moves a pair up together, so one freed spot can seat more than one player: the others, told the same way. */
+  also?: Promotion[];
+};
 
 /** Locks the event row so every slot mutation for one event is serialized. */
 export async function lockEvent(tx: Db, eventId: string): Promise<Event> {
@@ -41,6 +47,8 @@ const VACANT: Partial<typeof slots.$inferInsert> = {
   lastRemindedAt: null,
   joinedAt: null,
   team: null,
+  // An emptied seat is nobody's partner: the other half of a fixed pair reads as a single by itself.
+  pairId: null,
 };
 
 /**
@@ -102,6 +110,10 @@ export async function joinEvent(db: Db, input: { eventId: string; playerId: stri
  * Must run inside a transaction that already holds the event lock.
  */
 export async function vacateAndPromote(tx: Db, ev: Event, slot: Slot): Promise<Promotion | null> {
+  if (ev.fixedPairs) {
+    const [first, ...also] = await vacateSeats(tx, ev, [slot]);
+    return first ? { ...first, also } : null;
+  }
   if (slot.position > ev.capacity) {
     // Waitlist entry: just remove it.
     await tx.delete(slots).where(eq(slots.id, slot.id));
@@ -125,6 +137,43 @@ export async function vacateAndPromote(tx: Db, ev: Event, slot: Slot): Promise<P
     .returning();
   await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: next.playerId, verb: "promoted" });
   return { slot: promoted, playerId: next.playerId };
+}
+
+/**
+ * A fixed-pairs night's way of freeing seats: empty every seat given (a waiting-list entry goes), then
+ * let the waiting list in, in order, as far as the free seats allow. A pair moves up together and
+ * needs two free seats; a single needs one, and moves past a pair at the head that does not fit
+ * rather than leave a seat empty while somebody waits. The pair keeps its place and moves up the
+ * moment two seats are free. Seats are emptied first and filled once, so a pair that leaves together
+ * frees room for a pair that waits. The lock is the caller's.
+ */
+export async function vacateSeats(tx: Db, ev: Event, seats: readonly Slot[]): Promise<Promotion[]> {
+  for (const s of seats) {
+    if (s.position > ev.capacity) await tx.delete(slots).where(eq(slots.id, s.id));
+    else await tx.update(slots).set(VACANT).where(eq(slots.id, s.id));
+  }
+  const all = await tx.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(asc(slots.position));
+  const free = all.filter((s) => s.position <= ev.capacity && (s.status === "empty" || s.status === "declined"));
+  const waiting = seatUnits(all.filter((s) => s.position > ev.capacity));
+  const promotions: Promotion[] = [];
+  for (const unit of waiting) {
+    const movers = unit.kind === "pair" ? unit.seats : [unit.seat];
+    if (movers.length > free.length) continue;
+    for (const w of movers) {
+      const to = free.shift()!;
+      // The waiting row goes first: its invite code and its player are unique per event.
+      await tx.delete(slots).where(eq(slots.id, w.id));
+      const [moved] = await tx
+        .update(slots)
+        .set({ ...VACANT, playerId: w.playerId, status: w.status, kind: w.kind, inviteCode: w.inviteCode, invitedName: w.invitedName, invitedEmail: w.invitedEmail, invitedPhone: w.invitedPhone, invitedAt: w.invitedAt, joinedAt: w.joinedAt ?? new Date(), pairId: w.pairId })
+        .where(eq(slots.id, to.id))
+        .returning();
+      if (!w.playerId) continue;
+      await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: w.playerId, verb: "promoted" });
+      promotions.push({ slot: moved, playerId: w.playerId });
+    }
+  }
+  return promotions;
 }
 
 export type LeaveResult = { left: boolean; wasWaitlisted: boolean; promotion: Promotion | null; event: Event };

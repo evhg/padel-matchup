@@ -1,6 +1,7 @@
 import type { TournamentFormat } from "@/db/schema";
 import { buildHistory, computeStandings, maxCourtsFor, mulberry32, planRound, rotationLength, scheduleRound, seededShuffle, seedFrom, type History, type MatchRef, type Pairing, type RoundPlan, type StandingRow } from "./americano";
 import { DomainError } from "./errors";
+import { drawPairRound, type Pair } from "./fixedPairs";
 
 /**
  * Tournament formats beyond the americano rotation.
@@ -296,10 +297,12 @@ export type DrawnRound = CourtRound & { roundNumber: number };
  * - americano, field in fours on every court: the exact circle schedule, and once the rotation is
  *   complete round n replays round 1;
  * - americano otherwise: `planRound`, the generator's own heuristic, with fair rests;
- * - mexicano and king: their own planners, which wait for the scores.
+ * - mexicano and king: their own planners, which wait for the scores;
+ * - fixed pairs (`pairs` given): the pair is the unit, `drawPairRound` in `src/lib/domain/fixedPairs.ts`.
  */
-export function drawRound(input: { eventId: string; format: TournamentFormat; ids: readonly string[]; courts: number | null | undefined; rounds: readonly DrawnRound[] }): RoundPlan {
+export function drawRound(input: { eventId: string; format: TournamentFormat; ids: readonly string[]; courts: number | null | undefined; rounds: readonly DrawnRound[]; pairs?: readonly Pair[] }): RoundPlan {
   const { eventId, format, ids, courts, rounds } = input;
+  if (input.pairs) return drawPairRound({ eventId, format, pairs: input.pairs, courts, rounds });
   const roundNumber = (rounds.at(-1)?.roundNumber ?? 0) + 1;
   const rng = mulberry32(seedFrom(`${eventId}:${roundNumber}`));
   if (format === "mexicano") return planMexicanoRound({ ids, courts, rounds, rnd: rng });

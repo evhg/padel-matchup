@@ -43,6 +43,8 @@ const createSchema = z.object({
   pointsPerMatch: z.coerce.number().int().min(4).max(99).nullable().optional(),
   gamesTo: z.coerce.number().int().min(2).max(12).nullable().optional(),
   format: z.enum(["americano", "mexicano", "king"]).optional(),
+  /** Tournament: two partners play every round together (decision F). */
+  fixedPairs: z.boolean().optional(),
   joinSelf: z.boolean().optional(),
   levelMin: z.coerce.number().min(0).max(7).nullable().optional(),
   levelMax: z.coerce.number().min(0).max(7).nullable().optional(),
@@ -93,6 +95,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       pointsPerMatch: input.pointsPerMatch ?? null,
       gamesTo: input.gamesTo ?? null,
       format: input.format ?? null,
+      fixedPairs: input.fixedPairs ?? false,
       levelMin: input.levelMin ?? null,
       levelMax: input.levelMax ?? null,
       levelVerifiedOnly: input.levelVerifiedOnly ?? false,
@@ -130,6 +133,11 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
     if (input.names?.length) {
       const { seatNames } = await import("@/lib/domain/slots");
       await seatNames(db, { eventId: ev.id, actorPlayerId: me.id, names: input.names, skipName: me.displayName }).catch(() => 0);
+      // Fixed pairs: the names were typed as pairs, the organiser with the first one (`pairInOrder`).
+      if (ev.fixedPairs) {
+        const { pairInOrder } = await import("@/lib/domain/pairSeats");
+        await pairInOrder(db, { eventId: ev.id }).catch(() => 0);
+      }
     }
     code = ev.code;
     return { code: ev.code };

@@ -1,4 +1,5 @@
 import type { TournamentFormat } from "@/db/schema";
+import { pairsRefusal, seatUnits, unitCounts } from "./fixedPairs";
 import { firstRoundRefusal } from "./formats";
 
 /**
@@ -65,4 +66,27 @@ export function startAdvice(format: TournamentFormat, count: number): StartAdvic
   if (refusal === "need_4_players") return { kind: "need_4", count, more: 4 - count };
   if (refusal === "multiple_of_4") return { kind: "fours", count, up: 4 - (count % 4), down: count % 4 };
   return { kind: "ready", count };
+}
+
+export type PairStartAdvice =
+  | { kind: "ready"; count: number }
+  /** Fewer than two complete pairs ticked: `more` is how many pairs to tick or add. */
+  | { kind: "need_pairs"; count: number; more: number }
+  /** A ticked name without a ticked partner: pair them, or untick them. */
+  | { kind: "partner_needed"; count: number; singles: number };
+
+/**
+ * "Who is here?" on a fixed-pairs night, where the tick is the pair's: unticking one partner unticks
+ * the pair, because the night draws pairs (the owner's decision F). A pair of which only one came is
+ * split first ("Split"), so that partner shows as a single; a ticked single then holds Start until
+ * the organiser pairs them or unticks them, which is `pairsRefusal`, the rule `generateRound` keeps.
+ * `names` are the check-in's names in list order with their pair keys; `present` the ids round 1 would draw.
+ */
+export function pairStartAdvice(names: readonly { id: string; pairId: string | null }[], present: readonly string[]): PairStartAdvice {
+  const ticked = new Set(present);
+  const { pairs, singles } = unitCounts(seatUnits(names.filter((n) => ticked.has(n.id)).map((n, position) => ({ ...n, status: "joined", position }))));
+  const refusal = pairsRefusal(pairs, singles);
+  if (refusal === "partner_needed") return { kind: "partner_needed", count: pairs, singles };
+  if (refusal === "need_2_pairs") return { kind: "need_pairs", count: pairs, more: 2 - pairs };
+  return { kind: "ready", count: pairs };
 }

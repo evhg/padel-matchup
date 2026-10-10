@@ -2,6 +2,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { formatEventDay, formatEventTimeRange } from "@/lib/dates";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
+import { seatUnits } from "@/lib/domain/fixedPairs";
 import { tagParts } from "@/lib/domain/eventTags";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import { eventEnd } from "@/lib/domain/matchLength";
@@ -30,6 +31,8 @@ const STRINGS = {
     tags: { "level.tagMen": "Men", "level.tagWomen": "Women", "level.tagMixed": "Mixed" },
     players: "Players",
     reserved: "reserved",
+    /** A fixed-pairs night's player without a partner yet (decision F). */
+    partnerNeeded: "partner needed",
     organizer: "org",
     waitlist: (n: number) => `Waitlist: ${n}`,
     spots: (n: number) => (n === 1 ? "1 spot left" : `${n} spots left`),
@@ -207,6 +210,7 @@ const STRINGS = {
     tags: { "level.tagMen": "Мужчины", "level.tagWomen": "Женщины", "level.tagMixed": "Микст" },
     players: "Игроки",
     reserved: "бронь",
+    partnerNeeded: "ищет пару",
     organizer: "орг",
     waitlist: (n: number) => `Лист ожидания: ${n}`,
     spots: (n: number) => `Свободно: ${n}`,
@@ -375,6 +379,7 @@ const STRINGS = {
     tags: { "level.tagMen": "Hombres", "level.tagWomen": "Mujeres", "level.tagMixed": "Mixto" },
     players: "Jugadores",
     reserved: "reservado",
+    partnerNeeded: "busca pareja",
     organizer: "org",
     waitlist: (n: number) => `Lista de espera: ${n}`,
     spots: (n: number) => (n === 1 ? "Queda 1 plaza" : `Quedan ${n} plazas`),
@@ -576,6 +581,23 @@ export function levelLine(ev: Pick<EventDetail["event"], "levelMin" | "levelMax"
   return parts.length ? `🎚 ${parts.join(" · ")}` : null;
 }
 
+/**
+ * A fixed-pairs night's roster as a card lists it (decision F): one line a pair, "1. Ana 3.0 & Bo",
+ * a player without a partner as "2. Cy · partner needed", then the open seats as "—". Telegram,
+ * Discord and LINE each hand in their own markup; `max` cuts it as each card cuts its seats.
+ */
+export function pairCardLines(detail: EventDetail, locale: BotLocale, f: { text: (x: string) => string; level: (x: string) => string; note: (x: string) => string; /** "&" as the markup writes it: Telegram's HTML refuses a bare one. */ and: string }, max: number): string[] {
+  const ev = detail.event;
+  const s = strings(locale);
+  const seats = detail.roster.filter((x) => x.position <= ev.capacity).sort((a, b) => a.position - b.position);
+  const person = (seat: EventDetail["roster"][number]) =>
+    `${f.text(seat.player?.displayName ?? seat.invitedName ?? "?")}${seat.player?.level != null ? ` ${f.level(formatLevel(seat.player.level))}` : ""}${seat.status === "invited" ? ` ${f.note(s.reserved)}` : ""}${seat.playerId === ev.creatorPlayerId ? ` · ${s.organizer}` : ""}`;
+  const lines = seatUnits(seats).map((u) => (u.kind === "pair" ? `${person(u.seats[0])} ${f.and} ${person(u.seats[1])}` : `${person(u.seat)} · ${s.partnerNeeded}`));
+  for (const seat of seats) if (seat.status === "empty" || seat.status === "declined") lines.push("—");
+  const shown = lines.slice(0, max).map((l, i) => `${i + 1}. ${l}`);
+  return lines.length > max ? [...shown, `… +${lines.length - max}`] : shown;
+}
+
 /** The one message per match the bot keeps edited. HTML parse mode. */
 export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
@@ -599,7 +621,8 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
   if (ev.cost) lines.push(`💸 ${esc(ev.cost)}${ev.payNote ? ` · ${esc(ev.payNote)}` : ""}`);
   lines.push("");
   lines.push(`<b>${s.players} ${occupied}/${ev.capacity}</b>`);
-  const shown = seats.slice(0, MAX_LINES);
+  const shown = ev.fixedPairs ? [] : seats.slice(0, MAX_LINES);
+  if (ev.fixedPairs) lines.push(...pairCardLines(detail, locale, { text: esc, level: (x) => `<i>${x}</i>`, note: (x) => `<i>(${x})</i>`, and: "&amp;" }, MAX_LINES));
   for (const seat of shown) {
     if (isOccupied(seat)) {
       const name = seat.player?.displayName ?? seat.invitedName ?? "?";
@@ -612,7 +635,7 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
       lines.push(`${seat.position}. —`);
     }
   }
-  if (seats.length > shown.length) lines.push(`… +${seats.length - shown.length}`);
+  if (!ev.fixedPairs && seats.length > shown.length) lines.push(`… +${seats.length - shown.length}`);
   if (detail.waitlist.length > 0) lines.push(s.waitlist(detail.waitlist.length));
   lines.push("");
   const spotsLeft = Math.max(0, ev.capacity - occupied - seats.filter((x) => x.status === "invited").length);

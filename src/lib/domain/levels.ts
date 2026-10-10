@@ -163,6 +163,29 @@ export function tournamentDeltas(rows: readonly { id: string; level: number | nu
   return out;
 }
 
+/**
+ * Fixed pairs (decision F): the pair's finishing rank among the pairs, first place 1 and last 0. The
+ * pair is rated by the average of its partners' known levels against the field of pairs, and both
+ * partners move by the same step, as `matchDeltas` moves the two players of a side. A partner without
+ * a level neither moves nor counts; a pair with no level at all is left out of the field.
+ */
+export function pairTournamentDeltas(rows: readonly { ids: readonly [string, string]; levels: readonly [number | null, number | null]; rank: number }[]): Map<string, number> {
+  const out = new Map<string, number>();
+  const rated = rows.map((r) => ({ ...r, known: r.levels.filter((l): l is number => l != null) })).filter((r) => r.known.length > 0);
+  if (rated.length < 2 || rows.length < 2) return out;
+  const field = avg(rated.map((r) => avg(r.known)));
+  const n = rows.length;
+  for (const r of rated) {
+    const score = (n - r.rank) / (n - 1);
+    const d = round2(TOURNAMENT_K * (score - expectedScore(avg(r.known), field)));
+    if (d === 0) continue;
+    r.ids.forEach((id, i) => {
+      if (r.levels[i] != null) out.set(id, d);
+    });
+  }
+  return out;
+}
+
 /** Half a step of drift keeps an organizer's confirmation valid while results nudge the level. */
 export const VERIFIED_TOLERANCE = 0.5;
 /** How many result moves the passport keeps; the level line says so when the log is full. */

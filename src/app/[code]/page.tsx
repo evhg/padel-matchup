@@ -57,7 +57,10 @@ import { venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
-import { getTournamentState } from "@/lib/domain/tournament";
+import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
+import { seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
+import { partnerOf } from "@/lib/domain/pairSeats";
+import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
@@ -182,7 +185,12 @@ export default async function EventPage({ params, searchParams }: Props) {
         photo: me && (viewer.isCreator || isSeated(detail, me.id)) ? { has: Boolean(resultPhoto), canRemove: Boolean(resultPhoto && (resultPhoto.uploadedByPlayerId === me.id || viewer.isCreator)) } : null,
       }
     : null;
-  const tstate = isTournament ? await getTournamentState(db, ev, participantIds) : null;
+  // Fixed pairs (decision F): the list reads as pairs and singles, and the draw and the table as pairs.
+  const fixedPairs = isTournament && ev.fixedPairs;
+  const rosterUnits = fixedPairs ? seatUnits(roster) : [];
+  const pairCount = unitCounts(rosterUnits).pairs;
+  const myPartner = fixedPairs && mySlot ? partnerOf([...roster, ...waitlist], mySlot) : null;
+  const tstate = isTournament ? await getTournamentState(db, ev, participantIds, fixedPairs ? pairsOfSeats(namedSlots) : []) : null;
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
@@ -196,15 +204,17 @@ export default async function EventPage({ params, searchParams }: Props) {
   // The night at a glance under the title (src/lib/domain/tournamentPlan.ts), computed once and handed
   // to the panel too, so the chips and the panel's sample before round 1 name the same courts.
   // The count: the names round 1 would draw, or the field the organiser opened while it cannot start.
-  const night = tstate ? nightPlan({ players: nightField({ format: tstate.format, names: namedSlots.length, capacity: ev.capacity, roundsDrawn: tstate.rounds.length }), courts: ev.courts, format: tstate.format, pointsPerMatch: ev.pointsPerMatch, gamesTo: ev.gamesTo, durationMinutes: ev.durationMinutes }) : null;
+  // Fixed pairs: the names round 1 would draw are the players of complete pairs.
+  const night = tstate ? nightPlan({ players: nightField({ format: tstate.format, names: fixedPairs ? 2 * pairCount : namedSlots.length, capacity: ev.capacity, roundsDrawn: tstate.rounds.length, fixedPairs }), courts: ev.courts, format: tstate.format, pointsPerMatch: ev.pointsPerMatch, gamesTo: ev.gamesTo, durationMinutes: ev.durationMinutes, fixedPairs }) : null;
   // The format's name, as the create form says it (FORMAT_KEYS lives in a client module, which a server page cannot read values from).
   // "Who is here?" before round 1, for whoever may start it (the organiser or a manage link): the
   // names round 1 would draw, then the waiting list, which plays only when ticked (src/lib/domain/checkIn.ts).
   const checkIn =
     tstate && tstate.rounds.length === 0 && viewer.isCreator && !ev.scoreLockedByCreator && !cancelled && !over
       ? {
-          listed: namedSlots.map((s) => ({ id: s.id, name: s.player?.displayName ?? s.invitedName ?? "?" })),
-          waiting: waitlist.filter((s) => s.status === "joined" && s.playerId).map((s) => ({ id: s.id, name: s.player?.displayName ?? "?" })),
+          listed: namedSlots.map((s) => ({ id: s.id, name: s.player?.displayName ?? s.invitedName ?? "?", pairId: s.pairId })),
+          // A fixed-pairs night's waiting pair may hold a reserved partner: a named spot like any other.
+          waiting: waitlist.filter((s) => (fixedPairs ? s.status !== "empty" && s.status !== "declined" : s.status === "joined" && s.playerId)).map((s) => ({ id: s.id, name: s.player?.displayName ?? s.invitedName ?? "?", pairId: s.pairId })),
         }
       : null;
   // The night is running: round 1 drawn, scores not final. Every open page asks again every twenty
@@ -277,6 +287,7 @@ export default async function EventPage({ params, searchParams }: Props) {
     myLevel: creator.level,
     publicListing: ev.publicListing,
     format: ev.format ?? "americano",
+    fixedPairs: ev.fixedPairs,
     bookingUrl: ev.bookingUrl ?? "",
     cost: ev.cost ?? "",
     payNote: ev.payNote ?? "",
@@ -340,7 +351,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               <OpenSpot
                 key={`${s.id}-${s.status}`}
                 code={code}
-                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" ? "join" : "none"}
+                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" && !fixedPairs ? "join" : "none"}
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
                 slotId={s.id}
                 hasIdentity={Boolean(me)}
@@ -368,6 +379,88 @@ export default async function EventPage({ params, searchParams }: Props) {
             emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
           />
         )}
+      </li>
+    );
+  };
+
+  // A fixed-pairs night's list (decision F): one row a pair, "Ana & Bo", and one row a player who came
+  // alone, "Ana · Partner needed", with "Be their partner" for whoever can take the place beside them.
+  const personName = (s: SlotWithPlayer) => s.player?.displayName ?? s.invitedName ?? "";
+  const beforeRound1 = (tstate?.rounds.length ?? 0) === 0 && !cancelled && !over;
+  const mySingleOnList = Boolean(fixedPairs && isMember && !myPartner);
+  const unitRow = (u: SeatUnit<SlotWithPlayer>, isWaitlist = false) => {
+    const seatsOf = u.kind === "pair" ? u.seats : [u.seat];
+    const mine = Boolean(me && seatsOf.some((s) => s.playerId === me.id));
+    const hasOrganizer = seatsOf.some((s) => s.playerId === ev.creatorPlayerId);
+    const invited = seatsOf.find((s) => s.status === "invited");
+    const person = (s: SlotWithPlayer) => (
+      <span key={s.id} className="inline-flex items-center gap-1.5">
+        <span className="font-bold">{personName(s)}</span>
+        <LevelChip level={s.player?.level} verified={s.player ? isLevelVerified(s.player) : false} />
+      </span>
+    );
+    // Singles on the same side of the line, for the organiser's "Pair with…".
+    const others = u.kind === "single" ? seatUnits(isWaitlist ? waitlist : roster).flatMap((x) => (x.kind === "single" && x.seat.id !== u.seat.id ? [{ id: x.seat.id, name: personName(x.seat) }] : [])) : [];
+    // "Be their partner": a single on the list, before round 1, for somebody who is not in a pair and has a place to sit.
+    const canBePartner = u.kind === "single" && !isWaitlist && beforeRound1 && u.seat.playerId !== me?.id && !myPartner && (mySingleOnList || (!isMember && spotsLeft > 0));
+    return (
+      <li key={seatsOf[0].id} className={`rounded-2xl border px-4 py-3 ${u.kind === "pair" ? "border-line bg-card" : "border-dashed border-warn/50 bg-warn-soft/40"}`} data-testid={u.kind === "pair" ? "pair-row" : "single-row"}>
+        <div className="flex items-center gap-3">
+          <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-on-ink">{seatsOf.map((s) => personName(s).slice(0, 1).toUpperCase()).join("")}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {u.kind === "pair" ? (
+                <>
+                  {person(u.seats[0])}
+                  <span className="font-bold text-muted">&amp;</span>
+                  {person(u.seats[1])}
+                </>
+              ) : (
+                <>
+                  {person(u.seat)}
+                  <span className="text-sm font-semibold text-warn">· {t("pairs.partnerNeeded")}</span>
+                </>
+              )}
+              {mine && <span className="chip-open">{t("common.you")}</span>}
+              {hasOrganizer && <span className="chip-muted">{t("common.organizer")}</span>}
+            </div>
+            {invited && <div className="text-xs font-semibold text-warn">{t("event.reservedFor", { name: personName(invited) })} · {t("event.inviteNotAccepted")}</div>}
+          </div>
+        </div>
+        {/* Whoever named the partner holds their link: the partner claims the spot by opening it. */}
+        {invited?.inviteCode && mine && !viewer.isCreator && !cancelled && !over && (
+          <PartnerLink name={personName(invited)} url={inviteUrl(base, code, invited.inviteCode)} text={inviteTextTemplate.replace("__NAME__", personName(invited)).replace("__URL__", inviteUrl(base, code, invited.inviteCode))} />
+        )}
+        {canBePartner && <BePartnerButton code={code} slotId={u.seat.id} hasIdentity={Boolean(me)} />}
+        {/* The organiser: split or pair before round 1, a partner off by name; a reserved name keeps its forward-and-cancel, a single its remove. */}
+        {viewer.isCreator && !cancelled && !over && (
+          <PairTools code={code} slotId={seatsOf[0].id} kind={u.kind} singles={others} canPair={beforeRound1} removable={u.kind === "pair" ? u.seats.filter((s) => isOccupied(s) && s.playerId !== ev.creatorPlayerId).map((s) => ({ id: s.id, name: personName(s) })) : []} />
+        )}
+        {viewer.isCreator &&
+          !cancelled &&
+          !over &&
+          seatsOf
+            .filter((s) => s.status === "invited" || (u.kind === "single" && isOccupied(s) && s.playerId !== ev.creatorPlayerId))
+            .map((s) => {
+              const href = s.inviteCode ? inviteUrl(base, code, s.inviteCode) : undefined;
+              const name = personName(s);
+              return (
+                <div key={s.id}>
+                  <SlotActions
+                    code={code}
+                    slotId={s.id}
+                    kind={s.status === "invited" ? "invited" : "member"}
+                    name={name}
+                    inviteUrl={href}
+                    phone={s.invitedPhone}
+                    forwardText={href ? inviteTextTemplate.replace("__NAME__", name).replace("__URL__", href) : undefined}
+                    nudgeText={href ? nudgeTextTemplate.replace("__NAME__", name).replace("__URL__", href) : undefined}
+                    stale={s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000}
+                    emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
+                  />
+                </div>
+              );
+            })}
       </li>
     );
   };
@@ -407,6 +500,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             <div className="mt-2 flex flex-wrap gap-1.5" data-testid="night-chips">
               <span className="chip-muted">👥 {t("americano.chipPlayers", { count: occupied, capacity: ev.capacity })}</span>
               {formatName && <span className="chip-muted">{formatName}</span>}
+              {fixedPairs && <span className="chip-muted">{t("pairs.fixed")}</span>}
               {ev.gamesTo ? <span className="chip-muted">{t("americano.chipGames", { n: ev.gamesTo })}</span> : ev.pointsPerMatch ? <span className="chip-muted">{t("americano.chipPoints", { n: ev.pointsPerMatch })}</span> : null}
               {night.rounds && <span className="chip-muted">{t("americano.chipRounds", { n: night.rounds })}</span>}
               <span className="chip-muted">{t("americano.chipCourts", { n: night.courts })}</span>
@@ -520,16 +614,22 @@ export default async function EventPage({ params, searchParams }: Props) {
             gamesTo={ev.gamesTo}
             courtNames={ev.courtNames ?? null}
             rotationLength={tstate.rotationLength}
-            participantCount={namedSlots.length}
+            participantCount={fixedPairs ? 2 * pairCount : namedSlots.length}
             capacity={ev.capacity}
             night={night}
+            fixedPairs={fixedPairs}
             rounds={tstate.rounds.map((r) => ({
               id: r.id,
               roundNumber: r.roundNumber,
-              resting: r.resting.map((p) => nameOf.get(p) ?? "?"),
+              // A resting pair is written side by side: "Ana & Bo".
+              resting: fixedPairs ? r.resting.flatMap((p, i) => (i % 2 === 0 ? [`${nameOf.get(p) ?? "?"} & ${nameOf.get(r.resting[i + 1]) ?? "?"}`] : [])) : r.resting.map((p) => nameOf.get(p) ?? "?"),
               matches: r.matches.map((m) => ({ id: m.id, court: m.court, a: [nameOf.get(m.a1) ?? "?", nameOf.get(m.a2) ?? "?"], b: [nameOf.get(m.b1) ?? "?", nameOf.get(m.b2) ?? "?"], sideA: m.sideA, sideB: m.sideB })),
             }))}
-            standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))}
+            standings={
+              tstate.pairStandings
+                ? tstate.pairStandings.map((r) => ({ playerId: r.key, name: `${nameOf.get(r.pair[0]) ?? "?"} & ${nameOf.get(r.pair[1]) ?? "?"}`, rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: null, court: r.court }))
+                : tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))
+            }
             canPlayAgain={canPlayAgain}
             cardHref={`/${code}/card`}
             checkIn={checkIn}
@@ -546,7 +646,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             <h2 className="text-lg font-extrabold">{t("event.players", { count: occupied, capacity: ev.capacity })}</h2>
             {!cancelled && !over && <span className="text-sm font-semibold text-muted">{t("event.spotsLeft", { count: spotsLeft })}</span>}
           </div>
-          <ul className="mt-3 flex flex-col gap-2">{roster.map((s, i) => slotRow(s, i))}</ul>
+          <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {pendingRequests.length > 0 && (
             <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now) }))} />
           )}
@@ -554,7 +654,7 @@ export default async function EventPage({ params, searchParams }: Props) {
           {waitlist.length > 0 && (
             <>
               <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wider text-muted">{t("event.waitlist")}</h3>
-              <ul className="mt-2 flex flex-col gap-2">{waitlist.map((s, i) => slotRow(s, i, true))}</ul>
+              <ul className="mt-2 flex flex-col gap-2">{fixedPairs ? seatUnits(waitlist).map((u) => unitRow(u, true)) : waitlist.map((s, i) => slotRow(s, i, true))}</ul>
             </>
           )}
           {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t("event.fullHelp")}</p>}
@@ -663,6 +763,8 @@ export default async function EventPage({ params, searchParams }: Props) {
         verified={me ? isLevelVerified(me) : false}
         verifiers={verifierDTOs}
         asked={askedKeys}
+        fixedPairs={fixedPairs}
+        partnerName={myPartner ? (myPartner.player?.displayName ?? myPartner.invitedName ?? "") : null}
       />
     </>
   );
