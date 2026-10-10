@@ -220,10 +220,92 @@ const assertScored = (rounds: readonly RoundRef[]) => {
   if (last && !last.matches.every((m) => m.sideA != null && m.sideB != null)) throw new DomainError("invalid", "scores_missing");
 };
 
-/** Round 1 of mexicano and king, and americano on fewer courts than the field fills. */
+/** The least the meetings of these pairs can cost: exact up to eight pairs, the greedy sum above. No randomness, so pricing a choice draws nothing from the seed. */
+function meetingsCost(active: readonly Pair[], h: PairHistory): number {
+  const cost = (x: Pair, y: Pair) => h.met.get(meetKey(pairKey(x), pairKey(y))) ?? 0;
+  if (active.length <= 8) {
+    let best = Number.POSITIVE_INFINITY;
+    const walk = (left: readonly Pair[], c: number) => {
+      if (c >= best) return;
+      if (left.length === 0) {
+        best = c;
+        return;
+      }
+      const [first, ...others] = left;
+      for (let i = 0; i < others.length; i++)
+        walk(
+          others.filter((_, j) => j !== i),
+          c + cost(first, others[i]),
+        );
+    };
+    walk(active, 0);
+    return best;
+  }
+  const pool = active.slice();
+  let total = 0;
+  while (pool.length) {
+    const first = pool.shift()!;
+    let bi = 0;
+    for (let i = 1; i < pool.length; i++) if (cost(first, pool[i]) < cost(first, pool[bi])) bi = i;
+    total += cost(first, pool.splice(bi, 1)[0]);
+  }
+  return total;
+}
+
+/** How many ways to choose `k` of `n`, stopping counting once it passes `cap`. */
+function choose(n: number, k: number, cap: number): number {
+  let c = 1;
+  for (let i = 0; i < k && c <= cap; i++) c = (c * (n - i)) / (i + 1);
+  return c;
+}
+
+/** At most this many ways to choose who rests are priced; past it, that many seeded ones. */
+const REST_CHOICES = 600;
+
+/**
+ * Americano on fewer courts than the field fills (and round 1 of mexicano and king). The rest rule
+ * holds first: every pair with fewer rests than the rest must rest, and the rest go to pairs tied on
+ * the fewest rests. With few courts the choice among the tied decides who meets, so each way of
+ * choosing is priced by the meetings of the pairs left to play, and the cheapest wins: four pairs on
+ * one court meet each other once in six rounds, five pairs in ten. Before this, the rests were chosen
+ * first and the meetings followed, and the same two pairs met three times while others never met.
+ */
 function fairRound(pairs: readonly Pair[], courts: number | null | undefined, h: PairHistory, rnd: () => number): RoundPlan {
   const c = pairCourts(pairs.length, courts);
-  const resting = restingPairs(pairs, h, pairs.length - 2 * c, rnd, (x, y) => (h.played.get(pairKey(y)) ?? 0) - (h.played.get(pairKey(x)) ?? 0));
+  const restCount = pairs.length - 2 * c;
+  // The seeded order, the most matches played first among equal rests: ties fall where they always did.
+  const order = seededShuffle(pairs, rnd)
+    .map((p, i) => ({ p, i, rested: h.rested.get(pairKey(p)) ?? 0, played: h.played.get(pairKey(p)) ?? 0 }))
+    .sort((x, y) => x.rested - y.rested || y.played - x.played || x.i - y.i);
+  let resting: Pair[] = [];
+  if (restCount > 0) {
+    const edge = order[restCount - 1].rested;
+    const must = order.filter((x) => x.rested < edge).map((x) => x.p);
+    const tied = order.filter((x) => x.rested === edge).map((x) => x.p);
+    const need = restCount - must.length;
+    const options: Pair[][] = [];
+    if (choose(tied.length, need, REST_CHOICES) <= REST_CHOICES) {
+      const pick = (from: number, acc: Pair[]) => {
+        if (acc.length === need) return void options.push(acc.slice());
+        for (let i = from; i <= tied.length - (need - acc.length); i++) pick(i + 1, [...acc, tied[i]]);
+      };
+      pick(0, []);
+    } else for (let k = 0; k < REST_CHOICES; k++) options.push(seededShuffle(tied, rnd).slice(0, need));
+    // Among equal prices, let play the pairs with the most meetings still to come: they are the ones a
+    // later round cannot spare.
+    const unmet = (p: Pair) => pairs.filter((q) => q !== p && !h.met.get(meetKey(pairKey(p), pairKey(q)))).length;
+    let best = { cost: Number.POSITIVE_INFINITY, owed: Number.NEGATIVE_INFINITY };
+    for (const option of options) {
+      const out = new Set([...must, ...option].map(pairKey));
+      const active = pairs.filter((p) => !out.has(pairKey(p)));
+      const cost = meetingsCost(active, h);
+      const owed = active.reduce((sum, p) => sum + unmet(p), 0);
+      if (cost < best.cost || (cost === best.cost && owed > best.owed)) {
+        best = { cost, owed };
+        resting = [...must, ...option];
+      }
+    }
+  }
   const out = new Set(resting.map(pairKey));
   const meetings = fewestMeetings(
     pairs.filter((p) => !out.has(pairKey(p))),
@@ -364,11 +446,150 @@ function kingPairs(pairs: readonly Pair[], courts: number | null | undefined, ro
   return { matches, resting: resting.flat() };
 }
 
+/** One round planned ahead: who meets on which court, and which pairs rest. */
+type PlannedRound = { matches: Pairing[]; resting: Pair[] };
+
+/** How many search steps a round may take before it is drawn by the fewest rests and meetings alone. */
+const PLAN_BUDGET = 40000;
+
+/**
+ * The next round, chosen by looking ahead: of the ways the rest rule allows (nobody's pair rests twice
+ * before every pair has rested once), one from which every meeting not played yet still fits in the
+ * fewest rounds that can hold them, with no meeting played twice before then except in the last of
+ * those rounds, where the courts can force one (six pairs on two courts: fifteen meetings, sixteen
+ * places). It starts from the night as it stands, so a field that changed after round 1 is planned from
+ * there. A round-by-round choice paints itself into a corner: five pairs on one court met each other
+ * once in 79 nights of 100. Bounded by `PLAN_BUDGET`; null when it runs out or every meeting is played.
+ */
+function plannedNext(ordered: readonly Pair[], c: number, h: PairHistory, rnd: () => number): PlannedRound | null {
+  const P = ordered.length;
+  const restCount = P - 2 * c;
+  const keys = ordered.map(pairKey);
+  const edgeKey = (a: number, b: number) => (a < b ? `${a}#${b}` : `${b}#${a}`);
+  const met = new Set<string>();
+  for (let a = 0; a < P; a++) for (let b = a + 1; b < P; b++) if (h.met.get(meetKey(keys[a], keys[b]))) met.add(edgeKey(a, b));
+  const meetings = (P * (P - 1)) / 2;
+  const unmet = meetings - met.size;
+  if (unmet === 0 || c === 0) return null;
+  const tie = ordered.map(() => rnd());
+  /** The perfect matchings of these pairs, cheapest first (a meeting played already costs one). */
+  const matchings = (active: number[]): { cost: number; m: [number, number][] }[] => {
+    const out: { cost: number; m: [number, number][] }[] = [];
+    const walk = (left: number[], acc: [number, number][], cost: number) => {
+      if (left.length === 0) return void out.push({ cost, m: acc.slice() });
+      const [first, ...others] = left;
+      for (let i = 0; i < others.length; i++) {
+        acc.push([first, others[i]]);
+        walk(
+          others.filter((_, j) => j !== i),
+          acc,
+          cost + (met.has(edgeKey(first, others[i])) ? 1 : 0),
+        );
+        acc.pop();
+      }
+    };
+    walk(active, [], 0);
+    return out.sort((x, y) => x.cost - y.cost);
+  };
+  const attempt = (length: number): PlannedRound | null => {
+    const rested = keys.map((k) => h.rested.get(k) ?? 0);
+    const played = keys.map((k) => h.played.get(k) ?? 0);
+    let steps = 0;
+    let first: PlannedRound | null = null;
+    const dfs = (round: number): boolean => {
+      if (met.size === meetings) return true;
+      if (round === length || ++steps > PLAN_BUDGET) return false;
+      const order = ordered.map((_, i) => i).sort((x, y) => rested[x] - rested[y] || played[y] - played[x] || tie[x] - tie[y]);
+      let options: number[][] = [[]];
+      if (restCount > 0) {
+        const edge = rested[order[restCount - 1]];
+        const must = order.filter((i) => rested[i] < edge);
+        const tied = order.filter((i) => rested[i] === edge);
+        const need = restCount - must.length;
+        options = [];
+        const pick = (from: number, acc: number[]) => {
+          if (options.length > 200) return;
+          if (acc.length === need) return void options.push([...must, ...acc]);
+          for (let i = from; i <= tied.length - (need - acc.length); i++) pick(i + 1, [...acc, tied[i]]);
+        };
+        pick(0, []);
+      }
+      for (const out of options) {
+        const resting = new Set(out);
+        const active = order.filter((i) => !resting.has(i));
+        if (active.length > 8) return false;
+        for (const { cost, m } of matchings(active)) {
+          const fresh = m.filter(([a, b]) => !met.has(edgeKey(a, b)));
+          const left = meetings - met.size - fresh.length;
+          // A meeting played twice only in the round that plays the last new ones.
+          if (cost > 0 && left > 0) break;
+          // Whatever is left to meet must still fit in the rounds left.
+          if (left > (length - round - 1) * c) continue;
+          for (const [a, b] of fresh) met.add(edgeKey(a, b));
+          for (const i of out) rested[i]++;
+          for (const i of active) played[i]++;
+          const ok = dfs(round + 1);
+          for (const i of active) played[i]--;
+          for (const i of out) rested[i]--;
+          for (const [a, b] of fresh) met.delete(edgeKey(a, b));
+          if (ok) {
+            if (round === 0) first = { matches: m.map(([a, b], k) => asPairing(k + 1, ordered[a], ordered[b])), resting: out.map((i) => ordered[i]) };
+            return true;
+          }
+          if (steps > PLAN_BUDGET) return false;
+        }
+      }
+      return false;
+    };
+    return dfs(0) ? first : null;
+  };
+  // The fewest rounds that can hold every meeting left, then one more if the rest rule needs it.
+  const least = Math.ceil(unmet / c);
+  return attempt(least) ?? attempt(least + 1);
+}
+
+/** The circle's rounds for this field, seeded per event: P − 1 for an even field, P for an odd one, repeating once played through. */
+const circleRounds = (ordered: readonly Pair[]): PlannedRound[] => Array.from({ length: ordered.length % 2 === 0 ? ordered.length - 1 : ordered.length }, (_, i) => roundRobin(ordered, i));
+
+const meetingsOf = (matches: readonly { a: readonly string[]; b: readonly string[] }[]) =>
+  matches
+    .map((m) => [pairKey(m.a), pairKey(m.b)].sort().join(" v "))
+    .sort()
+    .join(",");
+
+/**
+ * Whether every round drawn so far is the circle's own round for these pairs. A field that changed after
+ * round 1 (a partner taken out, a pair moved up), or courts changed under a running night, leaves the
+ * circle, and from then the night is planned from where it stands (`plannedNext`).
+ */
+const followsCircle = (circle: readonly PlannedRound[], rounds: readonly PairRound[]) =>
+  rounds.every((r) => meetingsOf(circle[(r.roundNumber - 1) % circle.length].matches) === meetingsOf(r.matches.map((m) => ({ a: [m.a1, m.a2], b: [m.b1, m.b2] }))));
+
+/** The pairs sorted by key, then seeded per event: the order the circle and the plan read, whatever the seats' order. */
+function seatedOrder(eventId: string, input: readonly Pair[]): Pair[] {
+  const pairs = [...new Map(input.map((p) => [pairKey(p), p])).values()].sort((x, y) => pairKey(x).localeCompare(pairKey(y)));
+  return seededShuffle(pairs, mulberry32(seedFrom(`${eventId}:pairs`)));
+}
+
+/**
+ * The rounds of a full rotation while an americano night follows its circle (every court the field
+ * fills, the same pairs since round 1): P − 1, or P for an odd field. Null otherwise: on fewer courts,
+ * and once the field or the courts changed, so no screen says "every pair has met every other" when
+ * that is no longer the night's promise.
+ */
+export function pairRotation(input: { eventId: string; pairs: readonly Pair[]; courts: number | null | undefined; rounds: readonly PairRound[] }): number | null {
+  const ordered = seatedOrder(input.eventId, input.pairs);
+  if (ordered.length < 2 || pairCourts(ordered.length, input.courts) !== Math.floor(ordered.length / 2)) return null;
+  const circle = circleRounds(ordered);
+  return followsCircle(circle, input.rounds) ? circle.length : null;
+}
+
 /**
  * The next round of a fixed-pairs night, in any format: what `drawRound` returns when the night keeps
- * its partners. The seeds are the event's and the round's, as for rotating partners; the circle's
- * order is seeded per event from the pairs sorted by key, so the same pairs always meet in the same
- * order whatever order the seats list them in.
+ * its partners. The seeds are the event's and the round's, as for rotating partners. Americano follows
+ * the circle on every court the field fills while the rounds drawn so far are the circle's; otherwise
+ * (fewer courts, or a field that changed) the next round is planned ahead from the night as it stands
+ * (`plannedNext`), and once every meeting is played, drawn by the fewest rests and repeats (`fairRound`).
  */
 export function drawPairRound(input: { eventId: string; format: TournamentFormat; pairs: readonly Pair[]; courts: number | null | undefined; rounds: readonly PairRound[] }): RoundPlan {
   const { eventId, format, courts, rounds } = input;
@@ -379,11 +600,17 @@ export function drawPairRound(input: { eventId: string; format: TournamentFormat
   const h = pairHistory(rounds, pairs);
   if (format === "mexicano") return mexicanoPairs(pairs, courts, rounds, h, rnd);
   if (format === "king") return kingPairs(pairs, courts, rounds, h, rnd);
-  if (pairCourts(pairs.length, courts) === Math.floor(pairs.length / 2)) {
-    const ordered = seededShuffle(pairs, mulberry32(seedFrom(`${eventId}:pairs`)));
-    const r = roundRobin(ordered, roundNumber - 1);
-    return { matches: r.matches, resting: r.resting.flat() };
+  const ordered = seatedOrder(eventId, pairs);
+  const c = pairCourts(pairs.length, courts);
+  if (c === Math.floor(pairs.length / 2)) {
+    const circle = circleRounds(ordered);
+    if (followsCircle(circle, rounds)) {
+      const r = circle[(roundNumber - 1) % circle.length];
+      return { matches: r.matches, resting: r.resting.flat() };
+    }
   }
+  const next = plannedNext(ordered, c, h, mulberry32(seedFrom(`${eventId}:${roundNumber}:plan`)));
+  if (next) return { matches: next.matches, resting: next.resting.flat() };
   return fairRound(pairs, courts, h, rnd);
 }
 

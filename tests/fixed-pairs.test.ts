@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { mulberry32 } from "@/lib/domain/americano";
 import { drawRound, type DrawnRound } from "@/lib/domain/formats";
-import { computeKingPairStandings, computePairStandings, pairCourts, pairKey, pairRotationRounds, pairRowsToPlayers, pairsRefusal, seatUnits, type Pair } from "@/lib/domain/fixedPairs";
+import { computeKingPairStandings, computePairStandings, pairCourts, pairKey, pairRotation, pairRotationRounds, pairRowsToPlayers, pairsRefusal, seatUnits, type Pair } from "@/lib/domain/fixedPairs";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 
 /**
@@ -117,7 +118,7 @@ describe("fixed pairs: fairness for 2 to 8 pairs", () => {
     }
   });
 
-  it("on fewer courts than the field fills, rests stay fair and the meetings stay as even as the courts allow", () => {
+  it("on fewer courts than the field fills, rests stay fair and every pair meets every other once", () => {
     // Eight pairs on two courts: four play, four rest; 28 meetings at two a round is fourteen rounds.
     expect(pairRotationRounds(8, 2)).toBe(14);
     const night = playNight("americano", 8, 14, 2);
@@ -129,8 +130,107 @@ describe("fixed pairs: fairness for 2 to 8 pairs", () => {
     // Fourteen rounds, four pairs resting: 56 rests over eight pairs is seven each, exactly.
     expect([...rested.values()].every((v) => v === 7)).toBe(true);
     const met = meetings(night);
-    expect(Math.max(...met.values())).toBeLessThanOrEqual(2);
-    expect(met.size).toBeGreaterThanOrEqual(24);
+    expect(met.size).toBe(28);
+    expect([...met.values()].every((v) => v === 1)).toBe(true);
+  });
+
+  /** A night of `rounds` on `courts` for event `eventId`: the meetings, and whether every rest stayed fair after every round. */
+  const onCourts = (n: number, courts: number, rounds: number, eventId: string) => {
+    const pairs = pairsOf(n);
+    const night: DrawnRound[] = [];
+    const rested = new Map(pairs.map((p) => [p[0], 0]));
+    let fair = true;
+    for (let r = 1; r <= rounds; r++) {
+      const plan = drawRound({ eventId, format: "americano", ids: pairs.flat(), courts, rounds: night, pairs });
+      night.push({ roundNumber: r, resting: plan.resting, matches: plan.matches.map((m) => ({ court: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1], sideA: 21, sideB: 15 })) });
+      for (const id of plan.resting) if (rested.has(id)) rested.set(id, rested.get(id)! + 1);
+      if (Math.max(...rested.values()) - Math.min(...rested.values()) > 1) fair = false;
+    }
+    return { night, fair };
+  };
+
+  it("one court: four pairs meet each other once in six rounds and five pairs in ten, whatever the event, with fair rests", () => {
+    // The reviewer's measured nights: before the night was planned ahead, 4 pairs met 4 of 6 times and 5 pairs 6 of 10.
+    for (const eventId of ["ev-1", "ev-2", "ev-3", "night-a", "night-b", "phuket-friday"]) {
+      for (const [n, rounds] of [
+        [4, 6],
+        [5, 10],
+      ] as const) {
+        const { night, fair } = onCourts(n, 1, rounds, eventId);
+        const met = meetings(night);
+        expect(met.size, `${n} pairs, ${eventId}`).toBe((n * (n - 1)) / 2);
+        expect([...met.values()].every((v) => v === 1), `${n} pairs, ${eventId}`).toBe(true);
+        expect(fair, `${n} pairs, ${eventId}`).toBe(true);
+      }
+    }
+  });
+
+  it("where the courts force a repeat, every meeting comes first and the repeat waits for the last round", () => {
+    // Six pairs on two courts: fifteen meetings, sixteen places in eight rounds.
+    for (const eventId of ["ev-1", "ev-2", "ev-3"]) {
+      const { night, fair } = onCourts(6, 2, 8, eventId);
+      const before = meetings(night.slice(0, 7));
+      expect([...before.values()].every((v) => v === 1), eventId).toBe(true);
+      expect(meetings(night).size, eventId).toBe(15);
+      expect(fair, eventId).toBe(true);
+    }
+  });
+
+  it("a field that loses a pair after round 1 leaves the circle: rests stay fair, no meeting twice before every meeting, no rotation promised", () => {
+    for (const eventId of ["demo", "ev-1", "ev-7"]) {
+      // Seven pairs on every court: the circle, which promises seven rounds.
+      let pairs = pairsOf(7);
+      const night: DrawnRound[] = [];
+      const play = (r: number) => {
+        const plan = drawRound({ eventId, format: "americano", ids: pairs.flat(), courts: null, rounds: night, pairs });
+        night.push({ roundNumber: r, resting: plan.resting, matches: plan.matches.map((m) => ({ court: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1], sideA: 21, sideB: 15 })) });
+      };
+      play(1);
+      expect(pairRotation({ eventId, pairs, courts: null, rounds: night })).toBe(7);
+      // A pair that played round 1 goes home: six pairs, every court full.
+      const gone = pairKey([night[0].matches[0].a1, night[0].matches[0].a2]);
+      pairs = pairs.filter((p) => pairKey(p) !== gone);
+      expect(pairRotation({ eventId, pairs, courts: null, rounds: night }), eventId).toBeNull();
+      const keys = new Set(pairs.map(pairKey));
+      const among = (rounds: DrawnRound[]) => meetings(rounds.map((r) => ({ ...r, matches: r.matches.filter((m) => keys.has(pairKey([m.a1, m.a2])) && keys.has(pairKey([m.b1, m.b2]))) })));
+      for (let r = 2; r <= 7; r++) {
+        play(r);
+        const met = among(night);
+        // A meeting twice only once all fifteen are played.
+        if (met.size < 15) expect([...met.values()].every((v) => v === 1), `${eventId} round ${r}`).toBe(true);
+      }
+      expect(among(night).size, eventId).toBe(15);
+    }
+  });
+
+  it("a night of rotating partners draws exactly as it did before fixed pairs: 630 nights, hashed", () => {
+    // The hash of these 630 nights (three formats, 4 to 17 players, fifteen events, four rounds each,
+    // one court on every third event) as drawn by 69c3d3f, the main before decision F. A rotating night
+    // must not move by one player because fixed pairs exist.
+    const hash = createHash("sha256");
+    let nights = 0;
+    for (const format of ["americano", "mexicano", "king"] as const)
+      for (let n = 4; n <= 17; n++)
+        for (let e = 0; e < 15; e++) {
+          const ids = Array.from({ length: n }, (_, i) => `p${i}`);
+          const score = mulberry32(n * 101 + e);
+          const rounds: DrawnRound[] = [];
+          for (let r = 1; r <= 4; r++) {
+            const plan = drawRound({ eventId: `golden-${e}`, format, ids, courts: e % 3 === 0 ? 1 : null, rounds });
+            rounds.push({
+              roundNumber: r,
+              resting: plan.resting,
+              matches: plan.matches.map((m) => {
+                const a = Math.floor(score() * 22);
+                return { court: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1], sideA: a, sideB: 21 - Math.min(a, 21) };
+              }),
+            });
+          }
+          hash.update(JSON.stringify(rounds));
+          nights++;
+        }
+    expect(nights).toBe(630);
+    expect(hash.digest("hex")).toBe("b6f1936a7fde767077760ba4559f49b709022c084de5877d7049320fdd339b8a");
   });
 
   it("draws the same night twice from the same event", () => {

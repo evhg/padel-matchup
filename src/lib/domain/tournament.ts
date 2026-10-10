@@ -5,7 +5,7 @@ import { computeStandings, maxCourtsFor, rotationLength, type StandingRow } from
 import { presentSpots } from "./checkIn";
 import { DomainError } from "./errors";
 import { computeKingStandings, drawRound, firstRoundRefusal, FORMATS, formatOf, type KingStandingRow } from "./formats";
-import { computeKingPairStandings, computePairStandings, pairCourts, pairRotationRounds, pairRowsToPlayers, pairsOfRounds, pairsRefusal, seatUnits, unitCounts, type Pair, type PairStandingRow } from "./fixedPairs";
+import { computeKingPairStandings, computePairStandings, pairRotation, pairRowsToPlayers, pairsOfRounds, pairsRefusal, seatUnits, unitCounts, type Pair, type PairStandingRow } from "./fixedPairs";
 import { MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { recomputeStatus } from "./events";
 import { normalizeName } from "./players";
@@ -100,10 +100,9 @@ export async function getTournamentState(db: Db, ev: Event, participantIds: stri
   if (ev.fixedPairs) {
     const field = pairsOfRounds(rounds, pairs);
     const pairStandings = format === "king" ? computeKingPairStandings(field, rounds) : computePairStandings(field, all, { byWins: Boolean(ev.gamesTo) });
-    // The round robin repeats once every pair has met every other, when every court the field fills is in play.
-    const inPlay = pairs.length || field.length;
-    const exact = pairCourts(inPlay, ev.courts) === Math.floor(inPlay / 2);
-    return { format, rounds, standings: pairRowsToPlayers(pairStandings), participantIds, maxCourts: maxCourtsFor(participantIds.length), scoredMatches, rotationLength: format === "americano" && exact ? pairRotationRounds(inPlay) : null, pairStandings };
+    // The round robin's length while the night follows its circle (`pairRotation`): never once the field or the courts changed.
+    const rotation = format === "americano" ? pairRotation({ eventId: ev.id, pairs: pairs.length ? pairs : field, courts: ev.courts, rounds }) : null;
+    return { format, rounds, standings: pairRowsToPlayers(pairStandings), participantIds, maxCourts: maxCourtsFor(participantIds.length), scoredMatches, rotationLength: rotation, pairStandings };
   }
   const ids = new Set(participantIds);
   for (const m of all) for (const p of [m.a1, m.a2, m.b1, m.b2]) ids.add(p);
