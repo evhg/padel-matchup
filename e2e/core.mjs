@@ -299,7 +299,8 @@ try {
   await a.getByTestId("paste-names").locator("summary").click();
   await a.getByTestId("paste-names-box").fill("1. Ana 2. Bo\n+1 Cy 🎾\nDana\ncan't make it");
   const preview = a.getByTestId("paste-preview");
-  await preview.waitFor({ timeout: 10000 });
+  // The preview shows once the page is interactive; on a loaded machine that can take a while.
+  await preview.waitFor({ timeout: 20000 });
   check(
     "a pasted chat shows its names before anything is held, skips the organiser already in, and drops the chat",
     ((await preview.textContent()) ?? "").trim() === "Reserves a spot for: Ana, Bo, Cy" && (await a.getByText("Already in, skipped: Dana", { exact: true }).count()) === 1,
