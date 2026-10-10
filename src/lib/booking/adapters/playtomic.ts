@@ -222,6 +222,16 @@ async function pace(): Promise<void> {
 
 type Got = { kind: "response"; status: number; text: string } | { kind: "timeout" } | { kind: "error"; detail: string };
 
+/**
+ * What failed, as the error's class and the network's code ("TypeError ECONNRESET"), never its message:
+ * a message may carry the address it failed on, and this lands in the club's cache (`failureWhy`).
+ */
+function errorClass(e: unknown): string {
+  if (!(e instanceof Error)) return "Error";
+  const code = (e as { cause?: { code?: unknown } }).cause?.code ?? (e as { code?: unknown }).code;
+  return `${e.name}${typeof code === "string" && /^[A-Z0-9_]{2,40}$/.test(code) ? ` ${code}` : ""}`;
+}
+
 async function get(url: string, fetchImpl: typeof fetch, accept: string): Promise<Got> {
   await pace();
   const ctrl = new AbortController();
@@ -238,7 +248,11 @@ async function get(url: string, fetchImpl: typeof fetch, accept: string): Promis
       const text = res.ok ? (await res.text()).slice(0, MAX_BYTES) : "";
       return { kind: "response", status: res.status, text };
     } catch (e) {
-      return { kind: "error", detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
+      // The frame's own stop (budget, cap, a block) is the frame's to judge, not this club's error.
+      if (e instanceof Error && e.name === "ScrapeStop") throw e;
+      // An abort, ours or the frame's deadline, is a timeout.
+      if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return { kind: "timeout" };
+      return { kind: "error", detail: errorClass(e) };
     }
   })();
   try {

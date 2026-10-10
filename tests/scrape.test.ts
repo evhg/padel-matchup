@@ -1,18 +1,21 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, like, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, type Club } from "@/db/schema";
 import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult, type ScrapeTarget } from "@/lib/booking/adapters";
 import { createMatchiAdapter, matchiAdapter } from "@/lib/booking/adapters/matchi";
-import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
+import { playtomicAdapter, resetPlaytomicState } from "@/lib/booking/adapters/playtomic";
+import { createBookandgoAdapter } from "@/lib/booking/adapters/bookandgo";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeCourtsCardShown, freeCourtsState } from "@/lib/booking/availability";
 import { freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { setMetric } from "@/lib/domain/metrics";
-import { SCRAPE, disabledPlatforms, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
+import { SCRAPE, disabledPlatforms, failureWhy, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 
@@ -41,8 +44,8 @@ type Call = { url: string; at: number; headers: Headers; method: string };
 type Answer = { status: number; body?: unknown; text?: string; headers?: Record<string, string>; url?: string };
 
 /** A fake clock for the run, and a stubbed network that answers by URL. */
-function world(answer: (url: string) => Answer = () => ({ status: 200, body: { slots: [] } }), costMs = 200) {
-  let t = 0;
+function world(answer: (url: string) => Answer = () => ({ status: 200, body: { slots: [] } }), costMs = 200, start = 0) {
+  let t = start;
   const calls: Call[] = [];
   const clock: Clock = {
     now: () => t,
@@ -143,6 +146,15 @@ describe("the slice: which clubs a run reads", () => {
     expect(await urls(15 * 60_000)).toEqual(["/busy-club"]);
     expect(await urls(30 * 60_000)).toEqual(["/busy-club"]);
     expect(await urls(61 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
+  });
+
+  it("a club read an hour ago is due even when this tick came a few seconds early, so an hour does not become 75 minutes", async () => {
+    // The tick an hour after the last read started three seconds sooner than that read did.
+    await club("hourly", { availabilityAt: at(-HOUR + 3_000) });
+    await club("just-read", { availabilityAt: at(-50 * 60_000) });
+    const w = world();
+    await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.map((c) => new URL(c.url).pathname)).toEqual(["/hourly"]);
   });
 
   it("gives each platform its own slice, so one platform's clubs never crowd out another's", async () => {
@@ -425,6 +437,168 @@ describe("back-off and switches", () => {
     expect(await scrapeIfDue(db, at(10 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "not_due" });
     const third = await scrapeIfDue(db, at(15 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
     expect("clubs" in third).toBe(true);
+  });
+});
+
+/**
+ * The run's clock in production is `performance.now()`, which always carries a fraction. On 10 October
+ * 2026 four Playtomic clubs a run wrote a cache whose whole error was "error": the request timeout was
+ * the time left to the deadline, a fraction, and `AbortSignal.timeout` throws on anything but a whole
+ * number, so the last one or two clubs of an eight-club lane failed before a request left. Every clock
+ * above counts in whole milliseconds, which is why no test saw it. These start and step with fractions.
+ */
+describe("a clock with fractions, as performance.now() gives it", () => {
+  const fixture = (dir: string, name: string) => readFileSync(path.join(import.meta.dirname, "fixtures/scrape", dir, name), "utf8");
+  const PT_PAGE = fixture("playtomic", "club-the-padel-co.html");
+  const PT_DAY = fixture("playtomic", "availability-the-padel-co-2026-10-11.json");
+  /** Each club its own tenant, so the run's page cache never serves one club's days to another. */
+  const ptPage = (pathname: string) => PT_PAGE.replaceAll("b692a586-2e22-4fca-add7-272f73c98aa7", `b692a586-2e22-4fca-add7-${createHash("md5").update(pathname).digest("hex").slice(0, 12)}`);
+  const playtomic = (url: string): Answer => {
+    const u = new URL(url);
+    if (u.pathname.startsWith("/clubs/")) return { status: 200, text: ptPage(u.pathname) };
+    if (u.pathname === "/api/clubs/availability") return { status: 200, text: PT_DAY, headers: { "content-type": "application/json" } };
+    return { status: 404 };
+  };
+  /** The Playtomic reader keeps its own second between requests on `Date.now()`: move that clock on, so no real second passes. */
+  const wallClock = () => {
+    let wall = NOW.getTime();
+    return vi.spyOn(Date, "now").mockImplementation(() => (wall += 5_000));
+  };
+  const ptClub = (slug: string) => club(slug, { bookingUrl: `https://playtomic.com/clubs/${slug}`, website: `https://playtomic.com/clubs/${slug}`, availabilityAt: at(-61 * 60_000) });
+
+  // The runs of 10 October: at 1.19 s a request (10:50) the lane's eighth club wrote "error"; at 1.43 s
+  // (11:50 and 12:20) its seventh and eighth did. At 1.43 s thirty-two requests no longer fit in 45
+  // seconds, so the eighth club is cut short and stays due for the next run, unwritten.
+  for (const c of [
+    { cost: 1190.123, requests: 32, ok: 8, outOfTime: false, unread: [] as string[] },
+    { cost: 1430.123, requests: 31, ok: 7, outOfTime: true, unread: ["padel-cnx"] },
+  ]) {
+    it(`reads every Playtomic club of a lane clean at ${c.cost} ms a request, the last ones too`, async () => {
+      resetPlaytomicState();
+      const slugs = ["baan-padel", "bangkok-padel", "bel-club-padel", "destination-padel-club", "koh-tao-athletic-club", "love-all-sports", "madison-house-padel", "padel-cnx"];
+      for (const s of slugs) await ptClub(s);
+      const w = world(playtomic, c.cost, 1234.567);
+      const spy = wallClock();
+      try {
+        const run = await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: w.fetchImpl, clock: w.clock });
+        expect(run.platforms.playtomic).toMatchObject({ requests: c.requests, ok: c.ok, errors: 0 });
+        expect(run.outOfTime).toBe(c.outOfTime);
+        expect(run.failed).toEqual([]);
+        // Every request the frame counted went out: none died before it left.
+        expect(w.calls).toHaveLength(c.requests);
+        const rows = await db.select({ slug: clubs.slug, a: clubs.availability, at: clubs.availabilityAt }).from(clubs);
+        expect(rows.filter((r) => r.a !== null && r.a.error !== null).map((r) => [r.slug, r.a?.error])).toEqual([]);
+        expect(rows.filter((r) => r.at!.getTime() < NOW.getTime()).map((r) => r.slug)).toEqual(c.unread);
+      } finally {
+        spy.mockRestore();
+        resetPlaytomicState();
+      }
+    });
+  }
+
+  it("never starts a request with under a second left, and a request the deadline cuts short is not written", async () => {
+    resetPlaytomicState();
+    await ptClub("padel-cnx");
+    const spy = wallClock();
+    try {
+      // 0.9 s of budget: not one request fits, so none starts.
+      const none = world(playtomic, 300, 0.25);
+      const short = await runScrape(db, NOW, { adapters: [playtomicAdapter], fetchImpl: none.fetchImpl, clock: none.clock, budgetMs: 900.5 });
+      expect(none.calls).toEqual([]);
+      expect(short.outOfTime).toBe(true);
+      expect((await row("padel-cnx")).availability).toBeNull();
+
+      // 1.5 s of budget and a platform that never answers: the frame's own deadline aborts the request (a real 1.5 s).
+      // The club is cut short, never written as an error, and stays due for the next run.
+      const hang = world(() => ({ status: 200 }), 0, 0.25);
+      const hanging = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        void hang.fetchImpl(input, init);
+        return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+      }) as typeof fetch;
+      const cut = await runScrape(db, at(60_000), { adapters: [playtomicAdapter], fetchImpl: hanging, clock: hang.clock, budgetMs: 1_500.5 });
+      expect(hang.calls).toHaveLength(1);
+      expect(cut.outOfTime).toBe(true);
+      expect(cut.clubs).toBe(0);
+      expect((await row("padel-cnx")).availability).toBeNull();
+    } finally {
+      spy.mockRestore();
+      resetPlaytomicState();
+    }
+  });
+
+  it("MATCHi reads clean when its first request starts with 8.5 s left", async () => {
+    const page = (name: string) => fixture("matchi", name);
+    await club("blue-tree", { bookingUrl: "https://www.matchi.se/facilities/bluetree", bookingPlatform: "matchi" });
+    const w = world((url) => {
+      const u = new URL(url);
+      if (u.pathname === "/facilities/bluetree") return { status: 200, text: page("facility-bluetree.html") };
+      if (u.pathname === "/book/listSlots") return { status: 200, text: page(u.searchParams.get("date") === "2026-10-10" ? "list-slots-bluetree-2026-10-10.html" : u.searchParams.get("date") === "2026-10-11" ? "list-slots-bluetree-2026-10-11.html" : "list-slots-empty.html") };
+      return { status: 404 };
+    }, 200.123, 0.25);
+    const matchi = createMatchiAdapter({ sleep: async () => undefined, clock: () => 0 });
+    const run = await runScrape(db, NOW, { adapters: [matchi], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 8_500.5 });
+    expect(run.platforms.matchi).toMatchObject({ ok: 1, errors: 0 });
+    expect((await row("blue-tree")).availability).toMatchObject({ error: null, source: "scrape:matchi" });
+  });
+
+  it("Book & Go reads clean when its first request starts with 8.5 s left", async () => {
+    const bg = (name: string) => fixture("bookandgo", name);
+    await club("prime-padel-havelock", { bookingUrl: "https://app.primepadelsport.com/", bookingPlatform: "bookandgo", tz: "Asia/Singapore" });
+    const w = world((url) => {
+      const m = new URL(url).pathname.match(/^\/api\/v1\/apps\/39\/(locations|court-bookings)$/);
+      if (!m) return { status: 404 };
+      if (m[1] === "locations") return { status: 200, text: bg("locations-39.json"), headers: { "content-type": "application/json" } };
+      const date = new URL(url).searchParams.get("date");
+      return { status: 200, text: bg(`court-bookings-39-${date}.json`), headers: { "content-type": "application/json" } };
+    }, 200.123, 0.25);
+    const bookandgo = createBookandgoAdapter({ sleep: async () => undefined, clock: () => 0 });
+    const run = await runScrape(db, NOW, { adapters: [bookandgo], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 8_500.5 });
+    expect(run.platforms.bookandgo).toMatchObject({ ok: 1, errors: 0 });
+    expect((await row("prime-padel-havelock")).availability).toMatchObject({ error: null, source: "scrape:bookandgo" });
+  });
+});
+
+describe("a failed read says why, in a few words that are safe to keep", () => {
+  it("keeps the step and the error's class or status, never a link, a query or a body", () => {
+    expect(failureWhy("availability 2026-10-10: RangeError")).toBe("availability 2026-10-10: RangeError");
+    expect(failureWhy("club page: HTTP 500")).toBe("club page: HTTP 500");
+    const dirty = failureWhy("500 on /book/listSlots?facility=2165&date=2026-10-10 from https://www.matchi.se/x?token=abcdef0123456789abcdef0123456789 body {\"secret\":1}");
+    expect(dirty).not.toMatch(/http|\?|\/|token|secret|abcdef0123/i);
+    expect(dirty!.length).toBeLessThanOrEqual(60);
+    expect(failureWhy("x".repeat(500))).toBeNull();
+    expect(failureWhy(null)).toBeNull();
+  });
+
+  it("writes it beside the error, names the club in the run's answer, and never shows it in public", async () => {
+    await club("broken");
+    const leaky: AvailabilityAdapter = { ...reader(), scrape: async (t, f) => ((await f(t.bookingUrl)), { ok: false, status: 500, reason: "error", requests: 1, detail: `club page: HTTP 500 at ${t.bookingUrl}?key=abcdefabcdefabcdefabcdefabcdef` }) };
+    const w = world(() => ({ status: 500 }));
+    const run = await runScrape(db, NOW, { adapters: [leaky], fetchImpl: w.fetchImpl, clock: w.clock });
+    const a = (await row("broken")).availability!;
+    expect(a).toMatchObject({ error: "error 500", why: "club page: HTTP 500 at", slots: [] });
+    expect(run.failed).toEqual([{ slug: "broken", platform: "playtomic", error: "error 500", why: "club page: HTTP 500 at" }]);
+    expect(JSON.stringify(clubToPublic(await row("broken"), "https://kicksma.sh", undefined, NOW))).not.toContain("HTTP 500");
+  });
+
+  it("a reader that swallows the frame's own stop still gets the frame's word for it", async () => {
+    await club("greedy-swallower");
+    // A reader that catches everything, as the three real readers did with the frame's errors.
+    const swallower: AvailabilityAdapter = {
+      ...reader(),
+      async scrape(t, f) {
+        try {
+          for (let i = 0; i < 12; i++) await f(`${t.bookingUrl}?day=${i}`);
+          return { ok: true, slots: [], requests: 12 };
+        } catch (e) {
+          return { ok: false, status: null, reason: "error", requests: 0, detail: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    };
+    const w = world();
+    const run = await runScrape(db, NOW, { adapters: [swallower], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls).toHaveLength(SCRAPE.perClub);
+    expect((await row("greedy-swallower")).availability).toMatchObject({ error: "error", why: "frame: cap" });
+    expect(run.failed).toEqual([{ slug: "greedy-swallower", platform: "playtomic", error: "error", why: "frame: cap" }]);
   });
 });
 

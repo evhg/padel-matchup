@@ -258,6 +258,16 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and `booking_platform` by hand, and the directory import writes neither, so fifty green tests
   described a job that read almost no club (10 October 2026). Run the import's own statement in the
   test (`node scripts/import-clubs.mjs --sql`) before asking which rows a query finds.
+- **A fake clock in whole numbers hides what the real one does.** The court-time frame gave each
+  request the time left to its deadline as its timeout, and `AbortSignal.timeout` throws on anything
+  but a whole number. `performance.now()` always carries a fraction, so every request that started in a
+  lane's last ten seconds died before it left, and four Playtomic clubs an hour showed "not available
+  just now" (10 October 2026). Every test clock counted in whole milliseconds and saw nothing. A fake
+  clock starts and steps with a fraction (`1234.567`, `1190.123`) wherever the real one is
+  `performance.now()`, and a value that goes to a timer API is `Math.floor`ed where it is made.
+- **A failure that keeps no cause costs a day to explain.** The cache said "error" and nothing else,
+  so three diagnoses argued over a network fault, an abort and a timer. A failed row now keeps `why`,
+  the step and the error's class or status, and never the message: a message can carry a link.
 - **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
   MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
   a stub that set `url`, passed. Test a reader through the frame that production calls it through.

@@ -23,7 +23,12 @@ export type ClubFreeSlot = { start: string; end: string; free: number };
  * day. `fullAt` is when a read last covered all of `days`: a read of today alone keeps the later days of
  * that one. The column is jsonb, so the optional fields needed no migration.
  */
-export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string };
+/**
+ * `why`, on a failed read from a booking platform only: the step and the error's class or status
+ * ("availability 2026-10-10: RangeError"), never a link or a body (`failureWhy` in
+ * `src/lib/booking/scrape.ts`). No page and no API shape reads it; it is how we find the cause.
+ */
+export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string };
 
 export const clubs = pgTable(
   "clubs",

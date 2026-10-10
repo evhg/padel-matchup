@@ -6,7 +6,7 @@ import { MAX_REQUESTS, MIN_GAP_MS, parsePlaytomicAvailability, parsePlaytomicClu
 import type { ScrapeTarget } from "@/lib/booking/adapters/types";
 import { PLATFORMS } from "@/lib/booking/platforms";
 import { todaySlots } from "@/lib/booking/availability";
-import { availabilityFrom } from "@/lib/booking/scrape";
+import { availabilityFrom, ScrapeStop } from "@/lib/booking/scrape";
 import { utcToZonedParts } from "@/lib/dates";
 import { freeCourtHours } from "@/lib/domain/clubs";
 
@@ -367,6 +367,17 @@ describe("playtomicAdapter.scrape", () => {
     expect(Date.now() - started).toBeLessThan(REQUEST_TIMEOUT_MS + 1_000);
   });
 
+  it("calls the frame's own abort a timeout, never an error", async () => {
+    const aborted = stubFetch(() => Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError")));
+    const r = await settle(playtomicAdapter.scrape(target(), aborted, NOW));
+    expect(r).toMatchObject({ ok: false, status: null, reason: "timeout", requests: 1 });
+  });
+
+  it("hands the frame's own stop back to the frame rather than calling it the club's error", async () => {
+    const stopped = stubFetch(() => Promise.reject(new ScrapeStop("cap")));
+    await expect(settle(playtomicAdapter.scrape(target(), stopped, NOW))).rejects.toBeInstanceOf(ScrapeStop);
+  });
+
   it("reads the club's days in the page's own zone when the club row has none, and says which zone it used", async () => {
     // 20:00 UTC on the 10th is already the 11th in Singapore: a reader that guessed UTC would ask for the 10th.
     const r = await settle(playtomicAdapter.scrape(target({ tz: null }), site({ "2026-10-11": SG_DAY }), NOW));
@@ -382,8 +393,9 @@ describe("playtomicAdapter.scrape", () => {
   });
 
   it("reports a network error as error, and makes no request for a link that is not Playtomic's", async () => {
-    const r = await settle(playtomicAdapter.scrape(target(), stubFetch(() => Promise.reject(new TypeError("fetch failed"))), NOW));
-    expect(r).toEqual({ ok: false, status: null, reason: "error", requests: 1, detail: "club page: fetch failed" });
+    // The error's class and the network's code, never its message, which may carry a link.
+    const r = await settle(playtomicAdapter.scrape(target(), stubFetch(() => Promise.reject(new TypeError("fetch failed", { cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }) }))), NOW));
+    expect(r).toEqual({ ok: false, status: null, reason: "error", requests: 1, detail: "club page: TypeError ECONNRESET" });
     calls = [];
     const other = await settle(playtomicAdapter.scrape(target({ bookingUrl: "https://www.matchi.se/facilities/x" }), site({}), NOW));
     expect(other).toMatchObject({ ok: false, reason: "error", requests: 0 });

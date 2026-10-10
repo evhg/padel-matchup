@@ -39,6 +39,12 @@ export const SCRAPE = {
   usedDueMs: 14 * 60_000,
   /** Any other club is read again after this long: once an hour. */
   clubDueMs: 60 * 60_000,
+  /**
+   * A tick may start a few seconds before the one an hour earlier did, and a club read then is not yet
+   * an hour old: without this minute of slack the hour became 75 minutes about half the time. The same
+   * minute `dueMs` and `usedDueMs` keep below fifteen.
+   */
+  dueSlackMs: 60_000,
   /** The clubs one platform's lane takes in a run. Each lane has its own 45 seconds, so one platform never crowds out another. */
   perLane: 8,
   budgetMs: 45_000,
@@ -55,6 +61,8 @@ export const SCRAPE = {
    */
   fullDueMs: 60 * 60_000,
   requestTimeoutMs: 10_000,
+  /** No request starts with less than this left before the deadline: it would run past it. */
+  minRequestMs: 1_000,
   maxBytes: 3_000_000,
   maxSlots: 1_000,
   /** After a "blocked": six hours, then a day, then a week for every block after that. A clean read starts again from six hours. */
@@ -312,7 +320,7 @@ export async function dueClubs(db: Db, now: Date, platform: string, limit: numbe
         or(isNotNull(clubs.approvedAt), inArray(clubs.source, [...LISTED_SOURCES])),
         onPlatform,
         noFeed(),
-        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)), and(used, lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.usedDueMs)))),
+        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - (SCRAPE.clubDueMs - SCRAPE.dueSlackMs))), and(used, lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.usedDueMs)))),
       ),
     )
     .orderBy(sql`${clubs.availabilityAt} asc nulls first`, clubs.slug)
@@ -338,34 +346,60 @@ const realClock: Clock = { now: () => performance.now(), sleep: (ms) => new Prom
  */
 type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; changedAt: Set<string>; outOfTime: boolean; requests: number; cache: Map<string, { status: number; body: string; type: string | null; url: string }> };
 
+/** Does one more request fit before the deadline, after the platform's second between requests? */
+const fits = (lane: Lane, o: { clock: Clock; deadline: number }) => o.clock.now() + Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now()) + SCRAPE.minRequestMs <= o.deadline;
+
+/** What the frame itself did to one club's read: a stop it threw, and whether its own timer aborted a request. */
+type LaneFetch = { fetch: typeof fetch; count: () => number; stop: () => ScrapeStop["why"] | null; timedOut: () => boolean };
+
 /** The only fetch a reader gets. Every limit that stays is enforced here, not trusted to the reader. */
-function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadline: number }): { fetch: typeof fetch; count: () => number } {
+function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadline: number }): LaneFetch {
   let n = 0;
+  let stopped: ScrapeStop["why"] | null = null;
+  let timedOut = false;
+  const stop = (why: ScrapeStop["why"]) => {
+    stopped = why;
+    if (why === "budget") lane.outOfTime = true;
+    return new ScrapeStop(why);
+  };
   const f = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const req = typeof input === "object" && "url" in input && !(input instanceof URL) ? input : null;
     const url = req ? req.url : String(input);
     const method = (init?.method ?? req?.method ?? "GET").toUpperCase();
-    if (method !== "GET" && method !== "HEAD") throw new ScrapeStop("method");
+    if (method !== "GET" && method !== "HEAD") throw stop("method");
     const given = new Headers(init?.headers ?? req?.headers);
-    if (given.has("authorization") || given.has("cookie")) throw new ScrapeStop("credentials");
-    if (lane.blocked !== null) throw new ScrapeStop("blocked");
+    if (given.has("authorization") || given.has("cookie")) throw stop("credentials");
+    if (lane.blocked !== null) throw stop("blocked");
     const hit = method === "GET" ? lane.cache.get(url) : undefined;
     if (hit) return withUrl(new Response(hit.body, { status: hit.status, headers: hit.type ? { "content-type": hit.type } : {} }), hit.url);
-    if (n >= SCRAPE.perClub) throw new ScrapeStop("cap");
+    if (n >= SCRAPE.perClub) throw stop("cap");
+    if (!fits(lane, o)) throw stop("budget");
     const wait = Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now());
-    if (o.clock.now() + wait >= o.deadline) {
-      lane.outOfTime = true;
-      throw new ScrapeStop("budget");
-    }
     if (wait > 0) await o.clock.sleep(wait);
+    // The run's clock is performance.now(), which carries a fraction, and AbortSignal.timeout throws on
+    // anything but a whole number of milliseconds: before 10 October 2026 that threw for every request
+    // that started in a lane's last ten seconds, and the club was written as a bare "error".
+    const left = Math.floor(o.deadline - o.clock.now());
+    if (left < SCRAPE.minRequestMs) throw stop("budget");
     lane.lastAt = o.clock.now();
     n++;
     lane.requests++;
     const headers = new Headers(given);
     headers.set("user-agent", SCRAPE.userAgent);
     if (!headers.has("accept")) headers.set("accept", "text/html,application/json;q=0.9,*/*;q=0.8");
-    const timeout = Math.max(1_000, Math.min(SCRAPE.requestTimeoutMs, o.deadline - o.clock.now()));
-    const res = await o.fetchImpl(url, { method, headers, redirect: "follow", signal: AbortSignal.timeout(timeout) });
+    const timeout = Math.min(SCRAPE.requestTimeoutMs, left);
+    const signal = AbortSignal.timeout(timeout);
+    let res: Response;
+    try {
+      res = await o.fetchImpl(url, { method, headers, redirect: "follow", signal });
+    } catch (e) {
+      if (signal.aborted) {
+        timedOut = true;
+        // Cut by the run's deadline, not by the platform's ten seconds: the club stays due, unwritten.
+        if (timeout < SCRAPE.requestTimeoutMs) lane.outOfTime = true;
+      }
+      throw e;
+    }
     if (isBlock(method, res)) {
       lane.blocked = res.status;
       return res;
@@ -378,7 +412,7 @@ function laneFetch(lane: Lane, o: { fetchImpl: typeof fetch; clock: Clock; deadl
     lane.cache.set(url, { status: 200, body, type, url: final });
     return withUrl(new Response(body, { status: 200, headers: type ? { "content-type": type } : {} }), final);
   };
-  return { fetch: f as typeof fetch, count: () => n };
+  return { fetch: f as typeof fetch, count: () => n, stop: () => stopped, timedOut: () => timedOut };
 }
 
 /** A reader that never answers still ends: two seconds past the run's deadline, on the real clock. */
@@ -417,7 +451,7 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
   for (const { club, adapter, link } of queue) {
     if (lane.blocked !== null || lane.changed || lane.outOfTime) break;
     // Not even one request fits before the deadline: leave the club due for the next run.
-    if (o.clock.now() + Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now()) >= o.deadline) {
+    if (!fits(lane, o)) {
       lane.outOfTime = true;
       break;
     }
@@ -434,6 +468,12 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     }
     // The frame's own count, whatever the reader says, and its own view of a block.
     result = { ...result, requests: lf.count() };
+    // A reader may catch what the frame threw and call it an error; the frame knows what it was.
+    if (!result.ok && result.reason === "error") {
+      const stop = lf.stop();
+      if (lf.timedOut()) result = { ...result, reason: "timeout" };
+      else if (stop) result = { ...result, detail: `frame: ${stop}` };
+    }
     if (lane.blocked !== null) result = { ok: false, status: lane.blocked, reason: "blocked", requests: lf.count(), detail: null };
     // Cut short by the deadline: nothing is written, and the club stays due.
     if (lane.outOfTime && lane.blocked === null) break;
@@ -451,8 +491,15 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
 }
 
 export type PlatformRun = { requests: number; ok: number; errors: number; blocked: boolean; changed: boolean; restUntil: string | null };
-/** `writeErrors`: club rows the database refused; the run goes on, and the push job reports the count. */
-export type ScrapeRun = { clubs: number; fresh: number; requests: number; outOfTime: boolean; writeErrors: number; platforms: Record<string, PlatformRun> };
+/** A club this run wrote as failed: its slug, the error the cache shows, and the short cause (`failureWhy`). */
+export type FailedClub = { slug: string; platform: string; error: string; why: string | null };
+/**
+ * `writeErrors`: club rows the database refused; the run goes on, and the push job reports the count.
+ * `failed`: every club written as failed, at most a lane's eight a platform. The push job answers with
+ * the run, and pg_net keeps that answer for about six hours (`net._http_response`), which is longer
+ * than Vercel keeps a log; that is where a failure's cause is read afterwards.
+ */
+export type ScrapeRun = { clubs: number; fresh: number; requests: number; outOfTime: boolean; writeErrors: number; platforms: Record<string, PlatformRun>; failed: FailedClub[] };
 export type ScrapeOptions = { adapters?: readonly AvailabilityAdapter[]; fetchImpl?: typeof fetch; clock?: Clock; budgetMs?: number; perLane?: number; disabled?: string };
 
 /**
@@ -475,12 +522,36 @@ export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { pla
   return { availability, keepFrom: zonedTimeToUtc(days[1], "00:00", o.tz).toISOString() };
 }
 
+/**
+ * A failure's cause in a few words that are safe to keep: the step and the error's class or status, as a
+ * reader's `detail` gives them ("availability 2026-10-10: RangeError", "club page: HTTP 500"). Never a
+ * link, a path, a query string, a body or anything shaped like a token; at most 60 characters. Null when
+ * nothing safe is left. Pure.
+ */
+export function failureWhy(detail: string | null | undefined): string | null {
+  if (!detail) return null;
+  const t = detail
+    .replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, " ")
+    .replace(/(^|\s)\/\S*/g, " ")
+    .replace(/\?\S*/g, " ")
+    .replace(/[{[]\S*|\S*[}\]]/g, " ")
+    .replace(/\S{24,}/g, " ")
+    .replace(/[^A-Za-z0-9 .:_()-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60)
+    .trim();
+  return t || null;
+}
+
 /** What a reader's answer becomes on the club row. `tz` is a zone we know. Pure. */
 export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
   const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform };
   if (result.ok) return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt };
-  return { ...base, slots: [], error: `${result.reason}${result.status ? ` ${result.status}` : ""}` };
+  // `error` stays the reason and the status, which the pages and the counters read; `why` is for us.
+  const why = failureWhy(result.detail);
+  return { ...base, slots: [], error: `${result.reason}${result.status ? ` ${result.status}` : ""}`, ...(why ? { why } : {}) };
 }
 
 /**
@@ -495,7 +566,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   const adapters = o.adapters ?? ADAPTERS;
   const clock = o.clock ?? realClock;
   const deadline = clock.now() + Math.min(o.budgetMs ?? SCRAPE.budgetMs, SCRAPE.budgetMs);
-  const run: ScrapeRun = { clubs: 0, fresh: 0, requests: 0, outOfTime: false, writeErrors: 0, platforms: {} };
+  const run: ScrapeRun = { clubs: 0, fresh: 0, requests: 0, outOfTime: false, writeErrors: 0, platforms: {}, failed: [] };
   const day = dayKey(now);
   await setMetric(db, SCRAPE_RUN_AT, Math.floor(now.getTime() / 1000), day);
 
@@ -585,9 +656,14 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       continue;
     }
     const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now });
-    if ((await write(club.slug, availability)) && result.ok && zone) run.fresh++;
+    const written = await write(club.slug, availability);
+    if (written && result.ok && zone) run.fresh++;
+    if (written && availability.error) run.failed.push({ slug: club.slug, platform, error: availability.error, why: availability.why ?? null });
   }
-  for (const { club, platform } of unreadable) await write(club.slug, failedCache(platform, now, "unreadable link", zoneOf(club.tz)));
+  for (const { club, platform } of unreadable) {
+    const availability = failedCache(platform, now, "unreadable link", zoneOf(club.tz));
+    if (await write(club.slug, availability)) run.failed.push({ slug: club.slug, platform, error: availability.error!, why: null });
+  }
   if (run.fresh) await bumpMetric(db, SCRAPE_CLUBS_FRESH, run.fresh, day);
   return run;
 }

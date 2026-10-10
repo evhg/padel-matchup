@@ -292,6 +292,16 @@ commit keeps it.
 each platform: fresh (the clubs read clean in the last hour), resting until, stopped, or off. A
 stopped platform is red, and the owner hears once a month.
 
+**When a club's read fails.** The club's cache keeps `error` as the reason and the status
+("error", "timeout", "blocked 403"), which is what the pages and the counters read. Beside it,
+`why` holds the cause in a few safe words: the step and the error's class or HTTP status
+("availability 2026-10-10: RangeError", "club page: HTTP 500"), never a link or a body. Ask
+`select slug, availability->>'error', availability->>'why' from clubs where availability->>'error'
+is not null`. The push job's answer also lists every club the run wrote as failed (`scrape.failed`),
+and pg_net keeps that answer for about six hours in `net._http_response`, which outlives Vercel's
+hour of logs. A request that the run's own deadline cuts short is not a failure: the club is not
+written and stays due for the next run.
+
 **When a platform blocks us.** Do nothing that gets around it: no other address, no browser
 disguise, no captcha service, no sign-in. Let the rest run out. If it blocks again after a week,
 put the platform in `SCRAPE_DISABLED` and tell the owner in one line. A club on that platform can
