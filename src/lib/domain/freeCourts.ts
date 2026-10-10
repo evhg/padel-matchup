@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from
 import type { Db } from "@/db";
 import { clubs, events, groups, type Club } from "@/db/schema";
 import { cacheBetween, freeCourtsState } from "@/lib/booking/availability";
-import { BEST_TIMES, bestTimes, freeFeedOf, type BestTime, type BestTimesClub, type FreeFeed, type TimePattern } from "./bestTimes";
+import { BEST_TIMES, bestTimes, freeAt, freeFeedOf, type BestTime, type BestTimesClub, type FreeFeed, type TimePattern } from "./bestTimes";
 import { CITIES, cityOf, venueInCity, type City } from "./cities";
 import { defaultLength, parseMatchLength } from "./matchLength";
 import { getPlayerHistory, timePatternsOf } from "./queries";
@@ -52,6 +52,15 @@ const offered = (now: Date) => and(isNull(clubs.rejectedAt), or(isNotNull(clubs.
 function feedOfRow(r: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind">, now: Date): FreeFeed | null {
   const state = freeCourtsState(r, now);
   return state.kind === "feed" || state.kind === "platform" ? freeFeedOf(state.a, now) : null;
+}
+
+/**
+ * Does this club still show a free court then, by the same rule every list reads (`feedOfRow`)? The
+ * chat's buttons ask it again at the tap, because a court free when the bot answered may be booked
+ * since. Pure, on a row already read.
+ */
+export function freeAtClub(c: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind">, start: Date, minutes: number, now: Date): "free" | "busy" | "unknown" {
+  return freeAt(feedOfRow(c, now), start, minutes, now);
 }
 
 /** The offered clubs among these slugs, with a feed a screen may use: one read on the primary key, twelve at most. */

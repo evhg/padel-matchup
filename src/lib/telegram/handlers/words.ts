@@ -62,6 +62,9 @@ export function heardInGroup(msg: TgMessage): Exclude<Word, { kind: "score" }> |
   if (!msg.text || !ownWords(msg)) return null;
   const said = readWords(msg.text);
   if (!said || said.kind === "score" || (said.kind === "join" && said.onlyAsReply)) return null;
+  // In a group, "times?" is a question only with its question mark: "free courts" or "hay pistas" says
+  // something to the others and asks the bot nothing (rule 5). A private chat stays lenient.
+  if (said.kind === "times" && !/[?¿]/.test(msg.text)) return null;
   return said;
 }
 
@@ -157,7 +160,7 @@ export async function listenInGroup(db: Db, msg: TgMessage, chat: TelegramChat, 
   // and "+" take a seat only as a reply to a card; a forward is somebody else's words.
   const said = heardInGroup(msg);
   if (!said) return null;
-  // "times?": the free courts this week, asked for, so answered once (DECIDING rule 34).
+  // "times?": the free courts, asked for, so answered once (DECIDING rule 34).
   if (said.kind === "times") return timesInChat(db, msg, chat, from, "word", now);
   const open = await openCards(db, chat.chatId, now);
   if (said.kind === "ask") return askForMatch(db, msg, chat, from, said.text, open, ctx, now);

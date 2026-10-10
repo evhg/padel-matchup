@@ -41,10 +41,13 @@ type Call = { method: string; body: Record<string, unknown> };
 let calls: Call[] = [];
 let nextMessageId = 5000;
 let members = new Map<string, Record<string, unknown>>();
+/** Telegram refuses to delete the answer, as it does once a bot's message is 48 hours old. */
+let deleteFails = false;
 
 function stubTelegram() {
   calls = [];
   members = new Map();
+  deleteFails = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL, init?: RequestInit) => {
@@ -55,6 +58,7 @@ function stubTelegram() {
       if (method === "sendMessage" || method === "sendPhoto") return reply({ message_id: nextMessageId++, chat: { id: body.chat_id } });
       if (method === "getChatMember") return reply(members.get(`${body.chat_id}:${body.user_id}`) ?? { status: "member" });
       if (method === "createChatInviteLink") return reply({ invite_link: `https://t.me/+crew${Math.abs(Number(body.chat_id))}` });
+      if (method === "deleteMessage" && deleteFails) return new Response(JSON.stringify({ ok: false, error_code: 400, description: "Bad Request: message can't be deleted" }), { status: 400, headers: { "content-type": "application/json" } });
       return reply(true);
     }),
   );
@@ -100,8 +104,10 @@ describe("\"times?\" in the chat", () => {
     const id = messageId++;
     return { id, outcome: update({ message: { message_id: id, date: 0, chat, from, text } }) };
   };
-  const tap = (chat: TgMessage["chat"], from: ReturnType<typeof user>, data: string, onMessage: number) =>
-    update({ callback_query: { id: `cb${updateId}`, from, data, chat_instance: "x", message: { message_id: onMessage, date: 0, chat, from: BOT } } as never });
+  /** A tap on a button of the bot's message `onMessage`, which carries `buttons` (the tapped one, unless a test says otherwise). */
+  const tap = (chat: TgMessage["chat"], from: ReturnType<typeof user>, data: string, onMessage: number, buttons: string[] = [data]) =>
+    update({ callback_query: { id: `cb${updateId}`, from, data, chat_instance: "x", message: { message_id: onMessage, date: 0, chat, from: BOT, reply_markup: { inline_keyboard: buttons.map((d) => [{ text: "x", callback_data: d }]) } } } as never });
+  const dataFor = (date: string, time: string, slug: string, length = 90) => `bt:${Math.round(at(date, time).getTime() / 60_000).toString(36)}:${length}:${slug}`;
 
   /** The crew's own group, read by the bot: Ana ties it with the crew page's link; the crew plays Thursdays at 19:00 at Rawai. */
   async function listeningCrew(chatId: number) {
@@ -124,7 +130,7 @@ describe("\"times?\" in the chat", () => {
     expect(await asked.outcome).toBe("times:3");
     expect(sent("sendMessage")).toHaveLength(1);
     const answer = sent("sendMessage")[0];
-    expect(answer.body.text).toBe(en.timesFree);
+    expect(answer.body.text).toBe(en.timesFree(en.timesTheClubs));
     expect(answer.body.reply_parameters).toMatchObject({ message_id: asked.id });
     expect(answer.body.link_preview_options).toEqual({ is_disabled: true });
     const buttons = buttonsOf(answer);
@@ -162,6 +168,9 @@ describe("\"times?\" in the chat", () => {
     expect(await tap(chat, user(2, "Petr"), past, 77)).toBe("times_past");
     const nowhere = `bt:${Math.round(at("2026-10-15", "19:00").getTime() / 60_000).toString(36)}:90:nowhere-club`;
     expect(await tap(chat, user(2, "Petr"), nowhere, 77)).toBe("times_no_club");
+    // A club a player listed carries whatever that player typed: no button of ours makes a match there.
+    await db.insert(clubs).values({ slug: "kamala-padel", name: "Kamala Padel", source: "player", manageToken: "tok-kamala", tz: TZ, availability: feed([hour("2026-10-15", "19:00"), hour("2026-10-15", "20:00")]), availabilityAt: NOW });
+    expect(await tap(chat, user(2, "Petr"), dataFor("2026-10-15", "19:00", "kamala-padel"), 77)).toBe("times_no_club");
     expect(await tap(chat, user(2, "Petr"), `bt:zzzzzz:45:${rawai}`, 77)).toBe("times_bad");
     const farOut = `bt:${Math.round(at("2026-11-30", "19:00").getTime() / 60_000).toString(36)}:90:${rawai}`;
     expect(await tap(chat, user(2, "Petr"), farOut, 77)).toBe("times_bad");
@@ -170,7 +179,8 @@ describe("\"times?\" in the chat", () => {
 
   it("stays quiet unasked: ordinary chat about times is no question, and finding nothing in a group is a shrug", async () => {
     const { chat } = await listeningCrew(-300400);
-    for (const line of ["what times work for you?", "times are hard", "when can we play golf?"]) {
+    // In a group a question needs its question mark: "free courts" or "hay pistas" says something, it asks nothing.
+    for (const line of ["what times work for you?", "times are hard", "when can we play golf?", "free courts", "Free courts!", "Hay pistas", "hay pistas, chicos", "Есть свободные корты", "Horarios", "/times@prayer_times_bot"]) {
       expect(await say(chat, user(2, "Petr"), line).outcome, line).toBe("ignored");
     }
     expect(calls).toEqual([]);
@@ -179,10 +189,87 @@ describe("\"times?\" in the chat", () => {
     expect(await asked.outcome).toBe("times:none");
     expect(sent("sendMessage")).toHaveLength(0);
     expect(sent("setMessageReaction").map((c) => (c.body.reaction as { emoji: string }[])[0].emoji)).toEqual(["🤷"]);
-    // Asked as a command, the group hears one short line.
+    // Asked as a command a minute later, the group hears one short line.
     calls = [];
+    vi.setSystemTime(new Date(NOW.getTime() + 61_000));
     expect(await say(chat, user(2, "Petr"), "/times").outcome).toBe("times:none");
+    vi.setSystemTime(NOW);
     expect(sent("sendMessage").map((c) => c.body.text)).toEqual([en.timesNone]);
+  });
+
+  it("two taps at once on one button make one match", async () => {
+    const { chat, crew } = await listeningCrew(-300600);
+    await say(chat, user(2, "Petr"), "times?").outcome;
+    const first = buttonsOf(sent("sendMessage")[0])[0].callback_data!;
+    const both = await Promise.all([tap(chat, user(2, "Petr"), first, 9101), tap(chat, user(3, "Lena"), first, 9101)]);
+    expect(both.map((o) => o.replace(/:.*/, "")).sort()).toEqual(["times_created", "times_exists"]);
+    expect(await db.select().from(events).where(eq(events.groupId, crew.id))).toHaveLength(1);
+  });
+
+  it("a stale button makes nothing: a court booked since, or an hour now too close to reach", async () => {
+    const { chat } = await listeningCrew(-300700);
+    // Saturday 15:00 at Rawai was free when the bot answered; somebody booked it since.
+    const booked = dataFor("2026-10-10", "15:00", rawai);
+    await db.update(clubs).set({ availability: feed([hour("2026-10-15", "19:00", 2), hour("2026-10-15", "20:00", 2)]) }).where(eq(clubs.slug, rawai));
+    expect(await tap(chat, user(2, "Petr"), booked, 9201)).toBe("times_gone");
+    expect(sent("answerCallbackQuery").at(-1)?.body.text).toBe(en.timesGone);
+    // 13:30 today is free at Rawai, but an hour and a half away: four people cannot get there.
+    await db.update(clubs).set({ availability: feed([hour("2026-10-10", "13:00"), hour("2026-10-10", "14:00")]) }).where(eq(clubs.slug, rawai));
+    expect(await tap(chat, user(2, "Petr"), dataFor("2026-10-10", "13:30", rawai), 9202)).toBe("times_gone");
+    expect(await db.select().from(events)).toEqual([]);
+  });
+
+  it("an answer the bot can no longer delete loses its buttons instead", async () => {
+    const { chat } = await listeningCrew(-300800);
+    await say(chat, user(2, "Petr"), "times?").outcome;
+    const first = buttonsOf(sent("sendMessage")[0])[0].callback_data!;
+    deleteFails = true;
+    calls = [];
+    expect(await tap(chat, user(2, "Petr"), first, 9301)).toMatch(/^times_created:/);
+    expect(sent("editMessageReplyMarkup")).toEqual([{ method: "editMessageReplyMarkup", body: { chat_id: chat.id, message_id: 9301, reply_markup: { inline_keyboard: [] } } }]);
+  });
+
+  it("a payload that is not on the message's own buttons makes nothing and deletes nothing", async () => {
+    const { chat } = await listeningCrew(-300900);
+    const offered = dataFor("2026-10-15", "19:00", rawai);
+    const crafted = `bt:${Math.round(at("2026-10-11", "03:17").getTime() / 60_000).toString(36)}:120:${rawai}`;
+    expect(await tap(chat, user(2, "Petr"), crafted, 5013, [offered])).toBe("times_bad");
+    expect(sent("deleteMessage")).toEqual([]);
+    expect(await db.select().from(events)).toEqual([]);
+  });
+
+  it("one answer a minute in a chat: asked again at once, the bot stays quiet", async () => {
+    const { chat } = await listeningCrew(-301000);
+    expect(await say(chat, user(2, "Petr"), "times?").outcome).toBe("times:3");
+    calls = [];
+    expect(await say(chat, user(3, "Lena"), "times?").outcome).toBe("times_cooldown");
+    expect(await say(chat, user(3, "Lena"), "/times").outcome).toBe("times_cooldown");
+    expect(calls).toEqual([]);
+  });
+
+  it("names the platform when the times are a platform's, and asks another bot's command nothing", async () => {
+    const { chat } = await listeningCrew(-301100);
+    // Chalong shares no feed now; Playtomic's public page shows its Sunday.
+    const chalong = (await db.select({ slug: clubs.slug }).from(clubs).where(eq(clubs.name, "Chalong Padel Club")))[0].slug;
+    await db.update(clubs).set({ availabilityUrl: null, availabilityKind: null, availability: { ...feed([hour("2026-10-11", "09:00"), hour("2026-10-11", "10:00")]), source: "scrape:playtomic", platform: "playtomic" } }).where(eq(clubs.slug, chalong));
+    expect(await say(chat, user(2, "Petr"), "/times@kicksmash_bot").outcome).toBe("times:3");
+    // In the order of the buttons: Rawai's own feed first, then Chalong on Playtomic.
+    expect(sent("sendMessage")[0].body.text).toBe(en.timesFree(`${en.timesTheClubs}${en.timesAnd}Playtomic`));
+  });
+
+  it("a club whose slug would not fit a button leaves room for the next one, never a false shrug", async () => {
+    const owner = await makePlayer(db, "Owner of the resort");
+    const long = await claimClub(db, { name: "The Padel Club at Laguna Phuket Beach Resort and Spa Thailand", playerId: owner.id, tz: TZ, courts: 4 });
+    await decideClub(db, long.slug, true, NOW);
+    await db.update(clubs).set({ availabilityUrl: "https://laguna.example/bookings.ics", availabilityKind: "ics_bookings", availability: feed([hour("2026-10-10", "14:00"), hour("2026-10-10", "15:00"), hour("2026-10-11", "14:00"), hour("2026-10-11", "15:00"), hour("2026-10-15", "19:00"), hour("2026-10-15", "20:00")]), availabilityAt: NOW }).where(eq(clubs.slug, long.slug));
+    expect(`bt:zzzzzzz:120:${long.slug}`.length).toBeGreaterThan(64);
+    // The crew plays there: its usual court, so its times rank first.
+    const { chat, crew } = await listeningCrew(-301200);
+    await db.update(groups).set({ venueName: long.name }).where(eq(groups.id, crew.id));
+    await db.update(telegramChats).set({ venueName: long.name }).where(eq(telegramChats.chatId, chat.id));
+    expect(await say(chat, user(2, "Petr"), "times?").outcome).toBe("times:3");
+    const buttons = buttonsOf(sent("sendMessage")[0]);
+    expect(buttons.every((b) => !b.callback_data!.endsWith(long.slug) && b.callback_data!.length <= 64)).toBe(true);
   });
 
   it("in a private chat, the player's own clubs and times; in a group nobody tied to a crew, only /times", async () => {
@@ -191,6 +278,11 @@ describe("\"times?\" in the chat", () => {
     const dm = { id: 42, type: "private" as const };
     expect(await say(dm, user(42, "Nok"), "free courts?").outcome).toBe("times:3");
     expect(buttonsOf(sent("sendMessage")[0])[0].text).toBe("Thu, Oct 15 19:00 · Rawai Padel Club");
+
+    // In a private chat a statement will do: only the person can be asking (a minute later, past the one answer a minute).
+    vi.setSystemTime(new Date(NOW.getTime() + 61_000));
+    expect(await say(dm, user(42, "Nok"), "horarios").outcome).toBe("times:3");
+    vi.setSystemTime(NOW);
 
     calls = [];
     const plain = { id: -300500, type: "group" as const, title: "Padel friends" };

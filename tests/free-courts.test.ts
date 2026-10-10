@@ -98,6 +98,16 @@ describe("the best times, read from the clubs' cache", () => {
     expect(r.lengthMinutes).toBe(90);
   });
 
+  it("a crew's chat and the crew name one court: it is looked up once, not once for each", async () => {
+    const crew = await createGroup(db, { name: "Thursday crew", creatorPlayerId: nok.id, tz: TZ, venueName: "Rawai Padel Club" });
+    const counting = (n: { selects: number }) => new Proxy(db, { get: (t, k, r) => (k === "select" && n.selects++, Reflect.get(t, k, r)) }) as Db;
+    const crewOnly = { selects: 0 };
+    await bestTimesForChat(counting(crewOnly), { groupId: crew.id, playerId: null, venueName: null, tz: TZ }, NOW);
+    const both = { selects: 0 };
+    await bestTimesForChat(counting(both), { groupId: crew.id, playerId: null, venueName: "Rawai Padel Club", tz: TZ }, NOW);
+    expect(both.selects).toBe(crewOnly.selects);
+  });
+
   it("a player's private chat: their own history, and the chat's usual court", async () => {
     const mine = await bestTimesForChat(db, { groupId: null, playerId: nok.id, venueName: null, tz: TZ }, NOW);
     expect(said(mine.times)[0]).toBe("Rawai Padel Club 2026-10-15 19:00 *");
