@@ -15,9 +15,9 @@ const HEADER = `// Generated from src/lib/domain in https://github.com/evhg/pade
 
 const PACKAGES = {
   americano: {
-    files: ["americano.ts", "formats.ts", "errors.ts", "schedule.ts"],
+    files: ["americano.ts", "formats.ts", "fixedPairs.ts", "errors.ts", "schedule.ts"],
     extra: { "types.ts": `/** Tournament formats the engine knows. */\nexport type TournamentFormat = "americano" | "mexicano" | "king";\n` },
-    index: `export * from "./americano.js";\nexport * from "./formats.js";\nexport * from "./schedule.js";\nexport { DomainError, isDomainError, type DomainErrorCode } from "./errors.js";\nexport type { TournamentFormat } from "./types.js";\n`,
+    index: `export * from "./americano.js";\nexport * from "./formats.js";\nexport { computeKingPairStandings, computePairStandings, drawPairRound, pairCourts, pairKey, pairRotationRounds, type Pair, type PairRound, type PairStandingRow } from "./fixedPairs.js";\nexport * from "./schedule.js";\nexport { DomainError, isDomainError, type DomainErrorCode } from "./errors.js";\nexport type { TournamentFormat } from "./types.js";\n`,
   },
   levels: {
     files: ["levels.ts", "passport.ts"],

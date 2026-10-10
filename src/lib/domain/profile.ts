@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { players, type Player } from "@/db/schema";
 import { clubStatus, listClubsClaimedBy } from "./clubs";
+import { placesOf } from "./fixedPairs";
 import { getPlayerGroups } from "./groups";
 import { bandOf, isLevelVerified } from "./levels";
 import { signPassport, type Passport, type SignedPassport } from "./passport";
@@ -52,7 +53,7 @@ export function statsFromEvents(player: Pick<Player, "id" | "createdAt">, past: 
   const played = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
   const won = played.filter((m) => m.outcome === "won").length;
   const decided = played.filter((m) => m.outcome === "won" || m.outcome === "lost").length;
-  const podiums = played.filter((m) => m.event.type === "tournament" && (m.event.standings ?? []).slice(0, 3).includes(player.id)).length;
+  const podiums = played.filter((m) => m.event.type === "tournament" && placesOf(m.event).slice(0, 3).flat().includes(player.id)).length;
   const clubs = new Map<string, string>();
   for (const m of played) {
     const slug = m.event.venueSlug;

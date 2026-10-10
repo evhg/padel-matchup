@@ -4,6 +4,7 @@ import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
 import { lateExitFor, streakLine, winStreakFor, type Streak } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
+import { placesOf } from "@/lib/domain/fixedPairs";
 import { defaultLength } from "@/lib/domain/matchLength";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
@@ -144,7 +145,8 @@ export function resultSummary(detail: EventDetail, locale: BotLocale, base = bas
     }
   } else if (ev.standings?.length) {
     const names = new Map(detail.roster.filter((x) => x.playerId).map((x) => [x.playerId!, x.player?.displayName ?? "?"]));
-    summary.podium = s.winner(ev.standings.slice(0, 3).map((id, i) => `${i + 1}. ${names.get(id) ?? "?"}`).join("  "));
+    // A fixed-pairs night's podium is pairs: "1. Ana & Bo".
+    summary.podium = s.winner(placesOf(ev).slice(0, 3).map((ids, i) => `${i + 1}. ${ids.map((id) => names.get(id) ?? "?").join(" & ")}`).join("  "));
   }
   return summary;
 }

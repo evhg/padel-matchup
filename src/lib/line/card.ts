@@ -4,7 +4,7 @@ import { isOccupied } from "@/lib/domain/events";
 import { formatLevel } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, levelLine, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { cardTitle, levelLine, pairCardLines, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import type { FlexBubble, LineMessage } from "./api";
 
 /**
@@ -36,8 +36,9 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
   if (level) head.push(level);
   if (ev.cost) head.push(`💸 ${ev.cost}${ev.payNote ? ` · ${ev.payNote}` : ""}`);
 
-  const lines: string[] = [];
-  for (const seat of seats.slice(0, MAX_LINES)) {
+  // A fixed-pairs night lists its pairs, one line each (decision F).
+  const lines: string[] = ev.fixedPairs ? pairCardLines(detail, locale, { text: (x) => x, level: (x) => x, note: (x) => `(${x})`, and: "&" }, MAX_LINES) : [];
+  for (const seat of ev.fixedPairs ? [] : seats.slice(0, MAX_LINES)) {
     if (isOccupied(seat)) {
       const name = seat.player?.displayName ?? seat.invitedName ?? "?";
       const level = seat.player?.level != null ? ` ${formatLevel(seat.player.level)}` : "";
@@ -49,7 +50,7 @@ export function renderLineCard(detail: EventDetail, base: string, locale: BotLoc
       lines.push(`${seat.position}. —`);
     }
   }
-  if (seats.length > MAX_LINES) lines.push(`… +${seats.length - MAX_LINES}`);
+  if (!ev.fixedPairs && seats.length > MAX_LINES) lines.push(`… +${seats.length - MAX_LINES}`);
   if (detail.waitlist.length > 0) lines.push(s.waitlist(detail.waitlist.length));
 
   const spotsLeft = Math.max(0, ev.capacity - occupied - seats.filter((x) => x.status === "invited").length);

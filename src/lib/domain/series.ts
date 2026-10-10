@@ -4,6 +4,7 @@ import { events, players, series, type Event, type Series, type SeriesRhythm } f
 import { nextOccurrence, timePatternOf, wallClock, weekdayName, zonedTimeToUtc } from "@/lib/dates";
 import { slugFrom } from "@/lib/translit";
 import { bumpMetric } from "./metrics";
+import { placesOf } from "./fixedPairs";
 import { venueInCity, type City } from "./cities";
 import { createEvent, cleanText, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
@@ -272,13 +273,14 @@ export type SeriesPage = { series: Series; organizerName: string; next: Edition 
 async function editionsWithDetail(db: Db, rows: Event[]): Promise<Edition[]> {
   if (rows.length === 0) return [];
   const counted = await withCounts(db, rows);
-  const podiumIds = [...new Set(rows.flatMap((e) => (e.standings ?? []).slice(0, 3)))];
+  // The top three places: three players, or on a fixed-pairs edition three pairs (`placesOf`).
+  const podiumIds = [...new Set(rows.flatMap((e) => placesOf(e).slice(0, 3).flat()))];
   const named = podiumIds.length ? await db.select({ id: players.id, name: players.displayName }).from(players).where(inArray(players.id, podiumIds)) : [];
   const nameOf = new Map(named.map((p) => [p.id, p.name]));
   return counted.map(({ event, spotsLeft }) => ({
     event,
     spotsLeft,
-    podium: (event.standings ?? []).slice(0, 3).map((playerId, i) => ({ playerId, name: nameOf.get(playerId) ?? "?", rank: i + 1 })),
+    podium: placesOf(event).slice(0, 3).flatMap((ids, i) => ids.map((playerId) => ({ playerId, name: nameOf.get(playerId) ?? "?", rank: i + 1 }))),
   }));
 }
 

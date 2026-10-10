@@ -34,7 +34,7 @@ import { relayUptimeIssues } from "@/lib/uptime";
 import { alertOnServices, refreshAnthropicCost } from "@/lib/ops/alerts";
 import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { setMetric, snapshotMetrics } from "@/lib/domain/metrics";
-import { promoteWaitlists } from "@/lib/domain/slots";
+import { promotedOf, promoteWaitlists } from "@/lib/domain/slots";
 import { getPlayer } from "@/lib/domain/players";
 import { notifyClubMatch, notifyGroupMatch, notifyLineupChange, notifyPromotion, notifyRefill, notifyWanted, offerFreeCourts, sendCalendarInvite, sendInviteReminder } from "@/lib/notify";
 import { findRefillsDue } from "@/lib/domain/refill";
@@ -113,12 +113,13 @@ export async function GET(req: Request) {
 
   try {
     const promotions = await promoteWaitlists(db, now);
-    summary.promotions = promotions.length;
+    // A fixed-pairs night moves a pair up in one promotion: count, and leave out of the line-up notice, everybody it moved.
+    summary.promotions = promotions.reduce((n, p) => n + promotedOf(p).length, 0);
     for (const p of promotions) {
       const [ev] = await db.select().from(events).where(eq(events.id, p.slot.eventId));
       if (!ev) continue;
       // A hygiene promotion fills a hole, so the line-up was not complete before it.
-      const fresh = await notifyLineupChange(db, ev, false, p.playerId);
+      const fresh = await notifyLineupChange(db, ev, false, promotedOf(p).map((x) => x.playerId));
       await notifyPromotion(db, fresh ?? ev, p);
     }
   } catch (e) {

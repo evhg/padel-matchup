@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, series, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
 import { newManageCode, newShareCode } from "@/lib/codes";
@@ -9,6 +9,7 @@ import { cleanAgeMin, cleanCategory, type EventCategory } from "./eventTags";
 import { formatOf } from "./formats";
 import { hasRange, normalizeRange } from "./levels";
 import { defaultLength, parseMatchLength, type MatchLength } from "./matchLength";
+import { vacateSeats } from "./slots";
 import { venueSlugFor } from "./venueBoard";
 
 export type CreateEventInput = {
@@ -32,6 +33,8 @@ export type CreateEventInput = {
   gamesTo?: number | null;
   /** Tournament format; omitted = americano. */
   format?: TournamentFormat | null;
+  /** Tournament: two partners play every round together (decision F). Off when omitted; ignored for a match. */
+  fixedPairs?: boolean;
   /** Level range; omitted or 0–7 = open to everyone. */
   levelMin?: number | null;
   levelMax?: number | null;
@@ -141,6 +144,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           manageCode: newManageCode(),
           status: "open",
           format: input.type === "tournament" ? formatOf(input.format) : null,
+          fixedPairs: input.type === "tournament" && Boolean(input.fixedPairs),
           courts: input.type === "tournament" && input.courts ? Math.max(1, Math.min(16, Math.round(input.courts))) : null,
           pointsPerMatch: input.type === "tournament" && input.pointsPerMatch && !input.gamesTo ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
           gamesTo: input.type === "tournament" && input.gamesTo ? Math.max(2, Math.min(12, Math.round(input.gamesTo))) : null,
@@ -205,6 +209,8 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     pointsPerMatch: src.pointsPerMatch,
     gamesTo: src.gamesTo,
     format: src.format,
+    // A fixed-pairs night played again keeps its pairs as a way of playing; the pairs themselves sign up again.
+    fixedPairs: src.fixedPairs,
     levelMin: src.levelMin,
     levelMax: src.levelMax,
     levelVerifiedOnly: src.levelVerifiedOnly,
@@ -348,10 +354,29 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     }
 
     const promotedPlayerIds: string[] = [];
+    /** Moved up by `vacateSeats`, which writes their "promoted" lines itself. */
+    const movedUp: string[] = [];
     // An unchanged capacity is no change, even one round 1 left outside fours (ten players).
     if (patch.capacity !== undefined && ev.type === "tournament" && patch.capacity !== ev.capacity) {
       const newCap = resolveCapacity("tournament", patch.capacity);
-      if (newCap > ev.capacity) {
+      if (newCap > ev.capacity && ev.fixedPairs) {
+        // A fixed-pairs night grows the way a walk-in grows it: the waiting list moves back, the new
+        // seats open, and the waiting list moves up by pairs (`vacateSeats`), so no pair is split
+        // across the line and nobody's reserved partner moves up without the pair. Two set-based
+        // passes keep the (event, position) unique index happy.
+        const grow = newCap - ev.capacity;
+        await tx
+          .update(slots)
+          .set({ position: sql`-(${slots.position} + ${grow})` })
+          .where(and(eq(slots.eventId, ev.id), gt(slots.position, ev.capacity)));
+        await tx
+          .update(slots)
+          .set({ position: sql`-${slots.position}` })
+          .where(and(eq(slots.eventId, ev.id), lt(slots.position, 0)));
+        await tx.insert(slots).values(Array.from({ length: grow }, (_, i) => ({ eventId: ev.id, position: ev.capacity + 1 + i, kind: "open" as const, status: "empty" as const })));
+        for (const p of await vacateSeats(tx, { ...ev, capacity: newCap }, [])) movedUp.push(p.playerId);
+        set.capacity = newCap;
+      } else if (newCap > ev.capacity) {
         const existing = await tx
           .select({ position: slots.position, playerId: slots.playerId, status: slots.status })
           .from(slots)
@@ -386,7 +411,7 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     }
 
     if (calendarChanged) set.icsSequence = ev.icsSequence + 1;
-    if (Object.keys(set).length === 0) return { event: ev, calendarChanged: false, promotedPlayerIds };
+    if (Object.keys(set).length === 0) return { event: ev, calendarChanged: false, promotedPlayerIds: [...promotedPlayerIds, ...movedUp] };
 
     const [updated] = await tx.update(events).set(set).where(eq(events.id, ev.id)).returning();
     // An edition is made from its series row, so a tag the series' organiser sets here would be gone by
@@ -407,7 +432,7 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     }
     await recomputeStatus(tx, updated);
     const [fresh] = await tx.select().from(events).where(eq(events.id, ev.id));
-    return { event: fresh, calendarChanged, promotedPlayerIds };
+    return { event: fresh, calendarChanged, promotedPlayerIds: [...promotedPlayerIds, ...movedUp] };
   });
 }
 

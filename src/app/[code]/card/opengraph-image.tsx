@@ -137,13 +137,17 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
     const ids = named.map((s) => s.playerId).filter((x): x is string => Boolean(x));
     const state = await getTournamentState(db, ev, ids);
     const names = new Map(named.filter((s) => s.playerId).map((s) => [s.playerId!, nameOf(s)]));
-    const top = state.standings.slice(0, 5);
-    const podium = ev.scoreLockedByCreator && state.standings.length >= 3;
+    // One row a player, or on a fixed-pairs night one row a pair, "Ana & Bo".
+    const table = state.pairStandings
+      ? state.pairStandings.map((r) => ({ key: r.key, rank: r.rank, points: r.points, name: `${names.get(r.pair[0]) ?? "?"} & ${names.get(r.pair[1]) ?? "?"}` }))
+      : state.standings.map((r) => ({ key: r.playerId, rank: r.rank, points: r.points, name: names.get(r.playerId) ?? "?" }));
+    const top = table.slice(0, 5);
+    const podium = ev.scoreLockedByCreator && table.length >= 3;
     const step = (rank: 1 | 2 | 3, height: number) => {
-      const row = state.standings[rank - 1];
+      const row = table[rank - 1];
       return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", flex: 1, gap: 10 }}>
-          <div style={{ fontSize: rank === 1 ? 40 : 32, fontWeight: 800, letterSpacing: -1, color: ink, maxWidth: 340, overflow: "hidden", whiteSpace: "nowrap" }}>{names.get(row.playerId) ?? "?"}</div>
+          <div style={{ fontSize: rank === 1 ? 40 : 32, fontWeight: 800, letterSpacing: -1, color: ink, maxWidth: 340, overflow: "hidden", whiteSpace: "nowrap" }}>{row.name}</div>
           <div style={{ fontSize: 24, color: muted }}>{t("card.pts", { points: row.points })}</div>
           <div style={{ width: "100%", height, borderRadius: "18px 18px 0 0", background: rank === 1 ? ACCENT : onPhoto ? "rgba(255,255,255,0.28)" : "#E4E2DA", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 10, fontSize: 40, fontWeight: 800, color: rank === 1 ? INK : ink }}>{rank}</div>
         </div>
@@ -159,9 +163,9 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: muted }}>{ev.scoreLockedByCreator ? t("card.standingsFinal") : t("card.standingsLive")}</div>
         {top.map((s) => (
-          <div key={s.playerId} style={{ display: "flex", alignItems: "center", gap: 20, background: s.rank === 1 ? ACCENT : "transparent", borderRadius: 18, padding: "6px 16px", color: s.rank === 1 ? INK : ink }}>
+          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 20, background: s.rank === 1 ? ACCENT : "transparent", borderRadius: 18, padding: "6px 16px", color: s.rank === 1 ? INK : ink }}>
             <div style={{ width: 56, fontSize: 40, fontWeight: 800 }}>{s.rank}</div>
-            <div style={{ flex: 1, fontSize: 40, fontWeight: 800, letterSpacing: -1, overflow: "hidden", whiteSpace: "nowrap" }}>{names.get(s.playerId) ?? "?"}</div>
+            <div style={{ flex: 1, fontSize: 40, fontWeight: 800, letterSpacing: -1, overflow: "hidden", whiteSpace: "nowrap" }}>{s.name}</div>
             <div style={{ fontSize: 36, fontWeight: 800, color: s.rank === 1 ? INK : muted }}>{t("card.pts", { points: s.points })}</div>
           </div>
         ))}

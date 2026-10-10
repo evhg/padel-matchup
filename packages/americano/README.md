@@ -36,6 +36,19 @@ const table = computeStandings(ids, played.flatMap((r) => r.matches));
 
 Mexicano (courts formed by the standings, 1st + 4th against 2nd + 3rd) and King of the Court (winners move up a court, losers down, partners split) are `planMexicanoRound`, `planKingRound` and `computeKingStandings`; round one of both is random, later rounds need every score of the previous round.
 
+## Fixed pairs
+
+Two partners who play every round together: the pair is the unit, and the opponents rotate.
+
+```ts
+import { drawPairRound, computePairStandings, type Pair } from "@erikv69/americano";
+
+const pairs: Pair[] = [["ana", "bo"], ["cy", "di"], ["eva", "finn"], ["gus", "hana"], ["ida", "jon"]];
+const next = drawPairRound({ eventId: "friday", format: "americano", pairs, courts: null, rounds: [] });
+```
+
+On every court the field fills, americano is the circle method: every pair meets every other pair once in `P − 1` rounds (`P` with an odd field, where one pair rests a round, each in turn). On fewer courts each round is planned ahead, so five pairs on one court meet each other once in ten rounds. Mexicano and King of the Court move pairs by the pairs' table and the ladder. `computePairStandings` and `computeKingPairStandings` rank pairs; `pairRotationRounds` and `pairCourts` size the night.
+
 ## The same engine, other doors
 
 - `https://kicksma.sh/api/v1/schedule?players=12&courts=3` returns the same JSON without installing anything; `POST` accepts names.

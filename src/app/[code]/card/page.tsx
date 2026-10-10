@@ -69,8 +69,13 @@ export default async function CardPage({ params }: Props) {
     const state = await getTournamentState(db, ev, ids);
     if (state.scoredMatches === 0) redirect(`/${code}`);
     const first = state.standings[0];
-    const name = named.find((s) => s.playerId === first?.playerId);
-    line = first ? `${t("card.winner", { name: name ? nameOf(name) : "?" })} · ${t("card.pts", { points: first.points })}` : t("card.result");
+    const nameFor = (id: string) => {
+      const s = named.find((x) => x.playerId === id);
+      return s ? nameOf(s) : "?";
+    };
+    // A fixed-pairs night is won by a pair: "Ana & Bo".
+    const winner = state.pairStandings?.[0] ? `${nameFor(state.pairStandings[0].pair[0])} & ${nameFor(state.pairStandings[0].pair[1])}` : first ? nameFor(first.playerId) : "?";
+    line = first ? `${t("card.winner", { name: winner })} · ${t("card.pts", { points: first.points })}` : t("card.result");
   }
   const url = `${baseUrl()}/${code}/card`;
   const shareUrl = taggedUrl(url, "card");

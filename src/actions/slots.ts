@@ -14,6 +14,7 @@ import {
   confirmInvite,
   declineInvite,
   leaveEvent,
+  promotedOf,
   removeFromSlot,
   reserveSlot,
   setSlotPaid,
@@ -24,6 +25,8 @@ import {
 import { joinGroup } from "@/lib/domain/groups";
 import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
+import { admission, hasRange } from "@/lib/domain/levels";
+import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
@@ -36,7 +39,8 @@ import { LIMITS } from "@/lib/domain/ratelimit";
 
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
 
-export async function joinAction(code: string, name?: string, level?: number | null): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested" }>> {
+/** `partnerName`: on a fixed-pairs night, the partner who signs up with the player; their name becomes a reserved spot with its own link. */
+export async function joinAction(code: string, name?: string, level?: number | null, partnerName?: string | null): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested"; partner?: { name: string; inviteUrl: string } }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
@@ -46,7 +50,7 @@ export async function joinAction(code: string, name?: string, level?: number | n
     const myLevel = level != null ? await setPlayerLevel(db, me.id, level) : me.level;
     const ev = detail.event;
     // The rules themselves live in the domain, because the web form is no longer the only door in.
-    const decision = await joinWithPolicy(db, detail, me, myLevel);
+    const decision = await joinWithPolicy(db, detail, me, myLevel, partnerName);
     if (decision.kind === "level_required") throw new ActionFailure("level_required");
     if (decision.kind === "requested") {
       after(async () => {
@@ -56,6 +60,9 @@ export async function joinAction(code: string, name?: string, level?: number | n
       return { outcome: "requested" as const };
     }
     const res = decision.result;
+    const partner = res.partner?.inviteCode ? { name: res.partner.invitedName ?? "", inviteUrl: inviteUrl(baseUrl(), code, res.partner.inviteCode) } : undefined;
+    // A single who named their partner: the line-up changed by a reserved spot, as the organiser's reserve changes it.
+    if (res.outcome === "already_in" && res.partner) after(async () => void (await notifyLineupChange(db, res.event, before)));
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
       // A join that started from a tagged link (an Instagram story, a poster) is counted per source.
       // This one stays here: it is the web's own cookie and means nothing on another channel.
@@ -66,7 +73,37 @@ export async function joinAction(code: string, name?: string, level?: number | n
       });
     }
     revalidatePath(`/${code}`);
-    return { outcome: res.outcome };
+    return { outcome: res.outcome, partner };
+  });
+}
+
+/**
+ * "Be their partner" on a fixed-pairs night: the player takes the place beside a single on the list.
+ * Somebody new is joined as any join is, with its notices (`afterJoin`); a ranged night holds them to
+ * the range the way the Join button does, and an ask to join goes through that button.
+ */
+export async function bePartnerAction(code: string, slotId: string, name?: string): Promise<ActionResult<{ outcome: "paired" }>> {
+  return runA(async () => {
+    const { db, detail } = await loadEvent(code);
+    const before = wasComplete(detail);
+    const me = await requirePlayer(db, name);
+    await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
+    const ev = detail.event;
+    // Somebody already in (the organiser let them in) pairs without a second check of the range.
+    const seated = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
+    if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && me.id !== ev.creatorPlayerId && !seated) {
+      const fit = admission(ev, me);
+      if (fit === "unknown") throw new ActionFailure("level_required");
+      if (fit !== "ok") throw new ActionFailure("forbidden");
+    }
+    const res = await bePartner(db, { eventId: ev.id, playerId: me.id, slotId });
+    if (res.joined && ev.groupId) await joinGroup(db, ev.groupId, me.id, "match").catch(() => undefined);
+    after(async () => {
+      if (res.joined) await afterJoin(db, { outcome: "joined", slot: res.slot, event: res.event }, me, { wasComplete: before, code, level: me.level });
+      else await notifyLineupChange(db, res.event, before);
+    });
+    revalidatePath(`/${code}`);
+    return { outcome: "paired" as const };
   });
 }
 
@@ -106,6 +143,11 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
   });
 }
 
+/**
+ * Leaving. On a fixed-pairs night a partner who is a player stays, as "Partner needed"; a partner who
+ * is still only the name this player gave goes with them (`leaveEvent`), because nobody else holds
+ * that link. Nobody takes out a player who joined by themselves.
+ */
 export async function leaveAction(code: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
@@ -121,6 +163,28 @@ export async function leaveAction(code: string): Promise<ActionResult<null>> {
   });
 }
 
+/** The organiser pairs two singles on a fixed-pairs night, before round 1. */
+export async function pairSinglesAction(code: string, slotA: string, slotB: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    await pairSingles(db, { eventId: detail.event.id, slotIds: [slotA, slotB], actorPlayerId: viewer.player?.id ?? null });
+    after(async () => void (await emitMatchEvent(db, "match.updated", code)));
+    revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
+/** The organiser splits a pair on a fixed-pairs night, before round 1: both partners read as singles. */
+export async function splitPairAction(code: string, slotId: string): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    await splitPair(db, { eventId: detail.event.id, slotId, actorPlayerId: viewer.player?.id ?? null });
+    after(async () => void (await emitMatchEvent(db, "match.updated", code)));
+    revalidatePath(`/${code}`);
+    return null;
+  });
+}
+
 export async function removeAction(code: string, slotId: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
@@ -128,7 +192,7 @@ export async function removeAction(code: string, slotId: string): Promise<Action
     const res = await removeFromSlot(db, { eventId: detail.event.id, slotId, actorPlayerId: viewer.player?.id ?? null });
     after(async () => {
       await notifyRemoved(db, res.event, res.removedPlayerId);
-      const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+      const fresh = await notifyLineupChange(db, res.event, before, promotedOf(res.promotion).map((p) => p.playerId));
       await notifyPromotion(db, fresh ?? res.event, res.promotion);
       await notifyRefill(db, res.event.id);
     });
@@ -178,11 +242,23 @@ export async function confirmInviteAction(
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
     if (res.outcome === "confirmed") {
+      // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no
+      // invitation yet. The organiser hears that they wait, and the promotion sends the invitation.
+      const listed = res.slot.position <= res.event.capacity;
       after(async () => {
         const fresh = (await getPlayer(db, me.id)) ?? me;
-        await notifyCreator(db, res.event, "confirmed", fresh.displayName, fresh.id);
+        await notifyCreator(db, res.event, listed ? "confirmed" : "waitlisted", fresh.displayName, fresh.id);
+        if (!listed) return;
         const ev = await notifyLineupChange(db, res.event, before, fresh.id);
         await sendCalendarInvite(db, ev ?? res.event, fresh);
+      });
+    }
+    // The named partner was in already: the reserved spot they leave can move the waiting list up.
+    if (res.outcome === "already_in" && res.promotion) {
+      const promotion = res.promotion;
+      after(async () => {
+        const fresh = await notifyLineupChange(db, res.event, before, promotedOf(promotion).map((p) => p.playerId));
+        await notifyPromotion(db, fresh ?? res.event, promotion);
       });
     }
     revalidatePath(`/${code}`);
@@ -201,7 +277,7 @@ export async function declineInviteAction(code: string, inviteCode: string): Pro
       const name = res.slot.invitedName ?? "";
       after(async () => {
         await notifyCreator(db, res.event, "declined", name, null);
-        const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+        const fresh = await notifyLineupChange(db, res.event, before, promotedOf(res.promotion).map((p) => p.playerId));
         await notifyPromotion(db, fresh ?? res.event, res.promotion);
       });
     }

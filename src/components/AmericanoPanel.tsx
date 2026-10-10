@@ -6,7 +6,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { addWalkInAction, deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
 import type { TournamentFormat } from "@/db/schema";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
-import { presentSpots, startAdvice } from "@/lib/domain/checkIn";
+import { pairStartAdvice, presentSpots, startAdvice } from "@/lib/domain/checkIn";
+import { seatUnits } from "@/lib/domain/fixedPairs";
 import { FORMATS } from "@/lib/domain/formats";
 import type { NightPlan } from "@/lib/domain/tournamentPlan";
 import { FORMAT_HELP_KEYS, FORMAT_KEYS } from "./EventFields";
@@ -15,8 +16,8 @@ import { PlayAgainButton } from "./PlayAgainButton";
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
 export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null; court?: number | null };
-/** A name on the check-in: the roster spot's id, and the name as the roster shows it. */
-export type CheckInName = { id: string; name: string };
+/** A name on the check-in: the roster spot's id, the name as the roster shows it, and on a fixed-pairs night the pair key. */
+export type CheckInName = { id: string; name: string; pairId?: string | null };
 
 export function AmericanoPanel({
   code,
@@ -38,6 +39,7 @@ export function AmericanoPanel({
   canPlayAgain = false,
   cardHref,
   checkIn = null,
+  fixedPairs = false,
 }: {
   code: string;
   format: TournamentFormat;
@@ -65,6 +67,8 @@ export function AmericanoPanel({
   cardHref?: string;
   /** "Who is here?" before round 1, for whoever may start it: the named list and the waiting list. */
   checkIn?: { listed: CheckInName[]; waiting: CheckInName[] } | null;
+  /** Fixed pairs (decision F): the check-in ticks pairs, the sample and the start count pairs, the walk-in may bring a partner. */
+  fixedPairs?: boolean;
 }) {
   const t = useTranslations();
   const router = useRouter();
@@ -74,6 +78,7 @@ export function AmericanoPanel({
   const [away, setAway] = useState<Set<string>>(() => new Set());
   const [waitingIn, setWaitingIn] = useState<Set<string>>(() => new Set());
   const walkInRef = useRef<HTMLInputElement>(null);
+  const walkInPartnerRef = useRef<HTMLInputElement>(null);
   // The ticks and "Add" wait for the page to come alive: a tap before then is lost on a slow phone,
   // and "Add" would submit the form the old way and reload the page.
   const [ready, setReady] = useState(false);
@@ -89,12 +94,16 @@ export function AmericanoPanel({
   /** Round 1 draws the ticked names when there is a check-in, else the whole list. */
   const startCount = roster ? present.length : participantCount;
   /** Why round 1 cannot start with these names: fewer than four, or a king field not in fours. Americano and mexicano rest the rest. */
-  const advice = firstRound ? startAdvice(format, startCount) : null;
-  const refusal = advice?.kind === "need_4" ? "need_4_players" : advice?.kind === "fours" ? "multiple_of_4" : null;
+  const advice = firstRound && !fixedPairs ? startAdvice(format, startCount) : null;
+  /** Fixed pairs: complete ticked pairs, from two, and nobody ticked without a ticked partner (`pairStartAdvice`). */
+  const pairAdvice = firstRound && fixedPairs && roster ? pairStartAdvice([...roster.listed, ...roster.waiting].map((n) => ({ id: n.id, pairId: n.pairId ?? null })), present) : null;
+  const refusal = advice?.kind === "need_4" ? "need_4_players" : advice?.kind === "fours" ? "multiple_of_4" : pairAdvice && pairAdvice.kind !== "ready" ? "pairs" : null;
   const lastFullyScored = last ? last.matches.every((m) => m.sideA != null && m.sideB != null) : true;
   /** Mexicano and King build the next round from the scores, so they wait for them. */
   const needScores = format !== "americano" && rounds.length > 0 && !lastFullyScored;
   const canGenerate = isCreator && !locked && !cancelled && (firstRound ? startCount : participantCount) >= 4 && !refusal && !needScores;
+  // The check-in by pairs: one tick a pair, toggling both partners (unticking one partner unticks the pair).
+  const units = (names: CheckInName[]) => seatUnits(names.map((n, position) => ({ ...n, pairId: n.pairId ?? null, status: "joined", position })));
   // Before round 1, the night in one line (a visitor used to read "No rounds yet." and nothing about
   // what they would play). The page's own plan, the one its chips read, so the two cannot disagree.
   const sample = firstRound ? night : null;
@@ -108,17 +117,19 @@ export function AmericanoPanel({
       setError(null);
       const r = await fn();
       if (!r.ok) {
-        const key = r.detail === "scores_missing" || r.detail === "format_locked" || r.detail === "roster_changed" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
+        const key = r.detail === "scores_missing" || r.detail === "format_locked" || r.detail === "roster_changed" || r.detail === "partner_needed" || r.detail === "need_2_pairs" || r.detail === "pairs_locked" || r.detail === "pairs_waiting" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
         setError(t(`errors.${key}` as "errors.generic"));
         // The list moved under the check-in: show the one there is now.
         if (r.detail === "roster_changed") router.refresh();
       }
     });
-  const toggle = (set: (f: (cur: Set<string>) => Set<string>) => void, id: string) =>
+  const toggle = (set: (f: (cur: Set<string>) => Set<string>) => void, id: string | string[]) =>
     set((cur) => {
+      const ids = Array.isArray(id) ? id : [id];
       const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      // A pair goes as one: both in, or both out.
+      if (next.has(ids[0])) for (const x of ids) next.delete(x);
+      else for (const x of ids) next.add(x);
       return next;
     });
   const startRound = () => {
@@ -127,7 +138,13 @@ export function AmericanoPanel({
     const waiting = new Set(roster.waiting.map((n) => n.id));
     run(() => generateRoundAction(code, { away: [...away].filter((id) => listed.has(id)), waitingIn: [...waitingIn].filter((id) => waiting.has(id)), count: startCount }));
   };
-  const howItWorks = format === "mexicano" ? t("americano.howItWorksMexicano") : format === "king" ? t("americano.howItWorksKing") : t("americano.howItWorks");
+  const howItWorks = fixedPairs
+    ? t(format === "mexicano" ? "pairs.howMexicano" : format === "king" ? "pairs.howKing" : "pairs.howAmericano")
+    : format === "mexicano"
+      ? t("americano.howItWorksMexicano")
+      : format === "king"
+        ? t("americano.howItWorksKing")
+        : t("americano.howItWorks");
 
   return (
     <section id="score" className="card">
@@ -146,10 +163,17 @@ export function AmericanoPanel({
       )}
       {firstRound && (
         <div className="mt-2 text-sm" data-testid="night-sample">
-          <p className="text-muted">{t(FORMAT_HELP_KEYS[format])}</p>
+          {/* A fixed-pairs night says how its pairs play, not that partners rotate. */}
+          <p className="text-muted">{fixedPairs ? howItWorks : t(FORMAT_HELP_KEYS[format])}</p>
           {sample && (
             <p className="mt-1 font-semibold">
-              {sample.resting > 0 ? t("americano.sampleRest", { players: sample.players, courts: sample.courts, resting: sample.resting }) : t("americano.sampleAll", { players: sample.players, courts: sample.courts })}
+              {sample.pairs
+                ? sample.resting > 0
+                  ? t("pairs.sampleRest", { pairs: sample.pairs, courts: sample.courts, resting: sample.resting })
+                  : t("pairs.sampleAll", { pairs: sample.pairs, courts: sample.courts })
+                : sample.resting > 0
+                  ? t("americano.sampleRest", { players: sample.players, courts: sample.courts, resting: sample.resting })
+                  : t("americano.sampleAll", { players: sample.players, courts: sample.courts })}
             </p>
           )}
         </div>
@@ -165,6 +189,10 @@ export function AmericanoPanel({
               </button>
             ))}
           </div>
+          <label className="mt-2 flex cursor-pointer items-center gap-3 text-sm font-bold">
+            <input type="checkbox" className="h-5 w-5 accent-ink" checked={fixedPairs} disabled={pending || !ready} onChange={(e) => run(() => setTournamentSettingsAction(code, { fixedPairs: e.target.checked }))} data-testid="panel-fixed-pairs" />
+            {t("pairs.fixed")}
+          </label>
         </div>
       )}
 
@@ -308,13 +336,37 @@ export function AmericanoPanel({
           <p className="mt-0.5 text-xs text-muted">{t("americano.whoIsHereHelp")}</p>
           <div className="mt-2 flex flex-col" role="group" aria-label={t("americano.whoIsHere")}>
             {/* Labels, not list items: the roster below is the page's list of people, and suites read it as `main li`. */}
-            {roster.listed.map((n) => (
+            {fixedPairs &&
+              units(roster.listed).map((u) => {
+                const ids = u.kind === "pair" ? u.seats.map((x) => x.id) : [u.seat.id];
+                const label = u.kind === "pair" ? `${u.seats[0].name} & ${u.seats[1].name}` : u.seat.name;
+                return (
+                  <label key={ids[0]} className="flex min-h-11 items-center gap-3 font-semibold">
+                    <input type="checkbox" className="h-5 w-5 shrink-0 accent-ink" checked={!away.has(ids[0])} disabled={pending || !ready} onChange={() => toggle(setAway, ids)} />
+                    <span className={`truncate ${away.has(ids[0]) ? "text-faint line-through" : ""}`}>{label}</span>
+                    {u.kind === "single" && <span className="shrink-0 text-xs font-semibold text-warn">{t("pairs.partnerNeeded")}</span>}
+                  </label>
+                );
+              })}
+            {fixedPairs &&
+              units(roster.waiting).map((u) => {
+                const ids = u.kind === "pair" ? u.seats.map((x) => x.id) : [u.seat.id];
+                const label = u.kind === "pair" ? `${u.seats[0].name} & ${u.seats[1].name}` : u.seat.name;
+                return (
+                  <label key={ids[0]} className="flex min-h-11 items-center gap-3 font-semibold">
+                    <input type="checkbox" className="h-5 w-5 shrink-0 accent-ink" checked={waitingIn.has(ids[0])} disabled={pending || !ready} onChange={() => toggle(setWaitingIn, ids)} />
+                    <span className={`truncate ${waitingIn.has(ids[0]) ? "" : "text-faint"}`}>{label}</span>
+                    <span className="chip-muted shrink-0">{t("americano.waitingTag")}</span>
+                  </label>
+                );
+              })}
+            {!fixedPairs && roster.listed.map((n) => (
               <label key={n.id} className="flex min-h-11 items-center gap-3 font-semibold">
                 <input type="checkbox" className="h-5 w-5 shrink-0 accent-ink" checked={!away.has(n.id)} disabled={pending || !ready} onChange={() => toggle(setAway, n.id)} />
                 <span className={`truncate ${away.has(n.id) ? "text-faint line-through" : ""}`}>{n.name}</span>
               </label>
             ))}
-            {roster.waiting.map((n) => (
+            {!fixedPairs && roster.waiting.map((n) => (
               <label key={n.id} className="flex min-h-11 items-center gap-3 font-semibold">
                 <input type="checkbox" className="h-5 w-5 shrink-0 accent-ink" checked={waitingIn.has(n.id)} disabled={pending || !ready} onChange={() => toggle(setWaitingIn, n.id)} />
                 <span className={`truncate ${waitingIn.has(n.id) ? "" : "text-faint"}`}>{n.name}</span>
@@ -324,19 +376,23 @@ export function AmericanoPanel({
           </div>
           {/* A walk-in is the organiser's own reserve ("Open spot"); uncontrolled, so nothing typed before hydration is lost. */}
           <form
-            className="mt-2 flex gap-2"
+            className="mt-2 flex flex-wrap gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               const name = walkInRef.current?.value.trim() ?? "";
               if (!name) return;
+              const partner = walkInPartnerRef.current?.value.trim() || null;
               run(async () => {
-                const r = await addWalkInAction(code, name);
+                const r = await addWalkInAction(code, name, partner);
                 if (r.ok && walkInRef.current) walkInRef.current.value = "";
+                if (r.ok && walkInPartnerRef.current) walkInPartnerRef.current.value = "";
                 return r;
               });
             }}
           >
-            <input ref={walkInRef} className="input min-h-11 min-w-0 flex-1 text-sm" aria-label={t("americano.walkIn")} placeholder={t("americano.walkIn")} maxLength={40} disabled={pending} />
+            <input ref={walkInRef} className={`input min-h-11 min-w-0 flex-1 text-sm ${fixedPairs ? "basis-36" : ""}`} aria-label={t("americano.walkIn")} placeholder={t("americano.walkIn")} maxLength={40} disabled={pending} />
+            {/* Fixed pairs: a walk-in usually brings their partner, two seats in one tap. The two names share a line; Add wraps under them on a phone. */}
+            {fixedPairs && <input ref={walkInPartnerRef} className="input min-h-11 min-w-0 flex-1 basis-36 text-sm" aria-label={t("pairs.walkInPartner")} placeholder={t("pairs.walkInPartner")} maxLength={40} disabled={pending} />}
             <button type="submit" className="btn-secondary btn-sm shrink-0" disabled={pending || !ready}>
               {t("americano.walkInAdd")}
             </button>
@@ -351,20 +407,24 @@ export function AmericanoPanel({
           {!locked && (
             <>
               <button type="button" className={`${rounds.length === 0 || started ? "btn-primary" : "btn-secondary"} w-full`} disabled={pending || !canGenerate} onClick={startRound}>
-                {pending ? t("common.working") : rounds.length === 0 ? t("americano.startWith", { count: startCount }) : repeatsRound ? t("americano.generateRepeat", { n: nextRound, again: repeatsRound }) : t("americano.generateRound", { n: nextRound })}
+                {pending ? t("common.working") : rounds.length === 0 ? (fixedPairs ? t("pairs.startWith", { count: pairAdvice?.count ?? Math.floor(participantCount / 2) }) : t("americano.startWith", { count: startCount })) : repeatsRound ? t("americano.generateRepeat", { n: nextRound, again: repeatsRound }) : t("americano.generateRound", { n: nextRound })}
               </button>
               {needScores && last ? (
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.scoresMissing", { n: last.roundNumber })}</p>
+              ) : pairAdvice?.kind === "partner_needed" ? (
+                <p className="text-center text-xs font-semibold text-warn">{t("pairs.partnerAdvice", { singles: pairAdvice.singles })}</p>
+              ) : pairAdvice?.kind === "need_pairs" ? (
+                <p className="text-center text-xs text-muted">{t("pairs.needPairs", { count: pairAdvice.count })}</p>
               ) : advice?.kind === "need_4" ? (
                 <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: advice.count })}</p>
               ) : advice?.kind === "fours" ? (
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: advice.count, up: advice.up, down: advice.down })}</p>
               ) : firstRound && startCount < capacity ? (
-                <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: startCount })}</p>
+                <p className="text-center text-xs text-muted">{pairAdvice ? t("pairs.autoShrink", { count: pairAdvice.count }) : t("americano.autoShrink", { count: startCount })}</p>
               ) : rotationLength && rounds.length >= rotationLength ? (
-                <p className="text-center text-xs text-muted">{t("americano.rotationDone", { n: rotationLength })}</p>
+                <p className="text-center text-xs text-muted">{t(fixedPairs ? "pairs.rotationDone" : "americano.rotationDone", { n: rotationLength })}</p>
               ) : rotationLength ? (
-                <p className="text-center text-xs text-faint">{t("americano.rotationInfo", { n: rotationLength, left: rotationLength - rounds.length })}</p>
+                <p className="text-center text-xs text-faint">{t(fixedPairs ? "pairs.rotationInfo" : "americano.rotationInfo", { n: rotationLength, left: rotationLength - rounds.length })}</p>
               ) : null}
               {rounds.length > 0 && (
                 <button
@@ -445,7 +505,7 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }
   };
 
   return (
-    <div className="rounded-xl bg-bg p-3">
+    <div className="rounded-xl bg-bg p-3" data-testid="match-card">
       <div className="mb-2 text-2xs font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
       <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] items-center gap-2">
         <div className={`text-sm font-bold leading-tight ${aWon ? "" : match.sideA != null ? "text-muted" : ""}`}>

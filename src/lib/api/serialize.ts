@@ -7,6 +7,7 @@ import type { GroupDetail } from "@/lib/domain/groups";
 import { cleanAgeMin, cleanCategory, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
 import { memberLevelFor, type GroupViewer } from "@/lib/domain/groupAccess";
 import { formatOf } from "@/lib/domain/formats";
+import { seatUnits } from "@/lib/domain/fixedPairs";
 import { hasRange, presetFor } from "@/lib/domain/levels";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
@@ -19,6 +20,8 @@ import type { VenueBoard } from "@/lib/domain/venueBoard";
  * first names and levels, never emails, phones, tokens or manage links.
  */
 export type PublicPlayer = { name: string; level: number | null; organizer: boolean; status: "joined" | "confirmed" | "invited" };
+/** A fixed-pairs night's pair as it is listed: two first names, or one with `partnerNeeded`. */
+export type PublicPair = { names: string[]; partnerNeeded: boolean };
 export type PublicVenue = { name: string; slug: string | null; mapUrl: string | null; court: string | null; boardUrl: string | null };
 export type PublicMatch = {
   code: string;
@@ -26,6 +29,10 @@ export type PublicMatch = {
   type: "match" | "tournament";
   /** Tournaments only: americano, mexicano or king (King of the Court). */
   format: "americano" | "mexicano" | "king" | null;
+  /** Tournaments only: two partners play every round together (fixed pairs) instead of rotating. */
+  fixedPairs: boolean | null;
+  /** A fixed-pairs night's list as pairs, in order: two names each, or one name that needs a partner. Null otherwise. */
+  pairs: PublicPair[] | null;
   title: string | null;
   status: "open" | "full" | "cancelled" | "past";
   startsAt: string;
@@ -74,6 +81,11 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
     url: `${base}/${ev.code}`,
     type: ev.type,
     format: ev.type === "tournament" ? formatOf(ev.format) : null,
+    fixedPairs: ev.type === "tournament" ? ev.fixedPairs : null,
+    pairs:
+      ev.type === "tournament" && ev.fixedPairs
+        ? seatUnits(detail.roster).map((u) => (u.kind === "pair" ? { names: u.seats.map((x) => playerName(x.player, x.invitedName)), partnerNeeded: false } : { names: [playerName(u.seat.player, u.seat.invitedName)], partnerNeeded: true }))
+        : null,
     title: ev.title,
     status: ev.status,
     startsAt: ev.startsAt.toISOString(),

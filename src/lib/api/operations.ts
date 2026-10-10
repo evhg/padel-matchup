@@ -15,11 +15,12 @@ import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest } from "@/lib/domain/requests";
-import { joinEvent, leaveEvent } from "@/lib/domain/slots";
+import { joinPair, type PairJoinOutcome } from "@/lib/domain/pairSeats";
+import { joinEvent, leaveEvent, promotedOf } from "@/lib/domain/slots";
 import { lineupComplete } from "@/lib/lineup";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
-import { manageUrl } from "@/lib/share";
+import { inviteUrl, manageUrl } from "@/lib/share";
 import { ApiError } from "./http";
 import { matchToPublic, type PublicMatch } from "./serialize";
 import type { WebhookEvent } from "./webhooks";
@@ -46,6 +47,7 @@ export const createMatchSchema = z.object({
   court: z.string().max(40).optional().describe('Court within the venue, e.g. "3".'),
   capacity: z.number().int().min(4).max(64).optional().describe("Tournaments only, a multiple of 4. Matches are always 4."),
   format: z.enum(["americano", "mexicano", "king"]).optional().describe("Tournaments only. americano: partners rotate, everyone plays everyone. mexicano: courts by standings after round 1. king: winners move up a court, losers down."),
+  fixedPairs: z.boolean().default(false).describe("Tournaments only: two partners play every round together, in any format. Pairs sign up together (join_match with partner); a player alone is listed as needing a partner. Americano then rotates the opponents: every pair meets every other pair, and the table ranks pairs."),
   pointsPerMatch: z.number().int().min(4).max(99).optional().describe("Tournaments only: fixed points per match (16, 21, 24, 32). Omit for free scoring; mexicano defaults to 24."),
   gamesTo: z.number().int().min(2).max(12).optional().describe("Tournaments only: first to N games (4, 6, 8) instead of points; the table then ranks by matches won."),
   whenFull: z.enum(["waitlist", "closed"]).default("waitlist"),
@@ -77,6 +79,7 @@ export const joinMatchSchema = z.object({
   token: z.string().min(8).max(64).optional().describe("Personal token of an existing player."),
   email: z.email().optional().describe("Optional. Sends a calendar invite that updates itself."),
   level: z.number().min(0).max(7).optional().describe("Needed once when the match has a level range and the player has no level yet."),
+  partner: z.string().min(1).max(40).optional().describe("A fixed-pairs tournament only: the partner's first name. Their spot is reserved with its own invite link (partner.inviteUrl in the answer), which the partner opens to claim it. Omit to join alone: the player is listed as needing a partner. A player already in alone may call again with a partner."),
 });
 export type JoinMatchInput = z.infer<typeof joinMatchSchema>;
 
@@ -148,6 +151,7 @@ export async function createMatch(db: Db, raw: unknown, ctx: OpContext, locale =
     whenFull: input.whenFull,
     note: input.note,
     format: input.format ?? null,
+    fixedPairs: input.fixedPairs,
     pointsPerMatch: input.gamesTo ? null : (input.pointsPerMatch ?? DEFAULT_POINTS[formatOf(input.format)]),
     gamesTo: input.gamesTo ?? null,
     levelMin: input.levelMin ?? null,
@@ -179,6 +183,8 @@ export type JoinMatchResult = {
   outcome: "joined" | "waitlisted" | "already_in" | "full" | "requested";
   match: PublicMatch;
   player: { name: string; personalToken: string; personalUrl: string };
+  /** A fixed-pairs night: the partner named, and the link that claims their reserved spot. Private to whoever named them; null otherwise. */
+  partner: { name: string; inviteUrl: string } | null;
   /**
    * The match's group, when it has one, and whether the player is a member of it now. A seat in a
    * group that lets anyone in makes a member; a group that asks to join (`askToJoin`) is never
@@ -202,12 +208,13 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
   const input = joinMatchSchema.parse(raw);
   const detail = await getEventByCode(db, input.code);
   if (!detail) throw new ApiError(404, "not_found", `No match with code ${input.code}.`, "Codes are 4 characters and case-sensitive.");
+  if (input.partner && !(detail.event.type === "tournament" && detail.event.fixedPairs)) throw new ApiError(422, "invalid_request", "partner is for a fixed-pairs tournament only.", "Omit partner: on this match every player joins alone.");
   const player = await resolvePlayer(db, input, locale);
-  return joinAsPlayer(db, detail, player, ctx);
+  return joinAsPlayer(db, detail, player, ctx, input.partner);
 }
 
-/** The join itself, for a player already resolved (API token, Telegram account, session). Same side effects as the web button. */
-export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext): Promise<JoinMatchResult> {
+/** The join itself, for a player already resolved (API token, Telegram account, session). Same side effects as the web button. `partnerName`: a fixed-pairs night's partner. */
+export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext, partnerName?: string | null): Promise<JoinMatchResult> {
   const ev = detail.event;
   const range = { min: ev.levelMin, max: ev.levelMax };
   const base = baseUrl();
@@ -228,11 +235,16 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
             ? "This match takes confirmed levels only. The player's level is inside the range but nobody has confirmed it, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
             : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
         const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
-        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, group: line, next };
+        // The ask carries no partner: say so, so nobody believes the pair is in.
+        const pairNote = ev.fixedPairs && partnerName ? " The partner was not reserved: once the organizer says yes, call join_match again with partner." : "";
+        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, partner: null, group: line, next: next + pairNote };
       }
     }
   }
-  const res = await joinEvent(db, { eventId: ev.id, playerId: player.id });
+  const res: PairJoinOutcome = ev.fixedPairs && partnerName ? await joinPair(db, { eventId: ev.id, playerId: player.id, partnerName }) : await joinEvent(db, { eventId: ev.id, playerId: player.id });
+  const partner = res.partner?.inviteCode ? { name: res.partner.invitedName ?? "", inviteUrl: inviteUrl(base, ev.code, res.partner.inviteCode) } : null;
+  // A single already in who names a partner: a reserved spot changed the line-up.
+  if (res.outcome === "already_in" && res.partner) ctx.afterwards(async () => void (await notifyLineupChange(db, res.event, before)));
   if (res.outcome === "joined" || res.outcome === "waitlisted") {
     // A match seat (`via: "match"`): a member of a group that lets anyone in, of no group that asks to join.
     if (ev.groupId) await joinGroup(db, ev.groupId, player.id, "match").catch(() => undefined);
@@ -254,7 +266,15 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
     requested: "Waiting for the organizer's approval.",
   };
   const asking = line && line.askToJoin && !line.member && (res.outcome === "joined" || res.outcome === "waitlisted" || res.outcome === "already_in") ? ASKING_GROUP_NEXT : "";
-  return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, group: line, next: nextText[res.outcome] + asking };
+  // Fixed pairs: the partner's link is how the partner claims the spot; nothing is sent to a name (DECIDING rule 24).
+  const pairNext = partner
+    ? ` Send partner.inviteUrl to ${partner.name}: opening it claims their spot, signed in or by typing their name.`
+    : res.noSeatForPartner
+      ? ` The player is still in, alone: no spot is free beside them for ${partnerName}, so they stay listed as needing a partner.`
+      : ev.fixedPairs && (res.outcome === "joined" || res.outcome === "waitlisted")
+        ? " This is a fixed-pairs night and the player joined alone: they are listed as needing a partner until somebody taps Be their partner on the match page, or they join_match again with partner."
+        : "";
+  return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, partner, group: line, next: nextText[res.outcome] + pairNext + asking };
 }
 
 export const leaveMatchSchema = z.object({
@@ -283,7 +303,7 @@ export async function leaveAsPlayer(db: Db, detail: EventDetail, player: Player,
   const res = await leaveEvent(db, { eventId: ev.id, playerId: player.id });
   ctx.afterwards(async () => {
     if (!res.wasWaitlisted) await notifyCreator(db, res.event, "left", player.displayName, player.id);
-    const fresh = await notifyLineupChange(db, res.event, before, res.promotion?.playerId);
+    const fresh = await notifyLineupChange(db, res.event, before, promotedOf(res.promotion).map((p) => p.playerId));
     await notifyPromotion(db, fresh ?? res.event, res.promotion);
     await notifyRefill(db, res.event.id);
   });

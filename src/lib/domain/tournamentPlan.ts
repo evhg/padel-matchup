@@ -1,5 +1,6 @@
 import type { TournamentFormat } from "@/db/schema";
 import { maxCourtsFor } from "./americano";
+import { pairCourts, pairRotationRounds } from "./fixedPairs";
 import { firstRoundRefusal } from "./formats";
 
 /**
@@ -57,10 +58,12 @@ export function rotationRounds(players: number, courts?: number | null): number 
 
 export type NightPlan = {
   players: number;
+  /** A fixed-pairs night: how many pairs. Then `resting` counts pairs and `rotation` is the round robin of pairs. */
+  pairs?: number;
   courts: number;
-  /** Players who sit out each round, in turn. */
+  /** Players who sit out each round, in turn; pairs on a fixed-pairs night. */
   resting: number;
-  /** Americano only: rounds until everyone has partnered everyone once. */
+  /** Americano only: rounds until everyone has partnered everyone once, or with fixed pairs until every pair has met every other. */
   rotation: number | null;
   /** Minutes a round takes at the chosen score; null with free scoring. */
   roundMinutes: number | null;
@@ -80,24 +83,28 @@ export type NightPlan = {
  * with them (that is the field Generate would draw), else the field the organiser opened: three names
  * of eight, or a king night of five, still reads as a night of eight.
  */
-export function nightField(input: { format: TournamentFormat; names: number; capacity: number; roundsDrawn: number }): number {
+export function nightField(input: { format: TournamentFormat; names: number; capacity: number; roundsDrawn: number; /** `names` then counts the players of complete pairs. */ fixedPairs?: boolean }): number {
   if (input.roundsDrawn > 0) return input.names;
-  return firstRoundRefusal(input.format, input.names) ? input.capacity : input.names;
+  // Fixed pairs: round 1 draws two complete pairs or more, in any format (`pairsRefusal`).
+  const refused = input.fixedPairs ? input.names < 4 : firstRoundRefusal(input.format, input.names) !== null;
+  return refused ? input.capacity : input.names;
 }
 
-/** The night for this many players, or null below four, where there is no round to draw. */
-export function nightPlan(input: { players: number; courts?: number | null; format: TournamentFormat; pointsPerMatch?: number | null; gamesTo?: number | null; durationMinutes: number }): NightPlan | null {
-  const courts = courtsUsed(input.players, input.courts);
+/** The night for this many players, or null below four, where there is no round to draw. With fixed pairs the players go two by two. */
+export function nightPlan(input: { players: number; courts?: number | null; format: TournamentFormat; pointsPerMatch?: number | null; gamesTo?: number | null; durationMinutes: number; fixedPairs?: boolean }): NightPlan | null {
+  const pairs = input.fixedPairs ? Math.floor(input.players / 2) : 0;
+  const courts = input.fixedPairs ? pairCourts(pairs, input.courts) : courtsUsed(input.players, input.courts);
   if (courts === 0) return null;
   const minutes = roundMinutes(input);
-  const rotation = input.format === "americano" ? rotationRounds(input.players, input.courts) : null;
+  const rotation = input.format === "americano" ? (input.fixedPairs ? pairRotationRounds(pairs, input.courts) : rotationRounds(input.players, input.courts)) : null;
   const rotationMinutes = rotation && minutes ? rotation * minutes : null;
   const fits = minutes ? Math.max(1, Math.floor(input.durationMinutes / minutes)) : null;
   const rounds = rotation ? (fits ? Math.min(rotation, fits) : rotation) : fits;
   return {
     players: input.players,
+    ...(input.fixedPairs ? { pairs } : {}),
     courts,
-    resting: input.players - courts * 4,
+    resting: input.fixedPairs ? pairs - courts * 2 : input.players - courts * 4,
     rotation,
     roundMinutes: minutes,
     rotationMinutes,

@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, players, scores, slots, venues, type Activity, type Event, type Player, type Score, type Slot } from "@/db/schema";
 import { timePatternOf } from "@/lib/dates";
+import { placeOf } from "./fixedPairs";
 import { outcomeForTeam, type Outcome } from "./scores";
 
 export type SlotWithPlayer = Slot & { player: Player | null };
@@ -130,13 +131,14 @@ export async function getPlayerEvents(db: Db, playerId: string, now = new Date()
     seen.add(r.event.id);
     const evScores = scoreRows.filter((s) => s.eventId === r.event.id);
     const slot = r.slot ?? ({ team: null, status: "empty", position: 0 } as unknown as Slot);
-    const placementIdx = r.event.type === "tournament" && r.event.standings ? r.event.standings.indexOf(playerId) : -1;
+    // A fixed-pairs night's snapshot holds partners side by side: both are first (`placeOf`).
+    const placement = r.event.type === "tournament" ? placeOf(r.event, playerId) : null;
     list.push({
       event: r.event,
       slot,
       scores: evScores,
       outcome: outcomeForTeam(evScores, r.slot?.team ?? null),
-      placement: placementIdx >= 0 ? placementIdx + 1 : null,
+      placement,
       playerCount: countMap.get(r.event.id) ?? 0,
       isCreator: r.event.creatorPlayerId === playerId,
     });

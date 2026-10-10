@@ -6,6 +6,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getPlayerGroups } from "@/lib/domain/groups";
 import { getPlayerEvents, mergeTimeline, type MyEvent } from "@/lib/domain/queries";
+import { placesOf } from "@/lib/domain/fixedPairs";
 import { listStudentCoaches, listStudentLessons, packageLine, type StudentLesson } from "@/lib/domain/coaching";
 import { venueWithCourt } from "@/lib/labels";
 
@@ -42,7 +43,7 @@ export async function MyMatches({ player }: { player: Player }) {
       ev.status === "cancelled" ? (
         <span className="chip-danger">{t("me.cancelled")}</span>
       ) : m.placement ? (
-        <span className={m.placement === 1 ? "chip-open" : "chip-muted"}>{t("me.placement", { place: m.placement, total: ev.standings?.length ?? m.playerCount })}</span>
+        <span className={m.placement === 1 ? "chip-open" : "chip-muted"}>{t("me.placement", { place: m.placement, total: ev.standings ? placesOf(ev).length : m.playerCount })}</span>
       ) : m.outcome === "won" ? (
         <span className="chip-open">{t("score.won")}</span>
       ) : m.outcome === "lost" ? (

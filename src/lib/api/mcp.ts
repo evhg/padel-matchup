@@ -207,7 +207,7 @@ const TOOLS: Tool[] = [
   {
     name: "create_match",
     title: "Create a match",
-    description: "Create a padel match (4 players) or an americano tournament for a person. Returns the share link for the players and the organizer's private links. Give the person all links; keep personalToken and manageUrl private. Ask before creating; one request, one match.",
+    description: "Create a padel match (4 players) or an americano tournament for a person. A tournament may keep fixed pairs (fixedPairs: true): two partners play every round together and the table ranks pairs. Returns the share link for the players and the organizer's private links. Give the person all links; keep personalToken and manageUrl private. Ask before creating; one request, one match.",
     schema: createMatchSchema,
     readOnly: false,
     run: async (db, args, ctx) => createMatch(db, args, ctx),
@@ -215,7 +215,7 @@ const TOOLS: Tool[] = [
   {
     name: "join_match",
     title: "Join a match",
-    description: "Put a person into a match by first name (or by their personal token from an earlier call). Handles waitlists and level ranges; when the level is outside the range, the organizer is asked to approve. For a group's match the answer says whether the person is now a member of the group; a group that asks to join is never joined through a match.",
+    description: "Put a person into a match by first name (or by their personal token from an earlier call). Handles waitlists and level ranges; when the level is outside the range, the organizer is asked to approve. On a fixed-pairs tournament pass partner (a first name) to sign up as a pair: the answer's partner.inviteUrl is the link the partner opens to claim their spot; without partner the person is listed as needing a partner. For a group's match the answer says whether the person is now a member of the group; a group that asks to join is never joined through a match.",
     schema: joinMatchSchema,
     readOnly: false,
     run: async (db, args, ctx) => joinMatch(db, args, ctx),

@@ -325,6 +325,12 @@ Wall clock first, credits second. What actually moved it, measured:
 - **Read `GATE_EXIT=` before the push, in a separate command.** A push chained after the gate in one
   shell line (`... ; git push`) went out on a red gate: the exit line was printed, nobody had read
   it. The gate's log is read first, the push is its own command, every time.
+- **A migration number belongs to main, not to the branch that generated it.** Fixed pairs was built
+  as 0089 and 0090 on 69c3d3f; while it was being built, main merged its own 0089 and 0090 (the crew's
+  Telegram group), and the first full gate ran on a base nobody could merge. Before the full gate, ask
+  `git fetch origin main && git log HEAD..origin/main -- drizzle`. When it lists anything, put the
+  work on the new main and generate the migration and the reader grants again (both numbers move, and
+  the snapshot chain in `drizzle/meta` must follow the new parent), never rename the files by hand.
 - **A new button on a page an old suite already clicks needs a name of its own.** A second "Save"
   on the club's manage page made `getByRole("button", { name: "Save" })` match two elements and the
   clubs suite failed on a line the change never touched. Before adding a button, grep the suites

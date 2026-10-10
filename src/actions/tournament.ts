@@ -14,7 +14,7 @@ import { addWalkIn, deleteLastRound, generateRound, saveTournamentMatchScore, se
 import { notifyLineupChange, notifyRemoved } from "@/lib/notify";
 import { assertRate, getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
 
-export async function setTournamentSettingsAction(code: string, input: { courts?: number | null; pointsPerMatch?: number | null; gamesTo?: number | null; courtNames?: string[] | null; format?: TournamentFormat }): Promise<ActionResult<null>> {
+export async function setTournamentSettingsAction(code: string, input: { courts?: number | null; pointsPerMatch?: number | null; gamesTo?: number | null; courtNames?: string[] | null; format?: TournamentFormat; fixedPairs?: boolean }): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     await setTournamentSettings(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, ...input });
@@ -56,12 +56,13 @@ function cleanCheckIn(raw: CheckIn | undefined): CheckIn | undefined {
  * rate limit and its line-up notice (`reserveAction`), through `addWalkIn`, which grows a full field by
  * this one spot without moving the waiting list up. No email: a walk-in has none.
  */
-export async function addWalkInAction(code: string, name: string): Promise<ActionResult<{ name: string }>> {
+export async function addWalkInAction(code: string, name: string, partnerName?: string | null): Promise<ActionResult<{ name: string }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
     const before = wasComplete(detail);
-    const { slot, event } = await addWalkIn(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, name });
+    // A fixed-pairs night: a walk-in may bring their partner, two seats in one write.
+    const { slot, event } = await addWalkIn(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, name, partnerName: typeof partnerName === "string" ? partnerName : null });
     after(async () => {
       await notifyLineupChange(db, event, before);
     });

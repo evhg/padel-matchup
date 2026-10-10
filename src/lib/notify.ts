@@ -23,7 +23,7 @@ import { markWantsNotified, wantAudience } from "@/lib/domain/demand";
 import { claimCourtOffer, COURT_OFFERS, courtOfferLink, courtOffersDue } from "@/lib/domain/courtOffers";
 import { chatTicket } from "@/lib/telegram/identity";
 import { getPlayer } from "@/lib/domain/players";
-import type { Promotion } from "@/lib/domain/slots";
+import { promotedOf, type Promotion } from "@/lib/domain/slots";
 import { sendEmail } from "@/lib/email/send";
 import { layout, telegramLine, translatorFor } from "@/lib/email/templates";
 import { lineupComplete } from "@/lib/lineup";
@@ -464,12 +464,16 @@ export async function notifyRefill(db: Db, eventId: string, now = new Date()): P
   return sent;
 }
 
-/** Handles the fallout of a promotion: promoted player invite + creator notice. */
+/**
+ * Handles the fallout of a promotion: promoted player invite + creator notice. Every player it moved
+ * up, one after another: a fixed-pairs night moves a pair, or a single and a single, in one write.
+ */
 export async function notifyPromotion(db: Db, ev: Event, promotion: Promotion | null): Promise<void> {
-  if (!promotion) return;
-  const promoted = await getPlayer(db, promotion.playerId);
-  if (!promoted) return;
-  await Promise.all([sendCalendarInvite(db, ev, promoted, "promoted"), notifyCreator(db, ev, "promoted", promoted.displayName, promoted.id)]);
+  for (const p of promotedOf(promotion)) {
+    const promoted = await getPlayer(db, p.playerId);
+    if (!promoted) continue;
+    await Promise.all([sendCalendarInvite(db, ev, promoted, "promoted"), notifyCreator(db, ev, "promoted", promoted.displayName, promoted.id)]);
+  }
 }
 
 /** Time/venue changed → updated .ics (same UID, bumped SEQUENCE) to everyone with an email. */
@@ -500,7 +504,7 @@ export async function notifyEventUpdated(db: Db, ev: Event): Promise<void> {
  * Only people with no address. Somebody who turned activity emails off made a choice, and a push
  * instead of the email they refused is not a fix, it is a way around them.
  */
-async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupComplete" | "lineupOpen" | "updated" | "cancelled", excludePlayerId?: string | null): Promise<number> {
+async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupComplete" | "lineupOpen" | "updated" | "cancelled", excludePlayerIds: readonly string[] = []): Promise<number> {
   let told = 0;
   // An address that bounced or complained is no address: sendEmail refuses it, so its owner is told
   // here, on the channel they do have (src/lib/domain/emailMarks.ts).
@@ -512,7 +516,7 @@ async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupC
     // nobody falls between the two.
     if (works(slot.player?.email) || works(slot.invitedEmail)) continue;
     const player = slot.player;
-    if (!player || (excludePlayerId && player.id === excludePlayerId)) continue;
+    if (!player || excludePlayerIds.includes(player.id)) continue;
     const c = await ctx(db, ev, player.locale, player, detail);
     const heading = c.t(`push.${key}Title` as "push.lineupCompleteTitle", c.vars);
     const body = c.t(`push.${key}Body` as "push.lineupCompleteBody", c.vars);
@@ -529,7 +533,9 @@ async function tellTheRest(db: Db, ev: Event, detail: EventDetail, key: "lineupC
  * gains/loses "- COMPLETE" and the description lists the players.
  * Returns the refreshed event when something changed, else null.
  */
-export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean, excludePlayerId?: string | null): Promise<Event | null> {
+/** `excludePlayerId`: who hears of this another way (the joiner, the players a promotion moved up). */
+export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean, excludePlayerId?: string | readonly string[] | null): Promise<Event | null> {
+  const excluded = new Set(typeof excludePlayerId === "string" ? [excludePlayerId] : (excludePlayerId ?? []));
   const detail = await getEventDetail(db, ev);
   const complete = lineupComplete(detail.roster, ev.capacity);
   if (complete === wasComplete || ev.status === "cancelled") return null;
@@ -544,7 +550,7 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
   if (emailEnabled())
     await Promise.all(
       participantsWithEmail(detail.roster)
-        .filter((r) => !excludePlayerId || r.playerId !== excludePlayerId)
+        .filter((r) => !r.playerId || !excluded.has(r.playerId))
         .map(async (r) => {
           const player = r.playerId ? await getPlayer(db, r.playerId) : null;
           if (player && !player.emailNotifications) return;
@@ -562,7 +568,7 @@ export async function notifyLineupChange(db: Db, ev: Event, wasComplete: boolean
           await sendEmail({ to: r.email, subject: c.t(`${ns}.subject` as "email.lineupComplete.subject", c.vars), html, text, ics: { method: "REQUEST", content: icsFor(fresh, c, { name: r.name, email: r.email }, "REQUEST") } });
         }),
     );
-  await tellTheRest(db, fresh, freshDetail, complete ? "lineupComplete" : "lineupOpen", excludePlayerId);
+  await tellTheRest(db, fresh, freshDetail, complete ? "lineupComplete" : "lineupOpen", [...excluded]);
   return fresh;
 }
 

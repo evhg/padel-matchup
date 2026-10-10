@@ -13,6 +13,7 @@ import { emailEnabled } from "@/lib/config";
 import { formatEventDayLong, formatEventTime, tzLabel } from "@/lib/dates";
 import { playersWithEmail } from "@/lib/domain/identity";
 import { getSlotByInviteCode } from "@/lib/domain/queries";
+import { namedByOf } from "@/lib/domain/pairSeats";
 import { venueWithCourt } from "@/lib/labels";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -60,6 +61,10 @@ export default async function InvitePage({ params, searchParams }: Props) {
     ev.status === "cancelled" ? "cancelled" : slot.status === "invited" ? "invited" : slot.status === "declined" ? "declined" : (slot.status === "confirmed" || slot.status === "joined") && mine ? "confirmed_mine" : "gone";
   const courtNumber = (n: string) => t("event.courtNumber", { n });
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
+  // A fixed-pairs night: the player who named them, not the organiser, saved this spot; and a pair can
+  // wait together on the waiting list, where a claimed spot is not yet a place on court.
+  const namedBy = ev.fixedPairs ? await namedByOf(db, slot) : null;
+  const waitingAt = slot.position > ev.capacity ? slot.position - ev.capacity : 0;
   // The organizer typed an email we already know from another identity: offer to restore it (with a code) before confirming.
   const knownOwner =
     (state === "invited" || state === "declined") && emailEnabled() && slot.invitedEmail && !me?.email
@@ -73,7 +78,8 @@ export default async function InvitePage({ params, searchParams }: Props) {
         <section className="card">
           <div className="text-xs font-extrabold uppercase tracking-wider text-faint">{t(ev.type === "match" ? "event.match" : "event.tournament")}</div>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{state === "invited" || state === "declined" ? t("invitePage.title", { name }) : title}</h1>
-          <p className="mt-1 text-muted">{t("invitePage.subtitle", { organizer: creator.displayName })}</p>
+          <p className="mt-1 text-muted">{namedBy ? t("pairs.invitedBy", { partner: namedBy }) : t("invitePage.subtitle", { organizer: creator.displayName })}</p>
+          {waitingAt > 0 && state === "invited" && <p className="mt-1 text-sm font-semibold text-warn">{t("pairs.inviteWaiting")}</p>}
           <div className="mt-4 flex items-end gap-3">
             <div className="text-5xl font-extrabold tracking-tighter tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
             <div className="pb-1">
@@ -111,8 +117,8 @@ export default async function InvitePage({ params, searchParams }: Props) {
           )}
           {state === "confirmed_mine" && (
             <>
-              <h2 className="text-xl font-extrabold text-ok">✓ {t("invitePage.confirmed")}</h2>
-              <p className="mt-1 text-sm text-muted">{t("invitePage.confirmedHelp")}</p>
+              <h2 className={`text-xl font-extrabold ${waitingAt ? "" : "text-ok"}`}>{waitingAt ? t("event.youAreOnWaitlist", { position: waitingAt }) : `✓ ${t("invitePage.confirmed")}`}</h2>
+              <p className="mt-1 text-sm text-muted">{waitingAt ? t("pairs.inviteWaiting") : t("invitePage.confirmedHelp")}</p>
               {me && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} className="mt-4" />}
               <Link href={eventHref} className="btn-primary mt-2 w-full">
                 {t("invitePage.goToEvent")}
