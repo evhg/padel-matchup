@@ -11,6 +11,7 @@ import { seatUnits } from "@/lib/domain/fixedPairs";
 import { hasRange, presetFor } from "@/lib/domain/levels";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
+import { slotDay } from "@/lib/booking/availability";
 import type { EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import type { VenueBoard } from "@/lib/domain/venueBoard";
@@ -259,7 +260,8 @@ export function clubToPublic(c: Club, base: string, courtNames?: string[]): Publ
     about: c.about,
     claimed: isClubLive(c),
     founding: c.founding,
-    freeCourts: a ? { day: a.day, tz: a.tz, fetchedAt: a.fetchedAt, slots: a.slots } : null,
+    // The day the cache names, in the shape the API always had: a read from a booking platform holds several days and more fields.
+    freeCourts: a ? { day: a.day, tz: a.tz, fetchedAt: a.fetchedAt, slots: a.slots.filter((s) => slotDay(s.start, a.tz) === a.day).map((s) => ({ start: s.start, end: s.end, free: s.free })) } : null,
     boardUrl: `${base}/v/${c.slug}`,
     rankingUrl: `${base}/v/${c.slug}/ranking`,
     calendarUrl: `${base}/v/${c.slug}/calendar.ics`,

@@ -148,7 +148,7 @@ Three jobs run from Supabase `pg_cron` through `pg_net`, and the service board's
   After it reads the clubs' feeds of free courts, the run offers each free court two to six hours ahead to the players whose want names that club, day and hour (`offerFreeCourts` in `src/lib/notify.ts`, the rules in `src/lib/domain/courtOffers.ts`): at most twenty notices a run, one per player, one court a day for each want, and a want that heard anything in the last six hours hears nothing. The run's `courtOffers` counts them, and each one is a `demand.court_offered` fact. No club shared a feed on 25 September 2026, so the step sends nothing until one does.
   Once a day, the first run after 03:00 UTC (after the day's backup) removes the player rows nothing ties to a person: no contact, no public profile, nothing in the database pointing at them (read from the schema; their saved clubs and a coach page with no lesson ever booked go with them; a note, a want or a seat keeps them), and at least 14 days old (`src/lib/domain/disposable.ts`, the owner's decision of 24 September 2026). `GET /api/admin/disposable` lists what today's run would remove and changes nothing; the run's `disposed` and the daily metric `players_disposed` count what went.
   Every run, near its end, sends what players' quiet hours held (the owner's decision D, 9 October 2026; `sendQuietSummaries` in `src/lib/notify.ts`): each person whose quiet hours ended with notices waiting hears once, one short message per channel they have (Telegram, email when activity emails are on, each push device; WhatsApp has no template for it, so a WhatsApp-only player reads the inbox), and those notices count as delivered. At most 200 people a run, read on the partial index `notices_due_idx`; the rest go the next hour. Then it prunes the inbox: rows older than 90 days (`INBOX_DAYS`), at most 5,000 a run, oldest by `notices_created_idx`. The run's `noticeSummaries` and `noticesPruned` count them, and so do the daily metrics `notice_summaries` and `notices_pruned`. The inbox grows by one row per notice per player, a few kilobytes a day at today's size; 90 days keeps it far below the database's 500 MB.
-- the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour).
+- the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour). Every third tick it also reads the free court times on the booking platforms (below).
 - `kicksmash-sync`, every 10 minutes → `/api/cron/sync`: the coaches' calendars, both ways.
 
 **The three definitions live in the repository** since migration 0069 (`src/lib/ops/cronJobs.ts`,
@@ -161,6 +161,51 @@ held to the migration by `tests/cron-jobs.test.ts`). Before that they existed on
 - `POST /api/admin/cron` stores the app's own `CRON_SECRET` in Vault and schedules the three jobs,
   replacing any job typed by hand that calls the same routes. Call it once on a new database, and
   again the day `CRON_SECRET` changes on Vercel, or every job gets `unauthorized` from then on.
+
+## Free court times from the platforms
+
+DECIDING rule 32, the owner's decision of 10 October 2026: Kicksmash reads the free court times that
+the booking platforms show on their public club pages, and accepts the risk of being blocked.
+
+**The job.** `scrapeIfDue` in `src/lib/booking/scrape.ts`, called at the end of each push tick. A run
+starts when the last one began 14 minutes ago or more, so it runs every third tick: every 15 minutes.
+It takes at most 12 clubs: listed, a booking link on a platform that has a reader, no feed of their
+own, and not read in the last 14 minutes. The clubs people use go first, then the oldest cache. Each
+platform has its own lane: one request a second, at most eight requests a club. The run stops before
+45 seconds, or before 50 seconds less the push tick's own time. It writes three days of free courts
+into `clubs.availability` and `availability_at`. A feed the club shared always wins.
+
+**The cost.** No invocation of its own: it rides the push job's 288 invocations a day. It adds no
+migration and no table. A run with nothing to read costs one read of `metrics_daily`. Until a
+reader exists in `src/lib/booking/adapters/`, it costs nothing at all. A full run is about 96 runs a
+day of up to 45 seconds each, so at most 72 minutes of function time a day. On the Hobby plan,
+that time counts against the provisioned memory, not the active CPU, because the run mostly waits.
+Each run sends at most 45 requests to each platform and writes at most 12 club rows.
+
+**The switches.** Two, and the first needs no deploy at all:
+`POST /api/admin/metrics {"key":"scrape_off_playtomic","value":1}` (or `scrape_off_all`) stops that
+platform at the next run, and `"value":0` starts it again. `SCRAPE_DISABLED` on Vercel takes platform
+ids with commas (`playtomic,matchi`), or `all`. Vercel gives a running deployment the variables it
+was built with, so a change there takes effect only after a redeploy of the same code.
+
+**The back-off.** A 401, 403 or 429 stops that platform for the run. The platform then rests for six
+hours, then a day, then a week for each block after that. A clean read starts the ladder again. The
+rows are `scrape_rest_until_<platform>` (epoch seconds) and `scrape_rest_level_<platform>` in
+`metrics_daily`. A "changed" result (the reader no longer finds the page it knows) stops the
+platform until the next deploy (`scrape_stop_<platform>` holds the deploy it belongs to).
+
+**The counters**, one a day in `metrics_daily`: `scrape_ok_<platform>`, `scrape_blocked_<platform>`,
+`scrape_changed_<platform>`, `scrape_error_<platform>`, `scrape_requests_<platform>`,
+`scrape_clubs_fresh`, and `cron_scrape_at` for the last run. The service board has one line for
+each platform: fresh (the clubs read clean in the last hour), resting until, stopped, or off. A
+stopped platform is red, and the owner hears once a month.
+
+**When a platform blocks us.** Do nothing that gets around it: no other address, no browser
+disguise, no captcha service, no sign-in. Let the rest run out. If it blocks again after a week,
+put the platform in `SCRAPE_DISABLED` and tell the owner in one line. A club on that platform can
+still share its own feed. **When a platform's page changes**, fix the reader in
+`src/lib/booking/adapters/<platform>.ts` with a test from the new page, and merge: the deploy
+starts it again.
 
 ## The Sunday digest, one line to watch
 

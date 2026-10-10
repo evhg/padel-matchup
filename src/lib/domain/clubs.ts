@@ -6,7 +6,7 @@ import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
 import { clubCourts, clubs, clubSlots, coaches, events, venues, type Club } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
+import { AVAILABILITY_KINDS, isScraped, scrapeFresh, todaySlots } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, cityInText, venueInCity } from "./cities";
 import { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
 import { countryOfTz, isCountryCode } from "./countries";
@@ -604,7 +604,9 @@ export async function setClubNotifyMessage(db: Db, slug: string, messageId: numb
 export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined, now = new Date()): number | null {
   const a = c?.availability;
   if (!a || a.error) return null;
-  return a.slots.filter((s) => new Date(s.end) > now).reduce((sum, s) => sum + s.free, 0);
+  // A read from a booking platform covers several days and goes stale when the platform rests (DECIDING rule 32).
+  if (isScraped(a) && !scrapeFresh(a, now)) return null;
+  return todaySlots(a, now).reduce((sum, s) => sum + s.free, 0);
 }
 
 /** The club's time zone, set from the manage page when the claim came without one (the week cannot make matches without it). */

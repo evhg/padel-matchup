@@ -4,13 +4,25 @@ import { clubs, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 
 /**
- * Free courts, opt-in and permissionless: a club shares a feed it already has.
+ * Free courts, from two sources, cached on the club row (`clubs.availability`, `availability_at`).
+ *
+ * 1. A feed the club shares, refreshed hourly here:
  *   - ics_bookings: a calendar feed of its bookings (most booking systems and
  *     Google Calendar export one). Free courts = courts − overlapping bookings,
  *     hour by hour, inside opening hours.
  *   - json_free: a JSON document of free slots, {"slots":[{"start","end","free"}]}.
- * Refreshed hourly, cached on the club row, shown on the club page and the API.
- * No scraping, no credentials, nothing a club did not hand us.
+ * 2. The free court times a booking platform shows on its public club page, read every fifteen
+ *    minutes by `scrape.ts` through one reader per platform (`adapters/`). A feed the club shared
+ *    always wins over a read for that club.
+ *
+ * This header said "No scraping, no credentials, nothing a club did not hand us" from 7 September
+ * 2026; a session wrote that line, and the owner never asked for it. The owner's decision of
+ * 10 October 2026 replaces it (DECIDING rule 32): "platforms forbid scraping in their terms but we
+ * are just testing, and on top every app scrapes every other app, for example padel society scrapes
+ * playtomic and matchi for court availability. So scraping at risk of being blocked is acceptable,
+ * just do it." What stays: we never sign in to a platform, never store a player's password, token or
+ * session, never book, reserve, pay or post there, and never get around a login wall, a captcha or a
+ * block. The player books and pays on the platform.
  */
 export const AVAILABILITY_KINDS = ["ics_bookings", "json_free"] as const;
 export type AvailabilityKind = (typeof AVAILABILITY_KINDS)[number];
@@ -185,4 +197,36 @@ export async function refreshAllAvailability(db: Db, now = new Date(), fetchImpl
     if (r?.error) errors++;
   }
   return { refreshed, errors };
+}
+
+/** How long a read from a platform is shown after it was made. Past it a reader shows nothing rather than an old hour. */
+export const SCRAPE_SHOWN_MS = 2 * 3600_000;
+
+/** Was this cache read from a booking platform (`scrape:<platform>`) rather than handed to us by the club? Pure. */
+export const isScraped = (a: Pick<ClubAvailability, "source"> | null | undefined): boolean => Boolean(a?.source?.startsWith("scrape:"));
+
+/** A read from a platform that is clean and recent enough to show. Pure. */
+export function scrapeFresh(a: ClubAvailability | null | undefined, now: Date): boolean {
+  if (!a || !isScraped(a) || a.error) return false;
+  const at = Date.parse(a.fetchedAt);
+  return Number.isFinite(at) && now.getTime() - at < SCRAPE_SHOWN_MS;
+}
+
+/**
+ * The slots of today in the club's zone that have not ended. A feed holds only today's; a read from a
+ * platform holds several days, and every reader that says "today" goes through here. Pure.
+ */
+export function todaySlots(a: Pick<ClubAvailability, "slots" | "tz">, now: Date): ClubFreeSlot[] {
+  const tz = isValidTimeZone(a.tz) ? a.tz : "UTC";
+  const today = localDay(now, tz);
+  return a.slots.filter((s) => {
+    const start = new Date(s.start);
+    return !Number.isNaN(start.getTime()) && new Date(s.end) > now && localDay(start, tz) === today;
+  });
+}
+
+/** The club's day (yyyy-mm-dd) a slot starts on; "" for a time that does not parse. Pure. */
+export function slotDay(start: string, tz: string): string {
+  const d = new Date(start);
+  return Number.isNaN(d.getTime()) ? "" : localDay(d, isValidTimeZone(tz) ? tz : "UTC");
 }

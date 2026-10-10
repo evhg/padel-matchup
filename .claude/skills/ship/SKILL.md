@@ -244,6 +244,11 @@ learning can be a test, a gate step or a script, make it one and put the story i
   had the fix reverted for ninety seconds, and `git commit -a` in that window put the bug back into
   the branch with an unrelated change. Commit named paths while anything is running, and read
   `git status` before `-a`.
+- **An environment variable on Vercel is not a switch that needs no deploy.** A running deployment
+  keeps the variables it was built with, so `SCRAPE_DISABLED` changes nothing until a redeploy. The
+  brief for the court-times read asked for a switch "with no deploy"; the one that does that is a
+  row the code reads each run (`scrape_off_<platform>` through `POST /api/admin/metrics`). When a
+  switch must act now, put it in the database and keep the variable as the slow one.
 
 ### Wall clock
 

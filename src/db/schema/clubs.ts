@@ -8,9 +8,20 @@ import type { EventCategory } from "@/lib/domain/eventTags";
 // unclaimed venues still render from their matches. The owner approves each
 // claim once (one tap); until then the club's details stay private.
 // ---------------------------------------------------------------------------
-export type ClubFreeSlot = { start: string; end: string; free: number };
+/**
+ * A time with `free` courts open. A slot read from a booking platform (`src/lib/booking/scrape.ts`) can
+ * also name the free courts, the price as the platform writes it, and the platform's own booking link
+ * for that time. A feed that a club shares has none of the three.
+ */
+export type ClubFreeSlot = { start: string; end: string; free: number; courts?: string[]; price?: string | null; bookUrl?: string | null };
 
-export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string };
+/**
+ * The cache on the club row. `source` is the kind of feed the club shared (`ics_bookings`, `json_free`),
+ * or `scrape:<platform>` for times read from the platform's public page. A feed covers `day` only. A
+ * read covers `days` (today first, in the club's zone), so a reader that means "today" filters on the
+ * day. The column is jsonb, so the two optional fields needed no migration.
+ */
+export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string };
 
 export const clubs = pgTable(
   "clubs",

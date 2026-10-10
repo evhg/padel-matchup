@@ -824,6 +824,21 @@ Everything in this list is live. The README describes each in detail.
   Every existing player keeps every other notice; the old activity-email switch keeps its meaning as
   a switch on the email channel. Ninety days, then the hourly job prunes. Proven in
   `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.
+- **Free court times read from the booking platforms, every 15 minutes (10 October 2026, no
+  migration).** The owner's decision (DECIDING rule 32): "scraping at risk of being blocked is
+  acceptable, just do it." The frame is built: `src/lib/booking/scrape.ts` picks at most 12 clubs a
+  run (the clubs people use first, then the oldest cache), gives each platform its own lane at one
+  request a second, stops before 45 seconds, and writes three days of free courts into
+  `clubs.availability` (`source: "scrape:<platform>"`). A feed the club shared always wins. It rides
+  the five-minute push job, every third tick, so it costs no invocation and no migration. A 401, 403
+  or 429 stops the platform: it rests six hours, then a day, then a week. A page that changed stops
+  its reader until the next deploy. A `scrape_off_<platform>` row switches a platform off with no
+deploy, and `SCRAPE_DISABLED` does it at the next redeploy. The
+  service board has a line for each platform: fresh, resting until, stopped, or off. It never signs
+  in, never books and never pays; the player books and pays on the platform. The readers, one file
+  for each platform in `src/lib/booking/adapters/`, come next; until one lands the job reads nothing.
+  The clubs and the API still show today only; proposing the best times from the three days is the
+  next step.
 
 ## The finish line
 
@@ -949,8 +964,9 @@ compared with production (rows the old merge dropped that morning stay dropped).
 
 - **WhatsApp Channels**, which need a person on a phone to post, and there is no staff.
 - **Twilio and SMS**, which need template approval and a verified business.
-- **Court booking integrations** with the platforms, beyond recognising the link and reading a feed a club
-  chose to share.
+- **Court booking integrations** with the platforms: booking, reserving or paying for a player, or
+  signing in to a platform for anybody (DECIDING rule 32). Reading the free court times a platform
+  shows publicly is built; the player books and pays on the platform.
 - **Player reliability and no-show stats**, which would rank people by their worst days. Still parked as
   a stat. What changed on 25 September 2026 (banter, `docs/DECIDING.md` rule 18): a third late pull-out
   in 90 days is one playful line on the crew's own card while the spot it opened is open, and a win

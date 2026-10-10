@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
+import { scrapeFresh, todaySlots } from "@/lib/booking/availability";
 import { formatEventTime } from "@/lib/dates";
 import { isClubLive, freeCourtHours } from "@/lib/domain/clubs";
 
@@ -36,10 +37,11 @@ export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "cour
 export async function FreeCourts({ club, now = new Date(), whenUnconfigured }: { club: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind" | "tz">; now?: Date; /** What to show while the club shares no feed; the manage page puts the way to share it here. */ whenUnconfigured?: ReactNode }) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const a = club.availability;
-  const configured = Boolean(club.availabilityUrl && club.availabilityKind);
+  // A feed the club shares, or a clean and recent read of its booking platform's public page (DECIDING rule 32).
+  const configured = Boolean(club.availabilityUrl && club.availabilityKind) || scrapeFresh(a, now);
   if (!configured) return <>{whenUnconfigured ?? <p className="text-sm text-muted">{t("club.freeUnknown")}</p>}</>;
   if (!a || a.error) return <p className="text-sm text-muted">{t("club.freeError")}</p>;
-  const slots = a.slots.filter((s) => new Date(s.end) > now);
+  const slots = todaySlots(a, now);
   const hours = freeCourtHours(club, now) ?? 0;
   return (
     <div>

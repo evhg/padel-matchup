@@ -1,0 +1,361 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { and, eq, like } from "drizzle-orm";
+import type { Db } from "@/db";
+import { clubs, metricsDaily, type Club } from "@/db/schema";
+import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult } from "@/lib/booking/adapters";
+import { clubToPublic } from "@/lib/api/serialize";
+import { freeCourtHours } from "@/lib/domain/clubs";
+import { createEvent } from "@/lib/domain/events";
+import { setMetric } from "@/lib/domain/metrics";
+import { SCRAPE, disabledPlatforms, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
+import { createTestDb, makePlayer, HOUR } from "./helpers/db";
+import { freezeClock } from "./helpers/clock";
+
+/**
+ * The fifteen-minute read of free court times (DECIDING rule 32), on a reader that exists only here.
+ *
+ * NOW is Saturday 10 October 2026, 03:00 UTC — 10:00 in Bangkok (UTC+7). Every time below comes off
+ * NOW (rule 11):
+ *   05:00 UTC = 12:00 Bangkok today        (kept)
+ *   NOW + 1 day, 05:00 UTC = tomorrow noon   (kept: the read covers three days)
+ *   NOW + 2 days                             (kept)
+ *   NOW + 3 days                             (dropped: outside the three days)
+ *   02:00 UTC = 09:00 Bangkok, already over  (dropped)
+ * The run's own clock is a fake one: `sleep` moves it, and each request costs 200 ms of it, so the
+ * pace and the time budget are tested without waiting.
+ */
+const NOW = new Date("2026-10-10T03:00:00.000Z");
+freezeClock(NOW);
+const DAY = 24 * HOUR;
+const at = (ms: number) => new Date(NOW.getTime() + ms);
+const iso = (ms: number) => at(ms).toISOString();
+
+type Call = { url: string; at: number; headers: Headers; method: string };
+
+/** A fake clock for the run, and a stubbed network that answers by URL. */
+function world(answer: (url: string) => { status: number; body?: unknown } = () => ({ status: 200, body: { slots: [] } }), costMs = 200) {
+  let t = 0;
+  const calls: Call[] = [];
+  const clock: Clock = {
+    now: () => t,
+    sleep: async (ms) => {
+      t += ms;
+    },
+  };
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, at: t, headers: new Headers(init?.headers), method: init?.method ?? "GET" });
+    t += costMs;
+    const a = answer(url);
+    return new Response(a.body === undefined ? "" : JSON.stringify(a.body), { status: a.status, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  return { clock, fetchImpl, calls, advance: (ms: number) => (t += ms), time: () => t };
+}
+
+/** The test's reader: GETs the booking link and takes the JSON as it is. Parses nothing a real page would have. */
+const reader = (platform = "playtomic", o: { method?: string; cookie?: boolean; requests?: number; onRead?: (slug: string) => Promise<void> } = {}): AvailabilityAdapter => ({
+  platform,
+  matches: (url) => url.includes(`${platform}.`),
+  async scrape(target, fetchImpl): Promise<ScrapeResult> {
+    await o.onRead?.(target.clubSlug);
+    let res: Response | null = null;
+    for (let i = 0; i < (o.requests ?? 1); i++) {
+      res = await fetchImpl(i ? `${target.bookingUrl}?day=${i}` : target.bookingUrl, { method: o.method ?? "GET", headers: o.cookie ? { cookie: "session=abc" } : {} });
+    }
+    if (!res) return { ok: false, status: null, reason: "error", requests: 0, detail: null };
+    if (res.status === 403 || res.status === 429 || res.status === 401) return { ok: false, status: res.status, reason: "blocked", requests: 1, detail: null };
+    if (res.status === 404) return { ok: false, status: 404, reason: "not_found", requests: 1, detail: null };
+    const json = (await res.json()) as { slots?: ScrapedSlot[]; changed?: boolean };
+    if (json.changed) return { ok: false, status: 200, reason: "changed", requests: 1, detail: "no slot table" };
+    return { ok: true, slots: json.slots ?? [], requests: 1 };
+  },
+});
+
+let db: Db;
+beforeEach(async () => {
+  ({ db } = await createTestDb());
+  delete process.env.SCRAPE_DISABLED;
+  delete process.env.VERCEL_GIT_COMMIT_SHA;
+});
+
+let n = 0;
+async function club(slug: string, o: Partial<typeof clubs.$inferInsert> = {}): Promise<Club> {
+  const [row] = await db
+    .insert(clubs)
+    .values({ slug, name: slug.replace(/-/g, " "), manageToken: `tok-${slug}-${n++}-abcdefghijklmnop`, source: "directory", tz: "Asia/Bangkok", bookingUrl: `https://playtomic.io/${slug}`, bookingPlatform: "playtomic", ...o })
+    .returning();
+  return row;
+}
+const row = async (slug: string) => (await db.select().from(clubs).where(eq(clubs.slug, slug)))[0];
+const metric = async (key: string) => Number((await db.select().from(metricsDaily).where(and(eq(metricsDaily.key, key), eq(metricsDaily.day, "2026-10-10"))))[0]?.value ?? 0);
+
+describe("the slice: which clubs a run reads", () => {
+  it("reads the clubs people use first, then the oldest cache, at most N, one request a second", async () => {
+    const org = await makePlayer(db, "Org");
+    await club("old-cache", { availabilityAt: at(-2 * HOUR) });
+    await club("never-read");
+    await club("used-club", { availabilityAt: at(-1 * HOUR) });
+    await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(2 * DAY), tz: "Asia/Bangkok", venueName: "used club", whenFull: "waitlist" });
+    await club("read-just-now", { availabilityAt: at(-5 * 60_000) }); // not due
+    await club("own-feed", { availabilityUrl: "https://own-feed.example/b.ics", availabilityKind: "ics_bookings" }); // its feed wins
+    await club("refused", { rejectedAt: at(-DAY) });
+    await club("pending-claim", { source: "claim" }); // a claim nobody approved yet is not listed
+    await club("no-reader", { bookingUrl: "https://matchi.se/x", bookingPlatform: "matchi" });
+
+    const w = world();
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, maxClubs: 2 });
+    expect(w.calls.map((c) => c.url)).toEqual(["https://playtomic.io/used-club", "https://playtomic.io/never-read"]);
+    expect(run.clubs).toBe(2);
+    // One request a second for the platform, and an honest name on each.
+    expect(w.calls[1].at - w.calls[0].at).toBeGreaterThanOrEqual(SCRAPE.gapMs);
+    expect(w.calls[0].headers.get("user-agent")).toBe("KicksmashBot/1.0 (+https://kicksma.sh/about)");
+
+    // The rest at the default cap; the clubs just read wait their fourteen minutes.
+    const w2 = world();
+    await runScrape(db, at(60_000), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/old-cache"]);
+  });
+
+  it("stops before the time budget and leaves the unread clubs due", async () => {
+    for (const s of ["a-club", "b-club", "c-club", "d-club", "e-club"]) await club(s);
+    const w = world(undefined, 10_000); // each request takes ten seconds
+    const started: string[] = [];
+    const run = await runScrape(db, NOW, { adapters: [reader("playtomic", { onRead: async (s) => void started.push(s) })], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+    expect(run.outOfTime).toBe(true);
+    expect(started).toHaveLength(3); // no read starts once not one request fits
+    expect(w.time()).toBeLessThan(25_000 + SCRAPE.requestTimeoutMs);
+    expect(w.calls.length).toBe(3);
+    const read = (await db.select().from(clubs)).filter((c) => c.availabilityAt).map((c) => c.slug);
+    expect(read.sort()).toEqual(["a-club", "b-club", "c-club"]);
+  });
+
+  it("a club whose read the deadline cuts short is not written, and stays due", async () => {
+    await club("slow-pages");
+    const w = world(undefined, 10_000);
+    const run = await runScrape(db, NOW, { adapters: [reader("playtomic", { requests: 5 })], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+    expect(w.calls.length).toBe(3);
+    expect(run.outOfTime).toBe(true);
+    expect(run.clubs).toBe(0);
+    expect((await row("slow-pages")).availabilityAt).toBeNull();
+  });
+
+  it("caps one club's read at eight requests, and refuses anything but a GET without a cookie", async () => {
+    await club("greedy");
+    const w = world();
+    await runScrape(db, NOW, { adapters: [reader("playtomic", { requests: 12 })], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(SCRAPE.perClub);
+
+    await club("poster");
+    const w2 = world();
+    const posted = await runScrape(db, at(20 * 60_000), { adapters: [reader("playtomic", { method: "POST" })], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect(w2.calls).toEqual([]);
+    expect(posted.platforms.playtomic.errors).toBeGreaterThan(0);
+    expect((await row("poster")).availability?.error).toBe("error");
+
+    const w3 = world();
+    await runScrape(db, at(40 * 60_000), { adapters: [reader("playtomic", { cookie: true })], fetchImpl: w3.fetchImpl, clock: w3.clock });
+    expect(w3.calls).toEqual([]);
+  });
+
+  it("finds a reader by the club's platform, else by its link", () => {
+    const r = reader();
+    expect(adapterFor("https://playtomic.io/x", "playtomic", [r])).toBe(r);
+    expect(adapterFor("https://playtomic.io/x", "matchi", [r])).toBeNull();
+    expect(adapterFor("https://playtomic.io/x", null, [r])).toBe(r);
+    expect(adapterFor(null, "playtomic", [r])).toBeNull();
+  });
+});
+
+describe("back-off and switches", () => {
+  it("rests a blocked platform six hours, never retries inside the rest, then rests a day", async () => {
+    await club("first");
+    await club("second");
+    const blocked = () => ({ status: 403 });
+    const w = world(blocked);
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(1); // the second club is not tried after a 403
+    expect(run.platforms.playtomic.blocked).toBe(true);
+    expect(run.platforms.playtomic.restUntil).toBe(iso(6 * HOUR));
+    expect((await row("first")).availability?.error).toBe("blocked 403");
+    expect(await metric("scrape_blocked_playtomic")).toBe(1);
+
+    // Inside the rest: not one request, whatever the clubs' caches say.
+    for (const t of [20 * 60_000, 3 * HOUR, 6 * HOUR - 60_000]) {
+      const wi = world(blocked);
+      await runScrape(db, at(t), { adapters: [reader()], fetchImpl: wi.fetchImpl, clock: wi.clock });
+      expect(wi.calls).toEqual([]);
+    }
+
+    // After it: one try, blocked again, and the next rest is a day.
+    const w2 = world(blocked);
+    const again = await runScrape(db, at(6 * HOUR + 60_000), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect(w2.calls.length).toBe(1);
+    expect(again.platforms.playtomic.restUntil).toBe(iso(6 * HOUR + 60_000 + 24 * HOUR));
+
+    // A clean read after that starts the ladder again from six hours.
+    const w3 = world(() => ({ status: 200, body: { slots: [] } }));
+    await runScrape(db, at(31 * HOUR), { adapters: [reader()], fetchImpl: w3.fetchImpl, clock: w3.clock });
+    expect(w3.calls.length).toBeGreaterThan(0);
+    const [state] = await readPlatformStates(db, ["playtomic"], at(31 * HOUR));
+    expect(state.level).toBe(0);
+  });
+
+  it("stops at a 429 even when the reader calls it something else", async () => {
+    await club("busy");
+    await club("busy-two");
+    const w = world(() => ({ status: 429 }));
+    const liar: AvailabilityAdapter = { ...reader(), scrape: async (t, f) => ((await f(t.bookingUrl)), { ok: false, status: null, reason: "error", requests: 1, detail: null }) };
+    const run = await runScrape(db, NOW, { adapters: [liar], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(1);
+    expect(run.platforms.playtomic.blocked).toBe(true);
+  });
+
+  it("SCRAPE_DISABLED turns a platform off, or all of them, with no deploy", async () => {
+    await club("switch");
+    expect(disabledPlatforms(" Playtomic, matchi ")).toEqual(new Set(["playtomic", "matchi"]));
+    expect(disabledPlatforms("matchi,all")).toBe("all");
+
+    process.env.SCRAPE_DISABLED = "playtomic";
+    const w = world();
+    await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls).toEqual([]);
+    expect((await scrapeBoard(db, NOW, [reader()]))[0].state).toBe("off");
+
+    process.env.SCRAPE_DISABLED = "all";
+    expect(await scrapeIfDue(db, at(HOUR), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "off" });
+
+    process.env.SCRAPE_DISABLED = "matchi";
+    await runScrape(db, at(2 * HOUR), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(1);
+
+    // The switch that needs no deploy at all: a row the operator door writes, read at the next run.
+    await setMetric(db, "scrape_off_playtomic", 1, "2026-08-01"); // older than the sixty days the other rows count for
+    await runScrape(db, at(3 * HOUR), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(1);
+    await setMetric(db, "scrape_off_playtomic", 0, "2026-10-10");
+    await setMetric(db, "scrape_off_all", 1, "2026-10-10");
+    await runScrape(db, at(4 * HOUR), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(1);
+    await setMetric(db, "scrape_off_all", 0, "2026-10-10");
+    await runScrape(db, at(5 * HOUR), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.length).toBe(2);
+  });
+
+  it("a changed page stops the platform until the next deploy, and is counted", async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA = "aaaaaaa";
+    await club("moved");
+    await club("moved-two");
+    const w = world(() => ({ status: 200, body: { changed: true } }));
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(run.platforms.playtomic.changed).toBe(true);
+    expect(w.calls.length).toBe(1);
+    expect(await metric("scrape_changed_playtomic")).toBe(1);
+    expect((await scrapeBoard(db, NOW, [reader()]))[0].state).toBe("stopped");
+
+    const w2 = world();
+    await runScrape(db, at(HOUR), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect(w2.calls).toEqual([]);
+
+    process.env.VERCEL_GIT_COMMIT_SHA = "bbbbbbb"; // the next deploy
+    await runScrape(db, at(2 * HOUR), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect(w2.calls.length).toBeGreaterThan(0);
+  });
+
+  it("runs every third push tick, and costs nothing while no reader exists", async () => {
+    await club("ticks");
+    const w = world();
+    expect(await scrapeIfDue(db, NOW, { adapters: [], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "no_reader" });
+    expect(await metric("cron_scrape_at")).toBe(0); // not even a write
+    const first = await scrapeIfDue(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect("clubs" in first && first.clubs).toBe(1);
+    expect(await scrapeIfDue(db, at(5 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "not_due" });
+    expect(await scrapeIfDue(db, at(10 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "not_due" });
+    const third = await scrapeIfDue(db, at(15 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect("clubs" in third).toBe(true);
+  });
+});
+
+describe("what a read writes", () => {
+  const slots: ScrapedSlot[] = [
+    { start: iso(2 * HOUR), end: iso(3 * HOUR), court: "Court 1", free: true, priceText: " 1,200 ฿ ", bookUrl: "https://playtomic.io/book/1" },
+    { start: iso(2 * HOUR), end: iso(3 * HOUR), court: "Court 2", free: true, priceText: null, bookUrl: "https://evil.example/phish" },
+    { start: iso(2 * HOUR), end: iso(3 * HOUR), court: "Court 3", free: false, priceText: null, bookUrl: null },
+    { start: iso(DAY + 2 * HOUR), end: iso(DAY + 3 * HOUR), court: null, free: true, priceText: null, bookUrl: null },
+    { start: iso(2 * DAY + 2 * HOUR), end: iso(2 * DAY + 3 * HOUR), court: "Court 1", free: true, priceText: null, bookUrl: null },
+    { start: iso(3 * DAY + 2 * HOUR), end: iso(3 * DAY + 3 * HOUR), court: "Court 1", free: true, priceText: null, bookUrl: null },
+    { start: iso(-HOUR), end: iso(-1), court: "Court 1", free: true, priceText: null, bookUrl: null },
+  ];
+
+  it("keeps several days of free courts, counts the courts per time, and the counters move", async () => {
+    await club("days");
+    const w = world(() => ({ status: 200, body: { slots } }));
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(run.fresh).toBe(1);
+    const c = await row("days");
+    const a = c.availability!;
+    expect(a.source).toBe("scrape:playtomic");
+    expect(a.days).toEqual(["2026-10-10", "2026-10-11", "2026-10-12"]);
+    expect(a.slots.map((s) => [s.start, s.free])).toEqual([
+      [iso(2 * HOUR), 2],
+      [iso(DAY + 2 * HOUR), 1],
+      [iso(2 * DAY + 2 * HOUR), 1],
+    ]);
+    expect(a.slots[0]).toMatchObject({ courts: ["Court 1", "Court 2"], price: "1,200 ฿", bookUrl: "https://playtomic.io/book/1" });
+    expect(c.availabilityAt?.toISOString()).toBe(NOW.toISOString());
+    // Readers that say "today" see today only.
+    expect(freeCourtHours(c, NOW)).toBe(2);
+    expect(clubToPublic(c, "https://kicksma.sh").freeCourts?.slots).toEqual([{ start: iso(2 * HOUR), end: iso(3 * HOUR), free: 2 }]);
+    // An old read is not shown as if it were now.
+    expect(freeCourtHours(c, at(SCRAPE_SHOWN_HOURS * HOUR + 60_000))).toBeNull();
+
+    expect(await metric("scrape_ok_playtomic")).toBe(1);
+    expect(await metric("scrape_requests_playtomic")).toBe(1);
+    expect(await metric("scrape_clubs_fresh")).toBe(1);
+    expect((await scrapeBoard(db, NOW, [reader()]))[0]).toMatchObject({ state: "fresh", fresh: 1, requestsToday: 1 });
+  });
+
+  it("a feed the club shared wins over a read, even one that started before the club shared it", async () => {
+    await club("shares-late");
+    const w = world(() => ({ status: 200, body: { slots } }));
+    const sharer = reader("playtomic", {
+      onRead: async (slug) => {
+        await db.update(clubs).set({ availabilityUrl: "https://shares-late.example/free.json", availabilityKind: "json_free" }).where(eq(clubs.slug, slug));
+      },
+    });
+    const run = await runScrape(db, NOW, { adapters: [sharer], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(run.fresh).toBe(0);
+    expect((await row("shares-late")).availability).toBeNull();
+    // And from then on the club is never read.
+    const w2 = world();
+    await runScrape(db, at(HOUR), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
+    expect(w2.calls).toEqual([]);
+  });
+
+  it("keeps a booking link only on the platform's own https host", () => {
+    const out = freeSlotsFromScrape(
+      [
+        { start: iso(HOUR), end: iso(2 * HOUR), court: "A", free: true, priceText: null, bookUrl: "http://playtomic.io/x" },
+        { start: iso(HOUR), end: iso(2 * HOUR), court: "B", free: true, priceText: null, bookUrl: "javascript:alert(1)" },
+        { start: iso(3 * HOUR), end: iso(4 * HOUR), court: "A", free: true, priceText: null, bookUrl: "https://playtomic.io.evil.example/x" },
+        { start: iso(3 * HOUR), end: iso(4 * HOUR), court: "B", free: true, priceText: null, bookUrl: "https://playtomic.io/book/b" },
+      ],
+      { platform: "playtomic", tz: "Asia/Bangkok", now: NOW, days: ["2026-10-10"] },
+    );
+    expect(out).toEqual([
+      { start: iso(HOUR), end: iso(2 * HOUR), free: 2, courts: ["A", "B"], price: null, bookUrl: null },
+      { start: iso(3 * HOUR), end: iso(4 * HOUR), free: 2, courts: ["A", "B"], price: null, bookUrl: "https://playtomic.io/book/b" },
+    ]);
+  });
+
+  it("the service board has one line per platform", async () => {
+    await db.delete(metricsDaily).where(like(metricsDaily.key, "scrape_%"));
+    expect(await scrapeBoard(db, NOW, [])).toEqual([]);
+    const lines = await scrapeBoard(db, NOW, [reader(), reader("matchi")]);
+    expect(lines.map((l) => [l.platform, l.state])).toEqual([
+      ["playtomic", "fresh"],
+      ["matchi", "fresh"],
+    ]);
+  });
+});
+
+const SCRAPE_SHOWN_HOURS = 2;

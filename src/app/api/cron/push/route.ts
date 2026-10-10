@@ -20,9 +20,27 @@ import { lessonPackages } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { channels, sendReminders } from "@/lib/channels";
 import { matchParams, recordNotices } from "@/lib/domain/notices";
+import { scrapeIfDue } from "@/lib/booking/scrape";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/**
+ * The free court times on the booking platforms' public pages, every third tick (DECIDING rule 32):
+ * after the tick's own work, with what is left of the route's sixty seconds and never more than
+ * forty-five. It rides this job so it costs no invocation of its own (docs/OPERATING.md).
+ */
+async function readCourtTimes(db: Awaited<ReturnType<typeof getDb>>, now: Date, started: number) {
+  try {
+    // Fifty of the sixty seconds, less what the tick already spent: a read ends within about two seconds of its deadline, and the writes follow.
+    const left = 50_000 - (performance.now() - started);
+    if (left < 5_000) return { skipped: "no_time" as const };
+    return await scrapeIfDue(db, now, { budgetMs: left });
+  } catch (e) {
+    await reportError("cron", e, { path: "/api/cron/push#scrape" });
+    return { skipped: "error" as const };
+  }
+}
 
 /**
  * Every 5 minutes (Supabase pg_cron → pg_net; Vercel Hobby cron is daily):
@@ -30,6 +48,7 @@ export const maxDuration = 60;
  * Guarded by CRON_SECRET when set. Idempotent: the event is claimed first.
  */
 export async function GET(req: Request) {
+  const started = performance.now();
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
   if (secret && auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -75,7 +94,10 @@ export async function GET(req: Request) {
   } catch (e) {
     await reportError("cron", e, { path: "/api/cron/push" });
   }
-  if (!pushEnabled()) return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram, discord, coach: coachTick });
+  if (!pushEnabled()) {
+    const scrape = await readCourtTimes(db, now, started);
+    return NextResponse.json({ ok: true, at: now.toISOString(), push: "disabled", events: 0, sent: 0, telegram, discord, coach: coachTick, scrape });
+  }
 
   const summary = { events: 0, players: 0, sent: 0, gone: 0, failed: 0, telegram, discord, errors: [] as string[] };
   try {
@@ -119,5 +141,6 @@ export async function GET(req: Request) {
     summary.errors.push(`metrics: ${String(e)}`);
   }
   if (summary.errors.length) await reportError("cron", summary.errors.join(" | "));
-  return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary, coach: coachTick });
+  const scrape = await readCourtTimes(db, now, started);
+  return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary, coach: coachTick, scrape });
 }
