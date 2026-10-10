@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ClubAvailability, ClubFreeSlot } from "@/db/schema";
 import { SCRAPE_SHOWN_MS } from "@/lib/booking/availability";
 import { zonedTimeToUtc } from "@/lib/dates";
-import { BEST_TIMES, bestTimes, datesSharingAWeekday, freeAt, freeFeedOf, freeLineOf, timeChipsOf, type FreeFeed } from "@/lib/domain/bestTimes";
+import { BEST_TIMES, bestTimes, datesSharingAWeekday, freeAt, freeFeedOf, freeLineMessage, freeLineOf, timeChipsOf, type FreeFeed } from "@/lib/domain/bestTimes";
 import { freezeClock } from "./helpers/clock";
 
 /**
@@ -269,14 +269,23 @@ describe("freeLineOf: the line under the time, in the club's hour when the form'
   const f = rawai as FreeFeed;
 
   it("in the club's own zone: what the club shows, and no hour", () => {
-    expect(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW)).toEqual({ state: "free", clubTime: null });
+    expect(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW)).toMatchObject({ state: "free", clubTime: null });
   });
 
   it("from Madrid, 14:00 there is 19:00 at the club: the line names the club's hour", () => {
-    expect(freeLineOf(f, { date: "2026-10-15", time: "14:00", tz: "Europe/Madrid" }, 90, NOW)).toEqual({ state: "free", clubTime: "19:00" });
+    expect(freeLineOf(f, { date: "2026-10-15", time: "14:00", tz: "Europe/Madrid" }, 90, NOW)).toMatchObject({ state: "free", clubTime: "19:00" });
     // 19:00 in Madrid is midnight at the club, on a day it lists nothing.
-    expect(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: "Europe/Madrid" }, 60, NOW)).toEqual({ state: "busy", clubTime: "00:00" });
-    expect(freeLineOf(f, { date: "2026-10-15", time: "11:00", tz: "Europe/Madrid" }, 60, NOW)).toEqual({ state: "busy", clubTime: "16:00" });
+    expect(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: "Europe/Madrid" }, 60, NOW)).toMatchObject({ state: "busy", clubTime: "00:00" });
+    expect(freeLineOf(f, { date: "2026-10-15", time: "11:00", tz: "Europe/Madrid" }, 60, NOW)).toMatchObject({ state: "busy", clubTime: "16:00" });
+  });
+
+  it("names the platform when the times are a platform's, and the club when they are its own feed", () => {
+    expect(freeLineMessage(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW))).toEqual({ key: "create.freeThenOn", values: { platform: "Playtomic" } });
+    expect(freeLineMessage(freeLineOf(f, { date: "2026-10-15", time: "11:00", tz: "Europe/Madrid" }, 60, NOW))).toEqual({ key: "create.busyThenOnClub", values: { platform: "Playtomic", time: "16:00" } });
+    const own = freeFeedOf(feed(TODAY_ONLY, { source: "ics_bookings" }), NOW);
+    expect(freeLineMessage(freeLineOf(own, { date: "2026-10-10", time: "15:00", tz: TZ }, 60, NOW))).toEqual({ key: "create.freeThen", values: {} });
+    expect(freeLineMessage(freeLineOf(own, { date: "2026-10-10", time: "09:00", tz: "Europe/Madrid" }, 60, NOW))).toEqual({ key: "create.busyThenClub", values: { time: "14:00" } });
+    expect(freeLineMessage(freeLineOf(null, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW))).toBeNull();
   });
 
   it("says nothing without a feed or a time", () => {

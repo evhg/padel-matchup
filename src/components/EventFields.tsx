@@ -14,7 +14,7 @@ import { hoursAndMinutes, nightPlan } from "@/lib/domain/tournamentPlan";
 export const FORMAT_KEYS = { americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const;
 export const FORMAT_HELP_KEYS = { americano: "create.formatAmericanoHelp", mexicano: "create.formatMexicanoHelp", king: "create.formatKingHelp" } as const;
 import { formatDayMonth, nextOccurrence } from "@/lib/dates";
-import { bestTimes, datesSharingAWeekday, freeLineOf, timeChipsOf } from "@/lib/domain/bestTimes";
+import { bestTimes, datesSharingAWeekday, freeLineMessage, freeLineOf, timeChipsOf } from "@/lib/domain/bestTimes";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
@@ -169,9 +169,9 @@ export function EventFields({
   const freeCount = timeChips.filter((c) => c.free).length;
   const freeThen = useMemo(() => {
     try {
-      return freeLineOf(pickedFree, values, values.durationMinutes, new Date());
+      return freeLineMessage(freeLineOf(pickedFree, values, values.durationMinutes, new Date()));
     } catch {
-      return { state: "unknown" as const, clubTime: null };
+      return null;
     }
   }, [pickedFree, values]);
   // "More" opens by itself only when something non-default is already set (editing a match).
@@ -298,11 +298,9 @@ export function EventFields({
           </button>
         )}
         {/* Only where the club's feed speaks for the time picked; past it, nothing rather than a guess. */}
-        {freeThen.state !== "unknown" && (
-          <p className={`mt-1 ${freeThen.state === "free" ? "font-semibold text-ok" : ""}`} data-testid="free-then">
-            {freeThen.clubTime
-              ? t(freeThen.state === "free" ? "create.freeThenClub" : "create.busyThenClub", { time: freeThen.clubTime })
-              : t(freeThen.state === "free" ? "create.freeThen" : "create.busyThen")}
+        {freeThen && (
+          <p className={`mt-1 ${freeThen.key.startsWith("create.free") ? "font-semibold text-ok" : ""}`} data-testid="free-then">
+            {t(freeThen.key, freeThen.values)}
           </p>
         )}
       </div>

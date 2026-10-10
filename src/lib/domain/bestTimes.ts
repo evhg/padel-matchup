@@ -209,11 +209,31 @@ export function freeAt(feed: FreeFeed | null | undefined, start: Date, minutes: 
  * holds, and the club's own hour when the form's zone is not the club's ("18:00" in Madrid is 23:00 in
  * Bangkok, and the club's feed speaks in Bangkok's hours). Pure.
  */
-export function freeLineOf(feed: FreeFeed | null | undefined, when: { date: string; time: string; tz: string }, minutes: number, now: Date): { state: "free" | "busy" | "unknown"; clubTime: string | null } {
-  if (!feed || !when.date || !when.time || !isValidTimeZone(when.tz)) return { state: "unknown", clubTime: null };
+export type FreeLine = { state: "free" | "busy" | "unknown"; clubTime: string | null; platform: string | null };
+export function freeLineOf(feed: FreeFeed | null | undefined, when: { date: string; time: string; tz: string }, minutes: number, now: Date): FreeLine {
+  if (!feed || !when.date || !when.time || !isValidTimeZone(when.tz)) return { state: "unknown", clubTime: null, platform: null };
   const at = zonedTimeToUtc(when.date, when.time, when.tz);
   const state = freeAt(feed, at, minutes, now);
-  return { state, clubTime: state === "unknown" || when.tz === feed.tz ? null : utcToZonedParts(at, feed.tz).time };
+  return { state, clubTime: state === "unknown" || when.tz === feed.tz ? null : utcToZonedParts(at, feed.tz).time, platform: feed.platform ?? null };
+}
+
+/**
+ * The words of that line, as a message key and its values: the platform named when the times are a
+ * platform's (DECIDING rule 35: we read them; the club did not publish them), "the club" when they are
+ * its own feed; the club's hour when the form's zone is not the club's. Null when there is nothing to say.
+ */
+export function freeLineMessage(line: FreeLine):
+  | { key: "create.freeThen" | "create.busyThen"; values: Record<string, never> }
+  | { key: "create.freeThenClub" | "create.busyThenClub"; values: { time: string } }
+  | { key: "create.freeThenOn" | "create.busyThenOn"; values: { platform: string } }
+  | { key: "create.freeThenOnClub" | "create.busyThenOnClub"; values: { platform: string; time: string } }
+  | null {
+  if (line.state === "unknown") return null;
+  const free = line.state === "free";
+  if (line.platform && line.clubTime) return { key: free ? "create.freeThenOnClub" : "create.busyThenOnClub", values: { platform: line.platform, time: line.clubTime } };
+  if (line.platform) return { key: free ? "create.freeThenOn" : "create.busyThenOn", values: { platform: line.platform } };
+  if (line.clubTime) return { key: free ? "create.freeThenClub" : "create.busyThenClub", values: { time: line.clubTime } };
+  return { key: free ? "create.freeThen" : "create.busyThen", values: {} };
 }
 
 /** How far, in minutes, a club's hour sits from the nearest usual time on its weekday; Infinity when none. */

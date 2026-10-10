@@ -209,7 +209,11 @@
     "busyThen": "El club no muestra ninguna pista libre a esa hora.",
     "freeThenClub": "✓ El club muestra una pista libre a esa hora (las {time} en el club).",
     "busyThenClub": "El club no muestra ninguna pista libre a esa hora (las {time} en el club).",
-    "freeAndUsualLabel": "✓ Libre en {club}, y tus horarios habituales"
+    "freeAndUsualLabel": "✓ Libre en {club}, y tus horarios habituales",
+    "freeThenOn": "✓ {platform} muestra una pista libre a esa hora.",
+    "busyThenOn": "{platform} no muestra ninguna pista libre a esa hora.",
+    "freeThenOnClub": "✓ {platform} muestra una pista libre a esa hora (las {time} en el club).",
+    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club)."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -1365,9 +1369,9 @@
     "playNoneFit": "{count, plural, one {Hay # partido abierto, pero no con estos filtros.} other {Hay # partidos abiertos, pero no con estos filtros.}}",
     "playClear": "Ver todos",
     "playBy": "organiza {name}",
-    "playFreeTitle": "Pistas libres esta semana",
-    "playFreeHelp": "Tal como las muestran ahora los clubs. Reservas y pagas tú, en la app del club.",
-    "playFreeCta": "Organiza un partido aquí"
+    "playFreeTitle": "Pistas libres",
+    "playFreeHelp": "Tal como las muestran ahora los clubs y sus apps de reservas. Toca una para organizar un partido allí; reservas y pagas tú, en la app del club.",
+    "playFreeOn": "en {platform}"
   },
   "telegram": {
     "title": "Telegram",

@@ -209,7 +209,11 @@
     "busyThen": "The club shows no free court then.",
     "freeThenClub": "✓ The club shows a free court then ({time} at the club).",
     "busyThenClub": "The club shows no free court then ({time} at the club).",
-    "freeAndUsualLabel": "✓ Free at {club}, and your usual times"
+    "freeAndUsualLabel": "✓ Free at {club}, and your usual times",
+    "freeThenOn": "✓ {platform} shows a free court then.",
+    "busyThenOn": "{platform} shows no free court then.",
+    "freeThenOnClub": "✓ {platform} shows a free court then ({time} at the club).",
+    "busyThenOnClub": "{platform} shows no free court then ({time} at the club)."
   },
   "share": {
     "title": "Your match is live",
@@ -1365,9 +1369,9 @@
     "playNoneFit": "{count, plural, one {# game is open, but not with these filters.} other {# games are open, but not with these filters.}}",
     "playClear": "Show them all",
     "playBy": "by {name}",
-    "playFreeTitle": "Courts free this week",
-    "playFreeHelp": "As the clubs show them now. You book and pay in the club's own app.",
-    "playFreeCta": "Organise a game here"
+    "playFreeTitle": "Free courts",
+    "playFreeHelp": "As the clubs and their booking apps show them now. Tap one to organize a game there; you book and pay in the club's own app.",
+    "playFreeOn": "on {platform}"
   },
   "telegram": {
     "title": "Telegram",
