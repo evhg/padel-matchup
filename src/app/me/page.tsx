@@ -12,6 +12,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { getSessionPlayer } from "@/lib/session";
+import { nameOnly } from "@/actions/shared";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { countShipped, showsShipped } from "@/lib/feedback/store";
@@ -60,7 +61,9 @@ export default async function MePage({ searchParams }: Props) {
     );
   }
 
-  const [token, myClubs, t, asCoach, shipped] = await Promise.all([getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id), countShipped(db)]);
+  // A session that came in by "That's me" and has proved nothing since gets no personal link, and none is minted for it (DECIDING rule 34).
+  const byName = await nameOnly(me);
+  const [token, myClubs, t, asCoach, shipped] = await Promise.all([byName ? null : getOrCreatePersonalToken(db, me.id), listClubsClaimedBy(db, me.id), getTranslations(), getCoachForActor(db, me.id), countShipped(db)]);
   // Sequential, not folded into the batch above: the pooler stalls on pipelined bursts (rule 8).
   const wants = (await listWants(db, me.id)).map((w) => ({ id: w.id, weekday: w.weekday, fromTime: w.fromTime, toTime: w.toTime, place: w.venueSlug ?? w.citySlug ?? "" }));
   // Their usual court, offered as the starting value: most people want to play where they already play.

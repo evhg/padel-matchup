@@ -3,6 +3,8 @@ import { getDb } from "@/db";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { findPlayerByPersonalToken } from "@/lib/domain/identity";
+import { later } from "@/lib/alerts";
+import { countSignIn } from "@/lib/domain/signins";
 import { getSessionPlayerId, setSessionPlayer } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +19,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   try {
     const db = await getDb();
     const player = await findPlayerByPersonalToken(db, token);
-    if (player && (await getSessionPlayerId()) !== player.id) await setSessionPlayer(player.id);
+    if (player && (await getSessionPlayerId()) !== player.id) {
+      await setSessionPlayer(player.id);
+      await later(() => countSignIn(db, "personal_link"));
+    }
   } catch (e) {
     console.warn("[personal] could not adopt token", e);
   }

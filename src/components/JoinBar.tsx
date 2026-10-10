@@ -31,6 +31,7 @@ export function JoinBar({
   partnerName = null,
   partnerGoes = false,
   pairsLocked = false,
+  tellGroupHref = null,
 }: {
   code: string;
   state: JoinState;
@@ -59,6 +60,11 @@ export function JoinBar({
   partnerGoes?: boolean;
   /** Round 1 is drawn: the pairs are the field, and no partner is added any more. */
   pairsLocked?: boolean;
+  /**
+   * WhatsApp's share with the line-up typed, for a player who is in: the trip out of the group ends
+   * back in it. A ghost button beside Leave, so it never competes with a primary action (DECIDING rule 1).
+   */
+  tellGroupHref?: string | null;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
@@ -215,7 +221,7 @@ export function JoinBar({
           {state === "leave" && (
             <>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-extrabold text-ok">✓ {fixedPairs ? (partnerName ? t("pairs.youAreInWith", { name: partnerName }) : t("pairs.youAreInAlone")) : t("event.youAreIn")}</div>
+                <div className="truncate text-base font-extrabold text-ok">✓ {fixedPairs ? (partnerName ? t("pairs.youAreInWith", { name: partnerName }) : t("pairs.youAreInAlone")) : t("event.youAreIn")}</div>
                 {/* Came alone: the partner's name now, the way the join takes it. */}
                 {fixedPairs && !partnerName && !pairsLocked && (addingPartner ? (
                   <form
@@ -237,6 +243,11 @@ export function JoinBar({
                 ))}
                 {error && <div className="text-xs text-danger">{error}</div>}
               </div>
+              {tellGroupHref && (
+                <a href={tellGroupHref} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm" data-testid="tell-group">
+                  {t("event.tellGroup")}
+                </a>
+              )}
               <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={leave}>
                 {t("event.leave")}
               </button>

@@ -7,12 +7,13 @@ import { dayKey } from "./metrics";
  * Fixed-window counters on metrics_daily (no extra infrastructure). Windows
  * are UTC days or UTC hours. Returns true while under the limit.
  */
-export async function takeRate(db: Db, scope: string, id: string, limit: number, window: "day" | "hour" = "day", now = new Date()): Promise<boolean> {
+export async function takeRate(db: Db, scope: string, id: string, limit: number, window: "day" | "hour" = "day", now = new Date(), by = 1): Promise<boolean> {
   const key = window === "hour" ? `rl:${scope}:${id}:h${now.getUTCHours()}` : `rl:${scope}:${id}`;
+  // `by`: several of one thing in one request (a pasted list of names) take their places in one write.
   const rows = await db
     .insert(metricsDaily)
-    .values({ day: dayKey(now), key, value: 1 })
-    .onConflictDoUpdate({ target: [metricsDaily.day, metricsDaily.key], set: { value: sql`${metricsDaily.value} + 1` } })
+    .values({ day: dayKey(now), key, value: by })
+    .onConflictDoUpdate({ target: [metricsDaily.day, metricsDaily.key], set: { value: sql`${metricsDaily.value} + ${by}` } })
     .returning({ value: metricsDaily.value });
   return Number(rows[0]?.value ?? 0) <= limit;
 }
@@ -49,6 +50,13 @@ export const LIMITS = {
   /** Notices of new asks to join that one group's admins hear in a day; past it the asks wait on the group page, unannounced. */
   groupAskNoticesPerGroupPerDay: 10,
   restoreCodesPerIpPerDay: 20,
+  /**
+   * "That's me" taps from one address in a day, refused ones too: a name is tried, never guessed in a
+   * loop (DECIDING rule 34). Twenty, not ten: a club's Wi-Fi is one address for every player on it.
+   */
+  thatsMePerIpPerDay: 20,
+  /** Sign-ins by name into one record in a day, from anywhere: a record is not taken over and over. */
+  thatsMePerRecordPerDay: 3,
   clientErrorReportsPerIpPerDay: 60,
   feedbackPerIpPerDay: 5,
   // Public API and MCP: open without a key, roomier with one.

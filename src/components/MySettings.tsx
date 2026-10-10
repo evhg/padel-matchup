@@ -31,7 +31,11 @@ import { kindOn, NOTICE_KINDS, noticeSummary, type NoticeKind } from "@/lib/doma
  * below it — "When do you want to play?" came after the delete button. Settings sit under the
  * content now, and the one irreversible button sits under them.
  */
-export async function MySettings({ player, personalToken, hasMatches }: { player: Player; personalToken: string; hasMatches: boolean }) {
+/**
+ * `personalToken` is null for a session that came in by "That's me" and has proved nothing since
+ * (`nameOnlySession`, DECIDING rule 34): no personal link and no home-screen card for it.
+ */
+export async function MySettings({ player, personalToken, hasMatches }: { player: Player; personalToken: string | null; hasMatches: boolean }) {
   const [t, locale, db, jar] = await Promise.all([getTranslations(), getLocale(), getDb(), cookies()]);
   const hasPush = await playerHasPush(db, player.id);
   // Mail to this address stopped arriving: the one place the person can fix it is here, so it says so here.
@@ -47,8 +51,8 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
       <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />
       {/* What reaches this player and when: one line here, the switches behind it (the owner's decision D). */}
       <NoticeSettings on={on} quietFrom={player.quietFrom} quietTo={player.quietTo} summary={summary} />
-      <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />
-      <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />
+      {personalToken && <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />}
+      {personalToken && <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />}
       <section className="card">
         <NameEditor name={player.displayName} />
         <div className="mt-4 border-t border-line pt-4">
@@ -88,10 +92,12 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
             />
           </div>
         )}
-        <p className="mt-3 text-xs text-faint">{t("me.identityHelp")}</p>
+        <p className="mt-3 text-xs text-faint" data-testid="identity-help">
+          {personalToken ? t("me.identityHelp") : t("me.identityByName")}
+        </p>
       </section>
-      {/* Only for somebody with nothing yet: a player with matches already has their link above. */}
-      {!hasMatches && emailEnabled() && (
+      {/* For somebody with nothing yet, and for a session that came in by name: the code is how it proves itself. A player with matches already has their link above. */}
+      {(!hasMatches || !personalToken) && emailEnabled() && (
         <section className="card">
           <RestoreWithEmail initialEmail={player.email ?? ""} />
         </section>

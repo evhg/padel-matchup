@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { findPlayerByPersonalToken } from "@/lib/domain/identity";
+import { later } from "@/lib/alerts";
+import { countSignIn } from "@/lib/domain/signins";
 import { safeNext } from "@/lib/personal";
 import { getSessionPlayerId, setSessionPlayer } from "@/lib/session";
 
@@ -21,7 +23,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   try {
     const db = await getDb();
     const player = await findPlayerByPersonalToken(db, token);
-    if (player && (await getSessionPlayerId()) !== player.id) await setSessionPlayer(player.id);
+    if (player && (await getSessionPlayerId()) !== player.id) {
+      await setSessionPlayer(player.id);
+      await later(() => countSignIn(db, "personal_link"));
+    }
   } catch (e) {
     console.warn("[personal] could not adopt token", e);
   }

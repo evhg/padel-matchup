@@ -1,7 +1,7 @@
 {
   "wa": {
     "handoff": "Take a spot inside WhatsApp",
-    "handoffHelp": "Paste this in your group instead of the link above. Tapping it opens a chat with us, and they can take a spot without leaving WhatsApp.",
+    "handoffHelp": "Paste this in your group under the match link. A tap opens a chat with us with the match code typed, and one Send takes the spot: no browser, no name to type. The group does not see who took it.",
     "copy": "Copy the WhatsApp line"
   },
   "want": {
@@ -91,7 +91,11 @@
     "emailKeepNote": "You can change your email but not remove it: it's how you get back in. The previous address keeps working for restores.",
     "usedBefore": "Played before? Get your matches back.",
     "alreadyHere": "{name} is already in this match.",
-    "thatsMe": "That's me — get my matches back"
+    "thatsMe": "That's me — get my matches back",
+    "thatsMeIn": "That's me",
+    "thatsMeCrew": "{name} already plays with this crew. Is that you?",
+    "thatsMeNo": "That did not work for this name.",
+    "thatsMeSure": "Sign in as {name}?"
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -305,7 +309,8 @@
     "minutes": "{minutes} min",
     "until": "until {time}",
     "changeDetails": "Change the details",
-    "changeDetailsHelp": "Anyone playing can change the time, the place or the note. Everybody hears about it."
+    "changeDetailsHelp": "Anyone playing can change the time, the place or the note. Everybody hears about it.",
+    "tellGroup": "Tell the group"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -347,7 +352,16 @@
     "inviteBounced": "The invite email bounced. Send the invite link another way.",
     "banter": "Banter in the chat",
     "banterHelp": "One playful line from your crew's own matches, like three wins in a row or a third late pull-out. Only in the crew's chat and on the result card, never on a public page.",
-    "scoreReminderTournament": "Round {n} is waiting for scores. Enter them in the card below."
+    "scoreReminderTournament": "Round {n} is waiting for scores. Enter them in the card below.",
+    "pasteTitle": "Paste the names from the group",
+    "pasteHelp": "Who said they are in? Copy the replies from your group chat and paste them here: \"1. Ana 2. Bo\", \"+1 Cy\" or one name per line. Each name gets a reserved spot, and nobody gets a message.",
+    "pastePlaceholder": "1. Ana\n2. Bo\n+1 Cy",
+    "pasteWillHold": "Reserves a spot for: {names}",
+    "pasteAlreadyIn": "Already in, skipped: {names}",
+    "pasteNoSpot": "No spot left for: {names}",
+    "pasteNone": "No names found. One name per line works best.",
+    "pasteHold": "{count, plural, one {Reserve # spot} other {Reserve # spots}}",
+    "pasteDone": "Reserved: {names}"
   },
   "score": {
     "title": "Score",
@@ -415,7 +429,8 @@
     "sameNotMe": "Not me",
     "sameFailed": "These could not be added. Reload the page and try again.",
     "biggerTextHelp": "Larger words everywhere in the app, on this device.",
-    "sameAskingGroup": "This name is a member of a group that asks to join. First play one match at the same club or with the same organiser. Then you can add these matches."
+    "sameAskingGroup": "This name is a member of a group that asks to join. First play one match at the same club or with the same organiser. Then you can add these matches.",
+    "identityByName": "You came in by tapping your name, so your personal link stays hidden until you confirm an email with a code or link Telegram."
   },
   "notFound": {
     "title": "Link not found",
@@ -448,7 +463,9 @@
     "spotsLeft": "{count, plural, =0 {No spots left} one {# spot left} other {# spots left}}",
     "inviteGroup": "🎾 Padel {day} at {time} — {venue}. I reserved spots for you. Confirm with your personal link:\n{lines}",
     "result": "🎾 {line} · {day}\n{url}",
-    "group": "🎾 Join our padel group {name}: {url}"
+    "group": "🎾 Join our padel group {name}: {url}",
+    "spots": "{count, plural, =0 {full} one {# spot} other {# spots}}",
+    "held": "{count} held"
   },
   "og": {
     "players": "{count}/{capacity} players",
@@ -659,7 +676,8 @@
     "iosTitle": "Two taps in Safari",
     "notSafari": "Open this page in Safari to add it to your home screen.",
     "androidSteps": "Open the browser menu (⋮), then \"Add to Home screen\" or \"Install app\".",
-    "gotIt": "Got it"
+    "gotIt": "Got it",
+    "iosWhatsapp": "Links from WhatsApp open in Safari, not in this icon."
   },
   "pairs": {
     "fixed": "Fixed pairs",
@@ -974,7 +992,7 @@
     "storeTitle": "What we keep",
     "storeBody": "• The name you play under.\n• Your email, only if you give it.\n• If an organiser saves a seat for you: the name, email or phone number they typed. We email you the invite, and the organiser sees those details again when they invite people to their next match.\n• Your phone number, only if you write to our WhatsApp number: that is how WhatsApp knows you.\n• Your Telegram id and username, and your Discord or LINE id and name, only when you link that account.\n• Your level, and how it changed over time.\n• Your matches, your seats, the scores, and a photo if a player adds one to a match.\n• When and where you want to play, if you tell us.\n• The devices you turned notifications on for.\n• Your inbox on My matches: the notices we send you or keep for you, which kinds you switched off, and your quiet hours.\n• If you coach: your coach page, your students and your lessons.\n• The notes you send us through the feedback form.\n• If you ask us never to email you again, or an email to you bounces: that address, only so we stop sending to it.",
     "cookiesTitle": "Cookies",
-    "cookiesBody": "Only the cookies the app needs to work. No tracking, no ads, no cookies from anybody else.\n• km_player: who you are, signed so nobody can fake it. One year.\n• km_has_id: tells the page that you have an identity. One year.\n• NEXT_LOCALE: your language. One year.\n• km_manage_ plus a match code: lets the organiser manage that one match. One year.\n• ks_src and ks_csrc: the link that brought you here, so we can count it. One day.\n• ks_notmine: the names you said are not you, on My matches. One year.\n• km_text: bigger text, only if you switch it on. One year.\nYour browser also keeps a copy of who you are in its own storage, so a lost cookie does not lose your matches.",
+    "cookiesBody": "Only the cookies the app needs to work. No tracking, no ads, no cookies from anybody else.\n• km_player: who you are, signed so nobody can fake it. One year.\n• km_has_id: tells the page that you have an identity. One year.\n• km_by_name: only after you came in by tapping \"That's me\" beside your name; until you prove who you are with an email code or a chat account, your personal link stays hidden. One year.\n• NEXT_LOCALE: your language. One year.\n• km_manage_ plus a match code: lets the organiser manage that one match. One year.\n• ks_src and ks_csrc: the link that brought you here, so we can count it. One day.\n• ks_notmine: the names you said are not you, on My matches. One year.\n• km_text: bigger text, only if you switch it on. One year.\nYour browser also keeps a copy of who you are in its own storage, so a lost cookie does not lose your matches.",
     "ipTitle": "Your IP address",
     "ipBody": "We never write it into our database. To slow down scripts that hammer the app, we keep a key made from it with a secret (a keyed hash), so the address itself is not stored. Those rows go after {rateDays, plural, one {# day} other {# days}}. Our host sees your address to deliver each page, as every host does.",
     "helpersTitle": "Who helps us run it",

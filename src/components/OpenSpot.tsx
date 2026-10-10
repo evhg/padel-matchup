@@ -8,6 +8,7 @@ import { requestBackIn } from "./backInBus";
 import { registerJoinHandler } from "./joinBus";
 import { nameIsHere } from "@/lib/domain/dupes";
 import { LevelSelect } from "./LevelSelect";
+import { ThatsMeButton } from "./ThatsMe";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
 type Mode = "reserve" | "join" | "none";
@@ -27,6 +28,7 @@ export function OpenSpot({
   rolodex,
   emailEnabled,
   namesHere = [],
+  claimable = [],
   levelRange = null,
   myLevel = null,
 }: {
@@ -39,6 +41,8 @@ export function OpenSpot({
   emailEnabled: boolean;
   /** Everybody already in this match, so a returning player is recognised before they become a second row. */
   namesHere?: readonly string[];
+  /** Names on this line-up that "That's me" signs in by name (DECIDING rule 34): the page asked the rule already, and those rows wear the button too. */
+  claimable?: readonly string[];
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
   myLevel?: number | null;
@@ -183,18 +187,25 @@ export function OpenSpot({
           </button>
         </div>
         {/*
-          The duplicate is born here. A friend's link opens in WhatsApp's own browser, which has
-          never seen this person; they type the name they always type and become a second row with
-          none of their history on it. If that name is already in this match, say so and offer the
-          door instead — quietly, under the field, with the name field untouched, because a real
-          namesake must still be able to join.
+          The duplicate is born here. A friend's link in a chat opens in the phone's default browser,
+          and that may not be the browser the player first joined in (another app's, the home-screen
+          icon, another phone): it has never seen them, so they type the name they always type and
+          become a second row with none of their history on it. If that name is already in this match,
+          say so and offer the door instead — quietly, under the field, with the name field untouched,
+          because a real namesake must still be able to join. A record the rule lets in by name signs
+          in with one tap (DECIDING rule 34); any other opens the way back in that needs proof. A crew
+          member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
         {mode === "join" && !hasIdentity && nameIsHere(name, namesHere) && (
           <p data-testid="already-here" className="text-sm text-muted">
             {t("identity.alreadyHere", { name: name.trim() })}{" "}
-            <button type="button" className="link font-semibold" onClick={() => requestBackIn()}>
-              {t("identity.thatsMe")}
-            </button>
+            {nameIsHere(name, claimable) ? (
+              <ThatsMeButton code={code} name={name.trim()} className="link font-semibold" armedClassName="link font-extrabold text-ink" />
+            ) : (
+              <button type="button" className="link font-semibold" onClick={() => requestBackIn()}>
+                {t("identity.thatsMe")}
+              </button>
+            )}
           </p>
         )}
         {mode === "reserve" && suggestions.length > 0 && (

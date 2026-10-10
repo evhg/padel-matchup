@@ -1,7 +1,7 @@
 {
   "wa": {
     "handoff": "Coger sitio dentro de WhatsApp",
-    "handoffHelp": "Pega esto en tu grupo en lugar del enlace de arriba. Al tocarlo se abre un chat con nosotros y pueden coger sitio sin salir de WhatsApp.",
+    "handoffHelp": "Pega esto en tu grupo debajo del enlace del partido. Al tocarlo se abre un chat con nosotros con el código ya escrito, y con enviarlo se coge la plaza: sin navegador y sin escribir el nombre. El grupo no ve quién se apuntó.",
     "copy": "Copiar la línea de WhatsApp"
   },
   "want": {
@@ -91,7 +91,11 @@
     "emailKeepNote": "Puedes cambiar tu email pero no quitarlo: es tu forma de volver a entrar. La dirección anterior sigue sirviendo para recuperar la cuenta.",
     "usedBefore": "¿Jugaste antes? Recupera tus partidos.",
     "alreadyHere": "{name} ya está en este partido.",
-    "thatsMe": "Soy yo — recuperar mis partidos"
+    "thatsMe": "Soy yo — recuperar mis partidos",
+    "thatsMeIn": "Soy yo",
+    "thatsMeCrew": "En este grupo ya juega {name}. ¿Eres tú?",
+    "thatsMeNo": "Con este nombre no ha funcionado.",
+    "thatsMeSure": "¿Entrar como {name}?"
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -305,7 +309,8 @@
     "minutes": "{minutes} min",
     "until": "hasta las {time}",
     "changeDetails": "Cambiar los detalles",
-    "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran."
+    "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
+    "tellGroup": "Avisar al grupo"
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -347,7 +352,16 @@
     "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma.",
     "banter": "Bromas en el chat",
     "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública.",
-    "scoreReminderTournament": "La ronda {n} espera los resultados. Introdúcelos en la tarjeta de abajo."
+    "scoreReminderTournament": "La ronda {n} espera los resultados. Introdúcelos en la tarjeta de abajo.",
+    "pasteTitle": "Pegar los nombres del grupo",
+    "pasteHelp": "¿Quién ha dicho que viene? Copia las respuestas del chat del grupo y pégalas aquí: «1. Ana 2. Bo», «+1 Lucía» o un nombre por línea. Cada nombre recibe una plaza reservada y nadie recibe ningún mensaje.",
+    "pastePlaceholder": "1. Ana\n2. Bo\n+1 Lucía",
+    "pasteWillHold": "Reserva plaza para: {names}",
+    "pasteAlreadyIn": "Ya están, se saltan: {names}",
+    "pasteNoSpot": "No quedan plazas para: {names}",
+    "pasteNone": "No hay nombres. Funciona mejor un nombre por línea.",
+    "pasteHold": "{count, plural, one {Reservar # plaza} other {Reservar # plazas}}",
+    "pasteDone": "Reservado: {names}"
   },
   "score": {
     "title": "Resultado",
@@ -415,7 +429,8 @@
     "sameNotMe": "No soy yo",
     "sameFailed": "No se pudieron añadir. Recarga la página e inténtalo de nuevo.",
     "biggerTextHelp": "Letra más grande en toda la app, en este dispositivo.",
-    "sameAskingGroup": "Este nombre es miembro de un grupo que pide aprobación para entrar. Primero juega un partido en el mismo club o con el mismo organizador. Luego podrás añadir estos partidos."
+    "sameAskingGroup": "Este nombre es miembro de un grupo que pide aprobación para entrar. Primero juega un partido en el mismo club o con el mismo organizador. Luego podrás añadir estos partidos.",
+    "identityByName": "Entraste tocando tu nombre, así que tu enlace personal queda oculto hasta que confirmes un email con un código o vincules Telegram."
   },
   "notFound": {
     "title": "Enlace no encontrado",
@@ -448,7 +463,9 @@
     "spotsLeft": "{count, plural, =0 {No quedan plazas} one {Queda # plaza} other {Quedan # plazas}}",
     "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}",
     "result": "🎾 {line} · {day}\n{url}",
-    "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}"
+    "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}",
+    "spots": "{count, plural, =0 {completo} one {# plaza} other {# plazas}}",
+    "held": "{count, plural, one {# reservada} other {# reservadas}}"
   },
   "og": {
     "players": "{count}/{capacity} jugadores",
@@ -659,7 +676,8 @@
     "iosTitle": "Dos toques en Safari",
     "notSafari": "Abre esta página en Safari para añadirla a tu pantalla de inicio.",
     "androidSteps": "Abre el menú del navegador (⋮) y luego \"Añadir a pantalla de inicio\" o \"Instalar app\".",
-    "gotIt": "Entendido"
+    "gotIt": "Entendido",
+    "iosWhatsapp": "Los enlaces de WhatsApp se abren en Safari, no en este icono."
   },
   "pairs": {
     "fixed": "Parejas fijas",
@@ -974,7 +992,7 @@
     "storeTitle": "Qué guardamos",
     "storeBody": "• El nombre con el que juegas.\n• Tu email, solo si nos lo das.\n• Si un organizador te reserva una plaza: el nombre, email o teléfono que escribió. Te enviamos la invitación por email, y el organizador vuelve a ver esos datos cuando invita a gente a su siguiente partido.\n• Tu número de teléfono, solo si escribes a nuestro número de WhatsApp: así es como WhatsApp te reconoce.\n• Tu id y nombre de usuario de Telegram, y tu id y nombre de Discord o LINE, solo cuando vinculas esa cuenta.\n• Tu nivel y cómo ha cambiado.\n• Tus partidos, tus plazas, los resultados y una foto si un jugador la añade a un partido.\n• Cuándo y dónde quieres jugar, si nos lo dices.\n• Los dispositivos en los que activaste las notificaciones.\n• Tu bandeja de Mis partidos: los avisos que te enviamos o te guardamos, qué tipos de aviso desactivaste y tus horas de silencio.\n• Si eres entrenador: tu página de entrenador, tus alumnos y tus clases.\n• Los mensajes que nos envías por el formulario de opiniones.\n• Si nos pides no volver a escribirte, o un email que te enviamos rebota: esa dirección, solo para dejar de enviarle correos.",
     "cookiesTitle": "Cookies",
-    "cookiesBody": "Solo las cookies que la app necesita para funcionar. Sin rastreo, sin anuncios, sin cookies de nadie más.\n• km_player: quién eres, firmada para que nadie pueda falsificarla. Un año.\n• km_has_id: le dice a la página que tienes una identidad. Un año.\n• NEXT_LOCALE: tu idioma. Un año.\n• km_manage_ más el código de un partido: permite al organizador gestionar ese partido. Un año.\n• ks_src y ks_csrc: el enlace que te trajo, para poder contarlo. Un día.\n• ks_notmine: los nombres que dijiste que no son tuyos, en Mis partidos. Un año.\n• km_text: texto más grande, solo si lo activas. Un año.\nTu navegador también guarda una copia de quién eres en su propio almacenamiento, para que perder una cookie no te haga perder tus partidos.",
+    "cookiesBody": "Solo las cookies que la app necesita para funcionar. Sin rastreo, sin anuncios, sin cookies de nadie más.\n• km_player: quién eres, firmada para que nadie pueda falsificarla. Un año.\n• km_has_id: le dice a la página que tienes una identidad. Un año.\n• km_by_name: solo si entraste tocando «Soy yo» junto a tu nombre; hasta que confirmes quién eres con un código por email o una cuenta de chat, tu enlace personal queda oculto. Un año.\n• NEXT_LOCALE: tu idioma. Un año.\n• km_manage_ más el código de un partido: permite al organizador gestionar ese partido. Un año.\n• ks_src y ks_csrc: el enlace que te trajo, para poder contarlo. Un día.\n• ks_notmine: los nombres que dijiste que no son tuyos, en Mis partidos. Un año.\n• km_text: texto más grande, solo si lo activas. Un año.\nTu navegador también guarda una copia de quién eres en su propio almacenamiento, para que perder una cookie no te haga perder tus partidos.",
     "ipTitle": "Tu dirección IP",
     "ipBody": "Nunca la escribimos en nuestra base de datos. Para frenar los scripts que saturan la app, guardamos una clave hecha a partir de ella con un secreto (un hash con clave), así que la dirección en sí no se guarda. Esas filas se borran a los {rateDays, plural, one {# día} other {# días}}. Nuestro hosting ve tu dirección para entregar cada página, como cualquier hosting.",
     "helpersTitle": "Quién nos ayuda",

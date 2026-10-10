@@ -51,3 +51,17 @@ describe("the quick picks", () => {
     expect(levelAskSkipKey("a")).not.toBe(levelAskSkipKey("b"));
   });
 });
+
+describe("levels a chat offers for a match with a range", () => {
+  it("draws them from the range itself: bottom, middle and top, every one a way in", async () => {
+    const { rangeChoices } = await import("@/lib/domain/levelAsk");
+    expect(rangeChoices(3, 4)).toEqual([3, 3.5, 4]);
+    expect(rangeChoices(3.5, 4.5)).toEqual([3.5, 4, 4.5]);
+    expect(rangeChoices(4.5, 6.5)).toEqual([4.5, 5.5, 6.5]);
+    expect(rangeChoices(3, 3.25)).toEqual([3, 3.25]);
+    expect(rangeChoices(4.5, null)).toEqual([4.5, 5, 5.5]);
+    expect(rangeChoices(6.5, null)).toEqual([6.5, 7]);
+    expect(rangeChoices(null, 2.5)).toEqual([1.5, 2, 2.5]);
+    expect(rangeChoices(null, null)).toEqual([]);
+  });
+});

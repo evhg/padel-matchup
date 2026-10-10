@@ -51,6 +51,10 @@ export async function getSessionPlayer(db: Db): Promise<Player | null> {
   return getPlayer(db, id);
 }
 
+/**
+ * Every sign-in sets the cookie here, and every one of them ends a mark of a sign-in by name: the
+ * browser is now whoever this door says it is. `thatsMeAction` sets the mark again after it.
+ */
 export async function setSessionPlayer(playerId: string): Promise<void> {
   const store = await cookies();
   store.set(PLAYER_COOKIE, sealPlayerId(playerId), {
@@ -61,12 +65,49 @@ export async function setSessionPlayer(playerId: string): Promise<void> {
     maxAge: ONE_YEAR,
   });
   store.set(HAS_ID_COOKIE, "1", hintCookieOptions());
+  store.delete(BY_NAME_COOKIE);
 }
 
 export async function clearSessionPlayer(): Promise<void> {
   const store = await cookies();
   store.delete(PLAYER_COOKIE);
   store.delete(HAS_ID_COOKIE);
+  store.delete(BY_NAME_COOKIE);
+}
+
+/**
+ * A session that came in by "That's me" (DECIDING rule 34), marked beside the session cookie and
+ * signed for that one record, so it cannot be copied onto another and says nothing once the browser
+ * signs in as anybody else. What it holds back, and until when, is `nameOnlySession`
+ * (src/lib/domain/thatsMe.ts): no personal link and no home-screen card until the record proves
+ * something.
+ */
+export const BY_NAME_COOKIE = "km_by_name";
+const byNameValue = (playerId: string) => sign(`byname:${playerId}`);
+
+export async function markSignedInByName(playerId: string): Promise<void> {
+  const store = await cookies();
+  store.set(BY_NAME_COOKIE, byNameValue(playerId), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: ONE_YEAR,
+  });
+}
+
+/** Whether this browser's session came in by name, for this record. */
+export async function signedInByName(playerId: string): Promise<boolean> {
+  const store = await cookies();
+  const v = store.get(BY_NAME_COOKIE)?.value;
+  if (!v) return false;
+  const expected = byNameValue(playerId);
+  if (v.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(v), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }
 
 /** Per-event organizer access granted by visiting /{code}/manage/{manageCode}. */

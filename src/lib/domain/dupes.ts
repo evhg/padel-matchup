@@ -51,8 +51,18 @@ export type MergeRule =
   /** The same name, and at most one of the two can be reached at all. Nothing contradicts; nothing proves it either. */
   | "same_name_one_address";
 
-/** Lower case, one space between words, trimmed. What a person types twice is rarely spaced the same. */
-export const normalName = (s: string | null | undefined): string => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+/**
+ * Composed (NFC), nothing invisible, lower case, one space between words, trimmed. What a person types
+ * twice is rarely spaced the same, and a phone may send "José" composed or as "e" plus an accent. The
+ * same key the database makes for "That's me" (`keyOf` in src/lib/domain/thatsMe.ts).
+ */
+export const normalName = (s: string | null | undefined): string =>
+  (s ?? "")
+    .normalize("NFC")
+    .replace(/[\u200B-\u200F\u2060\uFEFF\u00AD]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 
 const email = (p: MergeCandidate) => (p.email ?? "").toLowerCase().trim() || null;
 
@@ -78,9 +88,10 @@ export function safeToMerge(into: MergeCandidate, from: MergeCandidate): MergeVe
 /**
  * Does the name somebody is typing already belong to a person in this match?
  *
- * The match page is where duplicates are born. A friend's link opens in WhatsApp's or Instagram's
- * own browser, which has never seen this person; the page asks "What's your name?"; they type the
- * name they always type, and become a second row with none of their history on it. Micky was invited
+ * The match page is where duplicates are born. A friend's link in a chat opens in the phone's default
+ * browser, or in Instagram's or Telegram's own, and that may not be the browser that knows this
+ * person; the page asks "What's your name?"; they type the name they always type, and become a second
+ * row with none of their history on it. Micky was invited
  * to a match by email on 23 September, the mail did not reach her, and the next thing she would have
  * done is exactly this.
  *

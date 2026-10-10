@@ -223,10 +223,10 @@ try {
   check("Jordi (live match) sees Happening right now + YOU chip", (await b.getByText("Happening right now").count()) > 0 && (await b.getByText("you", { exact: true }).count()) > 0);
   check("activity: Jordi reads 'Jordi was added by Dana' and 'You confirmed your spot'", (await b.getByText("Jordi was added by Dana").count()) > 0 && (await b.getByText("You confirmed your spot").count()) > 0);
 
-  // A friend's link opens in WhatsApp's own browser, which has never seen this person. The name
-  // field alone makes them a second row with none of their matches on it: in one week 29 players
-  // arrived and 3 joined anything. The way back in existed on the landing page and on My matches,
-  // and not on the one screen every shared link opens.
+  // A friend's link in a WhatsApp group opens the phone's default browser, which may never have seen
+  // this person. The name field alone makes them a second row with none of their matches on it: in
+  // one week 29 players arrived and 3 joined anything. The way back in existed on the landing page and
+  // on My matches, and not on the one screen every shared link opens.
   const w = await newPage();
   await w.goto(`${BASE}/${code}`);
   const backInHere = w.getByTestId("event-back-in");
@@ -238,6 +238,66 @@ try {
   check("opening it asks for the email, on the match page", await w.getByPlaceholder("you@example.com").isVisible());
 
   await w.close();
+
+  // "That's me" (DECIDING rule 34; the owner, 10 October 2026): the browser a WhatsApp tap opens sees
+  // Jordi on the line-up and is Jordi in two taps, with no email, no code and no second row. Dana
+  // organises this match, so her row carries no such button.
+  const j2 = await newPage();
+  await j2.goto(`${BASE}/${code}`);
+  const thatsMe = j2.getByRole("button", { name: "That's me", exact: true });
+  check(
+    "a browser that knows nobody sees \"That's me\" on the one row the rule allows: Jordi's, not the organiser's",
+    (await thatsMe.count()) === 1 && (await j2.locator("main li", { has: thatsMe }).getByText("Jordi", { exact: true }).count()) === 1,
+  );
+  // Two taps, not one (the owner, 10 October 2026): the first only arms the row and asks, and a tap
+  // anywhere else disarms it, so a thumb on the wrong row signs nobody in. Nothing reaches the server
+  // until the second tap.
+  let thatsMeSends = 0;
+  j2.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) thatsMeSends += 1;
+  });
+  const jordiRow = j2.locator("main li", { hasText: "Jordi" });
+  const sure = j2.getByRole("button", { name: "Sign in as Jordi?", exact: true });
+  await thatsMe.click();
+  await sure.waitFor({ timeout: 10000 });
+  await j2.waitForTimeout(1000);
+  check(
+    "the first tap on \"That's me\" signs nobody in: the button asks \"Sign in as Jordi?\" and nothing is sent",
+    thatsMeSends === 0 && (await jordiRow.getByText("you", { exact: true }).count()) === 0 && (await sure.count()) === 1,
+    `sends=${thatsMeSends}`,
+  );
+  await j2.locator("main h1").first().click();
+  await thatsMe.waitFor({ timeout: 10000 });
+  check(
+    "a tap anywhere else disarms it: the button says \"That's me\" again, and still nothing is sent",
+    thatsMeSends === 0 && (await sure.count()) === 0 && (await thatsMe.count()) === 1,
+    `sends=${thatsMeSends}`,
+  );
+  await thatsMe.click();
+  await sure.click();
+  await jordiRow.getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const lineup = await j2.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
+  const jordis = (lineup.players ?? []).filter((p) => p.name === "Jordi").length;
+  check(
+    "\"That's me\" signs that browser in as Jordi, and the line-up still holds one Jordi, not two",
+    jordis === 1 && (await j2.getByRole("button", { name: "That's me", exact: true }).count()) === 0 && (await j2.getByTestId("event-back-in").count()) === 0,
+    JSON.stringify((lineup.players ?? []).map((p) => p.name)),
+  );
+  await shot(j2, "12a-thats-me");
+  // A sign-in by name hands over no lasting key (DECIDING rule 34): until Jordi proves something, My
+  // matches shows that browser no personal link and no way to mail it, and the manifest gives it the
+  // plain start page instead of the personal link.
+  await j2.goto(`${BASE}/me`);
+  const byNameManifest = await j2.request.get(`${BASE}/manifest.webmanifest`).then((r) => r.json());
+  check(
+    "after \"That's me\", My matches shows no personal link and the manifest no personal start page",
+    (await j2.getByRole("heading", { name: /Your personal link/ }).count()) === 0 &&
+      (await j2.getByRole("button", { name: /Email me this link/ }).count()) === 0 &&
+      /came in by tapping your name/.test((await j2.getByTestId("identity-help").textContent()) ?? "") &&
+      byNameManifest.start_url === "/?source=homescreen",
+    byNameManifest.start_url,
+  );
+  await j2.close();
 
   // The duplicate is born in the open spot, not in the fold. A stranger on the future match — Dana
   // is its only player — types "Dana", which is what somebody who has played before does on a phone
@@ -256,6 +316,27 @@ try {
   check("\"That's me\" opens the way back in, on the spot", await dup.getByPlaceholder("you@example.com").isVisible());
   await shot(dup, "12b-already-here");
   await dup.close();
+
+  // ---- The organiser pastes the names from the group (the owner, 10 October 2026: "you have to leave the chat group") ----
+  // The players said "in" in WhatsApp and never leave it: the organiser carries the names across once.
+  // The future match, where Dana is the only player and three spots are open.
+  await a.goto(`${BASE}/${code2}`);
+  await a.getByTestId("paste-names").locator("summary").click();
+  await a.getByTestId("paste-names-box").fill("1. Ana 2. Bo\n+1 Cy 🎾\nDana\ncan't make it");
+  const preview = a.getByTestId("paste-preview");
+  // The preview shows once the page is interactive; on a loaded machine that can take a while.
+  await preview.waitFor({ timeout: 20000 });
+  check(
+    "a pasted chat shows its names before anything is held, skips the organiser already in, and drops the chat",
+    ((await preview.textContent()) ?? "").trim() === "Reserves a spot for: Ana, Bo, Cy" && (await a.getByText("Already in, skipped: Dana", { exact: true }).count()) === 1,
+    (await preview.textContent()) ?? "(none)",
+  );
+  await a.getByRole("button", { name: "Reserve 3 spots", exact: true }).click();
+  await a.getByText("Reserved for Cy", { exact: true }).waitFor({ timeout: 20000 });
+  const heldCounts = await Promise.all(["Ana", "Bo", "Cy"].map((n) => a.getByText(`Reserved for ${n}`, { exact: true }).count()));
+  check("three names pasted are three reserved spots", heldCounts.every((c) => c === 1), heldCounts.join(","));
+  await shot(a, "12c-paste-names");
+  await a.goto(`${BASE}/${code}`);
 
   await a.reload();
   check("creator sees Confirmed chip", (await a.getByText("Confirmed", { exact: true }).count()) > 0);

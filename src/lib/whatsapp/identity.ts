@@ -31,12 +31,20 @@ export function sameNumber(phone: string | null | undefined, waId: string): bool
   return phone === plus || phone === digits;
 }
 
-export async function findOrCreateWhatsappPlayer(db: Db, waId: string, profileName?: string | null): Promise<Player> {
+/** The record this number already belongs to, or null for a number that never wrote to us. */
+export async function findWhatsappPlayer(db: Db, waId: string): Promise<Player | null> {
   const { plus, digits } = shapes(waId);
   for (const candidate of [plus, digits]) {
     const [hit] = await db.select().from(players).where(eq(players.phone, candidate)).limit(1);
     if (hit) return hit;
   }
+  return null;
+}
+
+export async function findOrCreateWhatsappPlayer(db: Db, waId: string, profileName?: string | null): Promise<Player> {
+  const hit = await findWhatsappPlayer(db, waId);
+  if (hit) return hit;
+  const { plus } = shapes(waId);
   const name = (profileName ?? "").trim().slice(0, 40) || plus;
   return createPlayer(db, { displayName: name, locale: "en", phone: plus });
 }
@@ -57,7 +65,9 @@ export async function linkWhatsapp(db: Db, playerId: string, waId: string): Prom
     .where(and(inArray(players.phone, [plus, digits]), ne(players.id, playerId)));
   if (others.length > 0) await mergePlayers(db, playerId, others.map((o) => o.id));
   const [p] = await db.update(players).set({ phone: plus }).where(eq(players.id, playerId)).returning();
-  // A number that wrote to us is proof, as a linked Telegram account is (`foldSameNameRows`). Never throws.
+  // Not proof on its own: `proved()` counts a verified email or a Telegram account, never a phone, so
+  // this folds the same-name rows only of a player who proved themselves another way. Whether a number
+  // that wrote to us should count is the owner's decision, open since 10 October 2026. Never throws.
   await foldSameNameRows(db, p.id);
   return p;
 }

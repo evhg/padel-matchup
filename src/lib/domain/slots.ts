@@ -271,6 +271,33 @@ export async function removeFromSlot(
   });
 }
 
+/**
+ * "Paste the names from the group": the organiser's names, each a reserved spot in the next free seat,
+ * in one transaction under the event's lock, so one request and one line-up change carry the whole
+ * list. A full match ends the list; the names reserved come back in order. The names already in the
+ * match were left out before this (`planPaste`).
+ */
+export async function reserveNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; now?: Date }): Promise<{ held: Slot[]; event: Event }> {
+  const now = input.now ?? new Date();
+  return db.transaction(async (tx) => {
+    let ev = await lockEvent(tx, input.eventId);
+    const held: Slot[] = [];
+    for (const raw of input.names) {
+      const name = normalizeName(raw);
+      if (!name) continue;
+      try {
+        const done = await reserveLocked(tx, ev, { actorPlayerId: input.actorPlayerId, name, now });
+        held.push(done.slot);
+        ev = done.event;
+      } catch (e) {
+        if (e instanceof DomainError && e.code === "full") break;
+        throw e;
+      }
+    }
+    return { held, event: ev };
+  });
+}
+
 /** Creator reserves a roster slot by name; returns the slot with its personal invite code. */
 /** At most this many names travel from the americano generator into a new tournament. */
 export const SEAT_NAMES_MAX = 24;

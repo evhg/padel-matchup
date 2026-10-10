@@ -8,7 +8,7 @@ import { DISPOSABLE_AFTER_DAYS } from "@/lib/domain/disposable";
 import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { LEGAL_OPERATOR, legalDate, legalValues } from "@/lib/legal";
 import { hintCookieOptions } from "@/lib/hintCookie";
-import { HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE } from "@/lib/session";
+import { BY_NAME_COOKIE, HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE } from "@/lib/session";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 
@@ -28,7 +28,7 @@ const notMineCookie = readFileSync(path.resolve(process.cwd(), "src/components/S
 describe("the privacy page tells the truth about the code", () => {
   it("names every cookie the app sets, in every language", () => {
     expect(notMineCookie).toBe("ks_notmine");
-    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE];
+    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE];
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
@@ -45,6 +45,7 @@ describe("the privacy page tells the truth about the code", () => {
     const textSizeAge = Number(/max-age=(\d+)/.exec(textSizeCookie("big"))?.[1]);
     const lifetimes: [string, number][] = [
       [PLAYER_COOKIE, ONE_YEAR],
+      [BY_NAME_COOKIE, ONE_YEAR],
       [manageCookieName(""), ONE_YEAR],
       [HAS_ID_COOKIE, hintCookieOptions().maxAge],
       [SOURCE_COOKIE, SOURCE_MAX_AGE],

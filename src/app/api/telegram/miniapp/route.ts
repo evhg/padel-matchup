@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
+import { later } from "@/lib/alerts";
+import { countSignIn } from "@/lib/domain/signins";
 import { getSessionPlayer, setSessionPlayer } from "@/lib/session";
 import { initDataUser, telegramEnabled, verifyInitData } from "@/lib/telegram/api";
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/bot";
@@ -23,5 +25,6 @@ export async function POST(req: Request) {
   const player = me ? await linkTelegram(db, me.id, user) : await findOrCreateTelegramPlayer(db, user);
   // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
+  if (!me) await later(() => countSignIn(db, "telegram_miniapp"));
   return NextResponse.json({ ok: true, next: miniAppNext(body?.startParam ?? fields.start_param) });
 }

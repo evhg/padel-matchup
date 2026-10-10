@@ -1,6 +1,6 @@
 import "server-only";
 import { getLocale } from "next-intl/server";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { clientKeyFrom } from "@/lib/ipKey";
 import { later, reportError } from "@/lib/alerts";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
@@ -10,7 +10,10 @@ import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { canEditMatchDetails } from "@/lib/domain/events";
 import { createPlayer, normalizeName } from "@/lib/domain/players";
-import { getSessionPlayer, hasManageAccess, setSessionPlayer } from "@/lib/session";
+import { countNewRecord } from "@/lib/domain/signins";
+import { countedSource, SOURCE_COOKIE } from "@/lib/source";
+import { getSessionPlayer, hasManageAccess, setSessionPlayer, signedInByName } from "@/lib/session";
+import { nameOnlySession } from "@/lib/domain/thatsMe";
 
 export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required";
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError; detail?: string };
@@ -31,8 +34,8 @@ export async function clientKey(): Promise<string> {
 }
 
 /** Fixed-window rate limit; throws `too_many` past the ceiling. */
-export async function assertRate(db: Db, scope: string, id: string, limit: number, window: "day" | "hour" = "day"): Promise<void> {
-  if (!(await takeRate(db, scope, id, limit, window))) throw new ActionFailure("too_many");
+export async function assertRate(db: Db, scope: string, id: string, limit: number, window: "day" | "hour" = "day", by = 1): Promise<void> {
+  if (!(await takeRate(db, scope, id, limit, window, new Date(), by))) throw new ActionFailure("too_many");
 }
 
 export class ActionFailure extends Error {
@@ -52,8 +55,12 @@ export async function runA<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   }
 }
 
-/** Returns the current player, creating one from `name` when there is no identity yet. */
-export async function requirePlayer(db: Db, name?: string | null): Promise<Player> {
+/**
+ * Returns the current player, creating one from `name` when there is no identity yet. A record made
+ * here counts its browser, the link it came through and, with `namesHere` (everybody already in the
+ * match it joins), whether its name was already there (`countNewRecord`).
+ */
+export async function requirePlayer(db: Db, name?: string | null, o: { namesHere?: readonly (string | null | undefined)[] } = {}): Promise<Player> {
   const existing = await getSessionPlayer(db);
   if (existing) return existing;
   const clean = normalizeName(name ?? "");
@@ -62,7 +69,20 @@ export async function requirePlayer(db: Db, name?: string | null): Promise<Playe
   const locale = await getLocale();
   const player = await createPlayer(db, { displayName: clean, locale });
   await setSessionPlayer(player.id);
+  // Read now, counted after the answer: bookkeeping never sits in the path a person waits on (`later`).
+  const [h, jar] = [await headers(), await cookies()];
+  const seen = { ua: h.get("user-agent"), source: countedSource(jar.get(SOURCE_COOKIE)?.value), name: clean, namesHere: o.namesHere };
+  await later(() => countNewRecord(db, seen));
   return player;
+}
+
+/**
+ * A session that came in by "That's me" and has proved nothing since (DECIDING rule 34): My matches
+ * shows it no personal link and no home-screen card, the manifest gives it no personal start page, and
+ * the link can be neither rotated nor mailed from it.
+ */
+export async function nameOnly(player: Player | null): Promise<boolean> {
+  return player ? nameOnlySession(await signedInByName(player.id), player) : false;
 }
 
 export type Viewer = { player: Player | null; isCreator: boolean };
