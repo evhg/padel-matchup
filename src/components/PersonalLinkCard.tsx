@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { emailPersonalLinkAction, rotatePersonalLinkAction, updateMyEmail } from "@/actions/identity";
 import { CopyButton } from "./ShareSheet";
+import { placeholderWidth } from "@/lib/fieldWidth";
 
 /**
  * The player's personal link: copy it, email it to yourself (the one place
@@ -86,8 +87,8 @@ export function PersonalLinkCard({ url, email, emailEnabled }: { url: string; em
       </div>
       {mailTo && <p className="mt-2 text-sm font-semibold text-ok">✓ {t("identity.linkEmailed", { email: mailTo })}</p>}
       {askEmail && !mailTo && (
-        <form onSubmit={saveEmailAndSend} className="mt-2 flex gap-2 animate-pop">
-          <input type="email" inputMode="email" autoComplete="email" className="input" placeholder={t("share.emailPlaceholder")} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus required />
+        <form onSubmit={saveEmailAndSend} className="mt-2 flex flex-wrap gap-2 animate-pop">
+          <input type="email" inputMode="email" autoComplete="email" className="input flex-1" style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }} placeholder={t("share.emailPlaceholder")} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus required />
           <button type="submit" className="btn-primary shrink-0" disabled={pending || !draft.trim()}>
             {pending ? t("common.working") : t("identity.sendToEmail")}
           </button>

@@ -7,6 +7,7 @@ import { resendCalendarInviteAction } from "@/actions/calendar";
 import { updateMyEmail } from "@/actions/identity";
 import type { StayChannel, StayState } from "@/lib/domain/stayUpdated";
 import { CalendarSubscribe } from "./CalendarSubscribe";
+import { placeholderWidth } from "@/lib/fieldWidth";
 
 type Props = {
   code: string;
@@ -128,7 +129,7 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
       {waiting && !showForm && <p className="mt-2 text-sm font-semibold">{t(waiting === "telegram" ? "calendar.stayTelegramNext" : "calendar.stayWhatsappNext")}</p>}
       {showForm && (
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 flex flex-wrap gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             if (!value.trim()) return;
@@ -143,7 +144,7 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
             });
           }}
         >
-          <input type="email" inputMode="email" autoComplete="email" className="input" placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
+          <input type="email" inputMode="email" autoComplete="email" className="input flex-1" style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }} placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
           <button type="submit" className="btn-primary shrink-0" disabled={pending || !value.trim()}>
             {pending ? t("common.working") : t("calendar.send")}
           </button>

@@ -18,7 +18,15 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AboutPage() {
   const t = await getTranslations();
   const contact = emailFrom().match(/<([^>]+)>/)?.[1] ?? emailFrom();
-  const sections: { key: "store" | "never" | "cookies" | "rights" | "terms" | "open" }[] = [{ key: "store" }, { key: "never" }, { key: "cookies" }, { key: "rights" }, { key: "terms" }, { key: "open" }];
+  // The promise and the terms each lead on to the page that says them in full.
+  const sections: { key: "store" | "never" | "cookies" | "rights" | "terms" | "open"; more?: { href: "/privacy" | "/terms"; label: "about.privacyLink" | "about.termsLink" } }[] = [
+    { key: "store" },
+    { key: "never", more: { href: "/privacy", label: "about.privacyLink" } },
+    { key: "cookies" },
+    { key: "rights" },
+    { key: "terms", more: { href: "/terms", label: "about.termsLink" } },
+    { key: "open" },
+  ];
   return (
     <>
       <Header minimal />
@@ -27,10 +35,15 @@ export default async function AboutPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">{t("about.title")}</h1>
           <p className="mt-1 text-muted">{t("about.sub")}</p>
         </div>
-        {sections.map(({ key }) => (
+        {sections.map(({ key, more }) => (
           <section key={key} className="card">
             <h2 className="font-extrabold">{t(`about.${key}Title`)}</h2>
             <p className="mt-1 whitespace-pre-line text-sm text-ink-soft">{t(`about.${key}Body`)}</p>
+            {more && (
+              <Link href={more.href} prefetch={false} className="link mt-2 inline-block text-sm">
+                {t(more.label)}
+              </Link>
+            )}
           </section>
         ))}
         <section className="card">

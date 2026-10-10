@@ -35,6 +35,11 @@ try {
   check("embed match: organizer on the roster and a join button with spots left", (await page.getByText("Emi").count()) >= 1 && (await page.getByRole("link", { name: /3 spots left/ }).count()) === 1);
   await shot(page, "e2-embed-match");
   check("embed pages stay out of the index", /noindex/.test(await page.locator('meta[name="robots"]').getAttribute("content").catch(() => "")));
+  // The embed keeps the light colours on a phone in dark mode, so its browser bar must be light too: one theme-color, the light ground.
+  const themeColors = await page.locator('meta[name="theme-color"]').evaluateAll((ms) => ms.map((m) => `${m.getAttribute("media") ?? ""}${m.getAttribute("content")}`));
+  check("embed pages set one light theme-color, never the dark one", JSON.stringify(themeColors) === JSON.stringify(["#f4f3ee"]), JSON.stringify(themeColors));
+  const appHtml = await fetch(`${BASE}/${code}`).then((r) => r.text());
+  check("the app's own pages keep a theme-color for each scheme", appHtml.includes('content="#0f1520"') && appHtml.includes('content="#f4f3ee"'));
 
   await page.goto(`${BASE}/v/embed-club`);
   await page.getByRole("button", { name: /Embed this board/ }).click();

@@ -1,6 +1,6 @@
 // Venue boards: opt-in listing at create time, the public board, the printable poster,
 // unlisting from Edit match, the board's empty state prefilling the venue.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, widestDayFits } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -70,8 +70,49 @@ try {
   await other.getByRole("link", { name: /On the Riverside Padel board/ }).waitFor({ timeout: 20000 });
   await guest.goto(`${BASE}/v/riverside-padel`);
   check("one tap on the match page puts it on the board", (await guest.locator(`a[href='/${code2}']`).count()) === 1 && (await other.getByTestId("list-on-board").count()) === 0);
-  await guest.goto(`${BASE}/v/no-such-venue`);
-  check("unknown venue → 404 page", (await guest.getByText("Link not found").count()) > 0 || (await guest.title()).toLowerCase().includes("not found"));
+  // ---- Recent results: a finished, scored, listed match shows on its club's page ----
+  // Made through the API ninety minutes ago and booked for two hours, so three can still join and
+  // Ana can score it; then a 60-minute booking makes it over, which is when the strip takes it.
+  // Ana opts in to rankings and the other three do not: only her first name may show on the club page.
+  const key = await guest.request.post(`${BASE}/api/v1/keys`, { data: { name: "e2e venues", agent: "playwright" } }).then((r) => r.json());
+  const auth = { authorization: `Bearer ${key.key}` };
+  const made = await guest.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(), durationMinutes: 120, tz: "Asia/Bangkok", venue: "Lakeside Padel", listOnVenueBoard: true, organizer: { name: "Ana" } } }).then((r) => r.json());
+  const rcode = made.match?.code;
+  for (const name of ["Bo", "Cy", "Di"]) await guest.request.post(`${BASE}/api/v1/matches/${rcode}/join`, { headers: auth, data: { name } });
+  const ana = await newPage();
+  await ana.goto(`${made.organizer.personalUrl}?next=/${rcode}`);
+  await ana.waitForURL((u) => u.pathname === `/${rcode}`, { timeout: 20000 });
+  await guest.goto(`${BASE}/v/lakeside-padel`);
+  check("no result yet → no results strip, and no line saying so", (await guest.getByTestId("recent-results").count()) === 0);
+  await ana.getByRole("button", { name: "Enter score" }).click();
+  await ana.getByRole("button", { name: /^Ana/ }).click();
+  await ana.getByRole("button", { name: /^Bo/ }).click();
+  await ana.getByRole("button", { name: "Save score" }).click();
+  await ana.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
+  await ana.getByRole("button", { name: "Edit match" }).click();
+  await ana.getByTestId("length-choice").getByRole("button", { name: "60 min", exact: true }).click();
+  await ana.getByRole("button", { name: "Save changes" }).click();
+  await ana.getByRole("button", { name: "Save changes" }).waitFor({ state: "detached", timeout: 20000 });
+  await ana.goto(`${BASE}/v/lakeside-padel/ranking`);
+  await ana.getByRole("button", { name: "Show me in rankings" }).click();
+  await ana.getByText("You appear in rankings").waitFor({ timeout: 20000 });
+  await guest.goto(`${BASE}/v/lakeside-padel`);
+  const strip = guest.getByTestId("recent-results");
+  const row = strip.locator(`a[href='/${rcode}/card']`);
+  await shot(guest, "b3-recent-results");
+  const rowText = (await row.innerText().catch(() => "")) || "";
+  check("the finished match shows in the club's recent results, with both pairs, the tick and a link to its card", (await strip.getByRole("heading", { name: "Recent results" }).count()) === 1 && (await row.count()) === 1 && (await row.getByText("Won").count()) === 1, (await strip.innerText().catch(() => "no strip")).slice(0, 160));
+  check("only the player who opted in is named; the other three show as Player", /Ana & Player/.test(rowText) && /Player & Player/.test(rowText) && !/\b(Bo|Cy|Di)\b/.test(rowText), rowText.slice(0, 160));
+  // The day column held "WED, OCT 9" in 64 px and broke it over two lines on a phone. Every day of a
+  // year, in all three languages, must now sit on one line inside it at 390 px.
+  const day = await widestDayFits(row.getByTestId("result-day")).catch((e) => ({ ok: false, worst: String(e).slice(0, 80) }));
+  check("the result's day is one line inside its column at 390 px, for the widest day in every language", day.ok, JSON.stringify(day.worst));
+  // The status is the server's answer and cannot race. The words are a paint, so they are waited for:
+  // read at one instant after goto they were missing twice on 9 October 2026, both times while two
+  // gates loaded the machine, from a page that served them correctly in every probe.
+  const unknown = await guest.goto(`${BASE}/v/no-such-venue`);
+  const notFoundShown = await guest.getByText("Link not found").waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  check("unknown venue → 404 page", unknown?.status() === 404 && (notFoundShown || (await guest.title()).toLowerCase().includes("not found")), String(unknown?.status()));
 } catch (e) {
   await crashed(browser, results, e);
 } finally {

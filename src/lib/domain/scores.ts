@@ -31,14 +31,81 @@ export function scorePermission(input: {
   return { allowed: true, locked: false };
 }
 
+/**
+ * The most sets a match score holds (owner's decision H, 9 October 2026). Four or five sets are rare
+ * but real: a crew that keeps playing while the court is theirs, or a best of five. The server takes
+ * any games score from 0 to 30 in each; whether a set looks right is `unusualSets`, which only asks.
+ */
+export const MAX_SETS = 5;
+
+/**
+ * Does a set look like padel? A question, never a refusal: the web asks "Is 6-5 right?" once before it
+ * saves, and the bot saves and says the set looks unusual. What counts as usual:
+ *
+ * - a set to six: 6-0 to 6-4, 7-5, 7-6;
+ * - a short set to four: 4-0 to 4-2, then 5-3 and 5-4 (played on at 3-3, or a tie-break at 4-4);
+ * - a pro set, only when it is the whole match: to eight two clear (8-0 to 8-6), and 9-0 to 9-8, which
+ *   covers a set to nine two clear (9-7 at most), an eight-game pro set played on from 7-7 (9-7), and its
+ *   tie-break at 8-8 (9-8). Inside a longer match 8-3 or 9-2 is far likelier a typo than a pro set;
+ * - a match tie-break, only as the last set: the winner on ten or more and two clear, so 10-0 to 10-8,
+ *   then exactly two apart (11-9, 12-10 …).
+ *
+ * Everything else asks: 6-5, 3-1, 2-2, 9-2 as one set of several, 10-8 before the last set.
+ * The order of the sides does not matter.
+ */
+export function isUsualSet(set: { sideA: number; sideB: number }, place: { last: boolean; only: boolean }): boolean {
+  const w = Math.max(set.sideA, set.sideB);
+  const l = Math.min(set.sideA, set.sideB);
+  if (w === 6 && l <= 4) return true;
+  if (w === 7 && (l === 5 || l === 6)) return true;
+  if (w === 4 && l <= 2) return true;
+  if (w === 5 && (l === 3 || l === 4)) return true;
+  if (place.only && ((w === 8 && l <= 6) || (w === 9 && l <= 8))) return true;
+  if (place.last && w >= 10 && w - l >= 2 && (w === 10 || w - l === 2)) return true;
+  return false;
+}
+
+/**
+ * A result recorded with one tap (who won) and no games: one 1-0 set, which padel never produces. The
+ * Telegram card's 🏁 saves it (`WINNER_ONLY_SETS` in `result.ts`, which re-exports this).
+ */
+export const isWinnerOnly = (sets: Pick<Score, "sideA" | "sideB">[]) => sets.length === 1 && sets[0].sideA + sets[0].sideB === 1;
+
+/** A set where nobody won a game. The server refuses it (`validateSets`), so the form never asks about it. */
+export const isEmptySet = (s: { sideA: number; sideB: number }) => s.sideA === 0 && s.sideB === 0;
+
+/**
+ * The indexes (from 0) of the sets `isUsualSet` would ask about, in order; empty when the whole score
+ * looks right. A winner-only result is never asked about: "Is 1-0 right?" would question a tap that
+ * means exactly what it says.
+ */
+export function unusualSets(sets: { sideA: number; sideB: number }[]): number[] {
+  if (isWinnerOnly(sets)) return [];
+  const out: number[] = [];
+  sets.forEach((s, i) => {
+    if (!isUsualSet(s, { last: i === sets.length - 1, only: sets.length === 1 })) out.push(i);
+  });
+  return out;
+}
+
+/**
+ * The score form's one check before it saves. A 0-0 set is refused first, with the server's own
+ * message, so nobody is asked "Is 0-0 right?" and then refused after a "Yes, save". Else: the sets to
+ * ask about, once (`unusualSets`); none means save.
+ */
+export function checkSets(sets: { sideA: number; sideB: number }[]): { refuse: "empty_set" } | { ask: number[] } {
+  if (sets.some(isEmptySet)) return { refuse: "empty_set" };
+  return { ask: unusualSets(sets) };
+}
+
 export function validateSets(raw: SetScore[]): SetScore[] {
   const sets = raw
     .map((s, i) => ({ setNumber: i + 1, sideA: Math.round(Number(s.sideA)), sideB: Math.round(Number(s.sideB)) }))
     .filter((s) => Number.isFinite(s.sideA) && Number.isFinite(s.sideB));
-  if (sets.length < 1 || sets.length > 3) throw new DomainError("invalid", "sets");
+  if (sets.length < 1 || sets.length > MAX_SETS) throw new DomainError("invalid", "sets");
   for (const s of sets) {
     if (s.sideA < 0 || s.sideB < 0 || s.sideA > 30 || s.sideB > 30) throw new DomainError("invalid", "score_range");
-    if (s.sideA === 0 && s.sideB === 0) throw new DomainError("invalid", "empty_set");
+    if (isEmptySet(s)) throw new DomainError("invalid", "empty_set");
   }
   return sets;
 }

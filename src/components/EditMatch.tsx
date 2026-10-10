@@ -38,6 +38,8 @@ export function EditMatch({ code, initial, venues, beside }: { code: string; ini
         levelMin: values.levelMin,
         levelMax: values.levelMax,
         levelVerifiedOnly: values.levelVerifiedOnly,
+        category: values.category,
+        ageMin: values.ageMin,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl,
         cost: values.cost,

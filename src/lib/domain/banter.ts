@@ -6,7 +6,7 @@ import { isOccupied } from "./events";
 import { winStreak } from "./milestones";
 import { praiseLocale } from "./praise";
 import type { EventDetail } from "./queries";
-import { matchResult } from "./result";
+import { firstName, matchResult } from "./result";
 import { outcomeForTeam, type Outcome } from "./scores";
 
 /**
@@ -49,8 +49,9 @@ export async function setBanter(db: Db, playerId: string, on: boolean): Promise<
   await db.update(players).set({ banter: on }).where(eq(players.id, playerId));
 }
 
-/** The first word of a name: a line names people the way the crew calls them (rule 7). */
-export const firstName = (name: string | null | undefined) => (name ?? "").trim().split(/\s+/)[0]?.slice(0, 24) || "?";
+// The first word of a name: a line names people the way the crew calls them (rule 7). It lives in
+// `./result` now, so a public page can name the sides without importing banter.
+export { firstName } from "./result";
 
 /** Left before the start, and at most 24 hours before it. */
 export const isLateExit = (at: Date, startsAt: Date) => at.getTime() < startsAt.getTime() && startsAt.getTime() - at.getTime() <= LATE_MS;

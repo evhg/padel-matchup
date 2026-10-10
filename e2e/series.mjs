@@ -52,7 +52,7 @@ try {
   await a.getByPlaceholder("Name").fill("Zed");
   await a.getByRole("button", { name: "Done", exact: true }).click();
   await a.getByText("Reserved for Zed").first().waitFor({ timeout: 20000 });
-  await a.getByRole("button", { name: "Generate round 1" }).click();
+  await a.getByRole("button", { name: "Start with 4 players" }).click();
   await a.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
   await a.locator('input[aria-label="A"]').first().fill("16");
   await a.locator('input[aria-label="B"]').first().fill("8");

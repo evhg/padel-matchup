@@ -7,6 +7,7 @@ import { getViewer } from "@/actions/shared";
 import { cleanSource, taggedUrl } from "@/lib/source";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
+import { AutoRefresh } from "@/components/tournament/AutoRefresh";
 import { CreatorPanel } from "@/components/CreatorPanel";
 import { EditMatch } from "@/components/EditMatch";
 import type { EventFormValues } from "@/components/EventFields";
@@ -31,6 +32,7 @@ import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { StayUpdated } from "@/components/StayUpdated";
+import { LevelAfterJoin } from "@/components/LevelAfterJoin";
 import { getDb } from "@/db";
 import { feedKeyFor, feedLinks, stayChannels } from "@/lib/calendarFeed";
 import { stayUpdated } from "@/lib/domain/stayUpdated";
@@ -46,6 +48,8 @@ import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
+import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
+import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
@@ -57,7 +61,7 @@ import { getTournamentState } from "@/lib/domain/tournament";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
-import { rangeChip, rangeText } from "@/lib/levelText";
+import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl } from "@/lib/share";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
@@ -194,6 +198,18 @@ export default async function EventPage({ params, searchParams }: Props) {
   // The count: the names round 1 would draw, or the field the organiser opened while it cannot start.
   const night = tstate ? nightPlan({ players: nightField({ format: tstate.format, names: namedSlots.length, capacity: ev.capacity, roundsDrawn: tstate.rounds.length }), courts: ev.courts, format: tstate.format, pointsPerMatch: ev.pointsPerMatch, gamesTo: ev.gamesTo, durationMinutes: ev.durationMinutes }) : null;
   // The format's name, as the create form says it (FORMAT_KEYS lives in a client module, which a server page cannot read values from).
+  // "Who is here?" before round 1, for whoever may start it (the organiser or a manage link): the
+  // names round 1 would draw, then the waiting list, which plays only when ticked (src/lib/domain/checkIn.ts).
+  const checkIn =
+    tstate && tstate.rounds.length === 0 && viewer.isCreator && !ev.scoreLockedByCreator && !cancelled && !over
+      ? {
+          listed: namedSlots.map((s) => ({ id: s.id, name: s.player?.displayName ?? s.invitedName ?? "?" })),
+          waiting: waitlist.filter((s) => s.status === "joined" && s.playerId).map((s) => ({ id: s.id, name: s.player?.displayName ?? "?" })),
+        }
+      : null;
+  // The night is running: round 1 drawn, scores not final. Every open page asks again every twenty
+  // seconds, as the competition's screen does (`AutoRefresh`), so one phone's score reaches the rest.
+  const liveNight = Boolean(tstate && tstate.rounds.length > 0) && !ev.scoreLockedByCreator && !cancelled && !over;
   const formatName = tstate ? t(({ americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const)[tstate.format]) : null;
 
   const group = ev.groupId ? await getGroupById(db, ev.groupId) : null;
@@ -202,6 +218,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const seriesNext = seriesRow ? await nextEdition(db, seriesRow.id, now) : null;
   const canMakeSeries = Boolean(me) && me?.id === ev.creatorPlayerId && isTournament && Boolean(ev.standings) && !ev.seriesId && !cancelled;
   const levelChip = rangeChip(t, levelRange);
+  // Who it is for, beside the level: information, never a gate (eventTags.ts).
+  const forChip = tagChip(t, ev);
   const levelRangeText = ranged ? rangeText(t, levelRange) : "";
   const statusChip = cancelled
     ? { cls: "chip-danger", label: t("event.statusCancelled") }
@@ -228,6 +246,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
+  // Right under it, while they have no level: "Your level?" in one tap. A ranged match asked at the join already.
+  const askLevel = Boolean(me) && askLevelAfterJoin({ seated: isMember || isWaitlisted, level: me?.level ?? null, ranged, organiser: viewer.isCreator, open: !cancelled && !over });
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
   const stayFeed = me && stay?.kind === "reached" && stay.calendar === "feed" ? feedLinks(base, await feedKeyFor(db, me), locale) : null;
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
@@ -252,6 +272,8 @@ export default async function EventPage({ params, searchParams }: Props) {
     levelMin: ev.levelMin,
     levelMax: ev.levelMax,
     levelVerifiedOnly: ev.levelVerifiedOnly,
+    category: cleanCategory(ev.category),
+    ageMin: cleanAgeMin(ev.ageMin),
     myLevel: creator.level,
     publicListing: ev.publicListing,
     format: ev.format ?? "americano",
@@ -278,10 +300,10 @@ export default async function EventPage({ params, searchParams }: Props) {
     const justInvited = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() < 90 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
     return (
-      <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-white" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
+      <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-card" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
         <div className="flex items-center gap-3">
           {!tappable && (
-            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-white" : "bg-line text-muted"}`}>
+            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-on-ink" : "bg-line text-muted"}`}>
               {occupiedSlot ? name.slice(0, 1).toUpperCase() : isWaitlist ? index + 1 : "·"}
             </span>
           )}
@@ -362,6 +384,11 @@ export default async function EventPage({ params, searchParams }: Props) {
             <span className="text-xs font-bold uppercase tracking-wider text-faint">{typeLabel}</span>
             {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
             {levelChip && ev.levelVerifiedOnly && <span className="chip-muted">✓ {t("levelCheck.chip")}</span>}
+            {forChip && (
+              <span className="chip-muted" data-testid="tag-chip">
+                {forChip}
+              </span>
+            )}
             {group && (
               <Link href={`/g/${group.code}`} prefetch={false} className="chip-muted hover:bg-line">
                 👥 {t("group.partOf", { name: group.name })}
@@ -449,6 +476,7 @@ export default async function EventPage({ params, searchParams }: Props) {
               feed={stayFeed ? { webcal: stayFeed.webcal, google: stayFeed.google } : null}
             />
           )}
+          {me && askLevel && <LevelAfterJoin playerId={me.id} />}
         </section>
 
         {creatorBanner && (
@@ -504,8 +532,11 @@ export default async function EventPage({ params, searchParams }: Props) {
             standings={tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))}
             canPlayAgain={canPlayAgain}
             cardHref={`/${code}/card`}
+            checkIn={checkIn}
           />
         )}
+        {/* Live: scores typed on one phone appear on the others. Paused while the tab is hidden, gone once the scores are final or the booking is over. */}
+        {liveNight && <AutoRefresh seconds={20} />}
         {viewer.isCreator && ev.scoreLockedByCreator && !cancelled && levelCandidates.length > 0 && <ConfirmLevels code={code} players={levelCandidates} />}
         {canMakeSeries && <SeriesDoor code={code} suggestedName={ev.title ?? `${ev.venueName ?? "Padel"} ${weekdayName(ev.startsAt, ev.tz, locale)} Open`} suggestedCapacity={ev.capacity} />}
 

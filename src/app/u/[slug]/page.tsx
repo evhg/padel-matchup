@@ -70,7 +70,7 @@ export default async function PublicProfilePage({ params }: Props) {
             {rows.map((s) => (
               <div key={s.label}>
                 <div className="text-xl font-extrabold tabular-nums">{s.value}</div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-faint">{s.label}</div>
+                <div className="text-2xs font-bold uppercase tracking-wider text-faint">{s.label}</div>
               </div>
             ))}
           </div>

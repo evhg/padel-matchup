@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { players, type Player } from "@/db/schema";
-import { mergePlayers } from "@/lib/domain/merge";
+import { mergePlayers, recordToKeep, recordWeights } from "@/lib/domain/merge";
 import { foldSameNameRows } from "@/lib/domain/sameName";
 import { createPlayer } from "@/lib/domain/players";
 import { telegramWebhookSecret, type TgUser } from "./api";
@@ -57,14 +57,42 @@ export async function findOrCreateTelegramPlayer(db: Db, user: TgUser): Promise<
   return p;
 }
 
-/** Links a Telegram account to a signed-in player; a player the bot created earlier for that account merges in. */
+/**
+ * Links a Telegram account to a signed-in player, and returns the player this browser or chat is now
+ * signed in as. Every caller must use the returned player, never the id it passed in: that row can
+ * be gone.
+ *
+ * When another record already holds the account, the two are one person and become one record. The
+ * one with more history survives (`recordToKeep`: seats, matches created, scores entered; on a tie
+ * the older record), and the other merges into it. The owner decided this on 9 October 2026
+ * (decision 2A). Until then the signed-in record always survived, which was right for a record the
+ * bot made empty on first contact, and wrong the other way round: a WhatsApp link opens in a browser
+ * with no cookie, the person taps Join (a new, nearly empty record), then signs in with Telegram
+ * there. The real record, with the matches, the personal link the home-screen icon opens and the
+ * cookie on every other phone, was merged into the new one and deleted, and a merge kept no token.
+ *
+ * Either record can lose now, so both merges pass `proved`: the same Telegram account proves one
+ * person, and the survivor takes the loser's personal link (as its token, or else as its previous
+ * token) and its public page. A web record with a home-screen icon that loses to a busier bot
+ * record keeps its icon working.
+ */
 export async function linkTelegram(db: Db, playerId: string, user: TgUser): Promise<Player> {
   const other = await findTelegramPlayer(db, user.id);
+  let keep = playerId;
   if (other && other.id !== playerId) {
-    await db.update(players).set({ telegramId: null, telegramUsername: null }).where(eq(players.id, other.id));
-    await mergePlayers(db, playerId, [other.id]);
+    const weights = await recordWeights(db, [playerId, other.id]);
+    const mine = weights.find((w) => w.id === playerId);
+    const theirs = weights.find((w) => w.id === other.id);
+    if (mine && theirs) keep = recordToKeep(mine, theirs);
+    if (keep === playerId) {
+      await db.update(players).set({ telegramId: null, telegramUsername: null }).where(eq(players.id, other.id));
+      await mergePlayers(db, playerId, [other.id], { proved: true });
+    } else {
+      // The record that holds the account already is the real one: the signed-in record folds into it.
+      await mergePlayers(db, other.id, [playerId], { proved: true });
+    }
   }
-  const [p] = await db.update(players).set({ telegramId: user.id, telegramUsername: user.username ?? null }).where(eq(players.id, playerId)).returning();
+  const [p] = await db.update(players).set({ telegramId: user.id, telegramUsername: user.username ?? null }).where(eq(players.id, keep)).returning();
   // A linked Telegram account is proof, as a code from an address is (`foldSameNameRows`). Never throws.
   await foldSameNameRows(db, p.id);
   return p;

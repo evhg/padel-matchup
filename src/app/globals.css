@@ -3,7 +3,11 @@
 /* Every colour a word is written in reads at 4.5:1 or better (WCAG AA) on the page and on a card:
    faint was #8a919c, 2.9:1 on the page, and it carried every hint and footnote in the app; danger
    was #d93838, 4.1:1. Each moved darker on its own hue, and muted moved with faint to keep the step
-   between them. tests/contrast.test.ts reads this block and fails when a text colour drops below the line. */
+   between them. tests/contrast.test.ts reads this block and the dark set below, and fails when a
+   text colour drops below the line in either theme.
+
+   These are the light values. Tailwind writes each one as a variable on :root and every utility
+   reads the variable, so the dark set only has to give the same names new values. */
 @theme {
   --color-bg: #f4f3ee;
   --color-card: #ffffff;
@@ -24,9 +28,56 @@
   --color-ok-soft: #e6f6ec;
   --color-warn: #b45309;
   --color-warn-soft: #fef3c7;
+  /* The knob of a switch that is off, on its line-strong track. Light: white, as it always was. Dark:
+     the knob was on-ink, navy on a slate track at 1.98:1, under the 3:1 a control's parts need. */
+  --color-knob-off: #ffffff;
+  /* Words on an ink fill (a dark button, the picked chip). Ink turns light in the dark theme, so the
+     words on it turn dark: `text-white` there was white on near-white. */
+  --color-on-ink: #ffffff;
+  /* The brand's own dark, the same in both themes: the words on lime and the tile behind the logo.
+     Lime stays lime in the dark, so the text on it must not follow ink to a light grey. */
+  --color-night: #14161a;
+  /* The smallest text: chips and the footnotes beside them. A size in rem grows with "Bigger text";
+     the px sizes this replaced (text-[11px]) stayed where they were while everything round them grew. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: calc(1 / 0.6875);
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, system-ui, sans-serif;
   --shadow-card: 0 1px 2px rgb(20 22 26 / 0.04), 0 10px 30px -14px rgb(20 22 26 / 0.16);
   --shadow-bar: 0 -8px 30px -12px rgb(20 22 26 / 0.25);
+}
+
+/* The dark theme follows the phone. An ink-navy ground, cards one step lighter so they still rise
+   off it, the same lime, and status colours with the saturation taken out so they do not glow.
+   Screen only: paper gets the light set. A page that is shown on somebody else's wall or website (the
+   club's TV, the printed poster, the embeds) carries `data-keep-light` and keeps the light set, so the
+   :has() below costs one attribute lookup and nothing for every other page. */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not(:has([data-keep-light])) {
+    color-scheme: dark;
+    --color-bg: #0f1520;
+    --color-card: #18202d;
+    --color-ink: #eef1f5;
+    --color-ink-soft: #d3d9e1;
+    --color-muted: #a9b2bf;
+    --color-faint: #8f99a7;
+    --color-line: #29323f;
+    --color-line-strong: #3d4859;
+    --color-accent: #c8f135;
+    --color-accent-deep: #b3dc23;
+    --color-accent-soft: #263218;
+    --color-court: #8db0ff;
+    --color-court-soft: #1d2a47;
+    --color-danger: #f2958c;
+    --color-danger-soft: #3d2023;
+    --color-ok: #7fd19b;
+    --color-ok-soft: #163024;
+    --color-warn: #e9b672;
+    --color-warn-soft: #3a2d16;
+    --color-on-ink: #0f1520;
+    --color-knob-off: #d3d9e1;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 30px -14px rgb(0 0 0 / 0.6);
+    --shadow-bar: 0 -8px 30px -12px rgb(0 0 0 / 0.7);
+  }
 }
 
 @layer base {
@@ -41,6 +92,12 @@
       font-size: 17px;
     }
   }
+  /* "Bigger text" (a cookie the root layout reads, src/lib/textSize.ts): one step up for the whole
+     app, on a phone and on a desk, and the chips with it to 13.5px. */
+  html[data-text="big"] {
+    font-size: 18px;
+    --text-2xs: 0.75rem;
+  }
   body {
     @apply bg-bg text-ink font-sans antialiased;
     font-feature-settings: "cv11", "ss01", "tnum";
@@ -53,10 +110,10 @@
   }
   ::selection {
     background: var(--color-accent);
-    color: var(--color-ink);
+    color: var(--color-night);
   }
   /* A keyboard user sees where they are. :focus-visible leaves a tap or a click alone; an outline and
-     a shadow take no space, so nothing moves. The white halo fills the offset, so the ring still
+     a shadow take no space, so nothing moves. The card-coloured halo fills the offset, so the ring still
      shows round a button that sits on ink (the Copy button on a code block). :where() keeps this at
      zero specificity: `.input` keeps its own accent ring, and any utility can still override it. */
   :where(a, button, input, select, textarea, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
@@ -70,10 +127,10 @@
   @apply inline-flex items-center justify-center gap-2 rounded-2xl font-bold text-base leading-none select-none transition-[transform,background-color,opacity] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none min-h-14 px-5 touch-manipulation whitespace-nowrap;
 }
 @utility input {
-  @apply w-full rounded-2xl border border-line-strong bg-white px-4 min-h-14 text-base text-ink placeholder:text-faint focus:outline-none focus:ring-4 focus:ring-accent/60 focus:border-ink;
+  @apply w-full rounded-2xl border border-line-strong bg-card px-4 min-h-14 text-base text-ink placeholder:text-faint focus:outline-none focus:ring-4 focus:ring-accent/60 focus:border-ink;
 }
 @utility chip {
-  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider leading-none;
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-extrabold uppercase tracking-wider leading-none;
 }
 
 @layer components {
@@ -81,16 +138,16 @@
     @apply bg-card rounded-3xl border border-line shadow-card p-5;
   }
   .btn-primary {
-    @apply btn bg-accent text-ink hover:bg-accent-deep;
+    @apply btn bg-accent text-night hover:bg-accent-deep;
   }
   .btn-secondary {
-    @apply btn bg-ink text-white hover:bg-ink-soft;
+    @apply btn bg-ink text-on-ink hover:bg-ink-soft;
   }
   .btn-ghost {
-    @apply btn bg-white border border-line-strong text-ink hover:bg-bg;
+    @apply btn bg-card border border-line-strong text-ink hover:bg-bg;
   }
   .btn-danger {
-    @apply btn bg-danger-soft text-danger hover:bg-red-100;
+    @apply btn bg-danger-soft text-danger hover:brightness-95;
   }
   .btn-sm {
     @apply min-h-11 px-4 text-sm rounded-xl;
@@ -129,7 +186,7 @@
     @apply rounded-xl min-h-12 font-bold text-sm text-muted transition;
   }
   .segment > button[aria-pressed="true"] {
-    @apply bg-white text-ink shadow-card;
+    @apply bg-card text-ink shadow-card;
   }
 }
 
@@ -162,6 +219,13 @@
     border: 1px solid #ddd;
     break-inside: avoid;
   }
+}
+
+/* With "Bigger text" a date or a time no longer fits half a phone with the field's usual padding:
+   "10/10/2026" lost its last digit at 390px. The picker icon keeps its room; the padding gives way.
+   Unlayered, so it wins over the `input` utility. */
+html[data-text="big"] .input:is([type="date"], [type="time"]) {
+  padding-inline: 0.625rem;
 }
 
 /* Smooth scrolling only for people who have not asked for less motion (it also keeps automated taps honest). */

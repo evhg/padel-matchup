@@ -49,7 +49,9 @@
     "more": "More",
     "coaches": "Coaches",
     "clubs": "Clubs",
-    "tournaments": "Tournaments"
+    "tournaments": "Tournaments",
+    "findGame": "Find a game",
+    "biggerText": "Bigger text"
   },
   "identity": {
     "whatsYourName": "What's your name?",
@@ -371,7 +373,10 @@
     "standingsHelp": "Tap players in finishing order — 1st, 2nd, 3rd…",
     "saveStandings": "Save standings",
     "clear": "Clear",
-    "place": "{n}."
+    "place": "{n}.",
+    "unusual": "Is {score} right?",
+    "unusualYes": "Yes, save",
+    "unusualFix": "Fix it"
   },
   "me": {
     "title": "My matches",
@@ -407,7 +412,8 @@
     "sameWith": "with {names}",
     "sameMine": "Yes, these are mine",
     "sameNotMe": "Not me",
-    "sameFailed": "These could not be added. Reload the page and try again."
+    "sameFailed": "These could not be added. Reload the page and try again.",
+    "biggerTextHelp": "Larger words everywhere in the app, on this device."
   },
   "notFound": {
     "title": "Link not found",
@@ -518,7 +524,10 @@
     "cancelled": {
       "subject": "Cancelled: padel {day} {time} · {venue}",
       "heading": "The match was cancelled",
-      "body": "{organizer} cancelled the padel match on {day} at {time} at {venue}. Sorry! The calendar entry will be removed when you open the attachment."
+      "body": "{organizer} cancelled the padel match on {day} at {time} at {venue}. Sorry! The calendar entry will be removed when you open the attachment.",
+      "absentSubject": "Started without you: padel {day} {time} · {venue}",
+      "absentHeading": "We started without you",
+      "absentBody": "The tournament started with the players who were there. No worries: we hope to see you at the next one!"
     },
     "creator": {
       "joinedSubject": "{name} joined · {count}/{capacity}",
@@ -628,7 +637,8 @@
     "level_required": "Pick your level first.",
     "scores_missing": "Enter all scores of the last round first.",
     "format_locked": "The format can't change once round 1 exists.",
-    "no_result": "Finalize the result first."
+    "no_result": "Finalize the result first.",
+    "roster_changed": "The list changed while you looked. Check who is here again."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -653,7 +663,6 @@
     "court": "Court {n}",
     "resting": "Sitting out: {names}",
     "generateRound": "Generate round {n}",
-    "generateFirst": "Generate round 1",
     "needPlayers": "Round 1 needs at least 4 names ({count} so far). Reserved players count too.",
     "deleteLastRound": "Delete round {n}",
     "deleteLastRoundConfirm": "Delete round {n}? Only possible while it has no scores.",
@@ -671,8 +680,8 @@
     "colDiff": "+/-",
     "noRounds": "No rounds yet.",
     "vs": "vs",
-    "needMultiple": "Round 1 needs names in fours ({count} so far): add {up} or remove {down}.",
-    "autoShrink": "Generating round 1 with {count} players closes the remaining spots.",
+    "needMultiple": "King of the court plays in fours ({count} ticked): tick or add {up}, or untick {down}.",
+    "autoShrink": "Starting with {count} players closes the remaining spots.",
     "deleteScoredRoundConfirm": "Delete round {n}? Its scores will be lost.",
     "courtNames": "Courts",
     "courtNamesHelp": "Give the courts their real numbers or names, e.g. 5, 7 or Centre. Empty = Court 1, 2, …",
@@ -730,7 +739,13 @@
     "chipGames": "first to {n} games",
     "chipRounds": "{n, plural, one {about # round} other {about # rounds}}",
     "chipCourts": "{n, plural, one {# court} other {# courts}}",
-    "chipEnds": "ends ~{time}"
+    "chipEnds": "ends ~{time}",
+    "whoIsHere": "Who is here?",
+    "whoIsHereHelp": "Untick anyone who did not come, and add anyone who walked in. Round 1 draws the ticked names.",
+    "waitingTag": "waiting list",
+    "walkIn": "Add a walk-in",
+    "walkInAdd": "Add",
+    "startWith": "{count, plural, one {Start with # player} other {Start with # players}}"
   },
   "calendar": {
     "title": "Add to calendar",
@@ -791,7 +806,7 @@
     "cancelledBody": "{day} at {time} · {venue} will not happen."
   },
   "about": {
-    "footerLink": "Privacy & terms (short, promise)",
+    "footerLink": "Privacy and terms",
     "title": "The fine print, kept short",
     "sub": "No lawyers were harmed. Here's what Kicksmash does with your stuff.",
     "storeTitle": "What we store",
@@ -799,14 +814,61 @@
     "neverTitle": "What we never do",
     "neverBody": "Sell your data. Show ads. Email you for fun. Emails only go out for things you asked for: calendar invites, updates to matches you're in, reminders you switched on, and invitations an organizer sent you (with a one-tap 'never again' link).",
     "cookiesTitle": "Cookies",
-    "cookiesBody": "One functional cookie that remembers who you are, one for your language. No tracking, no third-party cookies, no banner needed.",
+    "cookiesBody": "Functional cookies only: who you are, your language, your text size, the matches you organise, and where you came from. No tracking, no third-party cookies, no banner needed.",
     "rightsTitle": "Your rights",
     "rightsBody": "Change your name or email anytime. Turn notifications off. Download everything we hold about you as one file from My matches → Passport. Delete your account from My matches: your personal data disappears, your old scores stay as 'Deleted player' so your friends' history still adds up.",
     "termsTitle": "Terms",
     "termsBody": "It's free. Be nice, show up, enter the score. The app comes as-is with no warranty; if a link breaks or a court double-books, that's between you and your padel buddies. We can remove abusive content or accounts.",
     "openTitle": "Open source",
     "openBody": "Kicksmash is open source under the Apache 2.0 license. Read it, run it, build on it. The name and logo stay ours.",
-    "contact": "Questions, data requests, love letters:"
+    "contact": "Questions, data requests, love letters:",
+    "privacyLink": "The full privacy page →",
+    "termsLink": "The full terms →"
+  },
+  "privacy": {
+    "title": "Privacy",
+    "sub": "What Kicksmash keeps about you, who helps us run it, and how to make it all go away.",
+    "updated": "Last updated {date}.",
+    "whoTitle": "Who we are",
+    "whoBody": "{operator}. We run this app and decide what happens to your data. To reach us, use the feedback form: a person reads every note.",
+    "storeTitle": "What we keep",
+    "storeBody": "• The name you play under.\n• Your email, only if you give it.\n• If an organiser saves a seat for you: the name, email or phone number they typed. We email you the invite, and the organiser sees those details again when they invite people to their next match.\n• Your phone number, only if you write to our WhatsApp number: that is how WhatsApp knows you.\n• Your Telegram id and username, and your Discord or LINE id and name, only when you link that account.\n• Your level, and how it changed over time.\n• Your matches, your seats, the scores, and a photo if a player adds one to a match.\n• When and where you want to play, if you tell us.\n• The devices you turned notifications on for.\n• If you coach: your coach page, your students and your lessons.\n• The notes you send us through the feedback form.\n• If you ask us never to email you again, or an email to you bounces: that address, only so we stop sending to it.",
+    "cookiesTitle": "Cookies",
+    "cookiesBody": "Only the cookies the app needs to work. No tracking, no ads, no cookies from anybody else.\n• km_player: who you are, signed so nobody can fake it. One year.\n• km_has_id: tells the page that you have an identity. One year.\n• NEXT_LOCALE: your language. One year.\n• km_manage_ plus a match code: lets the organiser manage that one match. One year.\n• ks_src and ks_csrc: the link that brought you here, so we can count it. One day.\n• ks_notmine: the names you said are not you, on My matches. One year.\n• km_text: bigger text, only if you switch it on. One year.\nYour browser also keeps a copy of who you are in its own storage, so a lost cookie does not lose your matches.",
+    "ipTitle": "Your IP address",
+    "ipBody": "We never write it into our database. To slow down scripts that hammer the app, we keep a key made from it with a secret (a keyed hash), so the address itself is not stored. Those rows go after {rateDays, plural, one {# day} other {# days}}. Our host sees your address to deliver each page, as every host does.",
+    "helpersTitle": "Who helps us run it",
+    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
+    "keepTitle": "How long we keep it",
+    "keepBody": "• Your data: while you use Kicksmash, until you delete your account.\n• A name with no match, no way to reach it and nothing else behind it: a daily clean-up removes it after {disposableDays, plural, one {# day} other {# days}}.\n• The rate-limit keys made from IP addresses: {rateDays, plural, one {# day} other {# days}}.\n• Backups: every night a copy of the database goes to a private GitHub repository. Each day's file leaves it after {backupDays, plural, one {# day} other {# days}}, but the repository's history still holds older copies, and only we can open them.",
+    "deleteTitle": "When you delete your account",
+    "deleteBody": "Delete it at the bottom of My matches. At once, we remove your name, email and phone (also the copies an organiser typed for your seat), your personal link, linked chat accounts, public page, notification devices, the times you wanted to play, and your coach page with its lessons. Your upcoming spots are released, and the matches you organise are cancelled. Your old scores and level stay under “Deleted player”, so your partners' history still adds up. The notes you sent through the feedback form stay, with the name and contact on them, because they are about the app: ask us and we delete them too. Your first name leaves the page of ideas that became the app. Copies made before you deleted stay in the history of our private backup repository, and only we can open them.",
+    "rightsTitle": "Your rights",
+    "rightsBody": "See and change your name, email and notices on My matches. Download everything we hold about you as one file from My matches → Passport. Delete it all from the bottom of My matches. For anything else, a question, a correction or a complaint, write to us through the feedback form.",
+    "lawTitle": "The law",
+    "lawBody": "Thailand's Personal Data Protection Act (PDPA) applies. We use your data to run the app you came to use, and for nothing else: we never sell it, never show ads, and never build a profile of you for anybody else.",
+    "termsLink": "Terms of use →",
+    "shortLink": "The short version →",
+    "contactLink": "Write to us →"
+  },
+  "terms": {
+    "title": "Terms of use",
+    "sub": "The deal is simple, so the terms are short.",
+    "whoTitle": "Who we are",
+    "whoBody": "{operator}. When you use Kicksmash, you agree to these terms. Questions go through the feedback form.",
+    "freeTitle": "It is free",
+    "freeBody": "Kicksmash costs nothing to use. No account, no password, no card.",
+    "courtsTitle": "Courts and money are yours",
+    "courtsBody": "Organisers book their own courts and settle the money with their players. A coach and a student agree their own prices and payments. Kicksmash takes no part in a booking or a payment, and cannot refund one.",
+    "riskTitle": "Play at your own risk",
+    "riskBody": "Padel is a sport: warm up, and mind the glass. You play at your own risk. Kicksmash is not responsible for an injury, a lost racket or anything else that happens on or off the court.",
+    "fairTitle": "Play fair",
+    "fairBody": "Be kind, turn up, and enter the true score. We may remove content or accounts that are abusive, fake or against the law, without warning.",
+    "warrantyTitle": "No warranty",
+    "warrantyBody": "The app comes as it is, with no warranty. We work to keep it running and right, but a link can break or a reminder can come late. As far as the law allows, we are not liable for what follows from that.",
+    "lawTitle": "Thai law",
+    "lawBody": "These terms follow the law of Thailand. When we change them, the date below changes too.",
+    "privacyLink": "How we handle your data →"
   },
   "optout": {
     "doneTitle": "Done. No more emails.",
@@ -936,7 +998,21 @@
     "confirmOne": "Looks right",
     "confirmed": "Confirmed",
     "confirmedCount": "{count, plural, one {# level confirmed} other {# levels confirmed}}",
-    "changedSince": "Changed since you looked: {names}. The new number is shown; confirm it if it still looks right."
+    "changedSince": "Changed since you looked: {names}. The new number is shown; confirm it if it still looks right.",
+    "joinedTitle": "Your level?",
+    "joinedHelp": "One tap. It shows next to your name, so games can be even. Change it any time on My matches.",
+    "joinedPlaytomic": "I have a Playtomic number",
+    "joinedPlaytomicHelp": "Playtomic uses the same 0–7 scale, so your number carries over.",
+    "joinedSkip": "Skip",
+    "tagLabel": "Who is it for?",
+    "tagAnyone": "Anyone",
+    "tagMen": "Men",
+    "tagWomen": "Women",
+    "tagMixed": "Mixed",
+    "tagAgeLabel": "Age",
+    "tagAnyAge": "Any age",
+    "tagAge": "{age}+",
+    "tagHelp": "The tag helps the right players find the game. Nobody is checked."
   },
   "card": {
     "title": "Result card",
@@ -1044,7 +1120,10 @@
     "coaches": "Coaches here",
     "coachesHelp": "Coaches who named this club and chose to be listed.",
     "coachHere": "Coach at {venue}? Set up your lessons →",
-    "listNow": "Show on the {venue} board"
+    "listNow": "Show on the {venue} board",
+    "recentResults": "Recent results",
+    "recentWon": "Won",
+    "recentPlayer": "Player"
   },
   "ranking": {
     "title": "Ranking",
@@ -1075,7 +1154,23 @@
     "how2": "Levels 0–7, the scale you know. Organizers can confirm them after a match.",
     "how3": "Americano, mexicano and King of the Court with live scores from any phone.",
     "how4": "Everything is open: the API, the data and the code. Bring your own bot or assistant.",
-    "metaDescription": "Padel in {city}: open matches, club rankings, americano, mexicano and King of the Court. Create a match in ten seconds, share one link, no app."
+    "metaDescription": "Padel in {city}: open matches, club rankings, americano, mexicano and King of the Court. Create a match in ten seconds, share one link, no app.",
+    "playTitle": "Find a padel game",
+    "playSub": "Open matches and tournaments you can join. Tap one, then join with your first name.",
+    "playMetaDescription": "Open padel matches and americanos you can join in {cities}. Pick the day, your level and the club, then join with your first name. No app.",
+    "playFilters": "Filters",
+    "playToday": "Today",
+    "playTomorrow": "Tomorrow",
+    "playWeek": "This week",
+    "playFits": "Fits my level",
+    "playSpots": "Spots left only",
+    "playAllClubs": "All clubs",
+    "playCount": "{count, plural, one {# open game} other {# open games}}",
+    "playEmpty": "No open games in {city} {day, select, today {today} tomorrow {tomorrow} other {this week}}.",
+    "playEmptyCta": "Organize one in 30 seconds",
+    "playNoneFit": "{count, plural, one {# game is open, but not with these filters.} other {# games are open, but not with these filters.}}",
+    "playClear": "Show them all",
+    "playBy": "by {name}"
   },
   "telegram": {
     "title": "Telegram",

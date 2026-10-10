@@ -1,10 +1,11 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubSlots, clubs, events, players, slots, type Club, type ClubSlot, type Event, type TournamentFormat } from "@/db/schema";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { createEvent } from "./events";
+import { cleanAgeMin, cleanCategory } from "./eventTags";
 import { formatOf } from "./formats";
 import { weeklyDue } from "./groups";
 import { hasRange, normalizeRange } from "./levels";
@@ -31,6 +32,9 @@ export type SlotInput = {
   levelMax?: unknown;
   /** The matches take confirmed levels only (needs a range). */
   verifiedOnly?: boolean;
+  /** Who the matches are for (`eventTags.ts`); anything the rule does not know is none. */
+  category?: unknown;
+  ageMin?: unknown;
   title?: string | null;
   leadDays?: number;
   whenFull?: "waitlist" | "closed";
@@ -59,6 +63,8 @@ export function cleanSlotInput(i: SlotInput) {
     levelMin: range.min,
     levelMax: range.max,
     verifiedOnly: Boolean(i.verifiedOnly) && hasRange(range),
+    category: cleanCategory(i.category),
+    ageMin: cleanAgeMin(i.ageMin),
     title: (i.title ?? "").trim().slice(0, 80) || null,
     leadDays,
     whenFull: i.whenFull === "closed" ? ("closed" as const) : ("waitlist" as const),
@@ -78,17 +84,28 @@ export async function addClubSlot(db: Db, clubSlug: string, input: SlotInput): P
   return row;
 }
 
-/** Pausing keeps the slot; moving it forgets what was already created so the new time is honoured. */
-export async function updateClubSlot(db: Db, clubSlug: string, id: string, patch: Partial<SlotInput> & { active?: boolean }): Promise<ClubSlot | null> {
+/**
+ * Pausing keeps the slot; moving it forgets what was already created so the new time is honoured. A
+ * new tag also reaches the matches the slot already made and that are still to come, so a club that
+ * retags its "Ladies social" needs no remove-and-add (which made a second match for the same night).
+ */
+export async function updateClubSlot(db: Db, clubSlug: string, id: string, patch: Partial<SlotInput> & { active?: boolean }, now = new Date()): Promise<ClubSlot | null> {
   const [cur] = await db.select().from(clubSlots).where(and(eq(clubSlots.id, id), eq(clubSlots.clubSlug, clubSlug))).limit(1);
   if (!cur) return null;
-  const merged = cleanSlotInput({ dow: cur.dow, time: cur.time, type: cur.type as "match" | "tournament", format: cur.format as TournamentFormat | null, capacity: cur.capacity, courts: cur.courts, levelMin: cur.levelMin, levelMax: cur.levelMax, verifiedOnly: cur.verifiedOnly, title: cur.title, leadDays: cur.leadDays, whenFull: cur.whenFull as "waitlist" | "closed", cost: cur.cost, ...patch });
+  const merged = cleanSlotInput({ dow: cur.dow, time: cur.time, type: cur.type as "match" | "tournament", format: cur.format as TournamentFormat | null, capacity: cur.capacity, courts: cur.courts, levelMin: cur.levelMin, levelMax: cur.levelMax, verifiedOnly: cur.verifiedOnly, category: cur.category, ageMin: cur.ageMin, title: cur.title, leadDays: cur.leadDays, whenFull: cur.whenFull as "waitlist" | "closed", cost: cur.cost, ...patch });
   const moved = merged.dow !== cur.dow || merged.time !== cur.time;
   const [row] = await db
     .update(clubSlots)
     .set({ ...merged, active: patch.active ?? cur.active, ...(moved ? { lastCreatedFor: null } : {}) })
     .where(eq(clubSlots.id, id))
     .returning();
+  // One bounded update down `events_club_slot_idx`: the slot's coming matches, a week ahead at most.
+  if (row && (merged.category !== cur.category || merged.ageMin !== cur.ageMin)) {
+    await db
+      .update(events)
+      .set({ category: merged.category, ageMin: merged.ageMin })
+      .where(and(eq(events.clubSlotId, id), gt(events.startsAt, now), ne(events.status, "cancelled")));
+  }
   return row ?? null;
 }
 
@@ -147,6 +164,8 @@ export async function autoCreateClubEvents(db: Db, now = new Date()): Promise<{ 
           levelMin: slot.levelMin,
           levelMax: slot.levelMax,
           levelVerifiedOnly: slot.verifiedOnly,
+          category: slot.category,
+          ageMin: slot.ageMin,
           publicListing: true,
           bookingUrl: club.bookingUrl,
           cost: slot.cost,

@@ -1,14 +1,18 @@
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
-import type { SetScore } from "@/lib/domain/scores";
+import { MAX_SETS, type SetScore } from "@/lib/domain/scores";
 
 /** Reading a message: a command and its words, the codes in a pasted link, a score. No database. */
 
-/** "6-3 6-4", "6:3, 6:4": up to three sets. */
+/**
+ * "6-3 6-4", "6:3, 6:4". It reads one set more than `MAX_SETS`, so a sixth set reaches the handler and
+ * is refused there ("Up to 5 sets"). Cutting at five saved the first five without a word, which is how
+ * a fourth set used to vanish (the owner's note 25d412f7).
+ */
 export function parseSets(text: string): SetScore[] {
   const out: SetScore[] = [];
   for (const m of text.matchAll(/(?<!\d)(\d{1,2})\s*[-:]\s*(\d{1,2})(?!\d)/g)) {
-    if (out.length === 3) break;
+    if (out.length > MAX_SETS) break;
     out.push({ setNumber: out.length + 1, sideA: Number(m[1]), sideB: Number(m[2]) });
   }
   return out;

@@ -1,10 +1,11 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
+import { activity, events, series, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
 import { newManageCode, newShareCode } from "@/lib/codes";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { cleanAgeMin, cleanCategory, type EventCategory } from "./eventTags";
 import { formatOf } from "./formats";
 import { hasRange, normalizeRange } from "./levels";
 import { defaultLength, parseMatchLength, type MatchLength } from "./matchLength";
@@ -36,6 +37,9 @@ export type CreateEventInput = {
   levelMax?: number | null;
   /** Verified levels only: inside the range but unconfirmed still asks to join. Ignored without a range. */
   levelVerifiedOnly?: boolean;
+  /** Who it is for (`eventTags.ts`): men, women or mixed, and 35, 45 or 55. Anything else is stored as none; nothing is checked at join. */
+  category?: EventCategory | null;
+  ageMin?: number | null;
   /** The group this match belongs to. */
   groupId?: string | null;
   /** Opt-in to the public venue board. */
@@ -143,6 +147,8 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           levelMin: range.min,
           levelMax: range.max,
           levelVerifiedOnly: Boolean(input.levelVerifiedOnly) && hasRange(range),
+          category: cleanCategory(input.category),
+          ageMin: cleanAgeMin(input.ageMin),
           groupId: input.groupId ?? null,
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
           venueSlug: slug,
@@ -202,6 +208,9 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     levelMin: src.levelMin,
     levelMax: src.levelMax,
     levelVerifiedOnly: src.levelVerifiedOnly,
+    // A ladies' match played again is a ladies' match.
+    category: src.category,
+    ageMin: src.ageMin,
     groupId: src.groupId,
     publicListing: src.publicListing,
     bookingUrl: src.bookingUrl,
@@ -225,6 +234,9 @@ export type UpdateEventInput = {
   levelMin?: number | null;
   levelMax?: number | null;
   levelVerifiedOnly?: boolean;
+  /** Undefined leaves the tag alone; null takes it off. */
+  category?: EventCategory | null;
+  ageMin?: number | null;
   publicListing?: boolean;
   bookingUrl?: string | null;
   cost?: string | null;
@@ -264,6 +276,15 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
       const after = { min: "levelMin" in set ? (set.levelMin ?? null) : ev.levelMin, max: "levelMax" in set ? (set.levelMax ?? null) : ev.levelMax };
       const want = (patch.levelVerifiedOnly ?? ev.levelVerifiedOnly) && hasRange(after);
       if (want !== ev.levelVerifiedOnly) set.levelVerifiedOnly = want;
+    }
+    // Information, not a rule: a new tag reaches the page and the cards, and no calendar.
+    if (patch.category !== undefined) {
+      const c = cleanCategory(patch.category);
+      if (c !== ev.category) set.category = c;
+    }
+    if (patch.ageMin !== undefined) {
+      const a = cleanAgeMin(patch.ageMin);
+      if (a !== ev.ageMin) set.ageMin = a;
     }
     if (patch.tz !== undefined) {
       if (!isValidTimeZone(patch.tz)) throw new DomainError("invalid", "tz");
@@ -368,6 +389,15 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     if (Object.keys(set).length === 0) return { event: ev, calendarChanged: false, promotedPlayerIds };
 
     const [updated] = await tx.update(events).set(set).where(eq(events.id, ev.id)).returning();
+    // An edition is made from its series row, so a tag the series' organiser sets here would be gone by
+    // the next edition. Their change is the series' change too; a player who edits the edition changes
+    // this date only. One update by primary key, and only when the tag moved.
+    if (ev.seriesId && actorPlayerId && ("category" in set || "ageMin" in set)) {
+      await tx
+        .update(series)
+        .set({ category: updated.category, ageMin: updated.ageMin, updatedAt: new Date() })
+        .where(and(eq(series.id, ev.seriesId), eq(series.organizerPlayerId, actorPlayerId)));
+    }
     for (const pid of promotedPlayerIds) {
       await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: pid, verb: "promoted" });
     }

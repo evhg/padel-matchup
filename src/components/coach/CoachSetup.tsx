@@ -94,7 +94,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   };
 
   const dayName = (d: number, style: "short" | "long" = "short") => new Intl.DateTimeFormat(locale, { weekday: style, timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 7 + d, 12)));
-  const chip = (active: boolean) => `rounded-full border px-4 py-2 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
+  const chip = (active: boolean) => `rounded-full border px-4 py-2 text-sm font-bold transition ${active ? "border-ink bg-ink text-on-ink" : "border-line bg-card text-ink hover:border-ink/40"}`;
   // Custom: seven lines from the grid. Preset: the same range every day, which is what the chips say.
   const hoursLines = custom ? days.map((d) => (d.on ? `${d.from}-${d.to}` : "off")) : Array.from({ length: 7 }, () => PRESET_HOURS[preset]);
 

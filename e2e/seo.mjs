@@ -1,4 +1,4 @@
-// Search pages: /levels (FAQ markup, CTA) and the pre-generated americano schedules.
+// Search pages: /levels (FAQ markup, CTA), the pre-generated americano schedules, and the fine print (/privacy, /terms).
 import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
@@ -20,6 +20,22 @@ try {
   check("the plain path stays English with x-default pointing at itself", new RegExp('hreflang="x-default" href="' + BASE + '/levels"', "i").test(await plain.text()));
   const sm = await fetch(`${BASE}/sitemap.xml`).then((r) => r.text());
   check("the sitemap lists the language variants with alternates", sm.includes(`${BASE}/ru/phuket`) && sm.includes(`${BASE}/es/americano/8`) && /hreflang="ru"/i.test(sm));
+  // The fine print in full: /privacy and /terms answer in every language, sit in the sitemap, and the
+  // promise on /about leads to /privacy. The figures come from the code, so "14 days" proves they rendered.
+  const privacy = await fetch(`${BASE}/privacy`);
+  const privacyHtml = await privacy.text();
+  check("/privacy names the operator, the cookies and the figures", privacy.status === 200 && privacyHtml.includes("Kicksmash, Phuket, Thailand") && privacyHtml.includes("km_player") && privacyHtml.includes("14 days"), String(privacy.status));
+  const ruPrivacy = await fetch(`${BASE}/ru/privacy`);
+  check("/ru/privacy renders in Russian", ruPrivacy.status === 200 && (await ruPrivacy.text()).includes("Конфиденциальность"));
+  const terms = await fetch(`${BASE}/terms`);
+  check("/terms renders with Thai law", terms.status === 200 && (await terms.text()).includes("the law of Thailand"), String(terms.status));
+  const esTerms = await fetch(`${BASE}/es/terms`);
+  check("/es/terms renders in Spanish", esTerms.status === 200 && (await esTerms.text()).includes("Condiciones de uso"));
+  check("the sitemap lists /privacy and /terms in every language", sm.includes(`${BASE}/privacy`) && sm.includes(`${BASE}/ru/privacy`) && sm.includes(`${BASE}/es/terms`));
+  await page.goto(`${BASE}/about`);
+  await page.getByRole("link", { name: "The full privacy page →" }).click();
+  await page.waitForURL(`${BASE}/privacy`);
+  check("the promise on /about leads to the privacy page", (await page.getByRole("heading", { name: "Privacy", exact: true }).count()) === 1);
   const levels = await fetch(`${BASE}/levels`);
   const levelsHtml = await levels.text();
   check("/levels renders with FAQ structured data", levels.status === 200 && levelsHtml.includes('"@type":"FAQPage"') && levelsHtml.includes("What your padel level means"));

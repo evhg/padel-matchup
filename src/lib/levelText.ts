@@ -1,3 +1,4 @@
+import { tagParts } from "@/lib/domain/eventTags";
 import { formatRange, hasRange, presetFor, type LevelRange } from "@/lib/domain/levels";
 
 /** Any next-intl translator (server or client); keys are checked at the call sites' message types. */
@@ -19,4 +20,16 @@ export function rangeChip(t: T, r: LevelRange | null | undefined): string | null
   const preset = presetFor(r);
   const range = rangeText(t, r);
   return preset && preset !== "custom" ? t("level.chip", { preset: t(`level.${preset}`), range }) : t("level.chipCustom", { range });
+}
+
+/**
+ * "Women", "Mixed · 45+", "35+": who the event is for, in the viewer's language, from the same parts
+ * every channel reads (`tagParts`). Null for an event open to anyone. Shown beside the level chip,
+ * never instead of it: a tag is information, and nobody is checked against it. It asks for both
+ * fields by type, so a read that selected a row without them fails the typecheck rather than
+ * showing no chip.
+ */
+export function tagChip(t: T, tag: { category: string | null; ageMin: number | null } | null | undefined): string | null {
+  const parts = tagParts(tag);
+  return parts.length ? parts.map((p) => t(p.key, p.values)).join(" · ") : null;
 }

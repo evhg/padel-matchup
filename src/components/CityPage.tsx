@@ -13,13 +13,17 @@ import { listSeries } from "@/lib/domain/series";
 import { rhythmLabel } from "@/lib/seriesText";
 import { ClubRow } from "@/components/ClubBits";
 import { CLUB_LIMITS, listShownClubs } from "@/lib/domain/clubs";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
+import { recentResults } from "@/lib/domain/recentResults";
+import { RecentResults } from "@/components/RecentResults";
 
 /** /phuket, /singapore: open matches across the city's clubs, the city ranking, and the pitch in four lines. */
 export async function CityPage({ city }: { city: City }) {
   const db = await getDb();
   const [t, locale, me, board, ranking, clubs, opens] = await Promise.all([getTranslations(), getLocale(), getSessionPlayer(db), getCityBoard(db, city), getRanking(db, { city }), listShownClubs(db, city.slug), listSeries(db, city)]);
+  // After the others, not beside them: the pooler stalls on pipelined bursts (rule 8).
+  const results = await recentResults(db, { city });
   const liveSlugs = new Set(clubs.map((c) => c.slug));
   const otherClubs = board.clubs.filter((c) => !liveSlugs.has(c.slug));
   const foundingLeft = Math.max(0, CLUB_LIMITS.foundingPerCity - clubs.filter((c) => c.founding).length);
@@ -44,6 +48,7 @@ export async function CityPage({ city }: { city: City }) {
             <ul className="mt-3 flex flex-col gap-2">
               {board.events.map(({ event: ev, spotsLeft }) => {
                 const chip = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+                const forChip = tagChip(t, ev);
                 return (
                   <li key={ev.id}>
                     <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-4 rounded-2xl border border-line px-4 py-3 hover:border-ink/30">
@@ -56,6 +61,7 @@ export async function CityPage({ city }: { city: City }) {
                         <div className="truncate text-sm text-muted">
                           {ev.venueName}
                           {chip ? ` · ${chip}` : ""}
+                          {forChip ? ` · ${forChip}` : ""}
                         </div>
                         <div className={`mt-1 text-sm font-bold ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t("venue.full")}</div>
                       </div>
@@ -130,6 +136,8 @@ export async function CityPage({ city }: { city: City }) {
           </div>
         </section>
 
+        <RecentResults results={results} showVenue />
+
         <section className="card">
           <h2 className="text-lg font-extrabold">🏆 {t("city.ranking", { city: city.name })}</h2>
           <p className="mt-1 text-sm text-muted">{t("ranking.sub")}</p>
@@ -142,7 +150,7 @@ export async function CityPage({ city }: { city: City }) {
           <ol className="mt-2 flex flex-col gap-2 text-sm text-muted">
             {(["city.how1", "city.how2", "city.how3", "city.how4"] as const).map((k, i) => (
               <li key={k} className="flex gap-3">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-ink text-xs font-extrabold text-accent">{i + 1}</span>
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-night text-xs font-extrabold text-accent">{i + 1}</span>
                 <span>{t(k)}</span>
               </li>
             ))}

@@ -232,6 +232,18 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
 }
 
 /**
+ * May this player get the club programme's email about a new match? Nobody may, today.
+ *
+ * The email becomes an opt-in, and its switch arrives with the per-kind notice settings (a
+ * decision still to come). Until then the answer is no for everybody, so push carries the notice
+ * alone. When the setting exists, read it here and nowhere else: the email path in
+ * `notifyClubMatch` is kept whole behind this one answer.
+ */
+export function mayEmailClubMatch(_p: Pick<Player, "id" | "email" | "emailNotifications">): boolean {
+  return false;
+}
+
+/**
  * A club's weekly programme creates a match and, until now, told nobody: no push, no email, no card,
  * unlike the group matches made in the very same cron tick. It sat on the club's page waiting to be
  * browsed to, which is not how a quiet Tuesday hour gets filled.
@@ -239,6 +251,10 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
  * Who hears it: people with a match at that club in the last three months or still to come, at a level
  * the match admits. Bounded on purpose (rule 12) — one indexed read on (venue_slug, starts_at), a
  * hard cap on recipients, and it runs in the cron tick, never in a path a person waits on.
+ *
+ * By push only, for now. The email went to up to forty past players who never asked for it, and
+ * /about promises that emails go out only for things a player asked for. The owner stopped it on
+ * 9 October 2026; it comes back as an opt-in (`mayEmailClubMatch`).
  */
 export async function notifyClubMatch(db: Db, club: { slug: string; name: string }, ev: Event, now = new Date()): Promise<{ emails: number; pushes: number; told: number }> {
   const since = new Date(now.getTime() - 90 * 24 * 3600_000);
@@ -265,7 +281,7 @@ export async function notifyClubMatch(db: Db, club: { slug: string; name: string
     told++;
     const c = await ctx(db, ev, p.locale, p, detail);
     const vars = { ...c.vars, club: club.name };
-    if (emailEnabled() && p.email && p.emailNotifications) {
+    if (emailEnabled() && p.email && p.emailNotifications && mayEmailClubMatch(p)) {
       const { html, text } = layout({ heading: c.t("email.clubMatch.heading", vars), body: c.t("email.clubMatch.body", vars), meta: c.meta, cta: { label: c.openLabel, url: c.url }, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
       await sendEmail({ to: p.email, subject: c.t("email.clubMatch.subject", vars), html, text }).catch(() => undefined);
       emails++;
@@ -522,13 +538,20 @@ export async function notifyEventCancelled(db: Db, ev: Event): Promise<void> {
 }
 
 /** Removed by the organizer → cancel their calendar entry (courtesy). */
-export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string | null): Promise<void> {
+/**
+ * The organiser took a player out. `absent` is the tournament's check-in ("Who is here?"): the
+ * same notice and the same calendar cancel, in words that say the night went on without them
+ * rather than that they were struck off.
+ */
+export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string | null, opts: { absent?: boolean } = {}): Promise<void> {
   if (!emailEnabled() || !removedPlayerId) return;
   const p = await getPlayer(db, removedPlayerId);
   if (!p?.email) return;
   const c = await ctx(db, ev, p.locale, p);
-  const { html, text } = layout({ heading: c.t("activity.removed", { name: p.displayName }), body: c.t("email.footer", { app: APP_NAME }), meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
-  await sendEmail({ to: p.email, subject: c.t("email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: p.displayName, email: p.email }, "CANCEL") } });
+  const heading = opts.absent ? c.t("email.cancelled.absentHeading") : c.t("activity.removed", { name: p.displayName });
+  const body = opts.absent ? c.t("email.cancelled.absentBody") : c.t("email.footer", { app: APP_NAME });
+  const { html, text } = layout({ heading, body, meta: c.meta, footer: c.footer, eventUrl: c.url, openLabel: c.openLabel, telegram: c.telegram });
+  await sendEmail({ to: p.email, subject: c.t(opts.absent ? "email.cancelled.absentSubject" : "email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: p.displayName, email: p.email }, "CANCEL") } });
 }
 
 /** Immediate invite to a reserved spot when the organizer entered an email. */

@@ -5,8 +5,14 @@ import { after } from "next/server";
 import type { TournamentFormat } from "@/db/schema";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { applyEventLevels } from "@/lib/domain/rating";
-import { deleteLastRound, generateRound, saveTournamentMatchScore, setTournamentLock, setTournamentSettings } from "@/lib/domain/tournament";
-import { getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
+import { MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
+import { absentToTell } from "@/lib/domain/checkIn";
+import { DomainError } from "@/lib/domain/errors";
+import { wasComplete } from "@/lib/domain/joining";
+import { LIMITS } from "@/lib/domain/ratelimit";
+import { addWalkIn, deleteLastRound, generateRound, saveTournamentMatchScore, setTournamentLock, setTournamentSettings, type CheckIn } from "@/lib/domain/tournament";
+import { notifyLineupChange, notifyRemoved } from "@/lib/notify";
+import { assertRate, getViewer, loadEvent, requireCreator, runA, type ActionResult } from "./shared";
 
 export async function setTournamentSettingsAction(code: string, input: { courts?: number | null; pointsPerMatch?: number | null; gamesTo?: number | null; courtNames?: string[] | null; format?: TournamentFormat }): Promise<ActionResult<null>> {
   return runA(async () => {
@@ -17,12 +23,50 @@ export async function setTournamentSettingsAction(code: string, input: { courts?
   });
 }
 
-export async function generateRoundAction(code: string): Promise<ActionResult<{ roundNumber: number }>> {
+/** The next round. Round 1 may carry the check-in ("Who is here?"): whoever it left out hears that the night started without them, by the removal's own notice. */
+export async function generateRoundAction(code: string, checkIn?: CheckIn): Promise<ActionResult<{ roundNumber: number }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
-    const round = await generateRound(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null });
+    const actor = viewer.player?.id ?? null;
+    const round = await generateRound(db, { eventId: detail.event.id, actorPlayerId: actor, checkIn: cleanCheckIn(checkIn) });
+    // Never the organiser who unticked their own name: they know (absentToTell).
+    const tell = absentToTell(round.absent, actor);
+    if (tell.length) {
+      after(async () => {
+        // Bounded by the names unticked, sequential (rule 8); each notice is one email at most.
+        for (const a of tell) await notifyRemoved(db, detail.event, a.playerId, { absent: true });
+      });
+    }
     revalidatePath(`/${code}`);
     return { roundNumber: round.roundNumber };
+  });
+}
+
+/** A check-in from the browser, as plain arrays of ids and a whole count, or nothing. */
+function cleanCheckIn(raw: CheckIn | undefined): CheckIn | undefined {
+  if (!raw) return undefined;
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, MAX_TOURNAMENT_CAPACITY * 2) : []);
+  const count = Number(raw.count);
+  if (!Number.isInteger(count) || count < 0) throw new DomainError("invalid", "roster_changed");
+  return { away: ids(raw.away), waitingIn: ids(raw.waitingIn), count };
+}
+
+/**
+ * A walk-in: somebody turned up who was not on the list. The organiser's "Open spot" reserve, with its
+ * rate limit and its line-up notice (`reserveAction`), through `addWalkIn`, which grows a full field by
+ * this one spot without moving the waiting list up. No email: a walk-in has none.
+ */
+export async function addWalkInAction(code: string, name: string): Promise<ActionResult<{ name: string }>> {
+  return runA(async () => {
+    const { db, detail, viewer } = await requireCreator(code);
+    await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
+    const before = wasComplete(detail);
+    const { slot, event } = await addWalkIn(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, name });
+    after(async () => {
+      await notifyLineupChange(db, event, before);
+    });
+    revalidatePath(`/${code}`);
+    return { name: slot.invitedName ?? name };
   });
 }
 

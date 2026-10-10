@@ -133,7 +133,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
     // first line, and on a phone the buttons drop underneath rather than crushing the name to nothing.
     // A cancelled or missed lesson is dimmed by its text, never by the row: a dimmed row made the one
     // button it still carries ("They came after all") look disabled.
-    <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-white px-4 py-3" data-status={l.status}>
+    <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-card px-4 py-3" data-status={l.status}>
       <div className={`w-14 shrink-0 text-xl font-extrabold leading-none tabular-nums ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>{l.time}</div>
       <div className={`min-w-0 flex-1 basis-40 ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>
         {/* The name opens this student on the students screen: their package, what they owe, their
@@ -258,7 +258,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
           <div className="text-sm font-extrabold">{t("home.requests")}</div>
           <ul className="mt-2 flex flex-col gap-2">
             {requests.map((r) => (
-              <li key={r.id} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-2">
+              <li key={r.id} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-bold">{r.name} · {r.label}</div>
                   {r.note && <div className="truncate text-xs text-muted">“{r.note}”</div>}
@@ -358,7 +358,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
 /** One door: an icon, a word, the whole tile tappable. */
 function NavTile({ href, icon, label }: { href: string; icon: string; label: string }) {
   return (
-    <Link href={href} prefetch={false} className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-line bg-white px-2 py-2 text-center text-xs font-bold leading-tight text-ink shadow-card transition hover:border-ink/40 active:scale-[0.98]">
+    <Link href={href} prefetch={false} className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl border border-line bg-card px-2 py-2 text-center text-xs font-bold leading-tight text-ink shadow-card transition hover:border-ink/40 active:scale-[0.98]">
       <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
       <span>{label}</span>
     </Link>
@@ -426,7 +426,7 @@ function BookForm({ students, slots, slotsSecond, days, dayLabels, lengths, onDo
       onDone(t("book.blocked", { when: `${dayLabels[day] ?? day} ${chosen?.time ?? customTime}` }));
     });
 
-  const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`;
+  const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-on-ink" : "border-line bg-card text-ink hover:border-ink/40"}`;
 
   return (
     <form onSubmit={submit} className="mt-4 flex flex-col gap-4 rounded-2xl border border-line bg-bg p-4 animate-pop">
@@ -522,7 +522,7 @@ function BookForm({ students, slots, slotsSecond, days, dayLabels, lengths, onDo
               role="radio"
               aria-checked={heads === n}
               data-heads={n}
-              className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${heads === n ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-ink/40"}`}
+              className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${heads === n ? "border-ink bg-ink text-on-ink" : "border-line bg-card text-ink hover:border-ink/40"}`}
               onClick={() => setHeads(n)}
             >
               {n}

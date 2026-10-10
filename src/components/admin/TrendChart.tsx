@@ -110,15 +110,15 @@ export function TrendChart({ title, days, series, unit = "int", subtitle }: { ti
             </defs>
             {ticks.map((tv) => (
               <g key={tv}>
-                <line x1={PAD.left} x2={W - PAD.right} y1={y(tv)} y2={y(tv)} stroke="#e4e2da" strokeWidth="1" />
-                <text x={PAD.left - 8} y={y(tv) + 3} textAnchor="end" fontSize="10" fill="#8a919c">
+                <line x1={PAD.left} x2={W - PAD.right} y1={y(tv)} y2={y(tv)} className="stroke-line" strokeWidth="1" />
+                <text x={PAD.left - 8} y={y(tv) + 3} textAnchor="end" fontSize="10" className="fill-faint">
                   {format(tv)}
                 </text>
               </g>
             ))}
             {days.map((d, i) =>
               (i % labelEvery === 0 && n - 1 - i >= Math.max(2, labelEvery / 2)) || i === n - 1 ? (
-                <text key={d} x={x(i)} y={H - 8} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="10" fill="#8a919c">
+                <text key={d} x={x(i)} y={H - 8} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="10" className="fill-faint">
                   {fmtDay(d)}
                 </text>
               ) : null,
@@ -127,20 +127,20 @@ export function TrendChart({ title, days, series, unit = "int", subtitle }: { ti
               <g key={s.name}>
                 {series.length === 1 && <path d={`${path(s.values)} L${x(n - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`} fill={`url(#${id}-g${si})`} />}
                 <path d={path(s.values)} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-                <circle cx={x(n - 1)} cy={y(s.values[n - 1] ?? 0)} r="5" fill={s.color} stroke="#ffffff" strokeWidth="2" />
+                <circle cx={x(n - 1)} cy={y(s.values[n - 1] ?? 0)} r="5" fill={s.color} className="stroke-card" strokeWidth="2" />
               </g>
             ))}
             {hover !== null && (
               <g>
-                <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={H - PAD.bottom} stroke="#8a919c" strokeWidth="1" />
+                <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={H - PAD.bottom} className="stroke-faint" strokeWidth="1" />
                 {series.map((s) => (
-                  <circle key={s.name} cx={x(hover)} cy={y(s.values[hover] ?? 0)} r="5" fill={s.color} stroke="#ffffff" strokeWidth="2" />
+                  <circle key={s.name} cx={x(hover)} cy={y(s.values[hover] ?? 0)} r="5" fill={s.color} className="stroke-card" strokeWidth="2" />
                 ))}
               </g>
             )}
           </svg>
           {hover !== null && (
-            <div className="pointer-events-none absolute top-2 rounded-xl border border-line bg-white px-3 py-2 text-xs shadow-card" style={{ left: `${(x(hover) / W) * 100}%`, transform: x(hover) > W / 2 ? "translateX(calc(-100% - 8px))" : "translateX(8px)" }}>
+            <div className="pointer-events-none absolute top-2 rounded-xl border border-line bg-card px-3 py-2 text-xs shadow-card" style={{ left: `${(x(hover) / W) * 100}%`, transform: x(hover) > W / 2 ? "translateX(calc(-100% - 8px))" : "translateX(8px)" }}>
               <div className="font-bold">{fmtDay(days[hover])}</div>
               {series.map((s) => (
                 <div key={s.name} className="mt-0.5 flex items-center gap-1.5 tabular-nums">

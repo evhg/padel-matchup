@@ -1,6 +1,7 @@
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db";
-import { coachManagers, coaches, events, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
+import { coachManagers, coaches, events, feedback, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
+import { DELETED_PLAYER_NAME } from "./result";
 import { dropCoachWantsFor } from "./coachWants";
 import { dropWantsFor } from "./demand";
 import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching";
@@ -77,9 +78,39 @@ export async function anonymizePlayer(
   // one thing an account deletion must not leave behind is a reason to send somebody a message.
   await dropWantsFor(db, playerId);
   await dropCoachWantsFor(db, playerId);
+  // The chat accounts and the public page go too. They are ways to reach a person and a page with
+  // their level on it, and /privacy promises that deletion takes them: until 9 October 2026 the row
+  // kept its Telegram, Discord and LINE ids, so the bot still knew a "Deleted player" by their account.
   await db
     .update(players)
-    .set({ displayName: "Deleted player", email: null, recoveryEmail: null, phone: null, personalToken: null, previousToken: null, emailVerifiedAt: null, emailNotifications: false, homescreenAt: null })
+    .set({
+      displayName: DELETED_PLAYER_NAME,
+      email: null,
+      recoveryEmail: null,
+      phone: null,
+      personalToken: null,
+      previousToken: null,
+      emailVerifiedAt: null,
+      emailNotifications: false,
+      homescreenAt: null,
+      telegramId: null,
+      telegramUsername: null,
+      discordId: null,
+      discordUsername: null,
+      lineId: null,
+      lineDisplayName: null,
+      publicProfile: false,
+      publicSlug: null,
+      publicSince: null,
+    })
     .where(eq(players.id, playerId));
+  // The organiser's copies go too. Reserving a seat "for someone" types a name, an email and a phone
+  // into the slot, and the organiser's rolodex reads them back (getRolodex): until 9 October 2026 a
+  // deleted player's address and number stayed there, on every seat they ever held. One update, by
+  // the slots_player_idx index; the seats themselves stay, so old line-ups still add up.
+  await db.update(slots).set({ invitedName: null, invitedEmail: null, invitedPhone: null }).where(eq(slots.playerId, playerId));
+  // And their first name leaves /built, the public page of ideas that became the app. The note and
+  // its summary stay: the change is the app's, the name was theirs.
+  await db.update(feedback).set({ publicName: null }).where(and(eq(feedback.playerId, playerId), isNotNull(feedback.publicName)));
   return { cancelledEvents, leftEvents, coachClosure };
 }

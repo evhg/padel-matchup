@@ -261,18 +261,23 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(await postTelegramResult(db, ev.code)).toBe(0);
   });
 
-  it("linking merges the bot-created player into the signed-in one; cards render for tournaments too", async () => {
+  it("linking keeps the record with the seat: a fresh web record folds into the bot's player who joined; cards render for tournaments too", async () => {
     const chat = { id: -100999, type: "group" as const, title: "Merge" };
     await handleTelegramUpdate(db, { update_id: 60, my_chat_member: { chat, from: user(21, "Nina"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } }, NO_SIDE_EFFECTS);
     const { ev } = await match();
     await handleTelegramUpdate(db, { update_id: 61, message: { message_id: 1, date: 0, chat, from: user(21, "Nina"), text: `/match ${ev.code}` } }, NO_SIDE_EFFECTS);
     const [card] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, ev.id));
     await handleTelegramUpdate(db, { update_id: 62, callback_query: { id: "x", from: user(21, "Nina"), message: { message_id: card.messageId, date: 0, chat }, data: `j:${ev.code}` } }, NO_SIDE_EFFECTS);
+    // Nina's bot record holds a seat and the web record holds nothing, so the bot record survives
+    // (the owner's decision 2A, 9 October 2026; tests/telegram-link.test.ts has the other cases).
+    const [botNina] = await db.select().from(players).where(eq(players.telegramId, 21));
     const web = await makePlayer(db, "Nina Web");
     const linked = await linkTelegram(db, web.id, user(21, "Nina"));
+    expect(linked.id).toBe(botNina.id);
     expect(linked.telegramId).toBe(21);
     const detail = (await getEventByCode(db, ev.code))!;
-    expect(detail.roster.some((s) => s.playerId === web.id)).toBe(true);
+    expect(detail.roster.some((s) => s.playerId === linked.id)).toBe(true);
+    expect(await db.select().from(players).where(eq(players.id, web.id))).toHaveLength(0);
     expect(await db.select().from(players).where(eq(players.telegramId, 21))).toHaveLength(1);
 
     const org = await makePlayer(db, "Org");
@@ -551,6 +556,25 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
     expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 6, b: 4 }]);
     expect(await msg(92, org, `/score ${code} 6-3`)).toBe("score_saved");
+    // Four sets save (decision H; the owner's note "we played 4 sets but we couldn't add the result!"),
+    // and an unusual one is saved too, with one line saying so in the chat's language.
+    // A sixth set is read, so it can be refused rather than dropped (the owner's note 25d412f7 was a set that vanished).
+    expect(parseSets("6-3 4-6 6-4 3-6 7-5 6-1")).toHaveLength(6);
+    expect(await msg(96, org, `/score ${code} 6-3 4-6 6-4 6-5`)).toBe("score_saved:unusual");
+    pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 4, b: 6 }, { a: 6, b: 4 }, { a: 6, b: 5 }]);
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("6-5: необычный счёт");
+    expect(await msg(97, org, `/score ${code} 6-3 4-6 6-4 7-5`)).toBe("score_saved");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).not.toContain("необычный");
+    // A bare four-set score in reply to the card is read too, not only the /score command.
+    expect(await msg(99, org, "6-3 4-6 6-4 6-2", card.messageId)).toBe("score_saved");
+    // Six sets are refused whole, in one line in the chat's language, and the saved score stays as it was:
+    // from /score CODE and from a bare reply to the card alike.
+    expect(await msg(120, org, `/score ${code} 6-3 4-6 6-4 3-6 7-5 6-1`)).toBe("score_too_many_sets");
+    expect(String(sent("sendMessage").at(-1)!.body.text)).toBe("Не больше 5 сетов. Пришлите счёт ещё раз.");
+    expect(await msg(121, org, "6-3 4-6 6-4 3-6 7-5 6-1 6-2", card.messageId)).toBe("score_too_many_sets");
+    pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
+    expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 4, b: 6 }, { a: 6, b: 4 }, { a: 6, b: 2 }]);
     expect(await msg(93, org, "/score what")).toBe("score_how");
     // A locked result stays locked for players.
     expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_error:locked");

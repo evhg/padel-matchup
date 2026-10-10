@@ -26,13 +26,15 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
           push the language toggle off a phone. Two chips here once overlapped the logo and broke a
           click three screens down the page, which is a strange way to find out your header overflows. */}
       <Link href="/" prefetch={false} className="flex min-w-0 items-center gap-2 font-extrabold tracking-tight text-lg" aria-label={APP_NAME}>
-        <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-ink">
+        <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-night">
           <span className="h-4 w-4 rounded-full bg-accent" />
         </span>
-        <span className={`truncate ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
+        {/* With Bigger text on a phone the three chips leave the word no room either, and "Kicksm…" reads
+            worse than the mark alone. The minimal header holds the language pill only, so it keeps the word. */}
+        <span className={`truncate ${minimal ? "" : "[[data-text=big]_&]:max-sm:hidden"} ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
-        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments") }} />}
+        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText") }} />}
         <LocaleToggle />
       </div>
     </header>
@@ -44,7 +46,7 @@ export async function Footer({ spacious = false }: { spacious?: boolean }) {
   const t = await getTranslations();
   return (
     <footer className={`mx-auto mt-10 flex w-full max-w-xl items-center justify-between px-4 text-xs text-faint ${spacious ? "pb-[45vh]" : "pb-16"}`}>
-      <Link href="/about" prefetch={false} className="hover:text-muted">
+      <Link href="/privacy" prefetch={false} className="hover:text-muted">
         {t("about.footerLink")}
       </Link>
       <span>{APP_NAME}</span>

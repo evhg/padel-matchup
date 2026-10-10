@@ -330,6 +330,14 @@ Wall clock first, credits second. What actually moved it, measured:
   twenty-one real people look like. Two rules came out of it: a shared counter is shared state, so
   count it like one; and a wait for a navigation also waits for the error that replaced it — watch
   both, or the failure cannot say what it was.
+- **A suite tests whatever answers on its port, so a port is a lock.** On 9 October 2026 two gates
+  ran on one machine for two checkouts. `e2e/run.mjs` started its server on 3001 and called it up the
+  moment `/api/health` answered — and the other checkout's server was already answering there, so a
+  suite could test a build it never made and go green or red for somebody else's code. `core.mjs` and
+  `passport.mjs` also pinned `localhost:3001` in their patterns, and the gate built for 3001 whatever
+  port it then served. Now `run.mjs` refuses a port that is already taken, before it starts anything;
+  the suites build their patterns from `BASE`; and the gate builds and serves on `E2E_PORT`. Two gates
+  at once: `E2E_PORT=3031 GATE_E2E=auto bash scripts/gate.sh`.
 - **A setting a walk switches on stays on for every check after it.** Olga ticked "anyone can book"
   at the first settings save, and forty lines later the assistant walk — which exists to prove that
   booking before the coach accepts is refused — got a 201 and then hung waiting for "Waiting for your
@@ -542,6 +550,14 @@ Wall clock first, credits second. What actually moved it, measured:
   Playwright, so four checks written from the source strings ("8 pairs of 8", "Entries closed") went
   red while the screen was right. Compare lower-cased text, or read `textContent`, whenever the check
   touches a `.chip-*` or anything else the stylesheet capitalises.
+- **The header is on every page, so a control added there is on every page a suite searches.** The
+  "Bigger text" switch went into the ⋯ menu, and core's `[role="switch"]:not([data-testid="banter-switch"])`
+  found it first, hidden in the closed menu, and timed out three screens later. Scope a page-wide
+  locator to `main`, and grep `e2e/*.mjs` for the role, not only the name, before adding to the header.
+- **A colour named after itself does not turn with the theme.** `bg-white` was the card in thirty-four
+  files and `text-white` the words on every ink fill, so the dark set alone gave white boxes on navy
+  and white words on light grey. Use the tokens (`bg-card`, `text-on-ink`, `text-night` on lime);
+  `tests/contrast.test.ts` counts the white that is left and names the file of a new one.
 - **The suite map reads the `e2e/` directory, so the suite file comes before the rule.** A rule for
   the tournament paths printed "no suite" until `e2e/tournament.mjs` existed, because `ALL` is the
   directory listing and a rule's suites are filtered against it. Write the suite, then ask

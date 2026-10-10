@@ -81,7 +81,7 @@ try {
   await org.goto(`${BASE}/${mex}`);
   check("panel is titled Mexicano", (await org.locator("section#score h2").innerText()) === "Mexicano", mex);
   check("format chips offered until round 1", (await org.locator("section#score").getByRole("button", { name: "King of the court", exact: true }).count()) === 1);
-  await org.getByRole("button", { name: "Generate round 1" }).click();
+  await org.getByRole("button", { name: "Start with 8 players" }).click();
   await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
   check("format chips gone once a round exists", (await org.locator("section#score").getByRole("button", { name: "King of the court", exact: true }).count()) === 0);
   const names = ["Kira", ...mexNames];
@@ -123,7 +123,11 @@ try {
   await org.goto(kingRes.json.organizer.manageUrl);
   await org.waitForURL(new RegExp(`/${king}$`), { timeout: 20000 });
   check("panel is titled King of the court", (await org.locator("section#score h2").innerText()) === "King of the court", king);
-  await org.getByRole("button", { name: "Generate round 1" }).click();
+  // King plays in fours: unticking one of eight names says how to get back to a four, and ticking again starts.
+  await org.getByTestId("check-in").getByRole("checkbox", { name: "King1" }).uncheck();
+  check("king names what reaches a four", (await org.getByRole("button", { name: "Start with 7 players" }).isDisabled()) && (await org.getByText("King of the court plays in fours (7 ticked): tick or add 1, or untick 3.").count()) === 1);
+  await org.getByTestId("check-in").getByRole("checkbox", { name: "King1" }).check();
+  await org.getByRole("button", { name: "Start with 8 players" }).click();
   await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
   const kn = ["Kai", ...kingNames];
   const k1 = await roundText(org, 1);
@@ -207,7 +211,7 @@ try {
   await fillUntilFull(gm, "Gm", key);
   await org.goto(`${BASE}/${gm}`);
   check("the panel keeps first to four games", (await org.getByLabel("Score by").inputValue()) === "g:4");
-  await org.getByRole("button", { name: "Generate round 1" }).click();
+  await org.getByRole("button", { name: "Start with 4 players" }).click();
   await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
   await org.locator('input[aria-label="A"]').nth(0).fill("5");
   await org.locator('input[aria-label="B"]').nth(0).fill("2");
@@ -236,8 +240,8 @@ try {
   check("the chips and the sample name the same courts", chipCourts !== undefined && chipCourts === sampleText.match(/about (\d+) courts?/)?.[1], `${chips} | ${sampleText}`);
   await org.getByRole("button", { name: /How Americano works/ }).click();
   check("the help is named for the format and opens the whole rule", (await org.getByText(/Partners rotate every round/).count()) > 0);
-  const restGen = org.getByRole("button", { name: "Generate round 1" });
-  check("five names may start round 1", !(await restGen.isDisabled()) && (await org.getByText(/needs names in fours/).count()) === 0);
+  const restGen = org.getByRole("button", { name: "Start with 5 players" });
+  check("five names may start round 1", !(await restGen.isDisabled()) && (await org.getByText(/plays in fours/).count()) === 0);
   await restGen.click();
   await org.getByText("Round 1", { exact: true }).waitFor({ timeout: 20000 });
   await org.getByRole("button", { name: "Generate round 2" }).click();

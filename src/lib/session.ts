@@ -10,7 +10,8 @@ import type { Player } from "@/db/schema";
 export const PLAYER_COOKIE = "km_player";
 /** Non-httpOnly companion so client code can tell "no identity" from "stale render". */
 export const HAS_ID_COOKIE = "km_has_id";
-const ONE_YEAR = 60 * 60 * 24 * 365;
+/** How long the identity and manage cookies last. /privacy says it in words; tests/legal.test.ts holds the two together. */
+export const ONE_YEAR = 60 * 60 * 24 * 365;
 
 const secret = sessionSecret;
 

@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
-import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
+import { formatLevel } from "@/lib/domain/levels";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
-import { cardTitle, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
+import { cardTitle, levelLine, strings, whenLine, whereLine, type BotLocale } from "@/lib/telegram/card";
 import { md, type DcActionRow, type DcEmbed } from "./api";
 
 /**
@@ -29,8 +29,8 @@ export function renderDiscordCard(detail: EventDetail, base: string, locale: Bot
   const head: string[] = [];
   head.push(`📅 ${md(whenLine(detail, locale))}`);
   head.push(`📍 ${md(whereLine(detail, locale))}`);
-  const range = { min: ev.levelMin, max: ev.levelMax };
-  if (hasRange(range)) head.push(`🎚 ${s.level} ${formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` })}`);
+  const level = levelLine(ev, locale);
+  if (level) head.push(level);
   if (ev.cost) head.push(`💸 ${md(ev.cost)}${ev.payNote ? ` · ${md(ev.payNote)}` : ""}`);
   const lines: string[] = [];
   const shown = seats.slice(0, MAX_LINES);

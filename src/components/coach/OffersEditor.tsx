@@ -26,7 +26,7 @@ export function OffersEditor({ value, onChange, lengths, currency, max = 3 }: Pr
   return (
     <div className="flex flex-col gap-3" data-testid="offers-editor">
       {value.map((o, i) => (
-        <div key={o.id ?? `new-${i}`} className="rounded-2xl border border-line bg-white p-3" data-testid={`offer-${i}`}>
+        <div key={o.id ?? `new-${i}`} className="rounded-2xl border border-line bg-card p-3" data-testid={`offer-${i}`}>
           <div className="grid grid-cols-2 gap-2">
             <label className="block text-xs font-bold text-muted">
               {t("setup.offerLessons")}

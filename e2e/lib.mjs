@@ -3,6 +3,13 @@ import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
 
 export const BASE = process.env.BASE ?? "http://localhost:3001";
+/**
+ * The server under test, ready for a RegExp. A pattern that spells out "localhost:3001" passes on the
+ * one port and fails, or matches somebody else's server, on any other (E2E_PORT, two gates at once).
+ */
+export const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export const BASE_RE = escapeRe(BASE);
+export const HOST_RE = escapeRe(new URL(BASE).host);
 const SHOTS = process.env.SHOTS;
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -42,6 +49,43 @@ export async function switchLang(page, l) {
   if (!(await target.isVisible())) await page.locator('[aria-label="Language"] button[aria-pressed="true"]').click();
   await target.click();
 }
+/**
+ * Does a day label hold the widest label its format prints, on one line, inside its box? Today's date
+ * proves little: "FRI, OCT 9" fits a column that "DOM, 13 SEPT" overflows. So the label takes every day
+ * of a year in English, Russian and Spanish, in the format it shows (with the weekday when its text has
+ * a comma, as "Fri, Oct 9" does and "Oct 9" does not), and is measured where it stands. Its own text
+ * comes back afterwards. Returns the worst label and whether it fitted.
+ */
+export const widestDayFits = (cell) =>
+  cell.evaluate((e) => {
+    const original = e.textContent;
+    const opts = original.includes(",") ? { weekday: "short", day: "numeric", month: "short" } : { day: "numeric", month: "short" };
+    const lh = parseFloat(getComputedStyle(e).lineHeight);
+    let worst = { text: original, over: -Infinity, lines: 0 };
+    for (const loc of ["en", "ru", "es"]) {
+      const f = new Intl.DateTimeFormat(loc, { ...opts, timeZone: "UTC" });
+      for (let d = 0; d < 366; d++) {
+        e.textContent = f.format(new Date(Date.UTC(2026, 0, 1 + d)));
+        const over = e.scrollWidth - e.clientWidth;
+        const lines = Math.round(e.getBoundingClientRect().height / lh);
+        if (lines > worst.lines || (lines === worst.lines && over > worst.over)) worst = { text: e.textContent, over, lines };
+      }
+    }
+    e.textContent = original;
+    return { ok: worst.over <= 0 && worst.lines <= 1, worst };
+  });
+
+/**
+ * Does `inner` sit wholly inside `outer`, and on the screen? A chip pushed past its row's edge is still
+ * "visible" to every other check: only the boxes say it ran off a 390px phone or was clipped.
+ */
+export async function sitsInside(page, inner, outer) {
+  const [a, b] = [await inner.boundingBox(), await outer.boundingBox()];
+  const width = page.viewportSize()?.width ?? Infinity;
+  const ok = Boolean(a && b) && a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.width <= b.x + b.width + 0.5 && a.y + a.height <= b.y + b.height + 0.5 && a.x + a.width <= width + 0.5;
+  return { ok, detail: JSON.stringify({ inner: a, outer: b, width }) };
+}
+
 export const shot = (page, name) => (SHOTS ? page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true }) : Promise.resolve());
 
 export function makeCheck(results) {

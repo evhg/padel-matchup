@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, crashed, finish, iphone, launch, makeCheck, resendEvent, shot, switchLang } from "./lib.mjs";
+import { BASE, BASE_RE, crashed, finish, iphone, launch, makeCheck, resendEvent, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -36,7 +36,7 @@ try {
   await a.getByRole("button", { name: "Send code" }).click();
   await a.getByText(/We don't know that email yet/).waitFor({ timeout: 20000 });
   check("the landing page's way back in answers when it is used", (await a.getByText(/We don't know that email yet/).count()) === 1);
-  check("footer carries only the faint privacy link", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/about");
+  check("footer carries only the faint privacy link, named \"Privacy and terms\"", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/privacy" && (await a.locator("footer a").textContent())?.trim() === "Privacy and terms");
   // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
   // "there should be a feedback option on the main landing page which explains that kicksmash is a
   // self-learning app with community feedback." Eight pages carried this door; the busiest did not.
@@ -45,7 +45,30 @@ try {
     (await a.getByRole("button", { name: /Tell us what should change/ }).count()) === 1 && (await a.getByText(/built from what players say/).count()) === 1,
   );
   check("the landing page links to the tournaments and to the clubs", (await a.getByTestId("landing-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("landing-clubs").getAttribute("href")) === "/clubs");
-  check("the header's More menu holds the three public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
+  check("the header's More menu holds the four public doors for a visitor", (await a.getByTestId("nav-more").count()) === 1 && (await a.getByTestId("nav-find").getAttribute("href")) === "/play" && (await a.getByTestId("nav-coaches").getAttribute("href")) === "/coaches" && (await a.getByTestId("nav-clubs").getAttribute("href")) === "/clubs" && (await a.getByTestId("nav-tournaments").getAttribute("href")) === "/t" && (await a.getByTestId("nav-play").count()) === 1);
+  // "Bigger text" in the same menu, for a visitor with no account: a tap grows the page in place,
+  // the cookie keeps it from the first paint of the next page, and a phone still has no sideways scroll.
+  const rootSize = () => a.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+  await a.getByTestId("nav-more").click();
+  await a.getByRole("switch", { name: "Bigger text" }).click();
+  check("Bigger text raises the root to 18px at once", (await rootSize()) === "18px");
+  await a.reload();
+  check("Bigger text holds after a reload, and nothing runs off a phone", (await rootSize()) === "18px" && (await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)));
+  // The pictures of /me at the big size, in the light theme and the dark one; then back to the landing page.
+  await a.goto(BASE + "/me");
+  // The e-mail field holds its whole placeholder at the big size: it read "you@example.c" beside "Send code".
+  const placeholderFits = () => a.locator('main input[type="email"]').first().evaluate((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; }).catch(() => false);
+  check("with Bigger text the e-mail field on My matches shows its whole placeholder", await placeholderFits());
+  await shot(a, "04b-me-bigger-text");
+  // A fresh render in the dark theme: a picture taken as the scheme flips catches the buttons halfway through their colour transition.
+  await a.emulateMedia({ colorScheme: "dark" });
+  await a.reload();
+  await shot(a, "04c-me-bigger-text-dark");
+  await a.emulateMedia({ colorScheme: "light" });
+  await a.goto(BASE + "/");
+  await a.getByTestId("nav-more").click();
+  await a.getByRole("switch", { name: "Bigger text" }).click();
+  check("switched off, the text is back to 16px", (await rootSize()) === "16px" && (await a.getByRole("switch", { name: "Bigger text" }).getAttribute("aria-checked")) === "false");
   await a.goto(BASE + "/PLAY");
   const story = await fetch(BASE + "/PLAY/story");
   check("story image renders as a 9:16 PNG", story.status === 200 && (story.headers.get("content-type") || "").startsWith("image/png"), `${story.status} ${story.headers.get("content-type")}`);
@@ -63,6 +86,23 @@ try {
 
   await a.goto(BASE + "/me");
   await shot(a, "04-me");
+  // A player's My matches at the big size, with its own switch on, in both themes; then the normal size again.
+  await a.getByTestId("text-size-switch").click();
+  check("the switch on My matches raises the text to 18px", (await rootSize()) === "18px");
+  // The header's word Kicksmash is whole or gone at the big size, never cut to "Kicksm…".
+  const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.scrollWidth <= e.clientWidth).catch(() => false);
+  check("with Bigger text the header shows the whole word Kicksmash or the mark alone, never a cut word", brandWhole);
+  const emailFields = a.locator('main input[type="email"]');
+  const allPlaceholdersFit = await emailFields.evaluateAll((es) => es.every((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; })).catch(() => false);
+  check("with Bigger text every e-mail field on a player's My matches shows its whole placeholder", (await emailFields.count()) > 0 && allPlaceholdersFit);
+  await shot(a, "04d-me-player-bigger-text");
+  await a.emulateMedia({ colorScheme: "dark" });
+  await a.reload();
+  await shot(a, "04e-me-player-bigger-text-dark");
+  await a.emulateMedia({ colorScheme: "light" });
+  await a.reload();
+  await a.getByTestId("text-size-switch").click();
+  check("switched off on My matches, the text is back to 16px", (await rootSize()) === "16px");
   check("/me lists PLAY", (await a.content()).includes('href="/PLAY"'));
   // The feedback card is the app saying what it is, not a suggestion box at the foot of the page.
   check("the feedback card says the app is built by the players on it", (await a.getByText(/built by the players on it/).count()) === 1);
@@ -102,13 +142,14 @@ try {
   await a.getByPlaceholder("you@example.com").first().fill("dana@example.com");
   await a.getByRole("button", { name: "Send invite" }).click();
   await a.getByText(/Calendar invite sent to dana@example.com/).waitFor({ timeout: 20000 });
-  // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not.
-  const emailSwitch = a.locator('[role="switch"]:not([data-testid="banter-switch"])');
+  // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not;
+  // and the header's ⋯ menu carries "Bigger text", so the search stays inside the page's own content.
+  const emailSwitch = a.locator('main [role="switch"]:not([data-testid="banter-switch"])');
   await emailSwitch.waitFor({ timeout: 20000 });
   check("after entering an email: one quiet line says where updates go, the invite line + email row with notifications switch, the question gone", (await a.getByText("Stay updated").count()) === 0 && (await stay.getByText("Updates reach you by email ✓").count()) === 1 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
   const ics = await a.evaluate(async (c) => { const r = await fetch(`/${c}/calendar.ics`); return { status: r.status, body: await r.text() }; }, code);
   check("calendar.ics serves a VCALENDAR with court in title", ics.status === 200 && ics.body.includes("BEGIN:VCALENDAR") && ics.body.includes("Court 3"), String(ics.status));
-  check("calendar.ics carries one short private link, no personal-link line", /URL:http:\/\/localhost:3001\/p\/[A-Za-z0-9]{12}\//.test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(/http:\/\/localhost:3001/g) || []).length === 2);
+  check("calendar.ics carries one short private link, no personal-link line", new RegExp(`URL:${BASE_RE}/p/[A-Za-z0-9]{12}/`).test(ics.body) && !ics.body.includes("COMPLETE") && !ics.body.includes("personal link") && (ics.body.match(new RegExp(BASE_RE, "g")) || []).length === 2);
 
   // ---- The invite really went out: the test server writes every email to a file instead of sending ----
   const { existsSync, readFileSync } = await import("node:fs");
@@ -130,12 +171,26 @@ try {
   await a.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
   await a.locator("input[type=time]").fill("11:30");
   await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  // Who it is for (the owner's decision of 9 October 2026): behind the level chip, so the form is not
+  // one line longer for anybody who skips it. "Men" is inside "Women" and the chip repeats both: exact.
+  check("the tag stays folded behind the level chip until asked", (await a.getByRole("button", { name: "Women", exact: true }).count()) === 0);
+  await a.getByTestId("level-chip").click();
+  await a.getByTestId("tag-category").getByRole("button", { name: "Women", exact: true }).click();
+  await a.getByTestId("tag-age").getByRole("button", { name: "45+", exact: true }).click();
+  // Chips are set in capitals by CSS, and innerText carries that: read textContent, or match blind to case.
+  check("the level chip reads the tag once it is picked", /any level · women · 45\+/i.test(await a.getByTestId("level-chip").innerText()));
+  await shot(a, "05b-new-tagged");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code2 = a.url().split("/").slice(-2)[0];
   const organizerInvite = await waitUntil(() => invitesFor(code2)[0]);
   check("organizer with an email on file gets the calendar invite the moment the match exists", Boolean(organizerInvite) && unfoldIcs(organizerInvite.ics.content).includes("DTSTART:"), organizerInvite ? organizerInvite.subject : `no invite for ${code2}`);
+  await a.goto(`${BASE}/${code2}`);
+  const tagText = ((await a.getByTestId("tag-chip").textContent().catch(() => null)) ?? "no chip").trim();
+  check("the match page shows who it is for, as one chip", tagText === "Women · 45+", tagText);
+  await shot(a, "05c-match-tagged");
   await a.goto(`${BASE}/${code}`);
+  check("an untagged match shows no tag chip", (await a.getByTestId("tag-chip").count()) === 0);
 
   // ---- Reserve a spot for Jordi by tapping an open spot ----
   check("creator sees tappable open spots", (await a.getByText("Tap to reserve for someone").count()) === 3);
@@ -148,7 +203,7 @@ try {
   check("reserved row shows forward buttons right away", (await a.getByText("Send them their personal link").count()) > 0 && (await a.locator('a[href^="https://wa.me"]').count()) > 0);
   await shot(a, "08-reserved");
   const hrefs = await a.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
-  const inviteUrl = hrefs.map(decodeURIComponent).map((h) => h.match(/(http:\/\/localhost:3001\/[^/\s]{4}\/i\/[^\s]{6})/)?.[1]).find(Boolean);
+  const inviteUrl = hrefs.map(decodeURIComponent).map((h) => h.match(new RegExp(`(${BASE_RE}/[^/\\s]{4}/i/[^\\s]{6})`))?.[1]).find(Boolean);
   check("invite url extracted from forward button", !!inviteUrl, inviteUrl);
   // Rolodex suggestions never include people already in the match
   await a.getByRole("button", { name: /Open spot/ }).first().click();
@@ -220,6 +275,54 @@ try {
   await a.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   check("Play again appears after the score", (await a.getByRole("button", { name: /Play again/ }).count()) === 1);
   await shot(a, "11-score-locked");
+  // ---- Four sets, one of them unusual (decision H; the owner's note "we played 4 sets but we couldn't add the result!") ----
+  // 6-3 stays the first set, because /me is read for it below. The organiser's "Confirmed" chip stays
+  // up while they edit, so a save is over when "Edit score" comes back, not when the chip shows.
+  const setInputs = a.locator("#score input[type=number]");
+  await a.getByRole("button", { name: "Edit score" }).click();
+  await a.getByRole("button", { name: /Add set/ }).click();
+  await a.getByRole("button", { name: /Add set/ }).click();
+  await setInputs.nth(4).fill("4");
+  await setInputs.nth(5).fill("6");
+  await setInputs.nth(6).fill("6");
+  await setInputs.nth(7).fill("5");
+  await a.getByRole("button", { name: "Save score" }).click();
+  const scoreCheck = a.getByTestId("score-check");
+  await scoreCheck.waitFor({ timeout: 20000 });
+  check("an unusual set asks before it saves, naming the set", (await scoreCheck.getByText("Is 6-5 right?").count()) === 1 && (await a.getByRole("button", { name: "Save score" }).count()) === 0);
+  await shot(a, "11a-score-question");
+  await scoreCheck.getByRole("button", { name: "Fix it" }).click();
+  check("\"Fix it\" goes back to the sets with nothing saved", (await a.getByTestId("score-check").count()) === 0 && (await setInputs.count()) === 8);
+  await a.getByRole("button", { name: "Save score" }).click();
+  // The second Save of the same score must save, not ask again. Counting the question at once proves
+  // nothing (it is not on screen yet either way), so wait for whichever comes: the saved view or the question.
+  const settled = (p, v) => p.then(() => v, () => "timeout");
+  const second = await Promise.race([settled(a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 }), "saved"), settled(scoreCheck.waitFor({ timeout: 20000 }), "asked")]);
+  check("the same score is asked about once, not twice", second === "saved" && (await a.getByTestId("score-check").count()) === 0, second);
+  // Asked twice is a failure above; answer it so the checks after this one still run.
+  if (second === "asked") await scoreCheck.getByRole("button", { name: "Yes, save" }).click();
+  await a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 });
+  const fourSets = await a.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
+  check("a four-set score saves", JSON.stringify(fourSets.result?.sets) === JSON.stringify([{ a: 6, b: 3 }, { a: 7, b: 5 }, { a: 4, b: 6 }, { a: 6, b: 5 }]), JSON.stringify(fourSets.result));
+  // A fifth set with an unusual score, answered with "Yes, save" this time.
+  await a.getByRole("button", { name: "Edit score" }).click();
+  await a.getByRole("button", { name: /Add set/ }).click();
+  check("five sets is the most", (await a.getByRole("button", { name: /Add set/ }).count()) === 0);
+  // A 0-0 set is refused with the server's own words before any question: never "Is 0-0 right?", then a refusal.
+  await setInputs.nth(8).fill("0");
+  await setInputs.nth(9).fill("0");
+  await a.getByRole("button", { name: "Save score" }).click();
+  const refused = await a.getByText("Please check the details and try again.").waitFor({ timeout: 20000 }).then(() => true, () => false);
+  check("a 0-0 set is refused before the question", refused && (await a.getByTestId("score-check").count()) === 0 && (await a.getByRole("button", { name: "Save score" }).count()) === 1);
+  // Asked instead is a failure above; go back to the sets so the checks after this one still run.
+  if ((await a.getByTestId("score-check").count()) === 1) await a.getByTestId("score-check").getByRole("button", { name: "Fix it" }).click();
+  await setInputs.nth(8).fill("3");
+  await setInputs.nth(9).fill("1");
+  await a.getByRole("button", { name: "Save score" }).click();
+  await a.getByTestId("score-check").getByRole("button", { name: "Yes, save" }).click();
+  await a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 });
+  const fiveSets = await a.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
+  check("\"Yes, save\" saves the five sets as they are", fiveSets.result?.sets?.length === 5 && fiveSets.result.sets[4].a === 3 && fiveSets.result.sets[4].b === 1, JSON.stringify(fiveSets.result));
   // Jordi (player) is now locked out
   await b.reload();
   check("player locked out after organizer confirms", (await b.getByText("Only they can change it").count()) > 0);
@@ -409,6 +512,13 @@ try {
   // ---- Hardening round: about, unsubscribe, Spanish, delete account ----
   await a.goto(`${BASE}/about`);
   await shot(a, "19-about");
+  await a.goto(`${BASE}/privacy`);
+  await shot(a, "19b-privacy");
+  await a.emulateMedia({ colorScheme: "dark" });
+  await a.reload();
+  await shot(a, "19c-privacy-dark");
+  await a.emulateMedia({ colorScheme: "light" });
+  await a.goto(`${BASE}/about`);
   check("about page renders the short legal text", (await a.getByText("The fine print, kept short").count()) > 0 && (await a.getByText("Open source").count()) > 0);
   await a.goto(`${BASE}/unsubscribe?e=someone%40example.com&s=forged`);
   check("forged unsubscribe link is rejected", (await a.getByText("That link doesn't check out").count()) > 0);

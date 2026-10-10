@@ -5,6 +5,7 @@ import { type TournamentFormat, activityVerbEnum, eventStatusEnum, eventTypeEnum
 import { players } from "./players";
 import { groups } from "./groups";
 import { clubSlots } from "./clubs";
+import type { EventCategory } from "@/lib/domain/eventTags";
 
 // ---------------------------------------------------------------------------
 // events — a match (exactly 4) or a tournament (creator-set capacity).
@@ -71,6 +72,14 @@ export const events = pgTable(
     levelMax: real("level_max"),
     /** Verified levels only: a self-declared level inside the range still asks to join; a confirmed one walks in. */
     levelVerifiedOnly: boolean("level_verified_only").notNull().default(false),
+    /**
+     * Who the match is for: men, women or mixed, and the youngest age, 35, 45 or 55 (the rule is
+     * `src/lib/domain/eventTags.ts`). Both null means anyone. The owner decided on 9 October 2026
+     * (decision G1): the tag is on the event, never on the player, and nothing is checked at join.
+     * It is information that helps the right players find the game.
+     */
+    category: text("category").$type<EventCategory>(),
+    ageMin: integer("age_min"),
     /** Result-based level adjustment ran for this event (once, on the organizer's finalize/confirm). */
     levelsAppliedAt: timestamp("levels_applied_at", { withTimezone: true }),
     /** The group this match belongs to (created from a group, or the group was formed from it). */
@@ -152,7 +161,7 @@ export const slots = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// scores — one shared scoreboard per match, per-set (1..3 sets).
+// scores — one shared scoreboard per match, per-set (1..5 sets, MAX_SETS in src/lib/domain/scores.ts).
 // ---------------------------------------------------------------------------
 export const scores = pgTable(
   "scores",
@@ -389,6 +398,9 @@ export const series = pgTable(
     levelMin: real("level_min"),
     levelMax: real("level_max"),
     levelVerifiedOnly: boolean("level_verified_only").notNull().default(false),
+    /** The tag every edition carries (see events.category): a ladies' night is one on every date. */
+    category: text("category").$type<EventCategory>(),
+    ageMin: integer("age_min"),
     whenFull: text("when_full").notNull().default("waitlist"),
     cost: text("cost"),
     bookingUrl: text("booking_url"),

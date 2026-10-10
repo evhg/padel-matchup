@@ -19,7 +19,9 @@ import { coachesAtClub } from "@/lib/domain/coaching";
 import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
 import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { embedHtml } from "@/lib/embed";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
+import { recentResults } from "@/lib/domain/recentResults";
+import { RecentResults } from "@/components/RecentResults";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -80,6 +82,9 @@ export default async function VenueBoardPage({ params }: Props) {
   // The week card already shows these; the list below carries only what comes after it.
   const inWeek = new Set((week ?? []).flatMap((d) => d.events.map((b) => b.event.id)));
   const later = week ? board.events.filter((b) => !inWeek.has(b.event.id)) : board.events;
+  // The last scored matches here, one bounded read after the others (rule 8), so a visitor sees
+  // that people actually play at this club and how it went.
+  const results = await recentResults(db, { venueSlug: slug });
   const tz = club?.tz ?? "UTC";
   const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: tz }).format(zonedTimeToUtc(date, "12:00", tz));
   return (
@@ -190,14 +195,28 @@ export default async function VenueBoardPage({ params }: Props) {
                     ) : (
                       d.events.map(({ event: ev, occupied, spotsLeft }) => {
                         const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+                        const forChip = tagChip(t, ev);
                         return (
-                          <Link key={ev.id} href={`/${ev.code}`} prefetch={false} className="flex items-center gap-2 text-sm hover:underline">
-                            <span className="font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
-                            <span className="truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
-                            {level && <span className="chip-muted">{level}</span>}
-                            <span className={`ml-auto shrink-0 tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
-                              {occupied}/{ev.capacity}
+                          // The time, the name and the seats on one line; the chips on their own line under it, so at
+                          // 390px a level and a tag wrap instead of crushing the name or running off the card.
+                          <Link key={ev.id} href={`/${ev.code}`} prefetch={false} className="block text-sm hover:underline" data-testid="club-week-row">
+                            <span className="flex items-center gap-2">
+                              <span className="font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
+                              <span className="min-w-0 truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
+                              <span className={`ml-auto shrink-0 tabular-nums ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
+                                {occupied}/{ev.capacity}
+                              </span>
                             </span>
+                            {(level || forChip) && (
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {level && <span className="chip-muted">{level}</span>}
+                                {forChip && (
+                                  <span className="chip-muted" data-testid="tag-chip">
+                                    {forChip}
+                                  </span>
+                                )}
+                              </span>
+                            )}
                           </Link>
                         );
                       })
@@ -221,6 +240,7 @@ export default async function VenueBoardPage({ params }: Props) {
           <ul className="flex flex-col gap-2">
             {later.map(({ event: ev, occupied, spotsLeft }) => {
               const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+              const forChip = tagChip(t, ev);
               return (
                 <li key={ev.id}>
                   <Link href={`/${ev.code}`} prefetch={false} className="card flex items-center gap-4 py-4 hover:border-ink/30">
@@ -232,6 +252,7 @@ export default async function VenueBoardPage({ params }: Props) {
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="truncate font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</span>
                         {level && <span className="chip-muted">{level}</span>}
+                        {forChip && <span className="chip-muted">{forChip}</span>}
                       </div>
                       <div className="truncate text-sm text-muted">
                         {formatEventDay(ev.startsAt, ev.tz, locale)} · {t("event.players", { count: occupied, capacity: ev.capacity })}
@@ -245,6 +266,7 @@ export default async function VenueBoardPage({ params }: Props) {
             })}
           </ul>
         )}
+        <RecentResults results={results} />
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <Link href={`/v/${slug}/ranking`} prefetch={false} className="link">
             🏆 {t("ranking.title")}
@@ -263,7 +285,7 @@ export default async function VenueBoardPage({ params }: Props) {
             <ul className="mt-3 flex flex-col gap-2">
               {coachesHere.map((c) => (
                 <li key={c.id}>
-                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3 hover:border-ink/30">
+                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
                     <span className="font-bold">{c.displayName}</span>
                     <span className="text-xs text-muted">{t("coach.page.lesson", { minutes: c.lessonMinutes })} ›</span>
                   </Link>

@@ -119,7 +119,7 @@ export function HomeScreenPrompt({ personalPath, installed = false }: { personal
 
   return (
     <div className="card flex items-start gap-3 border-court/20 bg-court-soft/40 py-4 animate-pop">
-      <span className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink">
+      <span className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-night">
         <span className="h-5 w-5 rounded-full bg-accent" />
       </span>
       <div className="min-w-0 flex-1">

@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { setEmailNotificationsAction, updateMyEmail } from "@/actions/identity";
 import { setCreatorEmailAction, setCreatorEmailNotificationsAction } from "@/actions/events";
 import { RestoreWithEmail } from "./RestoreWithEmail";
+import { placeholderWidth } from "@/lib/fieldWidth";
 
 /**
  * Decision 9: email is optional, never required, and always explained with the
@@ -119,7 +120,7 @@ export function EmailField({
             onClick={toggleNotify}
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${notify ? "bg-ink" : "bg-line-strong"}`}
           >
-            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${notify ? "translate-x-6" : "translate-x-1"}`} />
+            <span className={`inline-block h-5 w-5 rounded-full shadow transition ${notify ? "translate-x-6 bg-on-ink" : "translate-x-1 bg-knob-off"}`} />
           </button>
         </div>
         )}
@@ -139,12 +140,13 @@ export function EmailField({
           <p className="text-sm text-muted">{help ?? t("event.emailReward")}</p>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           type="email"
           inputMode="email"
           autoComplete="email"
-          className="input"
+          className="input flex-1"
+          style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }}
           placeholder={t("share.emailPlaceholder")}
           value={email}
           onChange={(e) => {

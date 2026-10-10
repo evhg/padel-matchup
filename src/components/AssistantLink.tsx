@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { RoleSet } from "@/lib/domain/roles";
+import { TextSizeSwitch } from "./TextSizeSwitch";
 
 /**
  * The one door in the header, chosen from the roles this person actually holds.
@@ -18,14 +19,16 @@ import type { RoleSet } from "@/lib/domain/roles";
 const chip = "btn-ghost btn-xs";
 
 type Door = { key: string; href: string; label: string; kind: "coach" | "club" | "series" | "public"; testId: string };
-export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; coaches: string; clubs: string; tournaments: string };
+export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; findGame: string; coaches: string; clubs: string; tournaments: string; biggerText: string };
 
 /**
- * The public doors every visitor gets, in the More menu: the coaches' directory, the clubs' page
- * with the claim, the tournaments. They used to be reachable only by URL or from a city page, which
- * is how a club owner or a serious organiser arrived on kicksma.sh and saw only the match form.
+ * The public doors every visitor gets, in the More menu: the open games to join (/play), the
+ * coaches' directory, the clubs' page with the claim, the tournaments. They used to be reachable only
+ * by URL or from a city page, which is how a club owner or a serious organiser arrived on kicksma.sh
+ * and saw only the match form.
  */
 const publicDoors = (labels: NavLabels): Door[] => [
+  { key: "play", href: "/play", label: labels.findGame, kind: "public", testId: "nav-find" },
   { key: "coaches", href: "/coaches", label: labels.coaches, kind: "public", testId: "nav-coaches" },
   { key: "clubs", href: "/clubs", label: labels.clubs, kind: "public", testId: "nav-clubs" },
   { key: "tournaments", href: "/t", label: labels.tournaments, kind: "public", testId: "nav-tournaments" },
@@ -48,16 +51,19 @@ export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?
     </Link>
   );
   // The menu is one short glyph, so the header keeps its one word beside it on a phone. Inside: the
-  // way to My matches when this is not it, every role door not shown outside, then the public three.
+  // way to My matches when this is not it, every role door not shown outside, then the public four,
+  // then "Bigger text": the one setting a visitor may want before they have an account or a /me.
   const more = (inside: React.ReactNode[]) => (
     <details className="relative">
       <summary className={`${chip} list-none cursor-pointer`} data-testid="nav-more" aria-label={labels.more} title={labels.more}>
         ⋯
       </summary>
-      <div className="absolute right-0 z-20 mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-line bg-white p-2 shadow-lg">
+      <div className="absolute right-0 z-20 mt-1 flex min-w-52 flex-col gap-1 rounded-xl border border-line bg-card p-2 shadow-lg">
         {inside}
-        <div className="my-1 border-t border-line" />
+        {inside.length > 0 && <div className="my-1 border-t border-line" />}
         {publicDoors(labels).map(link)}
+        <div className="my-1 border-t border-line" />
+        <TextSizeSwitch label={labels.biggerText} compact />
       </div>
     </details>
   );

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { fillText } from "@/components/EventRow";
 import { GroupJoin, GroupMembers, GroupSettings } from "@/components/GroupPanel";
 import { Footer, Header } from "@/components/Header";
 import { LevelChip } from "@/components/LevelSelect";
@@ -14,9 +15,9 @@ import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { crewSeasonSeats, SEASON_HOT_STREAK, SEASON_MIN_MATCHES, seasonTable } from "@/lib/domain/crewSeason";
 import { getGroupByCode, getGroupDetail } from "@/lib/domain/groups";
 import { hasRange } from "@/lib/domain/levels";
-import { fillOf, withCounts, type Fill } from "@/lib/domain/venueBoard";
+import { fillOf, withCounts } from "@/lib/domain/venueBoard";
 import { venueWithCourt } from "@/lib/labels";
-import { rangeChip } from "@/lib/levelText";
+import { rangeChip, tagChip } from "@/lib/levelText";
 import { getSessionPlayer } from "@/lib/session";
 
 type Props = { params: Promise<{ code: string }> };
@@ -57,15 +58,15 @@ export default async function GroupPage({ params }: Props) {
   // The seats on the upcoming rows: one bounded read over their slots, whatever the number of
   // rows, after the detail rather than beside it (rules 8 and 12).
   const fills = new Map((await withCounts(db, detail.upcoming)).map((b) => [b.event.id, fillOf(b)]));
-  const fillText = (f: Fill) => (f.kind === "full" ? t("event.statusFull") : f.kind === "left" ? t("event.spotsLeft", { count: f.count }) : t("event.players", { count: f.count, capacity: f.capacity }));
 
   const eventRow = (ev: (typeof detail.upcoming)[number]) => {
     // Upcoming rows say whether there is room, for whom and at what cost; a past row has no seats to offer.
     const fill = fills.get(ev.id);
     const range = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
+    const forChip = tagChip(t, ev);
     return (
       <li key={ev.id}>
-        <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 hover:border-ink/30">
+        <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
           <div className="w-14 shrink-0 text-center">
             <div className="text-xs font-bold uppercase text-faint">{formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]}</div>
             <div className="text-xl font-extrabold leading-none tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
@@ -77,11 +78,17 @@ export default async function GroupPage({ params }: Props) {
               {ev.status === "cancelled" ? ` · ${t("me.cancelled")}` : ""}
             </div>
             {fill && (
-              <div className="mt-1.5 flex items-center gap-1.5 overflow-hidden" data-testid="group-row-chips">
-                <span className={`${fill.kind === "full" ? "chip-full" : "chip-open"} shrink-0 tabular-nums`}>{fillText(fill)}</span>
+              // Wrapping, never clipping: with a level, a tag and a price the fourth chip used to vanish at 390px.
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="group-row-chips">
+                <span className={`${fill.kind === "full" ? "chip-full" : "chip-open"} shrink-0 tabular-nums`}>{fillText(t, fill)}</span>
                 {range && <span className="chip-muted shrink-0">🎚️ {range}</span>}
+                {forChip && (
+                  <span className="chip-muted shrink-0" data-testid="tag-chip">
+                    {forChip}
+                  </span>
+                )}
                 {ev.cost && (
-                  <span className="chip-muted min-w-0">
+                  <span className="chip-muted min-w-0 max-w-full">
                     <span className="truncate">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>
                   </span>
                 )}

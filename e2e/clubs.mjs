@@ -1,6 +1,6 @@
 // Clubs: the claim in the browser, the owner's approval through the Telegram callback, the club page,
 // the city page, the public API and My matches.
-import { BASE, finish, iphone, launch, lessonDay, makeCheck, shot } from "./lib.mjs";
+import { BASE, finish, iphone, launch, lessonDay, makeCheck, shot, sitsInside } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 /** Every email the build wrote instead of sending, oldest first. */
 const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -15,8 +15,9 @@ const CLUB = "Kata Padel Center";
 const SLUG = "kata-padel-center";
 
 try {
-  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: CLUB, organizer: { name: "Kai" }, listOnVenueBoard: true, bookingUrl: "https://playtomic.io/kata" }) }).then((r) => r.json());
+  const created = await fetch(`${BASE}/api/v1/matches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ startsAt: new Date(Date.now() + 5 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: CLUB, organizer: { name: "Kai" }, listOnVenueBoard: true, bookingUrl: "https://playtomic.io/kata", category: "mixed", ageMin: 45 }) }).then((r) => r.json());
   check("a match at the club exists with a booking link", created.match?.code && created.match.venue?.slug === SLUG, JSON.stringify(created).slice(0, 200));
+  check("the API takes who the match is for and gives it back", created.match?.category === "mixed" && created.match?.ageMin === 45, JSON.stringify({ category: created.match?.category, ageMin: created.match?.ageMin }));
 
   const ctx = await browser.newContext(iphone);
   const page = await ctx.newPage();
@@ -202,17 +203,37 @@ try {
   await page.getByRole("radio", { name: "Americano" }).click();
   await page.getByRole("radio", { name: /Gold/ }).click();
   await page.getByTestId("slot-verified-only").check();
+  // Who the slot's matches are for (the owner's decision of 9 October 2026): one tap, carried to every match.
+  await page.getByTestId("slot-category").getByRole("radio", { name: "Women", exact: true }).click();
   await page.getByTestId("slot-title").fill("Gold night");
   await page.getByTestId("slot-add").click();
   await page.getByText(/Added\. The first match appears/).waitFor({ timeout: 20000 });
   await page.getByTestId("club-slots").getByText("Gold night").waitFor({ timeout: 20000 });
+  await shot(page, "c3-week-tagged");
+  check("the slot's row says who its matches are for, as a checked chip", (await page.getByTestId("slot-row-category").first().getByRole("radio", { name: "Women", exact: true }).getAttribute("aria-checked")) === "true");
   const hourly = await fetch(`${BASE}/api/cron/hourly`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((r) => r.json());
   check("the hourly job turns the slot into a match", hourly.clubMatches >= 1, JSON.stringify(hourly).slice(0, 200));
   await page.goto(`${BASE}/v/${SLUG}`);
   const weekCard = page.getByTestId("club-week");
   check("the club page shows this week with the gold night and eight open seats", (await weekCard.count()) === 1 && (await weekCard.getByText("Gold night").count()) >= 1 && (await weekCard.getByText("0/8").count()) >= 1);
+  check("the gold night on the club's week carries the slot's tag", (await weekCard.getByText("Women", { exact: true }).count()) >= 1);
+  // On a phone each row's chips wrap on a line of their own: the box of every tag chip sits inside its row.
+  const taggedRows = weekCard.getByTestId("club-week-row").filter({ has: page.getByTestId("tag-chip") });
+  const boxes = [];
+  for (let i = 0; i < (await taggedRows.count()); i++) boxes.push(await sitsInside(page, taggedRows.nth(i).getByTestId("tag-chip"), taggedRows.nth(i)));
+  check("both tagged nights on the club's week keep their chips inside the row at 390px", boxes.length >= 2 && boxes.every((b) => b.ok), boxes.map((b) => b.detail).join(" "));
+  await shot(page, "c4-board-tagged");
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the editor names the next match of the slot", (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).count()) === 1);
+  // Retagged in place: no remove-and-add, so the night already made is not made twice, and it follows the tag.
+  const rowCategory = page.getByTestId("slot-row-category").first();
+  await rowCategory.getByRole("radio", { name: "Mixed", exact: true }).click();
+  await rowCategory.locator('[aria-checked="true"]', { hasText: "Mixed" }).waitFor({ timeout: 20000 });
+  await fetch(`${BASE}/api/cron/hourly`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } });
+  const board = await fetch(`${BASE}/api/v1/boards/${SLUG}`).then((r) => r.json());
+  const nights = (board.matches ?? []).filter((m) => m.title === "Gold night");
+  check("retagging the slot keeps one gold night, and that night now says Mixed", nights.length === 1 && nights[0].category === "mixed", JSON.stringify(nights.map((m) => [m.code, m.category])));
+  await shot(page, "c5-manage-tagged");
 
   // ---- Confirmed levels only: a declared level asks, the club confirms in one tap, the player is seated ----
   const slotText = (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).textContent()) ?? "";

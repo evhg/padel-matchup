@@ -148,6 +148,9 @@ export async function createEdition(db: Db, s: Series, startsAt: Date, durationM
     levelMin: s.levelMin,
     levelMax: s.levelMax,
     levelVerifiedOnly: s.levelVerifiedOnly,
+    // A ladies' night is one on every date: the tag lives on the series, not on whichever edition came last.
+    category: s.category,
+    ageMin: s.ageMin,
     publicListing: true,
     bookingUrl: s.bookingUrl,
     cost: s.cost,
@@ -212,6 +215,8 @@ export async function createSeriesFromEvent(db: Db, input: CreateSeriesInput): P
         levelMin: ev.levelMin,
         levelMax: ev.levelMax,
         levelVerifiedOnly: ev.levelVerifiedOnly,
+        category: ev.category,
+        ageMin: ev.ageMin,
         whenFull: ev.whenFull,
         cost: ev.cost,
         bookingUrl: ev.bookingUrl,

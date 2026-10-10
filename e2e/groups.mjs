@@ -1,6 +1,6 @@
 // Groups: form one from a match, member creates the next match from the group page (prefilled,
 // linked back), anyone with the link joins, admin sets the weekly slot, a member leaves.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, sitsInside } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -58,6 +58,11 @@ try {
   await bea.getByRole("link", { name: /Create the next match/ }).click();
   await bea.waitForURL(/\/\?group=/, { timeout: 20000 });
   check("create form is prefilled for the group", (await bea.getByRole("heading", { name: "For Club Nine" }).count()) === 1 && (await bea.locator("input[value='Club Nine']").count()) === 1);
+  // A crowded row on purpose: the seats, a level and a tag side by side must wrap at 390px, never clip.
+  await bea.getByTestId("level-chip").click();
+  await bea.getByRole("button", { name: "Gold", exact: true }).click();
+  await bea.getByTestId("tag-category").getByRole("button", { name: "Mixed", exact: true }).click();
+  await bea.getByTestId("tag-age").getByRole("button", { name: "45+", exact: true }).click();
   await bea.getByRole("button", { name: "Create & get the link" }).click();
   await bea.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code2 = bea.url().split("/").slice(-2)[0];
@@ -65,6 +70,11 @@ try {
   check("next match belongs to the group", (await bea.getByText("Part of Club Nine").count()) === 1);
   await olga.goto(`${BASE}/g/${gcode}`);
   check("group lists both matches", (await olga.locator("a[href='/" + code2 + "']").count()) >= 1 && (await olga.locator("a[href='/" + code + "']").count()) >= 1);
+  const crowded = olga.locator("a[href='/" + code2 + "']").first();
+  const tagText = ((await crowded.getByTestId("tag-chip").textContent().catch(() => null)) ?? "no chip").trim();
+  const box = await sitsInside(olga, crowded.getByTestId("tag-chip"), crowded);
+  check("the group row names who the match is for, and the chip sits inside the row at 390px", tagText === "Mixed · 45+" && box.ok, `${tagText} ${box.detail}`);
+  await shot(olga, "g1b-group-tagged");
   // Each upcoming row says whether there is room. Chips are set in capitals by CSS, so read textContent.
   const firstFill = ((await olga.locator("a[href='/" + code + "']").getByTestId("group-row-chips").first().textContent()) ?? "").toLowerCase();
   check("an upcoming row shows the spots left on one line of chips", /\d spots? left/.test(firstFill), firstFill);

@@ -1,11 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
-import { deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { addWalkInAction, deleteLastRoundAction, generateRoundAction, saveTournamentMatchAction, setTournamentLockAction, setTournamentSettingsAction } from "@/actions/tournament";
 import type { TournamentFormat } from "@/db/schema";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
-import { firstRoundRefusal, FORMATS } from "@/lib/domain/formats";
+import { presentSpots, startAdvice } from "@/lib/domain/checkIn";
+import { FORMATS } from "@/lib/domain/formats";
 import type { NightPlan } from "@/lib/domain/tournamentPlan";
 import { FORMAT_HELP_KEYS, FORMAT_KEYS } from "./EventFields";
 import { PlayAgainButton } from "./PlayAgainButton";
@@ -13,6 +15,8 @@ import { PlayAgainButton } from "./PlayAgainButton";
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
 export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null; court?: number | null };
+/** A name on the check-in: the roster spot's id, and the name as the roster shows it. */
+export type CheckInName = { id: string; name: string };
 
 export function AmericanoPanel({
   code,
@@ -33,6 +37,7 @@ export function AmericanoPanel({
   rotationLength,
   canPlayAgain = false,
   cardHref,
+  checkIn = null,
 }: {
   code: string;
   format: TournamentFormat;
@@ -58,22 +63,38 @@ export function AmericanoPanel({
   canPlayAgain?: boolean;
   /** Link to the shareable standings card (once a score exists). */
   cardHref?: string;
+  /** "Who is here?" before round 1, for whoever may start it: the named list and the waiting list. */
+  checkIn?: { listed: CheckInName[]; waiting: CheckInName[] } | null;
 }) {
   const t = useTranslations();
+  const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // The check-in keeps only the exceptions: a name added since (a walk-in, a late join) takes its default (src/lib/domain/checkIn.ts).
+  const [away, setAway] = useState<Set<string>>(() => new Set());
+  const [waitingIn, setWaitingIn] = useState<Set<string>>(() => new Set());
+  const walkInRef = useRef<HTMLInputElement>(null);
+  // The ticks and "Add" wait for the page to come alive: a tap before then is lost on a slow phone,
+  // and "Add" would submit the form the old way and reload the page.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [help, setHelp] = useState(false);
   const [namesOpen, setNamesOpen] = useState(false);
   const last = rounds.at(-1);
   const lastScored = last ? last.matches.some((m) => m.sideA != null || m.sideB != null) : false;
   const nextRound = (last?.roundNumber ?? 0) + 1;
   const firstRound = rounds.length === 0;
+  const roster = firstRound && isCreator && !locked && !cancelled ? checkIn : null;
+  const present = roster ? presentSpots({ listed: roster.listed.map((n) => n.id), waiting: roster.waiting.map((n) => n.id) }, { away, waitingIn }) : [];
+  /** Round 1 draws the ticked names when there is a check-in, else the whole list. */
+  const startCount = roster ? present.length : participantCount;
   /** Why round 1 cannot start with these names: fewer than four, or a king field not in fours. Americano and mexicano rest the rest. */
-  const refusal = firstRound ? firstRoundRefusal(format, participantCount) : null;
+  const advice = firstRound ? startAdvice(format, startCount) : null;
+  const refusal = advice?.kind === "need_4" ? "need_4_players" : advice?.kind === "fours" ? "multiple_of_4" : null;
   const lastFullyScored = last ? last.matches.every((m) => m.sideA != null && m.sideB != null) : true;
   /** Mexicano and King build the next round from the scores, so they wait for them. */
   const needScores = format !== "americano" && rounds.length > 0 && !lastFullyScored;
-  const canGenerate = isCreator && !locked && !cancelled && participantCount >= 4 && !refusal && !needScores;
+  const canGenerate = isCreator && !locked && !cancelled && (firstRound ? startCount : participantCount) >= 4 && !refusal && !needScores;
   // Before round 1, the night in one line (a visitor used to read "No rounds yet." and nothing about
   // what they would play). The page's own plan, the one its chips read, so the two cannot disagree.
   const sample = firstRound ? night : null;
@@ -87,10 +108,25 @@ export function AmericanoPanel({
       setError(null);
       const r = await fn();
       if (!r.ok) {
-        const key = r.detail === "scores_missing" || r.detail === "format_locked" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
+        const key = r.detail === "scores_missing" || r.detail === "format_locked" || r.detail === "roster_changed" ? r.detail : (r.error as string) === "name_required" || r.error === "no_identity" ? "generic" : (r.error as string);
         setError(t(`errors.${key}` as "errors.generic"));
+        // The list moved under the check-in: show the one there is now.
+        if (r.detail === "roster_changed") router.refresh();
       }
     });
+  const toggle = (set: (f: (cur: Set<string>) => Set<string>) => void, id: string) =>
+    set((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const startRound = () => {
+    if (!roster) return run(() => generateRoundAction(code));
+    const listed = new Set(roster.listed.map((n) => n.id));
+    const waiting = new Set(roster.waiting.map((n) => n.id));
+    run(() => generateRoundAction(code, { away: [...away].filter((id) => listed.has(id)), waitingIn: [...waitingIn].filter((id) => waiting.has(id)), count: startCount }));
+  };
   const howItWorks = format === "mexicano" ? t("americano.howItWorksMexicano") : format === "king" ? t("americano.howItWorksKing") : t("americano.howItWorks");
 
   return (
@@ -124,7 +160,7 @@ export function AmericanoPanel({
           <span className="label">{t("create.format")}</span>
           <div className="flex flex-wrap gap-2" role="group" aria-label={t("create.format")}>
             {FORMATS.map((f) => (
-              <button key={f} type="button" aria-pressed={format === f} disabled={pending} onClick={() => f !== format && run(() => setTournamentSettingsAction(code, { format: f }))} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${format === f ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong hover:bg-bg"}`}>
+              <button key={f} type="button" aria-pressed={format === f} disabled={pending} onClick={() => f !== format && run(() => setTournamentSettingsAction(code, { format: f }))} className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${format === f ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
                 {t(FORMAT_KEYS[f])}
               </button>
             ))}
@@ -266,23 +302,65 @@ export function AmericanoPanel({
         ))}
       </div>
 
+      {roster && (
+        <div className="mt-4 rounded-2xl border border-line p-3" data-testid="check-in">
+          <h3 className="font-extrabold">{t("americano.whoIsHere")}</h3>
+          <p className="mt-0.5 text-xs text-muted">{t("americano.whoIsHereHelp")}</p>
+          <div className="mt-2 flex flex-col" role="group" aria-label={t("americano.whoIsHere")}>
+            {/* Labels, not list items: the roster below is the page's list of people, and suites read it as `main li`. */}
+            {roster.listed.map((n) => (
+              <label key={n.id} className="flex min-h-11 items-center gap-3 font-semibold">
+                <input type="checkbox" className="h-5 w-5 shrink-0 accent-ink" checked={!away.has(n.id)} disabled={pending || !ready} onChange={() => toggle(setAway, n.id)} />
+                <span className={`truncate ${away.has(n.id) ? "text-faint line-through" : ""}`}>{n.name}</span>
+              </label>
+            ))}
+            {roster.waiting.map((n) => (
+              <label key={n.id} className="flex min-h-11 items-center gap-3 font-semibold">
+                <input type="checkbox" className="h-5 w-5 shrink-0 accent-ink" checked={waitingIn.has(n.id)} disabled={pending || !ready} onChange={() => toggle(setWaitingIn, n.id)} />
+                <span className={`truncate ${waitingIn.has(n.id) ? "" : "text-faint"}`}>{n.name}</span>
+                <span className="chip-muted shrink-0">{t("americano.waitingTag")}</span>
+              </label>
+            ))}
+          </div>
+          {/* A walk-in is the organiser's own reserve ("Open spot"); uncontrolled, so nothing typed before hydration is lost. */}
+          <form
+            className="mt-2 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = walkInRef.current?.value.trim() ?? "";
+              if (!name) return;
+              run(async () => {
+                const r = await addWalkInAction(code, name);
+                if (r.ok && walkInRef.current) walkInRef.current.value = "";
+                return r;
+              });
+            }}
+          >
+            <input ref={walkInRef} className="input min-h-11 min-w-0 flex-1 text-sm" aria-label={t("americano.walkIn")} placeholder={t("americano.walkIn")} maxLength={40} disabled={pending} />
+            <button type="submit" className="btn-secondary btn-sm shrink-0" disabled={pending || !ready}>
+              {t("americano.walkInAdd")}
+            </button>
+          </form>
+        </div>
+      )}
+
       {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
 
       {isCreator && !cancelled && (
         <div className="mt-4 flex flex-col gap-2">
           {!locked && (
             <>
-              <button type="button" className={`${rounds.length === 0 || started ? "btn-primary" : "btn-secondary"} w-full`} disabled={pending || !canGenerate} onClick={() => run(() => generateRoundAction(code))}>
-                {pending ? t("common.working") : rounds.length === 0 ? t("americano.generateFirst") : repeatsRound ? t("americano.generateRepeat", { n: nextRound, again: repeatsRound }) : t("americano.generateRound", { n: nextRound })}
+              <button type="button" className={`${rounds.length === 0 || started ? "btn-primary" : "btn-secondary"} w-full`} disabled={pending || !canGenerate} onClick={startRound}>
+                {pending ? t("common.working") : rounds.length === 0 ? t("americano.startWith", { count: startCount }) : repeatsRound ? t("americano.generateRepeat", { n: nextRound, again: repeatsRound }) : t("americano.generateRound", { n: nextRound })}
               </button>
               {needScores && last ? (
                 <p className="text-center text-xs font-semibold text-warn">{t("americano.scoresMissing", { n: last.roundNumber })}</p>
-              ) : participantCount < 4 ? (
-                <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: participantCount })}</p>
-              ) : refusal === "multiple_of_4" ? (
-                <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: participantCount, up: 4 - (participantCount % 4), down: participantCount % 4 })}</p>
-              ) : firstRound && participantCount < capacity ? (
-                <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: participantCount })}</p>
+              ) : advice?.kind === "need_4" ? (
+                <p className="text-center text-xs text-muted">{t("americano.needPlayers", { count: advice.count })}</p>
+              ) : advice?.kind === "fours" ? (
+                <p className="text-center text-xs font-semibold text-warn">{t("americano.needMultiple", { count: advice.count, up: advice.up, down: advice.down })}</p>
+              ) : firstRound && startCount < capacity ? (
+                <p className="text-center text-xs text-muted">{t("americano.autoShrink", { count: startCount })}</p>
               ) : rotationLength && rounds.length >= rotationLength ? (
                 <p className="text-center text-xs text-muted">{t("americano.rotationDone", { n: rotationLength })}</p>
               ) : rotationLength ? (
@@ -320,8 +398,21 @@ export function AmericanoPanel({
 
 function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }: { code: string; match: PanelMatch; courtLabel: string; editable: boolean; pointsPerMatch: number | null; gamesTo: number | null }) {
   const t = useTranslations();
-  const [a, setA] = useState<string>(match.sideA == null ? "" : String(match.sideA));
-  const [b, setB] = useState<string>(match.sideB == null ? "" : String(match.sideB));
+  const serverA = match.sideA == null ? "" : String(match.sideA);
+  const serverB = match.sideB == null ? "" : String(match.sideB);
+  const [a, setA] = useState<string>(serverA);
+  const [b, setB] = useState<string>(serverB);
+  // The page refreshes itself while the night runs, so a score typed on another phone arrives as new
+  // props. Take it, unless these boxes hold an unsaved score of their own: state seeded from a prop
+  // is stale after the first refresh otherwise, and the boxes would stay empty beside a full table.
+  const [seen, setSeen] = useState<[string, string]>([serverA, serverB]);
+  if (seen[0] !== serverA || seen[1] !== serverB) {
+    if (a === seen[0] && b === seen[1]) {
+      setA(serverA);
+      setB(serverB);
+    }
+    setSeen([serverA, serverB]);
+  }
   const [state, setState] = useState<"idle" | "saving" | "saved" | "incomplete" | "games" | "error">("idle");
   const dirty = a !== (match.sideA == null ? "" : String(match.sideA)) || b !== (match.sideB == null ? "" : String(match.sideB));
   const [, start] = useTransition();
@@ -355,7 +446,7 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }
 
   return (
     <div className="rounded-xl bg-bg p-3">
-      <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
+      <div className="mb-2 text-2xs font-extrabold uppercase tracking-wider text-faint">{courtLabel}</div>
       <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] items-center gap-2">
         <div className={`text-sm font-bold leading-tight ${aWon ? "" : match.sideA != null ? "text-muted" : ""}`}>
           {match.a[0]}
@@ -365,13 +456,13 @@ function MatchRow({ code, match, courtLabel, editable, pointsPerMatch, gamesTo }
         {editable ? (
           <input aria-label="A" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={a} onChange={(e) => onOther(setA, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
         ) : (
-          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${aWon ? "bg-accent" : "bg-white"}`}>{match.sideA ?? "–"}</span>
+          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${aWon ? "bg-accent text-night" : "bg-card"}`}>{match.sideA ?? "–"}</span>
         )}
         <span className="text-xs font-bold text-faint">{t("americano.vs")}</span>
         {editable ? (
           <input aria-label="B" className="input h-12 min-h-0 w-14 px-0 text-center text-xl font-extrabold tabular-nums" type="number" inputMode="numeric" min={0} max={99} value={b} onChange={(e) => onOther(setB, e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />
         ) : (
-          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${bWon ? "bg-accent" : "bg-white"}`}>{match.sideB ?? "–"}</span>
+          <span className={`inline-grid h-12 w-14 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${bWon ? "bg-accent text-night" : "bg-card"}`}>{match.sideB ?? "–"}</span>
         )}
         <div className={`text-right text-sm font-bold leading-tight ${bWon ? "" : match.sideB != null ? "text-muted" : ""}`}>
           {match.b[0]}

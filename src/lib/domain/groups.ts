@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { timePatternOf } from "@/lib/dates";
 import { events, groupMembers, groups, players, slots, type Event, type Group, type GroupMember, type Player } from "@/db/schema";
@@ -297,13 +297,26 @@ export function recurrenceDue(group: Pick<Group, "recurDow" | "recurTime" | "tz"
 
 /** Hourly: create the next match for every group whose weekly slot is within its lead time. */
 /**
- * How long a group's next match runs: as long as its latest one, so a crew that books an hour keeps
- * booking an hour. One read down `events_group_idx`; null when the group has no match yet, which
- * means the type's default.
+ * What a group's next match takes from the one before: the length, so a crew that books an hour keeps
+ * booking an hour, and the tag (`eventTags.ts`), so a ladies' crew's next match is a ladies' match too.
+ * A group has neither column of its own; the crew's own last choice is the habit.
+ *
+ * "The one before" is the last weekly match the slot made (`recurLastCreatedFor`) when it still
+ * stands, else the latest match before the new one. Never a cancelled match, and never a match after
+ * the one being made: a one-off "Mixed · 45+" on a Saturday, or a "Women" night that was called off,
+ * once set the Thursday crew's tag. One read down `events_group_idx`; null when nothing qualifies,
+ * which means the type's default and no tag.
  */
-export async function latestGroupLength(db: Db, groupId: string): Promise<number | null> {
-  const [row] = await db.select({ minutes: events.durationMinutes }).from(events).where(eq(events.groupId, groupId)).orderBy(desc(events.startsAt)).limit(1);
-  return row?.minutes ?? null;
+export async function latestGroupMatch(db: Db, group: Pick<Group, "id" | "recurLastCreatedFor">, before: Date): Promise<Pick<Event, "durationMinutes" | "category" | "ageMin"> | null> {
+  const weekly = group.recurLastCreatedFor;
+  const [row] = await db
+    .select({ durationMinutes: events.durationMinutes, category: events.category, ageMin: events.ageMin })
+    .from(events)
+    .where(and(eq(events.groupId, group.id), ne(events.status, "cancelled"), lt(events.startsAt, before)))
+    // The weekly match first when it is there (true sorts before false, descending), then the latest.
+    .orderBy(...(weekly ? [desc(eq(events.startsAt, weekly))] : []), desc(events.startsAt))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<{ group: Group; event: Event }[]> {
@@ -312,11 +325,14 @@ export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<
   for (const g of candidates) {
     const startsAt = recurrenceDue(g, now);
     if (!startsAt) continue;
+    const latest = await latestGroupMatch(db, g, startsAt);
     const event = await createEvent(db, {
       creatorPlayerId: g.creatorPlayerId,
       type: g.type,
       startsAt,
-      durationMinutes: await latestGroupLength(db, g.id),
+      durationMinutes: latest?.durationMinutes ?? null,
+      category: latest?.category ?? null,
+      ageMin: latest?.ageMin ?? null,
       tz: g.tz,
       venueName: g.venueName,
       venueMapUrl: g.venueMapUrl,

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { getClubByToken, setClubTimezone } from "@/lib/domain/clubs";
 import { addClubSlot, CLUB_WEEK, removeClubSlot, updateClubSlot } from "@/lib/domain/clubWeek";
+import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { ActionFailure, runA, type ActionResult } from "./shared";
 
 const slotSchema = z.object({
@@ -16,6 +17,8 @@ const slotSchema = z.object({
   levelMin: z.number().min(0).max(7).nullable().optional(),
   levelMax: z.number().min(0).max(7).nullable().optional(),
   verifiedOnly: z.boolean().optional(),
+  category: z.enum(EVENT_CATEGORIES).nullable().optional(),
+  ageMin: z.literal(AGE_MINS).nullable().optional(),
   title: z.string().max(80).optional(),
   leadDays: z.number().int().min(1).max(CLUB_WEEK.leadDaysMax).optional(),
 });
@@ -40,6 +43,22 @@ export async function addClubSlotAction(token: string, raw: ClubSlotInput): Prom
     const slot = await addClubSlot(db, club.slug, input);
     revalidate(club.slug, token);
     return { id: slot.id };
+  });
+}
+
+/**
+ * The club changes a slot it already has, in place: today, who its matches are for. The slot keeps
+ * what it already made, so no second match appears for a night that has one, and the coming match
+ * takes the new tag (`updateClubSlot`).
+ */
+export async function updateClubSlotAction(token: string, id: string, raw: Partial<ClubSlotInput>): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const patch = slotSchema.partial().parse(raw);
+    const { db, club } = await clubFor(token);
+    const row = await updateClubSlot(db, club.slug, id, patch);
+    if (!row) throw new ActionFailure("not_found");
+    revalidate(club.slug, token);
+    return null;
   });
 }
 

@@ -6,7 +6,8 @@ import { getDb } from "@/db";
 import Link from "next/link";
 import { isValidInviteCode } from "@/lib/codes";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
-import { getGroupByCode, getGroupMember, latestGroupLength, nextGroupSlot } from "@/lib/domain/groups";
+import { getGroupByCode, getGroupMember, latestGroupMatch, nextGroupSlot } from "@/lib/domain/groups";
+import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { parseMatchLength } from "@/lib/domain/matchLength";
 import { venuesForPicking } from "@/lib/domain/clubs";
 import { getPlayerTimePatterns } from "@/lib/domain/queries";
@@ -22,8 +23,8 @@ function prefilledHour(p: { date?: string; time?: string; tz?: string } | undefi
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) && isValidTimeZone(tz) ? { date, time, tz } : null;
 }
 
-/** The create form with its data. Rendered on / and /new. */
-export async function CreateScreen({ heading, prefill }: { heading: string; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string } }) {
+/** The create form with its data. Rendered on / and /new. `below` sits under the heading (the landing page's "Find a game"). */
+export async function CreateScreen({ heading, below, prefill }: { heading: string; below?: React.ReactNode; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -46,8 +47,9 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
   if (group && isMember) {
     const slot = nextGroupSlot(group);
     const when = slot ? { date: slot.date, time: slot.time } : undefined;
-    // The crew's usual length: as long as its latest match (one read, members only).
-    const length = parseMatchLength(await latestGroupLength(db, group.id));
+    // The crew's usual length and tag: as the match before the next slot has them (one read, members only).
+    const latest = await latestGroupMatch(db, group, slot?.startsAt ?? new Date());
+    const length = parseMatchLength(latest?.durationMinutes);
     groupValues = {
       type: group.type,
       ...(length ? { durationMinutes: length } : {}),
@@ -58,6 +60,8 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
       court: group.court ?? "",
       levelMin: group.levelMin,
       levelMax: group.levelMax,
+      category: cleanCategory(latest?.category),
+      ageMin: cleanAgeMin(latest?.ageMin),
       tz: group.tz,
       ...when,
     };
@@ -86,6 +90,9 @@ export async function CreateScreen({ heading, prefill }: { heading: string; pref
         <h1 className="text-3xl font-extrabold tracking-tight">{group && isMember ? t("group.forGroup", { name: group.name }) : fromGenerator ? t("landing.fromGeneratorTitle") : heading}</h1>
         {fromGenerator && !(group && isMember) && <p className="mt-1 text-muted">{t("landing.fromGeneratorSub")}</p>}
         {group && isMember && <p className="mt-1 text-muted">{t("group.nextMatchHelp")}</p>}
+        {/* The landing page's way to a game somebody else made. Inside the heading's block, so it
+            costs the form one short line and no extra gap; a crew or a generator hand-off has its own job. */}
+        {below && !(group && isMember) && !fromGenerator && below}
       </div>
       {group && !isMember && (
         <Link href={`/g/${group.code}`} prefetch={false} className="card flex items-center justify-between bg-accent-soft border-accent text-sm font-bold">

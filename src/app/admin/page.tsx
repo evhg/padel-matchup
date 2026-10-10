@@ -40,7 +40,7 @@ function Meter({ label, used, limit, format, note }: { label: string; used: numb
           {format(used)} <span className="text-faint">/ {format(limit)}</span>
         </span>
       </div>
-      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full" style={{ background: "#e9f2fb" }} aria-hidden>
+      <div className="mt-1.5 h-2.5 w-full overflow-hidden rounded-full bg-court-soft" aria-hidden>
         <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(pct > 0 ? 1.5 : 0, pct)}%`, background: color }} />
       </div>
       <div className="mt-1 flex justify-between text-xs text-faint">
@@ -113,7 +113,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <>
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 pt-5 pb-2">
         <Link href="/" prefetch={false} className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-          <span className="inline-grid h-8 w-8 place-items-center rounded-xl bg-ink">
+          <span className="inline-grid h-8 w-8 place-items-center rounded-xl bg-night">
             <span className="h-4 w-4 rounded-full bg-accent" />
           </span>
           {APP_NAME} <span className="chip-muted ml-1">admin · read-only</span>
@@ -139,7 +139,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
             {health.map((h) => (
               <li key={h.label} className="flex items-center gap-2">
-                <span className="inline-grid h-5 w-5 place-items-center rounded-full text-[11px] font-black text-white" style={{ background: h.ok ? STATUS.good : STATUS.critical }} aria-hidden>
+                <span className="inline-grid h-5 w-5 place-items-center rounded-full text-2xs font-black text-white" style={{ background: h.ok ? STATUS.good : STATUS.critical }} aria-hidden>
                   {h.ok ? "✓" : "!"}
                 </span>
                 <span className="font-semibold">{h.label}</span>
@@ -185,7 +185,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <td className="py-2.5 pr-3">
                       <div className="tabular-nums">{r.usage}</div>
                       {r.pct !== null && (
-                        <div className="mt-1 h-1.5 w-32 overflow-hidden rounded-full" style={{ background: "#e9f2fb" }} aria-hidden>
+                        <div className="mt-1 h-1.5 w-32 overflow-hidden rounded-full bg-court-soft" aria-hidden>
                           <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(r.pct > 0 ? 2 : 0, r.pct))}%`, background: stateColor(r.state) }} />
                         </div>
                       )}

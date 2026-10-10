@@ -55,6 +55,7 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
     { url: `${base}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/agents`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     ...CITIES.flatMap((c) => inEveryLanguage(`/${c.slug}`, "daily", 0.8)),
+    ...inEveryLanguage("/play", "daily", 0.8),
     ...inEveryLanguage("/clubs", "weekly", 0.7),
     ...clubPages,
     ...inEveryLanguage("/coaches", "daily", 0.8),
@@ -66,6 +67,8 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
     ...answerPages,
     ...inEveryLanguage("/built", "weekly", 0.5),
     ...inEveryLanguage("/about", "yearly", 0.3),
+    ...inEveryLanguage("/privacy", "yearly", 0.3),
+    ...inEveryLanguage("/terms", "yearly", 0.3),
     ...inEveryLanguage("/feedback", "yearly", 0.3),
   ];
 }

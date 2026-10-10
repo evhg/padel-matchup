@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
-import { tally } from "@/lib/domain/scores";
+import { checkSets, MAX_SETS, tally } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton } from "./PlayAgainButton";
 import { ShareButtons } from "./ShareSheet";
@@ -43,6 +43,11 @@ export function ScorePanel({
   const [teamA, setTeamA] = useState<string[]>(players.filter((p) => p.team === "a").map((p) => p.id));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // "Is 6-5 right?": the sets that do not look like padel, asked about once before the save. `askedFor`
+  // is the score that was asked about, so saving the same score again (after "Fix it" changed nothing)
+  // goes through without a second question. The server takes it either way (decision H).
+  const [asking, setAsking] = useState<number[] | null>(null);
+  const [askedFor, setAskedFor] = useState<string | null>(null);
 
   const teamAPlayers = players.filter((p) => p.team === "a");
   const teamBPlayers = players.filter((p) => p.team === "b");
@@ -56,9 +61,10 @@ export function ScorePanel({
     setTeamA((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 2 ? [cur[1], id] : [...cur, id]));
   };
 
-  const save = () =>
+  const send = () =>
     start(async () => {
       setError(null);
+      setAsking(null);
       const r = await saveScoreAction(code, sets, teamA.length === 2 ? teamA : undefined);
       if (!r.ok) {
         setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
@@ -67,10 +73,37 @@ export function ScorePanel({
       setEditing(false);
     });
 
-  const numInput = (value: number, onChange: (n: number) => void, label: string) => (
+  const save = () => {
+    const filled = sets.filter((s) => Number.isFinite(s.sideA) && Number.isFinite(s.sideB));
+    const check = checkSets(filled);
+    // A 0-0 set: the message the server would give, before any question (it would refuse after "Yes, save").
+    if ("refuse" in check) {
+      setAsking(null);
+      setError(t("errors.invalid"));
+      return;
+    }
+    setError(null);
+    const odd = check.ask.map((i) => sets.indexOf(filled[i]));
+    const key = JSON.stringify(filled.map((s) => [s.sideA, s.sideB]));
+    if (odd.length > 0 && key !== askedFor) {
+      setAsking(odd);
+      setAskedFor(key);
+      return;
+    }
+    send();
+  };
+
+  const setGames = (i: number, side: "sideA" | "sideB", n: number) => {
+    setAsking(null);
+    setSets((cur) => cur.map((x, j) => (j === i ? { ...x, [side]: n } : x)));
+  };
+  // Four or five sets do not fit beside a name at phone width in the big squares.
+  const chip = scores.length > 3 ? "h-9 w-9 rounded-lg text-base" : "h-11 w-11 rounded-xl text-xl";
+
+  const numInput = (value: number, onChange: (n: number) => void, label: string, odd: boolean) => (
     <input
       aria-label={label}
-      className="input h-16 min-h-0 w-full px-0 text-center text-3xl font-extrabold tabular-nums"
+      className={`input h-16 min-h-0 w-full px-0 text-center text-3xl font-extrabold tabular-nums ${odd ? "border-warn bg-warn-soft" : ""}`}
       type="number"
       inputMode="numeric"
       min={0}
@@ -92,17 +125,17 @@ export function ScorePanel({
         <div className="mt-3">
           <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2">
             <div className={`font-bold ${tl.a > tl.b ? "" : "text-muted"}`}>{hasTeams ? teamAPlayers.map((p) => p.name).join(" & ") : t("score.teamA")}</div>
-            <div className="flex gap-2">
+            <div className={`flex ${scores.length > 3 ? "gap-1.5" : "gap-2"}`}>
               {scores.map((s) => (
-                <span key={s.setNumber} className={`inline-grid h-11 w-11 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${s.sideA > s.sideB ? "bg-accent text-ink" : "bg-bg text-muted"}`}>
+                <span key={s.setNumber} className={`inline-grid ${chip} place-items-center font-extrabold tabular-nums ${s.sideA > s.sideB ? "bg-accent text-night" : "bg-bg text-muted"}`}>
                   {s.sideA}
                 </span>
               ))}
             </div>
             <div className={`font-bold ${tl.b > tl.a ? "" : "text-muted"}`}>{hasTeams ? teamBPlayers.map((p) => p.name).join(" & ") : t("score.teamB")}</div>
-            <div className="flex gap-2">
+            <div className={`flex ${scores.length > 3 ? "gap-1.5" : "gap-2"}`}>
               {scores.map((s) => (
-                <span key={s.setNumber} className={`inline-grid h-11 w-11 place-items-center rounded-xl text-xl font-extrabold tabular-nums ${s.sideB > s.sideA ? "bg-accent text-ink" : "bg-bg text-muted"}`}>
+                <span key={s.setNumber} className={`inline-grid ${chip} place-items-center font-extrabold tabular-nums ${s.sideB > s.sideA ? "bg-accent text-night" : "bg-bg text-muted"}`}>
                   {s.sideB}
                 </span>
               ))}
@@ -150,7 +183,7 @@ export function ScorePanel({
                       key={p.id}
                       type="button"
                       onClick={() => toggleTeam(p.id)}
-                      className={`min-h-11 rounded-xl px-3 text-sm font-bold ring-1 transition ${inA ? "bg-accent text-ink ring-accent" : inB ? "bg-ink text-white ring-ink" : "bg-white text-ink ring-line-strong"}`}
+                      className={`min-h-11 rounded-xl px-3 text-sm font-bold ring-1 transition ${inA ? "bg-accent text-night ring-accent" : inB ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong"}`}
                     >
                       {inA ? "A · " : inB ? "B · " : ""}
                       {p.name}
@@ -181,32 +214,50 @@ export function ScorePanel({
             {sets.map((s, i) => (
               <div key={i} className="contents">
                 <div className="text-sm font-bold text-muted">{t("score.set", { n: i + 1 })}</div>
-                {numInput(s.sideA, (n) => setSets((cur) => cur.map((x, j) => (j === i ? { ...x, sideA: n } : x))), `${t("score.set", { n: i + 1 })} ${t("score.teamA")}`)}
-                {numInput(s.sideB, (n) => setSets((cur) => cur.map((x, j) => (j === i ? { ...x, sideB: n } : x))), `${t("score.set", { n: i + 1 })} ${t("score.teamB")}`)}
+                {numInput(s.sideA, (n) => setGames(i, "sideA", n), `${t("score.set", { n: i + 1 })} ${t("score.teamA")}`, Boolean(asking?.includes(i)))}
+                {numInput(s.sideB, (n) => setGames(i, "sideB", n), `${t("score.set", { n: i + 1 })} ${t("score.teamB")}`, Boolean(asking?.includes(i)))}
               </div>
             ))}
           </div>
           <div className="flex gap-2">
-            {sets.length < 3 && (
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setSets((c) => [...c, { setNumber: c.length + 1, sideA: 6, sideB: 4 }])}>
+            {sets.length < MAX_SETS && (
+              <button type="button" className="btn-ghost btn-sm" onClick={() => { setAsking(null); setSets((c) => [...c, { setNumber: c.length + 1, sideA: 6, sideB: 4 }]); }}>
                 + {t("score.addSet")}
               </button>
             )}
             {sets.length > 1 && (
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setSets((c) => c.slice(0, -1))}>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => { setAsking(null); setSets((c) => c.slice(0, -1)); }}>
                 − {t("score.removeSet")}
               </button>
             )}
           </div>
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-          <div className="flex gap-2">
-            <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>
-              {pending ? t("common.saving") : t("score.save")}
-            </button>
-            <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>
-              {t("common.cancel")}
-            </button>
-          </div>
+          {asking ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-warn/40 bg-warn-soft/40 p-3" data-testid="score-check">
+              {asking.map((i) => (
+                <p key={i} className="font-bold">
+                  {t("score.unusual", { score: `${sets[i].sideA}-${sets[i].sideB}` })}
+                </p>
+              ))}
+              <div className="flex gap-2">
+                <button type="button" className="btn-primary flex-1" disabled={pending} onClick={send}>
+                  {pending ? t("common.saving") : t("score.unusualYes")}
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setAsking(null)}>
+                  {t("score.unusualFix")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>
+                {pending ? t("common.saving") : t("score.save")}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>
+                {t("common.cancel")}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

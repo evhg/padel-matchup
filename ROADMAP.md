@@ -51,7 +51,14 @@ Everything in this list is live. The README describes each in detail.
   "Warehaus" stopped being two different places.
 - **Groups, venue boards, club pages.** A crew becomes a group with a weekly slot; a venue gets a board
   and a printable poster; a club claims its page, shows free courts from a feed it already has, and fills
-  quiet hours from a weekly programme.
+  quiet hours from a weekly programme. A programme match reaches the club's recent players by push; the
+  email that went with it stopped on 9 October 2026 and comes back as an opt-in with the per-kind
+  notice settings (`mayEmailClubMatch` in `src/lib/notify.ts`).
+- **Privacy and terms in full.** `/privacy` and `/terms` in three languages, operator "Kicksmash, Phuket,
+  Thailand", the feedback form as the contact, Thailand's PDPA as the law. The figures on the page come
+  from the constants that enforce them (`src/lib/legal.ts`), and `tests/legal.test.ts` checks the cookie
+  names and the figures. Deleting an account now also unlinks Telegram, Discord and LINE and takes the
+  public page down.
 - **Every padel club in Thailand and Singapore, listed.** 67 clubs from public sources — 40 in Thailand
   across eight provinces, 27 in Singapore — with the indoor and outdoor court split where a source said
   it, which is also the first capacity number the app has. Where two sources disagree the club's own
@@ -695,6 +702,58 @@ Everything in this list is live. The README describes each in detail.
   Court keeps names in fours, because there the waiting players come in at the bottom court by the
   format's own rule. Rounds already drawn, and the next round of a tournament under way, are drawn
   exactly as before. The organiser's banner on a tournament names the round waiting for scores.
+- **Find a game (9 October 2026, no migration).** The owner's decision C: a compact "Find a game"
+  chip under the landing page's headline opens `/play`, the open games a visitor can join. It lists
+  the listed matches and social tournaments of one city, soonest first, with chips kept in the URL:
+  the city (the edge's city when it is one of ours, else Phuket), the day (Today, Tomorrow, This
+  week, in the city's own zone), "Fits my level" for a viewer with a level, the club, and "Spots
+  left only". Each game is one `EventRow` (`src/components/EventRow.tsx`): the time big and in
+  tabular figures, the seats in the group rows' words, the level, the price, the format of a
+  tournament, the club and the organiser's first name. It is one read (`findGames` in
+  `src/lib/domain/findGame.ts`: one query with the seat counts inside it, at most 120 rows) and the
+  rules are pure and tested in `tests/find-game.test.ts`. An empty city says so and offers the form.
+  `/play` is in the More menu and the sitemap. Later, when a city has three or more open games, a
+  strip of them above the form; and `EventRow` replaces the city page's, the venue board's and the
+  group page's own rows.
+- **"Who is here?" and a night that updates itself (9 October 2026, no migration).** Before round 1
+  the organiser (or whoever holds the manage link) sees every name with a tick, ticked by default,
+  and the waiting list unticked. "Add a walk-in" seats a name the way "Open spot" does. On a full
+  night it adds that one spot: the waiting list moves back a place and nobody on it is moved up. "Generate round 1" is now "Start with N
+  players" and draws only the ticked names; King of the Court says how many to tick, add or untick
+  to reach a four. The unticked leave in the same write as the draw (the feed records each one,
+  as "Remove player" does) and hear "We started without you" by the removal's own email, with no
+  spot offered to strangers and no waiting list moved up at the moment the spots close. While the
+  night runs (round 1 drawn, scores not final, the booking not over) the page asks the server
+  again every twenty seconds while it is on screen, so a score typed on one phone appears on the
+  others; a score box keeps what its own phone is typing. An organiser who unticks their own name
+  gets no "We started without you". The club's TV view (`/t/[slug]/tv`) was skipped: it reads the
+  serious tournament's competitions only (`liveBoard`), never a social night's rounds, so the match
+  page's live refresh is the night's screen. `src/lib/domain/checkIn.ts`, proven in
+  `tests/check-in.test.ts`.
+- **Bigger text, and a dark theme that follows the phone (9 October 2026, no migration).** "Bigger
+  text" is one switch on My matches and in the header's ⋯ menu, for anybody, account or not. It is a
+  cookie (`km_text`, `src/lib/textSize.ts`) that the root layout reads, so the first paint is already
+  the chosen size: the root goes from 16px to 18px and the chips to 13.5px. Every size is in rem, so
+  the whole app grows with it. The dark theme needs no switch: `src/app/globals.css` gives the same
+  colour names a dark set under `prefers-color-scheme: dark`, an ink-navy ground with the same lime.
+  `tests/contrast.test.ts` holds every text colour at 4.5:1 in both themes, and fails on a new
+  `bg-white` or `text-white` outside the few places white is meant (a QR code, the brand buttons).
+  The club's TV page, the printed poster and the embeds stay light (`data-keep-light`), with a light
+  theme-color for the browser's bar (`KEEP_LIGHT_VIEWPORT`). A switch that is off has its own knob
+  colour (`knob-off`), light in the dark theme, at 3:1 or better on its track. With Bigger text on a phone the
+  header shows the mark without the word, and the e-mail field never gets narrower than its placeholder.
+- **Who a match is for (9 October 2026, migrations 0085 and 0086).** The owner's decision G1: a match
+  can say "Men", "Women" or "Mixed", and "35+", "45+" or "55+". The tag is on the event, never on the
+  player: no gender and no age is stored about a person, and nothing is checked at join. It sits behind
+  the level chip on the create and edit forms ("Who is it for?"), so the form is not one line longer
+  for anybody who skips it, and shows as one chip beside the level wherever the level shows: the match page, the
+  club's board and day, the city pages, the group rows, the series page, the embeds and the Telegram,
+  Discord and LINE cards ("🎚 Level 3.0–4.5 · Women · 45+"). `events.category` and `age_min`, with the
+  same pair on `series` and `club_slots`, so a ladies' night keeps its tag on every edition and a
+  club's weekly "Ladies social" on every match it makes; "Play again" and a group's weekly match keep
+  the tag of the one before. The rule is `src/lib/domain/eventTags.ts`. The API and the MCP take
+  `category` and `ageMin` on create (anything else is refused with a 422) and every match object and
+  board row carries them. Filters on a listing come later.
 
 ## The finish line
 

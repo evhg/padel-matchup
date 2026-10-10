@@ -32,7 +32,7 @@ export function LocaleToggle({ className = "" }: { className?: string }) {
     void setLocaleAction(l);
   };
   return (
-    <div className={`inline-flex rounded-full border border-line bg-white p-0.5 text-xs font-extrabold ${className}`} aria-label="Language" aria-busy={pending}>
+    <div className={`inline-flex rounded-full border border-line bg-card p-0.5 text-xs font-extrabold ${className}`} aria-label="Language" aria-busy={pending}>
       {(["en", "ru", "es"] as const).map((l) => (
         <button
           key={l}
@@ -40,7 +40,7 @@ export function LocaleToggle({ className = "" }: { className?: string }) {
           onClick={() => set(l)}
           aria-pressed={locale === l}
           aria-expanded={locale === l ? open : undefined}
-          className={`min-h-8 min-w-9 rounded-full px-1.5 uppercase tracking-wide transition ${locale === l ? "bg-ink text-white" : `text-muted ${open ? "" : "max-sm:hidden"}`} ${pending && locale !== l ? "animate-pulse" : ""}`}
+          className={`min-h-8 min-w-9 rounded-full px-1.5 uppercase tracking-wide transition ${locale === l ? "bg-ink text-on-ink" : `text-muted ${open ? "" : "max-sm:hidden"}`} ${pending && locale !== l ? "animate-pulse" : ""}`}
         >
           {l}
         </button>

@@ -9,6 +9,7 @@ import { APP_NAME, baseUrl, shortHost } from "@/lib/config";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { getClub } from "@/lib/domain/clubs";
 import { getSessionPlayerId } from "@/lib/session";
+import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 /** The board of a claimed club that has no match yet: its name, nothing on it. Before the check, only for the person who claimed it. */
 async function claimedBoard(db: Awaited<ReturnType<typeof getDb>>, slug: string) {
@@ -20,6 +21,9 @@ async function claimedBoard(db: Awaited<ReturnType<typeof getDb>>, slug: string)
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
+
+// Light, like the page itself (data-keep-light): the phone's bar must not turn navy round it.
+export const viewport = KEEP_LIGHT_VIEWPORT;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
@@ -38,9 +42,9 @@ export default async function PosterPage({ params }: Props) {
   const t = await getTranslations();
   const url = `${baseUrl()}/v/${slug}`;
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col items-center justify-center gap-6 px-6 py-10 text-center print:max-w-none">
+    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col items-center justify-center gap-6 px-6 py-10 text-center print:max-w-none" data-keep-light>
       <div className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-        <span className="inline-grid h-9 w-9 place-items-center rounded-xl bg-ink">
+        <span className="inline-grid h-9 w-9 place-items-center rounded-xl bg-night">
           <span className="h-4 w-4 rounded-full bg-accent" />
         </span>
         {APP_NAME}

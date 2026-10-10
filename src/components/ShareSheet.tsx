@@ -73,6 +73,7 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
 export function QrPanel({ url, hint }: { url: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center gap-3">
+      {/* White in both themes, never `bg-card`: a scanner wants dark squares on a light ground. */}
       <div className="rounded-3xl bg-white p-4 shadow-card border border-line">
         <QRCodeSVG value={url} size={220} level="M" bgColor="#ffffff" fgColor="#14161a" marginSize={1} />
       </div>

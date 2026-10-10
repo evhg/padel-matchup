@@ -18,7 +18,8 @@ export const backupConfigured = () => Boolean(process.env.BACKUP_GITHUB_TOKEN &&
 /** Every table the schema declares, by its SQL name. */
 export const BACKUP_TABLES: readonly string[] = (Object.values(schema).filter((t) => is(t, PgTable)) as unknown as Table[]).map((t) => getTableName(t)).sort();
 
-const KEEP_DAYS = 60;
+/** How long a night's file stays in the repository; /privacy says so, read from here. */
+export const BACKUP_KEEP_DAYS = 60;
 /** Rows per table in one night's file. Far above today's counts, and said out loud when reached. */
 export const BACKUP_ROW_CAP = 50_000;
 
@@ -41,7 +42,7 @@ export async function dumpDatabase(db: Db, cap = BACKUP_ROW_CAP): Promise<Record
 
 export type BackupResult = { status: "skipped" | "already" | "done" | "failed"; path?: string; bytes?: number; pruned?: number; capped?: string[]; error?: string };
 
-/** Once a day after 03:00 UTC: dump, gzip, put into the repository, prune files older than KEEP_DAYS. Never throws. */
+/** Once a day after 03:00 UTC: dump, gzip, put into the repository, prune files older than BACKUP_KEEP_DAYS. Never throws. */
 export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<BackupResult> {
   if (!backupConfigured() || now.getUTCHours() < 3) return { status: "skipped" };
   const day = dayKey(now);
@@ -62,9 +63,11 @@ export async function runBackup(db: Db, now = new Date(), fetchImpl: typeof fetc
     await bumpMetric(db, "backup_done", 1, day);
     await bumpMetric(db, "backup_bytes", body.length, day);
     if (capped.length) await bumpMetric(db, "backup_capped", capped.length, day);
-    // Old days go: the repository keeps their history anyway.
+    // Old days leave the folder, not the history: a contents-API DELETE is one more commit, so every
+    // night's dump stays in the private repository's history. /privacy says exactly that. Making the
+    // copies really go (rewriting history, or a store that deletes) is the owner's decision.
     let pruned = 0;
-    const cutoff = dayKey(new Date(now.getTime() - KEEP_DAYS * 86_400_000));
+    const cutoff = dayKey(new Date(now.getTime() - BACKUP_KEEP_DAYS * 86_400_000));
     const list = await fetchImpl(api("backups"), { headers });
     if (list.ok) {
       const files = (await list.json()) as { name: string; sha: string; path: string }[];

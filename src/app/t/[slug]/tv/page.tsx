@@ -9,10 +9,14 @@ import { liveBoard } from "@/lib/domain/competitionLive";
 import type { PlayRow } from "@/lib/domain/competitionSchedule";
 import { categoriesOf, getCompetition } from "@/lib/domain/competitions";
 import { scoreText } from "@/lib/domain/draw";
+import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
 const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
+
+// Light, like the page itself (data-keep-light): the phone's bar must not turn navy round it.
+export const viewport = KEEP_LIGHT_VIEWPORT;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
@@ -39,7 +43,7 @@ export default async function TvPage({ params }: Props) {
   const pair = (name: string | null) => name ?? t("tournament.tbd");
   void locale;
   return (
-    <main className="min-h-screen bg-bg px-6 py-6 text-fg" data-testid="tv">
+    <main className="min-h-screen bg-bg px-6 py-6 text-fg" data-testid="tv" data-keep-light>
       <AutoRefresh seconds={30} />
       <header className="flex items-baseline justify-between gap-4">
         <h1 className="text-4xl font-extrabold tracking-tight">{c.name}</h1>

@@ -41,7 +41,7 @@ export default async function MomentPage({ params }: Props) {
       <Header minimal />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <h1 className="text-2xl font-extrabold tracking-tight">{line}</h1>
-        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`/m/${id}/opengraph-image`} alt={line} width={1200} height={630} className="block h-auto w-full" />
         </div>

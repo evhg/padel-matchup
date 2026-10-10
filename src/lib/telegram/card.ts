@@ -2,6 +2,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { formatEventDay, formatEventTimeRange } from "@/lib/dates";
 import { lateExitLine } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
+import { tagParts } from "@/lib/domain/eventTags";
 import { formatLevel, formatRange, hasRange } from "@/lib/domain/levels";
 import { eventEnd } from "@/lib/domain/matchLength";
 import type { EventDetail } from "@/lib/domain/queries";
@@ -25,6 +26,8 @@ const STRINGS = {
     courtTbd: "Court TBD",
     court: (n: string) => `Court ${n}`,
     level: "Level",
+    /** Who a match is for, keyed as the web's messages are, so `tagParts` reads both. */
+    tags: { "level.tagMen": "Men", "level.tagWomen": "Women", "level.tagMixed": "Mixed" },
     players: "Players",
     reserved: "reserved",
     organizer: "org",
@@ -152,6 +155,9 @@ const STRINGS = {
     scoreNoTeams: "Tap 🏁 Result on the card first, so I know the teams.",
     noTeamsPage: "I don't know the pairs yet. Tap 🏁 Result below to enter the score on the match page.",
     scoreSaved: (score: string) => `Saved: ${score}`,
+    /** Under "Saved", when a set does not look like padel (`unusualSets`). The score is saved; this only asks. */
+    scoreUnusual: (sets: string[]) => `${sets.join(", ")} ${sets.length === 1 ? "looks" : "look"} unusual. Send the score again to fix it.`,
+    scoreTooManySets: (max: number) => `Up to ${max} sets. Send the score again.`,
     sameTime: "🔁 Same time next week?",
     groupMade: (name: string, when: string) => `Done: “${name}”. Every ${when} a fresh card posts itself here; members tap in or out.`,
     groupExists: (name: string) => `This crew is already a group: “${name}”.`,
@@ -190,6 +196,7 @@ const STRINGS = {
     courtTbd: "Корт уточняется",
     court: (n: string) => `Корт ${n}`,
     level: "Уровень",
+    tags: { "level.tagMen": "Мужчины", "level.tagWomen": "Женщины", "level.tagMixed": "Микст" },
     players: "Игроки",
     reserved: "бронь",
     organizer: "орг",
@@ -313,6 +320,8 @@ const STRINGS = {
     scoreNoTeams: "Сначала нажмите 🏁 Результат на карточке, чтобы я знал составы пар.",
     noTeamsPage: "Я пока не знаю составы пар. Нажмите 🏁 Результат ниже, чтобы ввести счёт на странице матча.",
     scoreSaved: (score: string) => `Сохранено: ${score}`,
+    scoreUnusual: (sets: string[]) => `${sets.join(", ")}: необычный счёт. Чтобы исправить, пришлите счёт ещё раз.`,
+    scoreTooManySets: (max: number) => `Не больше ${max} сетов. Пришлите счёт ещё раз.`,
     sameTime: "🔁 В то же время на следующей неделе?",
     groupMade: (name: string, when: string) => `Готово: «${name}». Каждый ${when} здесь сама появляется новая карточка; участники нажимают «в игре» или «пас».`,
     groupExists: (name: string) => `Эта компания уже группа: «${name}».`,
@@ -349,6 +358,7 @@ const STRINGS = {
     courtTbd: "Pista por confirmar",
     court: (n: string) => `Pista ${n}`,
     level: "Nivel",
+    tags: { "level.tagMen": "Hombres", "level.tagWomen": "Mujeres", "level.tagMixed": "Mixto" },
     players: "Jugadores",
     reserved: "reservado",
     organizer: "org",
@@ -472,6 +482,8 @@ const STRINGS = {
     scoreNoTeams: "Toca 🏁 Resultado en la tarjeta primero, para que sepa los equipos.",
     noTeamsPage: "Aún no sé las parejas. Toca 🏁 Resultado abajo para anotar el resultado en la página del partido.",
     scoreSaved: (score: string) => `Guardado: ${score}`,
+    scoreUnusual: (sets: string[]) => `${sets.join(", ")} ${sets.length === 1 ? "parece raro" : "parecen raros"}. Para corregirlo, envía el resultado otra vez.`,
+    scoreTooManySets: (max: number) => `Hasta ${max} sets. Envía el resultado otra vez.`,
     sameTime: "🔁 ¿A la misma hora la semana que viene?",
     groupMade: (name: string, when: string) => `Hecho: “${name}”. Cada ${when} se publica aquí una tarjeta nueva; los miembros se apuntan o se quitan con un toque.`,
     groupExists: (name: string) => `Este grupo ya existe: “${name}”.`,
@@ -528,6 +540,22 @@ export function whenLine(detail: Pick<EventDetail, "event">, locale: BotLocale):
   return `${formatEventDay(ev.startsAt, ev.tz, locale)} · ${formatEventTimeRange(ev.startsAt, eventEnd(ev), ev.tz, locale)}`;
 }
 
+/**
+ * "🎚 Level 3.0–4.5 · Women · 45+": the level range and who the match is for, on one line, as the
+ * match page shows the two chips side by side. The tag's words come from `tagParts`, so every
+ * channel says it the way the web does. Plain text with no user input in it; null for a match open
+ * to any level and anyone. Telegram, Discord and LINE all print this line.
+ */
+export function levelLine(ev: Pick<EventDetail["event"], "levelMin" | "levelMax" | "category" | "ageMin">, locale: BotLocale): string | null {
+  const s = strings(locale);
+  const range = { min: ev.levelMin, max: ev.levelMax };
+  const parts = [
+    hasRange(range) ? `${s.level} ${formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` })}` : null,
+    ...tagParts(ev).map((p) => (p.key === "level.tagAge" ? `${p.values.age}+` : s.tags[p.key])),
+  ].filter(Boolean);
+  return parts.length ? `🎚 ${parts.join(" · ")}` : null;
+}
+
 /** The one message per match the bot keeps edited. HTML parse mode. */
 export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
@@ -546,8 +574,8 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
   lines.push(`🎾 <b>${esc(cardTitle(detail, locale))}</b>`);
   lines.push(`📅 ${esc(whenLine(detail, locale))}`);
   lines.push(`📍 ${esc(whereLine(detail, locale))}`);
-  const range = { min: ev.levelMin, max: ev.levelMax };
-  if (hasRange(range)) lines.push(`🎚 ${s.level} ${esc(formatRange(range, { between: (a, b) => `${a}–${b}`, plus: (a) => `${a}+`, upTo: (b) => `≤ ${b}` }))}`);
+  const level = levelLine(ev, locale);
+  if (level) lines.push(esc(level));
   if (ev.cost) lines.push(`💸 ${esc(ev.cost)}${ev.payNote ? ` · ${esc(ev.payNote)}` : ""}`);
   lines.push("");
   lines.push(`<b>${s.players} ${occupied}/${ev.capacity}</b>`);

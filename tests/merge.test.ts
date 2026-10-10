@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { coachStudents, coaches, demandSignals, feedback, groupMembers, lessonPackages, lessons, players, pushSubscriptions } from "@/db/schema";
 import { createGroup } from "@/lib/domain/groups";
+import { findPlayerByPersonalToken } from "@/lib/domain/identity";
 import { mergePlayers, playerReferences } from "@/lib/domain/merge";
 import { createTestDb, makePlayer } from "./helpers/db";
 
@@ -83,6 +84,26 @@ describe("merging two rows of one person", () => {
     } finally {
       await close();
     }
+  });
+
+  it("hands over a personal link only when the caller proved one person, and an address always with its proof", async () => {
+    const { db } = await createTestDb();
+    // A fold by name: a stranger called Alex must not get a key to the survivor.
+    const alex = await makePlayer(db, "Alex", { telegramId: 5551 });
+    const other = await makePlayer(db, "Alex", { personalToken: "Hn4pQr7sTv8w" });
+    await mergePlayers(db, alex.id, [other.id]);
+    expect(await findPlayerByPersonalToken(db, "Hn4pQr7sTv8w")).toBeNull();
+    expect((await db.select().from(players).where(eq(players.id, alex.id)))[0].personalToken).toBeNull();
+
+    // The same person, proved: the link comes across, and so does the address with its proof.
+    const into = await makePlayer(db, "Bea", { telegramId: 5552 });
+    const from = await makePlayer(db, "Bea", { personalToken: "Jk5mNp6qRs7t", email: "bea@example.com", emailVerifiedAt: new Date(Date.UTC(2026, 8, 2)) });
+    await mergePlayers(db, into.id, [from.id], { proved: true });
+    const [bea] = await db.select().from(players).where(eq(players.id, into.id));
+    expect(bea.personalToken).toBe("Jk5mNp6qRs7t");
+    expect(bea.email).toBe("bea@example.com");
+    expect(bea.emailVerifiedAt).toEqual(new Date(Date.UTC(2026, 8, 2)));
+    expect((await findPlayerByPersonalToken(db, "Jk5mNp6qRs7t"))?.id).toBe(into.id);
   });
 
   it("knows every table that points at a player, from the schema", () => {
