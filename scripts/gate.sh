@@ -16,6 +16,10 @@ step() {
     echo "✓ $name ($((SECONDS - t))s)"
   else
     echo "✗ $name ($((SECONDS - t))s)"
+    # The browser step prints every suite before its summary, so its last 60 lines can hold no failed
+    # check of an early suite: twice on 10 October a red run named no check at all. Each failed check
+    # comes first, under its suite's header, then the tail as before.
+    awk '/^=== /{s=$0} /^(✗ |failed:)/{if (s!=p) {print s; p=s} print}' "$log" | head -80
     tail -60 "$log"
     exit 1
   fi
