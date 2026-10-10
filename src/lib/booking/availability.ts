@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
+import { platformById } from "./platforms";
 
 /**
  * Free courts, from two sources, cached on the club row (`clubs.availability`, `availability_at`).
@@ -210,6 +211,40 @@ export function scrapeFresh(a: ClubAvailability | null | undefined, now: Date): 
   if (!a || !isScraped(a) || a.error) return false;
   const at = Date.parse(a.fetchedAt);
   return Number.isFinite(at) && now.getTime() - at < SCRAPE_SHOWN_MS;
+}
+
+/** What a club's card of free courts says (`freeCourtsState`). */
+export type FreeCourtsState =
+  | { kind: "none" }
+  | { kind: "feed"; a: ClubAvailability | null }
+  | { kind: "platform"; a: ClubAvailability; platform: string }
+  | { kind: "platformDown"; platform: string };
+
+/**
+ * What a club's free courts say, decided once for the club page, the manage page, the lists and the API
+ * (DECIDING rule 32). The club's own feed when it shares one: it always wins, and before its first read
+ * there is nothing yet (`a: null`). Else a clean read of the platform's public page from the last two
+ * hours, named as the platform's, because the club did not publish it. Else, after a read that failed or
+ * grew old, that the platform's times are not available just now: a block is ours, never the club's
+ * fault. Else nothing. `platform` is the platform's name as people know it. Pure.
+ */
+export function freeCourtsState(c: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind">, now: Date): FreeCourtsState {
+  const a = c.availability;
+  if (availabilityConfigured(c)) return { kind: "feed", a: a && !isScraped(a) ? a : null };
+  if (!a || !isScraped(a)) return { kind: "none" };
+  const id = a.platform ?? a.source.slice("scrape:".length);
+  const platform = platformById(id)?.name ?? id;
+  return scrapeFresh(a, now) ? { kind: "platform", a, platform } : { kind: "platformDown", platform };
+}
+
+/**
+ * Whether a club's page has a "Free courts today" card. A club that runs its page: when it shares a feed
+ * or its booking platform has been read (a read that failed says so). A club Kicksmash only lists: when a
+ * read is clean and recent, so the hours its row shows on /clubs are on its page too. Pure.
+ */
+export function freeCourtsCardShown(c: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind">, live: boolean, now: Date): boolean {
+  const kind = freeCourtsState(c, now).kind;
+  return live ? kind !== "none" : kind === "platform";
 }
 
 /**

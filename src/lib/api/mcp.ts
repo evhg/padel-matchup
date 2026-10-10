@@ -113,7 +113,7 @@ const TOOLS: Tool[] = [
   {
     name: "find_clubs",
     title: "Find clubs",
-    description: "Padel clubs: booking link and platform, courts, today's free courts when the club shares its calendar, founding status. Every row says `claimed`: true when the club runs the page itself, false when Kicksmash listed it from public sources, where the courts and links are our reading and may be out of date. Pass include:'listed' to get both — that is what answers \"where can I play here?\". Filter by city (phuket, singapore) or ask for one club by name.",
+    description: "Padel clubs: booking link and platform, courts, today's free courts (from the club's own calendar feed, or read from its booking platform's public page: freeCourts.source says which, and freeCourts.platform names it), founding status. Every row says `claimed`: true when the club runs the page itself, false when Kicksmash listed it from public sources, where the courts and links are our reading and may be out of date. Pass include:'listed' to get both — that is what answers \"where can I play here?\". Filter by city (phuket, singapore) or ask for one club by name.",
     schema: clubsSchema,
     readOnly: true,
     run: async (db, args) => {

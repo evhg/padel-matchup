@@ -1559,7 +1559,9 @@
     "dayInUse": "{used} of {total} courts busy",
     "dayMatch": "Match",
     "dayLesson": "Lesson",
-    "dayNoCourt": "No court named"
+    "dayNoCourt": "No court named",
+    "freeFromPlatform": "From {platform}'s public page · Updated {time}",
+    "freePlatformDown": "Free times from {platform} are not available just now."
   },
   "passport": {
     "title": "Passport",

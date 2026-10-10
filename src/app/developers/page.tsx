@@ -152,7 +152,7 @@ const ok = key && (await verifyPassport(doc, key.hex)) && new Date(doc.expiresAt
         <section className="card flex flex-col gap-3">
           <h2 className="text-lg font-extrabold">Licence and limits</h2>
           <p className="text-sm text-muted">
-            Code: <a href="https://github.com/evhg/padel-matchup/blob/main/LICENSE">Apache-2.0</a>. Public match, board, group and schedule data: <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, attribute &quot;Kicksmash, kicksma.sh&quot;. Personal data (emails, phones, tokens, manage links) is never in the public data.
+            Code: <a href="https://github.com/evhg/padel-matchup/blob/main/LICENSE">Apache-2.0</a>. Public match, board, group and schedule data: <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, attribute &quot;Kicksmash, kicksma.sh&quot;. Free court times read from a booking platform are not under that licence: they are facts with their source named, not ours to license. Personal data (emails, phones, tokens, manage links) is never in the public data.
           </p>
           <p className="text-sm text-muted">
             Limits without a key: {LIMITS.apiReadsPerIpPerHour} reads an hour, {LIMITS.apiWritesPerIpPerDay} writes a day per address, {LIMITS.mcpCallsPerIpPerHour} MCP calls an hour. With a key: five times the reads, {LIMITS.apiWritesPerKeyPerDay} writes a day, {LIMITS.webhooksPerKey} webhooks. Need more, or building something? Say so in{" "}

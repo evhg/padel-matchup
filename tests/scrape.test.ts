@@ -8,6 +8,7 @@ import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResu
 import { createMatchiAdapter, matchiAdapter } from "@/lib/booking/adapters/matchi";
 import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
 import { clubToPublic } from "@/lib/api/serialize";
+import { freeCourtsCardShown, freeCourtsState } from "@/lib/booking/availability";
 import { freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { setMetric } from "@/lib/domain/metrics";
@@ -595,3 +596,55 @@ describe("what a read writes", () => {
 });
 
 const SCRAPE_SHOWN_HOURS = 2;
+
+describe("what a page and the API show of a read (decision 8: the source is named)", () => {
+  const read = (o: Partial<NonNullable<Club["availability"]>> = {}): NonNullable<Club["availability"]> => ({
+    fetchedAt: NOW.toISOString(),
+    day: "2026-10-10",
+    days: ["2026-10-10", "2026-10-11", "2026-10-12"],
+    tz: "Asia/Bangkok",
+    source: "scrape:playtomic",
+    platform: "playtomic",
+    error: null,
+    fullAt: NOW.toISOString(),
+    slots: [
+      { start: iso(2 * HOUR), end: iso(4 * HOUR), free: 2 },
+      { start: iso(DAY + 2 * HOUR), end: iso(DAY + 3 * HOUR), free: 1 },
+    ],
+    ...o,
+  });
+  const feed = { availabilityUrl: "https://club.example/b.ics", availabilityKind: "ics_bookings" };
+  const none = { availabilityUrl: null, availabilityKind: null };
+
+  it("names the platform a read came from, and says when it is not available rather than blaming the club", () => {
+    expect(freeCourtsState({ ...none, availability: read() }, NOW)).toMatchObject({ kind: "platform", platform: "Playtomic" });
+    // Old, or failed: the platform's times are not available just now; the club did nothing wrong (docs-rules F5).
+    expect(freeCourtsState({ ...none, availability: read() }, at(3 * HOUR))).toEqual({ kind: "platformDown", platform: "Playtomic" });
+    expect(freeCourtsState({ ...none, availability: read({ error: "blocked 429", slots: [] }) }, NOW)).toEqual({ kind: "platformDown", platform: "Playtomic" });
+    // A club's own feed is the club's, whatever its cache says.
+    expect(freeCourtsState({ ...feed, availability: { ...read(), source: "ics_bookings", platform: undefined } }, NOW)).toMatchObject({ kind: "feed" });
+    expect(freeCourtsState({ ...feed, availability: null }, NOW)).toEqual({ kind: "feed", a: null });
+    expect(freeCourtsState({ ...none, availability: null }, NOW)).toEqual({ kind: "none" });
+  });
+
+  it("a listed club's page shows the card while a read is fresh, as its row on /clubs does; a club that runs its page also hears when it is down (docs-rules F5, F6)", () => {
+    const fresh = { ...none, availability: read() };
+    const failed = { ...none, availability: read({ error: "blocked 403", slots: [] }) };
+    expect([freeCourtsCardShown(fresh, false, NOW), freeCourtsCardShown(failed, false, NOW), freeCourtsCardShown(fresh, false, at(3 * HOUR))]).toEqual([true, false, false]);
+    expect([freeCourtsCardShown(fresh, true, NOW), freeCourtsCardShown(failed, true, NOW), freeCourtsCardShown({ ...none, availability: null }, true, NOW)]).toEqual([true, true, false]);
+    expect(freeCourtsCardShown({ ...feed, availability: null }, true, NOW)).toBe(true);
+    // The hours a list row shows come with a card on the page: both read the same fresh read.
+    expect(freeCourtHours(fresh, NOW)).toBe(4);
+    expect(freeCourtHours(fresh, at(3 * HOUR))).toBeNull();
+  });
+
+  it("the API says where today's free courts come from, and never serves an old read as now (job F6, docs-rules F2-F4)", () => {
+    const base = { slug: "x", name: "X", approvedAt: NOW, rejectedAt: null } as unknown as Club;
+    const fresh = clubToPublic({ ...base, ...none, availability: read() }, "https://kicksma.sh", undefined, NOW).freeCourts;
+    expect(fresh).toEqual({ day: "2026-10-10", tz: "Asia/Bangkok", fetchedAt: NOW.toISOString(), source: "platform", platform: "playtomic", slots: [{ start: iso(2 * HOUR), end: iso(4 * HOUR), free: 2 }] });
+    // Three hours on, the platform rests: the API says nothing rather than yesterday's courts.
+    expect(clubToPublic({ ...base, ...none, availability: read() }, "https://kicksma.sh", undefined, at(3 * HOUR)).freeCourts).toBeNull();
+    const own = clubToPublic({ ...base, ...feed, availability: { ...read(), source: "ics_bookings", platform: undefined, days: undefined } }, "https://kicksma.sh", undefined, NOW).freeCourts;
+    expect(own).toMatchObject({ source: "club", platform: null });
+  });
+});

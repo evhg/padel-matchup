@@ -1559,7 +1559,9 @@
     "dayInUse": "Занято кортов: {used} из {total}",
     "dayMatch": "Матч",
     "dayLesson": "Тренировка",
-    "dayNoCourt": "Корт не указан"
+    "dayNoCourt": "Корт не указан",
+    "freeFromPlatform": "С публичной страницы {platform} · Обновлено {time}",
+    "freePlatformDown": "Свободное время с {platform} сейчас недоступно."
   },
   "passport": {
     "title": "Паспорт",

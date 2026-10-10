@@ -1559,7 +1559,9 @@
     "dayInUse": "{used} de {total} pistas ocupadas",
     "dayMatch": "Partido",
     "dayLesson": "Clase",
-    "dayNoCourt": "Sin pista indicada"
+    "dayNoCourt": "Sin pista indicada",
+    "freeFromPlatform": "De la página pública de {platform} · Actualizado {time}",
+    "freePlatformDown": "Las horas libres de {platform} no están disponibles ahora mismo."
   },
   "passport": {
     "title": "Pasaporte",
