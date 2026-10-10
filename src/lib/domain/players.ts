@@ -2,8 +2,16 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { players, type Player } from "@/db/schema";
 
+/**
+ * Characters that change a name without showing: zero-width spaces and non-joiners, direction marks,
+ * the word joiner, the byte-order mark, the soft hyphen, and a zero-width joiner anywhere but inside an
+ * emoji (where it is part of the picture). With them, "Ana" could be two names that look like one.
+ */
+const INVISIBLE = /[\u200B\u200C\u200E\u200F\u2060\uFEFF\u00AD]|(?<!\p{Extended_Pictographic}\uFE0F?)\u200D|\u200D(?!\p{Extended_Pictographic})/gu;
+
+/** A name as it is stored: composed (NFC, so "José" typed two ways is one spelling), nothing invisible, one space between words, at most 40 characters. */
 export function normalizeName(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim().slice(0, 40);
+  return raw.normalize("NFC").replace(INVISIBLE, "").replace(/\s+/g, " ").trim().slice(0, 40);
 }
 
 export function normalizeEmail(raw: string | null | undefined): string | null {

@@ -41,7 +41,7 @@ export function OpenSpot({
   emailEnabled: boolean;
   /** Everybody already in this match, so a returning player is recognised before they become a second row. */
   namesHere?: readonly string[];
-  /** Names of this match or its crew that "That's me" signs in by name (DECIDING rule 32): the page asked the rule already. */
+  /** Names on this line-up that "That's me" signs in by name (DECIDING rule 32): the page asked the rule already, and those rows wear the button too. */
   claimable?: readonly string[];
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
@@ -190,15 +190,15 @@ export function OpenSpot({
           The duplicate is born here. A friend's link in a chat opens in the phone's default browser,
           and that may not be the browser the player first joined in (another app's, the home-screen
           icon, another phone): it has never seen them, so they type the name they always type and
-          become a second row with none of their history on it. If that name is already in this match
-          or its crew, say so and offer the door instead — quietly, under the field, with the name
-          field untouched, because a real namesake must still be able to join. A record the rule
-          lets in by name signs in with one tap (DECIDING rule 32); any other opens the way back in
-          that needs proof.
+          become a second row with none of their history on it. If that name is already in this match,
+          say so and offer the door instead — quietly, under the field, with the name field untouched,
+          because a real namesake must still be able to join. A record the rule lets in by name signs
+          in with one tap (DECIDING rule 32); any other opens the way back in that needs proof. A crew
+          member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
-        {mode === "join" && !hasIdentity && (nameIsHere(name, namesHere) || nameIsHere(name, claimable)) && (
+        {mode === "join" && !hasIdentity && nameIsHere(name, namesHere) && (
           <p data-testid="already-here" className="text-sm text-muted">
-            {nameIsHere(name, namesHere) ? t("identity.alreadyHere", { name: name.trim() }) : t("identity.knownCrew", { name: name.trim() })}{" "}
+            {t("identity.alreadyHere", { name: name.trim() })}{" "}
             {nameIsHere(name, claimable) ? (
               <ThatsMeButton code={code} name={name.trim()} className="link font-semibold" />
             ) : (

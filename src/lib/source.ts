@@ -16,5 +16,23 @@ export function cleanSource(v: string | string[] | null | undefined): string | n
   return /^[a-z0-9_-]{1,16}$/.test(s) ? s : null;
 }
 
+/**
+ * The tags the app itself puts on a link to a match: WhatsApp's share (`wa`), an Instagram story
+ * (`ig`), the printed poster, the result card, a moment, the series page, the americano generator, a
+ * Telegram card and the story picture.
+ */
+export const MATCH_SOURCES = ["wa", "ig", "poster", "card", "moment", "series", "gen", "tg", "story"] as const;
+
+/**
+ * The tag as a counter may carry it (`join_src_<tag>`, `newid_src_<tag>`): one the app writes, else
+ * `other`. Anybody can type `?s=` on a link, so a counter never carries a word somebody chose, a name
+ * among them, and a new word never makes a new row of counters.
+ */
+export function countedSource(v: string | string[] | null | undefined): string | null {
+  const s = cleanSource(v);
+  if (!s) return null;
+  return (MATCH_SOURCES as readonly string[]).includes(s) ? s : "other";
+}
+
 /** The link an organiser pastes into an Instagram link sticker. */
 export const taggedUrl = (url: string, source: string) => `${url}${url.includes("?") ? "&" : "?"}s=${source}`;

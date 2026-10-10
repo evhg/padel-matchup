@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cleanSource, SOURCE_COOKIE } from "@/lib/source";
+import { countedSource, SOURCE_COOKIE } from "@/lib/source";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { cookies } from "next/headers";
 import { after } from "next/server";
@@ -9,6 +9,8 @@ import { getDb } from "@/db";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { getPlayer } from "@/lib/domain/players";
 import { getEventDetail, getSlotByInviteCode } from "@/lib/domain/queries";
+import { isClaimable } from "@/lib/domain/events";
+import { namesFromChat, planPaste } from "@/lib/domain/pasteNames";
 import {
   claimSlotPaid,
   confirmInvite,
@@ -16,6 +18,7 @@ import {
   leaveEvent,
   promotedOf,
   removeFromSlot,
+  reserveNames,
   reserveSlot,
   setSlotPaid,
   type ConfirmOutcome,
@@ -68,7 +71,7 @@ export async function joinAction(code: string, name?: string, level?: number | n
     if (res.outcome === "joined" || res.outcome === "waitlisted") {
       // A join that started from a tagged link (an Instagram story, a poster) is counted per source.
       // This one stays here: it is the web's own cookie and means nothing on another channel.
-      const source = cleanSource((await cookies()).get(SOURCE_COOKIE)?.value);
+      const source = countedSource((await cookies()).get(SOURCE_COOKIE)?.value);
       if (source) await bumpMetric(db, `join_src_${source}`).catch(() => undefined);
       after(async () => {
         await afterJoin(db, res, me, { wasComplete: before, code, level: myLevel });
@@ -227,6 +230,32 @@ export async function reserveAction(
     });
     revalidatePath(`/${code}`);
     return { inviteUrl: inviteUrl(baseUrl(), code, slot.inviteCode!), inviteCode: slot.inviteCode!, name: slot.invitedName ?? input.name, emailed };
+  });
+}
+
+/**
+ * "Paste the names from the group" (src/components/PasteNames.tsx): the organiser's pasted chat, read
+ * again here (`namesFromChat`), each name not already in the match held as a reserved spot, in one
+ * request and one transaction (`reserveNames`): one rate check for the whole list against the same
+ * daily limit every reserved spot counts towards, one line-up notice, one page render. Rule 12: a
+ * list is one request, never one per name.
+ */
+export async function reserveManyAction(code: string, pasted: string): Promise<ActionResult<{ held: string[]; already: string[]; noSpot: string[] }>> {
+  return runA(async () => {
+    if (typeof pasted !== "string") throw new ActionFailure("invalid");
+    const { db, detail, viewer } = await requireCreator(code);
+    const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
+    const plan = planPaste(namesFromChat(pasted.slice(0, 20000)), namesHere, detail.roster.filter(isClaimable).length);
+    if (plan.hold.length === 0) return { held: [], already: plan.already, noSpot: plan.noSpot };
+    await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay, "day", plan.hold.length);
+    const before = wasComplete(detail);
+    const { held, event } = await reserveNames(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, names: plan.hold });
+    after(async () => {
+      await notifyLineupChange(db, event, before);
+    });
+    revalidatePath(`/${code}`);
+    const names = held.map((s) => s.invitedName ?? "");
+    return { held: names, already: plan.already, noSpot: [...plan.hold.slice(held.length), ...plan.noSpot] };
   });
 }
 

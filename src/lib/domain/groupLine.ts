@@ -4,12 +4,14 @@
  * Two places carry it. "Tell the group" after a join puts it in WhatsApp's share with the match link
  * under it, so the trip out of the group ends back in the group with the news (the owner, 10 October
  * 2026: "you have to leave the chat group"). And the link preview under a pasted match link names the
- * first names and the open spots, so "who is in?" is answered with no trip at all.
+ * players who are in and the open spots, so "who is in?" is answered with no trip at all.
  *
  * Only what the public match page already shows: names as the players typed them, never a level
  * (the owner's decision E, 9 October 2026) and never a personal link — a message in a group can be
- * forwarded, so the link is always the match's own. WhatsApp makes a preview once, on the sender's
- * phone, so a preview is the line-up at that moment and never updates.
+ * forwarded, so the link is always the match's own. A spot the organiser reserved by typing a name is
+ * a count ("2 held"), never the name: that person never said yes, and a line in a group that names
+ * them says they did. WhatsApp makes a preview once, on the sender's phone, so a preview is the
+ * line-up at that moment and never updates.
  *
  * Pure: the words come in already translated, the line goes out.
  */
@@ -17,13 +19,16 @@
 /** A seat as the line reads it: a player's name, or the name a spot is held for. */
 export type LineSeat = { status: string; name: string | null | undefined };
 
-/** The names on the line-up, in seat order: the players in, then nobody else, and a held spot by the name it is held for. */
+/** The names of the players who are in, in seat order: a joined or confirmed seat, never a held one. */
 export function lineupNames(roster: readonly LineSeat[]): string[] {
   return roster
-    .filter((s) => s.status === "joined" || s.status === "confirmed" || s.status === "invited")
+    .filter((s) => s.status === "joined" || s.status === "confirmed")
     .map((s) => (s.name ?? "").trim())
     .filter(Boolean);
 }
+
+/** How many seats are held for somebody who has not said yes. */
+export const heldSeats = (roster: readonly LineSeat[]): number => roster.filter((s) => s.status === "invited").length;
 
 /** As many names as fit in `room` characters, then "+N" for the rest, so a long field never pushes the spots and the time out of sight. */
 export function namesThatFit(names: readonly string[], room: number): string {
@@ -43,6 +48,8 @@ export type LineParts = {
   venue: string | null;
   names: readonly string[];
   capacity: number;
+  /** "2 held": seats reserved for somebody, already worded, or null when there are none. */
+  held?: string | null;
   /** "1 spot", "2 spots", "full": already worded. Null once the match is over or off. */
   spots: string | null;
 };
@@ -54,7 +61,7 @@ export const TELL_MAX = 160;
 export function tellGroupText(p: LineParts, url: string): string {
   const head = ["🎾 " + p.when, p.venue].filter(Boolean).join(" · ");
   const count = `${p.names.length}/${p.capacity}`;
-  const tail = p.spots ? ` · ${p.spots}` : "";
+  const tail = `${p.held ? ` · ${p.held}` : ""}${p.spots ? ` · ${p.spots}` : ""}`;
   const room = Math.max(20, TELL_MAX - head.length - count.length - tail.length - 5);
   const who = p.names.length ? `${count}: ${namesThatFit(p.names, room)}` : count;
   return `${head} · ${who}${tail}\n${url}`;
@@ -69,7 +76,7 @@ export const PREVIEW_MAX = 100;
 /** "Ana, Bo, Cy · 1 spot · Sat 18:00 Rawai": the og:description of a match page. */
 export function previewText(p: LineParts, max = PREVIEW_MAX): string {
   const where = [p.when, p.venue].filter(Boolean).join(" ");
-  const fixed = [p.spots, where].filter(Boolean).join(" · ");
+  const fixed = [p.held, p.spots, where].filter(Boolean).join(" · ");
   const room = max - fixed.length - 3;
   if (p.names.length === 0 || room < 8) return fixed.length <= max ? fixed : [p.spots, p.when].filter(Boolean).join(" · ");
   return `${namesThatFit(p.names, room)} · ${fixed}`;

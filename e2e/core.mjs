@@ -259,6 +259,16 @@ try {
     JSON.stringify((lineup.players ?? []).map((p) => p.name)),
   );
   await shot(j2, "12a-thats-me");
+  // A sign-in by name hands over no lasting key (DECIDING rule 32): until Jordi proves something, My
+  // matches shows that browser no personal link and no way to mail it, and the manifest gives it the
+  // plain start page instead of the personal link.
+  await j2.goto(`${BASE}/me`);
+  const byNameManifest = await j2.request.get(`${BASE}/manifest.webmanifest`).then((r) => r.json());
+  check(
+    "after \"That's me\", My matches shows no personal link and the manifest no personal start page",
+    (await j2.getByText("Your personal link").count()) === 0 && (await j2.getByRole("button", { name: /Email me this link/ }).count()) === 0 && byNameManifest.start_url === "/?source=homescreen",
+    byNameManifest.start_url,
+  );
   await j2.close();
 
   // The duplicate is born in the open spot, not in the fold. A stranger on the future match — Dana

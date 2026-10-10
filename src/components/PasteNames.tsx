@@ -2,14 +2,15 @@
 
 import { useTranslations } from "next-intl";
 import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { reserveAction } from "@/actions/slots";
+import { reserveManyAction } from "@/actions/slots";
 import { namesFromChat, planPaste } from "@/lib/domain/pasteNames";
 
 /**
  * "Paste the names from the group", for the organiser: the replies copied out of the crew's WhatsApp
  * group become one reserved spot per name, so a player who said "in" there never leaves the group.
- * The names show before anything is held; a name already in the match is skipped. Each spot goes
- * through `reserveAction`, one after another, with the rate limit every reserved spot has.
+ * The names show before anything is held; a name already in the match is skipped. The whole list is
+ * one request (`reserveManyAction`), under the daily limit every reserved spot counts towards. The box
+ * takes an evening's copy of a chat (twenty thousand characters); the reader keeps the first 24 names.
  *
  * The box is uncontrolled and read when the button is pressed: a person can paste before the page is
  * interactive, and a controlled field would wipe it.
@@ -28,22 +29,16 @@ export function PasteNames({ code, namesHere, spots }: { code: string; namesHere
   }, []);
 
   const hold = () => {
-    const now = planPaste(namesFromChat(box.current?.value ?? text), namesHere, spots);
-    if (now.hold.length === 0) return;
+    const pasted = box.current?.value ?? text;
+    if (planPaste(namesFromChat(pasted), namesHere, spots).hold.length === 0) return;
     start(async () => {
       setError(null);
-      const done: string[] = [];
-      for (const name of now.hold) {
-        const r = await reserveAction(code, { name });
-        if (!r.ok) {
-          startTransition(() => setError(r.error === "too_many" ? t("errors.too_many") : r.error === "full" ? t("creator.noSpots") : t("errors.generic")));
-          break;
-        }
-        done.push(r.data.name);
-      }
+      // One request for the whole list (`reserveManyAction`), which reads the names again on the server.
+      const r = await reserveManyAction(code, pasted);
       startTransition(() => {
-        setHeld(done);
-        if (done.length === now.hold.length) {
+        if (!r.ok) return setError(r.error === "too_many" ? t("errors.too_many") : r.error === "full" ? t("creator.noSpots") : t("errors.generic"));
+        setHeld(r.data.held);
+        if (r.data.noSpot.length === 0) {
           if (box.current) box.current.value = "";
           setText("");
         }
@@ -60,7 +55,7 @@ export function PasteNames({ code, namesHere, spots }: { code: string; namesHere
         ref={box}
         className="textarea mt-2"
         rows={4}
-        maxLength={2000}
+        maxLength={20000}
         placeholder={t("creator.pastePlaceholder")}
         onInput={(e) => setText(e.currentTarget.value)}
         data-testid="paste-names-box"

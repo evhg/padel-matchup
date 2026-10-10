@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
+import { heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
 import { formatWeekdayTime } from "@/lib/dates";
 import { tagForWhatsapp, whatsappShareUrl } from "@/lib/share";
 
@@ -17,8 +17,14 @@ describe("the line a group reads", () => {
     { status: "declined", name: "Dee" },
   ];
 
-  it("names the players in and the spots held, in seat order, and nobody who declined", () => {
-    expect(lineupNames(roster)).toEqual(["Ana", "Bo", "Cy"]);
+  it("names the players who are in, in seat order, and never a spot held for somebody who has not said yes", () => {
+    expect(lineupNames(roster)).toEqual(["Ana", "Bo"]);
+    expect(heldSeats(roster)).toBe(1);
+  });
+
+  it("counts the held spots without their names, in the line and in the preview", () => {
+    expect(tellGroupText({ when: "Sat 18:00", venue: "Rawai", names: ["Ana"], capacity: 4, held: "2 held", spots: "1 spot" }, "u")).toBe("🎾 Sat 18:00 · Rawai · 1/4: Ana · 2 held · 1 spot\nu");
+    expect(previewText({ when: "Sat 18:00", venue: "Rawai", names: ["Ana"], capacity: 4, held: "2 held", spots: "1 spot" })).toBe("Ana · 2 held · 1 spot · Sat 18:00 Rawai");
   });
 
   it("is the line a player would type, then the match link on its own line", () => {
@@ -42,6 +48,7 @@ describe("the line a group reads", () => {
   it("carries no personal link, whatever the roster holds", () => {
     const text = tellGroupText({ when: "Sat 18:00", venue: "Rawai", names: lineupNames(roster), capacity: 4, spots: "1 spot" }, "https://kicksma.sh/7KQ2?s=wa");
     expect(text).not.toMatch(/\/p\/|\/i\/|manage/);
+    expect(text).not.toContain("Cy");
     expect(whatsappShareUrl(text)).toMatch(/^https:\/\/wa\.me\/\?text=/);
   });
 

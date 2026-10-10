@@ -67,7 +67,7 @@ import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { eventUrl, inviteUrl, manageUrl, whatsappShareUrl } from "@/lib/share";
-import { lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
+import { heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
@@ -85,17 +85,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ev = detail.event;
   const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
   // The preview under a link pasted in a group: who is in and how many spots are left, so "who's in?"
-  // is answered without a tap. First names as the page shows them, never a level (decision E).
+  // is answered without a tap. The names of the players who are in, as the page shows them; a spot held
+  // for somebody is a count, never a name, because they never said yes; never a level (decision E).
   const when = formatWeekdayTime(ev.startsAt, ev.tz, locale);
   const cancelled = ev.status === "cancelled";
   const open = !cancelled && ev.status !== "past" && !isOver(ev, new Date());
+  const seats = detail.roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }));
+  const held = open ? heldSeats(seats) : 0;
   const description = cancelled
     ? [t("og.cancelled"), when, ev.venueName].filter(Boolean).join(" · ")
     : previewText({
         when,
         venue: ev.venueName,
-        names: lineupNames(detail.roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }))),
+        names: lineupNames(seats),
         capacity: ev.capacity,
+        held: held ? t("shareText.held", { count: held }) : null,
         spots: open ? t("shareText.spots", { count: detail.roster.filter(isClaimable).length }) : null,
       });
   return {
@@ -177,6 +181,7 @@ export default async function EventPage({ params, searchParams }: Props) {
   // "Tell the group": once in, one tap carries the line-up back to the group the link came from
   // (src/lib/domain/groupLine.ts). The match's own link, tagged as a WhatsApp one; never a personal
   // link, because a message in a group can be forwarded.
+  const lineSeats = roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }));
   const tellGroup =
     joinState === "leave"
       ? whatsappShareUrl(
@@ -184,8 +189,9 @@ export default async function EventPage({ params, searchParams }: Props) {
             {
               when: formatWeekdayTime(ev.startsAt, ev.tz, locale),
               venue: ev.venueName,
-              names: lineupNames(roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }))),
+              names: lineupNames(lineSeats),
               capacity: ev.capacity,
+              held: heldSeats(lineSeats) ? t("shareText.held", { count: heldSeats(lineSeats) }) : null,
               spots: t("shareText.spots", { count: spotsLeft }),
             },
             taggedUrl(url, "wa"),

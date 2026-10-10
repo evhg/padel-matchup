@@ -93,7 +93,6 @@
     "alreadyHere": "{name} ya está en este partido.",
     "thatsMe": "Soy yo — recuperar mis partidos",
     "thatsMeIn": "Soy yo",
-    "knownCrew": "{name} ya juega en este grupo.",
     "thatsMeCrew": "En este grupo ya juega {name}. ¿Eres tú?",
     "thatsMeNo": "Con este nombre no ha funcionado."
   },
@@ -463,7 +462,8 @@
     "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}",
     "result": "🎾 {line} · {day}\n{url}",
     "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}",
-    "spots": "{count, plural, =0 {completo} one {# plaza} other {# plazas}}"
+    "spots": "{count, plural, =0 {completo} one {# plaza} other {# plazas}}",
+    "held": "{count, plural, one {# reservada} other {# reservadas}}"
   },
   "og": {
     "players": "{count}/{capacity} jugadores",
@@ -990,7 +990,7 @@
     "storeTitle": "Qué guardamos",
     "storeBody": "• El nombre con el que juegas.\n• Tu email, solo si nos lo das.\n• Si un organizador te reserva una plaza: el nombre, email o teléfono que escribió. Te enviamos la invitación por email, y el organizador vuelve a ver esos datos cuando invita a gente a su siguiente partido.\n• Tu número de teléfono, solo si escribes a nuestro número de WhatsApp: así es como WhatsApp te reconoce.\n• Tu id y nombre de usuario de Telegram, y tu id y nombre de Discord o LINE, solo cuando vinculas esa cuenta.\n• Tu nivel y cómo ha cambiado.\n• Tus partidos, tus plazas, los resultados y una foto si un jugador la añade a un partido.\n• Cuándo y dónde quieres jugar, si nos lo dices.\n• Los dispositivos en los que activaste las notificaciones.\n• Tu bandeja de Mis partidos: los avisos que te enviamos o te guardamos, qué tipos de aviso desactivaste y tus horas de silencio.\n• Si eres entrenador: tu página de entrenador, tus alumnos y tus clases.\n• Los mensajes que nos envías por el formulario de opiniones.\n• Si nos pides no volver a escribirte, o un email que te enviamos rebota: esa dirección, solo para dejar de enviarle correos.",
     "cookiesTitle": "Cookies",
-    "cookiesBody": "Solo las cookies que la app necesita para funcionar. Sin rastreo, sin anuncios, sin cookies de nadie más.\n• km_player: quién eres, firmada para que nadie pueda falsificarla. Un año.\n• km_has_id: le dice a la página que tienes una identidad. Un año.\n• NEXT_LOCALE: tu idioma. Un año.\n• km_manage_ más el código de un partido: permite al organizador gestionar ese partido. Un año.\n• ks_src y ks_csrc: el enlace que te trajo, para poder contarlo. Un día.\n• ks_notmine: los nombres que dijiste que no son tuyos, en Mis partidos. Un año.\n• km_text: texto más grande, solo si lo activas. Un año.\nTu navegador también guarda una copia de quién eres en su propio almacenamiento, para que perder una cookie no te haga perder tus partidos.",
+    "cookiesBody": "Solo las cookies que la app necesita para funcionar. Sin rastreo, sin anuncios, sin cookies de nadie más.\n• km_player: quién eres, firmada para que nadie pueda falsificarla. Un año.\n• km_has_id: le dice a la página que tienes una identidad. Un año.\n• km_by_name: solo si entraste tocando «Soy yo» junto a tu nombre; hasta que confirmes quién eres con un código por email o una cuenta de chat, tu enlace personal queda oculto. Un año.\n• NEXT_LOCALE: tu idioma. Un año.\n• km_manage_ más el código de un partido: permite al organizador gestionar ese partido. Un año.\n• ks_src y ks_csrc: el enlace que te trajo, para poder contarlo. Un día.\n• ks_notmine: los nombres que dijiste que no son tuyos, en Mis partidos. Un año.\n• km_text: texto más grande, solo si lo activas. Un año.\nTu navegador también guarda una copia de quién eres en su propio almacenamiento, para que perder una cookie no te haga perder tus partidos.",
     "ipTitle": "Tu dirección IP",
     "ipBody": "Nunca la escribimos en nuestra base de datos. Para frenar los scripts que saturan la app, guardamos una clave hecha a partir de ella con un secreto (un hash con clave), así que la dirección en sí no se guarda. Esas filas se borran a los {rateDays, plural, one {# día} other {# días}}. Nuestro hosting ve tu dirección para entregar cada página, como cualquier hosting.",
     "helpersTitle": "Quién nos ayuda",

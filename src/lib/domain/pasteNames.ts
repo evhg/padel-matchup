@@ -4,7 +4,8 @@ import { nameIsHere, normalName } from "./dupes";
  * "Paste the names from the group": the organiser copies the replies from the crew's WhatsApp group
  * and each name becomes a reserved spot, so a player who said "in" there never has to leave it (the
  * owner, 10 October 2026: "you have to leave the chat group"). No API can read a WhatsApp group, so a
- * person carries the names across once; `reserveAction` holds each spot, with its own rate limit.
+ * person carries the names across once; `reserveManyAction` holds every spot in one request, under
+ * the daily limit every reserved spot counts towards.
  *
  * Chat is free text, and a reader of free text refuses what it does not recognise rather than keeping
  * whatever is left (the crew group's lesson: "who's in for beers at 8?" once made a match at "for
@@ -31,14 +32,18 @@ const CHAT_WORDS = new Set(
     "play", "playing", "game", "games", "match", "court", "courts", "tonight", "today", "tomorrow", "count", "plus", "also", "too", "please", "thanks",
     "thank", "hi", "hey", "hello", "all", "anyone", "someone", "more", "one", "two", "spot", "spots", "free", "full", "booked", "book", "here", "there", "late",
     "make", "it", "not", "will", "won't", "dont", "don't", "out.", "if",
+    "cool", "nice", "haha", "lol", "perfect", "great", "super", "works", "thx", "monday", "tuesday", "wednesday", "thursday",
+    "friday", "saturday", "sunday",
     // ru
     "я", "мы", "ты", "вы", "он", "она", "они", "кто", "что", "где", "когда", "да", "нет", "не", "может", "буду", "будем", "смогу", "могу", "играю", "играем",
     "иду", "идём", "идем", "тоже", "плюс", "ещё", "еще", "все", "всем", "привет", "спасибо", "сегодня", "завтра", "в", "на", "и", "или", "корт", "игра",
-    "матч", "место", "мест", "минус", "пас",
+    "матч", "место", "мест", "минус", "пас", "ок", "окей", "хаха", "отлично", "супер", "класс", "понедельник", "вторник", "среда",
+    "четверг", "пятница", "суббота", "воскресенье",
     // es
     "yo", "tú", "tu", "sí", "si", "quizás", "quizas", "voy", "vamos", "juego", "jugar", "jugamos", "puedo", "también", "tambien", "hoy", "mañana", "manana",
     "quién", "quien", "qué", "que", "el", "la", "los", "las", "de", "del", "y", "o", "para", "en", "con", "por", "hola", "gracias", "pista", "partido",
-    "plaza", "plazas", "alguien", "todos", "más", "mas", "apunto", "apúntame", "apuntame", "dentro", "fuera",
+    "plaza", "plazas", "alguien", "todos", "más", "mas", "apunto", "apúntame", "apuntame", "dentro", "fuera", "vale", "jaja", "genial",
+    "perfecto", "guay", "lunes", "martes", "miércoles", "miercoles", "jueves", "viernes", "sábado", "sabado",
   ],
 );
 
@@ -47,7 +52,7 @@ const YES = new Set(["+", "+1", "in", "i'm in", "im in", "me", "me too", "yes", 
 /** The emoji people answer "in" with, kept apart because every emoji is taken off a name. */
 const YES_EMOJI = /[✅👍🙋🙌💪🎾✋☝]/u;
 
-const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}‍️⃣]/gu;
+const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u200d\ufe0f\u20e3]/gu;
 const NAME = /^[\p{L}][\p{L}\p{M}'’.-]*(?: [\p{L}][\p{L}\p{M}'’.-]*){0,2}$/u;
 /** "[10/10/26, 18:02:11] Ana: +1" (a phone's copy) and "10/10/26, 18:02 - Ana: in" (an export). */
 const COPIED = [/^\s*\[[^\]]{4,40}\]\s*([^:]{1,40}):\s*(.*)$/u, /^\s*\d{1,4}[./-]\d{1,2}[./-]\d{1,4},?\s+\d{1,2}[:.]\d{2}(?:[:.]\d{2})?(?:\s*[aApP]\.?\s?[mM]\.?)?\s+[-–]\s+([^:]{1,40}):\s*(.*)$/u];
@@ -71,6 +76,9 @@ function asName(piece: string): string | null {
 /** A line's pieces: a numbered list on one line, a list with commas, or the line itself. */
 const piecesOf = (line: string): string[] => line.split(/(?:^|\s)\d{1,2}[.)]\s+|[,;]/u).filter((p) => p.trim());
 
+/** A message that is a list of names: numbered from one, or two pieces or more. */
+const isList = (message: string): boolean => /^\s*1[.)]/u.test(message) || piecesOf(message).length >= 2;
+
 const saysYes = (message: string): boolean => {
   const plain = message.replace(EMOJI, " ").replace(/\s+/gu, " ").trim().toLowerCase().replace(/[.!]+$/u, "");
   return YES.has(plain) || (plain === "" && YES_EMOJI.test(message));
@@ -86,11 +94,14 @@ export function namesFromChat(text: string): string[] {
     seen.add(key);
     out.push(name);
   };
-  for (const raw of text.replace(/\r/g, "").replace(/ /g, " ").split("\n")) {
+  for (const raw of text.replace(/\r/g, "").replace(/\u00a0/g, " ").split("\n")) {
     const copied = COPIED.map((re) => re.exec(raw)).find(Boolean);
     if (copied) {
+      // A copied message is one person speaking: the sender when they said yes, the names inside it
+      // when it is a list ("1. Pim 2. Ton", "Pim, Ton"), and nothing at all when it is a reply
+      // ("Cool", "Haha nice", "Vale"), however much a reply looks like a name.
       if (saysYes(copied[2])) keep(asName(copied[1]));
-      else for (const p of piecesOf(copied[2])) keep(asName(p));
+      else if (isList(copied[2])) for (const p of piecesOf(copied[2])) keep(asName(p));
       continue;
     }
     for (const p of piecesOf(raw)) keep(asName(p));

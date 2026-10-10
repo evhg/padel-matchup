@@ -51,8 +51,18 @@ export type MergeRule =
   /** The same name, and at most one of the two can be reached at all. Nothing contradicts; nothing proves it either. */
   | "same_name_one_address";
 
-/** Lower case, one space between words, trimmed. What a person types twice is rarely spaced the same. */
-export const normalName = (s: string | null | undefined): string => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+/**
+ * Composed (NFC), nothing invisible, lower case, one space between words, trimmed. What a person types
+ * twice is rarely spaced the same, and a phone may send "José" composed or as "e" plus an accent. The
+ * same key the database makes for "That's me" (`keyOf` in src/lib/domain/thatsMe.ts).
+ */
+export const normalName = (s: string | null | undefined): string =>
+  (s ?? "")
+    .normalize("NFC")
+    .replace(/[\u200B-\u200F\u2060\uFEFF\u00AD]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 
 const email = (p: MergeCandidate) => (p.email ?? "").toLowerCase().trim() || null;
 
