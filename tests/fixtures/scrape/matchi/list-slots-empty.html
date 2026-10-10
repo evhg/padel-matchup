@@ -1,0 +1,59 @@
+
+
+    <div>
+        
+            No available time slots in the selected period.
+        
+    </div>
+
+
+    
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('button.collapse-trigger').unbind().on('click', function() {
+            var collapsableID = $(this).attr('data-target');
+            $('.collapse.in:not('+collapsableID+')').removeClass('in');
+
+            $('.collapse-trigger').removeClass('active');
+
+            if(!$(this).hasClass('collapsed')) {
+                $(this).addClass('active');
+
+                var slotIds = $(this).data('slots');
+                var params = "";
+                _.each(slotIds, function (slot, index) {
+                    if(index == 0)
+                        params += "?slotId="+slot;
+                    else
+                        params += "&slotId="+slot;
+                });
+
+                $.ajax({
+                    cache: false,
+                    url: "\u002fbook\u002fgetSlotPrices"+params,
+                    dataType : 'json',
+                    success: function (data) {
+                        _.each(data, function (priceItem) {
+                            if (priceItem.facilityCountryCode == CROATIA_COUNTRY_CODE) {
+                                $('#price_'+priceItem.slotId).html(createDualCurrencyStringForCroatiaVenue(priceItem.price, priceItem.currency));
+                            } else {
+                                $('#price_'+priceItem.slotId).html(priceItem.price + " " + priceItem.currency);
+                            }
+                        });
+                    },
+                    error: function() {
+                        alert("Could not fetch prices, please try again");
+                    }
+                });
+            }
+            else {
+                $(this).removeClass('active');
+            }
+        });
+    });
+
+    var renderPrice = function (/*Object*/ priceItem) {
+        console.log(priceItem);
+    };
+</script>
