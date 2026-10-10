@@ -374,8 +374,10 @@ try {
     const chip = page.getByTestId("free-chip").first();
     const label = (await chip.innerText()).trim();
     await chip.click();
-    const filled = [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: "Asia/Bangkok" }).count(), (await page.getByTestId("free-then").innerText()).trim()];
-    check("the create form offers the club's free time as a chip, and a tap fills the time and the club's zone", label.endsWith(filled[0]) && filled[1] === 1 && filled[2] === "✓ The club shows a free court then.", JSON.stringify({ label, filled }));
+    // The club's own zone, as its feed was read: the claim took it from the claimant's phone, so it is not Bangkok here.
+    const clubTz = String(feedNow.freeCourts?.tz ?? "").replace(/_/g, " ");
+    const filled = [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: clubTz, exact: true }).count(), (await page.getByTestId("free-then").innerText()).trim()];
+    check("the create form offers the club's free time as a chip, and a tap fills the time and the club's zone", clubTz !== "" && label.endsWith(filled[0]) && filled[1] === 1 && filled[2] === "✓ The club shows a free court then.", JSON.stringify({ label, clubTz, filled }));
   } else {
     check("past the club's last free hour, the form offers no free time rather than a guess", (await page.getByTestId("free-times").count()) === 0);
   }
@@ -389,8 +391,9 @@ try {
   await page.getByTestId("court-booked-mark").click();
   await page.getByTestId("court-booked").waitFor({ timeout: 15000 });
   check("'I booked it' shows 'Court booked ✓' with who booked it", (await page.getByTestId("court-booked").innerText()).includes("Court booked ✓ (by Nok)"), await page.getByTestId("court-booked").innerText());
+  // GET /api/v1/matches/{code} answers with the match itself, not wrapped as a create does.
   const bookedApi = await fetch(`${BASE}/api/v1/matches/${bookedCode}`).then((r) => r.json());
-  check("and the API says so, with the booker's first name", bookedApi.match?.courtBooked?.by === "Nok", JSON.stringify(bookedApi.match?.courtBooked));
+  check("and the API says so, with the booker's first name", (bookedApi.match ?? bookedApi).courtBooked?.by === "Nok", JSON.stringify((bookedApi.match ?? bookedApi).courtBooked));
   await page.getByTestId("court-booked-undo").click();
   await page.getByTestId("court-booked-mark").waitFor({ timeout: 15000 });
   check("any player takes it back in one tap", (await page.getByTestId("court-booked").count()) === 0);
