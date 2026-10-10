@@ -83,6 +83,20 @@ describe("the club directory as a file", () => {
     expect(bySlug.get("sterling")?.name).toBe("Sterling Sport & Wellness");
   });
 
+  it("reaches production as the booking-links migration, row for row, under the same guard", () => {
+    // Migration 0097 carries the file's booking links as one UPDATE, never the import's insert, whose
+    // rows carry manage tokens that must not be in git. A link changed in the file and not here would
+    // be a club page that disagrees with the directory.
+    const name = readdirSync(root("drizzle")).find((f) => f.endsWith("_club_booking_links.sql"));
+    const sql = readFileSync(root(`drizzle/${name}`), "utf8");
+    expect(sql).toContain(`WHERE "clubs"."slug" = v.slug AND "clubs"."source" = 'directory' AND "clubs"."claimed_by" IS NULL;`);
+    expect(sql).not.toMatch(/manage_token|insert into/i);
+    const q = (v: string) => (v === "null" ? null : v.slice(1, -1).replace(/''/g, "'"));
+    const rows = [...sql.matchAll(/^\s+\(('[^']+'), (null|'[^']*'), (null|'[^']*'), (null|'[^']*')\),?$/gm)].map((m) => ({ slug: q(m[1]), bookingUrl: q(m[2]), bookingPlatform: q(m[3]), website: q(m[4]) }));
+    const want = file.clubs.filter((c) => c.bookingPlatform).map((c) => ({ slug: c.slug, bookingUrl: c.bookingUrl ?? null, bookingPlatform: c.bookingPlatform ?? null, website: c.website }));
+    expect(rows).toEqual(want);
+  });
+
   it("turns into one statement that only ever touches the directory's own rows", () => {
     const sql = execFileSync("node", [root("scripts/import-clubs.mjs"), "--sql"], { encoding: "utf8" });
     // One upsert over a VALUES list: one row per club, and one guard to read rather than sixty-three.
