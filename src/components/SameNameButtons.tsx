@@ -7,9 +7,11 @@ import { claimSameNameAction } from "@/actions/identity";
 
 /**
  * "These are mine" folds the row in (checked again on the server). "Not me" is remembered in this
- * browser only: nothing is written about a row somebody said is a stranger's.
+ * browser only: nothing is written about a row somebody said is a stranger's. A row the person may
+ * not claim yet (`mayClaim`: a member of a group that asks to join, with nothing shared) gets one
+ * line in place of the claim button, never a button the server would refuse.
  */
-export function SameNameButtons({ rowId, notMine }: { rowId: string; notMine: string[] }) {
+export function SameNameButtons({ rowId, notMine, claimable = true }: { rowId: string; notMine: string[]; claimable?: boolean }) {
   const t = useTranslations("me");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -31,9 +33,15 @@ export function SameNameButtons({ rowId, notMine }: { rowId: string; notMine: st
   };
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      <button type="button" className="btn-primary btn-sm" disabled={pending} onClick={claim} data-testid="same-name-mine">
-        {pending ? "…" : t("sameMine")}
-      </button>
+      {claimable ? (
+        <button type="button" className="btn-primary btn-sm" disabled={pending} onClick={claim} data-testid="same-name-mine">
+          {pending ? "…" : t("sameMine")}
+        </button>
+      ) : (
+        <p className="w-full text-xs text-muted" data-testid="same-name-asking-group">
+          {t("sameAskingGroup")}
+        </p>
+      )}
       <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={dismiss} data-testid="same-name-not-me">
         {t("sameNotMe")}
       </button>

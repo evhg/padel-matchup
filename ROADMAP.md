@@ -546,9 +546,12 @@ Everything in this list is live. The README describes each in detail.
   linking Telegram, a row of the same name that nobody can reach is folded in automatically if the
   two also share a match, an organiser or a club. Otherwise My matches asks "Are these yours?" and
   shows those matches (the day, the club, who else played), with "Yes, these are mine" and "Not me";
-  "Not me" is remembered in that browser only. A row with an address, a phone, a chat account or a
-  push subscription is never merged by name. A merge now also moves the person's wants, which point
-  at a player without a foreign key and were left behind on the folded row until now.
+  "Not me" is remembered in that browser only. A row that is a member of a group that asks to join
+  needs the shared context for that answer too (the owner, 10 October 2026: "Need a shared match
+  first"); without it the card says so and offers only "Not me". A row with an address, a phone,
+  a chat account or a push subscription is never merged by name. A merge now also moves the
+  person's wants, which point at a player without a foreign key and were left behind on the folded
+  row until now.
 - **Three players can score from Telegram (24 September 2026).** Erik's note of 15 September (match
   9wjp): with three players seated, the nudge's 🏁 said "the result needs four players", and a bare
   "6-4 6-3" in reply said "tap 🏁 on the card first", while the web took the score from three. Two of

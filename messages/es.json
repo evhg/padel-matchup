@@ -413,7 +413,8 @@
     "sameMine": "Sí, son míos",
     "sameNotMe": "No soy yo",
     "sameFailed": "No se pudieron añadir. Recarga la página e inténtalo de nuevo.",
-    "biggerTextHelp": "Letra más grande en toda la app, en este dispositivo."
+    "biggerTextHelp": "Letra más grande en toda la app, en este dispositivo.",
+    "sameAskingGroup": "Este nombre es miembro de un grupo que pide aprobación para entrar. Primero juega un partido en el mismo club o con el mismo organizador. Luego podrás añadir estos partidos."
   },
   "notFound": {
     "title": "Enlace no encontrado",

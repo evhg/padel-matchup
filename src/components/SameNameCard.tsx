@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { Db } from "@/db";
 import type { Player } from "@/db/schema";
 import { formatEventDay } from "@/lib/dates";
-import { proved, sameNameMatches, sameNameRows } from "@/lib/domain/sameName";
+import { mayClaim, proved, sameNameMatches, sameNameRows } from "@/lib/domain/sameName";
 import { SameNameButtons } from "./SameNameButtons";
 
 /** The cookie that remembers "Not me", per browser: ids of rows this person said are somebody else. */
@@ -14,7 +14,9 @@ export const NOT_MINE_COOKIE = "ks_notmine";
  * address. Offered only to a person who proved who they are, with the matches themselves shown, so
  * the answer is theirs to give with the facts in front of them (the owner's option A, 24 September
  * 2026). A row that shares a match, an organiser or a club was already folded in at the moment of
- * proof; what reaches this card is the rest.
+ * proof; what reaches this card is the rest. A row that is a member of a group that asks to join
+ * shows its matches without "Yes, these are mine": one line says what would let the person add them
+ * (the owner, 10 October 2026: "Need a shared match first"; `mayClaim`), and "Not me" stays.
  */
 export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
   if (!proved(player)) return null;
@@ -40,7 +42,7 @@ export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
                 </li>
               ))}
             </ul>
-            <SameNameButtons rowId={r.id} notMine={[...notMine]} />
+            <SameNameButtons rowId={r.id} notMine={[...notMine]} claimable={mayClaim(r)} />
           </li>
         ))}
       </ul>
