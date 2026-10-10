@@ -19,7 +19,8 @@
     "at": "at",
     "courtTitle": "A court is free at {club} today at {time}",
     "courtBody": "You said you want to play around this time at {club}. Book the court with the club, make the match here, and share the link. To stop these, remove the request on your own page.",
-    "courtButton": "Make the match"
+    "courtButton": "Make the match",
+    "courtTitleTomorrow": "A court is free at {club} tomorrow at {time}"
   },
   "common": {
     "appName": "Kicksmash",
@@ -871,7 +872,9 @@
     "openBody": "Kicksmash is open source under the Apache 2.0 license. Read it, run it, build on it. The name and logo stay ours.",
     "contact": "Questions, data requests, love letters:",
     "privacyLink": "The full privacy page →",
-    "termsLink": "The full terms →"
+    "termsLink": "The full terms →",
+    "botTitle": "KicksmashBot",
+    "botBody": "KicksmashBot reads the free court times that booking platforms such as Playtomic and MATCHi show on a club's public page, so players can see when a court is free. It reads today's times every 15 minutes at most and the next two days once an hour at most, one request a second, with its name on each request. It never signs in, books or pays, and it stops when a platform blocks it. To ask it to read less, or to stop, write to us:"
   },
   "notices": {
     "title": "Notices",
@@ -1559,7 +1562,9 @@
     "dayInUse": "{used} of {total} courts busy",
     "dayMatch": "Match",
     "dayLesson": "Lesson",
-    "dayNoCourt": "No court named"
+    "dayNoCourt": "No court named",
+    "freeFromPlatform": "From {platform}'s public page · Updated {time}",
+    "freePlatformDown": "Free times from {platform} are not available just now."
   },
   "passport": {
     "title": "Passport",

@@ -14,6 +14,7 @@ import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
 import { getClub, isClubListed, isClubLive } from "@/lib/domain/clubs";
 import { getSessionPlayerId } from "@/lib/session";
+import { freeCourtsCardShown } from "@/lib/booking/availability";
 import { clubBusy, courtDay, courtsInUse, listCourts } from "@/lib/domain/courts";
 import { coachesAtClub } from "@/lib/domain/coaching";
 import { clubWeek, listClubSlots } from "@/lib/domain/clubWeek";
@@ -141,11 +142,12 @@ export default async function VenueBoardPage({ params }: Props) {
             </div>
           </section>
         )}
-        {club && (club.availabilityUrl || club.availability) && (
-          <section className="card">
+        {/* A club Kicksmash lists gets the card too while a read of its platform is fresh: the hours its row shows on /clubs are here, with the platform named (DECIDING rule 35). */}
+        {shown && freeCourtsCardShown(shown, Boolean(club), new Date()) && (
+          <section className="card" data-testid="club-free">
             <h2 className="text-lg font-extrabold">{t("club.freeToday")}</h2>
             <div className="mt-2">
-              <FreeCourts club={club} />
+              <FreeCourts club={shown} />
             </div>
           </section>
         )}

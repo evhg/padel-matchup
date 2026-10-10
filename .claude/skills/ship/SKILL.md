@@ -244,6 +244,23 @@ learning can be a test, a gate step or a script, make it one and put the story i
   had the fix reverted for ninety seconds, and `git commit -a` in that window put the bug back into
   the branch with an unrelated change. Commit named paths while anything is running, and read
   `git status` before `-a`.
+- **An environment variable on Vercel is not a switch that needs no deploy.** A running deployment
+  keeps the variables it was built with, so `SCRAPE_DISABLED` changes nothing until a redeploy. The
+  brief for the court-times read asked for a switch "with no deploy"; the one that does that is a
+  row the code reads each run (`scrape_off_<platform>` through `POST /api/admin/metrics`). When a
+  switch must act now, put it in the database and keep the variable as the slow one.
+- **A platform sells one free hour as several rows.** Playtomic lists each free start once for every
+  length it offers (60, 90 and 120 minutes) and a new start every 30 minutes, so adding up the rows
+  said 156 court-hours for a club that has 30, and drew one start as three chips. A cache of free time
+  keeps each court's union and counts the courts in each piece (`freeSlotsFromScrape`). The trimmed
+  fixture of four rows a court could not show it; a full day in the platform's own shape did.
+- **Seed the row the way production made it.** Every test of the court-times job seeded `booking_url`
+  and `booking_platform` by hand, and the directory import writes neither, so fifty green tests
+  described a job that read almost no club (10 October 2026). Run the import's own statement in the
+  test (`node scripts/import-clubs.mjs --sql`) before asking which rows a query finds.
+- **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
+  MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
+  a stub that set `url`, passed. Test a reader through the frame that production calls it through.
 
 ### Wall clock
 
@@ -367,6 +384,12 @@ Wall clock first, credits second. What actually moved it, measured:
   file assumes before you tick a box near the top of it.
 
 ### Editing that keeps going wrong
+
+- **A time zone set inside a running test is not a time zone.** `process.env.TZ = "Asia/Bangkok"` in a
+  `beforeAll` passed the local gate and failed CI's real-Postgres run: a worker thread ignores the
+  assignment outright, and a long-lived test process cannot be trusted to honour it either. A test that
+  needs the host in another zone starts a child process with `TZ` in its environment
+  (`tests/helpers/playtomic-in-zone.ts`) and compares its answer with the one in UTC.
 
 - **Never round-trip `messages/*.json`.** Loading and re-serialising reformats the compact single-line
   blocks and turns a three-key change into fifty-seven changed lines; a hand-rolled comma fix corrupted

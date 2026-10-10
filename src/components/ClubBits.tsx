@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
+import { freeCourtsState, isScraped, todaySlots } from "@/lib/booking/availability";
 import { formatEventTime } from "@/lib/dates";
 import { isClubLive, freeCourtHours } from "@/lib/domain/clubs";
 
@@ -32,15 +33,29 @@ export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "cour
   );
 }
 
-/** Today's free courts from the club's own feed: a row of time chips, or one honest line. */
+/**
+ * Today's free courts: a row of time chips, or one honest line. From the club's own feed when it shares
+ * one, else from a recent read of its booking platform's public page, and then the line under the chips
+ * names the platform, because the club did not publish those times (DECIDING rule 35). A read that
+ * failed or grew old says the platform's times are not available just now, never that the club must
+ * share its calendar (`freeCourtsState`).
+ */
 export async function FreeCourts({ club, now = new Date(), whenUnconfigured }: { club: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind" | "tz">; now?: Date; /** What to show while the club shares no feed; the manage page puts the way to share it here. */ whenUnconfigured?: ReactNode }) {
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
-  const a = club.availability;
-  const configured = Boolean(club.availabilityUrl && club.availabilityKind);
-  if (!configured) return <>{whenUnconfigured ?? <p className="text-sm text-muted">{t("club.freeUnknown")}</p>}</>;
+  const state = freeCourtsState(club, now);
+  if (state.kind === "none") return <>{whenUnconfigured ?? <p className="text-sm text-muted">{t("club.freeUnknown")}</p>}</>;
+  if (state.kind === "platformDown")
+    return (
+      <>
+        <p className="text-sm text-muted">{t("club.freePlatformDown", { platform: state.platform })}</p>
+        {whenUnconfigured}
+      </>
+    );
+  const a = state.a;
   if (!a || a.error) return <p className="text-sm text-muted">{t("club.freeError")}</p>;
-  const slots = a.slots.filter((s) => new Date(s.end) > now);
-  const hours = freeCourtHours(club, now) ?? 0;
+  const slots = todaySlots(a, now);
+  const hours = freeCourtHours({ availability: a }, now) ?? 0;
+  const updated = formatEventTime(new Date(a.fetchedAt), a.tz, locale);
   return (
     <div>
       {slots.length === 0 ? (
@@ -50,15 +65,19 @@ export async function FreeCourts({ club, now = new Date(), whenUnconfigured }: {
           <p className="text-sm font-bold">{t("club.freeHours", { count: hours })}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {slots.slice(0, 12).map((s) => (
-              <span key={s.start} className="chip-muted tabular-nums">
-                {formatEventTime(new Date(s.start), a.tz, locale)} · {t("club.freeSlot", { count: s.free })}
+              // A read from a platform keeps pieces of any length, so its chip says when the piece ends too.
+              <span key={`${s.start}|${s.end}`} className="chip-muted tabular-nums">
+                {formatEventTime(new Date(s.start), a.tz, locale)}
+                {isScraped(a) ? `–${formatEventTime(new Date(s.end), a.tz, locale)}` : ""} · {t("club.freeSlot", { count: s.free })}
               </span>
             ))}
             {slots.length > 12 && <span className="chip-muted">…</span>}
           </div>
         </>
       )}
-      <p className="mt-2 text-xs text-faint">{t("club.freeUpdated", { time: formatEventTime(new Date(a.fetchedAt), a.tz, locale) })}</p>
+      <p className="mt-2 text-xs text-faint" data-testid="free-source">
+        {state.kind === "platform" ? t("club.freeFromPlatform", { platform: state.platform, time: updated }) : t("club.freeUpdated", { time: updated })}
+      </p>
     </div>
   );
 }

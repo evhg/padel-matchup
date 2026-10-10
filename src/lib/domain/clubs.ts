@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
-import { clubCourts, clubs, clubSlots, coaches, events, venues, type Club } from "@/db/schema";
+import { clubCourts, clubs, clubSlots, coaches, events, venues, type Club, type ClubAvailability } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { AVAILABILITY_KINDS } from "@/lib/booking/availability";
+import { AVAILABILITY_KINDS, cacheBetween, isScraped, scrapeFresh, todaySlots } from "@/lib/booking/availability";
 import { CITIES, cityBySlug, cityInText, venueInCity } from "./cities";
 import { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
 import { countryOfTz, isCountryCode } from "./countries";
@@ -134,23 +134,43 @@ export async function getClubByToken(db: Db, token: string): Promise<Club | null
   return c ?? null;
 }
 
+/** Every column of `clubs` but the cache of free courts, which is the one large column (AGENTS.md rule 12). */
+const columnsButCache = (() => {
+  const { availability, ...rest } = getTableColumns(clubs);
+  void availability;
+  return rest;
+})();
+
+/** A club in a list: no cache of free courts at all. */
+export type PickableClub = Omit<Club, "availability">;
+
+/**
+ * A club in a list that shows today's free courts: every column, with `availability` cut to the slots
+ * of the next 26 hours, which is today in any zone (`cacheBetween`). A read from a platform keeps three
+ * days on the row; a list never needs more than today. Same shape as `Club`, so every reader of "today"
+ * (`freeCourtHours`, `clubToPublic`) reads it unchanged; a reader that wants the later days reads the row.
+ */
+export type ListedClub = Omit<Club, "availability"> & { availability: ClubAvailability | null };
+const LIST_WINDOW_MS = 26 * 3600_000;
+const listedColumns = (now: Date) => ({ ...columnsButCache, availability: cacheBetween(now, new Date(now.getTime() + LIST_WINDOW_MS)) });
+
 /**
  * Every club a reader may see, theirs or ours, founding first. `listLiveClubs` is the smaller set a
  * club actually runs; this is the one a directory page, a city page and the sitemap read.
  */
-export async function listShownClubs(db: Db, city?: string | null, limit = 400): Promise<Club[]> {
+export async function listShownClubs(db: Db, city?: string | null, limit = 400, now = new Date()): Promise<ListedClub[]> {
   const shown = and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), listedSource()));
   return db
-    .select()
+    .select(listedColumns(now))
     .from(clubs)
     .where(city ? and(shown, eq(clubs.city, city)) : shown)
     .orderBy(desc(clubs.founding), asc(clubs.name))
     .limit(limit);
 }
 
-export async function listLiveClubs(db: Db, city?: string | null, limit = 200): Promise<Club[]> {
+export async function listLiveClubs(db: Db, city?: string | null, limit = 200, now = new Date()): Promise<ListedClub[]> {
   const where = city ? and(isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt), eq(clubs.city, city)) : and(isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt));
-  return db.select().from(clubs).where(where).orderBy(desc(clubs.founding), asc(clubs.name)).limit(limit);
+  return db.select(listedColumns(now)).from(clubs).where(where).orderBy(desc(clubs.founding), asc(clubs.name)).limit(limit);
 }
 
 /**
@@ -160,9 +180,9 @@ export async function listLiveClubs(db: Db, city?: string | null, limit = 200): 
  *
  * A rejected claim is nobody's club and appears as neither.
  */
-export async function listClubsForPicking(db: Db, limit = 500): Promise<Club[]> {
+export async function listClubsForPicking(db: Db, limit = 500): Promise<PickableClub[]> {
   return db
-    .select()
+    .select(columnsButCache)
     .from(clubs)
     .where(and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), listedSource())))
     .orderBy(asc(clubs.country), asc(clubs.province), asc(clubs.name))
@@ -228,7 +248,7 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
   const listed = await listClubsForPicking(db);
   // A club answers to its own slug, and to whatever its name would make, so a person who typed the
   // club's full name once is still recognised as having been there.
-  const byKey = new Map<string, Club>();
+  const byKey = new Map<string, PickableClub>();
   for (const c of listed) {
     byKey.set(c.slug, c);
     const fromName = placeKey(c.name);
@@ -236,7 +256,7 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
   }
   // A club that claimed its page never said which province it is in; the city it picked will do, so
   // the list has a heading to put it under rather than the one above it.
-  const provinceOf = (c: Club) => c.province ?? (c.city ? (cityBySlug(c.city)?.name ?? null) : null);
+  const provinceOf = (c: PickableClub) => c.province ?? (c.city ? (cityBySlug(c.city)?.name ?? null) : null);
   const seen = new Set<string>();
   const out: PickableVenue[] = [];
   const own: { name: string; mapUrl: string | null }[] = [
@@ -600,11 +620,20 @@ export async function setClubNotifyMessage(db: Db, slug: string, messageId: numb
   await db.update(clubs).set({ notifyMessageId: messageId }).where(eq(clubs.slug, slug));
 }
 
-/** Slots of "free courts today" as a short count, for chips and lists. */
+/**
+ * "Free courts today" as one count of court-hours, for chips and lists; null when there is nothing to
+ * say. A club's feed gives one row an hour, so its rows are counted as they come. A read from a booking
+ * platform gives pieces of any length (`freeSlotsFromScrape`), so each counts its courts times what is
+ * left of it, to the half hour.
+ */
 export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined, now = new Date()): number | null {
   const a = c?.availability;
   if (!a || a.error) return null;
-  return a.slots.filter((s) => new Date(s.end) > now).reduce((sum, s) => sum + s.free, 0);
+  if (!isScraped(a)) return todaySlots(a, now).reduce((sum, s) => sum + s.free, 0);
+  // A read from a booking platform covers several days and goes stale when the platform rests (DECIDING rule 35).
+  if (!scrapeFresh(a, now)) return null;
+  const ms = todaySlots(a, now).reduce((sum, s) => sum + s.free * Math.max(0, Date.parse(s.end) - Math.max(Date.parse(s.start), now.getTime())), 0);
+  return Math.round(ms / 1_800_000) / 2;
 }
 
 /** The club's time zone, set from the manage page when the claim came without one (the week cannot make matches without it). */

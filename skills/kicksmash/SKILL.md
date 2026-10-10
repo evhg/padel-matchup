@@ -5,7 +5,7 @@ description: Organise padel matches and tournaments (americano, mexicano, King o
 
 # Kicksmash
 
-Kicksmash is the open, agent-native way to organise padel: create a match, share one link, and let people or their assistants join, all through an API that anyone may use. No accounts, no app. Public data is CC BY 4.0, code is Apache-2.0.
+Kicksmash is the open, agent-native way to organise padel: create a match, share one link, and let people or their assistants join, all through an API that anyone may use. No accounts, no app. Public data is CC BY 4.0 (free court times read from a booking platform excepted: not ours to license), code is Apache-2.0.
 
 ## Fastest path: the MCP server
 
@@ -19,7 +19,7 @@ Add `https://kicksma.sh/mcp` (streamable HTTP, no auth). Tools:
 - `create_match {startsAt, tz, durationMinutes? (60, 90 or 120; 90 by default), venue?, organizer:{name, token?, email?, level?}, levelMin?, levelMax?, category? (men, women or mixed), ageMin? (35, 45 or 55), type?, format?, fixedPairs?, …}` — returns `shareUrl` for the players and the organizer's `personalUrl` and `manageUrl` (private). `fixedPairs: true` on a tournament keeps two partners together every round; the table then ranks pairs.
 - `join_match {code, name | token, level?, email?, partner?}` — outcomes joined, waitlisted, already_in, full, requested (organizer approval when the level is outside the range). On a fixed-pairs tournament, `partner` (a first name) signs the pair up: give the person `partner.inviteUrl` to send their partner, who opens it to claim the spot. Without `partner` the person is listed as needing a partner; `match.pairs` lists the night as pairs. For a group's match the answer carries `group`: `group.member` says whether the person is in the group now, and `member: false` with `askToJoin: true` means a seat never made them a member: they ask on `group.url`, and an admin decides.
 - `create_api_key {name, agent?}` — optional, for roomier limits and webhooks.
-- `find_clubs {city?}` — live club pages by city: booking link, platform, website, free courts today where the club shares a feed.
+- `find_clubs {city?}` — live club pages by city: booking link, platform, website, free courts today from the club's own feed or read from its booking platform's public page (`freeCourts.source`).
 - `find_series {city?}` — recurring Opens by city, with the next edition to sign up for and the past podiums.
 
 Coaches (lessons, under each coach's own rules):

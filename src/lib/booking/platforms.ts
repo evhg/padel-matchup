@@ -15,6 +15,7 @@ export const PLATFORMS: readonly Platform[] = [
   { id: "courtsite", name: "Courtsite", hosts: ["courtsite.my", "courtsite.com"] },
   { id: "skedda", name: "Skedda", hosts: ["skedda.com"] },
   { id: "playven", name: "Playven", hosts: ["playven.com"] },
+  { id: "bookandgo", name: "Book & Go", hosts: ["bookandgo.app"] },
 ];
 
 /** The platform behind a booking link, by host (subdomains included), or null for a club's own site. */

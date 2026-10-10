@@ -346,6 +346,13 @@ try {
   await courtPage.waitForLoadState("networkidle");
   const prefilled = [await courtPage.locator('input[type="date"]').inputValue(), await courtPage.locator('input[type="time"]').inputValue(), await courtPage.getByRole("button", { name: "Asia/Bangkok" }).count()];
   check("a free court's link fills the day, the hour and the club's zone", JSON.stringify(prefilled) === JSON.stringify([courtDay, "14:00", 1]), JSON.stringify(prefilled));
+
+  // KicksmashBot names /about in every request it sends a booking platform (DECIDING rule 35). Whoever
+  // follows the link finds what it reads, how often, that it stops, and an address to write to.
+  await courtPage.goto(`${BASE}/about`);
+  const bot = courtPage.locator("#bot");
+  const botText = ((await bot.textContent({ timeout: 5000 }).catch(() => "")) ?? "").replace(/\s+/g, " ");
+  check("/about says what KicksmashBot reads, how often, and where to write", /KicksmashBot/.test(botText) && /Playtomic/.test(botText) && /15/.test(botText) && (await bot.locator('a[href^="mailto:"]').count()) === 1, botText.slice(0, 160));
 } finally {
   await browser.close();
 }

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, demandSignals, events, facts, players, pushSubscriptions, slots, type Club, type ClubAvailability, type DemandSignal, type Player } from "@/db/schema";
+import { cacheBetween, isScraped } from "@/lib/booking/availability";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { WANT_COOLDOWN_MS, weekdayOf } from "./demand";
 import { recordFact } from "./facts";
@@ -9,8 +10,9 @@ import { recordFact } from "./facts";
  * A free court, offered to the player who asked to play then.
  *
  * The club's promise in docs/VISION.md is an off-peak court hour filled from Kicksmash. Two halves of
- * it existed and never met: a club that shares a feed of its free courts (`src/lib/booking/
- * availability.ts`, read every hour), and a player who said "Tuesdays around two at Rawai"
+ * it existed and never met: a club's free courts (a feed it shares, read every hour by `src/lib/booking/
+ * availability.ts`, or its booking platform's public page, read by `src/lib/booking/scrape.ts`), and a
+ * player who said "Tuesdays around two at Rawai"
  * (`demand.ts`), whose want was answered only by a match somebody else had already made. When the
  * feed shows a court free at the club a want names, on its day and inside its hours, the player hears
  * once, with one button that opens the match form at that club and that hour.
@@ -24,6 +26,7 @@ import { recordFact } from "./facts";
  * fact log, so this needs no table and no column of its own.
  */
 const HOUR_MS = 3600_000;
+const HALF_HOUR_MS = 30 * 60_000;
 
 export const COURT_OFFERS = {
   /** Closer than this, four people cannot get there. */
@@ -48,11 +51,42 @@ export type CourtOfferClub = Pick<Club, "slug" | "name"> & { tz: string };
 export type CourtOffer = { playerId: string; club: CourtOfferClub; hour: FreeHour; wantIds: string[] };
 type WantRow = Pick<DemandSignal, "id" | "playerId" | "venueSlug" | "onDate" | "weekday" | "fromTime" | "toTime">;
 
-/** The hours in a club's feed that people could still get to, soonest first, as the club's clock reads them. Pure. */
+/** The fewest courts free for all of [start, start + ms), walking slots that follow one another; 0 when any minute has none. `slots` is in time order. Pure. */
+function freeThrough(slots: readonly ClubAvailability["slots"][number][], start: number, ms: number): number {
+  let at = start;
+  let fewest = Infinity;
+  for (const s of slots) {
+    const a = Date.parse(s.start);
+    const b = Date.parse(s.end);
+    if (b <= at) continue;
+    if (a > at || !(s.free >= 1)) return 0;
+    fewest = Math.min(fewest, s.free);
+    at = b;
+    if (at >= start + ms) return fewest;
+  }
+  return 0;
+}
+
+/**
+ * The hours in a club's free courts that people could still get to, soonest first, as the club's clock
+ * reads them. A club's feed gives one row an hour, and each row is an hour on offer. A read from a booking
+ * platform gives pieces of any length (`freeSlotsFromScrape`), so an hour on offer starts at each half
+ * hour in the window where a court stays free for the whole hour, across neighbouring pieces, with the
+ * fewest courts free over it. Pure.
+ */
 export function offerableHours(a: ClubAvailability | null | undefined, now: Date): FreeHour[] {
   if (!a || a.error || !isValidTimeZone(a.tz)) return [];
   const from = now.getTime() + COURT_OFFERS.minLeadMs;
   const to = now.getTime() + COURT_OFFERS.maxLeadMs;
+  if (isScraped(a)) {
+    const pieces = [...a.slots].sort((x, y) => Date.parse(x.start) - Date.parse(y.start));
+    const hours: FreeHour[] = [];
+    for (let t = Math.ceil(from / HALF_HOUR_MS) * HALF_HOUR_MS; t <= to; t += HALF_HOUR_MS) {
+      const free = freeThrough(pieces, t, HOUR_MS);
+      if (free >= 1) hours.push({ start: new Date(t), end: new Date(t + HOUR_MS), ...utcToZonedParts(new Date(t), a.tz), free });
+    }
+    return hours;
+  }
   const out: FreeHour[] = [];
   for (const s of a.slots) {
     const start = new Date(s.start);
@@ -120,8 +154,10 @@ export function planCourtOffers(input: {
  * that could not go.
  */
 export async function courtOffersDue(db: Db, now: Date, reach: { telegram: boolean; email: boolean; push: boolean }): Promise<(CourtOffer & { player: Player })[]> {
+  // Only the slots an offer can use (two to six hours ahead, and the hour after): a read from a platform keeps three days on the row (rule 12).
+  const soon = cacheBetween(new Date(now.getTime() + COURT_OFFERS.minLeadMs), new Date(now.getTime() + COURT_OFFERS.maxLeadMs + HOUR_MS));
   const fed = await db
-    .select({ slug: clubs.slug, name: clubs.name, availability: clubs.availability })
+    .select({ slug: clubs.slug, name: clubs.name, availability: soon })
     .from(clubs)
     .where(and(isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt), gte(clubs.availabilityAt, new Date(now.getTime() - COURT_OFFERS.freshMs))))
     .orderBy(desc(clubs.availabilityAt))

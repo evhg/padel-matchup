@@ -8,9 +8,22 @@ import type { EventCategory } from "@/lib/domain/eventTags";
 // unclaimed venues still render from their matches. The owner approves each
 // claim once (one tap); until then the club's details stay private.
 // ---------------------------------------------------------------------------
+/**
+ * A time with `free` courts open from `start` to `end`. A club's feed gives one row an hour. A read from
+ * a booking platform (`src/lib/booking/scrape.ts`) gives rows that never overlap: the courts free for the
+ * whole piece, cut where that count changes and at the club's midnight, so `free x length` is the true
+ * count of court-hours and every start is unique.
+ */
 export type ClubFreeSlot = { start: string; end: string; free: number };
 
-export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string };
+/**
+ * The cache on the club row. `source` is the kind of feed the club shared (`ics_bookings`, `json_free`),
+ * or `scrape:<platform>` for times read from the platform's public page. A feed covers `day` only. A
+ * read covers `days` (today first, in the club's zone), so a reader that means "today" filters on the
+ * day. `fullAt` is when a read last covered all of `days`: a read of today alone keeps the later days of
+ * that one. The column is jsonb, so the optional fields needed no migration.
+ */
+export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string };
 
 export const clubs = pgTable(
   "clubs",

@@ -1,16 +1,29 @@
-import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
+import { platformById } from "./platforms";
 
 /**
- * Free courts, opt-in and permissionless: a club shares a feed it already has.
+ * Free courts, from two sources, cached on the club row (`clubs.availability`, `availability_at`).
+ *
+ * 1. A feed the club shares, refreshed hourly here:
  *   - ics_bookings: a calendar feed of its bookings (most booking systems and
  *     Google Calendar export one). Free courts = courts − overlapping bookings,
  *     hour by hour, inside opening hours.
  *   - json_free: a JSON document of free slots, {"slots":[{"start","end","free"}]}.
- * Refreshed hourly, cached on the club row, shown on the club page and the API.
- * No scraping, no credentials, nothing a club did not hand us.
+ * 2. The free court times a booking platform shows on its public club page, read every fifteen
+ *    minutes by `scrape.ts` through one reader per platform (`adapters/`). A feed the club shared
+ *    always wins over a read for that club.
+ *
+ * This header said "No scraping, no credentials, nothing a club did not hand us" from 7 September
+ * 2026; a session wrote that line, and the owner never asked for it. The owner's decision of
+ * 10 October 2026 replaces it (DECIDING rule 35): "platforms forbid scraping in their terms but we
+ * are just testing, and on top every app scrapes every other app, for example padel society scrapes
+ * playtomic and matchi for court availability. So scraping at risk of being blocked is acceptable,
+ * just do it." What stays: we never sign in to a platform, never store a player's password, token or
+ * session, never book, reserve, pay or post there, and never get around a login wall, a captcha or a
+ * block. The player books and pays on the platform.
  */
 export const AVAILABILITY_KINDS = ["ics_bookings", "json_free"] as const;
 export type AvailabilityKind = (typeof AVAILABILITY_KINDS)[number];
@@ -185,4 +198,83 @@ export async function refreshAllAvailability(db: Db, now = new Date(), fetchImpl
     if (r?.error) errors++;
   }
   return { refreshed, errors };
+}
+
+/** How long a read from a platform is shown after it was made. Past it a reader shows nothing rather than an old hour. */
+export const SCRAPE_SHOWN_MS = 2 * 3600_000;
+
+/** Was this cache read from a booking platform (`scrape:<platform>`) rather than handed to us by the club? Pure. */
+export const isScraped = (a: Pick<ClubAvailability, "source"> | null | undefined): boolean => Boolean(a?.source?.startsWith("scrape:"));
+
+/** A read from a platform that is clean and recent enough to show. Pure. */
+export function scrapeFresh(a: ClubAvailability | null | undefined, now: Date): boolean {
+  if (!a || !isScraped(a) || a.error) return false;
+  const at = Date.parse(a.fetchedAt);
+  return Number.isFinite(at) && now.getTime() - at < SCRAPE_SHOWN_MS;
+}
+
+/** What a club's card of free courts says (`freeCourtsState`). */
+export type FreeCourtsState =
+  | { kind: "none" }
+  | { kind: "feed"; a: ClubAvailability | null }
+  | { kind: "platform"; a: ClubAvailability; platform: string }
+  | { kind: "platformDown"; platform: string };
+
+/**
+ * What a club's free courts say, decided once for the club page, the manage page, the lists and the API
+ * (DECIDING rule 35). The club's own feed when it shares one: it always wins, and before its first read
+ * there is nothing yet (`a: null`). Else a clean read of the platform's public page from the last two
+ * hours, named as the platform's, because the club did not publish it. Else, after a read that failed or
+ * grew old, that the platform's times are not available just now: a block is ours, never the club's
+ * fault. Else nothing. `platform` is the platform's name as people know it. Pure.
+ */
+export function freeCourtsState(c: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind">, now: Date): FreeCourtsState {
+  const a = c.availability;
+  if (availabilityConfigured(c)) return { kind: "feed", a: a && !isScraped(a) ? a : null };
+  if (!a || !isScraped(a)) return { kind: "none" };
+  const id = a.platform ?? a.source.slice("scrape:".length);
+  const platform = platformById(id)?.name ?? id;
+  return scrapeFresh(a, now) ? { kind: "platform", a, platform } : { kind: "platformDown", platform };
+}
+
+/**
+ * Whether a club's page has a "Free courts today" card. A club that runs its page: when it shares a feed
+ * or its booking platform has been read (a read that failed says so). A club Kicksmash only lists: when a
+ * read is clean and recent, so the hours its row shows on /clubs are on its page too. Pure.
+ */
+export function freeCourtsCardShown(c: Pick<Club, "availability" | "availabilityUrl" | "availabilityKind">, live: boolean, now: Date): boolean {
+  const kind = freeCourtsState(c, now).kind;
+  return live ? kind !== "none" : kind === "platform";
+}
+
+/**
+ * The slots of today in the club's zone that have not ended. A feed holds only today's; a read from a
+ * platform holds several days, and every reader that says "today" goes through here. Pure.
+ */
+export function todaySlots(a: Pick<ClubAvailability, "slots" | "tz">, now: Date): ClubFreeSlot[] {
+  const tz = isValidTimeZone(a.tz) ? a.tz : "UTC";
+  const today = localDay(now, tz);
+  return a.slots.filter((s) => {
+    const start = new Date(s.start);
+    return !Number.isNaN(start.getTime()) && new Date(s.end) > now && localDay(start, tz) === today;
+  });
+}
+
+/** The club's day (yyyy-mm-dd) a slot starts on; "" for a time that does not parse. Pure. */
+export function slotDay(start: string, tz: string): string {
+  const d = new Date(start);
+  return Number.isNaN(d.getTime()) ? "" : localDay(d, isValidTimeZone(tz) ? tz : "UTC");
+}
+
+/**
+ * The cache as a read that needs only a few hours selects it: every field but the slots, and only the
+ * slots that end after `from` and start before `until`. The days it does not need stay in the database,
+ * which is what keeps a list of clubs small now that a read from a platform holds three days (AGENTS.md
+ * rule 12, the Supabase egress in docs/OPERATING.md). Every writer stores instants from `toISOString()`,
+ * so comparing the text compares the times. Null where the row has no cache.
+ */
+export function cacheBetween(from: Date, until: Date): SQL<ClubAvailability | null> {
+  const lo = from.toISOString();
+  const hi = until.toISOString();
+  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
 }

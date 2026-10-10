@@ -1,0 +1,37 @@
+import { bookandgoAdapter } from "./bookandgo";
+import { matchiAdapter } from "./matchi";
+import { playtomicAdapter } from "./playtomic";
+import type { AvailabilityAdapter } from "./types";
+
+export type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, ScrapeTarget } from "./types";
+
+/**
+ * The platform readers, one file each (`./<platform>.ts`), one line each here. A reader reads only what
+ * an anonymous visitor's browser loads on the platform's public club page (DECIDING rule 35), and the
+ * frame in `../scrape.ts` holds every reader to the same limits: a GET, no cookie, no sign-in, one
+ * request a second per platform, at most eight a club, and a stop at the first 401, 403, 429 or challenge.
+ *
+ * Playtomic and MATCHi, whose public club pages show free courts, and Book & Go, whose clubs' own web
+ * apps load a public feed of free courts (10 October 2026). A Book & Go club books on its own domain,
+ * so its reader knows each club by the host of its booking link (`BOOKANDGO_APPS` in `./bookandgo.ts`).
+ * The Padel Society shows free courts only inside its app, so it has no reader. The tests pass their
+ * own adapter (`tests/scrape.test.ts`), so no test double ships in production.
+ */
+export const ADAPTERS: readonly AvailabilityAdapter[] = [playtomicAdapter, matchiAdapter, bookandgoAdapter];
+
+/**
+ * The reader for a club's booking link: the one for the platform the club row names, else the first
+ * whose `matches` takes the link. Null for a link no reader knows. Pure.
+ */
+export function adapterFor(url: string | null | undefined, platform: string | null | undefined, adapters: readonly AvailabilityAdapter[] = ADAPTERS): AvailabilityAdapter | null {
+  if (!url) return null;
+  const safe = (a: AvailabilityAdapter) => {
+    try {
+      return a.matches(url);
+    } catch {
+      return false;
+    }
+  };
+  if (platform) return adapters.find((a) => a.platform === platform && safe(a)) ?? null;
+  return adapters.find(safe) ?? null;
+}

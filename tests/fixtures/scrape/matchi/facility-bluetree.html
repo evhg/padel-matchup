@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- Trimmed from GET https://www.matchi.se/facilities/bluetree on 2026-10-10 (anonymous visitor). Only the parts the reader needs. -->
+<html><head>
+    <title>Padel Phuket &#64; Blue Tree</title>
+</head><body>
+                    
+                    <div class="col-xs-12 col-sm-4 text-right">
+                        <div class="mobile-slot-filters list-inline">
+                            <select id="sport-picker-mobile" name="sport" data-style="form-control sport-slot-select">
+                                <option value="">All sports</option>
+                                
+                                    
+                                    <option value="5" selected
+                                            data-content="<i class='ma ma-5'></i> Padel"> Padel</option>
+                                    
+                                
+                            </select>
+                        </div>
+<div id="mobile-booking" class="panel-body slots-container" style="display: none;"></div>
+<div id="schedule" class="panel panel-default hidden-xs hidden-sm"></div>
+<script type="text/javascript">
+    $(document).ready(function() {
+        var today = '2026-10-10';
+        var dateParam = today;
+        var sport = '5';
+    });
+    var getFreeSlots = function(sport, date) {
+        $.ajax({
+            cache: false,
+            url: "\u002fbook\u002flistSlots?wl=\u0026facility=2165&date="+date+"&sport="+sport + "&week=&year=" + indoor,
+            dataType : 'html',
+        });
+    };
+</script>
+</body></html>

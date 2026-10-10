@@ -11,6 +11,7 @@ import { seatUnits } from "@/lib/domain/fixedPairs";
 import { hasRange, presetFor } from "@/lib/domain/levels";
 import type { Club } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
+import { freeCourtsState, slotDay, todaySlots } from "@/lib/booking/availability";
 import type { EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import type { VenueBoard } from "@/lib/domain/venueBoard";
@@ -231,17 +232,25 @@ export type PublicClub = {
    */
   claimed: boolean;
   founding: boolean;
-  /** Today's free court-hours from the club's own feed, or null when the club shares none. */
-  freeCourts: { day: string; tz: string; fetchedAt: string; slots: { start: string; end: string; free: number }[] } | null;
+  /**
+   * Today's free courts, still to come, in the club's zone; null when there is nothing current to say.
+   * `source` says where they come from: "club" is a feed the club shares, "platform" is a read of the
+   * booking platform's public page (`platform` names it), refreshed up to every 15 minutes and dropped
+   * after two hours without a clean read. `free` courts are free for the whole of each slot, and a
+   * platform's slots never overlap. Times read from a platform are not ours to license (not CC BY 4.0).
+   */
+  freeCourts: { day: string; tz: string; fetchedAt: string; source: "club" | "platform"; platform: string | null; slots: { start: string; end: string; free: number }[] } | null;
   boardUrl: string;
   rankingUrl: string;
   calendarUrl: string;
 };
 
 /** A club page: what the club chose to publish, nothing private (the manage token never leaves the server). */
-export function clubToPublic(c: Club, base: string, courtNames?: string[]): PublicClub {
+export function clubToPublic(c: Club, base: string, courtNames?: string[], now = new Date()): PublicClub {
   const platform = platformById(c.bookingPlatform);
-  const a = c.availability && !c.availability.error ? c.availability : null;
+  // The same answer the club page gives (`freeCourtsState`): the club's feed, or a clean read from the last two hours, never an old one.
+  const free = freeCourtsState(c, now);
+  const a = free.kind === "platform" ? free.a : free.kind === "feed" && free.a && !free.a.error ? free.a : null;
   return {
     slug: c.slug,
     name: c.name,
@@ -259,7 +268,8 @@ export function clubToPublic(c: Club, base: string, courtNames?: string[]): Publ
     about: c.about,
     claimed: isClubLive(c),
     founding: c.founding,
-    freeCourts: a ? { day: a.day, tz: a.tz, fetchedAt: a.fetchedAt, slots: a.slots } : null,
+    // Today in the club's zone, as the page shows it: a read from a booking platform holds several days.
+    freeCourts: a ? { day: slotDay(now.toISOString(), a.tz), tz: a.tz, fetchedAt: a.fetchedAt, source: free.kind === "platform" ? "platform" : "club", platform: a.platform ?? null, slots: todaySlots(a, now).map((s) => ({ start: s.start, end: s.end, free: s.free })) } : null,
     boardUrl: `${base}/v/${c.slug}`,
     rankingUrl: `${base}/v/${c.slug}/ranking`,
     calendarUrl: `${base}/v/${c.slug}/calendar.ics`,

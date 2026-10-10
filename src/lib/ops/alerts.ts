@@ -50,7 +50,8 @@ export async function alertOnServices(db: Db, now = new Date(), board?: ServiceB
     const [seenMonth] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(eq(metricsDaily.key, key)).limit(1);
     if (seen || seenMonth) continue;
     const pct = row.pct !== null ? ` (${row.pct.toFixed(0)}% of ${row.ceiling})` : "";
-    const text = `⚠️ ${row.name}: ${row.usage}${pct}.\n${whatNext[row.key] ?? "I am looking at it."}`;
+    const next = whatNext[row.key] ?? (row.key.startsWith("scrape_") ? "The platform's page changed at two clubs, so its reader stopped until a deploy of new code. Other platforms and the clubs' own feeds go on; the reader needs a fix." : "I am looking at it.");
+    const text = `⚠️ ${row.name}: ${row.usage}${pct}.\n${next}`;
     const res = await sendMessage(owner, esc(text), { keyboard: { inline_keyboard: [[{ text: "Service board", url: `${baseUrl()}/admin` }]] } });
     if (res.ok) {
       await setMetric(db, key, 1, dayKey(now));
