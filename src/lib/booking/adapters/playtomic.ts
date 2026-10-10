@@ -224,12 +224,14 @@ type Got = { kind: "response"; status: number; text: string } | { kind: "timeout
 
 /**
  * What failed, as the error's class and the network's code ("TypeError ECONNRESET"), never its message:
- * a message may carry the address it failed on, and this lands in the club's cache (`failureWhy`).
+ * a message may carry the address it failed on. The shapes are `failureWhy`'s in `scrape.ts`, which
+ * keeps nothing else when this lands in the club's cache.
  */
 function errorClass(e: unknown): string {
   if (!(e instanceof Error)) return "Error";
+  const name = /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : "Error";
   const code = (e as { cause?: { code?: unknown } }).cause?.code ?? (e as { code?: unknown }).code;
-  return `${e.name}${typeof code === "string" && /^[A-Z0-9_]{2,40}$/.test(code) ? ` ${code}` : ""}`;
+  return `${name}${typeof code === "string" && /^[A-Z_]{1,30}$/.test(code) ? ` ${code}` : ""}`;
 }
 
 async function get(url: string, fetchImpl: typeof fetch, accept: string): Promise<Got> {

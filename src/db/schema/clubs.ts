@@ -24,9 +24,10 @@ export type ClubFreeSlot = { start: string; end: string; free: number };
  * that one. The column is jsonb, so the optional fields needed no migration.
  */
 /**
- * `why`, on a failed read from a booking platform only: the step and the error's class or status
- * ("availability 2026-10-10: RangeError"), never a link or a body (`failureWhy` in
- * `src/lib/booking/scrape.ts`). No page and no API shape reads it; it is how we find the cause.
+ * `why`, on a failed read from a booking platform only: one of the readers' fixed steps and the error's
+ * class or HTTP status ("availability 2026-10-10: RangeError"), built from those parts alone, so never a
+ * link, an address, a body or a token (`failureWhy` in `src/lib/booking/scrape.ts`). No page, no list and
+ * no API shape reads it (`cacheBetween` leaves it behind); it is how we find the cause.
  */
 export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string };
 

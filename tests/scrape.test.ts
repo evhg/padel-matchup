@@ -15,7 +15,7 @@ import { freeCourtsCardShown, freeCourtsState } from "@/lib/booking/availability
 import { freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { setMetric } from "@/lib/domain/metrics";
-import { SCRAPE, disabledPlatforms, failureWhy, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
+import { SCRAPE, disabledPlatforms, dueClubs, failureWhy, freeSlotsFromScrape, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock } from "@/lib/booking/scrape";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 
@@ -148,13 +148,25 @@ describe("the slice: which clubs a run reads", () => {
     expect(await urls(61 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
   });
 
-  it("a club read an hour ago is due even when this tick came a few seconds early, so an hour does not become 75 minutes", async () => {
-    // The tick an hour after the last read started three seconds sooner than that read did.
-    await club("hourly", { availabilityAt: at(-HOUR + 3_000) });
-    await club("just-read", { availabilityAt: at(-50 * 60_000) });
-    const w = world();
-    await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
-    expect(w.calls.map((c) => new URL(c.url).pathname)).toEqual(["/hourly"]);
+  it("a quiet club read in full is read in full again at its next due run, never today alone", async () => {
+    // Nobody uses this club, so it is due once an hour, and its next read must cover all three days:
+    // its cache and its full read are the same instant. The ticks drift a second earlier each time, as
+    // real ones do. Run k is at k × 15 minutes − k seconds:
+    //   k = 0   0:00:00   full read
+    //   k = 4   0:59:56   not an hour since 0:00:00: not due
+    //   k = 5   1:14:55   due, and a full read (an hour since the full read)
+    //   k = 10  2:29:50   due, and a full read
+    await club("quiet-club");
+    const seen: ScrapeTarget[] = [];
+    const readAt: number[] = [];
+    for (let k = 0; k <= 10; k++) {
+      const t = k * 15 * 60_000 - k * 1_000;
+      const w = world();
+      await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
+      if (w.calls.length) readAt.push(k);
+    }
+    expect(readAt).toEqual([0, 5, 10]);
+    expect(seen.map((s) => s.days)).toEqual([SCRAPE.days, SCRAPE.days, SCRAPE.days]);
   });
 
   it("gives each platform its own slice, so one platform's clubs never crowd out another's", async () => {
@@ -184,6 +196,15 @@ describe("the slice: which clubs a run reads", () => {
     const w2 = world();
     await runScrape(db, at(61 * 60_000), { adapters: [strict], fetchImpl: w2.fetchImpl, clock: w2.clock, perLane: 1 });
     expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/next-one"]);
+  });
+
+  it("names a link no reader can read among the run's failed clubs", async () => {
+    await club("app-link", { bookingUrl: "https://playtomic.com/", bookingPlatform: "playtomic" });
+    const strict = { ...reader(), matches: (url: string) => /^https:\/\/playtomic\.io\/[a-z-]+$/.test(url) };
+    const w = world();
+    const run = await runScrape(db, NOW, { adapters: [strict], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls).toEqual([]);
+    expect(run.failed).toEqual([{ slug: "app-link", platform: "playtomic", error: "unreadable link", why: null }]);
   });
 
   it("reads the directory's clubs as the import writes them: the booking link on the platform", async () => {
@@ -245,6 +266,24 @@ describe("the slice: which clubs a run reads", () => {
     expect(run.outOfTime).toBe(true);
     expect(run.clubs).toBe(0);
     expect((await row("slow-pages")).availabilityAt).toBeNull();
+  });
+
+  it("counts each club the deadline cuts short, so a lane whose first club is cut on every run shows", async () => {
+    await club("slow-pages");
+    for (const t of [0, 15 * 60_000]) {
+      const w = world(undefined, 10_000);
+      await runScrape(db, at(t), { adapters: [reader("playtomic", { requests: 5 })], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+    }
+    expect((await row("slow-pages")).availabilityAt).toBeNull();
+    expect(await metric("scrape_cut_playtomic")).toBe(2);
+    // A club that never started is not cut: it only waits for the next run.
+    await db.update(clubs).set({ bookingUrl: null, bookingPlatform: null }).where(eq(clubs.slug, "slow-pages"));
+    for (const s of ["a-club", "b-club", "c-club", "d-club"]) await club(s);
+    const w = world(undefined, 10_000);
+    const run = await runScrape(db, at(30 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, budgetMs: 25_000 });
+    expect(run.outOfTime).toBe(true);
+    expect(w.calls).toHaveLength(3);
+    expect(await metric("scrape_cut_playtomic")).toBe(2);
   });
 
   it("caps one club's read at eight requests, and refuses anything but a GET without a cookie", async () => {
@@ -590,13 +629,24 @@ describe("a clock with fractions, as performance.now() gives it", () => {
 });
 
 describe("a failed read says why, in a few words that are safe to keep", () => {
-  it("keeps the step and the error's class or status, never a link, a query or a body", () => {
-    expect(failureWhy("availability 2026-10-10: RangeError")).toBe("availability 2026-10-10: RangeError");
-    expect(failureWhy("club page: HTTP 500")).toBe("club page: HTTP 500");
-    const dirty = failureWhy("500 on /book/listSlots?facility=2165&date=2026-10-10 from https://www.matchi.se/x?token=abcdef0123456789abcdef0123456789 body {\"secret\":1}");
-    expect(dirty).not.toMatch(/http|\?|\/|token|secret|abcdef0123/i);
-    expect(dirty!.length).toBeLessThanOrEqual(60);
-    expect(failureWhy("x".repeat(500))).toBeNull();
+  it("keeps a known step and the error's class or status, and drops everything else", () => {
+    // What each reader gives, kept as it is.
+    for (const kept of ["availability 2026-10-10: RangeError", "club page: HTTP 500", "club page: TypeError ECONNRESET", "club page: TypeError UND_ERR_CONNECT_TIMEOUT", "locations: HTTP 503", "frame: cap"]) expect(failureWhy(kept)).toBe(kept);
+    // A link, a token, an address and a body in the message: only the step and the class or status stay.
+    expect(failureWhy("club page: TypeError https://playtomic.com/clubs/x?token=abc123")).toBe("club page: TypeError");
+    expect(failureWhy("availability 2026-10-10: HTTP 500 Bearer eyJhbGciOi.e30.abc")).toBe("availability 2026-10-10: HTTP 500");
+    expect(failureWhy("club page: TypeError ECONNREFUSED 10.0.0.12:443")).toBe("club page: TypeError ECONNREFUSED");
+    expect(failureWhy("club page: sk7Live9abc123")).toBeNull(); // a token under 24 characters
+    expect(failureWhy("club page: 10.0.0.12")).toBeNull();
+    expect(failureWhy('club page: {"secret":"abc"}')).toBeNull();
+    expect(failureWhy("club page: TypeError ec0nn.reset")).toBe("club page: TypeError"); // a code not in capitals is not a code
+    expect(failureWhy("club page: HTTP 5000")).toBeNull();
+    // A step that is not one of the readers' own is dropped with the rest.
+    expect(failureWhy("500 on /book/listSlots?facility=2165&date=2026-10-10")).toBeNull();
+    expect(failureWhy("https://x.example/a?k=1: TypeError")).toBeNull();
+    expect(failureWhy("10.0.0.12: HTTP 500")).toBeNull();
+    expect(failureWhy("frame: x".repeat(10))).toBeNull();
+    expect(failureWhy(`club page: ${"x".repeat(41)}`)).toBeNull();
     expect(failureWhy(null)).toBeNull();
   });
 
@@ -606,8 +656,8 @@ describe("a failed read says why, in a few words that are safe to keep", () => {
     const w = world(() => ({ status: 500 }));
     const run = await runScrape(db, NOW, { adapters: [leaky], fetchImpl: w.fetchImpl, clock: w.clock });
     const a = (await row("broken")).availability!;
-    expect(a).toMatchObject({ error: "error 500", why: "club page: HTTP 500 at", slots: [] });
-    expect(run.failed).toEqual([{ slug: "broken", platform: "playtomic", error: "error 500", why: "club page: HTTP 500 at" }]);
+    expect(a).toMatchObject({ error: "error 500", why: "club page: HTTP 500", slots: [] });
+    expect(run.failed).toEqual([{ slug: "broken", platform: "playtomic", error: "error 500", why: "club page: HTTP 500" }]);
     expect(JSON.stringify(clubToPublic(await row("broken"), "https://kicksma.sh", undefined, NOW))).not.toContain("HTTP 500");
   });
 
@@ -630,6 +680,61 @@ describe("a failed read says why, in a few words that are safe to keep", () => {
     expect(w.calls).toHaveLength(SCRAPE.perClub);
     expect((await row("greedy-swallower")).availability).toMatchObject({ error: "error", why: "frame: cap" });
     expect(run.failed).toEqual([{ slug: "greedy-swallower", platform: "playtomic", error: "error", why: "frame: cap" }]);
+  });
+
+  it("a reader that swallows the frame's own abort still gets 'timeout', not 'error'", async () => {
+    await club("abort-swallower");
+    // A reader that catches everything and calls it an error.
+    const swallower: AvailabilityAdapter = {
+      ...reader(),
+      async scrape(t, f) {
+        try {
+          await f(t.bookingUrl);
+          return { ok: true, slots: [], requests: 1 };
+        } catch (e) {
+          return { ok: false, status: null, reason: "error", requests: 1, detail: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    };
+    // The platform's own ten seconds run out at once (the run's deadline is far off, so the club is
+    // written): the frame's timer aborts the request, as fetch does, with the signal's reason.
+    const timeouts: number[] = [];
+    const spy = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+      timeouts.push(ms);
+      return AbortSignal.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+    });
+    try {
+      const w = world();
+      const aborting = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const res = await w.fetchImpl(input, init);
+        if (init?.signal?.aborted) throw init.signal.reason;
+        return res;
+      }) as typeof fetch;
+      const run = await runScrape(db, NOW, { adapters: [swallower], fetchImpl: aborting, clock: w.clock });
+      expect(timeouts).toEqual([SCRAPE.requestTimeoutMs]);
+      expect(run.outOfTime).toBe(false);
+      expect((await row("abort-swallower")).availability).toMatchObject({ error: "timeout", slots: [] });
+      expect(run.failed).toEqual([{ slug: "abort-swallower", platform: "playtomic", error: "timeout", why: null }]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("no list and no pick carries `why`: only the row and the run's answer do (rule 12)", async () => {
+    await club("broken-listed", { approvedAt: at(-DAY), source: "claim" });
+    const leaky: AvailabilityAdapter = { ...reader(), scrape: async (t, f) => ((await f(t.bookingUrl)), { ok: false, status: 500, reason: "error", requests: 1, detail: "club page: HTTP 500" }) };
+    const w = world(() => ({ status: 500 }));
+    await runScrape(db, NOW, { adapters: [leaky], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect((await row("broken-listed")).availability).toMatchObject({ error: "error 500", why: "club page: HTTP 500" });
+    const listed = [(await listShownClubs(db, null, 400, NOW)).find((c) => c.slug === "broken-listed")!, (await listLiveClubs(db, null, 200, NOW)).find((c) => c.slug === "broken-listed")!];
+    for (const l of listed) {
+      expect(l.availability).toMatchObject({ error: "error 500", source: "scrape:playtomic" });
+      expect(l.availability).not.toHaveProperty("why");
+    }
+    const [due] = await dueClubs(db, at(2 * HOUR), "playtomic", 8);
+    expect(due.slug).toBe("broken-listed");
+    expect(due.prev).toMatchObject({ error: "error 500" });
+    expect(due.prev).not.toHaveProperty("why");
   });
 });
 

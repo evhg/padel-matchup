@@ -39,12 +39,6 @@ export const SCRAPE = {
   usedDueMs: 14 * 60_000,
   /** Any other club is read again after this long: once an hour. */
   clubDueMs: 60 * 60_000,
-  /**
-   * A tick may start a few seconds before the one an hour earlier did, and a club read then is not yet
-   * an hour old: without this minute of slack the hour became 75 minutes about half the time. The same
-   * minute `dueMs` and `usedDueMs` keep below fifteen.
-   */
-  dueSlackMs: 60_000,
   /** The clubs one platform's lane takes in a run. Each lane has its own 45 seconds, so one platform never crowds out another. */
   perLane: 8,
   budgetMs: 45_000,
@@ -100,7 +94,7 @@ const keyLevel = (p: string) => `scrape_rest_level_${p}`;
 const keyStop = (p: string) => `scrape_stop_${p}`;
 /** The switch with no deploy at all: `POST /api/admin/metrics {"key":"scrape_off_<platform>","value":1}` (or `scrape_off_all`); value 0 turns it back on. */
 const keyOff = (p: string) => `scrape_off_${p}`;
-export const scrapeCounter = (what: "ok" | "blocked" | "changed" | "requests" | "error", platform: string) => `scrape_${what}_${platform}`;
+export const scrapeCounter = (what: "ok" | "blocked" | "changed" | "requests" | "error" | "cut", platform: string) => `scrape_${what}_${platform}`;
 export const SCRAPE_CLUBS_FRESH = "scrape_clubs_fresh";
 export const SCRAPE_RUN_AT = "cron_scrape_at";
 
@@ -265,8 +259,8 @@ const noFeed = () => or(isNull(clubs.availabilityUrl), isNull(clubs.availability
 /** What a run needs of a club, and nothing more: never the cache itself, which is the one large column (AGENTS.md rule 12). */
 export type DueClub = Pick<Club, "slug" | "bookingUrl" | "bookingPlatform" | "website" | "tz" | "availabilityAt"> & {
   used: boolean;
-  /** The last cache without its slots: where it came from, whether it read clean, the days it covers. */
-  prev: Omit<ClubAvailability, "slots"> | null;
+  /** The last cache without its slots or `why`: where it came from, whether it read clean, the days it covers. */
+  prev: Omit<ClubAvailability, "slots" | "why"> | null;
 };
 
 /**
@@ -311,7 +305,7 @@ export async function dueClubs(db: Db, now: Date, platform: string, limit: numbe
       tz: clubs.tz,
       availabilityAt: clubs.availabilityAt,
       used,
-      prev: sql<Omit<ClubAvailability, "slots"> | null>`(${clubs.availability} - 'slots')`.mapWith(clubs.availability),
+      prev: sql<Omit<ClubAvailability, "slots" | "why"> | null>`(${clubs.availability} - 'slots' - 'why')`.mapWith(clubs.availability),
     })
     .from(clubs)
     .where(
@@ -320,12 +314,12 @@ export async function dueClubs(db: Db, now: Date, platform: string, limit: numbe
         or(isNotNull(clubs.approvedAt), inArray(clubs.source, [...LISTED_SOURCES])),
         onPlatform,
         noFeed(),
-        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - (SCRAPE.clubDueMs - SCRAPE.dueSlackMs))), and(used, lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.usedDueMs)))),
+        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)), and(used, lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.usedDueMs)))),
       ),
     )
     .orderBy(sql`${clubs.availabilityAt} asc nulls first`, clubs.slug)
     .limit(limit);
-  return rows.map((r) => ({ ...r, used: Boolean(r.used), prev: (r.prev as Omit<ClubAvailability, "slots"> | null) ?? null }));
+  return rows.map((r) => ({ ...r, used: Boolean(r.used), prev: (r.prev as Omit<ClubAvailability, "slots" | "why"> | null) ?? null }));
 }
 
 /** Why the frame refused a reader's request. Thrown into the reader, which may catch it; the frame still knows. */
@@ -344,7 +338,7 @@ const realClock: Clock = { now: () => performance.now(), sleep: (ms) => new Prom
  * the clubs that said "changed" in this run: one club alone is that club's error, and the platform stops
  * only at a second club, or at a club that read clean before.
  */
-type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; changedAt: Set<string>; outOfTime: boolean; requests: number; cache: Map<string, { status: number; body: string; type: string | null; url: string }> };
+type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; changedAt: Set<string>; outOfTime: boolean; cut: number; requests: number; cache: Map<string, { status: number; body: string; type: string | null; url: string }> };
 
 /** Does one more request fit before the deadline, after the platform's second between requests? */
 const fits = (lane: Lane, o: { clock: Clock; deadline: number }) => o.clock.now() + Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now()) + SCRAPE.minRequestMs <= o.deadline;
@@ -478,8 +472,12 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
       else if (stop) result = { ...result, detail: `frame: ${stop}` };
     }
     if (lane.blocked !== null) result = { ok: false, status: lane.blocked, reason: "blocked", requests: lf.count(), detail: null };
-    // Cut short by the deadline: nothing is written, and the club stays due.
-    if (lane.outOfTime && lane.blocked === null) break;
+    // Cut short by the deadline: nothing is written, and the club stays due. Counted (`scrape_cut_<platform>`),
+    // so a club that is cut on every run, and so never read, shows on the day's counters.
+    if (lane.outOfTime && lane.blocked === null) {
+      lane.cut++;
+      break;
+    }
     out.push({ club, platform: lane.platform, result, todayOnly });
     if (!result.ok && result.reason === "blocked") lane.blocked ??= result.status ?? 0;
     if (!result.ok && result.reason === "changed") {
@@ -525,26 +523,30 @@ export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { pla
   return { availability, keepFrom: zonedTimeToUtc(days[1], "00:00", o.tz).toISOString() };
 }
 
+/** The steps a reader names in its `detail` before the colon ("club page: HTTP 500"); `failureWhy` keeps no other. */
+const WHY_STEP = /^(club page|availability \d{4}-\d{2}-\d{2}|locations|frame)$/;
+/** An error's class ("TypeError") or a word of the frame's own ("cap"). */
+const WHY_CLASS = /^[A-Za-z]{1,40}$/;
+/** The network's code on an error's cause, as undici gives it ("ECONNRESET", "UND_ERR_CONNECT_TIMEOUT"). */
+const WHY_CODE = /^[A-Z_]{1,30}$/;
+
 /**
- * A failure's cause in a few words that are safe to keep: the step and the error's class or status, as a
- * reader's `detail` gives them ("availability 2026-10-10: RangeError", "club page: HTTP 500"). Never a
- * link, a path, a query string, a body or anything shaped like a token; at most 60 characters. Null when
- * nothing safe is left. Pure.
+ * A failure's cause in a few words that are safe to keep, built only from parts of a known shape: one of
+ * the readers' fixed steps (`WHY_STEP`), then either an HTTP status ("HTTP 500") or an error's class with,
+ * at most, the network's code ("TypeError ECONNRESET"). Everything after those parts is dropped, and a
+ * detail that does not start with them gives null. So no link, path, query string, body, address or
+ * token reaches the cache, whatever a message held. Pure.
  */
 export function failureWhy(detail: string | null | undefined): string | null {
   if (!detail) return null;
-  const t = detail
-    .replace(/[a-z][a-z0-9+.-]*:\/\/\S*/gi, " ")
-    .replace(/(^|\s)\/\S*/g, " ")
-    .replace(/\?\S*/g, " ")
-    .replace(/[{[]\S*|\S*[}\]]/g, " ")
-    .replace(/\S{24,}/g, " ")
-    .replace(/[^A-Za-z0-9 .:_()-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 60)
-    .trim();
-  return t || null;
+  const colon = detail.indexOf(": ");
+  if (colon < 0) return null;
+  const step = detail.slice(0, colon);
+  if (!WHY_STEP.test(step)) return null;
+  const [first, second] = detail.slice(colon + 2).split(" ");
+  if (first === "HTTP") return /^[1-5]\d\d$/.test(second ?? "") ? `${step}: HTTP ${second}` : null;
+  if (!WHY_CLASS.test(first)) return null;
+  return second !== undefined && WHY_CODE.test(second) ? `${step}: ${first} ${second}` : `${step}: ${first}`;
 }
 
 /** What a reader's answer becomes on the club row. `tz` is a zone we know. Pure. */
@@ -592,7 +594,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       if (link && adapter) queue.push({ club, adapter, link });
       else unreadable.push({ club, platform: s.platform });
     }
-    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, changedAt: new Set(), outOfTime: false, requests: 0, cache: new Map() }, queue });
+    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, changedAt: new Set(), outOfTime: false, cut: 0, requests: 0, cache: new Map() }, queue });
   }
 
   const fetchImpl = o.fetchImpl ?? fetch;
@@ -627,6 +629,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     if (lane.changedAt.size) await bumpMetric(db, scrapeCounter("changed", lane.platform), lane.changedAt.size, day);
     if (p.ok) await bumpMetric(db, scrapeCounter("ok", lane.platform), p.ok, day);
     if (lane.requests) await bumpMetric(db, scrapeCounter("requests", lane.platform), lane.requests, day);
+    if (lane.cut) await bumpMetric(db, scrapeCounter("cut", lane.platform), lane.cut, day);
   }
   for (const [platform, p] of Object.entries(run.platforms)) if (p.errors) await bumpMetric(db, scrapeCounter("error", platform), p.errors, day);
 
