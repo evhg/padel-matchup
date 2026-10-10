@@ -1,8 +1,12 @@
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, type Club } from "@/db/schema";
 import { adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeResult } from "@/lib/booking/adapters";
+import { matchiAdapter } from "@/lib/booking/adapters/matchi";
+import { playtomicAdapter } from "@/lib/booking/adapters/playtomic";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeCourtHours } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
@@ -90,12 +94,13 @@ const row = async (slug: string) => (await db.select().from(clubs).where(eq(club
 const metric = async (key: string) => Number((await db.select().from(metricsDaily).where(and(eq(metricsDaily.key, key), eq(metricsDaily.day, "2026-10-10"))))[0]?.value ?? 0);
 
 describe("the slice: which clubs a run reads", () => {
-  it("reads the clubs people use first, then the oldest cache, at most N, one request a second", async () => {
+  it("reads the oldest cache first, at most N a platform, one request a second", async () => {
     const org = await makePlayer(db, "Org");
     await club("old-cache", { availabilityAt: at(-2 * HOUR) });
     await club("never-read");
-    await club("used-club", { availabilityAt: at(-1 * HOUR) });
+    await club("used-club", { availabilityAt: at(-20 * 60_000) }); // used, so due after 14 minutes
     await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(2 * DAY), tz: "Asia/Bangkok", venueName: "used club", whenFull: "waitlist" });
+    await club("quiet-club", { availabilityAt: at(-30 * 60_000) }); // nobody uses it: due after an hour
     await club("read-just-now", { availabilityAt: at(-5 * 60_000) }); // not due
     await club("own-feed", { availabilityUrl: "https://own-feed.example/b.ics", availabilityKind: "ics_bookings" }); // its feed wins
     await club("refused", { rejectedAt: at(-DAY) });
@@ -103,17 +108,99 @@ describe("the slice: which clubs a run reads", () => {
     await club("no-reader", { bookingUrl: "https://matchi.se/x", bookingPlatform: "matchi" });
 
     const w = world();
-    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, maxClubs: 2 });
-    expect(w.calls.map((c) => c.url)).toEqual(["https://playtomic.io/used-club", "https://playtomic.io/never-read"]);
+    const run = await runScrape(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock, perLane: 2 });
+    expect(w.calls.map((c) => c.url)).toEqual(["https://playtomic.io/never-read", "https://playtomic.io/old-cache"]);
     expect(run.clubs).toBe(2);
     // One request a second for the platform, and an honest name on each.
     expect(w.calls[1].at - w.calls[0].at).toBeGreaterThanOrEqual(SCRAPE.gapMs);
     expect(w.calls[0].headers.get("user-agent")).toBe("KicksmashBot/1.0 (+https://kicksma.sh/about)");
 
-    // The rest at the default cap; the clubs just read wait their fourteen minutes.
+    // The rest at the default cap; the clubs just read wait, and the quiet club waits its hour.
     const w2 = world();
     await runScrape(db, at(60_000), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
-    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/old-cache"]);
+    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/used-club"]);
+  });
+
+  it("reads a used club every 15 minutes and any other club once an hour, whatever the order", async () => {
+    const org = await makePlayer(db, "Org");
+    await club("busy-club");
+    await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(DAY), tz: "Asia/Bangkok", venueName: "busy club", whenFull: "waitlist" });
+    await club("quiet-club");
+    const urls = async (t: number) => {
+      const w = world();
+      await runScrape(db, at(t), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+      return w.calls.map((c) => new URL(c.url).pathname).sort();
+    };
+    expect(await urls(0)).toEqual(["/busy-club", "/quiet-club"]);
+    expect(await urls(15 * 60_000)).toEqual(["/busy-club"]);
+    expect(await urls(30 * 60_000)).toEqual(["/busy-club"]);
+    expect(await urls(61 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
+  });
+
+  it("gives each platform its own slice, so one platform's clubs never crowd out another's", async () => {
+    for (let i = 0; i < 10; i++) await club(`pt-${i}`, { availabilityAt: at(-DAY + i * 60_000) });
+    await club("mt-a", { bookingUrl: "https://matchi.se/mt-a", bookingPlatform: "matchi" });
+    await club("mt-b", { bookingUrl: "https://matchi.se/mt-b", bookingPlatform: "matchi", availabilityAt: at(-HOUR * 3) });
+    const w = world(undefined, 10);
+    const run = await runScrape(db, NOW, { adapters: [reader(), reader("matchi")], fetchImpl: w.fetchImpl, clock: w.clock });
+    const hosts = w.calls.map((c) => new URL(c.url).hostname);
+    expect(hosts.filter((h) => h === "playtomic.io")).toHaveLength(SCRAPE.perLane);
+    expect(hosts.filter((h) => h === "matchi.se")).toHaveLength(2);
+    expect(run.platforms.matchi.ok).toBe(2);
+  });
+
+  it("writes a link no reader can read as an error, with no request, so it moves to the back", async () => {
+    // The club says Playtomic, but its link is the app's home page: no reader can read it.
+    await club("app-link", { bookingUrl: "https://playtomic.com/", bookingPlatform: "playtomic" });
+    await club("next-one", { availabilityAt: at(-30 * HOUR) });
+    const strict = { ...reader(), matches: (url: string) => /^https:\/\/playtomic\.io\/[a-z-]+$/.test(url) };
+    const w = world();
+    await runScrape(db, NOW, { adapters: [strict], fetchImpl: w.fetchImpl, clock: w.clock, perLane: 1 });
+    expect(w.calls).toEqual([]);
+    const bad = await row("app-link");
+    expect(bad.availability).toMatchObject({ error: "unreadable link", source: "scrape:playtomic", slots: [] });
+    expect(bad.availabilityAt?.toISOString()).toBe(NOW.toISOString());
+    // An hour on, the club that waited longest goes first; the unreadable one waits its turn behind it.
+    const w2 = world();
+    await runScrape(db, at(61 * 60_000), { adapters: [strict], fetchImpl: w2.fetchImpl, clock: w2.clock, perLane: 1 });
+    expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/next-one"]);
+  });
+
+  it("reads the directory's clubs as the import writes them: a website on the platform, no booking link", async () => {
+    // The import's own statement, as production ran it: `source = 'directory'`, `website`, no booking link or platform.
+    await db.execute(sql.raw(execFileSync("node", [path.resolve("scripts/import-clubs.mjs"), "--sql"], { encoding: "utf8" })));
+    const listed = await db.select({ slug: clubs.slug, website: clubs.website, bookingUrl: clubs.bookingUrl, bookingPlatform: clubs.bookingPlatform, source: clubs.source }).from(clubs).where(eq(clubs.slug, "bangkok-padel"));
+    expect(listed).toEqual([{ slug: "bangkok-padel", website: "https://www.matchi.se/facilities/bangkokpadel", bookingUrl: null, bookingPlatform: null, source: "directory" }]);
+    const real = (r: AvailabilityAdapter, matches: (url: string) => boolean): AvailabilityAdapter => ({ ...r, matches });
+    const w = world(undefined, 10);
+    const run = await runScrape(db, NOW, { adapters: [real(reader(), playtomicAdapter.matches), real(reader("matchi"), matchiAdapter.matches)], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(w.calls.filter((c) => c.url.startsWith("https://playtomic.com/clubs/"))).toHaveLength(SCRAPE.perLane);
+    expect(w.calls.filter((c) => c.url === "https://www.matchi.se/facilities/bangkokpadel")).toHaveLength(1);
+    expect(run.platforms.playtomic.ok).toBe(SCRAPE.perLane);
+    expect((await row("bangkok-padel")).availability?.source).toBe("scrape:matchi");
+    // A club whose website is its own site is never read.
+    expect(w.calls.every((c) => /playtomic\.com|matchi\.se/.test(c.url))).toBe(true);
+  });
+
+  it("records a block before it writes the clubs, and a club it cannot write does not end the run", async () => {
+    await club("first");
+    await club("second", { availabilityAt: at(-HOUR * 2) });
+    // The pool times out on every club write; the metrics rows still go through.
+    const failing = new Proxy(db, {
+      get(target, key, receiver) {
+        if (key === "update")
+          return () => {
+            throw new Error("pool timeout");
+          };
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const w = world(() => ({ status: 403 }));
+    const run = await runScrape(failing, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(run.platforms.playtomic.blocked).toBe(true);
+    const [state] = await readPlatformStates(db, ["playtomic"], NOW);
+    expect(state.restUntil?.toISOString()).toBe(iso(6 * HOUR));
+    expect(await metric("scrape_blocked_playtomic")).toBe(1);
   });
 
   it("stops before the time budget and leaves the unread clubs due", async () => {
@@ -153,7 +240,7 @@ describe("the slice: which clubs a run reads", () => {
     expect((await row("poster")).availability?.error).toBe("error");
 
     const w3 = world();
-    await runScrape(db, at(40 * 60_000), { adapters: [reader("playtomic", { cookie: true })], fetchImpl: w3.fetchImpl, clock: w3.clock });
+    await runScrape(db, at(2 * HOUR), { adapters: [reader("playtomic", { cookie: true })], fetchImpl: w3.fetchImpl, clock: w3.clock });
     expect(w3.calls).toEqual([]);
   });
 

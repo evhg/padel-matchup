@@ -35,7 +35,10 @@ async function readCourtTimes(db: Awaited<ReturnType<typeof getDb>>, now: Date, 
     // Fifty of the sixty seconds, less what the tick already spent: a read ends within about two seconds of its deadline, and the writes follow.
     const left = 50_000 - (performance.now() - started);
     if (left < 5_000) return { skipped: "no_time" as const };
-    return await scrapeIfDue(db, now, { budgetMs: left });
+    const run = await scrapeIfDue(db, now, { budgetMs: left });
+    // A club row the database refused does not end the run (the rests are written first); it is reported here.
+    if ("writeErrors" in run && run.writeErrors) await reportError("cron", `scrape: ${run.writeErrors} club row(s) not written`, { path: "/api/cron/push#scrape" });
+    return run;
   } catch (e) {
     await reportError("cron", e, { path: "/api/cron/push#scrape" });
     return { skipped: "error" as const };

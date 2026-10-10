@@ -6,6 +6,7 @@ import { LISTED_SOURCES } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
 import { ADAPTERS, adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeFailure, type ScrapeResult, type ScrapeTarget } from "./adapters";
 import { AVAILABILITY_KINDS, localDay } from "./availability";
+import { platformById } from "./platforms";
 
 /**
  * Free court times read from the booking platforms' public club pages, every fifteen minutes.
@@ -28,9 +29,12 @@ import { AVAILABILITY_KINDS, localDay } from "./availability";
 export const SCRAPE = {
   /** A run starts when the last one began this long ago or more: every third push tick, with a minute of slack for a late one. */
   dueMs: 14 * 60_000,
-  /** A club read this recently waits for the next run. */
-  clubDueMs: 14 * 60_000,
-  maxClubs: 12,
+  /** A club people use (`usedBackMs`, `usedAheadMs`) is read again after this long: every run. */
+  usedDueMs: 14 * 60_000,
+  /** Any other club is read again after this long: once an hour. */
+  clubDueMs: 60 * 60_000,
+  /** The clubs one platform's lane takes in a run. Each lane has its own 45 seconds, so one platform never crowds out another. */
+  perLane: 8,
   budgetMs: 45_000,
   /** One request a second per platform. */
   gapMs: 1_000,
@@ -217,34 +221,70 @@ export function freeSlotsFromScrape(slots: readonly ScrapedSlot[], o: { tz: stri
 /** No feed the club shared: a shared feed always wins over a read (`refreshAllAvailability` keeps those rows). */
 const noFeed = () => or(isNull(clubs.availabilityUrl), isNull(clubs.availabilityKind), notInArray(clubs.availabilityKind, [...AVAILABILITY_KINDS]));
 
+/** What a run needs of a club, and nothing more: never the cache itself, which is the one large column (AGENTS.md rule 12). */
+export type DueClub = Pick<Club, "slug" | "bookingUrl" | "bookingPlatform" | "website" | "tz" | "availabilityAt"> & {
+  used: boolean;
+  /** The last cache without its slots: where it came from, whether it read clean, the days it covers. */
+  prev: Omit<ClubAvailability, "slots"> | null;
+};
+
 /**
- * The clubs this run reads: listed, not refused, a booking link on a platform that may be read now, no
- * feed of their own, and not read in the last fourteen minutes. Clubs that people use come first (a
- * crew's match there in the last four weeks, a match there in the next two, a player's want there),
- * then the oldest cache. One query; `clubs` is small and the two subqueries use their venue indexes.
+ * The link a reader reads: the booking link, else the website. The directory lists a club with the
+ * platform's page as its website and no booking link (`scripts/import-clubs.mjs`), and those are most
+ * of the clubs on a platform (the decision of 10 October 2026 on this reader's review).
  */
-export async function dueClubs(db: Db, now: Date, platforms: readonly string[], limit: number): Promise<{ club: Club; used: boolean }[]> {
-  if (!platforms.length || limit <= 0) return [];
+export const readLink = (c: Pick<Club, "bookingUrl" | "website">): string | null => c.bookingUrl ?? c.website;
+
+/** A link on one of the platform's hosts, as a Postgres regular expression. Null for a platform we cannot name. */
+function hostPattern(platform: string): string | null {
+  const hosts = platformById(platform)?.hosts;
+  if (!hosts?.length) return null;
+  return `^https?://([^/?#]*\\.)?(${hosts.map((h) => h.replace(/\./g, "\\.")).join("|")})([/?#:]|$)`;
+}
+
+/**
+ * The clubs one platform's lane reads in this run: listed, not refused, no feed of their own, and a link
+ * on that platform: the booking link, or, with none, the website. A club people use (a crew's match there
+ * in the last four weeks, a match there in the next two, a player's want there) is due after 14 minutes,
+ * any other after an hour; the oldest cache goes first. One query a platform, bounded; `clubs` is small
+ * and the two subqueries use their venue indexes. It selects six columns and the cache's header, never
+ * the slots.
+ */
+export async function dueClubs(db: Db, now: Date, platform: string, limit: number): Promise<DueClub[]> {
+  if (limit <= 0) return [];
   const back = new Date(now.getTime() - SCRAPE.usedBackMs).toISOString();
   const nowIso = now.toISOString();
   const ahead = new Date(now.getTime() + SCRAPE.usedAheadMs).toISOString();
   const used = sql<boolean>`(exists (select 1 from ${events} e where e.venue_slug = ${clubs}.slug and ((e.group_id is not null and e.starts_at >= ${back}::timestamptz and e.starts_at < ${nowIso}::timestamptz) or (e.starts_at >= ${nowIso}::timestamptz and e.starts_at < ${ahead}::timestamptz))) or exists (select 1 from ${demandSignals} d where d.venue_slug = ${clubs}.slug and d.expires_at > ${nowIso}::timestamptz))`;
+  const host = hostPattern(platform);
+  const onPlatform = or(
+    and(isNotNull(clubs.bookingUrl), or(eq(clubs.bookingPlatform, platform), host ? and(isNull(clubs.bookingPlatform), sql`${clubs.bookingUrl} ~* ${host}`) : undefined)),
+    host ? and(isNull(clubs.bookingUrl), sql`${clubs.website} ~* ${host}`) : undefined,
+  );
   const rows = await db
-    .select({ club: clubs, used })
+    .select({
+      slug: clubs.slug,
+      bookingUrl: clubs.bookingUrl,
+      bookingPlatform: clubs.bookingPlatform,
+      website: clubs.website,
+      tz: clubs.tz,
+      availabilityAt: clubs.availabilityAt,
+      used,
+      prev: sql<Omit<ClubAvailability, "slots"> | null>`(${clubs.availability} - 'slots')`.mapWith(clubs.availability),
+    })
     .from(clubs)
     .where(
       and(
         isNull(clubs.rejectedAt),
         or(isNotNull(clubs.approvedAt), inArray(clubs.source, [...LISTED_SOURCES])),
-        isNotNull(clubs.bookingUrl),
-        inArray(clubs.bookingPlatform, [...platforms]),
+        onPlatform,
         noFeed(),
-        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs))),
+        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)), and(used, lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.usedDueMs)))),
       ),
     )
-    .orderBy(desc(used), sql`${clubs.availabilityAt} asc nulls first`, clubs.slug)
+    .orderBy(sql`${clubs.availabilityAt} asc nulls first`, clubs.slug)
     .limit(limit);
-  return rows.map((r) => ({ club: r.club, used: Boolean(r.used) }));
+  return rows.map((r) => ({ ...r, used: Boolean(r.used), prev: (r.prev as Omit<ClubAvailability, "slots"> | null) ?? null }));
 }
 
 /** Why the frame refused a reader's request. Thrown into the reader, which may catch it; the frame still knows. */
@@ -315,12 +355,14 @@ async function bounded<T>(p: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-type Outcome = { club: Club; platform: string; result: ScrapeResult };
+/** A club a lane will read, the reader for it, and the link it reads. */
+type Picked = { club: DueClub; adapter: AvailabilityAdapter; link: string };
+type Outcome = { club: DueClub; platform: string; result: ScrapeResult };
 
 /** One platform's clubs, one after another, until the platform blocks, changes, or the time runs out. */
-async function runLane(lane: Lane, queue: { club: Club; adapter: AvailabilityAdapter }[], o: { fetchImpl: typeof fetch; clock: Clock; deadline: number; now: Date }): Promise<Outcome[]> {
+async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typeof fetch; clock: Clock; deadline: number; now: Date }): Promise<Outcome[]> {
   const out: Outcome[] = [];
-  for (const { club, adapter } of queue) {
+  for (const { club, adapter, link } of queue) {
     if (lane.blocked !== null || lane.changed || lane.outOfTime) break;
     // Not even one request fits before the deadline: leave the club due for the next run.
     if (o.clock.now() + Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now()) >= o.deadline) {
@@ -328,7 +370,7 @@ async function runLane(lane: Lane, queue: { club: Club; adapter: AvailabilityAda
       break;
     }
     const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
-    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: club.bookingUrl!, tz, days: SCRAPE.days };
+    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz, days: SCRAPE.days };
     const lf = laneFetch(lane, o);
     let result: ScrapeResult;
     try {
@@ -350,8 +392,9 @@ async function runLane(lane: Lane, queue: { club: Club; adapter: AvailabilityAda
 }
 
 export type PlatformRun = { requests: number; ok: number; errors: number; blocked: boolean; changed: boolean; restUntil: string | null };
-export type ScrapeRun = { clubs: number; fresh: number; requests: number; outOfTime: boolean; platforms: Record<string, PlatformRun> };
-export type ScrapeOptions = { adapters?: readonly AvailabilityAdapter[]; fetchImpl?: typeof fetch; clock?: Clock; budgetMs?: number; maxClubs?: number; disabled?: string };
+/** `writeErrors`: club rows the database refused; the run goes on, and the push job reports the count. */
+export type ScrapeRun = { clubs: number; fresh: number; requests: number; outOfTime: boolean; writeErrors: number; platforms: Record<string, PlatformRun> };
+export type ScrapeOptions = { adapters?: readonly AvailabilityAdapter[]; fetchImpl?: typeof fetch; clock?: Clock; budgetMs?: number; perLane?: number; disabled?: string };
 
 /** What a reader's answer becomes on the club row. Pure. */
 export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
@@ -362,15 +405,18 @@ export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz
 }
 
 /**
- * One run: a bounded slice of clubs, each platform in its own lane at one request a second, the
- * results written one after another (never a burst on the pool), then the rests, the stops and the
- * day's counters. Returns what it did; never throws for a reader's failure.
+ * One run: for each platform that may be read now, its own slice of due clubs (`dueClubs`, at most
+ * `perLane`), read in its own lane at one request a second; all lanes at once, each inside the same 45
+ * seconds. Then the rests, the stops and the day's counters, and only then the club rows, one after
+ * another (never a burst on the pool), so a row the database refuses cannot lose a block. A club whose
+ * link no reader can read is written as an error with no request, so it moves to the back of the queue.
+ * Returns what it did; never throws for a reader's failure or a club row's.
  */
 export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {}): Promise<ScrapeRun> {
   const adapters = o.adapters ?? ADAPTERS;
   const clock = o.clock ?? realClock;
   const deadline = clock.now() + Math.min(o.budgetMs ?? SCRAPE.budgetMs, SCRAPE.budgetMs);
-  const run: ScrapeRun = { clubs: 0, fresh: 0, requests: 0, outOfTime: false, platforms: {} };
+  const run: ScrapeRun = { clubs: 0, fresh: 0, requests: 0, outOfTime: false, writeErrors: 0, platforms: {} };
   const day = dayKey(now);
   await setMetric(db, SCRAPE_RUN_AT, Math.floor(now.getTime() / 1000), day);
 
@@ -379,42 +425,37 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   const open = states.filter((s) => usable(s, now));
   if (!open.length) return run;
 
-  const maxClubs = o.maxClubs ?? SCRAPE.maxClubs;
-  const due = await dueClubs(db, now, open.map((s) => s.platform), maxClubs * 2);
-  const lanes = new Map<string, { lane: Lane; queue: { club: Club; adapter: AvailabilityAdapter }[] }>();
-  let picked = 0;
-  for (const { club } of due) {
-    if (picked >= maxClubs) break;
-    const adapter = adapterFor(club.bookingUrl, club.bookingPlatform, adapters);
-    if (!adapter) continue;
-    const entry: { lane: Lane; queue: { club: Club; adapter: AvailabilityAdapter }[] } = lanes.get(adapter.platform) ?? { lane: { platform: adapter.platform, lastAt: -Infinity, blocked: null, changed: false, outOfTime: false, requests: 0, cache: new Map() }, queue: [] };
-    entry.queue.push({ club, adapter });
-    lanes.set(adapter.platform, entry);
-    picked++;
+  // One bounded query a platform, one after another (rule 8).
+  const perLane = o.perLane ?? SCRAPE.perLane;
+  const lanes: { lane: Lane; queue: Picked[] }[] = [];
+  const unreadable: { club: DueClub; platform: string }[] = [];
+  for (const s of open) {
+    const mine = adapters.filter((a) => a.platform === s.platform);
+    const queue: Picked[] = [];
+    for (const club of await dueClubs(db, now, s.platform, perLane)) {
+      const link = readLink(club);
+      // The platform the row names goes with its booking link; a website is read by whichever reader takes it.
+      const adapter = adapterFor(link, club.bookingUrl ? club.bookingPlatform : null, mine);
+      if (link && adapter) queue.push({ club, adapter, link });
+      else unreadable.push({ club, platform: s.platform });
+    }
+    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, outOfTime: false, requests: 0, cache: new Map() }, queue });
   }
 
   const fetchImpl = o.fetchImpl ?? fetch;
-  const outcomes = (await Promise.all([...lanes.values()].map(({ lane, queue }) => runLane(lane, queue, { fetchImpl, clock, deadline, now })))).flat();
+  const outcomes = (await Promise.all(lanes.map(({ lane, queue }) => runLane(lane, queue, { fetchImpl, clock, deadline, now })))).flat();
 
-  for (const { club, platform, result } of outcomes) {
-    const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
-    const availability = availabilityFrom(result, { platform, tz, now });
-    const written = await db
-      .update(clubs)
-      .set({ availability, availabilityAt: now })
-      .where(and(eq(clubs.slug, club.slug), noFeed()))
-      .returning({ slug: clubs.slug });
-    run.clubs++;
-    const p = (run.platforms[platform] ??= { requests: 0, ok: 0, errors: 0, blocked: false, changed: false, restUntil: null });
-    if (result.ok) {
-      p.ok++;
-      if (written.length) run.fresh++;
-    } else if (result.reason !== "blocked" && result.reason !== "changed") p.errors++;
+  const tally = (platform: string) => (run.platforms[platform] ??= { requests: 0, ok: 0, errors: 0, blocked: false, changed: false, restUntil: null });
+  for (const { platform, result } of outcomes) {
+    const p = tally(platform);
+    if (result.ok) p.ok++;
+    else if (result.reason !== "blocked" && result.reason !== "changed") p.errors++;
   }
+  for (const { platform } of unreadable) tally(platform).errors++;
 
-  for (const { lane } of lanes.values()) {
+  for (const { lane } of lanes) {
     const s = states.find((x) => x.platform === lane.platform)!;
-    const p = (run.platforms[lane.platform] ??= { requests: 0, ok: 0, errors: 0, blocked: false, changed: false, restUntil: null });
+    const p = tally(lane.platform);
     p.requests = lane.requests;
     run.requests += lane.requests;
     if (lane.outOfTime) run.outOfTime = true;
@@ -431,8 +472,28 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       await bumpMetric(db, scrapeCounter("changed", lane.platform), 1, day);
     }
     if (p.ok) await bumpMetric(db, scrapeCounter("ok", lane.platform), p.ok, day);
-    if (p.errors) await bumpMetric(db, scrapeCounter("error", lane.platform), p.errors, day);
     if (lane.requests) await bumpMetric(db, scrapeCounter("requests", lane.platform), lane.requests, day);
+  }
+  for (const [platform, p] of Object.entries(run.platforms)) if (p.errors) await bumpMetric(db, scrapeCounter("error", platform), p.errors, day);
+
+  // The club rows last. A feed the club shared since the pick still wins (`noFeed`).
+  const write = async (slug: string, availability: ClubAvailability): Promise<boolean> => {
+    run.clubs++;
+    try {
+      const written = await db.update(clubs).set({ availability, availabilityAt: now }).where(and(eq(clubs.slug, slug), noFeed())).returning({ slug: clubs.slug });
+      return written.length > 0;
+    } catch {
+      run.writeErrors++;
+      return false;
+    }
+  };
+  for (const { club, platform, result } of outcomes) {
+    const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
+    if ((await write(club.slug, availabilityFrom(result, { platform, tz, now }))) && result.ok) run.fresh++;
+  }
+  for (const { club, platform } of unreadable) {
+    const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
+    await write(club.slug, { ...availabilityFrom({ ok: false, status: null, reason: "error", requests: 0, detail: null }, { platform, tz, now }), error: "unreadable link" });
   }
   if (run.fresh) await bumpMetric(db, SCRAPE_CLUBS_FRESH, run.fresh, day);
   return run;
