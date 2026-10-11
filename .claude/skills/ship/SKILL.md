@@ -463,6 +463,20 @@ learning can be a test, a gate step or a script, make it one and put the story i
   thirty answers to one victim; and an Outlook reply quoted the answer, which read as a booking again.
   An auto-answer says only what it read in fixed shapes, opens nothing, counts per recipient, and
   never answers its own words (`tests/book-mail.test.ts`).
+- **A key whose value is `undefined` never reaches a server action.** React's reply decoder deletes it
+  (`void 0 !== v ? (obj[k] = v) : delete obj[k]` in react-server-dom-webpack's `reviveModel`), so
+  `"availabilityUrl" in input` is false on the server. The club's manage form sends
+  `v.availabilityUrl || undefined`, so a club that empties its feed or its booking link and saves keeps
+  the old one (found 11 October 2026, while a browser check tried to take a feed away; not fixed yet).
+  A form that must clear a field sends `null` or `""`, and its test calls the action the way the
+  browser encodes it.
+- **The browser suites' server has a fake Playtomic, for slugs that start with `e2e-` only.**
+  `e2e/fakes/playtomic.mjs` is loaded before Next.js (`--import` in `NODE_OPTIONS`, set by `e2e/run.mjs`)
+  and answers the club page and the day's availability; every other request goes to the real fetch. A
+  check of the platform's free times, the chips or the checkout link sets a club's booking page to
+  `https://playtomic.com/clubs/e2e-<name>`, makes the read due (`cron_scrape_at` to 0 through
+  `POST /api/admin/metrics`) and calls `/api/cron/push`. A club with its own feed is never read: the
+  feed wins. Nothing opens a checkout; a check reads the link.
 - **A server action takes 1 MB, and so does every upload through one.** `serverActions.bodySizeLimit`
   in `next.config.ts` holds every action's body to 1 MB, and a body past it never reaches the action:
   the browser gets an error, and the page says "We could not read it". The screenshot door was briefed

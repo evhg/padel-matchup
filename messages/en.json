@@ -344,7 +344,6 @@
     "changeDetailsHelp": "Anyone playing can change the time, the place or the note. Everybody hears about it.",
     "tellGroup": "Tell the group",
     "bookCourt": "Book this court",
-    "bookAndPay": "Book and pay",
     "bookedIt": "I booked it",
     "courtBooked": "Court booked ✓",
     "courtBookedBy": "Court booked ✓ (by {name})",
@@ -359,7 +358,9 @@
     "startLocked": "Only the organiser moves the start once the match has started.",
     "joinBooking": "Join this booking on {platform}",
     "playAgainNext": "Next game: {when} · {code}",
-    "playAgainLands": "At that day and time, a tap opens that game. It makes no second one."
+    "playAgainLands": "At that day and time, a tap opens that game. It makes no second one.",
+    "bookAndPayOn": "Book and pay on {platform}",
+    "checkoutHint": "{platform} asks you to sign in first, then shows this court and time."
   },
   "creator": {
     "tools": "Organizer tools",

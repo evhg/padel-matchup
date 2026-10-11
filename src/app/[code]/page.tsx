@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { detectPlatform, madeToShare } from "@/lib/booking/platforms";
+import { detectPlatform, madeToShare, platformById } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -63,7 +63,7 @@ import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
-import { getShownClubLean, venuesForPicking } from "@/lib/domain/clubs";
+import { getClubForBooking, venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
@@ -365,12 +365,16 @@ async function EventPage({ params, searchParams }: Props) {
   const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
   // The booking link is a platform's invitation for strangers when `madeToShare` takes it: "Join this booking on …", never "Book on …".
   const invite = madeToShare(ev.bookingUrl);
-  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClubLean(db, ev.venueSlug) : null;
+  // With the head of its cache for a match inside the three days a read covers: Playtomic's checkout,
+  // filled in, when Playtomic listed exactly this start and length (the owner, 11 October 2026; `checkoutFor`).
+  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getClubForBooking(db, ev.venueSlug, { cache: ev.startsAt.getTime() < now.getTime() + 4 * 24 * 3600_000 }) : null;
   // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
-  const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
+  const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }, { cache: venueClub.cache, now }) : null;
   // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.
+  // A checkout names the court it holds, which is the match's own court when the platform listed it.
   const clubTz = venueClub?.tz || ev.tz;
-  const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), ev.court ? (/^\d{1,3}$/.test(ev.court) ? courtNumber(ev.court) : ev.court) : null].filter(Boolean).join(", ");
+  const slotCourt = prepared?.prepared === "checkout" ? (prepared.court ?? null) : ev.court;
+  const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), slotCourt ? (/^\d{1,3}$/.test(slotCourt) ? courtNumber(slotCourt) : slotCourt) : null].filter(Boolean).join(", ");
   const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
@@ -706,7 +710,7 @@ async function EventPage({ params, searchParams }: Props) {
           )}
           {ev.note && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
           {(booked || canMarkBooked) && !cancelled && (
-            <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
+            <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" ? (platformById(prepared.platform)?.name ?? prepared.platform ?? "") : null } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
           )}
           {cancelled && (
             <div className="mt-4 rounded-2xl bg-danger-soft p-4">

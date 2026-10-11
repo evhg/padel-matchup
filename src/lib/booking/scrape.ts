@@ -6,7 +6,10 @@ import { LISTED_SOURCES } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
 import { ADAPTERS, adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeFailure, type ScrapeResult, type ScrapeTarget } from "./adapters";
 import { AVAILABILITY_KINDS, localDay } from "./availability";
+import { fnv1a, linkKey, readLink } from "./linkKey";
+import { offersFromScrape } from "./offers";
 import { PLATFORMS, detectPlatform, platformById } from "./platforms";
+import { CHECKOUT } from "./prepare";
 
 /**
  * Free court times read from the booking platforms' public club pages: today every fifteen minutes for
@@ -127,6 +130,21 @@ const keyStop = (p: string) => `scrape_stop_${p}`;
 /** The switch with no deploy at all: `POST /api/admin/metrics {"key":"scrape_off_<platform>","value":1}` (or `scrape_off_all`); value 0 turns it back on. */
 const keyOff = (p: string) => `scrape_off_${p}`;
 export const scrapeCounter = (what: "ok" | "blocked" | "changed" | "requests" | "error" | "cut" | "unreadable", platform: string) => `scrape_${what}_${platform}`;
+/**
+ * The checkout "Book this court" fills (DECIDING rule 36, `checkoutFor` in prepare.ts): its switch with no
+ * deploy (`checkout_off_<platform>`, or `checkout_off_all`, through `POST /api/admin/metrics`), the club
+ * page's script known to build its link (`checkout_builder_<platform>`, the path as `fnv1a`, and
+ * `checkout_builder_chunk_<platform>`, the figures its name starts with), and whether the last check
+ * found that builder gone (`checkout_builder_lost_<platform>`, 1 or 0). Each holds however old it is.
+ */
+const keyCheckoutOff = (p: string) => `checkout_off_${p}`;
+const keyBuilder = (p: string) => `checkout_builder_${p}`;
+const keyBuilderChunk = (p: string) => `checkout_builder_chunk_${p}`;
+const keyBuilderLost = (p: string) => `checkout_builder_lost_${p}`;
+/** Day counters: a check that found the builder gone (each one, so a day of them shows), and a check that found it in another script. */
+export const checkoutCounter = (what: "lost" | "found", platform: string) => `checkout_${what}_${platform}`;
+/** A read may look for a lost builder only with this much of the run left: `BUILDER_HUNT` requests of up to 10 s each, and the club still written. */
+const HUNT_LEFT_MS = 25_000;
 export const SCRAPE_CLUBS_FRESH = "scrape_clubs_fresh";
 /** The error a club whose link no reader can read is written with. */
 const UNREADABLE = "unreadable link";
@@ -145,25 +163,20 @@ export function disabledPlatforms(raw: string | undefined = process.env.SCRAPE_D
   return ids.includes("all") ? "all" : new Set(ids);
 }
 
-/** FNV-1a, 32 bits. Pure. */
-function fnv1a(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h;
-}
-
 /** This deployment's code, as a number: a "changed" stop holds until a deploy of a new commit, which has another (a redeploy of the same commit keeps it). FNV-1a, 32 bits. Pure. */
 export function deployKey(env: Record<string, string | undefined> = process.env): number {
   return fnv1a(env.VERCEL_GIT_COMMIT_SHA || env.VERCEL_DEPLOYMENT_ID || "local");
 }
 
-/** The link a read came from, as the cache keeps it (`linkKey`): eight hex digits, never the link. Pure. */
-export const linkKey = (link: string): string => fnv1a(link).toString(16).padStart(8, "0");
+export { linkKey, readLink };
 
-export type PlatformState = { platform: string; off: boolean; stopped: boolean; restUntil: Date | null; level: number };
+/**
+ * `checkout`: for a platform whose checkout "Book this court" fills (`CHECKOUT`), whether the switch row
+ * turned it off, whether the last check found its builder gone, and the script known to build the link
+ * (the code's own until a check finds another). Null for every other platform.
+ */
+export type CheckoutState = { off: boolean; lost: boolean; builder: number; chunk: number | null };
+export type PlatformState = { platform: string; off: boolean; stopped: boolean; restUntil: Date | null; level: number; checkout?: CheckoutState | null };
 export const usable = (s: PlatformState, now: Date) => !s.off && !s.stopped && !(s.restUntil && s.restUntil > now);
 
 /**
@@ -174,7 +187,8 @@ export const usable = (s: PlatformState, now: Date) => !s.off && !s.stopped && !
 export async function readPlatformStates(db: Db, platforms: readonly string[], now: Date, disabled = disabledPlatforms()): Promise<PlatformState[]> {
   if (!platforms.length) return [];
   const keys = platforms.flatMap((p) => [keyRest(p), keyLevel(p), keyStop(p)]);
-  const offKeys = [keyOff("all"), ...platforms.map(keyOff)];
+  const checkouts = platforms.filter((p) => CHECKOUT[p]);
+  const offKeys = [keyOff("all"), ...platforms.map(keyOff), ...(checkouts.length ? [keyCheckoutOff("all")] : []), ...checkouts.flatMap((p) => [keyCheckoutOff(p), keyBuilder(p), keyBuilderChunk(p), keyBuilderLost(p)])];
   const rows = await db
     .select({ key: metricsDaily.key, value: metricsDaily.value })
     .from(metricsDaily)
@@ -191,9 +205,33 @@ export async function readPlatformStates(db: Db, platforms: readonly string[], n
       stopped: latest.has(keyStop(p)) && latest.get(keyStop(p)) === deploy,
       restUntil: until > 0 ? new Date(until * 1000) : null,
       level: latest.get(keyLevel(p)) ?? 0,
+      checkout: checkoutStateOf(p, latest),
     };
   });
 }
+
+/** A platform's checkout state from the latest rows, or null for a platform with no checkout. Pure. */
+function checkoutStateOf(p: string, latest: ReadonlyMap<string, number>): CheckoutState | null {
+  const config = CHECKOUT[p];
+  if (!config) return null;
+  const builder = latest.get(keyBuilder(p));
+  const chunk = latest.get(keyBuilderChunk(p));
+  const seed = /\/(\d{1,6})-[0-9a-f]{8,}\.js$/.exec(config.builder);
+  return {
+    off: !config.on || (latest.get(keyCheckoutOff("all")) ?? 0) > 0 || (latest.get(keyCheckoutOff(p)) ?? 0) > 0,
+    lost: (latest.get(keyBuilderLost(p)) ?? 0) > 0,
+    builder: builder && builder > 0 ? builder : fnv1a(config.builder),
+    chunk: builder && builder > 0 ? (chunk && chunk > 0 ? chunk : null) : seed ? Number(seed[1]) : null,
+  };
+}
+
+/**
+ * Does this run write the exact starts "Book this court" needs (`offers`)? Only for a platform whose
+ * checkout is on, not switched off by its row, and whose club page still builds the link as far as the
+ * checks know, this run's included. Otherwise the cache keeps no offers, and within one read of each
+ * club no match page fills a checkout. Pure.
+ */
+export const writeOffers = (s: Pick<PlatformState, "checkout"> | undefined): boolean => Boolean(s?.checkout && !s.checkout.off && !s.checkout.lost);
 
 /** A "blocked": rest for the next step of six hours, a day, a week. */
 async function rest(db: Db, s: PlatformState, now: Date): Promise<Date> {
@@ -303,12 +341,6 @@ export type DueClub = Pick<Club, "slug" | "bookingUrl" | "bookingPlatform" | "we
   prev: Omit<ClubAvailability, "slots" | "why"> | null;
 };
 
-/**
- * The link a reader reads: the booking link, else the website. The directory lists a club with the
- * platform's page as its website and no booking link (`scripts/import-clubs.mjs`), and those are most
- * of the clubs on a platform (the decision of 10 October 2026 on this reader's review).
- */
-export const readLink = (c: Pick<Club, "bookingUrl" | "website">): string | null => c.bookingUrl ?? c.website;
 
 /** A link on one of the platform's hosts, as a Postgres regular expression. Null for a platform we cannot name. */
 function hostPattern(platform: string): string | null {
@@ -342,7 +374,8 @@ export async function dueClubs(db: Db, now: Date, platform: string, limit: numbe
       website: clubs.website,
       tz: clubs.tz,
       availabilityAt: clubs.availabilityAt,
-      prev: sql<Omit<ClubAvailability, "slots" | "why"> | null>`(${clubs.availability} - 'slots' - 'why')`.mapWith(clubs.availability),
+      // Never the offers either: a read of today alone merges them in the database (`writeToday`).
+      prev: sql<Omit<ClubAvailability, "slots" | "why"> | null>`(${clubs.availability} - 'slots' - 'why' - 'offers')`.mapWith(clubs.availability),
     })
     .from(clubs)
     .where(and(listedForRead(), onPlatform, or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)))))
@@ -367,7 +400,8 @@ const realClock: Clock = { now: () => performance.now(), sleep: (ms) => new Prom
  * the clubs that said "changed" in this run: one club alone is that club's error, and the platform stops
  * only at a second club, or at a club that read clean before.
  */
-type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; changedAt: Set<string>; outOfTime: boolean; cut: number; requests: number; cache: Map<string, { status: number; body: string; type: string | null; url: string }> };
+/** `checkout`: what a read of the club page checks for the checkout builder (`ScrapeTarget.checkout`); `hunted`: a read in this run already looked for a lost builder, so no other does. */
+type Lane = { platform: string; lastAt: number; blocked: number | null; changed: boolean; changedAt: Set<string>; outOfTime: boolean; cut: number; requests: number; cache: Map<string, { status: number; body: string; type: string | null; url: string }>; checkout?: { builder: number; chunk: number | null } | null; hunted?: boolean };
 
 /** Does one more request fit before the deadline, after the platform's second between requests? */
 const fits = (lane: Lane, o: { clock: Clock; deadline: number }) => o.clock.now() + Math.max(0, lane.lastAt + SCRAPE.gapMs - o.clock.now()) + SCRAPE.minRequestMs <= o.deadline;
@@ -519,7 +553,10 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     // The club's zone as the row has it: never "UTC" in place of a zone nobody gave (readers F2). The
     // platform's id for the club goes with a read of today alone, which may then skip the club page.
     const ref = todayOnly ? cleanRef(club.prev?.ref) : undefined;
-    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: todayOnly ? 1 : SCRAPE.days, ...(ref ? { ref } : {}) };
+    // The checkout builder is checked on every club page a read fetches; one read a run may look for a
+    // lost one, and only with time to spare, so the look never costs the club its times.
+    const checkout = lane.checkout ? { ...lane.checkout, hunt: !lane.hunted && o.deadline - o.clock.now() >= HUNT_LEFT_MS } : null;
+    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: todayOnly ? 1 : SCRAPE.days, ...(ref ? { ref } : {}), ...(checkout ? { checkout } : {}) };
     const lf = laneFetch(lane, o);
     let result: ScrapeResult;
     try {
@@ -530,6 +567,7 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     }
     // The frame's own count, whatever the reader says, and its own view of a block.
     result = { ...result, requests: lf.count() };
+    if (result.ok && result.builder && result.builder.state !== "same") lane.hunted = true;
     // A reader may catch what the frame threw and call it an error; the frame knows what it was.
     if (!result.ok && result.reason === "error") {
       const stop = lf.stop();
@@ -564,7 +602,8 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
   return out;
 }
 
-export type PlatformRun = { requests: number; ok: number; errors: number; blocked: boolean; changed: boolean; restUntil: string | null };
+/** `checkout`: for a platform with a checkout, where it stands after this run: on, switched off, or its builder lost. */
+export type PlatformRun = { requests: number; ok: number; errors: number; blocked: boolean; changed: boolean; restUntil: string | null; checkout?: "on" | "off" | "lost" };
 /** A club this run wrote as failed: its slug, the error the cache shows, and the short cause (`failureWhy`). */
 export type FailedClub = { slug: string; platform: string; error: string; why: string | null };
 /**
@@ -588,13 +627,15 @@ function failedCache(platform: string, now: Date, error: string, tz: string | nu
  * A clean read of today alone, as the part of the cache it replaces: today's pieces, the three days the
  * cache still covers, and the time of the last full read. `keepFrom` is the club's next midnight: the
  * row keeps its own pieces from there on (`writeToday` in `runScrape`). `link` is the link read, which
- * the cache keeps as its `linkKey`. Pure.
+ * the cache keeps as its `linkKey`. `offers`: today's exact starts too (`offersFromScrape`), which the
+ * write joins with the later days' offers already on the row; without it the row keeps none. Pure.
  */
-export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string; link?: string }): { availability: ClubAvailability; keepFrom: string } {
+export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string; link?: string; offers?: boolean }): { availability: ClubAvailability; keepFrom: string } {
   const days = scrapeDays(o.now, o.tz);
   const slots = freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days: days.slice(0, 1) });
   const ref = cleanRef(result.ref);
-  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt, ...(ref ? { ref } : {}), ...(o.link ? { linkKey: linkKey(o.link) } : {}) };
+  const offers = o.offers ? offersFromScrape(result.slots, { tz: o.tz, now: o.now, days: days.slice(0, 1) }) : null;
+  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt, ...(ref ? { ref } : {}), ...(o.link ? { linkKey: linkKey(o.link) } : {}), ...(o.offers ? { offers: offers ?? { courts: {}, days: {} } } : {}) };
   return { availability, keepFrom: zonedTimeToUtc(days[1], "00:00", o.tz).toISOString() };
 }
 
@@ -631,13 +672,18 @@ export function failureWhy(detail: string | null | undefined): string | null {
   return second !== undefined && WHY_CODE.test(second) ? `${step}: ${first} ${second}` : `${step}: ${first}`;
 }
 
-/** What a reader's answer becomes on the club row. `tz` is a zone we know; `link` is the link read, kept as `linkKey`. Pure. */
-export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date; link?: string }): ClubAvailability {
+/**
+ * What a reader's answer becomes on the club row. `tz` is a zone we know; `link` is the link read, kept
+ * as `linkKey`; `offers`: the exact starts "Book this court" fills a checkout from (`offersFromScrape`),
+ * kept only while the platform's checkout is on (`writeOffers`). Pure.
+ */
+export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date; link?: string; offers?: boolean }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
   const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, ...(o.link ? { linkKey: linkKey(o.link) } : {}) };
   if (result.ok) {
     const ref = cleanRef(result.ref);
-    return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt, ...(ref ? { ref } : {}) };
+    const offers = o.offers ? offersFromScrape(result.slots, { tz: o.tz, now: o.now, days }) : null;
+    return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt, ...(ref ? { ref } : {}), ...(offers ? { offers } : {}) };
   }
   // `error` stays the reason and the status, which the pages and the counters read; `why` is for us.
   const why = failureWhy(result.detail);
@@ -684,7 +730,9 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     }
     const plan = planReads(readable.map((r) => r.club.prev), s.platform, now);
     readable.forEach((r, i) => queue.push({ ...r, todayOnly: plan[i] }));
-    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, changedAt: new Set(), outOfTime: false, cut: 0, requests: 0, cache: new Map() }, queue });
+    // The checkout builder is checked while the checkout is not switched off (`CheckoutState`).
+    const checkout = s.checkout && !s.checkout.off ? { builder: s.checkout.builder, chunk: s.checkout.chunk } : null;
+    if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, changedAt: new Set(), outOfTime: false, cut: 0, requests: 0, cache: new Map(), checkout }, queue });
   }
 
   const fetchImpl = o.fetchImpl ?? fetch;
@@ -728,6 +776,31 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   }
   for (const [platform, p] of Object.entries(run.platforms)) if (p.errors) await bumpMetric(db, scrapeCounter("error", platform), p.errors, day);
 
+  // The checkout builder (DECIDING rule 36): what this run's reads of club pages found, before any club
+  // is written, so a builder found gone keeps this run's offers off the rows already. A script that still
+  // builds the link wins over a page that did not show it (a page served by an older deploy, say).
+  for (const { lane } of lanes) {
+    const s = states.find((x) => x.platform === lane.platform)!;
+    if (!s.checkout || !lane.checkout) continue;
+    const reports = outcomes.flatMap((x) => (x.platform === lane.platform && x.result.ok && x.result.builder ? [x.result.builder] : []));
+    const found = reports.find((r) => r.state === "found");
+    if (found && found.state === "found") {
+      await setMetric(db, keyBuilder(lane.platform), found.key, day);
+      await setMetric(db, keyBuilderChunk(lane.platform), found.chunk ?? 0, day);
+      await setMetric(db, keyBuilderLost(lane.platform), 0, day);
+      await bumpMetric(db, checkoutCounter("found", lane.platform), 1, day);
+      s.checkout = { ...s.checkout, builder: found.key, chunk: found.chunk, lost: false };
+    } else if (reports.some((r) => r.state === "same")) {
+      if (s.checkout.lost) await setMetric(db, keyBuilderLost(lane.platform), 0, day);
+      s.checkout = { ...s.checkout, lost: false };
+    } else if (reports.length) {
+      if (!s.checkout.lost) await setMetric(db, keyBuilderLost(lane.platform), 1, day);
+      await bumpMetric(db, checkoutCounter("lost", lane.platform), reports.length, day);
+      s.checkout = { ...s.checkout, lost: true };
+    }
+  }
+  for (const s of states) if (s.checkout && run.platforms[s.platform]) run.platforms[s.platform].checkout = s.checkout.off ? "off" : s.checkout.lost ? "lost" : "on";
+
   // The club rows last. A feed the club shared since the pick still wins (`noFeed`).
   const write = async (slug: string, availability: ClubAvailability | SQL): Promise<boolean> => {
     run.clubs++;
@@ -742,18 +815,27 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   /**
    * A read of today alone: today's pieces from this read, and the later days' pieces from the cache
    * already on the row, joined in the database so no old slot travels (AGENTS.md rule 12). Today's
-   * pieces end at the club's midnight and the kept ones start there, so they never overlap.
+   * pieces end at the club's midnight and the kept ones start there, so they never overlap. The offers
+   * the same way, when this read keeps any: today's from this read, the later days' from the row (keys
+   * from the next club day on), and the courts of both, the row's names winning, since a read of today
+   * alone sees no names. A read that keeps none leaves the row with none.
    */
-  const writeToday = (slug: string, t: { availability: ClubAvailability; keepFrom: string }) =>
-    write(
-      slug,
-      sql`jsonb_set(${JSON.stringify(t.availability)}::jsonb, '{slots}', ${JSON.stringify(t.availability.slots)}::jsonb || coalesce((select jsonb_agg(s order by s->>'start') from jsonb_array_elements(case when jsonb_typeof(${clubs.availability}->'slots') = 'array' then ${clubs.availability}->'slots' else '[]'::jsonb end) s where s->>'start' >= ${t.keepFrom}), '[]'::jsonb))`,
-    );
+  const writeToday = (slug: string, t: { availability: ClubAvailability; keepFrom: string }) => {
+    const slots = sql`jsonb_set(${JSON.stringify(t.availability)}::jsonb, '{slots}', ${JSON.stringify(t.availability.slots)}::jsonb || coalesce((select jsonb_agg(s order by s->>'start') from jsonb_array_elements(case when jsonb_typeof(${clubs.availability}->'slots') = 'array' then ${clubs.availability}->'slots' else '[]'::jsonb end) s where s->>'start' >= ${t.keepFrom}), '[]'::jsonb))`;
+    const offers = t.availability.offers;
+    if (!offers) return write(slug, slots);
+    const keepDay = t.availability.days?.[1] ?? "9999-12-31";
+    const old = sql`case when jsonb_typeof(${clubs.availability}->'offers') = 'object' then ${clubs.availability}->'offers' else '{}'::jsonb end`;
+    const courts = sql`${JSON.stringify(offers.courts)}::jsonb || case when jsonb_typeof(${old}->'courts') = 'object' then ${old}->'courts' else '{}'::jsonb end`;
+    const days = sql`coalesce((select jsonb_object_agg(d.key, d.value) from jsonb_each(case when jsonb_typeof(${old}->'days') = 'object' then ${old}->'days' else '{}'::jsonb end) d where d.key >= ${keepDay}), '{}'::jsonb) || ${JSON.stringify(offers.days)}::jsonb`;
+    return write(slug, sql`jsonb_set(${slots}, '{offers}', jsonb_build_object('courts', ${courts}, 'days', ${days}))`);
+  };
   for (const { club, platform, link, result, todayOnly } of outcomes) {
     // The zone the reader read the days in, else the club's own; a clean read in no known zone is an error.
     const zone = result.ok && result.tz && isValidTimeZone(result.tz) ? result.tz : zoneOf(club.tz);
+    const offers = writeOffers(states.find((x) => x.platform === platform));
     if (result.ok && zone && todayOnly && club.prev?.fullAt) {
-      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt, link }))) run.fresh++;
+      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt, link, offers }))) run.fresh++;
       continue;
     }
     // A timeout over a good read: the good read stays, with its own time, so the pages show it for as
@@ -762,7 +844,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       if (await write(club.slug, sql`${clubs.availability}`)) run.failed.push({ slug: club.slug, platform, error: "timeout", why: failureWhy(result.ok ? null : result.detail) });
       continue;
     }
-    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now, link });
+    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now, link, offers });
     const written = await write(club.slug, availability);
     if (written && result.ok && zone) run.fresh++;
     if (written && availability.error) run.failed.push({ slug: club.slug, platform, error: availability.error, why: availability.why ?? null });
@@ -867,7 +949,8 @@ export async function scrapeCoverage(db: Db, adapters: readonly AvailabilityAdap
  * `unread`: the listed clubs on this platform that the run never reads (no link a reader takes, or no
  * reader at all). A platform with no reader has a line of its own (`no_reader`) while a listed club names it.
  */
-export type PlatformLine = { platform: string; state: "fresh" | "resting" | "off" | "stopped" | "no_reader"; fresh: number; restUntil: Date | null; requestsToday: number; blockedToday: number; unread: number };
+/** `checkout`: for a platform whose checkout "Book this court" fills, where it stands (DECIDING rule 36): on, switched off by its row, or its builder lost. */
+export type PlatformLine = { platform: string; state: "fresh" | "resting" | "off" | "stopped" | "no_reader"; fresh: number; restUntil: Date | null; requestsToday: number; blockedToday: number; unread: number; checkout?: "on" | "off" | "lost" };
 
 /**
  * The service board's line per platform: fresh (clubs read clean in the last hour, by the read's own
@@ -902,6 +985,7 @@ export async function scrapeBoard(db: Db, now: Date, adapters: readonly Availabi
     requestsToday: count(scrapeCounter("requests", s.platform)),
     blockedToday: count(scrapeCounter("blocked", s.platform)),
     unread: unread(s.platform),
+    ...(s.checkout ? { checkout: s.checkout.off ? ("off" as const) : s.checkout.lost ? ("lost" as const) : ("on" as const) } : {}),
   }));
   const unreadPlatforms = [...coverage.keys()].filter((p) => !ids.includes(p)).sort();
   return [...read, ...unreadPlatforms.map((p): PlatformLine => ({ platform: p, state: "no_reader", fresh: 0, restUntil: null, requestsToday: 0, blockedToday: 0, unread: unread(p) }))];

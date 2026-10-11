@@ -344,7 +344,6 @@
     "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
     "tellGroup": "Avisar al grupo",
     "bookCourt": "Reservar esta pista",
-    "bookAndPay": "Reservar y pagar",
     "bookedIt": "Ya reservé la pista",
     "courtBooked": "Pista reservada ✓",
     "courtBookedBy": "Pista reservada ✓ (por {name})",
@@ -359,7 +358,9 @@
     "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
     "joinBooking": "Únete a esta reserva en {platform}",
     "playAgainNext": "Próximo partido: {when} · {code}",
-    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro."
+    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro.",
+    "bookAndPayOn": "Reservar y pagar en {platform}",
+    "checkoutHint": "{platform} te pide iniciar sesión primero y después muestra esta pista y esta hora."
   },
   "creator": {
     "tools": "Herramientas de organizador",

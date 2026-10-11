@@ -1,5 +1,6 @@
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
-import type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, ScrapeTarget } from "./types";
+import { fnv1a } from "../linkKey";
+import type { AvailabilityAdapter, BuilderReport, ScrapedSlot, ScrapeFailure, ScrapeResult, ScrapeTarget } from "./types";
 import { errorClass } from "./errorClass";
 
 /**
@@ -17,10 +18,11 @@ import { errorClass } from "./errorClass";
  *      Singapore that opens at 07:00 shows its first slot as start_date "2026-10-10", "23:00:00".
  *      Only free start times are listed, one per offered duration; booked time is simply absent.
  *   3. "Continue" opens /api/web-app/payments?type=CUSTOMER_MATCH&tenant_id&resource_id&start&duration&sport_id,
- *      Playtomic's own checkout. This file builds that link for each slot (`playtomicBookUrl`) and
- *      never follows it, and the frame keeps no link (`freeSlotsFromScrape`): no player is handed it.
- *      "Book this court" opens the club's public page on the match's day (`prepareBooking`). Whether
- *      it may open this checkout instead is the owner's decision, not yet taken (DECIDING rule 36).
+ *      Playtomic's own checkout. This file never follows it. The owner decided on 11 October 2026,
+ *      "Playtomic checkout, filled" (DECIDING rule 36): "Book this court" on the match page opens this
+ *      checkout in the player's browser (`checkoutFor` in prepare.ts), built from the exact starts the
+ *      frame keeps (`offersFromScrape`), else the club's day page. The link is not documented, so a read
+ *      of the club page also checks that its scripts still build it (`builderCheck`, below).
  *
  * A read of today alone takes one request: the tenant id from the club's last clean read comes back as
  * `target.ref`, so the club page is not read again. The frame hands it back only while the club's link is
@@ -121,6 +123,70 @@ function objectAt(text: string, from: number): unknown {
     }
   }
   return null;
+}
+
+/**
+ * The scripts the club page loads (`<script src="/_next/static/chunks/…js">`), in page order, each once,
+ * 64 at most. Found by `indexOf`, never a pattern that can backtrack over a stranger's page. Pure.
+ */
+export function playtomicScripts(html: string): string[] {
+  const out: string[] = [];
+  const marker = 'src="/_next/static/chunks/';
+  for (let at = html.indexOf(marker); at >= 0 && out.length < 64; at = html.indexOf(marker, at + marker.length)) {
+    const from = at + 'src="'.length;
+    const end = html.indexOf('"', from);
+    if (end < 0 || end - from > 200) continue;
+    const path = html.slice(from, end);
+    if (/^\/_next\/static\/chunks\/[A-Za-z0-9._%/-]+\.js$/.test(path) && !path.includes("..") && !out.includes(path)) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * Does this script build the checkout link the way Playtomic's "Continue" did on 11 October 2026?
+ * `new URL("/api/web-app/payments"…)`, then the six parameters in order (type CUSTOMER_MATCH,
+ * tenant_id, resource_id, start, duration, sport_id) within 2,000 characters, and the start written in
+ * UTC as ISO (`toUTC().toISO()`). Minified names change at every deploy; these strings do not. Pure.
+ */
+export function holdsCheckoutBuilder(js: string): boolean {
+  const head = 'new URL("/api/web-app/payments"';
+  const steps = ['.set("type","CUSTOMER_MATCH")', '.set("tenant_id",', '.set("resource_id",', '.set("start",', '.set("duration",', '.set("sport_id",'];
+  for (let at = js.indexOf(head); at >= 0; at = js.indexOf(head, at + head.length)) {
+    const near = js.slice(at, at + 2_000);
+    let from = 0;
+    const found = steps.map((step) => {
+      const i = near.indexOf(step, from);
+      if (i >= 0) from = i + step.length;
+      return i;
+    });
+    if (found.some((i) => i < 0)) continue;
+    if (near.slice(found[3], found[4]).includes("toUTC().toISO()")) return true;
+  }
+  return false;
+}
+
+/** The figures a script's file name starts with ("7105" in 7105-b679921c03870a3f.js), which a new build of the same code often keeps. */
+export const chunkNumber = (path: string): number | null => {
+  const m = /\/(\d{1,6})-[0-9a-f]{8,}\.js$/.exec(path);
+  return m ? Number(m[1]) : null;
+};
+
+/** Scripts that are the framework itself (webpack, React's runtime, the layout, the error pages) never build a checkout. */
+const FRAMEWORK = /\/(webpack|main-app|main|polyfills|framework|layout|error|global-error|not-found|loading)-[0-9a-f]+\.js$/;
+/** The scripts one read fetches at most while it looks for the builder: two seconds of the platform's pace. */
+export const BUILDER_HUNT = 2;
+
+/**
+ * Which of the page's scripts to read first while looking for the builder: the one whose figures match
+ * the last known script's, then the others, turned by the quarter hour so that one read after another
+ * tries different scripts. Pure.
+ */
+export function huntOrder(scripts: readonly string[], chunk: number | null, now: Date): string[] {
+  const candidates = scripts.filter((s) => !FRAMEWORK.test(s));
+  const first = chunk === null ? [] : candidates.filter((s) => chunkNumber(s) === chunk);
+  const rest = candidates.filter((s) => !first.includes(s));
+  const turn = rest.length ? Math.floor(now.getTime() / (15 * 60_000)) % rest.length : 0;
+  return [...first, ...rest.slice(turn), ...rest.slice(0, turn)];
 }
 
 /** Pure: the club, its time zone and its courts from the public club page's HTML, or null when the page no longer carries them. */
@@ -285,12 +351,15 @@ async function scrape(target: ScrapeTarget, fetchImpl: typeof fetch, now: Date):
   const zone = target.tz && isValidTimeZone(target.tz) ? target.tz : null;
   const known = target.days === 1 && typeof target.ref === "string" && UUID.test(target.ref) && zone ? { at: now.getTime(), club: { tenantId: target.ref.toLowerCase(), slug: "", name: null, timezone: zone, courts: [] } } : null;
   let club = known ?? clubCache.get(page);
+  // The club page's HTML when this read fetched it: the checkout builder is checked on it (`builderCheck`).
+  let pageHtml: string | null = null;
   if (!club || now.getTime() - club.at > CLUB_TTL_MS || now.getTime() < club.at) {
     const got = await get(page, fetchImpl, "text/html");
     requests++;
     const failed = failureOf(got, requests, "club page");
     if (failed) return failed;
-    const parsed = parsePlaytomicClubPage((got as { text: string }).text);
+    pageHtml = (got as { text: string }).text;
+    const parsed = parsePlaytomicClubPage(pageHtml);
     if (!parsed) return fail("changed", (got as { status: number }).status, requests, "club page has no tenant and courts");
     club = { at: now.getTime(), club: parsed };
     clubCache.set(page, club);
@@ -320,7 +389,40 @@ async function scrape(target: ScrapeTarget, fetchImpl: typeof fetch, now: Date):
     }
   }
   slots.sort((a, b) => a.start.localeCompare(b.start) || (a.court ?? "").localeCompare(b.court ?? "") || a.end.localeCompare(b.end));
-  return { ok: true, slots, requests, tz, ref: club.club.tenantId };
+  // After the times, never before them: the check spends what the read left of its eight requests.
+  const checked = target.checkout && pageHtml !== null ? await builderCheck(pageHtml, target.checkout, { fetchImpl, now, left: MAX_REQUESTS - requests }) : null;
+  return { ok: true, slots, requests: requests + (checked?.requests ?? 0), tz, ref: club.club.tenantId, ...(checked ? { builder: checked.report } : {}) };
+}
+
+/**
+ * Does the club page still build the checkout link "Book this court" fills (the owner's decision of 11
+ * October 2026, DECIDING rule 36)? The link is not documented, so the check reads the code that makes
+ * it. Next.js names a script after its content, so while the page loads the script known to build it,
+ * the code is the same (`same`, no request). When that script is gone, and the frame allows (`hunt`),
+ * the read fetches at most `BUILDER_HUNT` of the page's other scripts, one a second, and looks for the
+ * builder (`holdsCheckoutBuilder`): `found` gives the new script, `lost` says how many it read. The frame
+ * turns the checkout off while it is lost (`writeOffers` in scrape.ts). A request that fails ends the
+ * look and keeps the times this read found.
+ */
+async function builderCheck(html: string, c: NonNullable<ScrapeTarget["checkout"]>, o: { fetchImpl: typeof fetch; now: Date; left: number }): Promise<{ report: BuilderReport; requests: number }> {
+  const scripts = playtomicScripts(html);
+  if (scripts.some((s) => fnv1a(s) === c.builder)) return { report: { state: "same" }, requests: 0 };
+  const order = huntOrder(scripts, c.chunk, o.now);
+  let requests = 0;
+  let checked = 0;
+  for (const path of c.hunt ? order.slice(0, Math.max(0, Math.min(BUILDER_HUNT, o.left))) : []) {
+    let got: Got;
+    try {
+      got = await get(new URL(path, ORIGIN).toString(), o.fetchImpl, "*/*");
+    } catch {
+      break;
+    }
+    requests++;
+    if (got.kind !== "response" || got.status !== 200) break;
+    checked++;
+    if (holdsCheckoutBuilder(got.text)) return { report: { state: "found", key: fnv1a(path), chunk: chunkNumber(path) }, requests };
+  }
+  return { report: { state: "lost", checked, of: order.length }, requests };
 }
 
 export const playtomicAdapter: AvailabilityAdapter = {
