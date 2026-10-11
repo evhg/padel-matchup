@@ -138,7 +138,8 @@ try {
   await shot(p, "v3b-score-panel-ru");
   // "Make it weekly" after a change of language: its "Done" line names the day in the language now on
   // screen (a string kept from the first render once said "Sun" in Russian), and follows the next change.
-  const latinDay = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/;
+  // The weekday in full and on its own ("Every Sunday 11:22"): no date's comma rides along ("Sun, 11:22").
+  const latinDay = /\b(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day \d{1,2}:\d{2}\b/;
   await score.getByTestId("same-time").click();
   await score.getByTestId("same-time-done").getByText(/Готово/).waitFor({ timeout: 20000 });
   const ruDone = (await score.getByTestId("same-time-done").textContent()) ?? "";
