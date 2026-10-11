@@ -110,8 +110,10 @@ const keyLevel = (p: string) => `scrape_rest_level_${p}`;
 const keyStop = (p: string) => `scrape_stop_${p}`;
 /** The switch with no deploy at all: `POST /api/admin/metrics {"key":"scrape_off_<platform>","value":1}` (or `scrape_off_all`); value 0 turns it back on. */
 const keyOff = (p: string) => `scrape_off_${p}`;
-export const scrapeCounter = (what: "ok" | "blocked" | "changed" | "requests" | "error" | "cut", platform: string) => `scrape_${what}_${platform}`;
+export const scrapeCounter = (what: "ok" | "blocked" | "changed" | "requests" | "error" | "cut" | "unreadable", platform: string) => `scrape_${what}_${platform}`;
 export const SCRAPE_CLUBS_FRESH = "scrape_clubs_fresh";
+/** The error a club whose link no reader can read is written with. */
+const UNREADABLE = "unreadable link";
 export const SCRAPE_RUN_AT = "cron_scrape_at";
 
 /**
@@ -547,7 +549,7 @@ export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { pla
 }
 
 /** The steps a reader names in its `detail` before the colon ("club page: HTTP 500"); `failureWhy` keeps no other. */
-const WHY_STEP = /^(club page|availability \d{4}-\d{2}-\d{2}|locations|frame)$/;
+const WHY_STEP = /^(club page|availability \d{4}-\d{2}-\d{2}|locations|court-bookings \d{4}-\d{2}-\d{2}|frame)$/;
 /**
  * An error's class ("TypeError"): a capital, then letters. A word of a message is not one: Playtomic's
  * "club page: no answer in 10 s" once kept "no".
@@ -637,7 +639,10 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     if (result.ok) p.ok++;
     else if (result.reason !== "blocked" && result.reason !== "changed") p.errors++;
   }
-  for (const { platform } of unreadable) tally(platform).errors++;
+  // A link no reader can read is not a read that failed: it is counted once, when it is first written
+  // (`scrape_unreadable_<platform>`), and not under `scrape_error_<platform>` every hour it is due again.
+  for (const { platform } of unreadable) tally(platform);
+  for (const { club, platform } of unreadable) if (club.prev?.error !== UNREADABLE) await bumpMetric(db, scrapeCounter("unreadable", platform), 1, day);
 
   for (const { lane } of lanes) {
     const s = states.find((x) => x.platform === lane.platform)!;
@@ -698,7 +703,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     if (written && availability.error) run.failed.push({ slug: club.slug, platform, error: availability.error, why: availability.why ?? null });
   }
   for (const { club, platform } of unreadable) {
-    const availability = failedCache(platform, now, "unreadable link", zoneOf(club.tz));
+    const availability = failedCache(platform, now, UNREADABLE, zoneOf(club.tz));
     if (await write(club.slug, availability)) run.failed.push({ slug: club.slug, platform, error: availability.error!, why: null });
   }
   if (run.fresh) await bumpMetric(db, SCRAPE_CLUBS_FRESH, run.fresh, day);

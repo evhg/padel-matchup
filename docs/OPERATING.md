@@ -314,18 +314,19 @@ commit keeps it.
 
 **The counters**, one a day in `metrics_daily`: `scrape_ok_<platform>`, `scrape_blocked_<platform>`,
 `scrape_changed_<platform>`, `scrape_error_<platform>`, `scrape_requests_<platform>`,
-`scrape_cut_<platform>`, `scrape_clubs_fresh`, and `cron_scrape_at` for the last run. The service board has one line for
+`scrape_cut_<platform>`, `scrape_unreadable_<platform>` (a club whose link no reader can read, counted
+once when it is first written, never as a read that failed), `scrape_clubs_fresh`, and `cron_scrape_at` for the last run. The service board has one line for
 each platform: fresh (the clubs read clean in the last hour), resting until, stopped, or off. A
 stopped platform is red, and the owner hears once a month.
 
 **When a club's read fails.** The club's cache keeps `error` as the reason and the status
 ("error", "timeout", "blocked 403"), which is what the pages and the counters read. Beside it,
 `why` holds the cause in a few safe words, built only from known parts: the reader's step ("club
-page", "availability <day>", "locations", "frame") and the error's class or HTTP status
-("availability 2026-10-10: RangeError", "club page: HTTP 500"). Anything else in the message is
-dropped, so it never holds a link, an address, a body or a token. Only the Playtomic reader names its
-steps; MATCHi and Book & Go keep a `why` only for the frame's own stops ("frame: cap", "frame:
-budget"), and their other failures show `error` alone. No page, no API shape and no list read of
+page", "availability <day>", "locations", "court-bookings <day>", "frame") and the error's class or
+HTTP status ("availability 2026-10-10: RangeError", "club page: HTTP 500", "court-bookings
+2026-10-10: TypeError ECONNRESET"). Anything else in the message is dropped, so it never holds a
+link, an address, a body or a token. Every reader names its steps in that shape: Playtomic, MATCHi
+("club page", "availability <day>") and Book & Go ("locations", "court-bookings <day>"). No page, no API shape and no list read of
 free courts shows `why`. Ask
 `select slug, availability->>'error', availability->>'why' from clubs where availability->>'error'
 is not null`. The push job's answer also lists every club the run wrote as failed (`scrape.failed`),

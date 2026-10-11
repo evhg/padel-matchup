@@ -1,5 +1,6 @@
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import type { AvailabilityAdapter, ScrapedSlot, ScrapeResult, ScrapeTarget } from "./types";
+import { errorClass } from "./errorClass";
 
 /**
  * Book & Go (bookandgo.app): the white-label booking system behind club apps that live on the club's
@@ -276,6 +277,8 @@ export function createBookandgoAdapter(opts: BookandgoOptions = {}): Availabilit
       let requests = 0;
       const fail = (reason: "changed" | "not_found" | "error", detail: string, status: number | null = null): ScrapeResult => ({ ok: false, status, reason, requests, detail });
 
+      // The step a failure names before its colon ("locations: HTTP 500"), the shape `failureWhy` keeps.
+      let step = "locations";
       const get = async (path: string): Promise<string> => {
         if (requests >= BOOKANDGO_MAX_REQUESTS) throw new Stop("error", null, "request budget spent");
         await pace();
@@ -285,22 +288,22 @@ export function createBookandgoAdapter(opts: BookandgoOptions = {}): Availabilit
         const timeout = new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
             ctrl.abort();
-            reject(new Stop("timeout", null, `no answer in ${timeoutMs} ms from ${path}`));
+            reject(new Stop("timeout", null, `${step}: TimeoutError`));
           }, timeoutMs);
         });
         const call = (async () => {
           const res = await fetchImpl(`${BOOKANDGO_API}${path}`, { headers: { "User-Agent": BOOKANDGO_USER_AGENT, Accept: "application/json" }, redirect: "follow", signal: ctrl.signal });
-          if (res.status === 401 || res.status === 403 || res.status === 429) throw new Stop("blocked", res.status, `${res.status} on ${path}`);
-          if (res.status === 404 || res.status === 410) throw new Stop("not_found", res.status, `${res.status} on ${path}`);
-          if (!res.ok) throw new Stop("error", res.status, `${res.status} on ${path}`);
+          if (res.status === 401 || res.status === 403 || res.status === 429) throw new Stop("blocked", res.status, `${step}: HTTP ${res.status}`);
+          if (res.status === 404 || res.status === 410) throw new Stop("not_found", res.status, `${step}: HTTP ${res.status}`);
+          if (!res.ok) throw new Stop("error", res.status, `${step}: HTTP ${res.status}`);
           return (await res.text()).slice(0, MAX_BYTES);
         })();
         try {
           return await Promise.race([call, timeout]);
         } catch (e) {
           if (e instanceof Stop) throw e;
-          if (ctrl.signal.aborted) throw new Stop("timeout", null, `no answer in ${timeoutMs} ms from ${path}`);
-          throw new Stop("error", null, e instanceof Error ? e.message : String(e));
+          if (ctrl.signal.aborted) throw new Stop("timeout", null, `${step}: TimeoutError`);
+          throw new Stop("error", null, `${step}: ${errorClass(e)}`);
         } finally {
           clearTimeout(timer);
           call.catch(() => undefined);
@@ -312,7 +315,7 @@ export function createBookandgoAdapter(opts: BookandgoOptions = {}): Availabilit
 
       try {
         const locations = parseBookandgoLocations(await get(`/apps/${app.app}/locations`));
-        if (!locations) return fail("changed", `app ${app.app}: the locations lack id, location_name or sports[].sport_name`);
+        if (!locations) return fail("changed", `${step}: the locations lack id, location_name or sports[].sport_name`);
         const pick = pickBookandgoLocation(locations, app, target.clubSlug);
         if (pick.kind === "not_found") return fail("not_found", pick.detail);
         // The club row's zone as the frame gives it, null included (DECIDING rule 35): never a guess.
@@ -328,9 +331,10 @@ export function createBookandgoAdapter(opts: BookandgoOptions = {}): Availabilit
         const slots: ScrapedSlot[] = [];
         for (let i = 0; i < days; i++) {
           const date = bookandgoDay(now, tz, i);
+          step = `court-bookings ${date}`;
           const q = new URLSearchParams({ sport_name: location.padel!, date });
           const parsed = parseBookandgoDay(await get(`/apps/${app.app}/court-bookings?${q}`), { locationId: location.id, date, tz, bookUrl: app.bookUrl });
-          if (!parsed) return fail("changed", `app ${app.app} ${date}: the court bookings lack duration, location.courts[].timings[] or available_time_slots`);
+          if (!parsed) return fail("changed", `${step}: the court bookings lack duration, location.courts[].timings[] or available_time_slots`);
           for (const s of parsed) {
             // Today's list still shows the hours that began; nobody can play them any more.
             if (Date.parse(s.start) < now.getTime()) continue;
@@ -344,7 +348,7 @@ export function createBookandgoAdapter(opts: BookandgoOptions = {}): Availabilit
         return { ok: true, slots, requests, tz };
       } catch (e) {
         if (e instanceof Stop) return { ok: false, status: e.status, reason: e.reason, requests, detail: e.message };
-        return fail("error", e instanceof Error ? e.message : String(e));
+        return fail("error", `${step}: ${errorClass(e)}`);
       }
     },
   };

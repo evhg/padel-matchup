@@ -233,6 +233,25 @@ describe("the slice: which clubs a run reads", () => {
     expect(run.failed).toEqual([{ slug: "app-link", platform: "playtomic", error: "unreadable link", why: null }]);
   });
 
+  it("counts a link no reader can read once, when it is first written, under its own key", async () => {
+    // Kross Padel Indoor books on a page no reader can read, so every hourly run wrote it again, and
+    // `scrape_error_<platform>` counted it each time as a read that failed. It is counted once, as
+    // `scrape_unreadable_<platform>`, and a read that really fails still counts as an error.
+    await club("app-link", { bookingUrl: "https://playtomic.com/", bookingPlatform: "playtomic" });
+    const strict = { ...reader(), matches: (url: string) => /^https:\/\/playtomic\.io\/[a-z-]+$/.test(url) };
+    for (const t of [0, 61 * 60_000, 122 * 60_000]) {
+      const w = world();
+      const run = await runScrape(db, at(t), { adapters: [strict], fetchImpl: w.fetchImpl, clock: w.clock });
+      expect(run.failed.map((f) => f.slug)).toEqual(["app-link"]);
+    }
+    expect(await metric("scrape_unreadable_playtomic")).toBe(1);
+    expect(await metric("scrape_error_playtomic")).toBe(0);
+    await club("broken", { availabilityAt: at(-DAY) });
+    const w = world(() => ({ status: 500 }));
+    await runScrape(db, at(123 * 60_000), { adapters: [strict], fetchImpl: w.fetchImpl, clock: w.clock });
+    expect(await metric("scrape_error_playtomic")).toBe(1);
+  });
+
   it("reads the directory's clubs as the import writes them: the booking link on the platform", async () => {
     // The import's own statement: `source = 'directory'`, and the booking link and platform the file
     // names (migration 0097 wrote the same to production's rows). Blue Tree books on MATCHi and has no website.
@@ -784,7 +803,7 @@ describe("a clock with fractions, as performance.now() gives it", () => {
 describe("a failed read says why, in a few words that are safe to keep", () => {
   it("keeps a known step and the error's class or status, and drops everything else", () => {
     // What each reader gives, kept as it is.
-    for (const kept of ["availability 2026-10-10: RangeError", "club page: HTTP 500", "club page: TypeError ECONNRESET", "club page: TypeError UND_ERR_CONNECT_TIMEOUT", "locations: HTTP 503", "frame: cap", "frame: budget", "club page: TimeoutError"]) expect(failureWhy(kept)).toBe(kept);
+    for (const kept of ["availability 2026-10-10: RangeError", "court-bookings 2026-10-10: TypeError", "club page: HTTP 500", "club page: TypeError ECONNRESET", "club page: TypeError UND_ERR_CONNECT_TIMEOUT", "locations: HTTP 503", "frame: cap", "frame: budget", "club page: TimeoutError"]) expect(failureWhy(kept)).toBe(kept);
     // A word of a message is not a class: Playtomic's "no answer in 10 s" once kept "no".
     expect(failureWhy("club page: no answer in 10 s")).toBeNull();
     expect(failureWhy("availability 2026-10-10: no answer in 10 s")).toBeNull();
