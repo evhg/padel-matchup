@@ -165,7 +165,7 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
   tags it `?s=wa` (`tagForWhatsapp` in `src/lib/share.ts`, and "Tell the group"); the match page
   keeps the tag for a day in the `ks_src` cookie. The other tags the app writes count the same way
-  (`ig`, `poster`, `card`, `moment`, `series`, `gen`, `tg`, `story`: `MATCH_SOURCES` in
+  (`ig`, `poster`, `card`, `moment`, `series`, `gen`, `tg`, `story`, `link`: `MATCH_SOURCES` in
   `src/lib/source.ts`); any other word somebody typed after `?s=` counts as `other`, so no counter
   ever carries a word a person chose (a name, say), for `join_src_` as for `newid_src_`. The
   WhatsApp bot counts `newid_name_here` too, for a new number whose profile name is already in the
@@ -192,6 +192,32 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.
+
+## From a shared link to a seat
+
+Each step is a day counter in `metrics_daily`, keyed by the tag the link carries, so one query reads
+the whole path. No step needs a migration, and no counter holds a name, an address or a token.
+
+1. **The share.** Each share button on a match tags the match link it sends: WhatsApp `?s=wa` (and
+   "Tell the group"), the Telegram share `?s=tg`, the "Copy link" button `?s=link`
+   (`tagMatchLinks` and `tagMatchUrl` in `src/lib/share.ts`). A tap on a share button is not
+   counted, because it leaves the app; the tag travels with the link instead.
+2. **The view.** `view_src_<tag>`: the match page opened by a person with no seat on it and who is not
+   the organiser, under the link's tag (`view_src_none` with no tag, `view_src_other` for a word
+   the app did not write). Link previews and crawlers do not count (`viewCounter` in
+   `src/lib/source.ts`). A reload counts again, so read it as views, not people.
+3. **The seat.** `join_src_<tag>`: a join from a browser that came through that tag in the last day
+   (the `ks_src` cookie).
+4. **The new record.** `newid_src_<tag>`: of those, a record made from a name alone.
+
+Read it for the last four weeks: `select key, sum(value) from metrics_daily where day >=
+current_date - 28 and (key like 'view_src_%' or key like 'join_src_%' or key like 'newid_src_%')
+group by 1 order by 1`. Then compare the steps for one tag. `join_src_wa` divided by
+`view_src_wa` is how many WhatsApp visitors take a seat. A high `newid_src_wa` against
+`join_src_wa` says those visitors are mostly new records (the jar above). `view_src_none` is
+everybody who came without a tag: a link typed by hand, an old untagged link, or a search.
+Counters start on the day this shipped (11 October 2026); `view_src_*`, `?s=tg` and `?s=link` have
+no history before it.
 
 ## The research desk (Tavily)
 

@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
-import { COACH_DOORS } from "@/lib/source";
+import { COACH_DOORS, MATCH_SOURCES } from "@/lib/source";
 import type { Db } from "@/db";
 import { activity, answers, coaches, discordChannels, events, listenItems, players, scores, slots, telegramChats, type Answer, type ListenItem } from "@/db/schema";
 import { listErrors, reportError } from "@/lib/alerts";
@@ -209,9 +209,10 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const [channels] = await db.select({ n: sql<number>`count(*)` }).from(discordChannels).where(isNull(discordChannels.leftAt));
   const [newCoaches] = await db.select({ n: sql<number>`count(*)` }).from(coaches).where(gte(coaches.createdAt, since));
   const played = await weekOfMatches(db, since, now);
-  const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`(${metricsDaily.key} in ('pageviews','card_views') or ${metricsDaily.key} like 'join_src_%' or ${metricsDaily.key} like 'coach_src_%')`)).groupBy(metricsDaily.key);
+  const funnelRows = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`(${metricsDaily.key} in ('pageviews','card_views') or ${metricsDaily.key} like 'join_src_%' or ${metricsDaily.key} like 'view_src_%' or ${metricsDaily.key} like 'coach_src_%')`)).groupBy(metricsDaily.key);
   const funnel = Object.fromEntries(funnelRows.map((r) => [r.key, Number(r.total)]));
   const bySource = funnelRows.filter((r) => r.key.startsWith("join_src_")).map((r) => `${r.key.slice("join_src_".length)} ${Number(r.total)}`).sort();
+  const viewsBySource = funnelRows.filter((r) => r.key.startsWith("view_src_")).map((r) => `${r.key.slice("view_src_".length)} ${Number(r.total)}`).sort();
   const coachDoors = funnelRows.filter((r) => r.key.startsWith("coach_src_")).map((r) => `${r.key.slice("coach_src_".length)} ${Number(r.total)}`).sort();
   // A club that opened this month reaches the app before it reaches the web: somebody types its name
   // into a match. One line so a real club can be listed the week it starts being played at.
@@ -223,7 +224,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     "<b>Kicksmash, this week</b>",
     `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,
     `Funnel: visitors ${funnel.pageviews ?? 0} · matches ${played.matches} → filled ${played.filled} → scores ${played.scored} · card views ${funnel.card_views ?? 0}`,
-    `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : "none this week (ig, poster, card, moment, podium are the tags)"}`,
+    `Joins by tagged link: ${bySource.length ? bySource.join(" · ") : `none this week (${MATCH_SOURCES.join(", ")} are the tags)`}${viewsBySource.length ? ` · views without a seat: ${viewsBySource.join(" · ")}` : ""}`,
     `Matches created: ${Number(matches.n)} · Telegram chats with the bot: ${Number(chats.n)} · Discord channels: ${Number(channels.n)} · clubs claimed: ${newClubs}`,
     unlisted.length ? `Played at, not listed: ${unlisted.map((v) => `${esc(v.name)} (${v.matches})`).join(" · ")} — add a club to data/clubs.json, or wait for it to claim its page` : "Played at, not listed: nothing this week; every court people used is a club we know.",
     `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : `none tagged (${COACH_DOORS.join(", ")})`}`,

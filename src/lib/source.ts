@@ -18,10 +18,10 @@ export function cleanSource(v: string | string[] | null | undefined): string | n
 
 /**
  * The tags the app itself puts on a link to a match: WhatsApp's share (`wa`), an Instagram story
- * (`ig`), the printed poster, the result card, a moment, the series page, the americano generator, a
- * Telegram card and the story picture.
+ * (`ig`), the printed poster, the result card, a moment, the series page, the americano generator, the
+ * Telegram share (`tg`), the story picture and the copied link (`link`).
  */
-export const MATCH_SOURCES = ["wa", "ig", "poster", "card", "moment", "series", "gen", "tg", "story"] as const;
+export const MATCH_SOURCES = ["wa", "ig", "poster", "card", "moment", "series", "gen", "tg", "story", "link"] as const;
 
 /**
  * The tag as a counter may carry it (`join_src_<tag>`, `newid_src_<tag>`): one the app writes, else
@@ -32,6 +32,19 @@ export function countedSource(v: string | string[] | null | undefined): string |
   const s = cleanSource(v);
   if (!s) return null;
   return (MATCH_SOURCES as readonly string[]).includes(s) ? s : "other";
+}
+
+/** A link preview, a crawler or a monitor: not a person, so no page view of theirs is counted. */
+export const isCrawler = (ua: string) => /bot|crawl|spider|slurp|facebookexternalhit|preview|uptime|monitor|curl|python-requests|Go-http-client/i.test(ua);
+
+/**
+ * The counter for a view of a match page, the step between a shared link and a seat: a person with no
+ * seat on it, under the link's tag (`view_src_<tag>`, `view_src_none` with no tag). Read beside
+ * `join_src_<tag>` and `newid_src_<tag>` (docs/OPERATING.md, "From a shared link to a seat").
+ */
+export function viewCounter(o: { source: string | null; seated: boolean; ua: string }): string | null {
+  if (o.seated || isCrawler(o.ua)) return null;
+  return `view_src_${countedSource(o.source) ?? "none"}`;
 }
 
 /** The link an organiser pastes into an Instagram link sticker. */

@@ -4,7 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
-import { cleanSource, taggedUrl } from "@/lib/source";
+import { cleanSource, taggedUrl, viewCounter } from "@/lib/source";
+import { headers } from "next/headers";
+import { later } from "@/lib/alerts";
+import { bumpMetric } from "@/lib/domain/metrics";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
 import { AutoRefresh } from "@/components/tournament/AutoRefresh";
@@ -143,6 +146,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const isMember = Boolean(mySlot && mySlot.position <= ev.capacity);
   const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
+  // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
+  // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response.
+  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: (await headers()).get("user-agent") ?? "" });
+  if (viewKey) await later(() => bumpMetric(db, viewKey));
 
   // Level range: players outside it ask to join; the organizer decides.
   const levelRange = { min: ev.levelMin, max: ev.levelMax };

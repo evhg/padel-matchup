@@ -128,6 +128,8 @@ try {
   check("share page renders QR", (await a.locator("svg path").count()) > 0, code);
   check("share page says match is live + Go to match", (await a.getByText("Your match is live").count()) > 0 && (await a.getByRole("link", { name: /Go to match/ }).count()) > 0);
   check("share text includes court", (await a.locator('a[href^="https://wa.me"]').first().getAttribute("href")).includes(encodeURIComponent("Court 3")));
+  // Each share button tags the match link it sends, so the step from a shared link to a seat is counted (docs/OPERATING.md).
+  check("the Telegram share tags its link ?s=tg", new URL(await a.locator('a[href^="https://t.me/share"]').first().getAttribute("href")).searchParams.get("url").endsWith(`/${code}?s=tg`), code);
 
   await a.goto(`${BASE}/${code}`);
   await shot(a, "07-event-creator");

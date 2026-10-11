@@ -8,7 +8,8 @@ export function whatsappShareUrl(text: string, phone?: string | null): string {
 }
 
 /**
- * The text a WhatsApp button carries, with its match link tagged `?s=wa`.
+ * The text a share button carries, with its match link tagged: `?s=wa` for WhatsApp, `?s=tg` for the
+ * Telegram share, and the copied link `?s=link` (`tagMatchUrl`).
  *
  * The match page reads the tag into the source cookie (`ks_src`, src/lib/source.ts), so a join and a
  * new record that start from a tap in a WhatsApp group count as such (`join_src_wa`, `newid_src_wa`):
@@ -20,10 +21,15 @@ export function whatsappShareUrl(text: string, phone?: string | null): string {
 const MATCH_LINK = /^https?:\/\/[^/?#\s]+\/[A-Za-z0-9]{4}$/;
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export function tagForWhatsapp(text: string, url: string): string {
+export function tagMatchLinks(text: string, url: string, tag: string): string {
   if (!MATCH_LINK.test(url)) return text;
-  return text.replace(new RegExp(`${escapeRe(url)}(?![\\w/?#])`, "g"), taggedUrl(url, "wa"));
+  return text.replace(new RegExp(`${escapeRe(url)}(?![\\w/?#])`, "g"), taggedUrl(url, tag));
 }
+
+export const tagForWhatsapp = (text: string, url: string) => tagMatchLinks(text, url, "wa");
+
+/** The link itself, tagged when it is a bare match link (the Telegram share's `url`, the copied link); any other link as it is. */
+export const tagMatchUrl = (url: string, tag: string) => (MATCH_LINK.test(url) ? taggedUrl(url, tag) : url);
 
 export function telegramShareUrl(url: string, text: string): string {
   return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;

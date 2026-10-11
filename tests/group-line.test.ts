@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
 import { formatWeekdayTime } from "@/lib/dates";
-import { tagForWhatsapp, whatsappShareUrl } from "@/lib/share";
+import { tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { countedSource, isCrawler, viewCounter } from "@/lib/source";
 
 /**
  * The owner, 10 October 2026: "you have to leave the chat group". No link keeps a player inside a
@@ -81,5 +82,36 @@ describe("a WhatsApp link says it is one", () => {
     expect(tagForWhatsapp(invites, "https://kicksma.sh/7KQ2")).toBe(invites);
     expect(tagForWhatsapp("x https://kicksma.sh/7KQ2/card?s=card", "https://kicksma.sh/7KQ2/card?s=card")).toBe("x https://kicksma.sh/7KQ2/card?s=card");
     expect(tagForWhatsapp("Book me: https://kicksma.sh/c/olga", "https://kicksma.sh/c/olga")).toBe("Book me: https://kicksma.sh/c/olga");
+  });
+});
+
+// Each step from a shared link to a seat is counted (docs/OPERATING.md, "From a shared link to a seat"):
+// the share button tags the link, the match page counts a view by somebody with no seat under that tag,
+// and the join and the new record count under the same tag.
+describe("every share button says where the link went", () => {
+  it("tags the Telegram share and the copied link as the WhatsApp share is tagged", () => {
+    const url = "https://kicksma.sh/7KQ2";
+    const tg = telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(`Padel Sat: ${url}`, url, "tg"));
+    expect(new URL(tg).searchParams.get("url")).toBe("https://kicksma.sh/7KQ2?s=tg");
+    expect(new URL(tg).searchParams.get("text")).toBe("Padel Sat: https://kicksma.sh/7KQ2?s=tg");
+    expect(tagMatchUrl(url, "link")).toBe("https://kicksma.sh/7KQ2?s=link");
+    // Only a bare match link: a coach's student link or an invitation is copied as it is.
+    expect(tagMatchUrl("https://kicksma.sh/c/olga", "link")).toBe("https://kicksma.sh/c/olga");
+    expect(tagMatchUrl("https://kicksma.sh/7KQ2/i/abc123", "link")).toBe("https://kicksma.sh/7KQ2/i/abc123");
+    expect(countedSource("tg")).toBe("tg");
+    expect(countedSource("link")).toBe("link");
+  });
+
+  it("counts a match page view by a visitor with no seat, under the link's tag", () => {
+    const phone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
+    expect(viewCounter({ source: "wa", seated: false, ua: phone })).toBe("view_src_wa");
+    expect(viewCounter({ source: "link", seated: false, ua: phone })).toBe("view_src_link");
+    expect(viewCounter({ source: null, seated: false, ua: phone })).toBe("view_src_none");
+    expect(viewCounter({ source: "my-cousin", seated: false, ua: phone })).toBe("view_src_other");
+    // A player already in, or the organiser, is not a step of the funnel; a link preview is not a visitor.
+    expect(viewCounter({ source: "wa", seated: true, ua: phone })).toBeNull();
+    expect(viewCounter({ source: "wa", seated: false, ua: "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" })).toBeNull();
+    expect(viewCounter({ source: "tg", seated: false, ua: "TelegramBot (like TwitterBot)" })).toBeNull();
+    expect(isCrawler("")).toBe(false);
   });
 });

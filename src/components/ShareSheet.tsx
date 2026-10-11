@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { tagForWhatsapp, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
 
 export function CopyButton({ value, label, className = "btn-ghost", copiedLabel }: { value: string; label: string; className?: string; copiedLabel?: string }) {
   const t = useTranslations();
@@ -54,14 +54,14 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
   };
   return (
     <div className={`grid gap-2 ${size === "sm" ? "grid-cols-3" : "grid-cols-2"}`}>
-      {/* A match link sent by WhatsApp says so (`?s=wa`), so what starts from a tap in a group is counted as such. */}
+      {/* A match link says which button sent it (`?s=wa`, `?s=tg`, `?s=link`), so what starts from a tap in a group is counted as such. */}
       <a href={whatsappShareUrl(tagForWhatsapp(text, url), phone)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#25D366] text-white hover:brightness-95`}>
         <WhatsAppIcon /> {t("share.whatsapp")}
       </a>
-      <a href={telegramShareUrl(url, text)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
+      <a href={telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(text, url, "tg"))} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
         <TelegramIcon /> {t("share.telegram")}
       </a>
-      <CopyButton value={url} label={t("share.copyLink")} className={`btn-ghost${sm}${size === "sm" ? "" : " col-span-2"}`} />
+      <CopyButton value={tagMatchUrl(url, "link")} label={t("share.copyLink")} className={`btn-ghost${sm}${size === "sm" ? "" : " col-span-2"}`} />
       {canShare && size === "lg" && (
         <button type="button" className="btn-ghost col-span-2" onClick={shareNative} data-testid="native-share">
           {imageUrl ? t("share.nativeShareImage") : t("share.nativeShare")}
