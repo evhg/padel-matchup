@@ -6,7 +6,8 @@ import { columnsButCache, type PickableClub } from "./clubColumns";
 import { coachesAtClub } from "./coaching";
 import { DomainError } from "./errors";
 import { joinGroup } from "./groups";
-import { admission, clampLevel, normalizeLevel } from "./levels";
+import { clampLevel, normalizeLevel } from "./levels";
+import { admissionAt } from "./playAgain";
 import { decideJoinRequest } from "./requests";
 import type { JoinOutcome } from "./slots";
 
@@ -157,7 +158,8 @@ export type Admitted = { event: Event; join: JoinOutcome };
 /**
  * After a confirmation: every open ask to join a coming verified-only event
  * that the confirmed level now fits is approved, as if the organizer had
- * tapped. Full events keep the ask pending (the organizer still decides).
+ * tapped; for a past partner of the organiser, any confirmed level fits
+ * (`admissionAt`). Full events keep the ask pending (the organizer still decides).
  */
 export async function admitConfirmed(db: Db, player: Player, byPlayerId: string | null, now = new Date()): Promise<Admitted[]> {
   const rows = await db
@@ -168,7 +170,9 @@ export async function admitConfirmed(db: Db, player: Player, byPlayerId: string 
     .limit(20);
   const out: Admitted[] = [];
   for (const { request, event } of rows) {
-    if (admission(event, player) !== "ok") continue;
+    // The same door as the join (`admissionAt`): a past partner of the organiser skips the range and
+    // still needs the confirmation, which this is. One read only for a player the range would hold.
+    if ((await admissionAt(db, event, player, now)) !== "ok") continue;
     try {
       const res = await decideJoinRequest(db, { eventId: event.id, requestId: request.id, approve: true, actorPlayerId: byPlayerId, now });
       if (res.join) {

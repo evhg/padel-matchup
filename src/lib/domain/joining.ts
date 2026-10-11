@@ -1,10 +1,11 @@
 import type { Db } from "@/db";
-import type { Player } from "@/db/schema";
+import type { Event, Player } from "@/db/schema";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
 import { joinGroup } from "./groups";
-import { admission, hasRange } from "./levels";
+import { hasRange } from "./levels";
 import { joinPair, type PairJoinOutcome } from "./pairSeats";
+import { admissionAt } from "./playAgain";
 import { createJoinRequest } from "./requests";
 import { joinEvent } from "./slots";
 
@@ -36,8 +37,9 @@ export const wasComplete = (detail: { roster: { status: string; position: number
 export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player, level: number | null, partnerName?: string | null): Promise<JoinDecision> {
   const ev = detail.event;
   // The organiser is never held to their own range: they set it, and they are already in the match.
+  // Nor is a player who already played a finished, scored match with them (DECIDING rule 37).
   if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && player.id !== ev.creatorPlayerId) {
-    const fit = admission(ev, { level, levelVerifiedLevel: player.levelVerifiedLevel });
+    const fit = await admissionAt(db, ev, { id: player.id, level, levelVerifiedLevel: player.levelVerifiedLevel });
     if (fit === "unknown") return { kind: "level_required" };
     if (fit !== "ok") {
       // Already on the roster or the waitlist: asking again would open a request for a spot they hold.
@@ -56,4 +58,23 @@ export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player
     await joinGroup(db, ev.groupId, player.id, "match").catch(() => undefined);
   }
   return { kind: "joined", result };
+}
+
+/**
+ * "Be their partner" on a fixed-pairs night: the range check before the place beside a single. A ranged
+ * night holds a newcomer to the range the way the Join button does, with the same waiver for a player
+ * who already played a finished, scored match with the organiser (`admissionAt`). The organiser, and
+ * somebody already in (the organiser let them in), pair without a second check.
+ */
+export async function partnerAdmission(
+  db: Db,
+  ev: Pick<Event, "levelMin" | "levelMax" | "levelVerifiedOnly" | "creatorPlayerId">,
+  me: Pick<Player, "id" | "level" | "levelVerifiedLevel">,
+  seated: boolean,
+  now = new Date(),
+): Promise<"ok" | "level_required" | "forbidden"> {
+  if (!hasRange({ min: ev.levelMin, max: ev.levelMax }) || me.id === ev.creatorPlayerId || seated) return "ok";
+  const fit = await admissionAt(db, ev, me, now);
+  if (fit === "unknown") return "level_required";
+  return fit === "ok" ? "ok" : "forbidden";
 }

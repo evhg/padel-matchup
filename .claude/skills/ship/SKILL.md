@@ -213,6 +213,53 @@ learning can be a test, a gate step or a script, make it one and put the story i
   crew's" ordered by `listening_since`, which `freezeClock` gave both groups to the millisecond, and two
   syncs "at once" never overlapped because the fake read the card after the first one wrote. Set the
   timestamps apart by hand, in both directions, and make the fake read, then wait, then return.
+- **A lock is proven by a transaction the test holds open, on real Postgres.** "Two taps at once" with
+  `Promise.all` passed with the `for update` removed, three runs out of three on Postgres 16 (11 October
+  2026): the two claims never overlapped. The test that caught it opens the first tap's transaction
+  itself, locks and writes, starts the second claim inside it, waits, then commits; without the lock
+  the second claim reads nothing and sends again (`tests/play-again.test.ts`, "a second tap wait").
+  PGlite has one connection and cannot show the race, so the test skips itself there
+  (`it.skipIf(!process.env.TEST_DATABASE_URL)`): a pass on PGlite would read as proof it is not.
+- **A rule the screen holds is not a rule.** "Play again" showed only under a result, and the server
+  action checked only for a seat, so a stranger who took a free seat in a coming match could call it
+  by its action id and message the whole line-up, and spend the match's one round before the real
+  game (11 October 2026). A server action is a public endpoint: whatever the screen waits for (a
+  score, the end, the organiser) the write checks too, in the domain, and a test calls it as the
+  stranger would.
+- **A seat is not a game played.** The "played" guard on "Play again" counted any seat in a started,
+  scored match, and joining stays open until the booked length ends while any seated player may type
+  the score. So a stranger could join five minutes in, type 6-0, send the round under their own name and
+  skip the organiser's level range ever after (11 October 2026). "Who played" is a seat taken at or
+  before the start (`slots.joined_at <= events.starts_at`); production had no played seat taken later,
+  so the rule cost nobody. When a check means "was there", ask what the door still lets in after it.
+- **A rule on a column holds only while every door that writes the column holds it too.** "Seated at
+  or before the start" compared `slots.joined_at` with `events.starts_at`, and any seated player could
+  still change `starts_at` after the start. So a latecomer moved the start past their own seat and
+  counted as having played (11 October 2026). When a guard compares two columns, list every write to
+  each of them: `updateEvent` now lets only the organiser move a start already gone.
+- **The organiser is a proof, not a player id.** That start guard compared `actorPlayerId` with the
+  creator, and the manage link proves the organiser with no player at all (a second browser, a
+  co-organiser), so the organiser could no longer correct a started match's start, and the page told
+  them their "Play again" tap sent nothing while it did (11 October 2026). A rule that means "the
+  organiser" takes `getViewer`'s `isCreator` (`asOrganiser`), and its test calls it with a null player.
+- **A form that sends back what it shows sends a rounded value.** The edit form showed the start in
+  minutes and sent it back on every save, so a note-only edit of a start with seconds, or one in an hour
+  the clocks repeat, moved the start and met the guard above. Send a field only when it changed
+  (`startToSend`, as the capacity already did).
+- **A form's state outlives the page under it.** `useState(initial)` reads `initial` once, and the page
+  renders again under the form (a live night every 20 seconds, the page after the player's own save).
+  So after the organiser corrected a started match's start, a seated player's form still held the old
+  start, "changed" against the new one, sent it, met the guard, and could save no note behind fields
+  they could not change (11 October 2026). A field the viewer may not change shows and sends the page's
+  value, not the form's (`shownStart`).
+- **A look-then-make with no unique index is a race, and the fix is a lock on the thing, not the row.**
+  "One game per crew hour" read "no game", then made one; two taps, or a tap and the hourly job, each
+  read "no game". No row exists to lock yet, and a called-off game keeps its row, so no unique index
+  fits. `lockCrewHour` takes `pg_advisory_xact_lock(hashtext(text))` on the group and the hour, as text
+  (rule 1), around the look and the write; a reader that may still meet two rows orders by `created_at`.
+- **`scripts/i18n.mjs` once put a key inside a nested block.** It anchored on the last key line in the
+  section, and when the section ended with a block (`levelCheck.notify`), that line was inside it. The
+  JSON still parsed. It now anchors on the section's own keys and reads back where the key landed.
 - **A reader of free text falls through to silence, never to "keep the rest".** The crew group's
   "who's in …?" kept whatever words were left as the match's venue, so "who's in for beers at 8?" made
   a match at "for beers" and showed it on the card and the crew page. When a parser meets chat, what it
@@ -227,6 +274,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
   that the input was visible. Neither ever typed an address and pressed the button. Every door gets one
   check that goes all the way through and waits for the answer the far side sends — an unknown address
   answering "We don't know that email yet" proves the handler ran; a visible input proves nothing.
+- **A place in `page.content()` is not a place on the screen.** "Upcoming comes before the personal link"
+  compared two `indexOf`s in the page's source and went red in CI with the screen right (11 October
+  2026). The source also holds React's inline payload, whose messages carry the same words. On a busy
+  machine hydration can start while that payload is still arriving; React then replays the suspended
+  `<main>`, meets its own `<h1>`, throws error 418 and renders the page again, after the scripts. Main
+  does it too. Read order from the elements (`headingOrder` in `e2e/core.mjs`). To see the 418 locally:
+  the CI browser (`playwright install chromium-headless-shell` into a scratch `PLAYWRIGHT_BROWSERS_PATH`)
+  and four busy loops on the CPU, then load a signed-in `/me` in fresh contexts: 1 to 2 in 50.
 - **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one
   and postgres-js throws `Received an instance of Date`, so the gate goes green and CI's real-Postgres
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use

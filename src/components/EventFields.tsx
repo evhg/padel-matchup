@@ -107,6 +107,7 @@ export function EventFields({
   showType = true,
   patterns = [],
   hasLevel = true,
+  startLocked = false,
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
@@ -115,6 +116,8 @@ export function EventFields({
   patterns?: TimePatternInput[];
   /** False when the organizer has no level yet: a range then also asks for theirs. */
   hasLevel?: boolean;
+  /** The match has started and this viewer is not the organiser (`mayMoveStart`): the day, the time and the zone show, and do not change. */
+  startLocked?: boolean;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -247,7 +250,7 @@ export function EventFields({
         </div>
       )}
 
-      {timeChips.length > 0 && (
+      {!startLocked && timeChips.length > 0 && (
         <div data-testid={freeCount > 0 ? "free-times" : undefined}>
           <div className="label">{freeCount === 0 ? t("create.chipsLabel") : freeCount === timeChips.length ? t("create.freeLabel", { club: values.venueName.trim() }) : t("create.freeAndUsualLabel", { club: values.venueName.trim() })}</div>
           <div className="flex flex-wrap gap-2">
@@ -266,16 +269,18 @@ export function EventFields({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{t("create.date")}</label>
-          <input className="input" type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} required />
+          <input className="input" type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} disabled={startLocked} required />
         </div>
         <div>
           <label className="label">{t("create.time")}</label>
-          <input className="input" type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} required />
+          <input className="input" type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} disabled={startLocked} required />
         </div>
       </div>
       <div className="-mt-3 text-sm text-muted">
         {t("create.timezone")}:{" "}
-        {tzOpen ? (
+        {startLocked ? (
+          <span>{values.tz.replace(/_/g, " ")}</span>
+        ) : tzOpen ? (
           <select className="input mt-1" value={values.tz} onChange={(e) => onChange({ tz: e.target.value })} data-testid="tz-select">
             <optgroup label={t("create.tzNearby")}>
               {nearby.map((z) => (
@@ -297,8 +302,13 @@ export function EventFields({
             {values.tz.replace(/_/g, " ")}
           </button>
         )}
+        {startLocked && (
+          <p className="mt-1 font-semibold" data-testid="start-locked">
+            {t("event.startLocked")}
+          </p>
+        )}
         {/* Only where the club's feed speaks for the time picked; past it, nothing rather than a guess. */}
-        {freeThen && (
+        {!startLocked && freeThen && (
           <p className={`mt-1 ${freeThen.key.startsWith("create.free") ? "font-semibold text-ok" : ""}`} data-testid="free-then">
             {t(freeThen.key, freeThen.values)}
           </p>

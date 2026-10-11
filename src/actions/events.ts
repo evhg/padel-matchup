@@ -9,7 +9,7 @@ import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { setBanter } from "@/lib/domain/banter";
-import { cancelEvent, createEvent, duplicateEvent, isSeated, updateEvent } from "@/lib/domain/events";
+import { cancelEvent, createEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
@@ -18,7 +18,8 @@ import { getPlayer, normalizeEmail } from "@/lib/domain/players";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
-import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayAgain, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { nextGameFor, playAgainStart } from "@/lib/domain/playAgain";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -171,28 +172,48 @@ const updateSchema = z.object({
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
-/** "Play again": any participant or the organizer clones this event one week later and becomes its organizer. */
-export async function duplicateEventAction(code: string): Promise<ActionResult<{ code: string }>> {
+const playAgainSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).nullable().optional();
+
+/**
+ * "Play again": any participant or the organizer clones this event on the day and at the time they
+ * picked (a week on when they did not) and becomes its organizer. Each player of this match then hears
+ * once, "Are you in?" (DECIDING rule 37), after the response and once per old match, however often anybody
+ * taps, and only once the match was played. When a game is already there (`existingNextGame`: the one
+ * the round announced, or the crew's own game at that hour, which the weekly slot made), the tap lands
+ * on it instead of making a second one beside it, and the round, if still unsent, announces that game.
+ */
+export async function duplicateEventAction(code: string, pick?: { date: string; time: string } | null): Promise<ActionResult<{ code: string }>> {
   let newCode: string | null = null;
+  let sameCode: string | null = null;
   const res = await runA(async () => {
+    const when = playAgainSchema.parse(pick);
     const { db, detail } = await loadEvent(code);
     const viewer = await getViewer(db, detail);
     const isParticipant = isSeated({ roster: detail.roster }, viewer.player?.id);
     if (!viewer.isCreator && !isParticipant) throw new ActionFailure("forbidden");
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
-    const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
+    const now = new Date();
+    const startsAt = playAgainStart(detail.event, when, now);
+    const organizer = viewer.player ?? (await getPlayer(db, creatorId));
+    // One game per crew hour: the look and the write hold the hour (`nextGameFor`, `lockCrewHour`).
+    const { event: ev, made } = await nextGameFor(db, detail.event, { creatorPlayerId: creatorId, startsAt, now });
+    if (!made) {
+      sameCode = ev.code;
+      // The round goes once per old match: a game the round already announced sends nothing here.
+      if (organizer) after(() => notifyPlayAgain(db, detail.event, ev, organizer).then(() => undefined).catch((e) => console.warn("[play again] the round failed", code, e)));
+      return { code: ev.code };
+    }
     const { joinEvent } = await import("@/lib/domain/slots");
     const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
-    if (joined?.outcome === "joined") {
-      const organizer = viewer.player ?? (await getPlayer(db, creatorId));
-      if (organizer) after(() => sendCalendarInvite(db, ev, organizer));
-    }
+    if (joined?.outcome === "joined" && organizer) after(() => sendCalendarInvite(db, ev, organizer));
     after(async () => {
       await emitMatchEvent(db, "match.created", ev.code, { playAgainOf: code });
+      if (organizer) await notifyPlayAgain(db, detail.event, ev, organizer).catch((e) => console.warn("[play again] the round failed", code, e));
     });
     newCode = ev.code;
     return { code: ev.code };
   });
+  if (res.ok && sameCode) redirect(`/${sameCode}`);
   if (res.ok && newCode) redirect(`/${newCode}/share`);
   return res;
 }
@@ -203,6 +224,8 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
     const { db, detail, viewer } = await requireMatchEditor(code);
     const tz = input.tz ?? detail.event.tz;
     const startsAt = input.date && input.time ? zonedTimeToUtc(input.date, input.time, tz) : undefined;
+    // The organiser by the session or by the manage link (a second browser, a co-organiser) moves a start
+    // already gone; a seated player does not (`mayMoveStart`).
     const result = await updateEvent(db, detail.event.id, viewer.player?.id ?? null, {
       title: input.title,
       startsAt,
@@ -223,7 +246,7 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       bookingUrl: input.bookingUrl,
       cost: input.cost,
       payNote: input.payNote,
-    });
+    }, new Date(), { asOrganiser: viewer.isCreator });
     if (result.calendarChanged) after(() => notifyEventUpdated(db, result.event));
     after(async () => {
       await emitMatchEvent(db, "match.updated", code, { calendarChanged: result.calendarChanged });

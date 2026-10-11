@@ -28,8 +28,7 @@ import {
 import { joinGroup } from "@/lib/domain/groups";
 import { setCourtBooked } from "@/lib/domain/courtBooked";
 import { formatLevel } from "@/lib/domain/levels";
-import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
-import { admission, hasRange } from "@/lib/domain/levels";
+import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { setPlayerLevel } from "@/lib/domain/rating";
@@ -97,11 +96,8 @@ export async function bePartnerAction(code: string, slotId: string, name?: strin
     const ev = detail.event;
     // Somebody already in (the organiser let them in) pairs without a second check of the range.
     const seated = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
-    if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && me.id !== ev.creatorPlayerId && !seated) {
-      const fit = admission(ev, me);
-      if (fit === "unknown") throw new ActionFailure("level_required");
-      if (fit !== "ok") throw new ActionFailure("forbidden");
-    }
+    const gate = await partnerAdmission(db, ev, me, seated);
+    if (gate !== "ok") throw new ActionFailure(gate);
     const res = await bePartner(db, { eventId: ev.id, playerId: me.id, slotId });
     if (res.joined && ev.groupId) await joinGroup(db, ev.groupId, me.id, "match").catch(() => undefined);
     after(async () => {

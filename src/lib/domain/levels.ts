@@ -238,3 +238,41 @@ export function admission(ev: { levelMin: number | null; levelMax: number | null
   const verified = Boolean(p) && isLevelVerified({ level: p!.level ?? null, levelVerifiedLevel: p!.levelVerifiedLevel ?? null }) && levelFit(r, p!.levelVerifiedLevel) === "ok";
   return verified ? "ok" : "unverified";
 }
+
+/** The answers a level range gives a declared level outside it: what a past game with the organiser may waive. */
+export const rangeHolds = (fit: Admission): boolean => fit === "below" || fit === "above";
+
+/**
+ * The owner's decision of 11 October 2026: "A player who already sat in a finished, scored match with
+ * the organiser skips that organiser's level-range approval." The organiser saw them play, so the range
+ * (below, above) lets them in. Only the range: a confirmed-levels-only match still takes a confirmed
+ * level (the tick still holds), and a missing level is still asked for. The read of who played with
+ * whom is `playedWithOrganiser` in `playAgain.ts`; this is the rule.
+ */
+export function waivedByPlay(
+  ev: { levelMin: number | null; levelMax: number | null; levelVerifiedOnly?: boolean | null },
+  p: { level: number | null | undefined; levelVerifiedLevel?: number | null },
+  playedWithOrganiser: boolean,
+): Admission {
+  const fit = admission(ev, p);
+  if (!playedWithOrganiser || !rangeHolds(fit)) return fit;
+  if (!ev.levelVerifiedOnly) return "ok";
+  return isLevelVerified({ level: p.level ?? null, levelVerifiedLevel: p.levelVerifiedLevel ?? null }) ? "ok" : "unverified";
+}
+
+/** What a past game with the organiser did to the range for this viewer (`rangeWaiverAt` in `playAgain.ts`): nothing (null), let in, or still asked for a confirmed level. */
+export type RangeWaiver = "ok" | "unverified" | null;
+
+/**
+ * The join bar's reading of the viewer's level, the same answer the server gives. `waived` "unverified"
+ * is a past partner on a confirmed-levels-only match: the range no longer holds them, a confirmed level
+ * is what they need, so the bar asks for one (the verifier chips) and never says "outside the range".
+ */
+export function joinBarLevel(o: { range: LevelRange | null; level: number | null; verifiedOnly: boolean; verified: boolean; waived: RangeWaiver }): { needsLevel: boolean; outOfRange: boolean; unverified: boolean } {
+  const fit = levelFit(o.range, o.level);
+  return {
+    needsLevel: Boolean(o.range) && o.level == null,
+    outOfRange: !o.waived && (fit === "below" || fit === "above"),
+    unverified: o.waived === "unverified" || (!o.waived && Boolean(o.range) && o.verifiedOnly && fit === "ok" && !o.verified),
+  };
+}

@@ -909,6 +909,31 @@ Everything in this list is live. The README describes each in detail.
   booking links and platforms (Book & Go, PodPlay and The Padel Society are recognised now), which
   migration 0097 writes to the directory's own rows. Nothing books or pays: a player does, in the
   club's own app.
+- **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
+  option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
+  37). Production had one group of four or five in Phuket, every full match made by hand with the same
+  people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
+  time in one control above the button, a week on by default; everything else carries over and a
+  crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
+  game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
+  one insert for the whole round, the switch and quiet hours respected, the inbox keeps it, the card's
+  own one-tap join in Telegram and the public match link everywhere else, and one round per old match
+  (the old match's row is locked, the fact `match.play_again` is the record), and only once the match
+  was played (started, not called off, scored), and only by its organiser or a player seated from
+  before the start, so a stranger who takes a seat in a coming match, or a free seat after the start,
+  cannot send it; once a match has started, only its organiser moves its start, so a latecomer cannot
+  move it past their own seat. A second tap at the same day and time lands on the game already
+  announced, and two taps at once, or a tap beside the hourly job, make one game at a crew's hour. The email
+  carries no "get this on Telegram" line, because its ticket binds whoever taps it. "Same time next week?"
+  moved from the card page to the score panel under it, renamed "Make it weekly" and made the quieter
+  button. The two taps never make two games at one hour, in either order: "Play again" at an hour the
+  weekly slot already filled lands on the crew's game and the round announces it, and the slot skips
+  an hour "Play again" already filled and tells only the crew members who have not heard of the game.
+  Nobody hears about one game twice (`toldOfGame`). A player who already sat in a finished, scored
+  match with the organiser, from before its start (a score typed in at the court counts, and so does a
+  scored americano), skips that organiser's level range on every door (`admissionAt` in
+  `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
+  No WhatsApp template carries the message yet.
 
 ## The finish line
 

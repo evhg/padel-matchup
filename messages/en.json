@@ -296,8 +296,6 @@
     "waitlistOff": "Closes when full",
     "startsIn": "Starts {when}",
     "venueTbd": "Court TBD",
-    "playAgain": "Play again next week",
-    "playAgainHelp": "Same players' settings, one week later, fresh link.",
     "courtNumber": "Court {n}",
     "tapToReserve": "Tap to reserve for someone",
     "tapToJoin": "Tap to join",
@@ -327,7 +325,14 @@
     "courtBooked": "Court booked ✓",
     "courtBookedBy": "Court booked ✓ (by {name})",
     "courtBookedUndo": "Not booked",
-    "bookYourself": "You book and pay in the club's own app, then tell the others here."
+    "bookYourself": "You book and pay in the club's own app, then tell the others here.",
+    "playAgainShort": "Play again",
+    "playAgainWhen": "Day and time of the next game",
+    "playAgainOne": "One next game, same settings. Each player of this match gets one “Are you in?” message.",
+    "playAgainSent": "One next game, same settings. This match's players already had their one “Are you in?” message.",
+    "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
+    "playAgainPlain": "One next game, same settings.",
+    "startLocked": "Only the organiser moves the start once the match has started."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -998,7 +1003,8 @@
     "managerJoined": "{name} now helps with your bookings",
     "levelCheckAsked": "{name} asks you to confirm their level",
     "coachListed": "A coach now takes bookings in {title}: {name}",
-    "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}"
+    "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}",
+    "playAgain": "{name} made the next game: {day} {time} at {venue}. Are you in?"
   },
   "privacy": {
     "title": "Privacy",
@@ -1076,7 +1082,8 @@
       "admittedBody": "You are in: {matches}.",
       "declinedSubject": "About your level",
       "declinedBody": "{verifier} did not confirm your level this time. Play with them and ask again, or ask another coach."
-    }
+    },
+    "gateWaived": "Confirmed levels only. Nobody has confirmed yours ({level}) yet: ask to join, then ask a coach to confirm."
   },
   "wrap": {
     "coachSubject": "{month}: {done, plural, one {# lesson} other {# lessons}} with you",
@@ -1205,7 +1212,6 @@
     "pts": "{points} pts",
     "teamA": "Team A",
     "teamB": "Team B",
-    "sameTime": "Same time next week?",
     "sameTimeHelp": "Turns this crew into a group with a weekly slot. The next card posts itself; members tap in or out.",
     "sameTimeDone": "Done: “{name}”. Every {when} a fresh card posts itself.",
     "sameTimeExists": "This crew is already a group: {name}.",
@@ -1214,7 +1220,8 @@
     "photoHelp": "The four of you after the match. The card becomes that photo with the score on it. Yours to post, never asked twice.",
     "photoFailed": "That picture could not be used. Try another one.",
     "removePhoto": "Remove the photo",
-    "waiting": "Waiting for the score"
+    "waiting": "Waiting for the score",
+    "makeWeekly": "Make it weekly"
   },
   "group": {
     "title": "Group",

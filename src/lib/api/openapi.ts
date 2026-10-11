@@ -111,7 +111,7 @@ export function openapiDocument(base: string) {
           tags: ["matches"],
           operationId: "joinMatch",
           summary: "Join a match by name (or by an existing personal token)",
-          description: "Outcomes: joined, waitlisted, already_in, full, or requested when the player's level is outside the match's range, or declared but unconfirmed on a match that takes confirmed levels only (the organizer approves on the match page; a coach's or the club's confirmation seats the player).",
+          description: "Outcomes: joined, waitlisted, already_in, full, or requested when the player's level is outside the match's range, or declared but unconfirmed on a match that takes confirmed levels only (the organizer approves on the match page; a coach's or the club's confirmation seats the player). A player who already played a finished, scored match with the organizer is never held by that organizer's range.",
           security: [{}, { bearer: [] }],
           parameters: [{ name: "code", in: "path", required: true, schema: { type: "string" } }],
           requestBody: jsonBody(ref("JoinMatch")),

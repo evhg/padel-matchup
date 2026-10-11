@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { canEditMatchDetails, createEvent, updateEvent } from "@/lib/domain/events";
+import { canEditMatchDetails, createEvent, mayMoveStart, updateEvent } from "@/lib/domain/events";
+import { editErrorKey, shownStart, startToSend } from "@/lib/editMatchForm";
+import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent, leaveEvent } from "@/lib/domain/slots";
 import en from "../messages/en.json";
@@ -55,6 +57,63 @@ describe("who may change a match's details", () => {
     expect(res.calendarChanged).toBe(true);
     const detail = (await getEventByCode(db, ev.code))!;
     expect(detail.activity.some((a) => a.verb === "updated" && a.actorPlayerId === bo.id)).toBe(true);
+  });
+
+  it("a seated player on a started match keeps its start, a note-only edit saves, and a refused move says why", async () => {
+    // 18:00:30 in Bangkok, with seconds, as an API caller may set it; twenty minutes in.
+    const start = new Date(Date.UTC(2030, 5, 1, 11, 0, 30));
+    const live = new Date(start.getTime() + 20 * 60_000);
+    const org = await makePlayer(db, "Org3");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: start, tz: TZ, venueName: "Rawai Padel", whenFull: "waitlist" });
+    const bo = await makePlayer(db, "Bo3");
+    await joinEvent(db, { eventId: ev.id, playerId: bo.id, now: new Date(start.getTime() - 3600_000) });
+    // The page locks the day, the time and the zone for Bo, by the rule updateEvent holds.
+    expect(mayMoveStart(ev, { playerId: bo.id, asOrganiser: false }, live)).toBe(false);
+    expect(mayMoveStart(ev, { playerId: null, asOrganiser: true }, live)).toBe(true);
+    // The form shows 18:00 and Bo changes only the note: what the action gets, and what it makes of it.
+    const shown = { ...utcToZonedParts(ev.startsAt, TZ), tz: TZ };
+    const sent = startToSend(shown, shown);
+    const startsAt = sent.date && sent.time ? zonedTimeToUtc(sent.date, sent.time, sent.tz ?? TZ) : undefined;
+    const saved = await updateEvent(db, ev.id, bo.id, { note: "Court 2", startsAt }, live);
+    expect(saved.event.note).toBe("Court 2");
+    expect(saved.event.startsAt.toISOString()).toBe(start.toISOString());
+    expect(saved.calendarChanged).toBe(false);
+    // A real change sends all three, and a change of zone alone carries the day and the time with it.
+    expect(startToSend({ ...shown, time: "19:00" }, shown)).toEqual({ date: shown.date, time: "19:00", tz: TZ });
+    expect(startToSend({ ...shown, tz: "Europe/Madrid" }, shown)).toEqual({ date: shown.date, time: shown.time, tz: "Europe/Madrid" });
+    // A move Bo still sends is refused, and the form says why instead of "check what you entered".
+    await expect(updateEvent(db, ev.id, bo.id, { startsAt: zonedTimeToUtc(shown.date, "19:00", TZ) }, live)).rejects.toMatchObject({ code: "forbidden", message: "startsAt" });
+    expect(editErrorKey({ error: "forbidden", detail: "startsAt" })).toBe("event.startLocked");
+    expect(editErrorKey({ error: "invalid", detail: "startsAt" })).toBe("errors.invalid");
+    expect(editErrorKey({ error: "forbidden" })).toBe("errors.invalid");
+    expect(en.event.startLocked).toBe("Only the organiser moves the start once the match has started.");
+  });
+
+  it("a seated player's form, kept from before the organiser corrected a started match's start, sends no start", async () => {
+    // 18:00 in Bangkok; the organiser corrects it to 18:15 twenty minutes in, on the manage link.
+    const start = new Date(Date.UTC(2030, 5, 1, 11, 0));
+    const live = new Date(start.getTime() + 20 * 60_000);
+    const org = await makePlayer(db, "Org4");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: start, tz: TZ, venueName: "Rawai Padel", whenFull: "waitlist" });
+    const bo = await makePlayer(db, "Bo4");
+    await joinEvent(db, { eventId: ev.id, playerId: bo.id, now: new Date(start.getTime() - 3600_000) });
+    // Bo's form holds 18:00 from its first render; the page renders again with 18:15 (a live night, a save).
+    const kept = { ...utcToZonedParts(ev.startsAt, TZ), tz: TZ, note: "Court 4" };
+    const corrected = (await updateEvent(db, ev.id, null, { startsAt: new Date(start.getTime() + 15 * 60_000) }, live, { asOrganiser: true })).event;
+    const page = { ...utcToZonedParts(corrected.startsAt, TZ), tz: TZ };
+    expect(page.time).toBe("18:15");
+    // The kept 18:00 would go back as a move, and the guard would refuse Bo's note with it.
+    const stale = startToSend(kept, page);
+    expect(stale).toEqual({ date: kept.date, time: "18:00", tz: TZ });
+    await expect(updateEvent(db, ev.id, bo.id, { note: kept.note, startsAt: zonedTimeToUtc(stale.date!, stale.time!, TZ) }, live)).rejects.toMatchObject({ code: "forbidden", message: "startsAt" });
+    // Locked, the form shows the page's 18:15 and sends no start, so the note saves and 18:15 stays.
+    const shown = shownStart(kept, page, true);
+    expect([shown.time, shown.note]).toEqual(["18:15", "Court 4"]);
+    expect(startToSend(shown, page)).toEqual({});
+    const saved = await updateEvent(db, ev.id, bo.id, { note: shown.note }, live);
+    expect([saved.event.note, saved.event.startsAt.toISOString()]).toEqual(["Court 4", corrected.startsAt.toISOString()]);
+    // Not locked, the form keeps what the viewer typed.
+    expect(shownStart(kept, page, false)).toBe(kept);
   });
 
   it("the change notice does not claim the organiser made it", () => {

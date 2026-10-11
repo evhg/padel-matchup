@@ -66,6 +66,9 @@ export const SENDERS = {
   levelDeclined: "results", // notifyLevelCheckDecided, no
   // Your crew.
   crewMatch: "crew", // notifyGroupMatch
+  // The players of the last match, after "Play again": one "Are you in?" each, once per old match (DECIDING
+  // rule 37). "Your crew" in a player's words: the people they play with, a group or not yet.
+  playAgain: "crew", // notifyPlayAgain
   groupAsk: "crew", // notifyGroupAsk, to the admins
   groupAskApproved: "crew", // notifyGroupAskDecided
   groupAskDeclined: "crew", // notifyGroupAskDecided
