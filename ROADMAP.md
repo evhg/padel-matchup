@@ -1107,7 +1107,8 @@ compared with production (rows the old merge dropped that morning stay dropped).
 
 - **No accounts, no passwords**, for players, coaches or clubs. A coach is a player with a role.
 - **No money through Kicksmash.** No payments, no commissions, no marketplace. A player books and pays
-  a court in the club's own app; Kicksmash prepares it up to payment and never signs in as anybody.
+  a court in the club's own app. Kicksmash opens the club's booking page, on the match's day where the
+  platform's page takes a day, and never signs in as anybody.
 - **No paid tiers** while the free plans hold. Free for every stakeholder, for good.
 - **No loud bots.** No bumps, no nags, nothing about Kicksmash beyond the card's footer.
 - **Nothing closed.** The API, the data and the code stay open, and every crawler is welcome.
@@ -1117,8 +1118,10 @@ compared with production (rows the old merge dropped that morning stay dropped).
 - **WhatsApp Channels**, which need a person on a phone to post, and there is no staff.
 - **Twilio and SMS**, which need template approval and a verified business.
 - **Court booking integrations** with the platforms: booking, reserving or paying for a player, or
-  signing in to a platform for anybody (DECIDING rule 35). Reading the free court times a platform
-  shows publicly is built; the player books and pays on the platform.
+  signing in to a platform as a player (DECIDING rule 35). Reading the free court times a platform
+  shows publicly is built; the player books and pays on the platform. Whether Kicksmash may read The
+  Padel Society with the owner's own sign-in (the owner's offer of 10 October 2026) waits for the
+  owner's decision.
 - **Player reliability and no-show stats**, which would rank people by their worst days. Still parked as
   a stat. What changed on 25 September 2026 (banter, `docs/DECIDING.md` rule 18): a third late pull-out
   in 90 days is one playful line on the crew's own card while the spot it opened is open, and a win
