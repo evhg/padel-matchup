@@ -320,7 +320,9 @@ needs more requests than its neighbours). Ask
 and `select slug, availability_at from clubs where availability->>'why' = 'frame: budget'`.
 
 **When a platform blocks us.** Do nothing that gets around it: no other address, no browser
-disguise, no captcha service, no sign-in. Let the rest run out. If it blocks again after a week,
+disguise, no captcha service, no sign-in. (The one read of a pasted link, below, poses as a chat
+app's preview robot by the owner's word. It is no way around a block: it stops at the first 401, 403
+or 429.) Let the rest run out. If it blocks again after a week,
 put the platform in `SCRAPE_DISABLED` and tell the owner in one line. A club on that platform can
 still share its own feed. **When a platform's page changes**, fix the reader in
 `src/lib/booking/adapters/<platform>.ts` with a test from the new page, and merge: the deploy of the
@@ -330,6 +332,19 @@ new commit starts it again. A challenge is not a changed page: never fix a reade
 User-Agent, and `/about` has a KicksmashBot section: what it reads, how often, that it stops, and the
 address to write to. robots.txt does not bind a reader (DECIDING rule 35): the Playtomic reader reads
 paths Playtomic's robots.txt disallows, under the owner's decision of 10 October 2026.
+
+**A pasted booking link.** "Paste your booking" (the owner, 11 October 2026) reads a link that a person
+pastes, once, as WhatsApp's link-preview robot reads it (DECIDING rule 35). The User-Agent is
+`PREVIEW_USER_AGENT` in `src/lib/booking/unfurl.ts`. It starts with `WhatsApp/2` and still names
+KicksmashBot and `/about#bot`. The read goes only to a host in `PLATFORMS`, over https. It follows
+three redirects at most, stops after four seconds, and reads 256 KB of the page at most. It keeps the
+title, the description, and the kind of link and the match id from a Branch link. It never logs the
+link, because a pasted link can carry a token. Each caller gets thirty pastes a day (`rl:paste:*` rows).
+A paste opens a link only when its words leave out the club, the day or the time. Two day counters
+show whether platforms still answer: `paste_preview_ok` and `paste_preview_fail`. When
+`paste_preview_fail` climbs and `paste_preview_ok` stays at zero, a platform changed its preview or
+stopped it. The form still fills from the person's words, so nothing breaks; tell the owner in one
+line.
 
 ## The Sunday digest, one line to watch
 

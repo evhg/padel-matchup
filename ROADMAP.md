@@ -929,6 +929,20 @@ can get a message, and WhatsApp one-to-one waits on the owner's Meta account and
 security steps at 100 real players (`docs/OPERATING.md`). Recommended with it: no new large feature
 until real use asks for one.
 
+## Being built
+
+- **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
+  app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
+  link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
+  then fills the club, the day, the time, the length, the court, the price and the players, and the
+  person checks the form. Built so far: the reader (`src/lib/domain/bookingPaste.ts`), the one read of a
+  pasted link as a chat app's preview robot reads it (`src/lib/booking/unfurl.ts`, DECIDING rule 35 as
+  changed that day), the server's side with its limit (`src/lib/booking/paste.ts`, `readBookingAction`)
+  and Setpoint in the list of platforms. Still to come: the box on the first page that fills the form,
+  and the same paste in a chat with the bot. The Padel Society keeps a match's club, day and players in
+  its app's private API, which Kicksmash never calls. Its preview gives the match id only, so the words
+  the person pastes carry the rest.
+
 ## Next, in order
 
 Decided 13 September 2026: **every stakeholder's experience made world class before a sixth channel.**

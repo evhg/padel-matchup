@@ -909,7 +909,8 @@
     "privacyLink": "La página completa de privacidad →",
     "termsLink": "Las condiciones completas →",
     "botTitle": "KicksmashBot",
-    "botBody": "KicksmashBot lee las horas de pista libres que las plataformas de reservas, como Playtomic y MATCHi, muestran en la página pública de un club, para que los jugadores vean cuándo hay una pista libre. Lee las horas de hoy como mucho cada 15 minutos y las de los dos días siguientes como mucho una vez por hora, con una petición por segundo y su nombre en cada petición. Nunca inicia sesión, ni reserva, ni paga, y se detiene si una plataforma lo bloquea. Para pedirle que lea menos o que pare, escríbenos:"
+    "botBody": "KicksmashBot lee las horas de pista libres que las plataformas de reservas, como Playtomic y MATCHi, muestran en la página pública de un club, para que los jugadores vean cuándo hay una pista libre. Lee las horas de hoy como mucho cada 15 minutos y las de los dos días siguientes como mucho una vez por hora, con una petición por segundo y su nombre en cada petición. Nunca inicia sesión, ni reserva, ni paga, y se detiene si una plataforma lo bloquea. Para pedirle que lea menos o que pare, escríbenos:",
+    "botPaste": "Cuando pegas en Kicksmash el enlace de una reserva, lo lee una sola vez, igual que una app de chat lee un enlace para mostrar su vista previa. Solo guarda lo que confirmas en el formulario."
   },
   "notices": {
     "title": "Avisos",

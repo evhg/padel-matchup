@@ -443,6 +443,11 @@ Wall clock first, credits second. What actually moved it, measured:
   prove where it landed: `node -e 'JSON.parse(...).email.telegramLine'` must not be undefined. Move a
   stray key by string edit (the line out of the nested block, then in under the section's opening
   line), never by round-tripping the file.
+- **Under the `i` flag, `\p{Lu}` takes any letter.** The pasted booking's reader asked for a capital
+  with `/(\p{Lu}…)/iu` so that "with danny" would not read "danny" as a player, and `/\p{Lu}/iu.test("a")`
+  is true: the case-insensitive flag folds a property class too. Check a capital in code, with a
+  pattern that has no `i` (`/^\p{Lu}/u.test(piece)`), and let the big pattern find the place only
+  (11 October 2026, `src/lib/domain/bookingPaste.ts`).
 - **A backslash in a raw `sql` template is one edit away from gone.** `'\\s+'` in the source is `\s+`
   in the query; one script edit wrote `'\s+'`, which a JavaScript template reads as a plain `s`, so
   the same-name match collapsed every letter s instead of the spaces and a test caught it. Use the
