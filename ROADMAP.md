@@ -954,6 +954,18 @@ Everything in this list is live. The README describes each in detail.
   one line under the question and "I'm in", which opens the match page at the join step (`?join=1`).
   A night played again keeps its named courts, and a read that fails after the claim takes the claim
   back, so the round is never spent on nobody.
+- **The held place by name (11 October 2026, no migration).** The owner asked: "danny clicks on the
+  generic one kicksmash doesn't know its danny and would it let confirm danny's place?" The decision
+  was "Yes, two taps" (DECIDING rule 34). An organiser holds a place for a name with no record, for
+  example with "Paste the names". A person who types that name on the plain match link gets "Take
+  Danny's held place". The first tap asks, and the second tap confirms the place with the personal
+  link's own write, so the organiser hears "Danny confirmed". The place has no email and no phone, and
+  no other record of the name sits in the match (`src/lib/domain/heldByName.ts`). The personal link
+  changed the same day: a viewer who is in the match already gets no "I'm in" on another person's
+  place. After the audit of 11 October 2026, the offer also shows on a full match, in the name field of
+  the waiting list, and to a browser that knows a record of the name, in place of its one-tap Join. The
+  Go key sends no join while the offer is on the screen. The server refuses a join that puts a second
+  record of the name beside the place.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and

@@ -7,6 +7,7 @@ import { askLevelCheckAction } from "@/actions/verify";
 import { formatLevel, joinBarLevel, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
 import { requestJoin } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
+import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past" | "requested" | "request_declined";
 /** Someone who can confirm the viewer's level for this event: a coach at the club, or the club. */
@@ -34,6 +35,10 @@ export function JoinBar({
   tellGroupHref = null,
   rangeWaived = null,
   openJoin = false,
+  namesHere = [],
+  claimable = [],
+  held = [],
+  heldForMe = null,
 }: {
   code: string;
   state: JoinState;
@@ -77,6 +82,17 @@ export function JoinBar({
    * opens by itself, as after a tap on Join. It never joins: a link that a mail scanner follows seats nobody.
    */
   openJoin?: boolean;
+  /** Everybody already in this match, held places too: a typed name among them gets the line that offers the way back. */
+  namesHere?: readonly string[];
+  /** Names "That's me" signs in by name (the page asked the rule). */
+  claimable?: readonly string[];
+  /** Names of held places a typed name may take (`heldOffers`): the form sends no Join while one is offered. */
+  held?: readonly string[];
+  /**
+   * The browser knows a record of a held place's name, with no place in the match (DECIDING rule 34):
+   * Join offers "Take Danny's held place" instead of seating a second Danny, on a full match too.
+   */
+  heldForMe?: string | null;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
@@ -147,9 +163,9 @@ export function JoinBar({
   useEffect(() => {
     if (!openJoin || opened.current || (state !== "join" && state !== "join_waitlist")) return;
     opened.current = true;
-    if (fixedPairs || (hasIdentity && !needsLevel)) setInline(true);
+    if (heldForMe || fixedPairs || (hasIdentity && !needsLevel)) setInline(true);
     else if (!requestJoin()) setInline(true);
-  }, [openJoin, state, fixedPairs, hasIdentity, needsLevel]);
+  }, [openJoin, state, fixedPairs, hasIdentity, needsLevel, heldForMe]);
 
   if (state === "cancelled" || state === "past") return null;
 
@@ -158,6 +174,8 @@ export function JoinBar({
   // No identity yet (or no level yet on a ranged event): expand an in-flow spot
   // instead of opening a sheet (fixed overlays drift off screen on iOS once the keyboard shows).
   const onJoin = () => {
+    // A place is held for this browser's own name: Join offers it, never a second seat of the name.
+    if (heldForMe) return setInline(true);
     // A fixed-pairs night always asks for the partner's name first (it may stay empty).
     if (fixedPairs) return setInline(true);
     if (hasIdentity && !needsLevel) return join();
@@ -171,12 +189,21 @@ export function JoinBar({
         <div className="mx-auto flex w-full max-w-xl items-center gap-3 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
           {(state === "join" || state === "join_waitlist") && (
             <div className="flex w-full flex-col gap-1">
-              {inline ? (
+              {inline && heldForMe ? (
+                <div className="flex items-center justify-between gap-2">
+                  <HeldForYou code={code} name={heldForMe} />
+                  <button type="button" className="shrink-0 text-sm link" onClick={() => setInline(false)}>
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              ) : inline ? (
                 <form
                   className="flex flex-col gap-2"
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
+                    // The Go key and Join while "Take Danny's held place" is on screen: a second Danny would close the place for good.
+                    if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
                     if (levelRange && level == null) return setError(t("errors.level_required"));
                     join(hasIdentity ? undefined : name, level, fixedPairs ? partner : undefined);
                   }}
@@ -194,6 +221,7 @@ export function JoinBar({
                       {pending ? t("common.working") : t("event.joinShort")}
                     </button>
                   </div>
+                  {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
                 </form>
               ) : (
                 <button type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>

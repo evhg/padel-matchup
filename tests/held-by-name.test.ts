@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, groupMembers, groups, metricsDaily, notices, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { decideHeldByName, heldOffers, heldSeatsOf, heldVerdict, inviteView, takeHeldByName, type HeldMatch, type HeldRefusal, type HeldSeat, type InviteState, type InviteView } from "@/lib/domain/heldByName";
+import { decideHeldByName, heldNameFor, heldOffers, heldSeatsOf, heldVerdict, inviteView, takeHeldByName, type HeldMatch, type HeldRefusal, type HeldSeat, type InviteState, type InviteView } from "@/lib/domain/heldByName";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { holdsPlaceIn } from "@/lib/domain/queries";
 import { confirmInvite, joinEvent, mayUseHeldLink, reserveNames, reserveSlot } from "@/lib/domain/slots";
@@ -60,6 +60,24 @@ describe("who may take a held place by name", () => {
   it.each(LIMIT_TABLE)("%s", (_label, c, reason) => {
     const v = heldVerdict({ ...live, ...c.m }, c.seats ?? [organiser, danny, empty], c.name ?? "danny", c.viewer ?? null, c.now ?? NOW);
     expect(v).toEqual(reason === null ? { ok: true, slotId: "s2", name: "Danny" } : { ok: false, reason });
+  });
+
+  // The audit of 11 October 2026: on a full match a typed "Alberto" joined the waiting list as a second
+  // Alberto, and the held place could then never be taken by name. A known browser's one-tap Join did
+  // the same. The web's join now asks first, over the rows it read, and refuses such a join.
+  it("names the held place a plain join would strand: a typed name, or a known browser's own name, on a full match too", () => {
+    const full = [organiser, danny, seat({ id: "s3", playerId: "p3", playerName: "Jakob", position: 3 }), seat({ id: "s4", playerId: "p4", playerName: "Erik", position: 4 })];
+    expect(heldNameFor(live, full, null, " danny ", NOW)).toBe("Danny");
+    expect(heldNameFor(live, full, { id: "v1", name: "DANNY" }, undefined, NOW)).toBe("Danny");
+    // Whatever such a browser types, its record's name is what joins.
+    expect(heldNameFor(live, full, { id: "v1", name: "Danny" }, "Bo", NOW)).toBe("Danny");
+    // Every limit of the rule still holds: another name, a place with an address, a Danny in the match, the organiser.
+    expect(heldNameFor(live, full, null, "Dana", NOW)).toBeNull();
+    expect(heldNameFor(live, full, { id: "v2", name: "Ana" }, undefined, NOW)).toBeNull();
+    expect(heldNameFor(live, [organiser, { ...danny, invitedEmail: "danny@example.com" }], null, "Danny", NOW)).toBeNull();
+    expect(heldNameFor(live, [...full, seat({ id: "s5", playerId: "p5", playerName: "Danny", position: 5 })], null, "Danny", NOW)).toBeNull();
+    expect(heldNameFor(live, full, { id: ORG, name: "Danny" }, undefined, NOW)).toBeNull();
+    expect(heldNameFor({ ...live, fixedPairs: true }, full, null, "Danny", NOW)).toBeNull();
   });
 
   it("offers on the page exactly the held rows the tap allows, and none to a browser that knows another name", () => {
@@ -142,6 +160,21 @@ describe("the held place by name on a real match", () => {
     await afterConfirm(db, res, res.fresh, { wasComplete: res.wasComplete });
     const [line] = await db.select().from(notices).where(and(eq(notices.playerId, org.id), eq(notices.key, "noticeItem.organizerFeed")));
     expect(line?.params).toMatchObject({ what: "confirmed", name: "Danny" });
+  });
+
+  it("on a full match, the typed held name takes its place, and nobody lands on the waiting list", async () => {
+    // TDsv as production held it on 11 October 2026: the organiser and three names, every place taken.
+    const { ev } = await match(["Alberto", "Bo", "Cy"]);
+    const [row] = await db.select({ status: events.status }).from(events).where(eq(events.id, ev.id));
+    expect(row.status).toBe("full");
+    const seats = await heldSeatsOf(db, ev.id);
+    expect(heldNameFor(ev, seats, null, "alberto", NOW)).toBe("Alberto");
+    expect(heldOffers(ev, seats, null, NOW).map((o) => o.name).sort()).toEqual(["Alberto", "Bo", "Cy"]);
+    const res = await tapTwice(ev.code, "alberto");
+    expect(res.ok).toBe(true);
+    const after = await heldSeatsOf(db, ev.id);
+    expect(after.filter((s) => s.position > ev.capacity && s.status !== "empty")).toEqual([]);
+    expect(after.filter((s) => s.playerName === "Alberto").map((s) => s.status)).toEqual(["confirmed"]);
   });
 
   it("the page offers the same place, from the rows it already read, and nothing once it is taken", async () => {

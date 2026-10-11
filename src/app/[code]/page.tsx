@@ -376,6 +376,10 @@ async function EventPage({ params, searchParams }: Props) {
   // for the typed name only, never on the row, wherever `heldVerdict` says yes. Over the rows this page
   // read already, so it costs no read; never for the organiser, a manage link included.
   const held = viewer.isCreator ? [] : heldOffers(ev, [...roster, ...waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null })), me ? { id: me.id, name: me.displayName } : null, now);
+  const heldNames = held.map((h) => h.name);
+  // A browser that knows a record of a held place's name, with no place here: the rule offers it that
+  // place alone (`heldVerdict`: its own name, one place of it), and Join offers the place, never a second Danny.
+  const heldForMe = me && held.length > 0 ? held[0].name : null;
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
@@ -484,7 +488,8 @@ async function EventPage({ params, searchParams }: Props) {
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
-                held={held.map((h) => h.name)}
+                held={heldNames}
+                heldForMe={heldForMe}
                 levelRange={ranged ? levelRange : null}
                 myLevel={me?.level ?? null}
               />
@@ -799,7 +804,9 @@ async function EventPage({ params, searchParams }: Props) {
           {pendingRequests.length > 0 && (
             <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now) }))} />
           )}
-          {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} />}
+          {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && (
+            <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} namesHere={namesHere} claimable={offer.names} held={heldNames} />
+          )}
           {waitlist.length > 0 && (
             <>
               <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wider text-muted">{t("event.waitlist")}</h3>
@@ -924,6 +931,10 @@ async function EventPage({ params, searchParams }: Props) {
         tellGroupHref={tellGroup}
         rangeWaived={rangeWaived}
         openJoin={openJoin}
+        namesHere={namesHere}
+        claimable={offer.names}
+        held={heldNames}
+        heldForMe={heldForMe}
       />
     </>
   );

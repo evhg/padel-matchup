@@ -98,7 +98,8 @@
     "thatsMeSure": "¿Entrar como {name}?",
     "takeHeld": "Ocupar la plaza guardada para {name}",
     "takeHeldSure": "¿Ocupar la plaza guardada para {name}?",
-    "takeHeldNo": "Esa plaza ya no está guardada para {name}."
+    "takeHeldNo": "Esa plaza ya no está guardada para {name}.",
+    "heldForYou": "En este partido hay un sitio reservado para {name}."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -730,7 +731,8 @@
     "taken": "Ese jugador ya tiene pareja.",
     "already_paired": "Ya tienes pareja.",
     "not_fixed_pairs": "Este torneo no usa parejas fijas.",
-    "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas."
+    "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas.",
+    "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",

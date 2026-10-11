@@ -439,6 +439,11 @@ try {
   await takeCy.waitFor({ timeout: 10000 });
   await shot(cyp, "12d0-held-offer");
   check("a typed held name reads \"cy is already in this match.\" and offers \"Take Cy's held place\"", ((await alreadyCy.textContent()) ?? "").startsWith("cy is already in this match.") && (await takeCy.count()) === 1, (await alreadyCy.textContent()) ?? "(none)");
+  // The keyboard's Go key while the offer is on screen: before this it sent Join and made a second Cy.
+  heldSends = 0;
+  await cyp.getByTestId("open-spot-name").first().press("Enter");
+  await cyp.waitForTimeout(1000);
+  check("the Go key sends no Join while \"Take Cy's held place\" is on screen, and says why", heldSends === 0 && (await cyp.getByText("This name has a held place.", { exact: false }).count()) === 1, `sends=${heldSends}`);
   heldSends = 0;
   await takeCy.click();
   await sureCy.waitFor({ timeout: 10000 });
@@ -461,6 +466,91 @@ try {
   check("the organiser hears \"Cy confirmed\", as from the personal link", Boolean(cyNote), cyNote ? cyNote.subject : "no mail to the organiser");
   await shot(cyp, "12d-held-by-name");
   await cyp.close();
+
+  // ---- The same on a full match (the audit of 11 October 2026: TDsv was full, and Alberto could not take his place) ----
+  // The organiser holds one more name, Eve, in the seat Bo left: every place is taken now. A browser that
+  // knows nobody opens the link of the "I'm in" email (`?join=1`): the waiting list's name field is open
+  // at once. Eve types her name, and the held place is offered there, not a place on the waiting list.
+  await a.goto(`${BASE}/${code2}`);
+  await a.getByTestId("paste-names").locator("summary").click();
+  await a.getByTestId("paste-names-box").fill("Eve");
+  await a.getByTestId("paste-preview").waitFor({ timeout: 20000 });
+  await a.getByRole("button", { name: "Reserve 1 spot", exact: true }).click();
+  await a.getByText("Reserved for Eve", { exact: true }).waitFor({ timeout: 20000 });
+  const fullNow = await a.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
+  check("with Eve held, every place of the match is taken", fullNow.spotsLeft === 0, JSON.stringify({ spotsLeft: fullNow.spotsLeft }));
+  const evp = await newPage();
+  let eveSends = 0;
+  evp.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) eveSends += 1;
+  });
+  await evp.goto(`${BASE}/${code2}?join=1`);
+  const waitName = evp.getByTestId("waitlist-name");
+  await waitName.waitFor({ timeout: 20000 });
+  check("the \"I'm in\" link opens the join step by itself: on a full match, the waiting list's name field", await waitName.isVisible());
+  await waitName.fill("eve");
+  const alreadyEve = evp.getByTestId("already-here");
+  const takeEve = alreadyEve.getByRole("button", { name: "Take Eve's held place", exact: true });
+  await takeEve.waitFor({ timeout: 10000 });
+  await shot(evp, "12e0-held-offer-full");
+  eveSends = 0;
+  await waitName.press("Enter");
+  await evp.waitForTimeout(1000);
+  const notWaiting = await evp.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
+  check(
+    "on a full match a typed held name is offered its place, and the Go key puts nobody on the waiting list",
+    eveSends === 0 && (notWaiting.waitlist ?? 0) === 0 && (await takeEve.count()) === 1,
+    JSON.stringify({ sends: eveSends, waitlist: notWaiting.waitlist }),
+  );
+  await takeEve.click();
+  await alreadyEve.getByRole("button", { name: "Take Eve's held place?", exact: true }).click();
+  await evp.locator("main li", { hasText: "Eve" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const afterEve = await evp.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
+  const eves = (afterEve.players ?? []).filter((p) => /^eve$/i.test(p.name));
+  check(
+    "two taps fill Eve's held place on the full match: one Eve, confirmed, and nobody waiting",
+    eves.length === 1 && eves[0].status === "confirmed" && (afterEve.waitlist ?? 0) === 0 && (await evp.getByText("Reserved for Eve", { exact: true }).count()) === 0,
+    JSON.stringify({ players: (afterEve.players ?? []).map((p) => `${p.name}:${p.status}`), waitlist: afterEve.waitlist }),
+  );
+  await evp.close();
+
+  // A browser that already knows a record called Ana, with no place in the match: before this, "Join the
+  // waitlist" put a second Ana on the waiting list in one tap. Now Join offers Ana's held place.
+  const anp = await newPage();
+  await anp.goto(BASE + "/");
+  await anp.getByPlaceholder("e.g. Alex").fill("Ana");
+  await anp.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
+  await anp.locator("input[type=time]").fill("19:00");
+  await anp.getByRole("button", { name: "Create & get the link" }).click();
+  await anp.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  let anaSends = 0;
+  anp.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) anaSends += 1;
+  });
+  await anp.goto(`${BASE}/${code2}`);
+  await anp.getByText("Reserved for Ana", { exact: true }).waitFor({ timeout: 20000 });
+  anaSends = 0;
+  await anp.getByRole("button", { name: "Join the waitlist", exact: true }).click();
+  const heldForAna = anp.getByTestId("held-for-you");
+  await heldForAna.waitFor({ timeout: 10000 });
+  await anp.waitForTimeout(500);
+  check(
+    "a browser that knows Ana taps Join on the full match: it sends nothing and offers \"Take Ana's held place\"",
+    anaSends === 0 && ((await heldForAna.textContent()) ?? "").startsWith("A place in this match is held for Ana.") && (await heldForAna.getByRole("button", { name: "Take Ana's held place", exact: true }).count()) === 1,
+    `sends=${anaSends} ${(await heldForAna.textContent()) ?? ""}`,
+  );
+  await shot(anp, "12f-held-for-known-browser");
+  await heldForAna.getByRole("button", { name: "Take Ana's held place", exact: true }).click();
+  await heldForAna.getByRole("button", { name: "Take Ana's held place?", exact: true }).click();
+  await anp.locator("main li", { hasText: "Ana" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const afterAna = await anp.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
+  const anas = (afterAna.players ?? []).filter((p) => /^ana$/i.test(p.name));
+  check(
+    "the second tap seats that browser's Ana in her held place: one Ana, confirmed, nobody waiting",
+    anas.length === 1 && anas[0].status === "confirmed" && (afterAna.waitlist ?? 0) === 0,
+    JSON.stringify({ players: (afterAna.players ?? []).map((p) => `${p.name}:${p.status}`), waitlist: afterAna.waitlist }),
+  );
+  await anp.close();
   await a.goto(`${BASE}/${code}`);
 
   await a.reload();

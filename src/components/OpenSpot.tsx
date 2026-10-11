@@ -4,12 +4,9 @@ import { useTranslations } from "next-intl";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
-import { requestBackIn } from "./backInBus";
 import { registerJoinHandler } from "./joinBus";
-import { nameIsHere, normalName } from "@/lib/domain/dupes";
 import { LevelSelect } from "./LevelSelect";
-import { TakeHeldButton } from "./TakeHeld";
-import { ThatsMeButton } from "./ThatsMe";
+import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
 type Mode = "reserve" | "join" | "none";
@@ -31,6 +28,7 @@ export function OpenSpot({
   namesHere = [],
   claimable = [],
   held = [],
+  heldForMe = null,
   levelRange = null,
   myLevel = null,
 }: {
@@ -47,6 +45,8 @@ export function OpenSpot({
   claimable?: readonly string[];
   /** Names of places held on this line-up that a typed name may take (DECIDING rule 34, the held place by name): the page asked `heldVerdict` already. */
   held?: readonly string[];
+  /** The browser knows a record of a held place's name (`heldOffers` for that record): the tap offers that place instead of a one-tap Join. */
+  heldForMe?: string | null;
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
   myLevel?: number | null;
@@ -126,7 +126,8 @@ export function OpenSpot({
 
   const tap = () => {
     if (mode === "reserve") expand();
-    else if (mode === "join" && hasIdentity && !needsLevel) join();
+    // A place is held for this browser's own name: the tap offers it, never a second seat of the name.
+    else if (mode === "join" && hasIdentity && !needsLevel && !heldForMe) join();
     else if (mode === "join") expand();
   };
 
@@ -154,9 +155,34 @@ export function OpenSpot({
     );
   }
 
+  const cancel = (
+    <button
+      type="button"
+      className="shrink-0 text-sm link"
+      onClick={() => {
+        reset();
+        setOpen(false);
+      }}
+    >
+      {t("common.cancel")}
+    </button>
+  );
+
+  if (mode === "join" && hasIdentity && heldForMe) {
+    return (
+      <div ref={box} className="flex flex-col gap-2 animate-pop">
+        <div className="flex items-center gap-3">
+          {avatar}
+          <HeldForYou code={code} name={heldForMe} />
+        </div>
+        <div className="flex justify-end">{cancel}</div>
+      </div>
+    );
+  }
+
   const hasNames = name.trim().length > 0;
-  // The held place this typed name may take, under the name the organiser gave it.
-  const heldName = mode === "join" && !hasIdentity ? held.find((h) => normalName(h) === normalName(name)) : undefined;
+  // The held place this typed name may take, under the name the organiser gave it: while it is offered, the form sends no Join.
+  const heldName = mode === "join" && !hasIdentity ? heldNameOf(name, held) : undefined;
   return (
     <div ref={box} className="animate-pop">
       <div className="mb-2 flex items-center gap-3">
@@ -169,6 +195,8 @@ export function OpenSpot({
           e.preventDefault();
           if (mode === "reserve") reserve();
           else if (!hasIdentity && !hasNames) setError(t("identity.nameRequired"));
+          // The Go key and Join while "Take Danny's held place" is on screen: a second Danny would close the place for good.
+          else if (heldName) setError(t("errors.name_held"));
           else if (levelRange && level == null) setError(t("errors.level_required"));
           else join(hasIdentity ? undefined : name);
         }}
@@ -193,31 +221,13 @@ export function OpenSpot({
           </button>
         </div>
         {/*
-          The duplicate is born here. A friend's link in a chat opens in the phone's default browser,
-          and that may not be the browser the player first joined in (another app's, the home-screen
-          icon, another phone): it has never seen them, so they type the name they always type and
-          become a second row with none of their history on it. If that name is already in this match,
-          say so and offer the door instead — quietly, under the field, with the name field untouched,
-          because a real namesake must still be able to join. A record the rule lets in by name signs
-          in with one tap (DECIDING rule 34); a place held for that name with nothing else on it is
-          taken in two taps, so no second row of the name appears and the open seat stays open; any
-          other opens the way back in that needs proof. A crew member who is not on this line-up joins,
-          and is then offered the fold into their old record.
+          The duplicate is born here: a friend's link opens in a browser that has never seen the player,
+          who types the name they always type. A real namesake must still be able to join, so the line
+          stays under the field and the field is untouched (`NameHereLine`). A held place of the name is
+          the exception: the form sends no Join while it is offered, and a namesake adds a last name. A
+          crew member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
-        {mode === "join" && !hasIdentity && nameIsHere(name, namesHere) && (
-          <p data-testid="already-here" className="text-sm text-muted">
-            {t("identity.alreadyHere", { name: name.trim() })}{" "}
-            {nameIsHere(name, claimable) ? (
-              <ThatsMeButton code={code} name={name.trim()} className="link font-semibold" armedClassName="link font-extrabold text-ink" />
-            ) : heldName ? (
-              <TakeHeldButton code={code} name={heldName} />
-            ) : (
-              <button type="button" className="link font-semibold" onClick={() => requestBackIn()}>
-                {t("identity.thatsMe")}
-              </button>
-            )}
-          </p>
-        )}
+        {mode === "join" && !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
         {mode === "reserve" && suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((r) => (
@@ -252,16 +262,7 @@ export function OpenSpot({
         )}
         <div className="flex items-center justify-between gap-2">
           {error ? <span className="text-sm font-semibold text-danger">{error}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</span>}
-          <button
-            type="button"
-            className="shrink-0 text-sm link"
-            onClick={() => {
-              reset();
-              setOpen(false);
-            }}
-          >
-            {t("common.cancel")}
-          </button>
+          {cancel}
         </div>
       </form>
     </div>

@@ -98,7 +98,8 @@
     "thatsMeSure": "Sign in as {name}?",
     "takeHeld": "Take {name}'s held place",
     "takeHeldSure": "Take {name}'s held place?",
-    "takeHeldNo": "That place is no longer held for {name}."
+    "takeHeldNo": "That place is no longer held for {name}.",
+    "heldForYou": "A place in this match is held for {name}."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -730,7 +731,8 @@
     "taken": "That player already has a partner.",
     "already_paired": "You already have a partner.",
     "not_fixed_pairs": "This tournament doesn't use fixed pairs.",
-    "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off."
+    "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off.",
+    "name_held": "This name has a held place. Take it above, or add your last name to join as somebody else."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",

@@ -15,7 +15,8 @@ import { countedSource, SOURCE_COOKIE } from "@/lib/source";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer, signedInByName } from "@/lib/session";
 import { nameOnlySession } from "@/lib/domain/thatsMe";
 
-export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required";
+/** `name_held`: the name has a held place this browser may take (DECIDING rule 34); a plain join would leave it behind for good. */
+export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held";
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError; detail?: string };
 
 export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
