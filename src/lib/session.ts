@@ -19,25 +19,67 @@ function sign(value: string): string {
   return createHmac("sha256", secret()).update(value).digest("base64url");
 }
 
-export function sealPlayerId(playerId: string): string {
-  return `${playerId}.${sign(playerId)}`;
+/** Whether `sig` is the signature of `value`, compared in constant time. */
+function signs(sig: string, value: string): boolean {
+  const expected = sign(value);
+  if (sig.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
+const PLAYER_ID = /^[0-9a-f-]{36}$/i;
+
+/**
+ * The session cookie's value: `<id>.<signature>` for a sign-in that proved who it is, and
+ * `<id>.n.<signature>` for a sign-in by name ("That's me", DECIDING rule 34). The mark is inside the
+ * signed value, so a browser cannot drop it to become a full session: until 11 October 2026 it lived
+ * only in a cookie of its own (`km_by_name`), which the browser could simply delete.
+ */
+export function sealPlayerId(playerId: string, o: { byName?: boolean } = {}): string {
+  return o.byName ? `${playerId}.n.${sign(`byname-session:${playerId}`)}` : `${playerId}.${sign(playerId)}`;
+}
+
+/** The session a cookie value holds: the player and whether they came in by name. Null for anything the server did not seal. */
+function openSession(token: string | undefined | null): { id: string; byName: boolean } | null {
+  if (typeof token !== "string" || !token) return null;
+  const parts = token.split(".");
+  if (parts.length === 2 && PLAYER_ID.test(parts[0]) && signs(parts[1], parts[0])) return { id: parts[0], byName: false };
+  if (parts.length === 3 && parts[1] === "n" && PLAYER_ID.test(parts[0]) && signs(parts[2], `byname-session:${parts[0]}`)) return { id: parts[0], byName: true };
+  return null;
 }
 
 export function unsealPlayerId(token: string | undefined | null): string | null {
-  if (!token) return null;
-  const idx = token.lastIndexOf(".");
-  if (idx <= 0) return null;
-  const id = token.slice(0, idx);
-  const sig = token.slice(idx + 1);
-  const expected = sign(id);
-  if (sig.length !== expected.length) return null;
-  try {
-    if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-  } catch {
-    return null;
-  }
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
-  return id;
+  return openSession(token)?.id ?? null;
+}
+
+/**
+ * What a browser keeps in localStorage to come back after a lost cookie (`IdentitySync`), and the only
+ * thing `restoreIdentity` takes: `r1.<id>.<p|n>.<signature>`, signed for this purpose and for the kind
+ * of session it gives back (`p` proved, `n` by name). Until 11 October 2026 the browser kept the raw
+ * player id and the restore took any id it was given, while the match page sent every seated player's
+ * id to every viewer: anybody could become anybody. A raw id is no proof of anything, and a seal for
+ * another purpose (the session cookie, the by-name mark) opens nothing here.
+ */
+export function restoreSeal(playerId: string, byName: boolean): string {
+  const kind = byName ? "n" : "p";
+  return `r1.${playerId}.${kind}.${sign(`restore:${kind}:${playerId}`)}`;
+}
+
+/** The player and the kind of session a restore seal gives back; null for a raw id, a changed seal or anything else. */
+export function openRestoreSeal(value: unknown): { playerId: string; byName: boolean } | null {
+  if (typeof value !== "string" || value.length > 200) return null;
+  const parts = value.split(".");
+  if (parts.length !== 4 || parts[0] !== "r1" || !PLAYER_ID.test(parts[1]) || (parts[2] !== "p" && parts[2] !== "n")) return null;
+  if (!signs(parts[3], `restore:${parts[2]}:${parts[1]}`)) return null;
+  return { playerId: parts[1], byName: parts[2] === "n" };
+}
+
+/** The restore seal for the browser signed in now as `playerId`: by name exactly when its session is by name. */
+export async function restoreSealForSession(playerId: string): Promise<string> {
+  return restoreSeal(playerId, await signedInByName(playerId));
 }
 
 export async function getSessionPlayerId(): Promise<string | null> {
@@ -57,16 +99,12 @@ export async function getSessionPlayer(db: Db): Promise<Player | null> {
  */
 export async function setSessionPlayer(playerId: string): Promise<void> {
   const store = await cookies();
-  store.set(PLAYER_COOKIE, sealPlayerId(playerId), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: ONE_YEAR,
-  });
+  store.set(PLAYER_COOKIE, sealPlayerId(playerId), sessionCookie());
   store.set(HAS_ID_COOKIE, "1", hintCookieOptions());
   store.delete(BY_NAME_COOKIE);
 }
+
+const sessionCookie = () => ({ httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: ONE_YEAR });
 
 export async function clearSessionPlayer(): Promise<void> {
   const store = await cookies();
@@ -76,38 +114,30 @@ export async function clearSessionPlayer(): Promise<void> {
 }
 
 /**
- * A session that came in by "That's me" (DECIDING rule 34), marked beside the session cookie and
- * signed for that one record, so it cannot be copied onto another and says nothing once the browser
- * signs in as anybody else. What it holds back, and until when, is `nameOnlySession`
- * (src/lib/domain/thatsMe.ts): no personal link and no home-screen card until the record proves
- * something.
+ * A session that came in by "That's me" (DECIDING rule 34). The mark is in the session cookie itself
+ * (`sealPlayerId` with `byName`), signed for that one record, so it cannot be copied onto another, cannot
+ * be dropped, and says nothing once the browser signs in as anybody else. The cookie of its own beside
+ * it is the mark as it was set before 11 October 2026, still read for the sessions made then. What the
+ * mark holds back, and until when, is `nameOnlySession` (src/lib/domain/thatsMe.ts): no personal link
+ * and no home-screen card until the record proves something.
  */
 export const BY_NAME_COOKIE = "km_by_name";
 const byNameValue = (playerId: string) => sign(`byname:${playerId}`);
 
+/** After `setSessionPlayer`: seals the session as one by name, and sets the mark cookie beside it. */
 export async function markSignedInByName(playerId: string): Promise<void> {
   const store = await cookies();
-  store.set(BY_NAME_COOKIE, byNameValue(playerId), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: ONE_YEAR,
-  });
+  store.set(PLAYER_COOKIE, sealPlayerId(playerId, { byName: true }), sessionCookie());
+  store.set(BY_NAME_COOKIE, byNameValue(playerId), sessionCookie());
 }
 
-/** Whether this browser's session came in by name, for this record. */
+/** Whether this browser's session came in by name, for this record: the session cookie says so, or (for a session from before 11 October 2026) the mark beside it. */
 export async function signedInByName(playerId: string): Promise<boolean> {
   const store = await cookies();
+  const session = openSession(store.get(PLAYER_COOKIE)?.value);
+  if (session?.id === playerId && session.byName) return true;
   const v = store.get(BY_NAME_COOKIE)?.value;
-  if (!v) return false;
-  const expected = byNameValue(playerId);
-  if (v.length !== expected.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(v), Buffer.from(expected));
-  } catch {
-    return false;
-  }
+  return Boolean(v) && signs(v!, `byname:${playerId}`);
 }
 
 /** Per-event organizer access granted by visiting /{code}/manage/{manageCode}. */
@@ -115,24 +145,11 @@ export const manageCookieName = (code: string) => `km_manage_${code}`;
 
 export async function grantManageAccess(code: string, manageCode: string): Promise<void> {
   const store = await cookies();
-  store.set(manageCookieName(code), sign(`${code}:${manageCode}`), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: `/${code}`,
-    maxAge: ONE_YEAR,
-  });
+  store.set(manageCookieName(code), sign(`${code}:${manageCode}`), { ...sessionCookie(), path: `/${code}` });
 }
 
 export async function hasManageAccess(code: string, manageCode: string): Promise<boolean> {
   const store = await cookies();
   const v = store.get(manageCookieName(code))?.value;
-  if (!v) return false;
-  const expected = sign(`${code}:${manageCode}`);
-  if (v.length !== expected.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(v), Buffer.from(expected));
-  } catch {
-    return false;
-  }
+  return Boolean(v) && signs(v!, `${code}:${manageCode}`);
 }

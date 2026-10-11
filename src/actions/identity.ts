@@ -14,7 +14,7 @@ import { sendPersonalLinkEmail } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
 import { notifyLineupChange, notifyPromotion, notifyRefill, sendEmailCode, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
-import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, markSignedInByName, setSessionPlayer } from "@/lib/session";
+import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, markSignedInByName, openRestoreSeal, setSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, clientKey, nameOnly, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { removeOptOut } from "@/lib/domain/optouts";
@@ -23,6 +23,7 @@ import { claimSameNameRow } from "@/lib/domain/sameName";
 import { later } from "@/lib/alerts";
 import { countSignIn } from "@/lib/domain/signins";
 import { thatsMe } from "@/lib/domain/thatsMe";
+import { isDeletedPlayer } from "@/lib/domain/result";
 
 export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
 
@@ -296,18 +297,26 @@ export async function adoptPersonalToken(token: string): Promise<ActionResult<Pu
   });
 }
 
-/** localStorage mirror → cookie restore (identity survives cookie loss on the same device). */
-export async function restoreIdentity(playerId: string): Promise<ActionResult<PublicPlayer | null>> {
+/**
+ * The localStorage copy brings back a lost cookie on the same device (`IdentitySync`). It takes only
+ * the seal the server gave this browser while it was signed in (`restoreSeal`), never a raw player id:
+ * a player id is on screens other people see, and until 11 October 2026 this action signed in as any
+ * id it was given. The session comes back as it was, so a sign-in by name comes back by name (DECIDING
+ * rule 34), and a deleted account does not come back. The answer says only whether the browser is
+ * signed in now: no name, no address, no id.
+ */
+export async function restoreIdentity(seal: string): Promise<ActionResult<boolean>> {
   return runA(async () => {
-    if (!/^[0-9a-f-]{36}$/i.test(playerId)) return null;
+    const opened = openRestoreSeal(seal);
+    if (!opened) return false;
     const db = await getDb();
-    const existing = await getSessionPlayer(db);
-    if (existing) return pub(existing);
-    const p = await getPlayer(db, playerId);
-    if (!p) return null;
+    if (await getSessionPlayerId()) return true;
+    const p = await getPlayer(db, opened.playerId);
+    if (!p || isDeletedPlayer(p)) return false;
     await setSessionPlayer(p.id);
+    if (opened.byName) await markSignedInByName(p.id);
     await later(() => countSignIn(db, "restore"));
-    return pub(p);
+    return true;
   });
 }
 

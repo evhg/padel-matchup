@@ -11,7 +11,7 @@ import { APP_NAME, APP_TAGLINE, baseUrl } from "@/lib/config";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { later } from "@/lib/alerts";
 import { isCrawler } from "@/lib/source";
-import { getSessionPlayer } from "@/lib/session";
+import { getSessionPlayer, restoreSealForSession } from "@/lib/session";
 import { pickMessages, ROOT_CLIENT_MESSAGES } from "@/i18n/clientMessages";
 import { htmlTextAttr, TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
 
@@ -42,11 +42,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const messages = await getMessages();
   // "Bigger text" is a cookie, read here so the first paint is already the size the person chose.
   const textSize = htmlTextAttr(textSizeOf((await cookies()).get(TEXT_SIZE_COOKIE)?.value));
-  let me: { id: string; name: string } | null = null;
+  // What the browser keeps to come back after a lost cookie: the server's seal, never the player id (IdentitySync).
+  let seal: string | null = null;
   try {
     const db = await getDb();
     const p = await getSessionPlayer(db);
-    if (p) me = { id: p.id, name: p.displayName };
+    if (p) seal = await restoreSealForSession(p.id);
     // Our own page-render counter, so the service board knows when Vercel's analytics ceiling is near. Crawlers do not count.
     const ua = (await headers()).get("user-agent") ?? "";
     if (!isCrawler(ua)) await later(() => bumpMetric(db, "pageviews"));
@@ -62,8 +63,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             (withClientMessages). The whole catalogue was 146 KB to 230 KB inline in every page. */}
         <NextIntlClientProvider messages={pickMessages(messages, ROOT_CLIENT_MESSAGES)}>
           {children}
-          <IdentitySync player={me} />
-          <PwaSetup signedIn={Boolean(me)} />
+          <IdentitySync seal={seal} />
+          <PwaSetup signedIn={Boolean(seal)} />
         </NextIntlClientProvider>
         {/* Vercel Web Analytics: page views and Web Vitals, no cookies, no personal data. */}
         <Analytics />
