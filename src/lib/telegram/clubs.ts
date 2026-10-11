@@ -108,7 +108,7 @@ export async function askOwnerAboutClub(db: Db, club: Club, claimant: Player): P
  * and loses its buttons (a stale Approve reads as a choice); a second message buzzes the owner and
  * carries Reject, one tap to take the page down. Both, by the owner's decision.
  */
-export async function tellOwnerClaimLive(club: Club, email: string): Promise<void> {
+export async function tellOwnerClaimLive(club: Pick<Club, "slug" | "name" | "founding" | "notifyMessageId" | "manageToken">, email: string): Promise<void> {
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return;
   const page = { text: "Open page", url: `${baseUrl()}/v/${club.slug}` };

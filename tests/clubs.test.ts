@@ -6,7 +6,8 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeSlotsFromBookings, localDay, parseDuration, parseFreeJson, parseIcs, refreshAllAvailability, refreshClubAvailability } from "@/lib/booking/availability";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, getClubByTokenWithCache, getClubWithCache, guessCity, listClubsClaimedBy, listLiveClubs, listPendingClubs, listShownClubs, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, getClubByTokenWithCache, getClubWithCache, guessCity, listClubsClaimedBy, listLiveClubs, listPendingClubs, listShownClubs, markClaimVerified, setClubTimezone, updateClub } from "@/lib/domain/clubs";
+import { replaceCourts } from "@/lib/domain/courts";
 import { claimCheckLine } from "@/lib/telegram/clubs";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { askOwnerAboutClub } from "@/lib/telegram/clubs";
@@ -182,10 +183,10 @@ describe("clubs (db)", () => {
     const edited = (await updateClub(db, club.manageToken, { bookingUrl: "https://www.matchi.se/facilities/rawai", opensAt: "7:00", closesAt: "23:00", availabilityUrl: "https://rawaipadel.com/bookings.ics", availabilityKind: "ics_bookings" }))!;
     expect(edited.bookingPlatform).toBe("matchi");
     expect(edited.opensAt).toBe("07:00");
-    expect(edited.availability).toBeNull();
+    expect((await getClubWithCache(db, club.slug))!.availability).toBeNull();
 
     // Public shape: no token, booking platform named, free courts null until a feed was read.
-    const pub = clubToPublic(edited, "https://kicksma.sh");
+    const pub = clubToPublic((await getClubWithCache(db, edited.slug))!, "https://kicksma.sh");
     expect(JSON.stringify(pub)).not.toContain(club.manageToken);
     expect(pub.booking).toEqual({ url: "https://www.matchi.se/facilities/rawai", platform: "matchi", platformName: "MATCHi" });
     expect(pub.freeCourts).toBeNull();
@@ -206,7 +207,7 @@ describe("clubs (db)", () => {
     let club = await claimClub(db, { name: "Chalong Padel", playerId: p.id, tz: "Asia/Bangkok", courts: 3, opensAt: "07:00", closesAt: "10:00", availabilityUrl: "https://chalong.example/bookings.ics", availabilityKind: "ics_bookings" });
     // Pending clubs are not refreshed by the hourly job.
     expect(await refreshAllAvailability(db, now)).toEqual({ refreshed: 0, errors: 0 });
-    club = (await decideClub(db, club.slug, true))!;
+    expect(await decideClub(db, club.slug, true)).toBeTruthy();
     expect(await refreshAllAvailability(db, now)).toEqual({ refreshed: 1, errors: 0 });
     club = (await getClubWithCache(db, club.slug))!;
     expect(club.availability?.day).toBe("2026-09-06");
@@ -389,5 +390,22 @@ describe("a club read carries the cache of free courts only where a page renders
       expect(row, read).not.toHaveProperty("availability");
     }
     expect(lean.getClub).toMatchObject({ slug: club.slug, name: "Cache Padel", manageToken: club.manageToken, approvedAt: club.approvedAt });
+
+    // The owner's writes give the row back without the cache too: none of their callers renders free times.
+    const written = {
+      updateClub: await updateClub(db, club.manageToken, { courts: 4 }),
+      replaceCourts: (await replaceCourts(db, club.manageToken, [{ name: "Court 1", kind: "indoor" }]))?.club,
+      setClubTimezone: await setClubTimezone(db, club.slug, "Asia/Bangkok"),
+      markClaimVerified: await markClaimVerified(db, club.slug),
+      approve: await decideClub(db, club.slug, true, NOW),
+      reject: await decideClub(db, pending.slug, false, NOW),
+    };
+    for (const [write, row] of Object.entries(written)) {
+      expect(row, write).toBeTruthy();
+      expect(row, write).not.toHaveProperty("availability");
+    }
+    expect(written.updateClub).toMatchObject({ slug: club.slug, courts: 4 });
+    // And the cache is still there for the pages that render it.
+    expect((await getClubWithCache(db, club.slug))!.availability).toEqual(cache);
   });
 });

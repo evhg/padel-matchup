@@ -501,7 +501,7 @@ export async function clubsAddedSince(db: Db, playerId: string, since: Date): Pr
 export const CLUB_ADD_LIMITS = { perPlayerPerDay: 5 } as const;
 
 /** Edits through the manage link. Name and slug never change (they are the venue's). */
-export async function updateClub(db: Db, token: string, input: ClubInput): Promise<Club | null> {
+export async function updateClub(db: Db, token: string, input: ClubInput): Promise<PickableClub | null> {
   const club = await getClubByToken(db, token);
   if (!club) return null;
   const fields = cleanClubInput(input);
@@ -514,7 +514,7 @@ export async function updateClub(db: Db, token: string, input: ClubInput): Promi
     .update(clubs)
     .set({ ...fields, ...(feedChanged ? { availability: null, availabilityAt: null } : {}), ...(tzFill ? { tz: tzFill } : {}), updatedAt: new Date() })
     .where(eq(clubs.slug, club.slug))
-    .returning();
+    .returning(columnsButCache);
   return row;
 }
 
@@ -580,7 +580,7 @@ const UNCLAIMED = {
  * owner's tap guards against), the courts and the week the claim set go with it, and the manage link
  * is new, because the old one belongs to the claim.
  */
-async function relist(db: Db, club: PickableClub, listing: DirectoryListing, now: Date): Promise<Club> {
+async function relist(db: Db, club: PickableClub, listing: DirectoryListing, now: Date): Promise<PickableClub> {
   return db.transaction(async (tx) => {
     await tx.delete(clubCourts).where(eq(clubCourts.clubSlug, club.slug));
     await tx.delete(clubSlots).where(eq(clubSlots.clubSlug, club.slug));
@@ -588,13 +588,13 @@ async function relist(db: Db, club: PickableClub, listing: DirectoryListing, now
       .update(clubs)
       .set({ ...listing, ...UNCLAIMED, claimedAt: club.createdAt, manageToken: newToken(), updatedAt: now })
       .where(eq(clubs.slug, club.slug))
-      .returning();
+      .returning(columnsButCache);
     return row;
   });
 }
 
 /** The owner's tap. Approval makes the page live and hands out the founding badge while the city has room. */
-export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date(), reason?: ClaimReason | null): Promise<Club | null> {
+export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date(), reason?: ClaimReason | null): Promise<PickableClub | null> {
   const club = await getClub(db, slug);
   if (!club) return null;
   if (!approve) {
@@ -605,7 +605,7 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
       .update(clubs)
       .set({ rejectedAt: now, approvedAt: null, founding: false, claimDecision: why, updatedAt: now })
       .where(eq(clubs.slug, slug))
-      .returning();
+      .returning(columnsButCache);
     return row;
   }
   let founding = club.founding;
@@ -617,7 +617,7 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
     const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(key, eq(clubs.founding, true), isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt)));
     founding = Number(n) < CLUB_LIMITS.foundingPerCity;
   }
-  const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, claimDecision: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
+  const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, claimDecision: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning(columnsButCache);
   // A live club page is news for the search engines that speak IndexNow.
   await pingIndexNow([`/v/${slug}`, ...locales.map((l) => localePath("/clubs", l))], { db });
   return row;
@@ -650,8 +650,8 @@ export function claimEmailForCode(c: Pick<Club, "claimContact" | "website" | "bo
 }
 
 /** The code came back right: the claim is confirmed by the club's own mail. Once; a second code changes nothing. */
-export async function markClaimVerified(db: Db, slug: string, now = new Date()): Promise<Club | null> {
-  const [row] = await db.update(clubs).set({ claimVerifiedAt: now, updatedAt: now }).where(and(eq(clubs.slug, slug), isNull(clubs.claimVerifiedAt))).returning();
+export async function markClaimVerified(db: Db, slug: string, now = new Date()): Promise<PickableClub | null> {
+  const [row] = await db.update(clubs).set({ claimVerifiedAt: now, updatedAt: now }).where(and(eq(clubs.slug, slug), isNull(clubs.claimVerifiedAt))).returning(columnsButCache);
   return row ?? null;
 }
 
@@ -692,8 +692,8 @@ export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined,
 }
 
 /** The club's time zone, set from the manage page when the claim came without one (the week cannot make matches without it). */
-export async function setClubTimezone(db: Db, slug: string, tz: string): Promise<Club | null> {
+export async function setClubTimezone(db: Db, slug: string, tz: string): Promise<PickableClub | null> {
   if (!isValidTimeZone(tz)) throw new DomainError("invalid", "tz");
-  const [row] = await db.update(clubs).set({ tz, updatedAt: new Date() }).where(eq(clubs.slug, slug)).returning();
+  const [row] = await db.update(clubs).set({ tz, updatedAt: new Date() }).where(eq(clubs.slug, slug)).returning(columnsButCache);
   return row ?? null;
 }

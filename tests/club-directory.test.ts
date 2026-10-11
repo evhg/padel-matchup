@@ -285,9 +285,11 @@ describe("a refused claim on a club the directory listed", () => {
     const refused = (await decideClub(db, "warehaus", false, REFUSED_AT, "unconfirmed"))!;
     // Every column is what the directory import wrote: the name, the place, the description the claim
     // cleared, no courts because no source said, and nobody's claim, link or hours.
-    expect(facts(refused)).toEqual(facts(listed));
+    expect(facts((await getClubWithCache(db, refused.slug))!)).toEqual(facts(listed));
     expect(refused.source).toBe("directory");
     expect(refused.claimedBy).toBeNull();
+    // The hand-back gives the row back without the cache of free courts (AGENTS.md rule 12).
+    expect(refused).not.toHaveProperty("availability");
     expect(refused.about).toBe("WAREHAUS.club, Cherngtalay, Thalang.");
     // The courts it named and the week it set were the claim's, and went with it.
     expect(await db.select().from(clubCourts).where(eq(clubCourts.clubSlug, "warehaus"))).toEqual([]);
@@ -311,7 +313,7 @@ describe("a refused claim on a club the directory listed", () => {
     const someone = await makePlayer(db, "Someone");
     await claimClub(db, { playerId: someone.id, name: "Padel Phuket @ Blue Tree", tz: "Asia/Bangkok", bookingUrl: "https://karon-padel-pay.example/checkout" });
     const refused = (await decideClub(db, "blue-tree", false, REFUSED_AT, "unconfirmed"))!;
-    expect(facts(refused)).toEqual(facts(listed));
+    expect(facts((await getClubWithCache(db, refused.slug))!)).toEqual(facts(listed));
   });
 
   it("lets the real owner's claim keep the directory's booking link when the field is blank, and the platform its own domain cannot tell", async () => {
@@ -408,7 +410,9 @@ describe("a refused claim on a club the directory listed", () => {
 
   it("repairs nothing when the row is in any other state", async () => {
     await claimAsErik();
-    const live = (await decideClub(db, "warehaus", true, REFUSED_AT))!;
+    expect(await decideClub(db, "warehaus", true, REFUSED_AT)).toBeTruthy();
+    // The whole row, the cache of free courts with it, before the repair and after.
+    const live = (await getClubWithCache(db, "warehaus"))!;
     for (const statement of migration.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
     expect(await getClubWithCache(db, "warehaus")).toEqual(live);
     expect(await db.select().from(clubCourts).where(eq(clubCourts.clubSlug, "warehaus"))).toHaveLength(2);
