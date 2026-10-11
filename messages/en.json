@@ -229,10 +229,6 @@
     "freeThenClub": "✓ The club shows a free court then ({time} at the club).",
     "busyThenClub": "The club shows no free court then ({time} at the club).",
     "freeAndUsualLabel": "✓ Free at {club}, and your usual times",
-    "freeThenOn": "✓ {platform} shows a free court then.",
-    "busyThenOn": "{platform} shows no free court then.",
-    "freeThenOnClub": "✓ {platform} shows a free court then ({time} at the club).",
-    "busyThenOnClub": "{platform} shows no free court then ({time} at the club).",
     "bookedByMe": "Court booked by me",
     "bookedByMeHelp": "The match page tells the players the court is booked.",
     "pasteNoDay": "Your booking did not give the day. Pick it here.",
@@ -1426,8 +1422,7 @@
     "playClear": "Show them all",
     "playBy": "by {name}",
     "playFreeTitle": "Free courts",
-    "playFreeHelp": "As the clubs and their booking apps show them now. Tap one to organize a game there; you book and pay in the club's own app.",
-    "playFreeOn": "on {platform}"
+    "playFreeHelp": "As the clubs and their booking apps show them now. Tap one to organize a game there; you book and pay in the club's own app."
   },
   "telegram": {
     "title": "Telegram",

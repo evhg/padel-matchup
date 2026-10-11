@@ -212,12 +212,10 @@ const STRINGS = {
     crewOther: "This group already runs matches for another crew. A group admin can type /quiet first.",
     crewTaken: "This crew already has its Telegram group. To move it here, a group admin there first types /quiet or removes the bot.",
     whichMatch: "Which match?",
-    // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. "From" names whose
-    // times they are: a platform's, or the clubs' own (DECIDING rule 35); never "this week", because a
-    // club's own feed holds today.
-    timesFree: (from: string) => `Free courts at your clubs, from ${from}. Tap one and I make the match; you book and pay in the club's own app.`,
-    timesTheClubs: "the clubs",
-    timesAnd: " and ",
+    // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. No platform's name
+    // (the owner, 11 October 2026: "The chat reply and the time chips show no platform name"); never
+    // "this week", because a club's own feed holds today.
+    timesFree: "Free courts at your clubs. Tap one and I make the match; you book and pay in the club's own app.",
     timesNone: "None of your clubs shows a free court just now.",
     timesExists: "That match is already on.",
     timesGone: "That time is no longer on offer. Ask again for the free times.",
@@ -431,9 +429,7 @@ const STRINGS = {
     crewOther: "Этот чат уже ведёт матчи другой группы. Сначала админ чата может написать /quiet.",
     crewTaken: "У этой группы уже есть свой Telegram-чат. Чтобы перенести его сюда, админ того чата сначала пишет там /quiet или удаляет бота.",
     whichMatch: "Какой матч?",
-    timesFree: (from: string) => `Свободные корты в ваших клубах, по данным ${from}. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.`,
-    timesTheClubs: "клубов",
-    timesAnd: " и ",
+    timesFree: "Свободные корты в ваших клубах. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.",
     timesNone: "Сейчас ни один из ваших клубов не показывает свободных кортов.",
     timesGone: "Это время больше не предлагается. Спросите свободное время ещё раз.",
     timesExists: "Этот матч уже есть.",
@@ -644,9 +640,7 @@ const STRINGS = {
     crewOther: "Este chat ya organiza partidos de otro grupo. Antes, un administrador del chat puede escribir /quiet.",
     crewTaken: "Este grupo ya tiene su chat de Telegram. Para traerlo aquí, un administrador de ese chat escribe antes /quiet allí o quita el bot.",
     whichMatch: "¿Qué partido?",
-    timesFree: (from: string) => `Pistas libres en tus clubs, según ${from}. Toca una y creo el partido; reservas y pagas tú, en la app del club.`,
-    timesTheClubs: "los clubs",
-    timesAnd: " y ",
+    timesFree: "Pistas libres en tus clubs. Toca una y creo el partido; reservas y pagas tú, en la app del club.",
     timesNone: "Ahora mismo ninguno de tus clubs muestra una pista libre.",
     timesGone: "Esa hora ya no está disponible. Vuelve a pedir los horarios libres.",
     timesExists: "Ese partido ya existe.",

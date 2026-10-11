@@ -144,7 +144,7 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
             <ul className="mt-2 flex flex-col divide-y divide-line">
               {free.map((b) => (
                 <li key={`${b.slug}-${b.start.toISOString()}`}>
-                  {/* The whole row is the link: the club on its own line, never cut, and whose times these are. */}
+                  {/* The whole row is the link: the club on its own line, never cut. No platform's name: the owner, 11 October 2026, shows it only at the booking step. */}
                   <Link href={courtOfferLink("", { club: { name: b.name, tz: b.tz }, hour: { date: b.date, time: b.time } })} prefetch={false} className="-mx-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 hover:bg-bg" data-testid="play-free-row">
                     <span className="min-w-0 flex-1">
                       <span className="block font-bold tabular-nums">
@@ -153,7 +153,6 @@ export default async function PlayPage({ searchParams }: { searchParams: Promise
                       <span className="block text-sm">{b.name}</span>
                       <span className="block text-xs text-muted">
                         {t("club.freeSlot", { count: b.free })}
-                        {b.platform ? ` · ${t("city.playFreeOn", { platform: b.platform })}` : ""}
                       </span>
                     </span>
                     <span aria-hidden className="text-faint">
