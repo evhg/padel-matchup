@@ -31,6 +31,16 @@ export const tagForWhatsapp = (text: string, url: string) => tagMatchLinks(text,
 /** The link itself, tagged when it is a bare match link (the Telegram share's `url`, the copied link); any other link as it is. */
 export const tagMatchUrl = (url: string, tag: string) => (MATCH_LINK.test(url) ? taggedUrl(url, tag) : url);
 
+/**
+ * What the phone's own share sheet gets: the link tagged `?s=share`, and the text without it. With a
+ * picture the sheet takes text only, so `textWithLink` carries the tagged link.
+ */
+export function nativeShareData(url: string, text: string): { url: string; text: string; textWithLink: string } {
+  const tagged = tagMatchUrl(url, "share");
+  const plain = text.replace(url, "").trim();
+  return { url: tagged, text: plain, textWithLink: `${plain} ${tagged}`.trim() };
+}
+
 export function telegramShareUrl(url: string, text: string): string {
   return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
 }

@@ -150,6 +150,24 @@ try {
     views = await viewsWa();
   }
   check("a stranger's view of a ?s=wa link counts once under view_src_wa", wasViews >= 0 && views === wasViews + 1, `${wasViews} -> ${views}`);
+  // A refresh of the open page is no view: router.refresh() is what the live night's AutoRefresh calls
+  // every 20 seconds. Next.js removes the RSC header before the page reads it, so the page reads the
+  // browser's Sec-Fetch-Dest instead (isFullPageLoad in src/lib/source.ts). A reload by hand is a view.
+  for (let i = 0; i < 2; i++) {
+    const refreshed = viewer.waitForResponse((r) => r.request().headers()["rsc"] === "1" && new URL(r.url()).pathname === `/${code}`, { timeout: 15000 });
+    await viewer.evaluate(() => window.next.router.refresh());
+    await (await refreshed).finished();
+  }
+  await viewer.waitForTimeout(2000);
+  const afterRefresh = await viewsWa();
+  check("a refresh of the open match page adds no view", afterRefresh === wasViews + 1, `${wasViews + 1} -> ${afterRefresh}`);
+  await viewer.reload();
+  let reloaded = afterRefresh;
+  for (let i = 0; i < 20 && reloaded <= afterRefresh; i++) {
+    await viewer.waitForTimeout(500);
+    reloaded = await viewsWa();
+  }
+  check("a full load of the match page adds one view", reloaded === afterRefresh + 1, `${afterRefresh} -> ${reloaded}`);
   await viewer.context().close();
 
   await a.goto(`${BASE}/${code}`);

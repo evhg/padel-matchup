@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
-import { cleanSource, taggedUrl, viewCounter } from "@/lib/source";
+import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/source";
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
 import { bumpMetric } from "@/lib/domain/metrics";
@@ -148,9 +148,9 @@ export default async function EventPage({ params, searchParams }: Props) {
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
   // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
   // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
-  // a full page load only: a refresh, a client navigation and a prefetch carry the RSC header.
+  // a full page load only: never the 20-second refresh of a live night, a server action or a prefetch.
   const h = await headers();
-  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", rsc: h.has("rsc") });
+  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", fullLoad: isFullPageLoad(h) });
   if (viewKey) await later(() => bumpMetric(db, viewKey));
 
   // Level range: players outside it ask to join; the organizer decides.

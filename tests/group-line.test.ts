@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
 import { formatWeekdayTime } from "@/lib/dates";
-import { tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
-import { countedSource, isCrawler, viewCounter } from "@/lib/source";
+import { createRequestStoreForRender } from "next/dist/server/async-storage/request-store";
+import { nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { countedSource, isCrawler, isFullPageLoad, viewCounter } from "@/lib/source";
 
 /**
  * The owner, 10 October 2026: "you have to leave the chat group". No link keeps a player inside a
@@ -102,9 +103,21 @@ describe("every share button says where the link went", () => {
     expect(countedSource("link")).toBe("link");
   });
 
+  it("tags the phone's own share sheet ?s=share, with or without the picture", () => {
+    const url = "https://kicksma.sh/7KQ2";
+    const d = nativeShareData(url, `Padel Sat: ${url}`);
+    expect(d.url).toBe("https://kicksma.sh/7KQ2?s=share");
+    expect(d.text).toBe("Padel Sat:");
+    // With a picture the sheet takes text only, so the tagged link rides in the text.
+    expect(d.textWithLink).toBe("Padel Sat: https://kicksma.sh/7KQ2?s=share");
+    expect(countedSource("share")).toBe("share");
+    // A coach's page or an invitation is shared as it is.
+    expect(nativeShareData("https://kicksma.sh/c/olga", "Book me").url).toBe("https://kicksma.sh/c/olga");
+  });
+
   it("counts a match page view by a visitor with no seat, under the link's tag", () => {
     const phone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
-    const view = (o: { source: string | null; seated?: boolean; ua?: string; rsc?: boolean }) => viewCounter({ seated: false, ua: phone, rsc: false, ...o });
+    const view = (o: { source: string | null; seated?: boolean; ua?: string; fullLoad?: boolean }) => viewCounter({ seated: false, ua: phone, fullLoad: true, ...o });
     expect(view({ source: "wa" })).toBe("view_src_wa");
     expect(view({ source: "link" })).toBe("view_src_link");
     expect(view({ source: null })).toBe("view_src_none");
@@ -118,9 +131,29 @@ describe("every share button says where the link went", () => {
     expect(view({ source: "link", ua: "WhatsApp/2.24.1.78 i" })).toBeNull();
     // WhatsApp's in-app browser is a person, and still counts.
     expect(view({ source: "wa", ua: `${phone} WhatsApp/2.24.1.78` })).toBe("view_src_wa");
-    // Only a full page load is a view. A refresh of an open page (AutoRefresh polls every 20 s on a
-    // live night), a client navigation and a prefetch send the RSC header, and are not.
-    expect(view({ source: "wa", rsc: true })).toBeNull();
+    // Only a full page load is a view: a refresh of an open page (AutoRefresh polls every 20 s on a
+    // live night), a server action, a client navigation and a prefetch are not.
+    expect(view({ source: "wa", fullLoad: false })).toBeNull();
     expect(isCrawler("")).toBe(false);
+  });
+
+  // Next.js deletes the RSC header and the other router headers before `headers()` returns
+  // (getHeaders in next/dist/server/async-storage/request-store.js), so a guard on `rsc` never fired
+  // and every 20-second refresh of a live night counted a view. The kind of request is read from the
+  // headers Next.js keeps, through the same request store a page reads.
+  it("tells a full page load from a refresh, a server action and a prefetch, by the headers a page can read", () => {
+    const seen = (headers: Record<string, string>) => isFullPageLoad(createRequestStoreForRender({ headers } as never, undefined, { pathname: "/7KQ2" }, {}, undefined as never, undefined, undefined, false, undefined, undefined, null).headers);
+    // A tapped link, a typed address, a reload by hand.
+    expect(seen({ "sec-fetch-dest": "document", "sec-fetch-mode": "navigate" })).toBe(true);
+    // A browser too old to send Sec-Fetch-Dest (Safari before 16.4) is a full load unless it says otherwise.
+    expect(seen({})).toBe(true);
+    // router.refresh() (AutoRefresh) and a prefetch: a fetch() with the RSC header, which the page never sees.
+    expect(seen({ rsc: "1", "next-router-state-tree": "%5B%22%22%5D", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors" })).toBe(false);
+    expect(seen({ rsc: "1", "next-router-prefetch": "1", "sec-fetch-dest": "empty" })).toBe(false);
+    // A server action that re-renders the page (leave, a join request, stay updated).
+    expect(seen({ "next-action": "7f3a", "sec-fetch-dest": "empty" })).toBe(false);
+    expect(seen({ "next-action": "7f3a" })).toBe(false);
+    // An iframe or an image request is not a view either.
+    expect(seen({ "sec-fetch-dest": "iframe" })).toBe(false);
   });
 });
