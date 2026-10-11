@@ -2,11 +2,12 @@
  * The browser gets only the messages its page hands it, and this file proves each page hands enough.
  *
  * Until 11 October 2026 the root layout gave every page the whole catalogue: 146 KB in English and
- * 230 KB in Russian, inline in every page's HTML and again in every refresh. On a busy phone hydration
- * could start while that data was still arriving, and React threw error 418 and rendered the page
- * again (the ship skill, "A place in page.content() is not a place on the screen"). Now the root layout
- * gives `ROOT_CLIENT_MESSAGES` (nothing), and a page whose client components translate wraps its
- * default export in `withClientMessages([...], Page)` with the namespaces they read.
+ * 230 KB in Russian, inline in every page's HTML and again in every refresh. Now the root layout gives
+ * `ROOT_CLIENT_MESSAGES` (nothing), and a page whose client components translate wraps its default
+ * export in `withClientMessages([...], Page)` with the namespaces they read. A smaller page narrows the
+ * window in which hydration can start before the page's rows arrive; it does not fix React error 418
+ * on /me (the ship skill, "A place in page.content() is not a place on the screen"). What a
+ * client-side navigation now costs is in src/i18n/withClientMessages.tsx.
  *
  * The price of a missing key is the lesson about a notification that showed its own message key: the
  * browser renders "me.title". So the list is not trusted, it is read back from the source
@@ -247,5 +248,42 @@ describe("the messages each page gives the browser", () => {
       .map(({ f, i }) => `${path.relative(process.cwd(), f)}:${i + 1}`);
     expect(elsewhere).toEqual([]);
     expect(providers.sort()).toEqual(["src/app/layout.tsx: {pickMessages(messages, ROOT_CLIENT_MESSAGES)}", "src/i18n/withClientMessages.tsx: {pickMessages(await getMessages(), [...ROOT_CLIENT_MESSAGES, ...paths])}"]);
+  });
+});
+
+/**
+ * The guard's own blind spots, each found by the review of 11 October 2026 in a scratch copy where
+ * tsc and this file passed while the browser showed "me.title". tests/fixtures/client-messages is a
+ * small app tree with one page for each; the guard must see the key or name the problem.
+ */
+describe("the guard sees a translator however it reaches the browser", () => {
+  const FIX = "tests/fixtures/client-messages/src";
+  let fx: Report;
+  beforeAll(() => {
+    // A DYNAMIC entry for a template it can never build: the browser would get feedback.* and no errors.* key.
+    fx = analyseClientMessages({ [`${FIX}/components/TemplateKey.tsx`]: { "`errors.${code}`": ["feedback.*"], key: ["feedback.*"] } }, path.resolve(process.cwd(), FIX));
+  }, 60_000);
+  const problemsIn = (file: string) => fx.problems.filter((p) => p.at.startsWith(`${FIX}/${file}`)).map((p) => p.message);
+  const needsOf = (page: string) => fx.entries.find((e) => e.file === `${FIX}/app/${page}/page.tsx`)!.needs.map((n) => n.path).sort();
+
+  it("useTranslations passed on by a file of our own, under its own name or another", () => {
+    expect(needsOf("barrel")).toEqual(["feedback.title", "me.title"]);
+  });
+
+  it("a namespace import of such a file, and useMessages taken from it", () => {
+    expect(problemsIn("components/ByNamespace.tsx")).toEqual([expect.stringContaining("a namespace import of")]);
+    expect(problemsIn("components/ByMessages.tsx")).toEqual([expect.stringContaining("useMessages in code the browser runs")]);
+  });
+
+  it("a JavaScript module the browser runs", () => {
+    expect(problemsIn("components/ProbeJsx.jsx")).toEqual([expect.stringContaining("a JavaScript module the browser runs")]);
+  });
+
+  it("an import() of a path built at run time, and a local import that names no file", () => {
+    expect(problemsIn("components/Loader.tsx")).toEqual([expect.stringContaining("an import() of a path built at run time"), 'an import the guard cannot resolve: "./steps/Gone"']);
+  });
+
+  it("a DYNAMIC entry that lists keys its template can never build", () => {
+    expect(problemsIn("components/TemplateKey.tsx")).toEqual(['`errors.${code}` can never be "feedback.*", which its DYNAMIC entry lists', 'key can never be "feedback.*", which its DYNAMIC entry lists']);
   });
 });

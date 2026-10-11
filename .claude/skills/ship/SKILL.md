@@ -281,7 +281,10 @@ learning can be a test, a gate step or a script, make it one and put the story i
   `<main>`, meets its own `<h1>`, throws error 418 and renders the page again, after the scripts. Main
   does it too. Read order from the elements (`headingOrder` in `e2e/core.mjs`). To see the 418 locally:
   the CI browser (`playwright install chromium-headless-shell` into a scratch `PLAYWRIGHT_BROWSERS_PATH`)
-  and four busy loops on the CPU, then load a signed-in `/me` in fresh contexts: 1 to 2 in 50.
+  and four busy loops on the CPU, then load a signed-in `/me` in fresh contexts: 1 to 2 in 50. On
+  demand: a proxy in front of `next start` that sends the first 30,000 bytes of the document, waits
+  1.5 s and trickles the rest. The lean messages below made the window smaller, not gone: that proxy
+  still gives 418 on both builds. It stays open (ROADMAP.md, "Open, small"); never call it fixed.
 - **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one
   and postgres-js throws `Received an instance of Date`, so the gate goes green and CI's real-Postgres
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use
@@ -378,6 +381,20 @@ learning can be a test, a gate step or a script, make it one and put the story i
   trusted: `tests/client-messages.test.ts` reads it back from the source and prints the line to paste,
   and the browser suites fail on MISSING_MESSAGE. The provider sits in the page, not the layout: the
   layout does not render again on a client-side navigation, so a list picked there follows the visitor.
+  That has a price, and rule 12 says to name it: a Link tap into a wrapped page now carries the page's
+  list, where the catalogue never travelled twice (`/me` to a match: en 23 KB -> 71 KB, ru 24 KB ->
+  101 KB). The first load of `/me` saves 116 KB (en) and 184 KB (ru), and each 20-second refresh of a
+  live match page saves 89 KB (en) and 144 KB (ru), so a session comes out behind only after three Link
+  taps into matches in English, or two round trips in Russian, with no refresh between. The numbers
+  are in `src/i18n/withClientMessages.tsx`; a measured saving is not a saving on every path.
+- **A guard that reads the source has the source's blind spots.** The first walk knew `useTranslations`
+  only when imported from next-intl by that name, read only `.ts` and `.tsx`, dropped an `import()`
+  of a built path and a local import it could not resolve, and trusted a `DYNAMIC` entry that named
+  keys its own template could never build, all without a word. In each case tsc passed, the guard
+  passed, and the browser showed a key as text (review, 11 October 2026). Now the hook is known by
+  what its symbol resolves to, and each of the others is an error. Every blind spot gets a page in
+  `tests/fixtures/client-messages` and a test that names what the guard must say about it; break the
+  guard and watch that test go red before trusting it.
 - **A missing header is a browser too, and the browser in the suite always sends it.** The next fix
   read `Sec-Fetch-Dest` and counted every request without it as a load. Safari before 16.4 (iOS 15)
   sends no `Sec-Fetch-*`, so its 20-second refresh still counted a view, and headless Chromium could
