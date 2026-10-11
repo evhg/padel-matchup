@@ -201,8 +201,14 @@ export async function GET(req: Request) {
   try {
     // Weekly group slots: create the next match a few days ahead and ping the members.
     const created = await autoCreateGroupMatches(db, now);
-    summary.groupMatches = created.length;
+    summary.groupMatches = created.filter((c) => !c.adopted).length;
     for (const c of created) {
+      // "Play again" already made the crew's game at this hour (DECIDING rule 37): the members who have
+      // not heard of it hear once now; its calendar invitation and its webhook went when it was made.
+      if (c.adopted) {
+        await notifyGroupMatch(db, c.group, c.event, c.event.creatorPlayerId, { onlyUntold: true }).catch((e) => summary.errors.push(`group notice ${c.event.code}: ${String(e)}`));
+        continue;
+      }
       await notifyGroupMatch(db, c.group, c.event, c.group.creatorPlayerId);
       // The organizer is seated by the job, so their calendar gets the invitation the web form would have sent, and not the group note as well.
       const organizer = await getPlayer(db, c.group.creatorPlayerId);

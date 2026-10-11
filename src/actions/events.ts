@@ -19,7 +19,7 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayAgain, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
-import { playAgainStart, sameNextGame } from "@/lib/domain/playAgain";
+import { playAgainStart, existingNextGame } from "@/lib/domain/playAgain";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -178,8 +178,9 @@ const playAgainSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
  * "Play again": any participant or the organizer clones this event on the day and at the time they
  * picked (a week on when they did not) and becomes its organizer. Each player of this match then hears
  * once, "I'm in?" (DECIDING rule 37), after the response and once per old match, however often anybody
- * taps, and only once the match was played. A second tap at the day and time the round already
- * announced lands on that game instead of making a second one beside it (`sameNextGame`).
+ * taps, and only once the match was played. When a game is already there (`existingNextGame`: the one
+ * the round announced, or the crew's own game at that hour, which the weekly slot made), the tap lands
+ * on it instead of making a second one beside it, and the round, if still unsent, announces that game.
  */
 export async function duplicateEventAction(code: string, pick?: { date: string; time: string } | null): Promise<ActionResult<{ code: string }>> {
   let newCode: string | null = null;
@@ -193,12 +194,17 @@ export async function duplicateEventAction(code: string, pick?: { date: string; 
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
     const now = new Date();
     const startsAt = playAgainStart(detail.event, when, now);
-    sameCode = await sameNextGame(db, detail.event.id, startsAt);
-    if (sameCode) return { code: sameCode };
+    const organizer = viewer.player ?? (await getPlayer(db, creatorId));
+    const there = await existingNextGame(db, detail.event, startsAt);
+    if (there) {
+      sameCode = there.code;
+      // The round goes once per old match: a game the round already announced sends nothing here.
+      if (organizer) after(() => notifyPlayAgain(db, detail.event, there, organizer).then(() => undefined).catch((e) => console.warn("[play again] the round failed", code, e)));
+      return { code: there.code };
+    }
     const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId, startsAt, now });
     const { joinEvent } = await import("@/lib/domain/slots");
     const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
-    const organizer = viewer.player ?? (await getPlayer(db, creatorId));
     if (joined?.outcome === "joined" && organizer) after(() => sendCalendarInvite(db, ev, organizer));
     after(async () => {
       await emitMatchEvent(db, "match.created", ev.code, { playAgainOf: code });

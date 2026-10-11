@@ -136,8 +136,16 @@ try {
   await score.getByTestId("same-time").getByText(/каждую неделю/).waitFor({ timeout: 20000 });
   const ruPanel = await panelLayout();
   await shot(p, "v3b-score-panel-ru");
+  // "Make it weekly" after a change of language: its "Done" line names the day in the language now on
+  // screen (a string kept from the first render once said "Sun" in Russian), and follows the next change.
+  const latinDay = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/;
+  await score.getByTestId("same-time").click();
+  await score.getByTestId("same-time-done").getByText(/Готово/).waitFor({ timeout: 20000 });
+  const ruDone = (await score.getByTestId("same-time-done").textContent()) ?? "";
   await switchLang(p, "en");
-  await score.getByTestId("same-time").getByText("Make it weekly").waitFor({ timeout: 20000 });
+  await score.getByTestId("same-time-done").getByText(/Done/).waitFor({ timeout: 20000 });
+  const enDone = (await score.getByTestId("same-time-done").textContent()) ?? "";
+  check("after a change of language, Make it weekly says its Done line in that language", !latinDay.test(ruDone) && latinDay.test(enDone), JSON.stringify({ ruDone, enDone }));
   check(
     "at 390 px Play again sits full width under its field, the field has its bounds, and Make it weekly fits in English and Russian",
     enPanel.stacked && enPanel.weeklyFits && ruPanel.stacked && ruPanel.weeklyFits && /Make it weekly/.test(enPanel.label) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(bounds.min ?? "") && (bounds.max ?? "") > (bounds.min ?? ""),

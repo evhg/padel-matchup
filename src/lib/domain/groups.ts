@@ -8,7 +8,7 @@ import { createEvent, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
 import { cleanAskNote, joinDoor, nextAsk, type JoinVia } from "./groupAccess";
 import { normalizeRange } from "./levels";
-import { playAgainRoundOf } from "./playAgain";
+import { crewGameAt, playAgainRoundOf } from "./playAgain";
 import { joinEvent } from "./slots";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -485,21 +485,26 @@ export async function latestGroupMatch(db: Db, group: Pick<Group, "id" | "recurL
   return row ?? null;
 }
 
-export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<{ group: Group; event: Event }[]> {
+/**
+ * A weekly slot's game for the hourly job: one it made (`adopted` unset: announce it to the crew), or
+ * the crew's game already at that hour, which "Play again" made (`adopted`: DECIDING rule 37). The job
+ * tells an adopted game's members only if they have not heard of it (`notifyGroupMatch`, `onlyUntold`).
+ */
+export type GroupSlotGame = { group: Group; event: Event; adopted?: true };
+
+export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<GroupSlotGame[]> {
   const candidates = await db.select().from(groups).where(and(isNotNull(groups.recurDow), isNotNull(groups.recurTime), isNull(groups.archivedAt)));
-  const created: { group: Group; event: Event }[] = [];
+  const created: GroupSlotGame[] = [];
   for (const g of candidates) {
     const startsAt = recurrenceDue(g, now);
     if (!startsAt) continue;
     // The crew already has a game at this hour ("Play again" made it, DECIDING rule 37): the slot is
-    // taken, not made twice. One read down `events_group_idx`, only for a group whose slot is due.
-    const [taken] = await db
-      .select({ id: events.id })
-      .from(events)
-      .where(and(eq(events.groupId, g.id), eq(events.startsAt, startsAt), ne(events.status, "cancelled")))
-      .limit(1);
+    // taken, not made twice, and the job tells the members who have not heard of it. One read down
+    // `events_group_idx`, only for a group whose slot is due; the slot counts as made, so once.
+    const taken = await crewGameAt(db, g.id, startsAt);
     if (taken) {
       await db.update(groups).set({ recurLastCreatedFor: startsAt }).where(eq(groups.id, g.id));
+      created.push({ group: g, event: taken, adopted: true });
       continue;
     }
     const latest = await latestGroupMatch(db, g, startsAt);

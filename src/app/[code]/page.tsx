@@ -266,8 +266,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const playAgain = playAgainOffered
     ? { defaultWhen: `${nextGame.date}T${nextGame.time}`, minWhen: wall(now), maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)), sent: Boolean(await playAgainRoundOf(db, ev.id)) }
     : null;
-  // "Make it weekly" sits under it for a match with no crew yet (it makes the weekly slot).
-  const sameTimeWhen = ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster }, me.id)) ? `${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}` : null;
+  // "Make it weekly" sits under it for a match with no crew yet (it makes the weekly slot). The slot's
+  // words are given on every render, in the language of that render, also once the crew exists.
+  const weeklyOffered = Boolean(ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster }, me.id)));
+  const weeklyWhen = ev.type === "match" ? `${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}` : null;
   // After the result is in, the organizer can confirm the levels of the people they played with.
   const levelCandidates = participants
     .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)
@@ -693,7 +695,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             enteredBy={enteredBy}
             canPlayAgain={canPlayAgain}
             playAgain={playAgain}
-            sameTimeWhen={sameTimeWhen}
+            weeklyOffered={weeklyOffered}
+            weeklyWhen={weeklyWhen}
             card={resultCard}
           />
         )}

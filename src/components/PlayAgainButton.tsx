@@ -53,7 +53,7 @@ export function PlayAgainButton({ code, offer }: { code: string; offer: PlayAgai
         data-testid="play-again-when"
       />
       <button type="button" className="btn-primary w-full" disabled={pending} onClick={go}>
-        {pending ? t("common.working") : `↻ ${t("event.playAgainShort")}`}
+        {pending ? t("common.working") : t("event.playAgainShort")}
       </button>
       <p className="text-center text-xs text-faint">{offer.sent ? t("event.playAgainSent") : t("event.playAgainOne")}</p>
       {error && <p className="text-sm text-danger">{error}</p>}

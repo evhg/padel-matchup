@@ -1,5 +1,5 @@
 import type { Db } from "@/db";
-import type { Player } from "@/db/schema";
+import type { Event, Player } from "@/db/schema";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
 import { joinGroup } from "./groups";
@@ -58,4 +58,23 @@ export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player
     await joinGroup(db, ev.groupId, player.id, "match").catch(() => undefined);
   }
   return { kind: "joined", result };
+}
+
+/**
+ * "Be their partner" on a fixed-pairs night: the range check before the place beside a single. A ranged
+ * night holds a newcomer to the range the way the Join button does, with the same waiver for a player
+ * who already played a finished, scored match with the organiser (`admissionAt`). The organiser, and
+ * somebody already in (the organiser let them in), pair without a second check.
+ */
+export async function partnerAdmission(
+  db: Db,
+  ev: Pick<Event, "levelMin" | "levelMax" | "levelVerifiedOnly" | "creatorPlayerId">,
+  me: Pick<Player, "id" | "level" | "levelVerifiedLevel">,
+  seated: boolean,
+  now = new Date(),
+): Promise<"ok" | "level_required" | "forbidden"> {
+  if (!hasRange({ min: ev.levelMin, max: ev.levelMax }) || me.id === ev.creatorPlayerId || seated) return "ok";
+  const fit = await admissionAt(db, ev, me, now);
+  if (fit === "unknown") return "level_required";
+  return fit === "ok" ? "ok" : "forbidden";
 }

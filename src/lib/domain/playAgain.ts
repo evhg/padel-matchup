@@ -1,10 +1,11 @@
-import { and, eq, inArray, isNotNull, lte, ne, sql, type SQL } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
-import { events, facts, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
+import { events, facts, notices, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
-import { admission, waivedByPlay, type Admission } from "./levels";
+import { admission, rangeHolds, waivedByPlay, type Admission } from "./levels";
+import { noticeKey } from "./noticeKinds";
 import { DELETED_PLAYER_NAME } from "./result";
 
 /**
@@ -103,18 +104,25 @@ export function playedOut(now: Date): SQL[] {
 export const PLAY_AGAIN_FACT = "match.play_again";
 
 /**
- * Claims the one round of "I'm in?" messages an old match may send, and only for a match that was
- * played (`playedOut`): a tap on a match nobody has played yet, by anybody who took a seat in it, sends
- * nothing and leaves the round for after the game. The old match's row is locked for the read and the
- * write, so two taps at once make one round; the record is the fact log, read on `facts_subject_idx`.
- * True for the tap that may send.
+ * Claims the one round of "I'm in?" messages an old match may send: only for a match that was played
+ * (`playedOut`), and only by its organiser or by a player who held a seat in its line-up from before
+ * the start. Joining stays open until the booked length runs out and any seated player may type the
+ * score, so a stranger who took a free seat five minutes in could otherwise type 6-0 and spend the
+ * round under their own name. A tap that may not send leaves the round for one that may. The old
+ * match's row is locked for the read and the write, so two taps at once make one round; the record is
+ * the fact log, read on `facts_subject_idx`. True for the tap that may send.
  */
 export async function claimPlayAgainRound(db: Db, old: Pick<Event, "id" | "code">, next: Pick<Event, "code">, actorPlayerId: string, now = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {
+    // The tapper's seat, by `slots_event_player_idx`: taken, inside the capacity, and taken by the start.
+    const satIn = tx
+      .select({ one: sql`1` })
+      .from(slots)
+      .where(and(eq(slots.eventId, events.id), eq(slots.playerId, actorPlayerId), inArray(slots.status, [...SEATED]), lte(slots.position, events.capacity), lte(slots.joinedAt, events.startsAt)));
     const [row] = await tx
       .select({ id: events.id })
       .from(events)
-      .where(and(eq(events.id, old.id), ...playedOut(now)))
+      .where(and(eq(events.id, old.id), ...playedOut(now), or(eq(events.creatorPlayerId, actorPlayerId), exists(satIn))))
       .for("update");
     if (!row) return false;
     const [done] = await tx
@@ -153,8 +161,58 @@ export async function sameNextGame(db: Db, oldId: string, startsAt: Date): Promi
 }
 
 /**
+ * The crew's game at this hour, when there is one that was not called off: the weekly slot may have made
+ * it already ("Make it weekly"), or a member did. One read down `events_group_idx`. Null with no crew.
+ */
+export async function crewGameAt(db: Db, groupId: string | null, startsAt: Date): Promise<Event | null> {
+  if (!groupId) return null;
+  const [ev] = await db
+    .select()
+    .from(events)
+    .where(and(eq(events.groupId, groupId), eq(events.startsAt, startsAt), ne(events.status, "cancelled")))
+    .limit(1);
+  return ev ?? null;
+}
+
+/**
+ * A game "Play again" lands on instead of making one: the game this old match's round already
+ * announced at that day and time (`sameNextGame`), else the crew's own game at that hour
+ * (`crewGameAt`), so the crew never splits across two matches at one hour. Null: make the game.
+ */
+export async function existingNextGame(db: Db, old: Pick<Event, "id" | "groupId">, startsAt: Date): Promise<Event | null> {
+  const same = await sameNextGame(db, old.id, startsAt);
+  if (same) {
+    const [ev] = await db.select().from(events).where(eq(events.code, same)).limit(1);
+    if (ev) return ev;
+  }
+  return crewGameAt(db, old.groupId, startsAt);
+}
+
+/**
+ * Of these people, who already knows about this game: anybody with a place in it (a seat, the waiting
+ * list or an invitation), and anybody who already got its crew notice or its "I'm in?" message. So
+ * nobody hears about one game twice, whichever of the weekly slot and "Play again" came first. Two
+ * bounded reads: the game's places (`slots_event_position_idx`), and these people's notices
+ * (`notices_player_created_idx`, at most ninety days of rows each).
+ */
+export async function toldOfGame(db: Db, eventId: string, playerIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(playerIds)];
+  if (ids.length === 0) return new Set();
+  const seated = await db
+    .select({ id: slots.playerId })
+    .from(slots)
+    .where(and(eq(slots.eventId, eventId), inArray(slots.playerId, ids), inArray(slots.status, ["joined", "confirmed", "invited"])));
+  const heard = await db
+    .select({ id: notices.playerId })
+    .from(notices)
+    .where(and(inArray(notices.playerId, ids), eq(notices.eventId, eventId), inArray(notices.key, [noticeKey("crewMatch"), noticeKey("playAgain")])));
+  return new Set([...seated.map((r) => r.id), ...heard.map((r) => r.id)].filter((id): id is string => Boolean(id)));
+}
+
+/**
  * Did this player sit in a finished, scored match with this organiser? Both in its line-up (a taken
- * seat inside the capacity), the match played (`playedOut`: started, not cancelled, with a score). One
+ * seat inside the capacity, taken by the start: a seat taken after it is a latecomer's, and never
+ * counts as having played), the match played (`playedOut`: started, not cancelled, with a score). One
  * bounded read: the player's seats (`slots_player_idx`), each match by its key, the organiser's seat
  * in it (`slots_event_player_idx`), its score.
  */
@@ -165,8 +223,8 @@ export async function playedWithOrganiser(db: Db, organiserId: string, playerId:
   const [row] = await db
     .select({ id: events.id })
     .from(mine)
-    .innerJoin(events, and(eq(events.id, mine.eventId), lte(mine.position, events.capacity), ...playedOut(now)))
-    .innerJoin(theirs, and(eq(theirs.eventId, events.id), eq(theirs.playerId, organiserId), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity)))
+    .innerJoin(events, and(eq(events.id, mine.eventId), lte(mine.position, events.capacity), lte(mine.joinedAt, events.startsAt), ...playedOut(now)))
+    .innerJoin(theirs, and(eq(theirs.eventId, events.id), eq(theirs.playerId, organiserId), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity), lte(theirs.joinedAt, events.startsAt)))
     .where(and(eq(mine.playerId, playerId), inArray(mine.status, [...SEATED])))
     .limit(1);
   return Boolean(row);
@@ -174,8 +232,9 @@ export async function playedWithOrganiser(db: Db, organiserId: string, playerId:
 
 /**
  * Who walks in, with the owner's decision of 11 October 2026: somebody the organiser already played a
- * finished, scored match with skips that organiser's level range (and its confirmed-levels-only
- * check). A missing level is still asked for. The read runs only for a player the range would hold.
+ * finished, scored match with skips that organiser's level range (`waivedByPlay`). The
+ * confirmed-levels-only check still holds, and a missing level is still asked for. The read runs only
+ * for a player the range would hold.
  */
 export async function admissionAt(
   db: Db,
@@ -184,6 +243,6 @@ export async function admissionAt(
   now = new Date(),
 ): Promise<Admission> {
   const fit = admission(ev, p);
-  if (waivedByPlay(fit, true) === fit || p.id === ev.creatorPlayerId) return fit;
-  return waivedByPlay(fit, await playedWithOrganiser(db, ev.creatorPlayerId, p.id, now));
+  if (!rangeHolds(fit) || p.id === ev.creatorPlayerId) return fit;
+  return waivedByPlay(ev, p, await playedWithOrganiser(db, ev.creatorPlayerId, p.id, now));
 }

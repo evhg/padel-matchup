@@ -239,13 +239,23 @@ export function admission(ev: { levelMin: number | null; levelMax: number | null
   return verified ? "ok" : "unverified";
 }
 
+/** The answers a level range gives a declared level outside it: what a past game with the organiser may waive. */
+export const rangeHolds = (fit: Admission): boolean => fit === "below" || fit === "above";
+
 /**
  * The owner's decision of 11 October 2026: "A player who already sat in a finished, scored match with
- * the organiser skips that organiser's level-range approval." The organiser saw them play, so a range
- * that would hold their request (below, above, or only declared on a confirmed-levels match) lets
- * them in. A missing level is still asked for: nothing else about levels changes. The read of who
- * played with whom is `playedWithOrganiser` in `playAgain.ts`; this is the rule.
+ * the organiser skips that organiser's level-range approval." The organiser saw them play, so the range
+ * (below, above) lets them in. Only the range: a confirmed-levels-only match still takes a confirmed
+ * level (the tick still holds), and a missing level is still asked for. The read of who played with
+ * whom is `playedWithOrganiser` in `playAgain.ts`; this is the rule.
  */
-export function waivedByPlay(fit: Admission, playedWithOrganiser: boolean): Admission {
-  return playedWithOrganiser && (fit === "below" || fit === "above" || fit === "unverified") ? "ok" : fit;
+export function waivedByPlay(
+  ev: { levelMin: number | null; levelMax: number | null; levelVerifiedOnly?: boolean | null },
+  p: { level: number | null | undefined; levelVerifiedLevel?: number | null },
+  playedWithOrganiser: boolean,
+): Admission {
+  const fit = admission(ev, p);
+  if (!playedWithOrganiser || !rangeHolds(fit)) return fit;
+  if (!ev.levelVerifiedOnly) return "ok";
+  return isLevelVerified({ level: p.level ?? null, levelVerifiedLevel: p.levelVerifiedLevel ?? null }) ? "ok" : "unverified";
 }

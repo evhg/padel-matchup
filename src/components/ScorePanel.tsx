@@ -25,7 +25,8 @@ export function ScorePanel({
   enteredBy,
   canPlayAgain = false,
   playAgain = null,
-  sameTimeWhen = null,
+  weeklyOffered = false,
+  weeklyWhen = null,
   card,
 }: {
   code: string;
@@ -39,18 +40,18 @@ export function ScorePanel({
   canPlayAgain?: boolean;
   /** "Play again"'s day and time: the default (this match's a week on), the bounds, and whether the round went out. */
   playAgain?: PlayAgainOffer | null;
-  /**
-   * "Make it weekly" under it, for a match with no crew yet, worded as the weekly slot ("Sat 18:00");
-   * null hides it. One next game and a weekly slot: two buttons, two help lines.
-   */
-  sameTimeWhen?: string | null;
+  /** "Make it weekly" under it, for a match with no crew yet. One next game and a weekly slot: two buttons, two help lines. */
+  weeklyOffered?: boolean;
+  /** The weekly slot in words, in the page's language as it renders now ("Sat 18:00"). */
+  weeklyWhen?: string | null;
   /** The shareable result card, once a result exists. */
   card?: ResultCardView | null;
 }) {
   const t = useTranslations();
-  // Latched on purpose: the tap makes the crew, the page then renders with a crew and no offer, and
-  // the "Done" the button shows must outlive that refresh rather than vanish with the prop.
-  const [weekly] = useState(sameTimeWhen);
+  // Only the fact that the offer was shown is latched: the tap makes the crew, the page then renders
+  // with a crew and no offer, and the "Done" the button shows must outlive that refresh. The words come
+  // from each render, so a change of language reaches them (a latched string kept the first language).
+  const [weekly] = useState(weeklyOffered);
   const [editing, setEditing] = useState(false);
   const [sets, setSets] = useState<S[]>(scores.length ? scores : [{ setNumber: 1, sideA: 6, sideB: 4 }]);
   const [teamA, setTeamA] = useState<string[]>(players.filter((p) => p.team === "a").map((p) => p.id));
@@ -168,7 +169,7 @@ export function ScorePanel({
           {canPlayAgain && playAgain && (
             <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
               <PlayAgainButton code={code} offer={playAgain} />
-              {weekly && <SameTimeButton code={code} when={weekly} />}
+              {weekly && weeklyWhen && <SameTimeButton code={code} when={weeklyWhen} />}
             </div>
           )}
         </div>

@@ -234,7 +234,7 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
         const fresh = (await getEventByCode(db, ev.code))!;
         const next =
           fit === "unverified"
-            ? "This match takes confirmed levels only. The player's level is inside the range but nobody has confirmed it, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
+            ? "This match takes confirmed levels only, and nobody has confirmed the player's level, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
             : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
         const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
         // The ask carries no partner: say so, so nobody believes the pair is in.
