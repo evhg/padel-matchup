@@ -919,15 +919,19 @@ Everything in this list is live. The README describes each in detail.
   one insert for the whole round, the switch and quiet hours respected, the inbox keeps it, the card's
   own one-tap join in Telegram and the public match link everywhere else, and one round per old match
   (the old match's row is locked, the fact `match.play_again` is the record), and only once the match
-  was played (started, not called off, scored), so a stranger who takes a seat in a coming match cannot
-  send it. A second tap at the same day and time lands on the game already announced. The email
+  was played (started, not called off, scored), and only by its organiser or a player seated from
+  before the start, so a stranger who takes a seat in a coming match, or a free seat after the start,
+  cannot send it. A second tap at the same day and time lands on the game already announced. The email
   carries no "get this on Telegram" line, because its ticket binds whoever taps it. "Same time next week?"
   moved from the card page to the score panel under it, renamed "Make it weekly" and made the quieter
-  button; the game "Play again" made becomes the new crew's, and the weekly slot skips an hour the crew
-  already has a game at, so the two taps never make two games. A player who already sat in a finished,
-  scored match with the organiser (a score typed in at the court counts, and so does a scored americano)
-  skips that organiser's level range on every door (`admissionAt` in `src/lib/domain/playAgain.ts`;
-  rule 21). No WhatsApp template carries the message yet.
+  button. The two taps never make two games at one hour, in either order: "Play again" at an hour the
+  weekly slot already filled lands on the crew's game and the round announces it, and the slot skips
+  an hour "Play again" already filled and tells only the crew members who have not heard of the game.
+  Nobody hears about one game twice (`toldOfGame`). A player who already sat in a finished, scored
+  match with the organiser, from before its start (a score typed in at the court counts, and so does a
+  scored americano), skips that organiser's level range on every door (`admissionAt` in
+  `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
+  No WhatsApp template carries the message yet.
 
 ## The finish line
 

@@ -226,6 +226,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   game (11 October 2026). A server action is a public endpoint: whatever the screen waits for (a
   score, the end, the organiser) the write checks too, in the domain, and a test calls it as the
   stranger would.
+- **A seat is not a game played.** The "played" guard on "Play again" counted any seat in a started,
+  scored match, and joining stays open until the booked length ends while any seated player may type
+  the score. So a stranger could join five minutes in, type 6-0, send the round under their own name and
+  skip the organiser's level range ever after (11 October 2026). "Who played" is a seat taken at or
+  before the start (`slots.joined_at <= events.starts_at`); production had no played seat taken later,
+  so the rule cost nobody. When a check means "was there", ask what the door still lets in after it.
 - **A reader of free text falls through to silence, never to "keep the rest".** The crew group's
   "who's in …?" kept whatever words were left as the match's venue, so "who's in for beers at 8?" made
   a match at "for beers" and showed it on the card and the crew page. When a parser meets chat, what it
