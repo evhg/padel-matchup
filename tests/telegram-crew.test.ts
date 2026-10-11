@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -694,6 +696,14 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(crewTelegramDoors("admin", { invite: null, listening: false })).toEqual({ join: null, run: true });
     expect(crewTelegramDoors(null, quiet)).toEqual({ join: null, run: false });
     expect(crewTelegramDoors("admin", null)).toEqual({ join: null, run: false });
+  });
+
+  it("the crew page asks for a new group only for this crew's padel, in every language", () => {
+    // The owner, 9 October 2026: the group "is solely for the purpose of coordinating padel matches". The bot cannot tell a new group from an old one, so the words ask.
+    const help = (locale: string) => (JSON.parse(readFileSync(path.resolve(__dirname, "..", "messages", `${locale}.json`), "utf8")) as { group: { telegramRunHelp: string } }).group.telegramRunHelp;
+    expect(help("en")).toMatch(/^First make a new Telegram group only for this crew's padel/);
+    expect(help("ru")).toMatch(/^Сначала создайте новый Telegram-чат только для падела этой группы/);
+    expect(help("es")).toMatch(/^Primero crea un chat de Telegram nuevo solo para el pádel de este grupo/);
   });
 
   it("two updates at once start the group once: one notice, one pin", async () => {
