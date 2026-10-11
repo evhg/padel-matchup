@@ -13,7 +13,7 @@ import { esc, sendMessage, setMessageReaction, telegramBotId, type InlineKeyboar
 import { strings } from "../card";
 import { chatZone, GROUP_TYPES } from "../chats";
 import { findOrCreateTelegramPlayer, findTelegramPlayer } from "../identity";
-import { namesAPlace, parseNewCommand, tzHintFor } from "../parse";
+import { asksNoPlace, parseNewCommand, tzHintFor } from "../parse";
 import { syncTelegram } from "../post";
 import { readWords, type Word } from "../words";
 import { createMatchInChat, knownVenues } from "./new";
@@ -202,7 +202,8 @@ const UNCLEAR =
   /\d|(?<!\p{L})(?:next|weeks?|weekends?|tonite|january|february|march|april|june|july|august|september|october|november|december|jan|feb|apr|jun|jul|aug|sept?|oct|nov|dec|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|semanas?|finde|pr[óo]xim\p{L}*|следующ\p{L}*|недел\p{L}*|выходн\p{L}*|январ\p{L}*|феврал\p{L}*|март\p{L}*|апрел\p{L}*|ма[йя]|июн\p{L}*|июл\p{L}*|август\p{L}*|сентябр\p{L}*|октябр\p{L}*|ноябр\p{L}*|декабр\p{L}*)(?!\p{L})/iu;
 
 /**
- * "who's in Thursday 7pm Rawai?": the match through the /new path, its card as the reply. Ordinary chat
+ * "who's in Thursday 7pm Rawai?" (or "Let's play Thursday 7pm at Rawai, who's in?"): the match through
+ * the /new path, its card as the reply. Ordinary chat
  * must never become a match, so a question makes one only when everything in it is read: an hour named
  * outright ("7pm", "19:00", "at 19", never a stray number), and a place that is a court the chat knows
  * (its usual court, the sender's, a listed club named in full), or no place at all and a usual court.
@@ -223,7 +224,7 @@ async function askForMatch(db: Db, msg: TgMessage, chat: TelegramChat, from: TgU
   // A tournament, a court that is not a number, a date or a word the parser cannot place: not ours to guess.
   if (parsed.type !== "match" || (parsed.court && !/^\d{1,2}$/.test(parsed.court)) || (parsed.place && UNCLEAR.test(parsed.place))) return unsure("unclear");
   // The place is a court the chat knows, or the crew's usual court when none was named; never the words as typed.
-  const venue = parsed.venueKnown ? parsed.venue : namesAPlace(parsed.place) ? null : chat.venueName;
+  const venue = parsed.venueKnown ? parsed.venue : asksNoPlace(parsed.place) ? chat.venueName : null;
   if (!venue) return unsure("no_place");
   // The card already there answers the question: same hour, or twelve hours on when no am/pm was typed
   // ("who's in Thursday at 7?" is the 19:00 card), on the same day, or any day when none was typed.

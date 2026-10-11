@@ -72,6 +72,20 @@ const TIMES_SET = new Set(TIMES);
 export const ASK_PREFIX = "who'?s in|who is in|who'?s up for|who wants to play|anyone (?:up )?for|anybody (?:up )?for|кто (?:в деле|играет|идёт|идет|хочет играть|хочет|со мной|на)|quién (?:juega|se apunta|viene|está|esta)|quien (?:juega|se apunta|viene|está|esta)|alguien (?:para|juega)";
 const ASK_RE = new RegExp(`^(?:${ASK_PREFIX})(?![\\p{L}\\d])(.*)$`, "iu");
 
+/**
+ * The same question asked the other way round, the match first and the question after it: "Let's play
+ * Thursday 7pm at Warehaus, who's in?", "Thu 19:00 Rawai — anyone?", "Играем в четверг в 19:00, кто в
+ * деле?", "¿Jugamos el jueves a las 19? ¿Quién se apunta?". The whole message is still the question: an
+ * opening that only says "let's play", the match, and one of these questions at the very end. Only the
+ * part between them is handed on, and it must carry a time; what it names is checked as every ask is
+ * (`askForMatch`: an hour named outright, a court the chat knows).
+ */
+const ASK_TAIL = "who'?s in|who is in|who'?s up(?: for it)?|who'?s keen|who wants to (?:play|join)|anyone|anybody|any takers|кто в деле|кто играет|кто со мной|кто с нами|кто идёт|кто идет|кто будет|quién se apunta|quien se apunta|quién juega|quien juega|quién viene|quien viene|alguien";
+const ASK_LEAD = "let'?s play|lets play|let us play|shall we play|wanna play|want to play|играем|сыграем|давайте сыграем|давай сыграем|jugamos|juguemos|vamos a jugar";
+const TAIL_RE = new RegExp(`^[\\s¿¡]*(?:(?:${ASK_LEAD})(?![\\p{L}\\d])[\\s,:]*)?(.+?)[\\s,;:.!?¿¡—–-]+(?:${ASK_TAIL})[\\s?!.]*$`, "iu");
+/** A question at the end of a leading ask ("who's in Thursday 7pm, anyone?") is not part of the match. */
+const TAIL_ONLY_RE = new RegExp(`[\\s,;:.!—–-]+(?:${ASK_TAIL})\\s*$`, "iu");
+
 /** A message longer than this is somebody talking, not a word. */
 const MAX_CHARS = 200;
 
@@ -88,6 +102,14 @@ export function normalizeWords(text: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** One kind of apostrophe and dash, no emoji, one space between words; the case and the punctuation stay. */
+const plainLine = (text: string): string =>
+  text
+    .replace(/[‘’ʼ`´]/g, "'")
+    .replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}‍️]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /** The phrase with one courtesy word (or two) taken off either end. */
 function bare(line: string): string {
@@ -110,7 +132,10 @@ export function readWords(text: string | null | undefined): Word | null {
   const question = text.split("?")[0].trim();
   const ask = ASK_RE.exec(normalizeWords(question));
   // A time, or at least an hour, is what makes a question into a match; "who's in?" is about the card.
-  if (ask) return /\d/.test(ask[1]) ? { kind: "ask", text: question } : null;
+  if (ask) return /\d/.test(ask[1]) ? { kind: "ask", text: question.replace(TAIL_ONLY_RE, "").trim() } : null;
+  // The match first, the question after it.
+  const tail = TAIL_RE.exec(plainLine(text));
+  if (tail && /\d/.test(tail[1])) return { kind: "ask", text: tail[1].trim() };
   const phrase = bare(line);
   // "times?" is a question by nature: asked, it is answered; it takes nobody's seat.
   if (TIMES_SET.has(phrase)) return { kind: "times" };

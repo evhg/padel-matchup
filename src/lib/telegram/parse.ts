@@ -286,19 +286,19 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
 
   // Whatever is left is the place, unless it is a seat word ("I'm in" in reply to a prompt is not a court).
   // Every preposition goes, not only the first: "в четверг в 19:00 Равай" leaves "Равай", not "в Равай".
+  // `place` keeps the seat word as typed, so a crew's question with one in it ("Thursday 7pm I'm out,
+  // anyone?") names no court it could be held at.
   const words = readWords(text.trim())?.kind;
-  const venue =
-    words === "join" || words === "leave"
-      ? ""
-      : text
-          .replace(/[?!¿¡"«»“”]+/g, " ")
-          .replace(word("at|in|on|в|во|на|у|@|с|from|en|a las|a la", "giu"), " ")
-          .replace(/[,;·]+/g, " ")
-          .replace(/\s+/g, " ")
-          .replace(/^[\s\-–—.]+|[\s\-–—.]+$/g, "")
-          .trim();
+  const left = text
+    .replace(/[?!¿¡"«»“”]+/g, " ")
+    .replace(word("at|in|on|в|во|на|у|@|с|from|en|a las|a la", "giu"), " ")
+    .replace(/[,;·]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–—.]+|[\s\-–—.]+$/g, "")
+    .trim();
+  const venue = words === "join" || words === "leave" ? "" : left;
   const known = venue && (opts.venues?.length || opts.clubs?.length) ? matchVenue(venue, opts.venues ?? [], opts.clubs ?? []) : null;
-  out.place = venue || null;
+  out.place = (words === "join" || words === "leave" ? text.trim() : venue) || null;
   out.venueKnown = Boolean(known);
   out.venue = known ?? (venue ? venue.slice(0, 80) : null);
   if (out.type === "tournament" && out.capacity == null) out.capacity = 8;
@@ -335,8 +335,16 @@ const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENE
 /** The words of a name that tell one court from another, as `matchVenue` reads them ("WAREHAUS.club" → ["warehaus"]). */
 export const distinctWords = (text: string): string[] => distinct(placeWords(text));
 
-/** True when the words name a place at all ("Bangtao", "Phuket", "the beers"); false for nothing but small or generic words ("the", "padel"). */
-export const namesAPlace = (text: string | null | undefined): boolean => Boolean(text) && placeWords(text!).some((w) => w.length >= 3 && !GENERIC.has(w));
+/** Words a crew's question may carry beside its day and hour that name no court: the game itself. */
+const ASK_FILLER = new Set(["padel", "падел", "pádel", "game", "games", "match", "court", "корт", "игру", "игра", "матч", "партию", "partido", "pista", "juego", "the", "for", "this", "some", "one", "una", "uno"]);
+
+/**
+ * True when what a crew's question leaves over names no court at all: nothing, or only the game itself
+ * and small words ("who's in for a game Thursday 7pm?", "anyone for padel Sat 18:00?"). Then the crew's
+ * usual court answers it. Anything else ("beers", "tennis", "I'm out") is a place the chat does not know,
+ * or no place for a match, and the question makes nothing.
+ */
+export const asksNoPlace = (text: string | null | undefined): boolean => !text || placeWords(text).every((w) => w.length < 3 || ASK_FILLER.has(w));
 
 /**
  * The known court the words point at, or null; `venues` are the chat's own courts (its usual court, the

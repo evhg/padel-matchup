@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, feedback, metricsDaily, players, telegramCards, telegramChats } from "@/db/schema";
+import { clubs, events, feedback, metricsDaily, players, telegramCards, telegramChats } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { createEvent } from "@/lib/domain/events";
 import { createGroup, crewTelegramDoors, crewTelegramInvite, handOverGroup, joinGroup } from "@/lib/domain/groups";
@@ -550,6 +550,30 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(made).toMatch(/^word_ask:created:/);
     const ev = (await getEventByCode(db, made.split(":")[2]))!.event;
     expect([ev.startsAt.toISOString(), ev.venueName, ev.publicListing, ev.cost, ev.levelMin, ev.levelMax, ev.capacity, ev.type]).toEqual([THURSDAY_7PM.toISOString(), "Rawai Padel", false, null, null, null, 4, "match"]);
+  });
+
+  it("\"Let's play Thursday 7pm at Warehaus, who's in?\" makes the match at the club named; chatter of the same shape makes none", async () => {
+    const { chat, crew } = await listeningCrew(-202300);
+    await db.insert(clubs).values({ slug: "warehaus", name: "WAREHAUS.club", manageToken: "tok-warehaus-crew-abcdefghijklmnop", source: "directory", tz: "Asia/Bangkok" }).onConflictDoNothing();
+    const made = await say(chat, user(61, "Ivo"), "Let's play Thursday 7pm at Warehaus, who's in?").outcome;
+    expect(made).toMatch(/^word_ask:created:/);
+    const ev = (await getEventByCode(db, made.split(":")[2]))!.event;
+    expect([ev.startsAt.toISOString(), ev.venueName, ev.venueSlug, ev.groupId, ev.publicListing]).toEqual([THURSDAY_7PM.toISOString(), "WAREHAUS.club", "warehaus", crew.id, false]);
+    // "anyone for padel …?": the game itself is no place, so the crew's usual court answers it.
+    const sat = await say(chat, user(61, "Ivo"), "anyone for padel Sat 18:00?").outcome;
+    expect(sat).toMatch(/^word_ask:created:/);
+    expect((await getEventByCode(db, sat.split(":")[2]))!.event.venueName).toBe("Rawai Padel");
+    calls = [];
+    const before = (await db.select().from(events).where(eq(events.groupId, crew.id))).length;
+    for (const [line, why] of [
+      ["Let's play tennis Friday 7pm, who's in?", "no_place"],
+      ["Beers Friday 8pm at the pub, anyone?", "no_place"],
+      ["Friday 7pm I'm out, anyone?", "no_place"],
+      ["Lost my racket at 7pm yesterday, anyone?", "no_place"],
+    ] as const) expect(await say(chat, user(62, "Lena"), line).outcome, line).toBe(`word_ask:${why}`);
+    expect(sent("sendMessage")).toHaveLength(0);
+    expect((await db.select().from(events).where(eq(events.groupId, crew.id))).length).toBe(before);
+    expect(await db.select().from(players).where(eq(players.telegramId, 62))).toHaveLength(0);
   });
 
   it("a question about a card already there makes nothing: twelve hours on, any day when none was typed, and a match still being carded", async () => {
