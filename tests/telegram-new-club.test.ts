@@ -57,7 +57,7 @@ describe("/new against the whole club list", () => {
 
   it("a word everybody uses never picks a club: \"Asia\", \"Thai\", \"Bay\" and their like", () => {
     for (const tz of ZONES) {
-      for (const word of ["Asia", "Thai", "Bay", "Top", "Pop", "Swiss", "Tropical", "Lodge", "Beach", "Sky", "Racket", "Padel", "Club"]) {
+      for (const word of ["Asia", "Thai", "Bay", "Top", "Pop", "Swiss", "Tropical", "Lodge", "Beach", "Sky", "Racket", "Padel", "Club", "Drama", "No Drama", "Athletic", "the Athletic", "Destination"]) {
         const p = read(word, tz);
         expect([p.club, p.venueKnown, p.venue], `${word} in ${tz}`).toEqual([null, false, word]);
       }
@@ -86,6 +86,8 @@ describe("/new against the whole club list", () => {
     expect(read("Capella", sg).club).toBe("Capella Hotel Sentosa");
     expect(read("Ricochet Orchard", sg).club).toBe("Ricochet Padel Orchard");
     expect(read("Four Seasons", sg).club).toBe("Four Seasons Hotel Singapore");
+    expect(read("Koh Tao Athletic", bkk).club).toBe("Koh Tao Athletic Club");
+    expect(read("Destination Padel", bkk).club).toBe("Destination Padel Club");
     // Part of the club's own words: none, and the words stay as typed.
     for (const [line, tz] of [["Kross", bkk], ["Ricochet", sg], ["Seasons", sg], ["Love", sg], ["Pad", bkk], ["Pickle", sg]] as const) {
       const p = read(line, tz);

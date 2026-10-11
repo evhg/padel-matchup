@@ -647,6 +647,10 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     const sat = await say(chat, user(61, "Ivo"), "anyone for padel Sat 18:00?").outcome;
     expect(sat).toMatch(/^word_ask:created:/);
     expect((await getEventByCode(db, sat.split(":")[2]))!.event.venueName).toBe("Rawai Padel");
+    // Clubs of the directory in the same zone whose names hold an everyday word.
+    for (const [slug, name] of [["no-drama-padel", "No Drama Padel"], ["koh-tao-athletic-club", "Koh Tao Athletic Club"]]) {
+      await db.insert(clubs).values({ slug, name, manageToken: `tok-${slug}-crew-abcdefghijklmnop`, source: "directory", tz: "Asia/Bangkok" }).onConflictDoNothing();
+    }
     calls = [];
     const before = (await db.select().from(events).where(eq(events.groupId, crew.id))).length;
     for (const [line, why] of [
@@ -654,6 +658,12 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
       ["Beers Friday 8pm at the pub, anyone?", "no_place"],
       ["Friday 7pm I'm out, anyone?", "no_place"],
       ["Lost my racket at 7pm yesterday, anyone?", "no_place"],
+      // A "no" asks for no match, and an everyday word is no club far away.
+      ["No padel tomorrow 7pm, anyone?", "no_place"],
+      ["No game Thursday 7pm? anyone", "no_place"],
+      ["No pádel el jueves a las 19:00, ¿quién se apunta?", "no_place"],
+      ["Let's play Thursday 7pm, no drama, who's in?", "no_place"],
+      ["Thursday 7pm at the Athletic, anyone?", "no_place"],
     ] as const) expect(await say(chat, user(62, "Lena"), line).outcome, line).toBe(`word_ask:${why}`);
     expect(sent("sendMessage")).toHaveLength(0);
     expect((await db.select().from(events).where(eq(events.groupId, crew.id))).length).toBe(before);

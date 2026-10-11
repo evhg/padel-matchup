@@ -344,9 +344,10 @@ const PLACES_TH_SG = [
 const AREA_WORDS = new Set([...CITY_WORDS.flatMap((c) => c.needles), ...PLACES_TH_SG].filter((n) => /^[\p{L}\d]+$/u.test(n) && !CITY_NAMES.has(n)));
 /**
  * Words of a club's name that are everybody's words too ("Padel Asia", "Pad Thai Padel", "Padel Bay
- * Indoor Club"): a /new line of these alone names no club. With the club's other words they still do.
+ * Indoor Club", "No Drama Padel"): a /new line or a crew's question of these alone names no club, so "no
+ * drama" in a chat is not a club in Bangkok. With the club's other words they still do ("Koh Tao Athletic").
  */
-const COMMON_WORDS = new Set(["asia", "asian", "thai", "bay", "beach", "sky", "top", "pop", "swiss", "soi", "baan", "tropical", "lodge", "city", "park", "island", "east", "west", "north", "south", "central", "river", "valley", "coast", "hill", "garden", "house", "home", "prime", "station"]);
+const COMMON_WORDS = new Set(["asia", "asian", "thai", "bay", "beach", "sky", "top", "pop", "swiss", "soi", "baan", "tropical", "lodge", "city", "park", "island", "east", "west", "north", "south", "central", "river", "valley", "coast", "hill", "garden", "house", "home", "prime", "station", "drama", "athletic", "destination"]);
 /** The words a club's name carries beside its own: "Pattaya Padel" is Pattaya Padel Club, "Padel Bay" is Padel Bay Indoor Club. */
 const FILLER = new Set([...GENERIC].filter((w) => !["padel", "падел", "tennis", "racquet", "racket"].includes(w)));
 const filled = (words: string[]) => [...new Set(words.filter((w) => !FILLER.has(w)))].sort().join(" ");
@@ -371,14 +372,16 @@ export const clubKeyWords = (name: string): string[] => distinctWords(name).filt
 
 /** Words a crew's question may carry beside its day and hour that name no court: the game itself. */
 const ASK_FILLER = new Set(["padel", "падел", "pádel", "game", "games", "match", "court", "корт", "игру", "игра", "матч", "партию", "partido", "pista", "juego", "the", "for", "this", "some", "one", "una", "uno"]);
+/** Words that say no, short ones too: "No padel tomorrow 7pm, anyone?" asks for no match. */
+const ASK_NO = new Set(["no", "not", "nobody", "none", "never", "nope", "не", "нет", "никто", "ни", "nadie", "ni", "nunca"]);
 
 /**
  * True when what a crew's question leaves over names no court at all: nothing, or only the game itself
  * and small words ("who's in for a game Thursday 7pm?", "anyone for padel Sat 18:00?"). Then the crew's
- * usual court answers it. Anything else ("beers", "tennis", "I'm out") is a place the chat does not know,
- * or no place for a match, and the question makes nothing.
+ * usual court answers it. Anything else ("beers", "tennis", "I'm out", "no padel") is a place the chat
+ * does not know, or no place for a match, and the question makes nothing.
  */
-export const asksNoPlace = (text: string | null | undefined): boolean => !text || placeWords(text).every((w) => w.length < 3 || ASK_FILLER.has(w));
+export const asksNoPlace = (text: string | null | undefined): boolean => !text || placeWords(text).every((w) => !ASK_NO.has(w) && (w.length < 3 || ASK_FILLER.has(w)));
 
 /**
  * The known court the words point at, or null; `venues` are the chat's own courts (its usual court, the
