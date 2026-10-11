@@ -189,7 +189,8 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   browser that does not know them.
 - **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 34), with
   `signin_thats_me_fold` when it folded the browser's own new record into the old one;
-  `signin_restore` (the saved id brought back without proof); `signin_personal_link`;
+  `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
+  11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
   counts only when the cookie changes to another record; a link to a browser already signed in
   counts nothing. `thats_me_refused` counts a "That's me" the rule turned down. "That's me" takes

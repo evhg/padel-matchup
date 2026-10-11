@@ -12,7 +12,9 @@ import { bumpMetric } from "./metrics";
  *
  *   - `thats_me`: "That's me" on a match page, by name, without proof (DECIDING rule 34);
  *     `thats_me_fold` as well when it folded the new record this browser had made into the old one.
- *   - `restore`: the browser's own saved id brought back without proof (`restoreIdentity`).
+ *   - `restore`: a lost cookie brought back from the seal the browser kept (`restoreIdentity`). The
+ *     person proves nothing; the browser gives back what the server signed for it. Until 11 October
+ *     2026 it took a bare player id, which anybody could read off a match page.
  *   - `personal_link`: the personal link, on any of its three paths.
  *   - `email_code`: a six-digit code that came back from the address.
  *   - `telegram`: the Telegram login widget; `telegram_miniapp`: the Mini App inside Telegram.

@@ -17,6 +17,7 @@ import { notifyStudentJoined } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
 import { whatsappShareUrl } from "@/lib/share";
 import { withClientMessages } from "@/i18n/withClientMessages";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -132,7 +133,7 @@ async function CoachPublicPage({ params, searchParams }: Props) {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
-        {coach.isPublic && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
+        {coach.isPublic && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />}
         <section className="card">
           <span className="chip-muted">🎾 {t("page.coach")}</span>
           {founding && <span className="chip-muted ml-2">🏅 {foundingCity ? t("page.founding", { city: foundingCity }) : t("page.foundingPlain")}</span>}

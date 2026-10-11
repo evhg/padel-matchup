@@ -10,6 +10,7 @@ import { CITIES } from "@/lib/domain/cities";
 import { countryName, countryOfTz, noneInCountry, visitorCountry } from "@/lib/domain/countries";
 import { busyForCoaches, coachCardFacts, listPublicCoaches, hasPhoto, NO_BUSY, offersForCoaches, proofForCoaches, reachableCoaches } from "@/lib/domain/coaching";
 import { localeAlternates } from "@/lib/seo";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function CoachesPage() {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <section className="card">
           <span className="chip-muted">🎾 {t("indexEyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("indexTitle")}</h1>

@@ -8,7 +8,7 @@ import { admitConfirmed, type Admitted } from "@/lib/domain/verify";
 import { announceAdmission } from "@/lib/levelChecks";
 import { requireCreator, runA, type ActionResult } from "./shared";
 
-/** One tick as the organizer saw it: the player and the number next to their name. */
+/** One tick as the organizer saw it: the player's seat in this match (never a player id, src/lib/seatProps.ts) and the number next to their name. */
 export type LevelPick = { id: string; level: number };
 
 /**
@@ -23,13 +23,15 @@ export async function verifyLevelsAction(code: string, picks: LevelPick[]): Prom
     let verified = 0;
     const skipped: { id: string; name: string }[] = [];
     const seated: { player: Awaited<ReturnType<typeof verifyPlayerLevel>>; admitted: Admitted[] }[] = [];
-    for (const [playerId, level] of new Map(picks.slice(0, 64).map((p) => [p.id, p.level] as const))) {
+    for (const [seatId, level] of new Map(picks.slice(0, 64).map((p) => [p.id, p.level] as const))) {
+      const seat = detail.roster.find((s) => s.id === seatId && s.playerId);
+      if (!seat?.playerId) continue;
       let player: Awaited<ReturnType<typeof verifyPlayerLevel>>;
       try {
-        player = await verifyPlayerLevel(db, { eventId: detail.event.id, byPlayerId: detail.event.creatorPlayerId, playerId, level });
+        player = await verifyPlayerLevel(db, { eventId: detail.event.id, byPlayerId: detail.event.creatorPlayerId, playerId: seat.playerId, level });
       } catch (e) {
         if (!isDomainError(e) || e.message !== "level_changed") throw e;
-        skipped.push({ id: playerId, name: detail.roster.find((s) => s.playerId === playerId)?.player?.displayName ?? "?" });
+        skipped.push({ id: seatId, name: seat.player?.displayName ?? "?" });
         continue;
       }
       verified++;

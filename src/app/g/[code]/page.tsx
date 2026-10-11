@@ -21,7 +21,7 @@ import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, tagChip } from "@/lib/levelText";
 import { telegramEnabled } from "@/lib/telegram/api";
 import { crewGroupLink } from "@/lib/telegram/deepLinks";
-import { getSessionPlayer } from "@/lib/session";
+import { getSessionPlayer, memberHandle } from "@/lib/session";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
 type Props = { params: Promise<{ code: string }> };
@@ -155,7 +155,7 @@ async function GroupPage({ params }: Props) {
           {isAdmin && <GroupRequests code={code} items={asks.map((r) => ({ id: r.id, name: r.player.displayName, level: r.player.level, note: r.note, ago: relativeTime(r.createdAt, locale, now) }))} />}
           {isAdmin && (
             <div className="mt-4">
-              <GroupSettings code={code} name={group.name} recurDow={group.recurDow} recurTime={group.recurTime} recurLeadDays={group.recurLeadDays} weekdays={weekdays} askToJoin={group.askToJoin} others={detail.members.filter((m) => m.playerId !== me?.id).map((m) => ({ playerId: m.playerId, name: m.player.displayName }))} />
+              <GroupSettings code={code} name={group.name} recurDow={group.recurDow} recurTime={group.recurTime} recurLeadDays={group.recurLeadDays} weekdays={weekdays} askToJoin={group.askToJoin} others={detail.members.filter((m) => m.playerId !== me?.id).map((m) => ({ handle: memberHandle(group.id, m.playerId), name: m.player.displayName }))} />
             </div>
           )}
         </section>
@@ -209,8 +209,8 @@ async function GroupPage({ params }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {season.map((line) => (
-                  <tr key={line.playerId} className="border-t border-line">
+                {season.map((line, i) => (
+                  <tr key={i} className="border-t border-line">
                     <td className="max-w-0 truncate py-2 font-bold">{line.name}</td>
                     <td className="py-2 pl-4 text-right">{line.played}</td>
                     <td className="py-2 pl-4 text-right font-bold">{line.won}</td>
@@ -227,13 +227,14 @@ async function GroupPage({ params }: Props) {
           <h2 className="text-lg font-extrabold">{t("group.members")}</h2>
           <GroupMembers
             code={code}
-            members={detail.members.map((m) => ({
-              playerId: m.playerId,
+            members={detail.members.map((m, i) => ({
+              // No player id on a page anybody with the link opens: a position for the list, a handle for the admin's button.
+              key: String(i),
               name: m.player.displayName,
               level: seesLevels ? m.player.level : null,
               role: m.role,
               isMe: m.playerId === me?.id,
-              removable: Boolean(isAdmin) && m.playerId !== me?.id && m.playerId !== group.creatorPlayerId,
+              handle: isAdmin && m.playerId !== me?.id && m.playerId !== group.creatorPlayerId ? memberHandle(group.id, m.playerId) : null,
             }))}
           />
           {!seesLevels && <p className="mt-3 text-xs text-faint">{t("group.levelsForMembers")}</p>}
