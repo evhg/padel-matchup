@@ -32,13 +32,23 @@ import { platformById } from "./platforms";
  * The job rides the five-minute push job (`/api/cron/push`), which calls `scrapeIfDue`: it costs no
  * invocation of its own and no migration. It runs when the last run is fourteen minutes old or more.
  */
+/** What the hourly thresholds allow for a run that lands late on its tick (`clubDueMs`, `fullDueMs`). */
+const DUE_SLACK_MS = 2 * 60_000;
+
 export const SCRAPE = {
   /** A run starts when the last one began this long ago or more: every third push tick, with a minute of slack for a late one. */
   dueMs: 14 * 60_000,
   /** A club people use (`usedBackMs`, `usedAheadMs`) is read again after this long: every run. */
   usedDueMs: 14 * 60_000,
-  /** Any other club is read again after this long: once an hour. */
-  clubDueMs: 60 * 60_000,
+  /**
+   * Any other club is read again after this long: once an hour, on the fourth run. The hour less
+   * `DUE_SLACK_MS`, because a run's `now` lands a little after its tick, by a different amount each
+   * time: a read written at 0:00:00.812 was not an hour old at 1:00:00.301, so a quiet club was read
+   * every 75 minutes until 11 October 2026. `fullDueMs` moves with it, so the read that comes due is a
+   * full one. Two reads of a club are still never under 58 minutes apart, and on the push job's
+   * five-minute ticks that is the hour: rule 35's rate does not change.
+   */
+  clubDueMs: 60 * 60_000 - DUE_SLACK_MS,
   /** The clubs one platform's lane takes in a run. Each lane has its own 45 seconds, so one platform never crowds out another. */
   perLane: 8,
   budgetMs: 45_000,
@@ -59,7 +69,7 @@ export const SCRAPE = {
    * has today alone read, and keeps the later days of its last full read: half the requests (the
    * decision of 10 October 2026 on this reader's review, to lower the load on a platform).
    */
-  fullDueMs: 60 * 60_000,
+  fullDueMs: 60 * 60_000 - DUE_SLACK_MS,
   requestTimeoutMs: 10_000,
   /** No request starts with less than this left before the deadline: it would run past it. */
   minRequestMs: 1_000,

@@ -152,11 +152,10 @@ describe("the slice: which clubs a run reads", () => {
   it("a quiet club read in full is read in full again at its next due run, never today alone", async () => {
     // Nobody uses this club, so it is due once an hour, and its next read must cover all three days:
     // its cache and its full read are the same instant. The ticks drift a second earlier each time, as
-    // real ones do. Run k is at k × 15 minutes − k seconds:
+    // real ones do. Run k is at k × 15 minutes − k seconds; the hour allows two minutes for a late run:
     //   k = 0   0:00:00   full read
-    //   k = 4   0:59:56   not an hour since 0:00:00: not due
-    //   k = 5   1:14:55   due, and a full read (an hour since the full read)
-    //   k = 10  2:29:50   due, and a full read
+    //   k = 4   0:59:56   58 minutes and more since 0:00:00: due, and a full read
+    //   k = 8   1:59:52   due, and a full read
     await club("quiet-club");
     const seen: ScrapeTarget[] = [];
     const readAt: number[] = [];
@@ -166,8 +165,34 @@ describe("the slice: which clubs a run reads", () => {
       await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
       if (w.calls.length) readAt.push(k);
     }
-    expect(readAt).toEqual([0, 5, 10]);
+    expect(readAt).toEqual([0, 4, 8]);
     expect(seen.map((s) => s.days)).toEqual([SCRAPE.days, SCRAPE.days, SCRAPE.days]);
+  });
+
+  it("on a clock with fractions, the hourly club is read on the 4th run, never the 5th", async () => {
+    // pg_cron ticks every five minutes and the push job's `now` lands a little after each tick, by a
+    // different amount each time; the run's own clock (performance.now()) carries fractions. A read
+    // written at 0:00:00.812 was not due at 1:00:00.301, so a quiet club was read every 75 minutes and a
+    // used club's next two days the same (11 October 2026). Run k lands at k × 15 minutes plus `late[k]`:
+    //   k = 0   0:00:00.812   both clubs: full read
+    //   k = 1-3               the used club: today alone; the quiet club: not due
+    //   k = 4   1:00:00.301   both clubs: full read (the 4th run, never the 5th)
+    //   k = 8   2:00:00.004   both clubs: full read
+    const org = await makePlayer(db, "Org");
+    await club("busy-club");
+    await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(DAY), tz: "Asia/Bangkok", venueName: "busy club", whenFull: "waitlist" });
+    await club("quiet-club");
+    const late = [812.4, 3.7, 640.2, 95.9, 301.3, 27.5, 999.1, 412.8, 4.6];
+    const reads: Record<string, { run: number; days: number }[]> = { "busy-club": [], "quiet-club": [] };
+    for (let k = 0; k < late.length; k++) {
+      const seen: ScrapeTarget[] = [];
+      const w = world(undefined, 200.25, 1234.567 + k * 900_000.125);
+      await runScrape(db, new Date(NOW.getTime() + k * 15 * 60_000 + late[k]), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
+      for (const t of seen) reads[t.clubSlug].push({ run: k, days: t.days });
+    }
+    expect(reads["quiet-club"]).toEqual([0, 4, 8].map((run) => ({ run, days: SCRAPE.days })));
+    expect(reads["busy-club"].filter((r) => r.days === SCRAPE.days).map((r) => r.run)).toEqual([0, 4, 8]);
+    expect(reads["busy-club"].map((r) => r.run)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   it("gives each platform its own slice, so one platform's clubs never crowd out another's", async () => {
