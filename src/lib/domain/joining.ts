@@ -3,8 +3,9 @@ import type { Player } from "@/db/schema";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
 import { joinGroup } from "./groups";
-import { admission, hasRange } from "./levels";
+import { hasRange } from "./levels";
 import { joinPair, type PairJoinOutcome } from "./pairSeats";
+import { admissionAt } from "./playAgain";
 import { createJoinRequest } from "./requests";
 import { joinEvent } from "./slots";
 
@@ -36,8 +37,9 @@ export const wasComplete = (detail: { roster: { status: string; position: number
 export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player, level: number | null, partnerName?: string | null): Promise<JoinDecision> {
   const ev = detail.event;
   // The organiser is never held to their own range: they set it, and they are already in the match.
+  // Nor is a player who already played a finished, scored match with them (DECIDING rule 37).
   if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && player.id !== ev.creatorPlayerId) {
-    const fit = admission(ev, { level, levelVerifiedLevel: player.levelVerifiedLevel });
+    const fit = await admissionAt(db, ev, { id: player.id, level, levelVerifiedLevel: player.levelVerifiedLevel });
     if (fit === "unknown") return { kind: "level_required" };
     if (fit !== "ok") {
       // Already on the roster or the waitlist: asking again would open a request for a spot they hold.

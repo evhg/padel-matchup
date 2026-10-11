@@ -29,7 +29,8 @@ import { joinGroup } from "@/lib/domain/groups";
 import { setCourtBooked } from "@/lib/domain/courtBooked";
 import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
-import { admission, hasRange } from "@/lib/domain/levels";
+import { hasRange } from "@/lib/domain/levels";
+import { admissionAt } from "@/lib/domain/playAgain";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterJoin, afterLeave } from "@/lib/aftermath";
 import { setPlayerLevel } from "@/lib/domain/rating";
@@ -98,7 +99,7 @@ export async function bePartnerAction(code: string, slotId: string, name?: strin
     // Somebody already in (the organiser let them in) pairs without a second check of the range.
     const seated = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
     if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && me.id !== ev.creatorPlayerId && !seated) {
-      const fit = admission(ev, me);
+      const fit = await admissionAt(db, ev, me);
       if (fit === "unknown") throw new ActionFailure("level_required");
       if (fit !== "ok") throw new ActionFailure("forbidden");
     }

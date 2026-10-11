@@ -4,13 +4,12 @@ import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { PhotoButton } from "@/components/PhotoButton";
-import { SameTimeButton } from "@/components/SameTimeButton";
 import { ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { formatEventDay } from "@/lib/dates";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { later } from "@/lib/alerts";
 import { streakLine, winStreakFor } from "@/lib/domain/banter";
@@ -101,7 +100,6 @@ export default async function CardPage({ params }: Props) {
         <p className="text-xs text-faint">{t("card.saveHint")}</p>
         {participant && ev.type === "match" && <PhotoButton code={code} hasPhoto={Boolean(photo)} canRemove={Boolean(me && photo && (photo.uploadedByPlayerId === me.id || ev.creatorPlayerId === me.id))} />}
         <ShareButtons url={shareUrl} text={text} imageUrl={image} />
-        {ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster: detail.roster }, me.id)) && <SameTimeButton code={code} when={`${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}`} />}
         <Link href="/" prefetch={false} className="btn-primary w-full text-lg">
           {t("card.organize")}
         </Link>

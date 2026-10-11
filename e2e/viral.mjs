@@ -96,7 +96,8 @@ try {
   const key = await p.request.post(`${BASE}/api/v1/keys`, { data: { name: "e2e viral", agent: "playwright" } }).then((r) => r.json());
   const auth = { authorization: `Bearer ${key.key}` };
   // Booked for two hours, so ninety minutes in it is still on and three more can join it (a 90-minute match would be over).
-  const made = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(), durationMinutes: 120, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Ana" } } }).then((r) => r.json());
+  const playedAt = Date.now() - 90 * 60 * 1000;
+  const made = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(playedAt).toISOString(), durationMinutes: 120, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Ana" } } }).then((r) => r.json());
   const mcode = made.match?.code;
   check("a match played ninety minutes ago is created for Ana", Boolean(mcode) && Boolean(made.organizer?.personalUrl), JSON.stringify(made).slice(0, 160));
   for (const name of ["Bo", "Cy", "Di"]) await p.request.post(`${BASE}/api/v1/matches/${mcode}/join`, { headers: auth, data: { name } });
@@ -112,8 +113,13 @@ try {
   check("the organizer's score is confirmed at once", true);
   await p.getByTestId("result-card").waitFor({ timeout: 20000 });
   check("right after the score the match page offers the court photo on the card", (await p.getByTestId("result-card").getByTestId("photo-add").count()) === 1);
+  // Beside the card: "Play again" with its one control, a week on by default, and "Same time next week?" (DECIDING rule 37).
+  const bangkokDay = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+  const score = p.locator("#score");
+  const nextWhen = await score.getByTestId("play-again-when").inputValue();
+  check("the score panel offers Play again, a week on by default, and the weekly slot beside it", nextWhen.startsWith(`${bangkokDay(playedAt + 7 * 24 * 3600 * 1000)}T`) && (await score.getByTestId("same-time").count()) === 1, nextWhen);
   await p.goto(`${BASE}/${mcode}/card`);
-  check("the card page praises the winners and offers the weekly group", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 1);
+  check("the card page praises the winners and leaves the weekly group to the match page", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 0);
   const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGNgYGD4z8DAwAAABAAC/wKzCgAAAABJRU5ErkJggg==", "base64");
   await p.getByTestId("photo-input").setInputFiles({ name: "court.png", mimeType: "image/png", buffer: tinyPng });
   await p.locator(`img[src^="/${mcode}/card/opengraph-image?v="][src*="-p"]`).waitFor({ timeout: 30000 });
@@ -124,6 +130,15 @@ try {
   check("the share button offers the picture where the phone can share files (hidden where it cannot)", canShareHere ? (await p.getByRole("button", { name: "Share the picture…" }).count()) === 1 : (await p.getByRole("button", { name: "Share the picture…" }).count()) === 0, `navigator.share ${canShareHere ? "present" : "absent"}`);
   check("the uploader can take the photo down", (await p.getByTestId("photo-remove").count()) === 1);
   await shot(p, "v3-card-photo");
+  // "Play again" all the way through: another day picked in the control, the next game made on it.
+  await p.goto(`${BASE}/${mcode}`);
+  const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
+  await p.getByTestId("play-again-when").fill(`${picked}T19:30`);
+  await p.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();
+  await p.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const nextCode = p.url().split("/").slice(-2)[0];
+  await p.goto(`${BASE}/${nextCode}`);
+  check("Play again makes the next game on the day and at the time picked", nextCode !== mcode && (await p.getByText(/19:30/).count()) > 0, nextCode);
   await p.goto(`${BASE}/built`);
   check("the page of ideas that became the app opens", (await p.getByTestId("built-empty").count()) + (await p.getByTestId("built-list").count()) === 1);
   let momentsSeen = false;

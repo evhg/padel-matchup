@@ -18,7 +18,8 @@ import { getPlayer, normalizeEmail } from "@/lib/domain/players";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
-import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayAgain, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
+import { playAgainStart } from "@/lib/domain/playAgain";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -171,24 +172,32 @@ const updateSchema = z.object({
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
 
-/** "Play again": any participant or the organizer clones this event one week later and becomes its organizer. */
-export async function duplicateEventAction(code: string): Promise<ActionResult<{ code: string }>> {
+const playAgainSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).nullable().optional();
+
+/**
+ * "Play again": any participant or the organizer clones this event on the day and at the time they
+ * picked (a week on when they did not) and becomes its organizer. Each player of this match then hears
+ * once, "I'm in?" (DECIDING rule 37), after the response and once per old match, however often anybody taps.
+ */
+export async function duplicateEventAction(code: string, pick?: { date: string; time: string } | null): Promise<ActionResult<{ code: string }>> {
   let newCode: string | null = null;
   const res = await runA(async () => {
+    const when = playAgainSchema.parse(pick);
     const { db, detail } = await loadEvent(code);
     const viewer = await getViewer(db, detail);
     const isParticipant = isSeated({ roster: detail.roster }, viewer.player?.id);
     if (!viewer.isCreator && !isParticipant) throw new ActionFailure("forbidden");
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
-    const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId });
+    const now = new Date();
+    const startsAt = playAgainStart(detail.event, when, now);
+    const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId, startsAt, now });
     const { joinEvent } = await import("@/lib/domain/slots");
     const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
-    if (joined?.outcome === "joined") {
-      const organizer = viewer.player ?? (await getPlayer(db, creatorId));
-      if (organizer) after(() => sendCalendarInvite(db, ev, organizer));
-    }
+    const organizer = viewer.player ?? (await getPlayer(db, creatorId));
+    if (joined?.outcome === "joined" && organizer) after(() => sendCalendarInvite(db, ev, organizer));
     after(async () => {
       await emitMatchEvent(db, "match.created", ev.code, { playAgainOf: code });
+      if (organizer) await notifyPlayAgain(db, detail.event, ev, organizer).catch((e) => console.warn("[play again] the round failed", code, e));
     });
     newCode = ev.code;
     return { code: ev.code };

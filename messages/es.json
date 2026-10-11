@@ -327,7 +327,10 @@
     "courtBooked": "Pista reservada ✓",
     "courtBookedBy": "Pista reservada ✓ (por {name})",
     "courtBookedUndo": "No reservada",
-    "bookYourself": "Reservas y pagas tú, en la app del club, y luego lo marcas aquí."
+    "bookYourself": "Reservas y pagas tú, en la app del club, y luego lo marcas aquí.",
+    "playAgainShort": "Jugar otra vez",
+    "playAgainWhen": "Día y hora del próximo partido",
+    "playAgainOne": "Un partido más, con la misma configuración. Cada jugador de este partido recibe un mensaje «¿Te apuntas?»."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -998,7 +1001,8 @@
     "managerJoined": "{name} ahora te ayuda con las reservas",
     "levelCheckAsked": "{name} te pide que confirmes su nivel",
     "coachListed": "Un entrenador ya acepta reservas en {title}: {name}",
-    "wantersTold": "Los jugadores que pidieron entrenador en {title} acaban de saber de ti: {count}"
+    "wantersTold": "Los jugadores que pidieron entrenador en {title} acaban de saber de ti: {count}",
+    "playAgain": "{name} creó el próximo partido: {day} {time} en {venue}. ¿Te apuntas?"
   },
   "privacy": {
     "title": "Privacidad",

@@ -327,7 +327,10 @@
     "courtBooked": "Court booked ✓",
     "courtBookedBy": "Court booked ✓ (by {name})",
     "courtBookedUndo": "Not booked",
-    "bookYourself": "You book and pay in the club's own app, then tell the others here."
+    "bookYourself": "You book and pay in the club's own app, then tell the others here.",
+    "playAgainShort": "Play again",
+    "playAgainWhen": "Day and time of the next game",
+    "playAgainOne": "One next game, same settings. Each player of this match gets one “I'm in?” message."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -998,7 +1001,8 @@
     "managerJoined": "{name} now helps with your bookings",
     "levelCheckAsked": "{name} asks you to confirm their level",
     "coachListed": "A coach now takes bookings in {title}: {name}",
-    "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}"
+    "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}",
+    "playAgain": "{name} made the next game: {day} {time} at {venue}. I'm in?"
   },
   "privacy": {
     "title": "Privacy",

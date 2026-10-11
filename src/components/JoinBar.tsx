@@ -32,6 +32,7 @@ export function JoinBar({
   partnerGoes = false,
   pairsLocked = false,
   tellGroupHref = null,
+  rangeWaived = false,
 }: {
   code: string;
   state: JoinState;
@@ -65,6 +66,8 @@ export function JoinBar({
    * back in it. A ghost button beside Leave, so it never competes with a primary action (DECIDING rule 1).
    */
   tellGroupHref?: string | null;
+  /** The organiser already played a finished, scored match with the viewer: the range does not hold them (DECIDING rule 37). */
+  rangeWaived?: boolean;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
@@ -79,9 +82,9 @@ export function JoinBar({
 
   const fit = levelFit(levelRange, myLevel);
   const needsLevel = Boolean(levelRange) && myLevel == null;
-  const outOfRange = fit === "below" || fit === "above";
+  const outOfRange = !rangeWaived && (fit === "below" || fit === "above");
   // Inside the range, but the event wants a confirmed level and this one is only declared.
-  const unverified = Boolean(levelRange) && verifiedOnly && fit === "ok" && !verified;
+  const unverified = !rangeWaived && Boolean(levelRange) && verifiedOnly && fit === "ok" && !verified;
 
   // State updates after an awaited server action are wrapped in startTransition
   // so they join the router's transition instead of interrupting it (React 19).

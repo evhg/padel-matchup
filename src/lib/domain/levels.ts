@@ -238,3 +238,14 @@ export function admission(ev: { levelMin: number | null; levelMax: number | null
   const verified = Boolean(p) && isLevelVerified({ level: p!.level ?? null, levelVerifiedLevel: p!.levelVerifiedLevel ?? null }) && levelFit(r, p!.levelVerifiedLevel) === "ok";
   return verified ? "ok" : "unverified";
 }
+
+/**
+ * The owner's decision of 11 October 2026: "A player who already sat in a finished, scored match with
+ * the organiser skips that organiser's level-range approval." The organiser saw them play, so a range
+ * that would hold their request (below, above, or only declared on a confirmed-levels match) lets
+ * them in. A missing level is still asked for: nothing else about levels changes. The read of who
+ * played with whom is `playedWithOrganiser` in `playAgain.ts`; this is the rule.
+ */
+export function waivedByPlay(fit: Admission, playedWithOrganiser: boolean): Admission {
+  return playedWithOrganiser && (fit === "below" || fit === "above" || fit === "unverified") ? "ok" : fit;
+}

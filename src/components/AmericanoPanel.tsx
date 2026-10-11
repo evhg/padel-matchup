@@ -37,6 +37,7 @@ export function AmericanoPanel({
   courtNames,
   rotationLength,
   canPlayAgain = false,
+  nextWhen = "",
   cardHref,
   checkIn = null,
   fixedPairs = false,
@@ -63,6 +64,8 @@ export function AmericanoPanel({
   /** Rounds until everyone has partnered everyone once (field in fours), else null. */
   rotationLength: number | null;
   canPlayAgain?: boolean;
+  /** "Play again"'s default day and time, this night's a week on ("2026-10-17T18:00"). */
+  nextWhen?: string;
   /** Link to the shareable standings card (once a score exists). */
   cardHref?: string;
   /** "Who is here?" before round 1, for whoever may start it: the named list and the waiting list. */
@@ -447,9 +450,9 @@ export function AmericanoPanel({
           )}
         </div>
       )}
-      {locked && canPlayAgain && (
+      {locked && canPlayAgain && nextWhen && (
         <div className="mt-4 border-t border-line pt-4">
-          <PlayAgainButton code={code} />
+          <PlayAgainButton code={code} defaultWhen={nextWhen} />
         </div>
       )}
     </section>

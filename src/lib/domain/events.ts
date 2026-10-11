@@ -186,8 +186,11 @@ export function nextWeekAfter(startsAt: Date, now = new Date()): Date {
   return new Date(t);
 }
 
-/** "Play again": clone an event one week later with the same settings; the organizer joins automatically. */
-export async function duplicateEvent(db: Db, input: { sourceEventId: string; creatorPlayerId: string; now?: Date }): Promise<Event> {
+/**
+ * "Play again": clone an event with the same settings, at `startsAt` (the day and time the organiser
+ * picked, `playAgainStart` in `playAgain.ts`) or else one week later; the organizer joins automatically.
+ */
+export async function duplicateEvent(db: Db, input: { sourceEventId: string; creatorPlayerId: string; startsAt?: Date; now?: Date }): Promise<Event> {
   const now = input.now ?? new Date();
   const [src] = await db.select().from(events).where(eq(events.id, input.sourceEventId)).limit(1);
   if (!src) throw new DomainError("not_found");
@@ -195,7 +198,7 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     creatorPlayerId: input.creatorPlayerId,
     type: src.type,
     title: src.title,
-    startsAt: nextWeekAfter(src.startsAt, now),
+    startsAt: input.startsAt ?? nextWeekAfter(src.startsAt, now),
     // "Play again" books the same court for the same time: the length travels with the rest.
     durationMinutes: src.durationMinutes,
     tz: src.tz,

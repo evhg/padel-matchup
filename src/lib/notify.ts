@@ -37,6 +37,8 @@ import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { sendWaTemplate, waLocale, waMatchLine } from "@/lib/whatsapp/templates";
 import { markHeldDelivered, matchParams, quietSummariesDue, recordNotice, recordNotices, type NoticeInput } from "@/lib/domain/notices";
 import { kindOn, type Sender } from "@/lib/domain/noticeKinds";
+import { claimPlayAgainRound, playAgainRecipients } from "@/lib/domain/playAgain";
+import { firstName } from "@/lib/domain/result";
 
 /**
  * All outbound notifications live here. Every function is safe to call when
@@ -286,6 +288,38 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
     }
   }
   return { emails, pushes };
+}
+
+/**
+ * "Play again" (DECIDING rule 37; the owner, 11 October 2026: "Yes, one message each"): each player
+ * who sat in the last match hears once that the next game exists, "Ana made the next game: Sat, Oct 17
+ * 18:00 at Warehaus. I'm in?". One round per old match, however often anybody taps
+ * (`claimPlayAgainRound`); the rows for everybody in one insert (rule 12), kind `crew`; delivery only
+ * to the people the gate released. In Telegram the ✅ is the card's own `j:` join and "Open" the Mini
+ * App or the public page; every other channel carries the public match link, never a personal one,
+ * because a forwarded message keeps its buttons (as `notifyRefill`). No WhatsApp template says this,
+ * so a player whose only channel is WhatsApp finds it in the inbox on My matches.
+ *
+ * Returns how many people the round reached (inbox rows), 0 when the round was already sent.
+ */
+export async function notifyPlayAgain(db: Db, old: Event, next: Event, organizer: Pick<Player, "id" | "displayName">, now = new Date()): Promise<number> {
+  if (!(await claimPlayAgainRound(db, old, next, organizer.id))) return 0;
+  const people = await playAgainRecipients(db, old, organizer.id);
+  if (people.length === 0) return 0;
+  const name = firstName(organizer.displayName);
+  const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "playAgain", eventId: next.id, params: { ...matchParams(next), name }, startsAt: next.startsAt, tz: next.tz })), now);
+  const detail = await getEventDetail(db, next);
+  const open = eventUrl(baseUrl(), next.code);
+  for (const p of people) {
+    if (released.get(p.id) !== "now") continue;
+    // No recipient handed to ctx: no personal link is made, and none could leak into the message.
+    const c = await ctx(db, next, p.locale, null, detail);
+    const s = botStrings(botLocale(p.locale));
+    const url = telegramEnabled() && p.telegramId ? (miniAppUrl(next.code) ?? open) : open;
+    const text = c.t("noticeItem.playAgain", { ...c.vars, name });
+    await tell(db, p, text, { inline_keyboard: [[{ text: s.in, callback_data: `j:${next.code}` }, { text: s.open, url }]] }, { notice: { released: "now" } }).catch(() => undefined);
+  }
+  return people.length;
 }
 
 /**

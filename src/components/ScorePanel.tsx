@@ -7,6 +7,7 @@ import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { checkSets, MAX_SETS, tally } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton } from "./PlayAgainButton";
+import { SameTimeButton } from "./SameTimeButton";
 import { ShareButtons } from "./ShareSheet";
 
 type P = { id: string; name: string; team: "a" | "b" | null; level?: number | null };
@@ -23,6 +24,8 @@ export function ScorePanel({
   locked,
   enteredBy,
   canPlayAgain = false,
+  nextWhen = "",
+  sameTimeWhen = null,
   card,
 }: {
   code: string;
@@ -32,12 +35,22 @@ export function ScorePanel({
   reason: "not_started" | "cancelled" | "not_participant" | "locked" | null;
   locked: boolean;
   enteredBy: string | null;
-  /** Creator or participant: offer "Play again next week" once a result exists. */
+  /** Creator or participant: offer "Play again" once a result exists. */
   canPlayAgain?: boolean;
+  /** "Play again"'s default day and time: this match's a week on, as its own wall clock ("2026-10-17T18:00"). */
+  nextWhen?: string;
+  /**
+   * "Same time next week?" beside it, for a match with no crew yet, worded as the weekly slot
+   * ("Sat 18:00"); null hides it. One next game and a weekly slot: two buttons, two help lines.
+   */
+  sameTimeWhen?: string | null;
   /** The shareable result card, once a result exists. */
   card?: ResultCardView | null;
 }) {
   const t = useTranslations();
+  // Latched on purpose: the tap makes the crew, the page then renders with a crew and no offer, and
+  // the "Done" the button shows must outlive that refresh rather than vanish with the prop.
+  const [weekly] = useState(sameTimeWhen);
   const [editing, setEditing] = useState(false);
   const [sets, setSets] = useState<S[]>(scores.length ? scores : [{ setNumber: 1, sideA: 6, sideB: 4 }]);
   const [teamA, setTeamA] = useState<string[]>(players.filter((p) => p.team === "a").map((p) => p.id));
@@ -152,9 +165,10 @@ export function ScorePanel({
               <ShareButtons url={card.shareUrl} text={card.shareText} imageUrl={card.image} />
             </div>
           )}
-          {canPlayAgain && (
-            <div className="mt-4 border-t border-line pt-4">
-              <PlayAgainButton code={code} />
+          {canPlayAgain && nextWhen && (
+            <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
+              <PlayAgainButton code={code} defaultWhen={nextWhen} />
+              {weekly && <SameTimeButton code={code} when={weekly} />}
             </div>
           )}
         </div>

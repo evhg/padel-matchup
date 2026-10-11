@@ -54,7 +54,8 @@ import { canEditMatchDetails, isClaimable, isOccupied, isSeated } from "@/lib/do
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
-import { hasRange, isLevelVerified } from "@/lib/domain/levels";
+import { admission, hasRange, isLevelVerified } from "@/lib/domain/levels";
+import { admissionAt, playAgainDefault } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
@@ -177,6 +178,9 @@ export default async function EventPage({ params, searchParams }: Props) {
   else if (spotsLeft > 0) joinState = "join";
   else if (ev.whenFull === "waitlist") joinState = "join_waitlist";
   else joinState = "full";
+  // Somebody the organiser already played a finished, scored match with is not held to the range
+  // (DECIDING rule 37): the button says Join, not "Ask to join". One read, only for a viewer the range would hold.
+  const rangeWaived = Boolean(me) && ranged && !viewer.isCreator && (joinState === "join" || joinState === "join_waitlist") && admission(ev, me) !== "ok" && (await admissionAt(db, ev, me!, now)) === "ok";
 
   const typeLabel = t(ev.type === "match" ? "event.match" : "event.tournament");
   const title = calendarTitle(ev, typeLabel);
@@ -250,6 +254,11 @@ export default async function EventPage({ params, searchParams }: Props) {
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
+  // "Play again"'s default: this match's day and time a week on, as the wall clock where it is played.
+  const nextGame = playAgainDefault(ev, now);
+  const nextWhen = `${nextGame.date}T${nextGame.time}`;
+  // "Same time next week?" sits beside it for a match with no crew yet (it makes the weekly slot).
+  const sameTimeWhen = ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster }, me.id)) ? `${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}` : null;
   // After the result is in, the organizer can confirm the levels of the people they played with.
   const levelCandidates = participants
     .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)
@@ -674,6 +683,8 @@ export default async function EventPage({ params, searchParams }: Props) {
             locked={ev.scoreLockedByCreator}
             enteredBy={enteredBy}
             canPlayAgain={canPlayAgain}
+            nextWhen={nextWhen}
+            sameTimeWhen={sameTimeWhen}
             card={resultCard}
           />
         )}
@@ -715,6 +726,7 @@ export default async function EventPage({ params, searchParams }: Props) {
                 : tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))
             }
             canPlayAgain={canPlayAgain}
+            nextWhen={nextWhen}
             cardHref={`/${code}/card`}
             checkIn={checkIn}
           />
@@ -857,6 +869,7 @@ export default async function EventPage({ params, searchParams }: Props) {
         partnerGoes={partnerGoes}
         pairsLocked={(tstate?.rounds.length ?? 0) > 0}
         tellGroupHref={tellGroup}
+        rangeWaived={rangeWaived}
       />
     </>
   );

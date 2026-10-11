@@ -8,7 +8,8 @@ import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById, getGroupMember, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
-import { admission, hasRange } from "@/lib/domain/levels";
+import { hasRange } from "@/lib/domain/levels";
+import { admissionAt } from "@/lib/domain/playAgain";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
@@ -222,7 +223,8 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
   const token = await getOrCreatePersonalToken(db, player.id);
   const me = { name: player.displayName, personalToken: token, personalUrl: personalUrl(base, token) };
   if (hasRange(range) && player.id !== ev.creatorPlayerId) {
-    const fit = admission(ev, player);
+    // A player who already played a finished, scored match with the organiser is not held to the range (DECIDING rule 37).
+    const fit = await admissionAt(db, ev, player);
     if (fit === "unknown") throw new ApiError(422, "level_required", `This match is for levels ${range.min ?? 0}–${range.max ?? 7}. Pass the player's level (0–7) to join.`, "Levels are self-declared in quarter steps; 3.0 is a consistent intermediate player.");
     if (fit !== "ok") {
       const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === player.id);
