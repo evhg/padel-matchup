@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { balancedTeams, formatLevel, levelFit, matchDeltas, normalizeLevel, normalizeRange, presetFor, rangeFor, tournamentDeltas } from "@/lib/domain/levels";
+import { balancedTeams, formatLevel, joinBarLevel, joinStep, levelFit, matchDeltas, normalizeLevel, normalizeRange, presetFor, rangeFor, tournamentDeltas } from "@/lib/domain/levels";
 import { applyEventLevels, setPlayerLevel } from "@/lib/domain/rating";
 import { createJoinRequest, decideJoinRequest, getJoinRequests, withdrawJoinRequest } from "@/lib/domain/requests";
 import { saveMatchScore } from "@/lib/domain/scores";
@@ -181,5 +181,26 @@ describe("result-based level adjustment", () => {
     const [row] = await db.select().from(players).where(eq(players.id, p.id));
     expect(row.levelSource).toBe("self");
     expect(await setPlayerLevel(db, p.id, "x")).toBeNull();
+  });
+});
+
+// Review of 11 October 2026: "I'm in" (`?join=1`) opened the bar's form for a known player who needs no
+// level. On a ranged match that form showed the level picker, sent the level with the join (so it
+// became self-declared) and said "Join" where the bar says "Ask to join". Join itself is that step.
+describe("what Join does, and what \"I'm in\" opens", () => {
+  const known = { heldForMe: false, fixedPairs: false, hasIdentity: true };
+  it("is the bar's own Join for a known player who needs no level, inside the range or not", () => {
+    for (const level of [3, 5.5]) {
+      const { needsLevel } = joinBarLevel({ range: { min: 2.5, max: 3.5 }, level, verifiedOnly: false, verified: false, waived: null });
+      expect(joinStep({ ...known, needsLevel })).toBe("tap");
+    }
+    expect(joinStep({ ...known, needsLevel: false })).toBe("tap");
+  });
+
+  it("asks for what is missing, and offers the held place or the partner first", () => {
+    expect(joinStep({ ...known, needsLevel: true })).toBe("spot");
+    expect(joinStep({ ...known, hasIdentity: false, needsLevel: false })).toBe("spot");
+    expect(joinStep({ ...known, fixedPairs: true, needsLevel: false })).toBe("form");
+    expect(joinStep({ ...known, heldForMe: true, fixedPairs: true, needsLevel: true })).toBe("held");
   });
 });

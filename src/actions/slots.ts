@@ -30,7 +30,7 @@ import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
-import { decideHeldByName, heldNameFor, takeHeldByName } from "@/lib/domain/heldByName";
+import { decideHeldByName, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
 import { later } from "@/lib/alerts";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
@@ -52,11 +52,11 @@ export async function joinAction(code: string, name?: string, level?: number | n
     const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName);
     // A held place this name may take (DECIDING rule 34): a join would seat a second record of the name
     // beside it, a seat or a waiting place, and the place could never be taken by name after that. The
-    // page offers "Take Danny's held place" instead; this refuses the join, whatever the page showed.
-    const known = await getSessionPlayer(db);
-    const seats = [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
-    if (heldNameFor(detail.event, seats, known ? { id: known.id, name: known.displayName } : null, name, new Date())) throw new ActionFailure("name_held");
-    const me = known ?? (await requirePlayer(db, name, { namesHere }));
+    // page offers "Take Danny's held place" instead; this refuses the join, whatever the page showed,
+    // before any record is made (`whoJoins`).
+    const who = await whoJoins(detail, await getSessionPlayer(db), name, new Date(), () => requirePlayer(db, name, { namesHere }));
+    if ("held" in who) throw new ActionFailure("name_held");
+    const me = who.player;
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     // A level given while joining is the player's declaration (ranged events ask for it once).
     const myLevel = level != null ? await setPlayerLevel(db, me.id, level) : me.level;

@@ -351,8 +351,10 @@ export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: P
     }
     // Email and push: the line, one line under it (never the same sentence twice), and "I'm in" to the
     // public page with its join step open (`playAgainJoinUrl`). No personal link: a forward is safe.
+    // The email shows "I'm in" as its button; a push has no button, and its tap opens the same link,
+    // so the line under the question names no button (`email.playAgainLine`).
     const join = playAgainJoinUrl(next.code);
-    const body = c.t("email.playAgainBody", c.vars);
+    const body = c.t("email.playAgainLine", c.vars);
     await tell(db, p, `${text}\n${body}`, { inline_keyboard: [[{ text: c.t("email.playAgainIn"), url: join }]] }, { notice: { released: "now" }, bind: false, label: c.t("email.playAgainIn") }).catch(() => undefined);
   }
   return people.length;

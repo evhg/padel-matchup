@@ -99,7 +99,8 @@
     "takeHeld": "Take {name}'s held place",
     "takeHeldSure": "Take {name}'s held place?",
     "takeHeldNo": "That place is no longer held for {name}.",
-    "heldForYou": "A place in this match is held for {name}."
+    "heldForYou": "A place in this match is held for {name}.",
+    "heldNotYou": "Not {name}? Add your last name on My matches, then join."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -700,8 +701,8 @@
     "bookOpen": "Open the filled form. Check it, then tap the button to make the match:",
     "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email. If you mark this answer as spam, it keeps your address only so that it never writes to you again.",
     "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form.",
-    "playAgainBody": "{spots}. Tap “I'm in” and the match page opens at the join step.",
-    "playAgainIn": "I'm in"
+    "playAgainIn": "I'm in",
+    "playAgainLine": "{spots}. One tap opens the match page at the join step."
   },
   "errors": {
     "not_found": "We couldn't find that.",

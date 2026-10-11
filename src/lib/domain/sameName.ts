@@ -17,8 +17,9 @@ import { mergePlayers } from "./merge";
  *     match, an organiser or a club with the person proving. The shared context is what makes a name
  *     enough: two strangers called Alex rarely also share a court and an organiser.
  *   - **Otherwise the person decides**: "Are these yours?" on My matches, with the matches shown;
- *     except a row that is a member of a group that asks to join, which needs a match the two
- *     played together first (the owner, 10 October 2026: "Need a shared match first"; `mayClaim`).
+ *     except a row that is a member of a group that asks to join, which needs a match the two sat
+ *     in together first, a match still to come included (the owner, 10 October 2026: "Need a shared
+ *     match first"; `mayClaim`).
  *     The automatic fold asks the same of such a row: a shared organiser or club is not enough there.
  *   - **Never** a row that can be reached (an address, a phone, a chat account, a push subscription):
  *     that is somebody, and a name does not say it is the same somebody.
@@ -42,9 +43,10 @@ export const proved = (p: Pick<Player, "emailVerifiedAt" | "telegramId">) => Boo
  * May this row fold into the person, by the claim or at the moment of proof? The owner, 10 October
  * 2026, on a row that is a member of a group that asks to join: "Need a shared match first". A merge
  * moves the row's memberships, the admin role with them, so a name alone would be a way into such a
- * crew that no admin approved (DECIDING rule 30). Such a row folds only after a match the two played
+ * crew that no admin approved (DECIDING rule 30). Such a row folds only once the two sat in one match
  * together (`sharedMatch`): a shared organiser or a shared club is not a shared match, and a match
- * called off is no match. Every other row is claimed as before. Pure: the card, `claimSameNameRow`
+ * called off is no match. A match still to come counts, played or not: the owner has not decided that
+ * case (review of 11 October 2026). Every other row is claimed as before. Pure: the card, `claimSameNameRow`
  * and `foldSameNameRows` all ask it, so they cannot disagree.
  */
 export const mayClaim = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup">): boolean => row.sharedMatch || !row.inAskingGroup;
@@ -54,7 +56,7 @@ const yes = (v: unknown) => v === true || v === "t" || v === "true";
 
 /**
  * Rows of the same name that nobody can reach and that hold at least one match, with whether each
- * shares a match, an organiser or a club with this player, whether the two played one match together,
+ * shares a match, an organiser or a club with this player, whether the two sat in one match together,
  * and whether it is a member of a group that asks to join (more columns of the same bounded read: the
  * row's seats down `slots_player_idx`, its matches down `events_creator_idx`, its groups down
  * `group_members_player_idx`). A match that was called off counts for nothing. Bounded: five rows.
@@ -133,8 +135,8 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
 
 /**
  * At the moment of proof: folds in every row of the same name that nobody can reach and that shares
- * a match, an organiser or a club; a row in a group that asks to join only after a match the two
- * played together (`mayClaim`). Returns the ids it folded. Never throws: a proof must not fail
+ * a match, an organiser or a club; a row in a group that asks to join only once the two sat in one
+ * match together (`mayClaim`). Returns the ids it folded. Never throws: a proof must not fail
  * because a merge could not run.
  */
 export async function foldSameNameRows(db: Db, playerId: string): Promise<string[]> {
@@ -159,7 +161,7 @@ export async function foldSameNameRows(db: Db, playerId: string): Promise<string
  * "These are mine": the person folds one row in themselves. Checked again here, whatever the screen
  * showed: the person proved who they are, the row still carries their name, still nobody can reach
  * it, and it is no way into a group that asks to join (`mayClaim`: such a row needs a match the two
- * played together first). Returns false when any of that no longer holds, and the row, its
+ * sat in together first). Returns false when any of that no longer holds, and the row, its
  * memberships and any admin role stay where they were.
  */
 export async function claimSameNameRow(db: Db, playerId: string, rowId: string): Promise<boolean> {

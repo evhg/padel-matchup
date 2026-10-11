@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, facts, groupMembers, groups, notices, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
+import { events, facts, groupMembers, groups, notices, pushSubscriptions, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { NO_SIDE_EFFECTS, joinAsPlayer } from "@/lib/api/operations";
 import { anonymizePlayer } from "@/lib/domain/anonymize";
 import { createEvent, duplicateEvent, mayMoveStart, nextWeekAfter, updateEvent, type CreateEventInput } from "@/lib/domain/events";
@@ -12,7 +12,7 @@ import { autoCreateGroupMatches, createGroup, createGroupFromEvent, weeklyGroupF
 import { joinWithPolicy, partnerAdmission } from "@/lib/domain/joining";
 import { joinBarLevel, waivedByPlay } from "@/lib/domain/levels";
 import { saveNoticeSettings } from "@/lib/domain/notices";
-import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, organiserNextGame, playAgainActor, playAgainOfferWhen, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, nextGameOf, organiserNextGame, playAgainActor, playAgainOfferWhen, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { getEventByCode } from "@/lib/domain/queries";
 import { admitConfirmed, confirmLevel } from "@/lib/domain/verify";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
@@ -21,7 +21,10 @@ import { formatWeeklyWhen, timePatternOf } from "@/lib/dates";
 import { baseUrl } from "@/lib/config";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
+import enMessages from "../messages/en.json";
+import esMessages from "../messages/es.json";
 import ruMessages from "../messages/ru.json";
+import webpush from "web-push";
 
 /**
  * "Play again", the owner's decision of 11 October 2026 (option A, "Make the one working group repeat
@@ -281,16 +284,15 @@ describe("Play again", () => {
       expect(await db.select().from(events).where(and(eq(events.groupId, group.id), eq(events.startsAt, startsAt)))).toHaveLength(1);
     });
 
-    it("finds no game at another hour, another organiser's game with no crew, or a game called off", async () => {
+    it("finds no game at another hour, for a match with no crew, or a game called off", async () => {
       const ana = await makePlayer(db, "Ana");
       const old = await played([ana, await makePlayer(db, "Ben")]);
       const { group } = await weeklyGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
       const [slot] = (await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id);
       const [fresh] = await db.select().from(events).where(eq(events.id, old.id));
       expect(await existingNextGame(db, fresh, new Date(slot.event.startsAt.getTime() + HOUR))).toBeNull();
-      // With no crew, the game is still Ana's at the same club and hour: the tap lands on it.
-      expect((await existingNextGame(db, { ...fresh, groupId: null }, slot.event.startsAt))?.code).toBe(slot.event.code);
-      // Another organiser's match with no crew has no game of its own there.
+      // A match with no crew is not steered onto the crew's game, Ana's own or anybody else's.
+      expect(await existingNextGame(db, { ...fresh, groupId: null }, slot.event.startsAt)).toBeNull();
       const cy = await makePlayer(db, "Cy");
       expect(await existingNextGame(db, { ...fresh, groupId: null, creatorPlayerId: cy.id }, slot.event.startsAt)).toBeNull();
       await db.update(events).set({ status: "cancelled" }).where(eq(events.id, slot.event.id));
@@ -367,6 +369,34 @@ describe("Play again", () => {
       expect(await notifyPlayAgain(db, efua, tap.event, erik, NOW)).toBe(0);
       // A second tap at that time lands there too, whoever taps.
       expect(await nextGameFor(db, efua, { creatorPlayerId: jakob.id, startsAt, now: NOW })).toMatchObject({ made: false, event: { code: tdsv.code } });
+    });
+
+    // Review of 11 October 2026: the organiser runs two crews at Warehaus. Crew B's game on Saturday was
+    // crew A's "Next game", and A1's tap at that hour landed on it: crew A's players got "Are you in?"
+    // for crew B's game. A match with no crew was steered onto a crew's game the same way.
+    it("stays in the old match's crew: another crew's game, or a crew's game for a match with no crew, is never the next game", async () => {
+      const erik = await makePlayer(db, "Erik");
+      const [a1, a2, b1] = [await makePlayer(db, "A1"), await makePlayer(db, "A2"), await makePlayer(db, "B1")];
+      const crewA = await createGroup(db, { name: "Crew A", creatorPlayerId: erik.id, tz: TZ, venueName: "Warehaus", memberIds: [a1.id, a2.id] });
+      const crewB = await createGroup(db, { name: "Crew B", creatorPlayerId: erik.id, tz: TZ, venueName: "Warehaus", memberIds: [b1.id] });
+      const lastA = await played([erik, a1, a2], { groupId: crewA.id }, { startsAt: EFUA });
+      const gameB = await createEvent(db, { creatorPlayerId: erik.id, type: "match", startsAt: TDSV, tz: TZ, whenFull: "waitlist", venueName: "Warehaus", groupId: crewB.id });
+      // Crew B's game is no "Next game" on crew A's match, so the control keeps the week on.
+      expect(await nextGameOf(db, lastA, null, NOW)).toBeNull();
+      expect(await organiserNextGame(db, lastA, NOW)).toBeNull();
+      // A1's tap at crew B's hour makes crew A's own game, and crew B's stays crew B's.
+      const tap = await nextGameFor(db, lastA, { creatorPlayerId: a1.id, startsAt: TDSV, now: NOW });
+      expect(tap.made).toBe(true);
+      expect(tap.event.code).not.toBe(gameB.code);
+      expect(tap.event.groupId).toBe(crewA.id);
+      // The same match with no crew is not steered onto either crew's game.
+      const lone = { ...lastA, groupId: null };
+      expect(await nextGameOf(db, lone, null, NOW)).toBeNull();
+      expect(await existingNextGame(db, lone, TDSV)).toBeNull();
+      // And the organiser's own game of crew A at the club is crew A's next game.
+      const gameA = await createEvent(db, { creatorPlayerId: erik.id, type: "match", startsAt: new Date(TDSV.getTime() + DAY), tz: TZ, whenFull: "waitlist", venueName: "Warehaus", groupId: crewA.id });
+      expect((await nextGameOf(db, lastA, null, NOW))?.code).toBe(gameA.code);
+      expect(await nextGameOf(db, lone, null, NOW)).toBeNull();
     });
 
     it("still makes a game at another day and time", async () => {
@@ -620,12 +650,46 @@ describe("Play again", () => {
       // One real line under the heading, never the heading twice (audit of 11 October 2026), and "I'm in"
       // to the public page with the join step open: one tap there, from the browser that knows Fay.
       expect(mail.text.split("Ana made the next game").length - 1).toBe(1);
-      expect(mail.text).toContain("Tap “I'm in” and the match page opens at the join step.");
+      expect(mail.text).toContain("One tap opens the match page at the join step.");
       expect(mail.text).toContain(`I'm in: ${baseUrl()}/${next.code}?join=1`);
       // Forwarded to a friend, it must not hand the friend Fay's account.
       expect(mail.text).not.toContain("start=p_");
       expect(mail.text).not.toContain("t.me/");
       expect(mail.text).not.toContain("/p/");
+    });
+
+    // Review of 11 October 2026: the push carried "Tap “I'm in” and the match page opens at the join
+    // step", and a push has no button. Its tap opens the same page with the join step open.
+    it("by push names no button, and its tap opens the join step", async () => {
+      const keys = webpush.generateVAPIDKeys();
+      process.env.VAPID_PUBLIC_KEY = keys.publicKey;
+      process.env.VAPID_PRIVATE_KEY = keys.privateKey;
+      process.env.VAPID_SUBJECT = "mailto:test@example.com";
+      const sent: { title: string; body: string; url: string }[] = [];
+      const push = vi.spyOn(webpush, "sendNotification").mockImplementation(async (_sub, payload) => {
+        sent.push(JSON.parse(String(payload)) as { title: string; body: string; url: string });
+        return { statusCode: 201, body: "", headers: {} };
+      });
+      try {
+        const ana = await makePlayer(db, "Ana");
+        // Gus has no Telegram and no address: the push is his channel.
+        const gus = await makePlayer(db, "Gus");
+        await db.insert(pushSubscriptions).values({ playerId: gus.id, endpoint: "https://push.example/gus", p256dh: "p256dh", auth: "auth" });
+        const old = await played([ana, gus]);
+        const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, now: NOW });
+        expect(await notifyPlayAgain(db, old, next, ana, NOW)).toBe(1);
+        expect(sent).toHaveLength(1);
+        expect(sent[0].title).toBe("Ana made the next game: Sat, Oct 17 18:00 at Warehaus. Are you in?");
+        expect(sent[0].url).toBe(`${baseUrl()}/${next.code}?join=1`);
+        expect(sent[0].body).toContain("One tap opens the match page at the join step.");
+        expect(sent[0].body).not.toContain("I'm in");
+      } finally {
+        push.mockRestore();
+      }
+    });
+
+    it("never names a button in the line under the question, in any language, because the push carries the same line", () => {
+      for (const m of [enMessages, ruMessages, esMessages]) expect(m.email.playAgainLine).not.toContain(m.email.playAgainIn);
     });
 
     it("lets the player in with the one tap", async () => {

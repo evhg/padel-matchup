@@ -8,7 +8,7 @@ import { claimSameNameAction } from "@/actions/identity";
 /**
  * "These are mine" folds the row in (checked again on the server). "Not me" is remembered in this
  * browser only: nothing is written about a row somebody said is a stranger's. A row the person may
- * not claim (`mayClaim`: a member of a group that asks to join, with no match the two played together)
+ * not claim (`mayClaim`: a member of a group that asks to join, with no match the two sat in together)
  * gets one line in place of the claim button, never a button the server would refuse. The line says
  * that a name alone cannot add the matches, and never how to pass the guard.
  */

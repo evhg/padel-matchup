@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, groupMembers, groups, metricsDaily, notices, slots } from "@/db/schema";
+import { events, groupMembers, groups, metricsDaily, notices, slots, type Player } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { decideHeldByName, heldNameFor, heldOffers, heldSeatsOf, heldVerdict, inviteView, takeHeldByName, type HeldMatch, type HeldRefusal, type HeldSeat, type InviteState, type InviteView } from "@/lib/domain/heldByName";
+import { decideHeldByName, heldNameFor, heldOffers, heldSeatsOf, heldVerdict, inviteView, takeHeldByName, whoJoins, type HeldMatch, type HeldRefusal, type HeldSeat, type InviteState, type InviteView } from "@/lib/domain/heldByName";
+import { joinWithPolicy } from "@/lib/domain/joining";
 import { LIMITS } from "@/lib/domain/ratelimit";
-import { holdsPlaceIn } from "@/lib/domain/queries";
+import { getEventByCode, holdsPlaceIn } from "@/lib/domain/queries";
 import { confirmInvite, joinEvent, mayUseHeldLink, reserveNames, reserveSlot } from "@/lib/domain/slots";
 import { joinPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterRelease } from "@/lib/aftermath";
@@ -175,6 +176,40 @@ describe("the held place by name on a real match", () => {
     const after = await heldSeatsOf(db, ev.id);
     expect(after.filter((s) => s.position > ev.capacity && s.status !== "empty")).toEqual([]);
     expect(after.filter((s) => s.playerName === "Alberto").map((s) => s.status)).toEqual(["confirmed"]);
+  });
+
+  // Review of 11 October 2026: nothing proved the web join's own refusal. The checks stopped at the
+  // page's guards, which never send the join, so a stale page or a direct call of the action was
+  // covered by nothing. `joinAction` asks `whoJoins` before it makes a record or seats anybody; this
+  // drives that step as the action does, then the join itself, on a full match.
+  it("refuses the web's plain join of a held name on a full match, typed or known, and puts nobody on the waiting list", async () => {
+    const { ev } = await match(["Danny", "Bo", "Cy"]);
+    let made = 0;
+    /** `joinAction` after `loadEvent`: who joins (`whoJoins`), then the join (`joinWithPolicy`). */
+    const webJoin = async (known: Player | null, typed: string | undefined) => {
+      const detail = (await getEventByCode(db, ev.code))!;
+      const who = await whoJoins(detail, known, typed, NOW, async () => {
+        made += 1;
+        return makePlayer(db, typed ?? "");
+      });
+      if ("held" in who) return { refused: who.held };
+      const d = await joinWithPolicy(db, detail, who.player, who.player.level);
+      return { outcome: d.kind === "joined" ? d.result.outcome : d.kind };
+    };
+    const waiting = async () => (await heldSeatsOf(db, ev.id)).filter((s) => s.position > ev.capacity && s.status !== "empty").map((s) => s.playerName);
+    // A browser that knows nobody types "danny"; a browser that knows a Danny with no place taps Join.
+    expect(await webJoin(null, " danny ")).toEqual({ refused: "Danny" });
+    const knownDanny = await makePlayer(db, "Danny");
+    expect(await webJoin(knownDanny, undefined)).toEqual({ refused: "Danny" });
+    // Whatever that browser types, its own record's name is what would join.
+    expect(await webJoin(knownDanny, "Daniel")).toEqual({ refused: "Danny" });
+    expect(made).toBe(0);
+    expect(await waiting()).toEqual([]);
+    // The same step lets any other name through to the waiting list, so the refusal above is the only
+    // thing that kept Danny off it.
+    expect(await webJoin(null, "Eve")).toEqual({ outcome: "waitlisted" });
+    expect(made).toBe(1);
+    expect(await waiting()).toEqual(["Eve"]);
   });
 
   it("the page offers the same place, from the rows it already read, and nothing once it is taken", async () => {

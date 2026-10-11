@@ -539,6 +539,14 @@ try {
     anaSends === 0 && ((await heldForAna.textContent()) ?? "").startsWith("A place in this match is held for Ana.") && (await heldForAna.getByRole("button", { name: "Take Ana's held place", exact: true }).count()) === 1,
     `sends=${anaSends} ${(await heldForAna.textContent()) ?? ""}`,
   );
+  // Review of 11 October 2026: a different person known as Ana had no way in and no word why. The
+  // offer now says how: a last name on My matches, then Join.
+  const notAna = heldForAna.getByTestId("held-not-you");
+  check(
+    "the offer tells a different Ana the way in: a last name on My matches",
+    (await notAna.count()) === 1 && (await notAna.getAttribute("href")) === "/me" && ((await notAna.textContent()) ?? "") === "Not Ana? Add your last name on My matches, then join.",
+    (await notAna.count()) ? `${await notAna.getAttribute("href")} ${await notAna.textContent()}` : "(no link)",
+  );
   await shot(anp, "12f-held-for-known-browser");
   await heldForAna.getByRole("button", { name: "Take Ana's held place", exact: true }).click();
   await heldForAna.getByRole("button", { name: "Take Ana's held place?", exact: true }).click();

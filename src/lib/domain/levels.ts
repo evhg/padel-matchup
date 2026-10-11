@@ -276,3 +276,19 @@ export function joinBarLevel(o: { range: LevelRange | null; level: number | null
     unverified: o.waived === "unverified" || (!o.waived && Boolean(o.range) && o.verifiedOnly && fit === "ok" && !o.verified),
   };
 }
+
+/**
+ * What the join bar's Join does for this viewer, and so what "I'm in" from a message (`?join=1`) opens:
+ * `held`, the held place of the browser's own name (`HeldForYou`); `form`, the bar's own form, because a
+ * fixed-pairs night asks for the partner; `tap`, the bar's Join itself, one tap under its own words
+ * ("Ask to join" outside the range), with no level asked and none sent; `spot`, the open spot's form
+ * above, else the bar's form, for a name or a level.
+ */
+export type JoinStep = "held" | "form" | "tap" | "spot";
+
+export function joinStep(o: { heldForMe: boolean; fixedPairs: boolean; hasIdentity: boolean; needsLevel: boolean }): JoinStep {
+  if (o.heldForMe) return "held";
+  if (o.fixedPairs) return "form";
+  if (o.hasIdentity && !o.needsLevel) return "tap";
+  return "spot";
+}

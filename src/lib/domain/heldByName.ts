@@ -33,8 +33,9 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  *
  * The offer stands wherever a join could start: the open spot's typed name, the waiting list's typed
  * name on a full match, and, for a browser that knows a record of the name, in place of its one-tap
- * Join. A plain join that would seat a second record of the name beside the place is refused
- * (`heldNameFor`), because after it no typed name could take the place.
+ * Join. The web's plain join that would seat a second record of the name beside the place is refused
+ * (`whoJoins`), because after it no typed name could take the place. The joins through `joinAsPlayer`
+ * (Telegram, Discord, LINE, `join_match`) do not ask yet.
  */
 
 /** A place in the match as the rule reads it: the row, and the name of the record on it when there is one. */
@@ -116,6 +117,29 @@ export function heldOffers(m: HeldMatch, seats: readonly HeldSeat[], viewer: Hel
 export function heldNameFor(m: HeldMatch, seats: readonly HeldSeat[], viewer: HeldViewer, typed: string | null | undefined, now: Date): string | null {
   const v = heldVerdict(m, seats, viewer ? viewer.name : (typed ?? ""), viewer, now);
   return v.ok ? v.name : null;
+}
+
+/** A place as a join reads it: the row and the record on it, as `getEventDetail` gives them. */
+type JoinSeat = Omit<HeldSeat, "playerName"> & { player: { displayName: string } | null };
+
+/**
+ * Who a plain join on the web seats, decided before anything is made or seated: the browser's own
+ * record, else a new record from the typed name (`make`, called only then). A join that would put a
+ * second record of a held place's name beside it, in a seat or on the waiting list (`heldNameFor`),
+ * gets `{ held }` and no record: `joinAction` refuses it with `name_held`. The places are the line-up
+ * and the waiting list the join read already, so there is no read here.
+ */
+export async function whoJoins<P extends { id: string; displayName: string }>(
+  detail: { event: HeldMatch; roster: readonly JoinSeat[]; waitlist: readonly JoinSeat[] },
+  known: P | null,
+  typed: string | null | undefined,
+  now: Date,
+  make: () => Promise<P>,
+): Promise<{ held: string } | { player: P }> {
+  const seats = [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
+  const held = heldNameFor(detail.event, seats, known ? { id: known.id, name: known.displayName } : null, typed, now);
+  if (held) return { held };
+  return { player: known ?? (await make()) };
 }
 
 /**

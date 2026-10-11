@@ -949,11 +949,12 @@ Everything in this list is live. The README describes each in detail.
   `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
   No WhatsApp template carries the message yet. After the audit of 11 October 2026: the score panel
   names the next game when it exists already (the game the round announced, or the organiser's own
-  game at the same club in the next 14 days, made by hand or not), the control defaults to its day and
-  time, and a tap there lands on it (`nextGameOf`, `organiserGameAt`). Outside Telegram the message has
-  one line under the question and "I'm in", which opens the match page at the join step (`?join=1`).
-  A night played again keeps its named courts, and a read that fails after the claim takes the claim
-  back, so the round is never spent on nobody.
+  game at the same club in the next 14 days, made by hand or not, in the last match's crew or with no
+  crew), the control defaults to its day and time, and a tap there lands on it (`nextGameOf`,
+  `organiserGameAt`). Outside Telegram the message has one line under the question, and the line
+  names no button. The email has an "I'm in" button, and a tap on the push opens the same link: the
+  match page at the join step (`?join=1`). A night played again keeps its named courts, and a read
+  that fails after the claim takes the claim back, so the round is never spent on nobody.
 - **The held place by name (11 October 2026, no migration).** The owner asked: "danny clicks on the
   generic one kicksmash doesn't know its danny and would it let confirm danny's place?" The decision
   was "Yes, two taps" (DECIDING rule 34). An organiser holds a place for a name with no record, for
@@ -962,10 +963,13 @@ Everything in this list is live. The README describes each in detail.
   link's own write, so the organiser hears "Danny confirmed". The place has no email and no phone, and
   no other record of the name sits in the match (`src/lib/domain/heldByName.ts`). The personal link
   changed the same day: a viewer who is in the match already gets no "I'm in" on another person's
-  place. After the audit of 11 October 2026, the offer also shows on a full match, in the name field of
-  the waiting list, and to a browser that knows a record of the name, in place of its one-tap Join. The
-  Go key sends no join while the offer is on the screen. The server refuses a join that puts a second
-  record of the name beside the place.
+  place. After the audit of 11 October 2026, the offer also shows on a full match with a waiting list,
+  in the name field of the waiting list, and to a browser that knows a record of the name, in place of
+  its one-tap Join. A full match with a closed waiting list shows no join, so only the personal link
+  fills the place there. The Go key sends no join while the offer is on the screen. The web's join
+  (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
+  offer, a different person of the same name reads how to get in: a last name on My matches. The
+  Telegram, Discord and LINE joins and `join_match` in the API and MCP do not refuse it yet.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and

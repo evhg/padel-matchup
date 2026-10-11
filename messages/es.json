@@ -99,7 +99,8 @@
     "takeHeld": "Ocupar la plaza guardada para {name}",
     "takeHeldSure": "¿Ocupar la plaza guardada para {name}?",
     "takeHeldNo": "Esa plaza ya no está guardada para {name}.",
-    "heldForYou": "En este partido hay un sitio reservado para {name}."
+    "heldForYou": "En este partido hay un sitio reservado para {name}.",
+    "heldNotYou": "¿No eres {name}? Añade tu apellido en Mis partidos y luego apúntate."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -700,8 +701,8 @@
     "bookOpen": "Abre el formulario relleno. Revísalo y toca el botón para crear el partido:",
     "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo. Si marcas esta respuesta como spam, guarda tu dirección solo para no volver a escribirte.",
     "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario.",
-    "playAgainBody": "{spots}. Toca «Me apunto» y la página del partido se abre en el paso para unirte.",
-    "playAgainIn": "Me apunto"
+    "playAgainIn": "Me apunto",
+    "playAgainLine": "{spots}. Un toque abre la página del partido en el paso para unirte."
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",

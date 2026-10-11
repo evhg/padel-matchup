@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { startTransition, useState, useTransition } from "react";
 import { takeHeldPlaceAction } from "@/actions/slots";
@@ -95,13 +96,20 @@ export function NameHereLine({ code, name, namesHere, claimable, held }: { code:
 /**
  * For a browser that knows a record of the held name, with no place in the match (DECIDING rule 34):
  * the held place, offered in place of its one-tap Join, which would seat a second record of the name
- * beside the place and close it to its name for good. Two taps, as for a typed name.
+ * beside the place and close it to its name for good. Two taps, as for a typed name. A different
+ * person of the same name is told the way in: a last name on My matches, then Join (`name_held`
+ * refuses the plain join until then).
  */
 export function HeldForYou({ code, name }: { code: string; name: string }) {
   const t = useTranslations();
   return (
-    <p data-testid="held-for-you" className="text-sm text-muted">
-      {t("identity.heldForYou", { name })} <TakeHeldButton code={code} name={name} />
-    </p>
+    <div data-testid="held-for-you" className="text-sm text-muted">
+      <p>
+        {t("identity.heldForYou", { name })} <TakeHeldButton code={code} name={name} />
+      </p>
+      <Link href="/me" prefetch={false} className="link text-xs" data-testid="held-not-you">
+        {t("identity.heldNotYou", { name })}
+      </Link>
+    </div>
   );
 }

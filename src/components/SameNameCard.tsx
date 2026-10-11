@@ -15,7 +15,7 @@ export const NOT_MINE_COOKIE = "ks_notmine";
  * the answer is theirs to give with the facts in front of them (the owner's option A, 24 September
  * 2026). A row that shares a match, an organiser or a club was already folded in at the moment of
  * proof; what reaches this card is the rest. A row that is a member of a group that asks to join,
- * with no match the two played together, shows its days only, without "Yes, these are mine" (the
+ * with no match the two sat in together, shows its days only, without "Yes, these are mine" (the
  * owner, 10 October 2026: "Need a shared match first"; `mayClaim`): no club and no names, because
  * those would tell a stranger of the same name where to go to pass the guard, and one line says that
  * a name alone cannot add them. "Not me" stays.

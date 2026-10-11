@@ -193,7 +193,10 @@ describe("the same name, one side proved", () => {
     expect(await claimSameNameRow(db, stranger.id, hal.id)).toBe(false);
   });
 
-  it("a row in a crew that asks to join folds after a match the two played together, at the proof and by claim", async () => {
+  // "Together" means a seat in one match that is not called off, and a match still to come counts:
+  // both matches below start after NOW. The owner has not decided whether it should (review of
+  // 11 October 2026: a stranger can take a free seat beside the record).
+  it("a row in a crew that asks to join folds once the two sat in one match together, a match still to come included, at the proof and by claim", async () => {
     const org = await makePlayer(db, "Org Twelve", { email: "org12@example.com" });
     const boss = await makePlayer(db, "Boss Three", { email: "boss3@example.com" });
     // At the moment of proof: Ivy's two records sat in one match, from two browsers.
@@ -232,7 +235,7 @@ describe("the same name, one side proved", () => {
     const crew = await createGroup(db, { name: "Kim's crew", creatorPlayerId: kim2.id, tz: "Asia/Bangkok" });
     await updateGroup(db, crew.id, kim2.id, { askToJoin: true });
     const [row] = await sameNameRows(db, kim.id);
-    // Kim waits behind four seats: the two never played together, although they share the match.
+    // Kim waits behind four seats: the two never sat in one match together, although they share it.
     expect(row).toMatchObject({ id: kim2.id, shared: true, sharedMatch: false, inAskingGroup: true });
     expect(await claimSameNameRow(db, kim.id, kim2.id)).toBe(false);
   });
@@ -253,7 +256,7 @@ describe("the same name, one side proved", () => {
     expect((await getGroupMember(db, open.id, gus.id))?.role).toBe("member");
   });
 
-  it("folds at a Telegram link too, when the two played together", async () => {
+  it("folds at a Telegram link too, when the two sat in one match together", async () => {
     const org = await makePlayer(db, "Org Four", { email: "org4@example.com" });
     const cy = await makePlayer(db, "Cy");
     const second = await makePlayer(db, "Cy");

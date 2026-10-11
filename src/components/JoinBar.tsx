@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { joinAction, leaveAction, withdrawJoinRequestAction } from "@/actions/slots";
 import { askLevelCheckAction } from "@/actions/verify";
-import { formatLevel, joinBarLevel, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
+import { formatLevel, joinBarLevel, joinStep, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
 import { requestJoin } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
@@ -157,15 +157,22 @@ export function JoinBar({
       });
     });
 
+  // What Join does for this viewer (`joinStep`): the held place, the bar's form, Join itself, or the open spot.
+  const step = joinStep({ heldForMe: Boolean(heldForMe), fixedPairs, hasIdentity, needsLevel });
+  const joinButton = useRef<HTMLButtonElement>(null);
+
   // "I'm in" from a message: open the step the Join button opens, once, after the open spots below
-  // registered (their effects run before this one, which sits after them on the page).
+  // registered (their effects run before this one, which sits after them on the page). For a known
+  // player who needs no level, Join itself is the step: one tap under its own words, and no form that
+  // would ask for a level, send one, or say "Join" where the bar says "Ask to join".
   const opened = useRef(false);
   useEffect(() => {
     if (!openJoin || opened.current || (state !== "join" && state !== "join_waitlist")) return;
     opened.current = true;
-    if (heldForMe || fixedPairs || (hasIdentity && !needsLevel)) setInline(true);
+    if (step === "held" || step === "form") setInline(true);
+    else if (step === "tap") joinButton.current?.focus();
     else if (!requestJoin()) setInline(true);
-  }, [openJoin, state, fixedPairs, hasIdentity, needsLevel, heldForMe]);
+  }, [openJoin, state, step]);
 
   if (state === "cancelled" || state === "past") return null;
 
@@ -174,11 +181,10 @@ export function JoinBar({
   // No identity yet (or no level yet on a ranged event): expand an in-flow spot
   // instead of opening a sheet (fixed overlays drift off screen on iOS once the keyboard shows).
   const onJoin = () => {
-    // A place is held for this browser's own name: Join offers it, never a second seat of the name.
-    if (heldForMe) return setInline(true);
-    // A fixed-pairs night always asks for the partner's name first (it may stay empty).
-    if (fixedPairs) return setInline(true);
-    if (hasIdentity && !needsLevel) return join();
+    // A place held for this browser's own name: Join offers it, never a second seat of the name. A
+    // fixed-pairs night always asks for the partner's name first (it may stay empty).
+    if (step === "held" || step === "form") return setInline(true);
+    if (step === "tap") return join();
     if (!requestJoin()) setInline(true);
   };
 
@@ -224,7 +230,7 @@ export function JoinBar({
                   {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
                 </form>
               ) : (
-                <button type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>
+                <button ref={joinButton} type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>
                   {pending ? t("common.working") : joinLabel}
                 </button>
               )}

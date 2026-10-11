@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gt, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, exists, gt, inArray, isNotNull, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { events, facts, notices, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
@@ -231,11 +231,19 @@ export async function lockCrewHour(tx: Db, groupId: string, startsAt: Date): Pro
 /** How far ahead the match page looks for the organiser's next game at the same club. */
 export const NEXT_GAME_DAYS = 14;
 
-/** The organiser's games at this club, of this kind, not called off, other than the old match: conditions on `events`. */
-const organiserAtClub = (old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">): SQL[] => [
+/** What `organiserAtClub` reads of the old match. */
+type OldGame = Pick<Event, "id" | "groupId" | "creatorPlayerId" | "venueSlug" | "type">;
+
+/**
+ * The organiser's games at this club, of this kind, not called off, other than the old match, and in the
+ * old match's crew (a match with no crew: a game with no crew), so one crew's "Play again" never lands
+ * on another crew's game of the same organiser: conditions on `events`.
+ */
+const organiserAtClub = (old: OldGame): SQL[] => [
   eq(events.venueSlug, old.venueSlug ?? ""),
   eq(events.creatorPlayerId, old.creatorPlayerId),
   eq(events.type, old.type),
+  old.groupId ? eq(events.groupId, old.groupId) : isNull(events.groupId),
   ne(events.status, "cancelled"),
   ne(events.id, old.id),
 ];
@@ -246,7 +254,7 @@ const organiserAtClub = (old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug"
  * The first by its start, the first made at that start. One read down `events_venue_slug_idx` (the
  * club and the start): the club's games in that window, filtered on the organiser. Null with no club.
  */
-export async function organiserNextGame(db: Db, old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">, now: Date): Promise<Event | null> {
+export async function organiserNextGame(db: Db, old: OldGame, now: Date): Promise<Event | null> {
   if (!old.venueSlug) return null;
   const [ev] = await db
     .select()
@@ -262,7 +270,7 @@ export async function organiserNextGame(db: Db, old: Pick<Event, "id" | "creator
  * still to come and not called off (one read down `events_code_idx`), else the organiser's next game
  * at the club (`organiserNextGame`). Null when there is neither.
  */
-export async function nextGameOf(db: Db, old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">, announced: string | null, now: Date): Promise<Event | null> {
+export async function nextGameOf(db: Db, old: OldGame, announced: string | null, now: Date): Promise<Event | null> {
   if (announced) {
     const [ev] = await db.select().from(events).where(eq(events.code, announced)).limit(1);
     if (ev && ev.status !== "cancelled" && ev.startsAt.getTime() > now.getTime()) return ev;
@@ -274,7 +282,7 @@ export async function nextGameOf(db: Db, old: Pick<Event, "id" | "creatorPlayerI
  * The organiser's own game at this club at exactly this start: the game the page's "Next game" names,
  * which a tap at its day and time lands on. One read down `events_venue_slug_idx`. Null with no club.
  */
-export async function organiserGameAt(db: Db, old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">, startsAt: Date): Promise<Event | null> {
+export async function organiserGameAt(db: Db, old: OldGame, startsAt: Date): Promise<Event | null> {
   if (!old.venueSlug) return null;
   const [ev] = await db
     .select()
@@ -292,7 +300,7 @@ export async function organiserGameAt(db: Db, old: Pick<Event, "id" | "creatorPl
  * game made by hand, as the week's game often is), so the group never splits across two matches at
  * one hour. Null: make the game.
  */
-export async function existingNextGame(db: Db, old: Pick<Event, "id" | "groupId" | "creatorPlayerId" | "venueSlug" | "type">, startsAt: Date): Promise<Event | null> {
+export async function existingNextGame(db: Db, old: OldGame, startsAt: Date): Promise<Event | null> {
   const same = await sameNextGame(db, old.id, startsAt);
   if (same) {
     const [ev] = await db.select().from(events).where(eq(events.code, same)).limit(1);
