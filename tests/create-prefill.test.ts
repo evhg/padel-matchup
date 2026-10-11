@@ -26,6 +26,7 @@ describe("the create form's address", () => {
       booked: true,
       names: ["Danny", "Alberto"],
       missing: [],
+      check: [],
     });
   });
 
@@ -83,6 +84,16 @@ describe("the create form's address", () => {
       tz: "Asia/Bangkok",
     });
     const p = readCreateLink(params(bookingHref(read)));
-    expect(p).toMatchObject({ fromPaste: true, venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: "Asia/Bangkok", durationMinutes: 90, court: "3", booked: true, publicListing: false, names: ["Danny", "Alberto"], missing: [] });
+    expect(p).toMatchObject({ fromPaste: true, venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: "Asia/Bangkok", durationMinutes: 90, court: "3", booked: true, publicListing: false, names: ["Danny", "Alberto"], missing: [], check: [] });
+  });
+
+  it("reads which pasted fields the organiser must check, only for a field the link fills", () => {
+    const base = { src: "paste", venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: "Asia/Bangkok" };
+    expect(readCreateLink({ ...base, check: "venue,date" }).check).toEqual(["venue", "date"]);
+    expect(readCreateLink({ ...base, check: "date" }).check).toEqual(["date"]);
+    expect(readCreateLink({ ...base, check: "venue,court,<b>" }).check).toEqual(["venue"]);
+    // Nothing to check in an empty field, and nothing outside a paste.
+    expect(readCreateLink({ src: "paste", tz: "Asia/Bangkok", check: "venue,date" }).check).toEqual([]);
+    expect(readCreateLink({ ...base, src: undefined, check: "venue,date" }).check).toEqual([]);
   });
 });

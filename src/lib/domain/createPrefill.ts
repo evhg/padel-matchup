@@ -26,6 +26,7 @@ export type CreateLink = {
   court?: string;
   cost?: string;
   booked?: string;
+  check?: string;
 };
 
 export type LinkPrefill = {
@@ -45,6 +46,8 @@ export type LinkPrefill = {
   names: string[];
   /** A pasted booking only: what it did not say, so the form asks for it in place. */
   missing: ("venue" | "date" | "time")[];
+  /** A pasted booking only: what the organiser must look at (`check=venue,date`): a venue that is their last one, a date its weekday disagrees with. */
+  check: ("venue" | "date")[];
 };
 
 /** The form's bounds: a court and a price are 40 characters at most, a venue 80 (as the create action takes them). */
@@ -99,5 +102,6 @@ export function readCreateLink(sp: CreateLink): LinkPrefill {
     booked: sp.booked === "1",
     names,
     missing: fromPaste ? [...(venue ? [] : ["venue" as const]), ...(date ? [] : ["date" as const]), ...(time ? [] : ["time" as const])] : [],
+    check: fromPaste ? (["venue", "date"] as const).filter((f) => (sp.check ?? "").split(",").includes(f) && (f === "venue" ? venue : date)) : [],
   };
 }

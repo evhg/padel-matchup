@@ -4,7 +4,7 @@ import { venues } from "@/db/schema";
 import { later } from "@/lib/alerts";
 import { isValidTimeZone } from "@/lib/dates";
 import { bookingHref, clubNamed, linksIn, PASTE_TEXT_MAX, readBooking, type BookingPreview, type BookingRead, type PickClub } from "@/lib/domain/bookingPaste";
-import { listClubsForPicking } from "@/lib/domain/clubs";
+import { listClubsForPaste } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { detectPlatform, type Platform } from "./platforms";
@@ -12,7 +12,7 @@ import { disabledPlatforms, readPlatformStates } from "./scrape";
 import { readLinkPreview } from "./unfurl";
 
 /** `previewed`: the platform's preview filled part of the read, so the organiser checks it on the form before a match is made. */
-export type PasteResult = { ok: true; read: BookingRead; href: string; previewed: boolean } | { ok: false; reason: "empty" | "limit" };
+export type PasteResult = { ok: true; read: BookingRead; href: string; previewed: boolean } | { ok: false; reason: "empty" | "limit" | "nothing" };
 
 /** A club row as the reader takes it. */
 export const pickClubOf = (c: { slug: string; name: string; tz: string | null; bookingUrl?: string | null; website?: string | null }): PickClub => ({
@@ -51,12 +51,13 @@ async function mayRead(db: Db, platform: Platform, now: Date): Promise<boolean> 
 /**
  * A pasted booking, read: the form's fields and the link that opens the form with them. What it costs
  * (AGENTS.md rule 12): one counter write for the limit (`takeRate`, thirty a day for each caller);
- * one read of the clubs (`listClubsForPicking`, every listed club without its cache; no cache in
+ * one read of the clubs (`listClubsForPaste`, every listed club, five short columns each; no cache in
  * front of it today); when the paste still lacks the club, the day or the time and carries a
  * platform's link, one read of that platform's switches (`mayRead`), then one outbound read of that
  * link (`readLinkPreview`: one request and at most three redirects, four seconds) and one counter
  * after the answer; when no club is found and the caller is signed in, one read of their latest
- * venue. Nothing is stored but the counters.
+ * venue. Nothing is stored but the counters. A paste that shows no platform, no club, no day and no
+ * time is no booking (`nothing`): the form does not open on it, and the last venue is not read.
  *
  * `rateKey` is the caller's key: a hash of the address on the web (`clientKeyFrom`), the account on a bot.
  */
@@ -83,7 +84,7 @@ export async function pasteBooking(
   if (!(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
 
   const tz = isValidTimeZone(input.tz) ? input.tz : "UTC";
-  const clubs = input.clubs ?? (await listClubsForPicking(db)).map(pickClubOf);
+  const clubs = input.clubs ?? (await listClubsForPaste(db)).map(pickClubOf);
   const base = { text, links, clubs, now, tz, selfName: input.selfName ?? null };
   let preview: BookingPreview | null = null;
   let read = readBooking(base);
@@ -101,6 +102,7 @@ export async function pasteBooking(
       read = readBooking({ ...base, preview });
     }
   }
+  if (!read.platform && !read.club && !read.date && !read.time) return { ok: false, reason: "nothing" };
   if (!read.club && input.playerId) {
     const name = await lastVenueOf(db, input.playerId);
     const club = name ? clubNamed(name, clubs, tz) : null;

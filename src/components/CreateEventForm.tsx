@@ -53,7 +53,7 @@ export function CreateEventForm({
    * ticked when the booking said so, and the fields the booking did not carry, marked for the
    * organiser to fill in place.
    */
-  booking?: { booked: boolean; missing: readonly ("venue" | "date" | "time")[] };
+  booking?: { booked: boolean; missing: readonly ("venue" | "date" | "time")[]; check?: readonly ("venue" | "date")[] };
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
@@ -181,7 +181,7 @@ export function CreateEventForm({
         </div>
       )}
       <div className="card">
-        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} missing={booking?.missing} />
+        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} missing={booking?.missing} check={booking?.check} />
       </div>
       {booking && (
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ok-soft px-4 py-3">

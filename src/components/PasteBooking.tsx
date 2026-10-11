@@ -10,7 +10,8 @@ import { readBookingAction } from "@/actions/events";
  * (the owner, 11 October 2026: "how do I turn this into a match and match card/link by just copy and
  * pasting the link?"). One quiet line beside "Find a game"; a tap opens one box under it for the link,
  * the share text or both, and "Read my booking" sends it to `readBookingAction` and opens the create
- * form filled with what the booking said (`bookingHref`). Nothing is created until the organiser taps
+ * form filled with what the booking said (`bookingHref`); a paste that shows no booking at all keeps
+ * the box open and says so (`pasteNothing`). Nothing is created until the organiser taps
  * the form's own button. A paste is one request: thirty a day from one address, and at most one read
  * of the pasted link (DECIDING rule 35).
  *
@@ -39,7 +40,7 @@ export function PasteBooking({ max }: { max: number }) {
       })();
       const r = await readBookingAction({ text, tz: zone }).catch(() => null);
       if (!r) return setNote(t("pasteFailed"));
-      if (!r.ok) return setNote(r.reason === "limit" ? t("pasteLimit") : t("pasteEmpty"));
+      if (!r.ok) return setNote(r.reason === "limit" ? t("pasteLimit") : r.reason === "nothing" ? t("pasteNothing") : t("pasteEmpty"));
       setOpen(false);
       setText("");
       router.push(r.href);

@@ -3,6 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, venues } from "@/db/schema";
 import { pasteBooking } from "@/lib/booking/paste";
+import { listClubsForPaste, listClubsForPicking } from "@/lib/domain/clubs";
 import { dayKey } from "@/lib/domain/metrics";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { freezeClock } from "./helpers/clock";
@@ -116,6 +117,24 @@ describe("a pasted booking, read on the server", () => {
     // A skipped read counts on its own, never as a platform that failed to answer.
     const [skipped] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.day, dayKey(NOW)), eq(metricsDaily.key, "paste_preview_off")));
     expect(skipped?.value).toBe(6);
+  });
+
+  it("reads the clubs the picker lists, with the five columns the reader uses", async () => {
+    const narrow = await listClubsForPaste(db);
+    const wide = await listClubsForPicking(db);
+    expect(narrow.map((c) => c.slug)).toEqual(wide.map((c) => c.slug));
+    expect(narrow.length).toBeGreaterThan(0);
+    // No manage token (a credential) and no other column comes along for a paste.
+    for (const row of narrow) expect(Object.keys(row).sort()).toEqual(["bookingUrl", "name", "slug", "tz", "website"]);
+  });
+
+  it("says a paste with no platform, no club, no day and no time is no booking, and opens no form", async () => {
+    const me = await makePlayer(db, "Nok");
+    await db.insert(venues).values({ creatorPlayerId: me.id, name: "WAREHAUS.club", lastUsedAt: NOW });
+    expect(await paste("hello, see you there!", { rateKey: "k-nothing", playerId: me.id })).toEqual({ ok: false, reason: "nothing" });
+    expect(await paste("https://example.com/my-booking", { rateKey: "k-nothing" })).toEqual({ ok: false, reason: "nothing" });
+    // A platform's link alone is a booking, even when its preview says nothing.
+    expect((await paste("https://thepadelsociety.app.link/AbCdEf12345", { rateKey: "k-nothing" }, stub("<html></html>").fetchImpl)).ok).toBe(true);
   });
 
   it("refuses an empty paste before it counts anything", async () => {

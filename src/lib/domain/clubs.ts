@@ -191,6 +191,21 @@ export async function listClubsForPicking(db: Db, limit = 500): Promise<Pickable
     .limit(limit);
 }
 
+/**
+ * The clubs a pasted booking is read against (`readBooking` in `bookingPaste.ts`): the rows
+ * `listClubsForPicking` gives, in its order and to its limit, with the five columns the reader uses.
+ * The bot reads them for every private message that has a day and a time, so each row is five short
+ * columns, not every column of the club (no `manage_token`, which is a credential).
+ */
+export async function listClubsForPaste(db: Db, limit = 500): Promise<{ slug: string; name: string; tz: string | null; bookingUrl: string | null; website: string | null }[]> {
+  return db
+    .select({ slug: clubs.slug, name: clubs.name, tz: clubs.tz, bookingUrl: clubs.bookingUrl, website: clubs.website })
+    .from(clubs)
+    .where(and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), listedSource())))
+    .orderBy(asc(clubs.country), asc(clubs.province), asc(clubs.name))
+    .limit(limit);
+}
+
 /** The names of the clubs shown in one time zone: what a chat's free text is matched against (`matchVenue` in the bot's parser). */
 export async function listedClubNames(db: Db, tz: string, limit = 200): Promise<string[]> {
   const rows = await db

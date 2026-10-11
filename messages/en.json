@@ -127,7 +127,8 @@
     "pasteEmpty": "Paste the link or the text of your booking first.",
     "pasteLimit": "You read many bookings here today. Fill in the form below, or paste again tomorrow.",
     "pasteFailed": "We could not read it just now. Fill in the form below, or try again.",
-    "carriedFromBooking": "{count, plural, one {# player from your booking} other {# players from your booking}}"
+    "carriedFromBooking": "{count, plural, one {# player from your booking} other {# players from your booking}}",
+    "pasteNothing": "We found no booking in it. Paste the link or the text from your booking app."
   },
   "create": {
     "title": "New match",
@@ -226,7 +227,9 @@
     "bookedByMeHelp": "The match page tells the players the court is booked.",
     "pasteNoDay": "Your booking did not give the day. Pick it here.",
     "pasteNoTime": "Your booking did not give the time. Pick it here.",
-    "pasteNoClub": "Your booking did not name the club. Pick it here."
+    "pasteNoClub": "Your booking did not name the club. Pick it here.",
+    "pasteCheckClub": "We took the club of your last match. Check it here.",
+    "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day."
   },
   "share": {
     "title": "Your match is live",

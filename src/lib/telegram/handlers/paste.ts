@@ -8,7 +8,7 @@ import { chatLocale } from "@/lib/channels/telegram";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { linksIn, readBooking, type BookingRead, type PickClub } from "@/lib/domain/bookingPaste";
-import { listClubsForPicking } from "@/lib/domain/clubs";
+import { listClubsForPaste } from "@/lib/domain/clubs";
 import { isClaimable } from "@/lib/domain/events";
 import { parseMatchLength } from "@/lib/domain/matchLength";
 import { bumpMetric } from "@/lib/domain/metrics";
@@ -74,7 +74,7 @@ async function readPaste(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUse
     const guess = chat.tz ?? "UTC";
     const shape = readBooking({ text, links, clubs: [], now, tz: guess });
     if (!shape.date || !shape.time) return null;
-    clubs = (await listClubsForPicking(db)).map(pickClubOf);
+    clubs = (await listClubsForPaste(db)).map(pickClubOf);
     const named = readBooking({ text, links, clubs, now, tz: guess });
     if (!named.club || !named.date || !named.time) return null;
   }

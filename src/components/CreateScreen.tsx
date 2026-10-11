@@ -84,7 +84,7 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
   const fromGenerator = prefill?.type === "tournament";
   const carried = link.names;
   // "Court booked by me", under the form, for a booking pasted or a link that says it is booked.
-  const booking = link.fromPaste || link.booked ? { booked: link.booked, missing: link.missing } : undefined;
+  const booking = link.fromPaste || link.booked ? { booked: link.booked, missing: link.missing, check: link.check } : undefined;
   // A new paste on this page is a new address on the same page: the form starts again from it.
   const formKey = JSON.stringify(prefill ?? {});
   // A device that has never seen this person shows a name field. Somebody who has played before is
