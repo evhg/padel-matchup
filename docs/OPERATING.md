@@ -380,6 +380,18 @@ platform at the next run, and `"value":0` starts it again. `SCRAPE_DISABLED` on 
 ids with commas (`playtomic,matchi`), or `all`. Vercel gives a running deployment the variables it
 was built with, so a change there takes effect only after a redeploy of the same code.
 
+**The checkout.** "Book and pay on Playtomic" on a match page opens Playtomic's own checkout, filled in
+(the owner's decision of 11 October 2026, DECIDING rule 36). It needs the exact starts the reader keeps
+(`offers`, about 1 KB a club, read by the match page only). `POST /api/admin/metrics
+{"key":"checkout_off_playtomic","value":1}` (or `checkout_off_all`) turns it off with no deploy: the
+reader keeps no offers from its next read of each club, so within 15 minutes every match page gives the
+day page; `"value":0` turns it on again. Each read of a club page checks that its script still builds the
+link. When the known script is gone and no script found builds it, the row
+`checkout_builder_lost_playtomic` is 1, the counter `checkout_lost_playtomic` counts the checks, the
+service board's Playtomic line says "checkout off", and the checkout stays off until a read finds the
+builder in a new script (`checkout_found_playtomic`, and `checkout_builder_playtomic` then names it).
+A look for the builder costs at most two requests, one read a run.
+
 **The back-off.** A 401, 403 or 429 stops that platform for the run, and so does a challenge: an
 `x-amzn-waf-action` or `cf-mitigated` header, or a 202 or 405 on a GET (AWS WAF's challenge and
 captcha; Playtomic runs behind CloudFront). The platform then rests for six hours, then a day, then a

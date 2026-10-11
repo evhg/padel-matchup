@@ -216,6 +216,9 @@ const STRINGS = {
     // (the owner, 11 October 2026: "The chat reply and the time chips show no platform name"); never
     // "this week", because a club's own feed holds today.
     timesFree: "Free courts at your clubs. Tap one and I make the match; you book and pay in the club's own app.",
+    // The weekly post before the crew's slot (the owner, 11 October 2026, "Weekly best times in the
+    // group"): the one message the bot sends a crew's group unasked. No platform's name.
+    weeklyTimes: (when: string) => `Free courts around your ${when} game. Tap a time and I make the match, or you join it if it is on already. You book and pay in the club's own app.`,
     timesNone: "None of your clubs shows a free court just now.",
     timesExists: "That match is already on.",
     timesGone: "That time is no longer on offer. Ask again for the free times.",
@@ -430,6 +433,7 @@ const STRINGS = {
     crewTaken: "У этой группы уже есть свой Telegram-чат. Чтобы перенести его сюда, админ того чата сначала пишет там /quiet или удаляет бота.",
     whichMatch: "Какой матч?",
     timesFree: "Свободные корты в ваших клубах. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.",
+    weeklyTimes: (when: string) => `Свободные корты рядом со временем вашей игры (${when}). Нажмите на время, и я создам матч, или вы присоединитесь к нему, если он уже есть. Бронируете и платите вы, в приложении клуба.`,
     timesNone: "Сейчас ни один из ваших клубов не показывает свободных кортов.",
     timesGone: "Это время больше не предлагается. Спросите свободное время ещё раз.",
     timesExists: "Этот матч уже есть.",
@@ -641,6 +645,7 @@ const STRINGS = {
     crewTaken: "Este grupo ya tiene su chat de Telegram. Para traerlo aquí, un administrador de ese chat escribe antes /quiet allí o quita el bot.",
     whichMatch: "¿Qué partido?",
     timesFree: "Pistas libres en tus clubs. Toca una y creo el partido; reservas y pagas tú, en la app del club.",
+    weeklyTimes: (when: string) => `Pistas libres cerca de vuestro partido (${when}). Toca una hora y creo el partido, o te apuntas si ya existe. Reservas y pagas tú, en la app del club.`,
     timesNone: "Ahora mismo ninguno de tus clubs muestra una pista libre.",
     timesGone: "Esa hora ya no está disponible. Vuelve a pedir los horarios libres.",
     timesExists: "Ese partido ya existe.",

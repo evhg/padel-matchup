@@ -272,12 +272,17 @@ function candidatesOf(pieces: readonly Piece[], from: number, last: number, feed
  * a free court for the whole length, at least two hours away, inside what each feed speaks for.
  * Ranked: a usual club at a usual time first (a usual weekday, within the hour), then the soonest.
  * One time per club and local day; on a day with several, the one nearest the usual time, else the
- * earliest. At most `limit`. Each club costs one pass over its stretches and its candidates. Pure.
+ * earliest. At most `limit`. Each club costs one pass over its stretches and its candidates.
+ *
+ * `around`: only starts within `withinMs` of `at` (the crew's weekly slot, for the weekly post in its
+ * group), ranked the person's or the crew's own clubs first, then the nearest to `at`, then the soonest.
+ * Pure.
  */
-export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: readonly TimePattern[]; lengthMinutes: number; now: Date; limit?: number }): BestTime[] {
+export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: readonly TimePattern[]; lengthMinutes: number; now: Date; limit?: number; around?: { at: Date; withinMs: number } }): BestTime[] {
   const limit = input.limit ?? BEST_TIMES.limit;
   const length = input.lengthMinutes * MINUTE_MS;
-  const from = input.now.getTime() + BEST_TIMES.minLeadMs;
+  const around = input.around ? { at: input.around.at.getTime(), within: Math.max(0, input.around.withinMs) } : null;
+  const from = Math.max(input.now.getTime() + BEST_TIMES.minLeadMs, around ? around.at - around.within : -Infinity);
   const to = input.now.getTime() + BEST_TIMES.horizonMs;
   type Candidate = BestTime & { tier: number; distance: number };
   const bestOfDay = new Map<string, Candidate>();
@@ -285,21 +290,24 @@ export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: re
     const feed = club.feed;
     if (!feed) continue;
     const pieces = parsed(feed);
-    const last = Math.min(to, new Date(feed.until).getTime()) - length;
+    const last = Math.min(Math.min(to, new Date(feed.until).getTime()) - length, around ? around.at + around.within : Infinity);
     for (const start of candidatesOf(pieces, from, last, feed.tz, input.patterns, input.now)) {
       const free = freeThrough(pieces, start, length);
       if (free < 1) continue;
       const { date, time } = utcToZonedParts(new Date(start), feed.tz);
-      const distance = distanceToUsual(date, time, input.patterns);
+      // Around a slot, every club is ranked by how near it starts; else a usual club by its usual time.
+      const distance = around ? Math.abs(start - around.at) / MINUTE_MS : distanceToUsual(date, time, input.patterns);
       const usual = Boolean(club.usual) && distance <= BEST_TIMES.nearMinutes;
-      const c: Candidate = { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, tier: usual ? 0 : 1, distance: usual ? distance : Infinity };
+      const c: Candidate = around
+        ? { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, tier: club.usual ? 0 : 1, distance }
+        : { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, tier: usual ? 0 : 1, distance: usual ? distance : Infinity };
       const key = `${club.slug}|${date}`;
       const held = bestOfDay.get(key);
       if (!held || c.tier < held.tier || (c.tier === held.tier && (c.distance < held.distance || (c.distance === held.distance && start < held.start.getTime())))) bestOfDay.set(key, c);
     }
   }
   return [...bestOfDay.values()]
-    .sort((a, b) => a.tier - b.tier || a.start.getTime() - b.start.getTime() || a.name.localeCompare(b.name))
+    .sort((a, b) => a.tier - b.tier || (around ? a.distance - b.distance : 0) || a.start.getTime() - b.start.getTime() || a.name.localeCompare(b.name))
     .slice(0, Math.max(0, limit))
     .map(({ tier: _tier, distance: _distance, ...b }) => b);
 }
