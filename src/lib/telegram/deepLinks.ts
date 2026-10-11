@@ -30,10 +30,13 @@ export function readBindPayload(rest: string): { ticket: string; code: string | 
 }
 
 /**
- * A crew's own Telegram group (DECIDING rule 31). The bot cannot make a group; this link lets a crew's
- * admin pick one, or make one, and add the bot to it as an admin in one step, with the rights below
- * already ticked. Telegram then sends `/start crew_<ticket>` into that group, and the ticket ties it to
- * the crew.
+ * A crew's own Telegram group (DECIDING rule 31). The bot cannot make a group. The owner's words of 9
+ * October 2026 make the group one "solely for the purpose of coordinating padel matches", so the crew
+ * page asks the crew's admin to make a new group only for this crew's padel (`group.telegramRunHelp`).
+ * This link then adds the bot to the group they pick, as an admin in one step, with the rights below
+ * already ticked. Telegram's picker also lists the admin's other groups, and nothing in the Bot API
+ * tells a new group from an old one, so the words on the page are the guard. Telegram then sends
+ * `/start crew_<ticket>` into that group, and the ticket ties it to the crew.
  *
  * The rights are the fewest the bot needs, one job each: `pin_messages` pins the notice (without a
  * pinned notice the bot does not read anything), `invite_users` makes the link the crew page hands to

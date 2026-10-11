@@ -20,7 +20,8 @@ export const CITIES: readonly City[] = [
     name: "Phuket",
     tz: "Asia/Bangkok",
     needles: ["phuket", "patong", "rawai", "kata", "karon", "chalong", "bangtao", "bang-tao", "cherngtalay", "cherng-talay", "laguna", "kamala", "thalang", "nai-harn", "naiharn", "surin", "kathu", "boat-avenue", "layan", "mai-khao", "cape-panwa", "panwa"],
-    venueSlugs: [],
+    // The directory's Phuket clubs whose slug names no area (data/clubs.json; tests/telegram-new-club.test.ts holds the two together).
+    venueSlugs: ["warehaus", "blue-tree", "destination-padel-club", "padel-bay-indoor-club"],
   },
   {
     slug: "singapore",

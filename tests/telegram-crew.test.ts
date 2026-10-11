@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, feedback, metricsDaily, players, telegramCards, telegramChats } from "@/db/schema";
+import { clubs, events, feedback, metricsDaily, players, telegramCards, telegramChats } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { createEvent } from "@/lib/domain/events";
 import { createGroup, crewTelegramDoors, crewTelegramInvite, handOverGroup, joinGroup } from "@/lib/domain/groups";
@@ -58,7 +60,12 @@ function stubTelegram() {
       if (method === "sendMessage" && body.ephemeral_message_parameters && ephemeralFails) return reply("Bad Request: ephemeral message can't be sent", false);
       if (method === "pinChatMessage" && pinFails) return reply("Bad Request: not enough rights to pin a message", false);
       if (method === "sendMessage" || method === "sendPhoto") return reply({ message_id: nextMessageId++, chat: { id: body.chat_id } });
-      if (method === "getChatMember") return reply(members.get(`${body.chat_id}:${body.user_id}`) ?? { status: "member" });
+      if (method === "getChatMember") {
+        // A member written as { error, code } is Telegram refusing the question ("bot was kicked", "chat not found").
+        const m = members.get(`${body.chat_id}:${body.user_id}`);
+        if (m && typeof m.error === "string") return new Response(JSON.stringify({ ok: false, error_code: m.code, description: m.error }), { status: Number(m.code), headers: { "content-type": "application/json" } });
+        return reply(m ?? { status: "member" });
+      }
       if (method === "createChatInviteLink") return reply({ invite_link: inviteOf(Number(body.chat_id)) });
       return reply(true);
     }),
@@ -269,27 +276,24 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(await metric("tg_groups_started")).toBe(1);
 
     // The other order: promoted first, then the link. The crew link adds the bot as an admin that may
-    // pin, and then the notice says what the welcome would: one message from the bot, one pin.
+    // pin, and then the notice says what the welcome would: one message from the bot, one pin. (Another
+    // crew here: this crew already has its group.)
+    const second = await createGroup(db, { name: "Sunday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "WAREHAUS.club" });
     const chat2 = { id: -200401, type: "supergroup" as const, title: "Crew chat 2" };
     members.set(`${chat2.id}:1`, { status: "administrator" });
     members.set(`${chat2.id}:${BOT.id}`, ADMIN_RIGHTS);
     calls = [];
     expect(await update({ my_chat_member: { chat: chat2, from: user(1, "Ana"), old_chat_member: { status: "left" }, new_chat_member: ADMIN_RIGHTS } })).toBe("joined");
     expect(sent("sendMessage")).toHaveLength(0);
-    expect(await say(chat2, user(1, "Ana"), `/start@kicksmash_bot ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect(await say(chat2, user(1, "Ana"), `/start@kicksmash_bot ${crewStartPayload(second.id, owner.id)}`).outcome).toBe("crew_listening");
     expect(sent("sendMessage")).toHaveLength(1);
     expect(sent("pinChatMessage")).toHaveLength(1);
-    expect((await chatRow(chat2.id)).groupId).toBe(crew.id);
+    expect((await chatRow(chat2.id)).groupId).toBe(second.id);
+    // The pinned example asks at this crew's own court, not at a court named for every crew.
+    expect(String(groupMessages()[0].body.text)).toContain(strings("en").crewHow("WAREHAUS.club"));
     // Telegram's own promotion update arriving after the link changes nothing.
     expect(await promote(chat2, ADMIN_RIGHTS)).toBe("rejoined");
     expect(sent("pinChatMessage")).toHaveLength(1);
-    // Two groups now read for the crew: the first one tied stays the crew's group on its page, whether
-    // it started reading before the second or, after a demotion and a promotion, again after it.
-    const startedAt = async (id: number, at: Date) => db.update(telegramChats).set({ listeningSince: at }).where(eq(telegramChats.chatId, id));
-    await startedAt(chat.id, new Date(NOW.getTime() - 3600_000));
-    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
-    await startedAt(chat.id, new Date(NOW.getTime() + 3600_000));
-    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
     // A plain member added as an admin by hand still gets the welcome.
     const chat3 = { id: -200402, type: "group" as const, title: "Friends" };
     calls = [];
@@ -304,7 +308,8 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     const r = say(chat, user(2, "Petr"), "I'M IN 🎾");
     expect(await r.outcome).toBe("word_join:joined");
     expect(reactions()).toEqual([{ message: r.id, emoji: "👍" }]);
-    expect(sent("sendMessage")).toHaveLength(0);
+    // The group hears nothing; Petr alone gets his calendar's button (below).
+    expect(groupMessages()).toHaveLength(0);
     expect(String(sent("editMessageText")[0].body.text)).toContain("Players 2/4");
     // Ordinary chat stays unread.
     calls = [];
@@ -396,8 +401,8 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(sent("setChatDescription")).toHaveLength(0);
     expect(reactions()).toEqual([{ message: quiet.id, emoji: "👌" }]);
     expect(groupMessages()).toHaveLength(0);
-    // The group is still the crew's, so its members keep the way in, and the crew's admin may start it again.
-    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: false });
+    // The group is no longer the crew's run group: the crew page stops handing out its link, and the crew's admin may start it again.
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: false });
     calls = [];
     expect(await say(chat, user(2, "Petr"), "I'm in").outcome).toBe("ignored");
     expect(calls).toHaveLength(0);
@@ -430,6 +435,155 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     row = await chatRow(chat.id);
     expect([row.listeningSince, row.noticeVersion, row.inviteLink]).toEqual([null, null, null]);
     expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: false });
+  });
+
+  it("the first group tied stays the crew's: an older chat tied second is refused, and another crew's link moves no group", async () => {
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Friday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
+    const other = await createGroup(db, { name: "Another crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok" });
+    // A general chat the bot met a month ago: its row is older than the crew's new group's.
+    const older = { id: -202100, type: "supergroup" as const, title: "Everybody" };
+    const fresh = { id: -202101, type: "supergroup" as const, title: "Friday padel" };
+    for (const c of [older, fresh]) {
+      members.set(`${c.id}:1`, { status: "creator" });
+      members.set(`${c.id}:${BOT.id}`, ADMIN_RIGHTS);
+    }
+    await update({ my_chat_member: { chat: older, from: user(1, "Ana"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } });
+    await db.update(telegramChats).set({ createdAt: new Date(NOW.getTime() - 30 * 24 * 3600_000) }).where(eq(telegramChats.chatId, older.id));
+    expect(await say(fresh, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect((await chatRow(fresh.id)).createdAt.getTime()).toBeGreaterThan((await chatRow(older.id)).createdAt.getTime());
+
+    // The same crew's link, still fresh, tapped in the older chat: not tied, nothing pinned, nothing read.
+    calls = [];
+    expect(await say(older, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_taken");
+    expect(String(groupMessages().at(-1)!.body.text)).toContain("already has its Telegram group");
+    expect(sent("pinChatMessage")).toHaveLength(0);
+    const o = await chatRow(older.id);
+    expect([o.groupId, o.noticeVersion, o.listeningSince]).toEqual([null, null, null]);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(fresh.id), listening: true });
+
+    // Another crew's link in the group the bot reads for this crew: the group stays this crew's.
+    calls = [];
+    expect(await say(fresh, user(1, "Ana"), `/start ${crewStartPayload(other.id, owner.id)}`).outcome).toBe("crew_other");
+    expect(String(groupMessages().at(-1)!.body.text)).toContain("another crew");
+    expect((await chatRow(fresh.id)).groupId).toBe(crew.id);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(fresh.id), listening: true });
+    expect(await crewTelegramInvite(db, other.id)).toEqual({ invite: null, listening: false });
+
+    // /quiet in the first group frees the crew, and the crew moves to the group a group admin ties next.
+    expect(await say(fresh, user(1, "Ana"), "/quiet").outcome).toBe("quiet");
+    expect(await say(older, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(older.id), listening: true });
+  });
+
+  it("the crew page hands out the link of the group that opted in, not the link an older quieted group kept", async () => {
+    const { chat, crew } = await listeningCrew(-202600);
+    // The bot may no longer pin there, so it stops reading; it may still invite, so the group keeps its link.
+    expect(await promote(chat, { status: "administrator", can_pin_messages: false, can_invite_users: true })).toBe("crew_quiet:no_pin");
+    // A group quieted before /quiet dropped the link (11 October 2026) kept it: older, read by nobody, opted out.
+    await db.insert(telegramChats).values({ chatId: -202601, type: "supergroup", title: "Old crew chat", groupId: crew.id, inviteLink: "https://t.me/+quieted", createdAt: new Date(NOW.getTime() - 30 * 24 * 3600_000) });
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: false });
+  });
+
+  it("a first group the bot is gone from, with no word from Telegram, frees the crew; a failed question does not", async () => {
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Sunday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
+    const [first, second, third] = [-202500, -202501, -202502].map((id) => ({ id, type: "supergroup" as const, title: "Sunday padel" }));
+    for (const c of [first, second, third]) {
+      members.set(`${c.id}:1`, { status: "creator" });
+      members.set(`${c.id}:${BOT.id}`, ADMIN_RIGHTS);
+    }
+    const tie = (c: typeof first) => say(c, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome;
+    expect(await tie(first)).toBe("crew_listening");
+    // The bot is still in the first group: the second is refused after one question about the bot there.
+    calls = [];
+    expect(await tie(second)).toBe("crew_taken");
+    expect(sent("getChatMember").filter((c) => c.body.chat_id === first.id).map((c) => c.body.user_id)).toEqual([BOT.id]);
+    expect(String(groupMessages().at(-1)!.body.text)).toContain("removes the bot");
+    // The first group was deleted, and no update came: Telegram refuses the question, the row is left, the second group ties.
+    members.set(`${first.id}:${BOT.id}`, { error: "Forbidden: bot was kicked from the supergroup chat", code: 403 });
+    expect(await tie(second)).toBe("crew_listening");
+    const gone = await chatRow(first.id);
+    expect([gone.leftAt != null, gone.noticeVersion, gone.listeningSince, gone.inviteLink]).toEqual([true, null, null, null]);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(second.id), listening: true });
+    // A question that fails for another reason (a rate limit, the network) frees nothing.
+    members.set(`${second.id}:${BOT.id}`, { error: "Too Many Requests: retry after 5", code: 429 });
+    expect(await tie(third)).toBe("crew_taken");
+    expect((await chatRow(second.id)).leftAt).toBeNull();
+    // A chat Telegram no longer knows is gone too.
+    members.set(`${second.id}:${BOT.id}`, { error: "Bad Request: chat not found", code: 400 });
+    expect(await tie(third)).toBe("crew_listening");
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(third.id), listening: true });
+  });
+
+  it("the invite link follows the bot's right to invite, and the reading stops with the right to pin", async () => {
+    const chat = { id: -202200, type: "supergroup" as const, title: "Rights" };
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Rights crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
+    const PIN_ONLY = { status: "administrator", can_pin_messages: true, can_invite_users: false };
+    members.set(`${chat.id}:1`, { status: "creator" });
+    members.set(`${chat.id}:${BOT.id}`, PIN_ONLY);
+    // Started without the right to invite: it reads, and the crew page has no way in yet.
+    expect(await say(chat, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect(sent("createChatInviteLink")).toHaveLength(0);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: true });
+    // The right arrives later: the link is made then.
+    calls = [];
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_invite");
+    expect(sent("createChatInviteLink")).toHaveLength(1);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
+    // The right goes again: the link goes with it, and the reading goes on.
+    expect(await promote(chat, PIN_ONLY)).toBe("crew_invite_gone");
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: true });
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_invite");
+    // Still an admin, but no longer one that may pin: it stops reading, keeps the opt-in and the notice.
+    const noticeId = (await chatRow(chat.id)).noticeMessageId;
+    expect(await promote(chat, { status: "administrator", can_pin_messages: false, can_invite_users: true })).toBe("crew_quiet:no_pin");
+    const row = await chatRow(chat.id);
+    expect([row.listeningSince, row.noticeVersion, row.inviteLink]).toEqual([null, CREW_NOTICE_VERSION, inviteOf(chat.id)]);
+    calls = [];
+    expect(await say(chat, user(2, "Petr"), "I'm in").outcome).toBe("ignored");
+    expect(calls).toHaveLength(0);
+    // The right to pin back: the notice already in the group is pinned again, nothing new is posted.
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_listening");
+    expect(sent("sendMessage")).toHaveLength(0);
+    expect(sent("pinChatMessage").map((c) => c.body.message_id)).toEqual([noticeId]);
+  });
+
+  it("a seat taken by a word or a tap in a crew's group sends that person alone the calendar feed's button, once ever", async () => {
+    const { chat } = await listeningCrew(-202400);
+    const { ev, card } = await matchWithCard(chat);
+    calls = [];
+    expect(await say(chat, user(81, "Rui"), "I'm in").outcome).toBe("word_join:joined");
+    const [offer] = sent("sendMessage");
+    expect(sent("sendMessage")).toHaveLength(1);
+    expect(offer.body.ephemeral_message_parameters).toEqual({ receiver_user_id: 81 });
+    expect(offer.body.text).toBe(strings("en").calendarFeed);
+    const [[button]] = (offer.body.reply_markup as { inline_keyboard: { text: string; url: string }[][] }).inline_keyboard;
+    expect(button.text).toBe(strings("en").calendarButton);
+    // The feed's page, never the personal link: the address names a key made from the token, not the token.
+    const [rui] = await db.select().from(players).where(eq(players.telegramId, 81));
+    expect(button.url).toMatch(/\/p\/[0-9a-f]{52}\/calendar$/);
+    expect(button.url).not.toContain(rui.personalToken!);
+    // Out and in again: no second button.
+    expect(await say(chat, user(81, "Rui"), "out").outcome).toBe("word_leave:left");
+    calls = [];
+    expect(await say(chat, user(81, "Rui"), "I'm in").outcome).toBe("word_join:joined");
+    expect(sent("sendMessage")).toHaveLength(0);
+    // A tap on the card's ✅ counts the same, once.
+    const tap = (from: ReturnType<typeof user>) => update({ callback_query: { id: `cb${updateId}`, from, message: { message_id: card.messageId, date: 0, chat }, data: `j:${ev.code}` } });
+    calls = [];
+    expect(await tap(user(82, "Sol"))).toBe("join:joined");
+    expect(sent("sendMessage").map((c) => c.body.ephemeral_message_parameters)).toEqual([{ receiver_user_id: 82 }]);
+    // A player whose address brings an invitation per match gets none.
+    process.env.RESEND_API_KEY = "re_test";
+    const [tia] = await db.insert(players).values({ displayName: "Tia", telegramId: 83, email: "tia@example.com" }).returning();
+    expect(tia.email).toBe("tia@example.com");
+    calls = [];
+    expect(await tap(user(83, "Tia"))).toBe("join:joined");
+    // (The fourth seat: the group's one "line-up complete" note goes out, and nothing to Tia.)
+    expect(sent("sendMessage").filter((c) => c.body.ephemeral_message_parameters)).toHaveLength(0);
+    delete process.env.RESEND_API_KEY;
   });
 
   it("\"I'm in\" in reply to a /new prompt is not the place of a new match", async () => {
@@ -480,6 +634,40 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(made).toMatch(/^word_ask:created:/);
     const ev = (await getEventByCode(db, made.split(":")[2]))!.event;
     expect([ev.startsAt.toISOString(), ev.venueName, ev.publicListing, ev.cost, ev.levelMin, ev.levelMax, ev.capacity, ev.type]).toEqual([THURSDAY_7PM.toISOString(), "Rawai Padel", false, null, null, null, 4, "match"]);
+  });
+
+  it("\"Let's play Thursday 7pm at Warehaus, who's in?\" makes the match at the club named; chatter of the same shape makes none", async () => {
+    const { chat, crew } = await listeningCrew(-202300);
+    await db.insert(clubs).values({ slug: "warehaus", name: "WAREHAUS.club", manageToken: "tok-warehaus-crew-abcdefghijklmnop", source: "directory", tz: "Asia/Bangkok" }).onConflictDoNothing();
+    const made = await say(chat, user(61, "Ivo"), "Let's play Thursday 7pm at Warehaus, who's in?").outcome;
+    expect(made).toMatch(/^word_ask:created:/);
+    const ev = (await getEventByCode(db, made.split(":")[2]))!.event;
+    expect([ev.startsAt.toISOString(), ev.venueName, ev.venueSlug, ev.groupId, ev.publicListing]).toEqual([THURSDAY_7PM.toISOString(), "WAREHAUS.club", "warehaus", crew.id, false]);
+    // "anyone for padel …?": the game itself is no place, so the crew's usual court answers it.
+    const sat = await say(chat, user(61, "Ivo"), "anyone for padel Sat 18:00?").outcome;
+    expect(sat).toMatch(/^word_ask:created:/);
+    expect((await getEventByCode(db, sat.split(":")[2]))!.event.venueName).toBe("Rawai Padel");
+    // Clubs of the directory in the same zone whose names hold an everyday word.
+    for (const [slug, name] of [["no-drama-padel", "No Drama Padel"], ["koh-tao-athletic-club", "Koh Tao Athletic Club"]]) {
+      await db.insert(clubs).values({ slug, name, manageToken: `tok-${slug}-crew-abcdefghijklmnop`, source: "directory", tz: "Asia/Bangkok" }).onConflictDoNothing();
+    }
+    calls = [];
+    const before = (await db.select().from(events).where(eq(events.groupId, crew.id))).length;
+    for (const [line, why] of [
+      ["Let's play tennis Friday 7pm, who's in?", "no_place"],
+      ["Beers Friday 8pm at the pub, anyone?", "no_place"],
+      ["Friday 7pm I'm out, anyone?", "no_place"],
+      ["Lost my racket at 7pm yesterday, anyone?", "no_place"],
+      // A "no" asks for no match, and an everyday word is no club far away.
+      ["No padel tomorrow 7pm, anyone?", "no_place"],
+      ["No game Thursday 7pm? anyone", "no_place"],
+      ["No pádel el jueves a las 19:00, ¿quién se apunta?", "no_place"],
+      ["Let's play Thursday 7pm, no drama, who's in?", "no_place"],
+      ["Thursday 7pm at the Athletic, anyone?", "no_place"],
+    ] as const) expect(await say(chat, user(62, "Lena"), line).outcome, line).toBe(`word_ask:${why}`);
+    expect(sent("sendMessage")).toHaveLength(0);
+    expect((await db.select().from(events).where(eq(events.groupId, crew.id))).length).toBe(before);
+    expect(await db.select().from(players).where(eq(players.telegramId, 62))).toHaveLength(0);
   });
 
   it("a question about a card already there makes nothing: twelve hours on, any day when none was typed, and a match still being carded", async () => {
@@ -563,6 +751,14 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(crewTelegramDoors("admin", { invite: null, listening: false })).toEqual({ join: null, run: true });
     expect(crewTelegramDoors(null, quiet)).toEqual({ join: null, run: false });
     expect(crewTelegramDoors("admin", null)).toEqual({ join: null, run: false });
+  });
+
+  it("the crew page asks for a new group only for this crew's padel, in every language", () => {
+    // The owner, 9 October 2026: the group "is solely for the purpose of coordinating padel matches". The bot cannot tell a new group from an old one, so the words ask.
+    const help = (locale: string) => (JSON.parse(readFileSync(path.resolve(__dirname, "..", "messages", `${locale}.json`), "utf8")) as { group: { telegramRunHelp: string } }).group.telegramRunHelp;
+    expect(help("en")).toMatch(/^First make a new Telegram group only for this crew's padel/);
+    expect(help("ru")).toMatch(/^Сначала создайте новый Telegram-чат только для падела этой группы/);
+    expect(help("es")).toMatch(/^Primero crea un chat de Telegram nuevo solo para el pádel de este grupo/);
   });
 
   it("two updates at once start the group once: one notice, one pin", async () => {

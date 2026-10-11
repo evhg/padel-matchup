@@ -219,13 +219,18 @@ describe("the reviewers' cases: a known court never eats typed words, Spanish mo
     expect(parseNewCommand("el viernes a las 8 de la noche", { tz, now }).startsAt).toEqual(at("2026-09-11", "20:00"));
   });
 
-  it("every preposition goes, so the examples the bot pins in a crew's group give a clean place", () => {
-    // The pinned notice's own examples, read out of it verbatim.
-    const example = (locale: "en" | "ru" | "es") => [...strings(locale).crewHow.matchAll(/[“«]([^”»]+)[”»]/g)].map((m) => m[1]).find((q) => /\d/.test(q))!;
-    expect(example("en")).toBe("who's in Thursday 7pm Rawai?");
+  it("the example the bot pins in a crew's group asks at the crew's own court, never at a court named for every crew", () => {
+    // The pinned notice's own example, read out of it verbatim: a question with no place, which the crew's usual court answers.
+    const example = (locale: "en" | "ru" | "es", court: string | null) => [...strings(locale).crewHow(court).matchAll(/[“«]([^”»]+)[”»]/g)].map((m) => m[1]).find((q) => /\d/.test(q))!;
+    expect(example("en", "WAREHAUS.club")).toBe("who's in Thursday 7pm?");
     for (const locale of ["en", "ru", "es"] as const) {
-      const p = parseNewCommand(example(locale), { tz, now });
-      expect([p.startsAt, p.venue], locale).toEqual([at("2026-09-10", "19:00"), locale === "ru" ? "Равай" : "Rawai"]);
+      for (const court of ["WAREHAUS.club", null]) {
+        const p = parseNewCommand(example(locale, court), { tz, now, venues: court ? [court] : [] });
+        expect([p.startsAt, p.venue, p.place], `${locale} ${court}`).toEqual([at("2026-09-10", "19:00"), null, null]);
+        // The notice names the crew's court and no other, in every language.
+        expect(strings(locale).crewHow(court), locale).not.toMatch(/Rawai|Равай/);
+      }
+      expect(strings(locale).crewHow("WAREHAUS.club"), locale).toContain("WAREHAUS.club");
     }
     expect(parseNewCommand("завтра в 19:00 в Равай", { tz, now }).venue).toBe("Равай");
     expect(parseNewCommand("tmr at 19:00 at Kata", { tz, now }).venue).toBe("Kata");

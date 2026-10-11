@@ -76,4 +76,4 @@ has the detail):
 4. The serious tournament: pairs, categories, a group stage then a knockout, consolation, qualifying, seeds, scoring per phase, the draw published, courts scheduled, live scores. **Built**, all five steps; it waits for an organiser to run a weekend on it.
 5. Courts as capacity, then a court a person can take. Courts as capacity **built**; the hold waits for the owner.
 6. Performance analytics by integration, with consent. Not started.
-7. WhatsApp, when it allows more than links and previews. One-to-one **built**, waiting on an account; a bot in a group chat is still impossible.
+7. WhatsApp, when it allows more than links and previews. One-to-one **built**, waiting on an account. A bot can never join a chat the crew already has. A group that the bot makes is possible with an Official Business Account. It holds 8 people at most and allows no edit of a message. It waits for the owner's Meta steps.

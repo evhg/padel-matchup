@@ -6,15 +6,16 @@ import { chatLocale } from "@/lib/channels/telegram";
 import { baseUrl } from "@/lib/config";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { listedClubNames } from "@/lib/domain/clubs";
-import { createEvent } from "@/lib/domain/events";
+import { createEvent, updateEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { settleNewMatch } from "@/lib/domain/newMatch";
 import { getEventByCode, getVenues, type EventDetail } from "@/lib/domain/queries";
+import { venueSlugFor } from "@/lib/domain/venueBoard";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { sendCalendarInvite } from "@/lib/notify";
 import { answerCallbackQuery, deleteMessage, editMessageText, esc, sendMessage, telegramBotId, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
 import { strings, type BotLocale, type BotStrings } from "../card";
-import { chatZone, getChat, rememberChatDefaults } from "../chats";
+import { chatZone, getChat, GROUP_TYPES, rememberChatDefaults } from "../chats";
 import { chatTicket, findOrCreateTelegramPlayer, findTelegramPlayer } from "../identity";
 import { GUIDED_ZONES, parseNewCommand, resolveZone, tzHintFor, type ParsedNew } from "../parse";
 import { postCard } from "../post";
@@ -107,6 +108,78 @@ const formKeyboard = (chat: TelegramChat, s: BotStrings): InlineKeyboard => {
   return { inline_keyboard: [[{ text: s.formBtn, url: `${baseUrl()}/?${params.toString()}` }]] };
 };
 
+/**
+ * Whether a /new match goes on a board, and whether the answer offers to take it off (`byClub`).
+ *
+ * "public" lists any match, as before. Without it, a line that names a club of the directory in full
+ * lists the match when the match sits at that club: the same slug, so the sender's own spelling counts
+ * ("Warehaus" is WAREHAUS.club's `warehaus`). The board and the free-spot notice to the club's regulars
+ * are the public listing's own paths (`getVenueBoard`, the audience in `src/lib/domain/refill.ts`).
+ * The owner said yes on 10 October 2026 to a question that said such a match "moves onto that club's
+ * board". The audit of 11 October put this default to the owner again (option A, B or C). A session
+ * built option A the same day; the owner has not confirmed it.
+ *
+ * Never in a crew's own chat (`groupId`): a stranger who joins from the board becomes a member of the
+ * crew (`joinGroup`, "match"), and the crew page then gives them the crew group's invite link. There
+ * only "public" lists the match. Two reads of a club by name at most, for a line that names a club.
+ */
+async function listedFrom(db: Db, chat: TelegramChat, parsed: Pick<ParsedNew, "publicListing" | "club" | "venue">): Promise<{ publicListing: boolean; byClub: boolean }> {
+  if (parsed.publicListing) return { publicListing: true, byClub: false };
+  if (!parsed.club || !parsed.venue || chat.groupId) return { publicListing: false, byClub: false };
+  const atClub = parsed.venue === parsed.club || (await venueSlugFor(db, parsed.venue)) === (await venueSlugFor(db, parsed.club));
+  return { publicListing: atClub, byClub: atClub };
+}
+
+/** "vb:<code>:0" takes a /new match off its club's board, "vb:<code>:1" puts it back: the organiser's tap only. */
+export const BOARD_CALLBACK = /^vb:([A-Za-z0-9]{4}):([01])$/;
+
+const boardKeyboard = (code: string, on: boolean, s: BotStrings): InlineKeyboard => ({ inline_keyboard: [[{ text: on ? s.boardOff : s.boardBack, callback_data: `vb:${code}:${on ? 0 : 1}` }]] });
+
+/**
+ * The one line under a match that went on a club's board because the /new line named the club: where
+ * it is, and one tap to take it off. In a group it goes to the organiser alone (an ephemeral message),
+ * and as a quiet reply to their /new only when Telegram will not deliver that.
+ */
+async function offerBoardOff(chat: TelegramChat, from: TgUser, ev: Event, o: { replyTo?: number | null; threadId?: number | null }): Promise<void> {
+  const s = strings(chatLocale(chat));
+  const text = esc(s.boardOn(ev.venueName ?? ""));
+  const keyboard = boardKeyboard(ev.code, true, s);
+  if (GROUP_TYPES.has(chat.type)) {
+    const alone = await sendMessage(chat.chatId, text, { keyboard, onlyFor: from.id, threadId: o.threadId ?? null, silent: true });
+    if (alone.ok) return;
+  }
+  await sendMessage(chat.chatId, text, { keyboard, replyTo: o.replyTo ?? null, threadId: o.threadId ?? null, silent: true });
+}
+
+/** The tap under that line: off the club's board, or back on it, for the organiser alone; the note says where the match is now. */
+export async function handleBoardCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]>, ctx: OpContext): Promise<string> {
+  const m = BOARD_CALLBACK.exec(cb.data ?? "");
+  const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
+  const s = strings(chatLocale(chat, cb.from.language_code));
+  const detail = m ? await getEventByCode(db, m[1]) : null;
+  if (!m || !detail) {
+    await answerCallbackQuery(cb.id, s.noMatch);
+    return "board_no_match";
+  }
+  const tapper = await findTelegramPlayer(db, cb.from.id);
+  if (!tapper || tapper.id !== detail.event.creatorPlayerId) {
+    await answerCallbackQuery(cb.id, s.toastNotOrganizer);
+    return "board_not_organizer";
+  }
+  const on = m[2] === "1";
+  try {
+    await updateEvent(db, detail.event.id, tapper.id, { publicListing: on }, new Date(), { asOrganiser: true });
+  } catch {
+    await answerCallbackQuery(cb.id, s.toastError);
+    return "board_error";
+  }
+  ctx.emit("match.updated", detail.event.code);
+  const club = detail.event.venueName ?? "";
+  if (cb.message) await editMessageText(cb.message.chat.id, cb.message.message_id, esc(on ? s.boardOn(club) : s.boardOffDone(club)), boardKeyboard(detail.event.code, on, s));
+  await answerCallbackQuery(cb.id);
+  return on ? "board_on" : "board_off";
+}
+
 /** "/new tomorrow 19:00 Rawai 400฿": the match is created and its card posted, no site visit. */
 export
 async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, args: string, ctx: OpContext): Promise<string> {
@@ -123,11 +196,13 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
     await say(s.newHowTo, formKeyboard(chat, s));
     return "new_how";
   }
-  const r = await createMatchInChat(db, chat, from, { ...parsed, startsAt: parsed.startsAt }, tz, ctx, { replyTo: msg.message_id, threadId });
+  const listing = await listedFrom(db, chat, parsed);
+  const r = await createMatchInChat(db, chat, from, { ...parsed, startsAt: parsed.startsAt, publicListing: listing.publicListing }, tz, ctx, { replyTo: msg.message_id, threadId });
   if (!r.ok) {
     await say(r.reason === "past" ? s.newPast : r.reason === "too_many" ? s.tooMany : s.newHowTo, r.reason === "invalid" ? formKeyboard(chat, s) : undefined);
     return `new_${r.reason}`;
   }
+  if (listing.byClub && r.ev.publicListing) await offerBoardOff(chat, from, r.ev, { replyTo: msg.message_id, threadId });
   return `new_created:${r.ev.code}`;
 }
 
@@ -292,11 +367,13 @@ async function continueGuidedNew(db: Db, msg: TgMessage, chat: TelegramChat, fro
     await editMessageText(chat.chatId, parent.message_id, p.text, p.keyboard);
     return "new_where";
   }
-  const r = await createMatchInChat(db, chat, from, { ...parsed, startsAt: parsed.startsAt }, tz, ctx, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
+  const listing = await listedFrom(db, chat, parsed);
+  const r = await createMatchInChat(db, chat, from, { ...parsed, startsAt: parsed.startsAt, publicListing: listing.publicListing }, tz, ctx, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
   if (!r.ok) {
     await sendMessage(chat.chatId, esc(r.reason === "past" ? s.newPast : r.reason === "too_many" ? s.tooMany : s.newHowTo), { replyTo: msg.message_id, silent: true });
     return `new_${r.reason}`;
   }
   await deleteMessage(chat.chatId, parent.message_id);
+  if (listing.byClub && r.ev.publicListing) await offerBoardOff(chat, from, r.ev, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
   return `new_created:${r.ev.code}`;
 }

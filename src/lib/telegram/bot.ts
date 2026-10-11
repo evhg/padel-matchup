@@ -19,13 +19,13 @@ import { continuePartnerReply, PARTNER_TRAILER, tournamentsInChat } from "./comp
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
 import { FEEDBACK_TRAILER, feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
-import { continueGuidedNew, createFromChat, handleGuidedNew, startGuidedNew } from "./handlers/new";
+import { BOARD_CALLBACK, continueGuidedNew, createFromChat, handleBoardCallback, handleGuidedNew, startGuidedNew } from "./handlers/new";
 import { handleWantCallback, wantCommand } from "./handlers/want";
 import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
 import { crewLeft, crewRightsChanged, crewStart, mayPinNotice, migrateChat, quietCommand } from "./handlers/crew";
-import { countSeat, heardInGroup, isListening, listenInGroup, repliedTo, replyToCard } from "./handlers/words";
+import { countSeat, heardInGroup, isListening, listenInGroup, offerCalendar, repliedTo, replyToCard } from "./handlers/words";
 import { handleTimesCallback, timesInChat, TIMES_CALLBACK } from "./handlers/times";
 import { handlePasteCallback, PASTE_CALLBACK, pasteInChat } from "./handlers/paste";
 import { readWords } from "./words";
@@ -233,6 +233,8 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (TIMES_CALLBACK.test(data)) return handleTimesCallback(db, cb, data, ctx);
   // "Create match" under a pasted booking: the booking is read again from the message it answers.
   if (PASTE_CALLBACK.test(data)) return handlePasteCallback(db, cb, ctx);
+  // A /new match on its club's board: off the board, or back on it.
+  if (BOARD_CALLBACK.test(data)) return handleBoardCallback(db, cb, ctx);
   const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
@@ -308,6 +310,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") });
   await syncTelegram(db, code);
   await countSeat(db, "tap", outcome, player.id, detail.event);
+  if (chat && outcome === "joined") await offerCalendar(db, chat, player, cb.from.id, cb.message?.message_thread_id ?? null);
   return `${action === "j" ? "join" : "leave"}:${outcome}`;
 }
 
@@ -318,9 +321,9 @@ async function handleMyChatMember(db: Db, u: NonNullable<TgUpdate["my_chat_membe
     await db.update(telegramChats).set({ leftAt: new Date(), ...crewLeft }).where(eq(telegramChats.chatId, u.chat.id));
     return "left";
   }
-  // Restricted is not an admin: whatever else it means, the bot stops reading a crew's group.
+  // Restricted is not an admin: whatever else it means, the bot stops reading a crew's group, and its invite link goes with the right.
   if (status === "restricted") {
-    await db.update(telegramChats).set({ listeningSince: null }).where(eq(telegramChats.chatId, u.chat.id));
+    await db.update(telegramChats).set({ listeningSince: null, inviteLink: null }).where(eq(telegramChats.chatId, u.chat.id));
     return "ignored";
   }
   if (status === "member" || status === "administrator") {

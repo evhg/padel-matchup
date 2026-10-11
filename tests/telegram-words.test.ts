@@ -33,6 +33,24 @@ describe("readWords: join, leave, a score, a new match, or nothing", () => {
     expect(readWords("who's in? I booked court 3")).toBeNull();
   });
 
+  it("the match first and the question after it: what lies between them is handed on, and must carry a time", () => {
+    const asks: [string, string][] = [
+      ["Let's play Thursday 7pm at Warehaus, who's in?", "Thursday 7pm at Warehaus"],
+      ["let’s play thu 19:00 Rawai — anyone? 🎾", "thu 19:00 Rawai"],
+      ["Padel Sat 18:00, who's up for it?", "Padel Sat 18:00"],
+      ["Thursday 7pm at Warehaus, anyone?", "Thursday 7pm at Warehaus"],
+      ["Tomorrow 8am Rawai who's in", "Tomorrow 8am Rawai"],
+      ["Играем в четверг в 19:00 Равай, кто в деле?", "в четверг в 19:00 Равай"],
+      ["¿Jugamos el jueves a las 19 en Rawai? ¿Quién se apunta?", "el jueves a las 19 en Rawai"],
+      // The question in front, as before, and a second question after it is not part of the match.
+      ["anyone for padel Sat 18:00?", "anyone for padel Sat 18:00"],
+      ["who's in Thursday 7pm, anyone?", "who's in Thursday 7pm"],
+    ];
+    for (const [line, text] of asks) expect(readWords(line), line).toEqual({ kind: "ask", text });
+    // Chatter shaped the same way, with no time between the two: nothing.
+    for (const line of ["Let's play Thursday, who's in?", "Let's play, who's in?", "dinner tonight, anyone?", "great game, who's in next week?", "Играем в четверг, кто в деле?", "¿Jugamos el jueves? ¿Quién se apunta?", "who's in?", "anyone?"]) expect(readWords(line), line).toBeNull();
+  });
+
   it("a word that answers any question (\"me\", \"+\", \"я\", \"буду\", \"voy\") takes a seat only as a reply to the card", () => {
     for (const line of ["me", "Me!", "+", "я", "Я!", "буду", "я буду", "voy", "¡Voy!", "yo voy"]) expect(readWords(line), line).toEqual({ kind: "join", onlyAsReply: true });
     for (const line of ["in", "I'm in", "+1", "+ 1", "count me in", "я в деле", "в деле", "me apunto", "cuenta conmigo"]) expect(readWords(line), line).toEqual({ kind: "join", onlyAsReply: false });
