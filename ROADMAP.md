@@ -909,6 +909,19 @@ Everything in this list is live. The README describes each in detail.
   booking links and platforms (Book & Go, PodPlay and The Padel Society are recognised now), which
   migration 0097 writes to the directory's own rows. Nothing books or pays: a player does, in the
   club's own app.
+- **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
+  option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
+  37). Production had one group of four or five in Phuket, every full match made by hand with the same
+  people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
+  time in one control beside the button, a week on by default; everything else carries over and a
+  crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
+  game: Sat, Oct 17 18:00 at Warehaus. I'm in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
+  one insert for the whole round, the switch and quiet hours respected, the inbox keeps it, the card's
+  own one-tap join in Telegram and the public match link everywhere else, and one round per old match
+  (the old match's row is locked, the fact `match.play_again` is the record). "Same time next week?"
+  moved from the card page to the score panel beside it. A player who already sat in a finished,
+  scored match with the organiser skips that organiser's level range on every door (`admissionAt` in
+  `src/lib/domain/playAgain.ts`; rule 21). No WhatsApp template carries the message yet.
 
 ## The finish line
 

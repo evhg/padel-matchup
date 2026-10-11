@@ -215,7 +215,7 @@ const TOOLS: Tool[] = [
   {
     name: "join_match",
     title: "Join a match",
-    description: "Put a person into a match by first name (or by their personal token from an earlier call). Handles waitlists and level ranges; when the level is outside the range, the organizer is asked to approve. On a fixed-pairs tournament pass partner (a first name) to sign up as a pair: the answer's partner.inviteUrl is the link the partner opens to claim their spot; without partner the person is listed as needing a partner. For a group's match the answer says whether the person is now a member of the group; a group that asks to join is never joined through a match.",
+    description: "Put a person into a match by first name (or by their personal token from an earlier call). Handles waitlists and level ranges; when the level is outside the range, the organizer is asked to approve, unless the player already played a finished, scored match with that organizer. On a fixed-pairs tournament pass partner (a first name) to sign up as a pair: the answer's partner.inviteUrl is the link the partner opens to claim their spot; without partner the person is listed as needing a partner. For a group's match the answer says whether the person is now a member of the group; a group that asks to join is never joined through a match.",
     schema: joinMatchSchema,
     readOnly: false,
     run: async (db, args, ctx) => joinMatch(db, args, ctx),

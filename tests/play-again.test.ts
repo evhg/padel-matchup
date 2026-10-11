@@ -120,6 +120,24 @@ describe("Play again", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("makes a second tap wait while the first is still writing, then send nothing", async () => {
+    const ana = await makePlayer(db, "Ana");
+    const ben = await makePlayer(db, "Ben");
+    const old = await played([ana, ben]);
+    const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, now: NOW });
+    // The first tap, held open between its write and its commit: the old match locked, its record written.
+    // The second tap starts inside that window. A frozen clock and a fast fake hide this race, so the
+    // window is made by hand (real Postgres is where it bites: TEST_DATABASE_URL).
+    let second: Promise<boolean> | null = null;
+    await db.transaction(async (tx) => {
+      await tx.select({ id: events.id }).from(events).where(eq(events.id, old.id)).for("update");
+      await tx.insert(facts).values({ kind: PLAY_AGAIN_FACT, channel: "web", actorPlayerId: ana.id, subjectType: "match", subjectId: old.id, code: old.code, data: { next: next.code } });
+      second = claimPlayAgainRound(db, old, next, ben.id);
+      await new Promise((r) => setTimeout(r, 300));
+    });
+    expect(await second!).toBe(false);
+  });
+
   describe("the message", () => {
     let calls: { method: string; body: Record<string, unknown> }[] = [];
     beforeEach(() => {
