@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { listClubsForPicking } from "@/lib/domain/clubs";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** /clubs/claim?name=…: the self-serve claim as a walk of four steps, ending on the poster, the week and the claim's own check. */
-export default async function ClaimClubPage({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
+async function ClaimClubPage({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
   const sp = await searchParams;
   const db = await getDb();
   const [t, me] = await Promise.all([getTranslations(), getSessionPlayer(db)]);
@@ -38,3 +39,5 @@ export default async function ClaimClubPage({ searchParams }: { searchParams: Pr
     </>
   );
 }
+
+export default withClientMessages(["club", "common", "identity", "share"], ClaimClubPage);

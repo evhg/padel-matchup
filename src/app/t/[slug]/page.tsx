@@ -19,6 +19,7 @@ import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimTok
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 import { bandLabel, dayRange } from "@/lib/tournamentText";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ claim?: string; claimed?: string }> };
@@ -38,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** The poster: the days and the place, the categories with who is in, the door to enter, the waiting list. */
-export default async function TournamentPage({ params, searchParams }: Props) {
+async function TournamentPage({ params, searchParams }: Props) {
   const { slug } = await params;
   if (!SLUG.test(slug)) notFound();
   const sp = await searchParams;
@@ -264,3 +265,5 @@ export default async function TournamentPage({ params, searchParams }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "event", "identity", "share", "tournament"], TournamentPage);

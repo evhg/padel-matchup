@@ -7,6 +7,7 @@ import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
 import { buildHistory, mulberry32, rotationLength, scheduleRound, type RoundRef } from "@/lib/domain/americano";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 // Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** The full exact schedule for n players on n/4 courts: every pair partners once. Server-rendered, printable, indexable. */
-export default async function AmericanoStaticPage({ params }: Props) {
+async function AmericanoStaticPage({ params }: Props) {
   const { players } = await params;
   const n = parseField(players);
   if (!n) notFound();
@@ -120,3 +121,5 @@ export default async function AmericanoStaticPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["feedback"], AmericanoStaticPage);

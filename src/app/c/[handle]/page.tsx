@@ -16,6 +16,7 @@ import { localeAlternates } from "@/lib/seo";
 import { notifyStudentJoined } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
 import { whatsappShareUrl } from "@/lib/share";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** A coach's public page: who, where, and the booking that answers students while the coach is on court. */
-export default async function CoachPublicPage({ params, searchParams }: Props) {
+async function CoachPublicPage({ params, searchParams }: Props) {
   const [{ handle }, sp] = await Promise.all([params, searchParams]);
   const db = await getDb();
   const coach = await getCoachByHandle(db, handle.toLowerCase());
@@ -227,3 +228,5 @@ export default async function CoachPublicPage({ params, searchParams }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["coach.errors", "coach.how", "coach.minutes", "coach.packageLine", "coach.packageLineNoExpiry", "coach.page", "common", "feedback", "identity"], CoachPublicPage);

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
 
@@ -24,7 +24,52 @@ function chromiumPath() {
   return preinstalled && existsSync(preinstalled) ? preinstalled : undefined;
 }
 
-export const launch = () => chromium.launch({ executablePath: chromiumPath(), headless: true });
+/**
+ * A message the browser was not given renders as its own key ("me.title") and next-intl logs
+ * MISSING_MESSAGE to the console. Each page hands the browser only the messages its client components
+ * read (`withClientMessages`, 11 October 2026), so a list that falls short shows up here first: every
+ * such line, from every page of every suite, is printed as [console] and fails the suite in finish().
+ */
+const missingMessages = [];
+const watchConsole = (target) =>
+  target.on("console", (m) => {
+    if (m.type() !== "error" || !m.text().includes("MISSING_MESSAGE")) return;
+    const line = `${m.page()?.url() ?? "?"}: ${m.text().split("\n")[0]}`;
+    missingMessages.push(line);
+    console.log("  [console]", line);
+  });
+
+export async function launch() {
+  const browser = await chromium.launch({ executablePath: chromiumPath(), headless: true });
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...args) => {
+    const ctx = await newContext(...args);
+    watchConsole(ctx);
+    return ctx;
+  };
+  const newPage = browser.newPage.bind(browser);
+  browser.newPage = async (...args) => {
+    const page = await newPage(...args);
+    watchConsole(page);
+    return page;
+  };
+  return browser;
+}
+
+function keyPaths(o, prefix = "", out = []) {
+  for (const [k, v] of Object.entries(o)) {
+    const p = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === "object") keyPaths(v, p, out);
+    else out.push(p);
+  }
+  return out;
+}
+const KEY_PATHS = keyPaths(JSON.parse(readFileSync(new URL("../messages/en.json", import.meta.url), "utf8")));
+/** Every message key the page shows as text: what a key the browser was not given looks like on the screen. */
+export async function rawKeysOn(page) {
+  const text = await page.locator("body").innerText();
+  return KEY_PATHS.filter((k) => text.includes(k));
+}
 
 /**
  * One client address per suite. Every browser in the run reaches the same server from 127.0.0.1, so
@@ -116,6 +161,7 @@ export async function crashed(browser, results, e, name = "crash") {
 }
 
 export function finish(results) {
+  if (missingMessages.length) makeCheck(results)(`no page logged MISSING_MESSAGE (${missingMessages.length}: ${missingMessages.slice(0, 3).join(" | ")})`, false);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
   if (failed.length) console.log("failed: " + failed.map((r) => r.name).join(" | "));

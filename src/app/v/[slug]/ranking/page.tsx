@@ -10,6 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { getRanking } from "@/lib/domain/ranking";
 import { getVenueName, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** Club ranking: finalized results from the last 90 days, opted-in players only. */
-export default async function VenueRankingPage({ params }: Props) {
+async function VenueRankingPage({ params }: Props) {
   const { slug } = await params;
   if (!isValidVenueSlug(slug)) notFound();
   const db = await getDb();
@@ -57,3 +58,5 @@ export default async function VenueRankingPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "ranking"], VenueRankingPage);

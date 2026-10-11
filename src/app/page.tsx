@@ -7,6 +7,7 @@ import { FeedbackInline } from "@/components/FeedbackInline";
 import { PasteBooking } from "@/components/PasteBooking";
 import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { Footer, Header } from "@/components/Header";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 /**
  * The paste box's "Add screenshot" waits on one model call (`readScreenshotAction`, 20 seconds at most),
@@ -26,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * generator); `?venue=…&date=…&time=…&tz=…` is a club's free court; `?src=paste&…&len=&court=&cost=&booked=1`
  * is a pasted booking (`bookingHref`), which "Booked already? Paste it" under the headline opens.
  */
-export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string; src?: string; len?: string; court?: string; cost?: string; booked?: string; check?: string; invite?: string }> }) {
+async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string; src?: string; len?: string; court?: string; cost?: string; booked?: string; check?: string; invite?: string }> }) {
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
   return (
     <>
@@ -84,3 +85,5 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
     </>
   );
 }
+
+export default withClientMessages(["common", "create", "errors", "event", "feedback", "identity", "landing", "level", "levelCheck", "pairs", "share", "telegram", "venue"], Home);

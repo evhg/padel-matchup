@@ -5,6 +5,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** Where anyone tells us what should change. The loop that ships it tells them what changed. */
-export default async function FeedbackPage() {
+async function FeedbackPage() {
   const t = await getTranslations("feedback");
   let via: "telegram" | "none" = "none";
   try {
@@ -37,3 +38,5 @@ export default async function FeedbackPage() {
     </>
   );
 }
+
+export default withClientMessages(["feedback"], FeedbackPage);

@@ -22,6 +22,7 @@ import { rangeChip, tagChip } from "@/lib/levelText";
 import { telegramEnabled } from "@/lib/telegram/api";
 import { crewGroupLink } from "@/lib/telegram/deepLinks";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -43,7 +44,7 @@ const weekdayNames = (locale: string) => Array.from({ length: 7 }, (_, i) => new
  * Each match row links to that match's roster, which shows its seated players' levels to anybody by
  * the match page's own rule, so the line under the list says only that members see levels here.
  */
-export default async function GroupPage({ params }: Props) {
+async function GroupPage({ params }: Props) {
   const { code } = await params;
   if (!isValidInviteCode(code)) notFound();
   const db = await getDb();
@@ -263,3 +264,5 @@ export default async function GroupPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "create", "errors", "group", "identity", "level", "share"], GroupPage);

@@ -12,6 +12,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { later } from "@/lib/alerts";
 import { isCrawler } from "@/lib/source";
 import { getSessionPlayer } from "@/lib/session";
+import { pickMessages, ROOT_CLIENT_MESSAGES } from "@/i18n/clientMessages";
 import { htmlTextAttr, TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
 
 export const metadata: Metadata = {
@@ -57,7 +58,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-dvh">
         {/* Per-user manifest: start_url is the visitor's personal link, so a home-screen shortcut is always signed in. */}
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
-        <NextIntlClientProvider messages={messages}>
+        {/* The browser gets no messages here: a page whose client components translate gives its own
+            (withClientMessages). The whole catalogue was 146 KB to 230 KB inline in every page. */}
+        <NextIntlClientProvider messages={pickMessages(messages, ROOT_CLIENT_MESSAGES)}>
           {children}
           <IdentitySync player={me} />
           <PwaSetup signedIn={Boolean(me)} />

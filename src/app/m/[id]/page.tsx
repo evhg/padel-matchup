@@ -9,6 +9,7 @@ import { baseUrl } from "@/lib/config";
 import { momentLine, momentWhere } from "@/lib/moments";
 import { getMilestone } from "@/lib/domain/milestones";
 import { taggedUrl } from "@/lib/source";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** One earned moment, as a page whose link unfurls with the picture. Private by its id; shared by choice. */
-export default async function MomentPage({ params }: Props) {
+async function MomentPage({ params }: Props) {
   const { id } = await params;
   const db = await getDb();
   const hit = await getMilestone(db, id);
@@ -55,3 +56,5 @@ export default async function MomentPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "share"], MomentPage);

@@ -12,6 +12,7 @@ import { countCoachWants, shownCount } from "@/lib/domain/coachWants";
 import { busyForCoaches, coachCardFacts, listPublicCoaches, hasPhoto, NO_BUSY, offersForCoaches, proofForCoaches, reachableCoaches } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
 import { localeAlternates } from "@/lib/seo";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** The coaches who chose to be listed in a city: one card each, a link to their book. Nothing ranked, nothing paid. */
-export default async function CoachesInCityPage({ params }: Props) {
+async function CoachesInCityPage({ params }: Props) {
   const { city: slug } = await params;
   const city = cityBySlug(slug.toLowerCase());
   if (!city) notFound();
@@ -95,3 +96,5 @@ export default async function CoachesInCityPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["coaches", "level"], CoachesInCityPage);

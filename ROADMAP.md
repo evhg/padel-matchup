@@ -1088,6 +1088,15 @@ the player, and invite them to try it.
    entries, then the courts, then each category's draw settings, whatever the entries' status. The
    strip at the top (`WeekendStrip`) links to each part, but once entries close the draw's settings
    still belong above the pairs.
+4. **React error 418 on My matches.** Open on 11 October 2026. When hydration starts before the page's
+   rows arrive, React replays the suspended `<main>`, meets the "My matches" `<h1>`, throws 418 and
+   renders the page again in the browser. The screen comes out right, so nobody sees it, but the page
+   renders twice. Each page now gives the browser only its own messages (`withClientMessages`), which
+   cuts the HTML before `/me` can hydrate from 176,867 to 60,377 bytes in English. That makes the race
+   rarer. It does not remove it: a proxy that sends the first 30,000 bytes of the document, waits
+   1.5 s and then trickles the rest still gives 418 on both builds (main 3 in 20 loads, the lean build
+   1 in 15). Start the root cause there, at the `<h1>` under `<main>` on `/me`. Do not relax a browser
+   check that already reads order from the elements (`headingOrder` in `e2e/core.mjs`).
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
 

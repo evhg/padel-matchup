@@ -21,6 +21,7 @@ import { claimEmailForCode, clubStatus, getClubByTokenWithCache } from "@/lib/do
 import { ClaimCodeForm } from "@/components/ClaimCodeForm";
 import { listCourts } from "@/lib/domain/courts";
 import { coachingAtClub } from "@/lib/domain/coaching";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string; token: string }> };
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** The club's private page: status of the claim, every field, the feed, free courts as players will see them. */
-export default async function ClubManagePage({ params }: Props) {
+async function ClubManagePage({ params }: Props) {
   const { slug, token } = await params;
   const db = await getDb();
   const club = await getClubByTokenWithCache(db, token);
@@ -203,3 +204,5 @@ export default async function ClubManagePage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["club", "common", "level", "levelCheck"], ClubManagePage);

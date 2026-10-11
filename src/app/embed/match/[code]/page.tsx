@@ -13,6 +13,7 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, tagChip } from "@/lib/levelText";
 import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ code: string }> };
@@ -22,7 +23,7 @@ export const viewport = KEEP_LIGHT_VIEWPORT;
 export const metadata: Metadata = { robots: { index: false, follow: true } };
 
 /** One match as an iframe: who plays, spots left, one button that opens the real page. */
-export default async function EmbedMatch({ params }: Props) {
+async function EmbedMatch({ params }: Props) {
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
   const db = await getDb();
@@ -77,3 +78,5 @@ export default async function EmbedMatch({ params }: Props) {
     </main>
   );
 }
+
+export default withClientMessages(["level"], EmbedMatch);

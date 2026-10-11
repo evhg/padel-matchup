@@ -22,6 +22,7 @@ import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";
 import { eventUrl, manageUrl } from "@/lib/share";
 import { taggedUrl } from "@/lib/source";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: t(tournament ? "share.titleTournament" : "share.titleMatch"), robots: { index: false } };
 }
 
-export default async function SharePage({ params }: Props) {
+async function SharePage({ params }: Props) {
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
   const db = await getDb();
@@ -107,3 +108,5 @@ export default async function SharePage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "creator", "errors", "event", "homescreen", "identity", "push", "share"], SharePage);
