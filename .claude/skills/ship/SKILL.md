@@ -294,6 +294,11 @@ learning can be a test, a gate step or a script, make it one and put the story i
   (`createRequestStoreForRender` in `tests/group-line.test.ts`), and prove the wiring in the browser:
   `window.next.router.refresh()` is the call AutoRefresh makes. Wait for its response, never for
   `finished()`: Playwright never reports a refresh response as finished, and the check hangs.
+- **A missing header is a browser too, and the browser in the suite always sends it.** The next fix
+  read `Sec-Fetch-Dest` and counted every request without it as a load. Safari before 16.4 (iOS 15)
+  sends no `Sec-Fetch-*`, so its 20-second refresh still counted a view, and headless Chromium could
+  never show it. When code branches on a header, write the case where the header is absent, and give
+  it its own fallback (here `Accept`: a page load asks for `text/html`, the router's fetch for `*/*`).
 
 ### Wall clock
 

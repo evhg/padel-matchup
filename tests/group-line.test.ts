@@ -145,8 +145,15 @@ describe("every share button says where the link went", () => {
     const seen = (headers: Record<string, string>) => isFullPageLoad(createRequestStoreForRender({ headers } as never, undefined, { pathname: "/7KQ2" }, {}, undefined as never, undefined, undefined, false, undefined, undefined, null).headers);
     // A tapped link, a typed address, a reload by hand.
     expect(seen({ "sec-fetch-dest": "document", "sec-fetch-mode": "navigate" })).toBe(true);
-    // A browser too old to send Sec-Fetch-Dest (Safari before 16.4) is a full load unless it says otherwise.
-    expect(seen({})).toBe(true);
+    // A browser with no Sec-Fetch-* (Safari before 16.4, so iOS 15) is read by its Accept: a page load asks
+    // for text/html; router.refresh() sets no Accept, so the browser sends */*, every 20 seconds.
+    const html = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+    expect(seen({ accept: html })).toBe(true);
+    expect(seen({ rsc: "1", "next-router-state-tree": "%5B%22%22%5D", accept: "*/*" })).toBe(false);
+    expect(seen({ accept: "*/*" })).toBe(false);
+    expect(seen({})).toBe(false);
+    // An old browser with Sec-Fetch-Dest says what it is; Accept does not overrule it.
+    expect(seen({ "sec-fetch-dest": "empty", accept: html })).toBe(false);
     // router.refresh() (AutoRefresh) and a prefetch: a fetch() with the RSC header, which the page never sees.
     expect(seen({ rsc: "1", "next-router-state-tree": "%5B%22%22%5D", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors" })).toBe(false);
     expect(seen({ rsc: "1", "next-router-prefetch": "1", "sec-fetch-dest": "empty" })).toBe(false);

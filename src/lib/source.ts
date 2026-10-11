@@ -59,12 +59,15 @@ export function viewCounter(o: { source: string | null; seated: boolean; ua: str
  * browser's own `Sec-Fetch-Dest` can: a tapped link, a typed address and a reload say `document`;
  * `router.refresh()` (the live night's AutoRefresh, every 20 seconds), a prefetch and a client
  * navigation are a `fetch()` and say `empty`. A server action that re-renders the page carries
- * `Next-Action`. A browser too old to send `Sec-Fetch-Dest` counts as a load.
+ * `Next-Action`. A browser too old to send `Sec-Fetch-Dest` (Safari before 16.4, so iOS 15) is read by its
+ * `Accept`: a page load asks for `text/html`, and the router's fetch sets no `Accept`, so it sends `*\/*`.
+ * A speculative load (`Sec-Purpose: prefetch;prerender`) counts: when the person opens it, the browser
+ * sends no second request, so it is the only one there is.
  */
 export function isFullPageLoad(h: { get(name: string): string | null }): boolean {
   if (h.get("next-action") !== null) return false;
   const dest = h.get("sec-fetch-dest");
-  return dest === null || dest === "document";
+  return dest === "document" || (dest === null && (h.get("accept") ?? "").includes("text/html"));
 }
 
 /** The link an organiser pastes into an Instagram link sticker. */

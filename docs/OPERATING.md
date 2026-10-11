@@ -216,7 +216,8 @@ the whole path. No step needs a migration, and no counter holds a name, an addre
    The 20-second refresh on a live night, a move inside the app and a prefetch send
    `Sec-Fetch-Dest: empty`, and a server action sends `Next-Action`, so they do not count. Next.js
    removes the `RSC` header before a page can read it, so that header cannot tell them apart. A
-   browser too old to send `Sec-Fetch-Dest` counts on every request. A reload by hand counts again,
+   browser too old to send `Sec-Fetch-Dest` (Safari before 16.4) is read by its `Accept` header: a
+   page load asks for `text/html`, and the refresh asks for `*/*`. A reload by hand counts again,
    so read it as views, not people.
 3. **The seat.** `join_src_<tag>`: a join from a browser that came through that tag in the last day
    (the `ks_src` cookie).
