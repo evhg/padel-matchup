@@ -103,11 +103,14 @@ Anthropic: the owner's cap (booking screenshots may use twenty calls a day of it
 screenshot", below). Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. A crew's own Telegram group (DECIDING rule 31) sends every message to the
 webhook, because an admin bot receives them all: one invocation each, dropped before any database
-read unless it is a command, a reply, a link or a word the bot acts on. A busy group of 200 messages
+read unless it is a command, a reply, a link or a word the bot can act on ("in", "out", "who's in …?",
+"times?"). Such a word costs one read of the chat's row by its key, because only that row says whether
+the bot reads the group. A busy group of 200 messages
 a day is 6,000 invocations a month, so 160 such groups would spend the whole 1M. `tg_groups_managed`
 is the hourly count of the groups the bot reads now; `tg_groups_started` counts starts a day. A group
 where the bot is an admin without the opt-in, or after /quiet, sends every message too, and nothing
-counts it: no column records the bot's admin rights. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
+counts it: no column records the bot's admin rights. There, such a word also costs that one read, and
+then the bot does nothing: the update from Telegram does not say whether the group opted in. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
 unverified tier — and the definition is the whole of it, because Meta counts only numbers messaged
 *outside* an open 24-hour window, so only templates to people who have gone quiet spend that limit.
 Counted is not the same as free. A message a player sends us costs nothing. Every message we send

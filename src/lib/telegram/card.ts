@@ -193,10 +193,16 @@ const STRINGS = {
     // A crew's own group, run by the bot as an admin (DECIDING rule 31). The notice is the pinned message, and it names
     // exactly what the code keeps: players.display_name and players.telegram_username, the seats, the court and the score.
     crewNotice: "Kicksmash runs matches here. It reads messages in this group to do that. It keeps first names, Telegram usernames, who is in or out, the court and the score. It never keeps the text. A group admin can type /quiet, or remove the bot, to stop.",
-    crewHow: "Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm Rawai?” and I post the card.",
+    // The example asks at the crew's own court, so a member who copies it gets a match where the crew plays.
+    crewHow: (court: string | null) =>
+      court
+        ? `Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm?” and I post the card for ${court}.`
+        : "Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm?” with your club's full name, and I post the card.",
     crewLinkBad: "This link is too old. Open the crew's page on kicksma.sh and tap “Run a Telegram group for this crew” again.",
     crewAdminOnly: "Only an admin of this group can tie it to a crew.",
     crewNeedsAdmin: "Tied to the crew. Make me an admin who may pin messages, and I start.",
+    crewOther: "This group already runs matches for another crew. A group admin can type /quiet first.",
+    crewTaken: "This crew already has its Telegram group. To move it here, a group admin there types /quiet first.",
     whichMatch: "Which match?",
     // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. "From" names whose
     // times they are: a platform's, or the clubs' own (DECIDING rule 35); never "this week", because a
@@ -399,10 +405,15 @@ const STRINGS = {
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} играет · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} в листе ожидания` : kind === "left" ? `↩️ ${name} больше не играет · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} просится в матч (вне диапазона уровней)` : kind === "confirmed" ? `✅ ${name}: участие подтверждено · ${n}/${cap}` : kind === "declined" ? `❌ ${name}: отказ` : `⬆️ ${name} из листа ожидания в состав · ${n}/${cap}`,
     crewNotice: "Kicksmash ведёт здесь матчи. Для этого он читает сообщения в этой группе. Он хранит имена, имена пользователей в Telegram, кто в игре и кто нет, корт и счёт. Текст сообщений он не хранит никогда. Чтобы остановить, админ группы может написать /quiet или удалить бота.",
-    crewHow: "Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00 Равай?», и я выложу карточку.",
+    crewHow: (court: string | null) =>
+      court
+        ? `Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00?», и я выложу карточку матча, корт: ${court}.`
+        : "Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00?» и добавьте полное название клуба, и я выложу карточку.",
     crewLinkBad: "Ссылка устарела. Откройте страницу группы на kicksma.sh и снова нажмите «Завести Telegram-чат для этой группы».",
     crewAdminOnly: "Привязать этот чат к группе может только его админ.",
     crewNeedsAdmin: "Чат привязан к группе. Сделайте меня админом с правом закреплять сообщения, и я начну.",
+    crewOther: "Этот чат уже ведёт матчи другой группы. Сначала админ чата может написать /quiet.",
+    crewTaken: "У этой группы уже есть свой Telegram-чат. Чтобы перенести его сюда, админ того чата сначала пишет там /quiet.",
     whichMatch: "Какой матч?",
     timesFree: (from: string) => `Свободные корты в ваших клубах, по данным ${from}. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.`,
     timesTheClubs: "клубов",
@@ -599,10 +610,15 @@ const STRINGS = {
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} se apunta · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} entró en la lista de espera` : kind === "left" ? `↩️ ${name} se fue · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} pide unirse (fuera del rango de nivel)` : kind === "confirmed" ? `✅ ${name} confirmó · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declinó` : `⬆️ ${name} entró desde la lista de espera · ${n}/${cap}`,
     crewNotice: "Kicksmash organiza aquí los partidos. Para eso lee los mensajes de este grupo. Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado. Nunca guarda el texto. Para pararlo, un administrador del grupo puede escribir /quiet o quitar el bot.",
-    crewHow: "Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19 Rawai?» y publico la tarjeta.",
+    crewHow: (court: string | null) =>
+      court
+        ? `Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19?» y publico la tarjeta del partido en ${court}.`
+        : "Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19?» con el nombre completo de tu club y publico la tarjeta.",
     crewLinkBad: "Este enlace ha caducado. Abre la página del grupo en kicksma.sh y toca otra vez «Abrir un chat de Telegram para este grupo».",
     crewAdminOnly: "Solo un administrador de este chat puede vincularlo a un grupo.",
     crewNeedsAdmin: "Vinculado al grupo. Hazme administrador con permiso para fijar mensajes y empiezo.",
+    crewOther: "Este chat ya organiza partidos de otro grupo. Antes, un administrador del chat puede escribir /quiet.",
+    crewTaken: "Este grupo ya tiene su chat de Telegram. Para traerlo aquí, un administrador de ese chat escribe antes /quiet allí.",
     whichMatch: "¿Qué partido?",
     timesFree: (from: string) => `Pistas libres en tus clubs, según ${from}. Toca una y creo el partido; reservas y pagas tú, en la app del club.`,
     timesTheClubs: "los clubs",

@@ -269,27 +269,24 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(await metric("tg_groups_started")).toBe(1);
 
     // The other order: promoted first, then the link. The crew link adds the bot as an admin that may
-    // pin, and then the notice says what the welcome would: one message from the bot, one pin.
+    // pin, and then the notice says what the welcome would: one message from the bot, one pin. (Another
+    // crew here: this crew already has its group.)
+    const second = await createGroup(db, { name: "Sunday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "WAREHAUS.club" });
     const chat2 = { id: -200401, type: "supergroup" as const, title: "Crew chat 2" };
     members.set(`${chat2.id}:1`, { status: "administrator" });
     members.set(`${chat2.id}:${BOT.id}`, ADMIN_RIGHTS);
     calls = [];
     expect(await update({ my_chat_member: { chat: chat2, from: user(1, "Ana"), old_chat_member: { status: "left" }, new_chat_member: ADMIN_RIGHTS } })).toBe("joined");
     expect(sent("sendMessage")).toHaveLength(0);
-    expect(await say(chat2, user(1, "Ana"), `/start@kicksmash_bot ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect(await say(chat2, user(1, "Ana"), `/start@kicksmash_bot ${crewStartPayload(second.id, owner.id)}`).outcome).toBe("crew_listening");
     expect(sent("sendMessage")).toHaveLength(1);
     expect(sent("pinChatMessage")).toHaveLength(1);
-    expect((await chatRow(chat2.id)).groupId).toBe(crew.id);
+    expect((await chatRow(chat2.id)).groupId).toBe(second.id);
+    // The pinned example asks at this crew's own court, not at a court named for every crew.
+    expect(String(groupMessages()[0].body.text)).toContain(strings("en").crewHow("WAREHAUS.club"));
     // Telegram's own promotion update arriving after the link changes nothing.
     expect(await promote(chat2, ADMIN_RIGHTS)).toBe("rejoined");
     expect(sent("pinChatMessage")).toHaveLength(1);
-    // Two groups now read for the crew: the first one tied stays the crew's group on its page, whether
-    // it started reading before the second or, after a demotion and a promotion, again after it.
-    const startedAt = async (id: number, at: Date) => db.update(telegramChats).set({ listeningSince: at }).where(eq(telegramChats.chatId, id));
-    await startedAt(chat.id, new Date(NOW.getTime() - 3600_000));
-    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
-    await startedAt(chat.id, new Date(NOW.getTime() + 3600_000));
-    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
     // A plain member added as an admin by hand still gets the welcome.
     const chat3 = { id: -200402, type: "group" as const, title: "Friends" };
     calls = [];
@@ -396,8 +393,8 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(sent("setChatDescription")).toHaveLength(0);
     expect(reactions()).toEqual([{ message: quiet.id, emoji: "👌" }]);
     expect(groupMessages()).toHaveLength(0);
-    // The group is still the crew's, so its members keep the way in, and the crew's admin may start it again.
-    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: false });
+    // The group is no longer the crew's run group: the crew page stops handing out its link, and the crew's admin may start it again.
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: false });
     calls = [];
     expect(await say(chat, user(2, "Petr"), "I'm in").outcome).toBe("ignored");
     expect(calls).toHaveLength(0);
@@ -430,6 +427,79 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     row = await chatRow(chat.id);
     expect([row.listeningSince, row.noticeVersion, row.inviteLink]).toEqual([null, null, null]);
     expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: false });
+  });
+
+  it("the first group tied stays the crew's: an older chat tied second is refused, and another crew's link moves no group", async () => {
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Friday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
+    const other = await createGroup(db, { name: "Another crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok" });
+    // A general chat the bot met a month ago: its row is older than the crew's new group's.
+    const older = { id: -202100, type: "supergroup" as const, title: "Everybody" };
+    const fresh = { id: -202101, type: "supergroup" as const, title: "Friday padel" };
+    for (const c of [older, fresh]) {
+      members.set(`${c.id}:1`, { status: "creator" });
+      members.set(`${c.id}:${BOT.id}`, ADMIN_RIGHTS);
+    }
+    await update({ my_chat_member: { chat: older, from: user(1, "Ana"), old_chat_member: { status: "left" }, new_chat_member: { status: "member" } } });
+    await db.update(telegramChats).set({ createdAt: new Date(NOW.getTime() - 30 * 24 * 3600_000) }).where(eq(telegramChats.chatId, older.id));
+    expect(await say(fresh, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect((await chatRow(fresh.id)).createdAt.getTime()).toBeGreaterThan((await chatRow(older.id)).createdAt.getTime());
+
+    // The same crew's link, still fresh, tapped in the older chat: not tied, nothing pinned, nothing read.
+    calls = [];
+    expect(await say(older, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_taken");
+    expect(String(groupMessages().at(-1)!.body.text)).toContain("already has its Telegram group");
+    expect(sent("pinChatMessage")).toHaveLength(0);
+    const o = await chatRow(older.id);
+    expect([o.groupId, o.noticeVersion, o.listeningSince]).toEqual([null, null, null]);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(fresh.id), listening: true });
+
+    // Another crew's link in the group the bot reads for this crew: the group stays this crew's.
+    calls = [];
+    expect(await say(fresh, user(1, "Ana"), `/start ${crewStartPayload(other.id, owner.id)}`).outcome).toBe("crew_other");
+    expect(String(groupMessages().at(-1)!.body.text)).toContain("another crew");
+    expect((await chatRow(fresh.id)).groupId).toBe(crew.id);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(fresh.id), listening: true });
+    expect(await crewTelegramInvite(db, other.id)).toEqual({ invite: null, listening: false });
+
+    // /quiet in the first group frees the crew, and the crew moves to the group a group admin ties next.
+    expect(await say(fresh, user(1, "Ana"), "/quiet").outcome).toBe("quiet");
+    expect(await say(older, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(older.id), listening: true });
+  });
+
+  it("the invite link follows the bot's right to invite, and the reading stops with the right to pin", async () => {
+    const chat = { id: -202200, type: "supergroup" as const, title: "Rights" };
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Rights crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
+    const PIN_ONLY = { status: "administrator", can_pin_messages: true, can_invite_users: false };
+    members.set(`${chat.id}:1`, { status: "creator" });
+    members.set(`${chat.id}:${BOT.id}`, PIN_ONLY);
+    // Started without the right to invite: it reads, and the crew page has no way in yet.
+    expect(await say(chat, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
+    expect(sent("createChatInviteLink")).toHaveLength(0);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: true });
+    // The right arrives later: the link is made then.
+    calls = [];
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_invite");
+    expect(sent("createChatInviteLink")).toHaveLength(1);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
+    // The right goes again: the link goes with it, and the reading goes on.
+    expect(await promote(chat, PIN_ONLY)).toBe("crew_invite_gone");
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: null, listening: true });
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_invite");
+    // Still an admin, but no longer one that may pin: it stops reading, keeps the opt-in and the notice.
+    const noticeId = (await chatRow(chat.id)).noticeMessageId;
+    expect(await promote(chat, { status: "administrator", can_pin_messages: false, can_invite_users: true })).toBe("crew_quiet:no_pin");
+    const row = await chatRow(chat.id);
+    expect([row.listeningSince, row.noticeVersion, row.inviteLink]).toEqual([null, CREW_NOTICE_VERSION, inviteOf(chat.id)]);
+    calls = [];
+    expect(await say(chat, user(2, "Petr"), "I'm in").outcome).toBe("ignored");
+    expect(calls).toHaveLength(0);
+    // The right to pin back: the notice already in the group is pinned again, nothing new is posted.
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_listening");
+    expect(sent("sendMessage")).toHaveLength(0);
+    expect(sent("pinChatMessage").map((c) => c.body.message_id)).toEqual([noticeId]);
   });
 
   it("\"I'm in\" in reply to a /new prompt is not the place of a new match", async () => {

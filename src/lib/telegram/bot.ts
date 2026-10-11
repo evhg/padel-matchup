@@ -318,9 +318,9 @@ async function handleMyChatMember(db: Db, u: NonNullable<TgUpdate["my_chat_membe
     await db.update(telegramChats).set({ leftAt: new Date(), ...crewLeft }).where(eq(telegramChats.chatId, u.chat.id));
     return "left";
   }
-  // Restricted is not an admin: whatever else it means, the bot stops reading a crew's group.
+  // Restricted is not an admin: whatever else it means, the bot stops reading a crew's group, and its invite link goes with the right.
   if (status === "restricted") {
-    await db.update(telegramChats).set({ listeningSince: null }).where(eq(telegramChats.chatId, u.chat.id));
+    await db.update(telegramChats).set({ listeningSince: null, inviteLink: null }).where(eq(telegramChats.chatId, u.chat.id));
     return "ignored";
   }
   if (status === "member" || status === "administrator") {

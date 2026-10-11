@@ -570,17 +570,18 @@ export async function getGroupById(db: Db, id: string): Promise<Group | null> {
 
 /**
  * The way into a crew's own Telegram group (DECIDING rule 31): the invite link the bot made there, for
- * the crew page to hand its members, while the bot is still in the group (after /quiet too: the group
- * is still the crew's), and whether the bot reads it now. One indexed read (`telegram_chats_group_idx`).
- * The first group the bot reads stays the crew's group: a group it reads comes first, then a group
- * with a link, then the older one, so a second group tied later never takes the first one's place.
+ * the crew page to hand its members, while the group is the crew's (until /quiet there, the bot's
+ * removal, or the bot losing the right to invite), and whether the bot reads it now. One indexed read
+ * (`telegram_chats_group_idx`). The first group tied stays the crew's group because a second one is
+ * never tied while it is (`crewStart` refuses it), so at most one row here opted in; that row comes
+ * first, then any row the bot reads, then a row with a link, then the older one.
  */
 export async function crewTelegramInvite(db: Db, groupId: string): Promise<{ invite: string | null; listening: boolean }> {
   const [row] = await db
     .select({ link: telegramChats.inviteLink, listeningSince: telegramChats.listeningSince })
     .from(telegramChats)
     .where(and(eq(telegramChats.groupId, groupId), isNull(telegramChats.leftAt)))
-    .orderBy(sql`${telegramChats.listeningSince} is null`, sql`${telegramChats.inviteLink} is null`, asc(telegramChats.createdAt))
+    .orderBy(sql`${telegramChats.noticeVersion} is null`, sql`${telegramChats.listeningSince} is null`, sql`${telegramChats.inviteLink} is null`, asc(telegramChats.createdAt))
     .limit(1);
   return { invite: row?.link ?? null, listening: Boolean(row?.listeningSince) };
 }

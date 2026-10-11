@@ -1341,7 +1341,7 @@
     "askDeclinedNotice": "Por ahora no hay sitio en {group}\nGracias por pedirlo. Esta vez los admins dijeron que no. Puedes volver a pedirlo en una semana.",
     "askToJoinSetting": "Entrar con aprobación",
     "telegramRun": "Abrir un chat de Telegram para este grupo",
-    "telegramRunHelp": "Kicksmash entra como administrador, mantiene allí una tarjeta por partido y lee el chat para entender «me apunto» y «no puedo». Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado, nunca el texto. Para pararlo, un administrador del chat puede escribir /quiet o quitar el bot.",
+    "telegramRunHelp": "Primero crea un chat de Telegram nuevo solo para el pádel de este grupo; luego toca el botón de arriba y elígelo. Kicksmash entra como administrador, mantiene allí una tarjeta por partido y lee el chat para entender «me apunto» y «no puedo». Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado, nunca el texto. Para pararlo, un administrador del chat puede escribir /quiet o quitar el bot.",
     "telegramJoin": "Unirse al chat de Telegram del grupo"
   },
   "venue": {
