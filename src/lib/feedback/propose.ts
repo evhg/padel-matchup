@@ -73,8 +73,11 @@ export type ProposeOutcome = "sent" | "skipped:not_feedback" | "skipped:already"
 async function askModel(db: Db, note: Feedback, fetchImpl: typeof fetch, now: Date): Promise<{ proposal: Proposal | null; reason: string | null }> {
   if (!draftingEnabled()) return { proposal: null, reason: "the model is off" };
   if (!(await withinBudget(db, now))) return { proposal: null, reason: BUDGET_SPENT };
+  // True while the Messages API call is in flight: a timeout or a network error then is a failed call.
+  let calling = false;
   try {
     const user = `source: ${note.source}\nlocale: ${note.locale}\nrole: ${note.role ?? "player"}\nname: ${note.name ?? "(none)"}\ncontext: ${note.context ?? "(none)"}\nnote:\n${note.text.slice(0, 2000)}`;
+    calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
@@ -83,11 +86,13 @@ async function askModel(db: Db, note: Feedback, fetchImpl: typeof fetch, now: Da
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; stop_reason?: string; error?: { message?: string } } | null;
     await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
+    calling = false;
     if (!res.ok || !json) return { proposal: null, reason: `the model answered HTTP ${res.status}` };
     const proposal = parseProposal((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (proposal) return { proposal, reason: null };
     return { proposal: null, reason: json.stop_reason === "max_tokens" ? "the model's answer was cut short" : "the model's answer could not be read" };
   } catch {
+    if (calling) await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
     return { proposal: null, reason: "the model did not answer in time" };
   }
 }
