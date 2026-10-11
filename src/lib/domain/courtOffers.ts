@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, demandSignals, events, facts, players, pushSubscriptions, slots, type Club, type ClubAvailability, type DemandSignal, type Player } from "@/db/schema";
-import { cacheBetween, isScraped } from "@/lib/booking/availability";
+import { cacheBetween, freeCourtsState, isScraped } from "@/lib/booking/availability";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { WANT_COOLDOWN_MS, weekdayOf } from "./demand";
 import { recordFact } from "./facts";
@@ -152,19 +152,47 @@ export function planCourtOffers(input: {
  * today, one of the clubs' matches (on `events_venue_slug_idx`) and the seats in them, one of the
  * people. Somebody no channel reaches is left out here, so a claim never silences a want for a notice
  * that could not go.
+ *
+ * The clubs are the ones the best times offer (`offered` in `freeCourts.ts`, `mayPrepareFor`): a club
+ * that runs its page here, or the directory's own row. Their free times are what the club page shows
+ * (`freeCourtsState`): the club's own feed, else a platform's clean read from the last two hours. Until
+ * 11 October 2026 only an approved club counted, production had none, and every club a platform's read
+ * covers is a directory row, so no platform's read ever reached a want.
+ *
+ * The run takes only the clubs that a want can hear about now: a clean read, and at the club a live want
+ * out of its cooldown (on `demand_venue_idx`). The read of 15 minutes writes every platform's club, a
+ * failed one too, and production had 27 such rows on 11 October 2026. Until then the 30 newest writes
+ * went in, whatever they held. At 31 the oldest of the three 15-minute groups fell out of every hourly
+ * run, and a want at one of those clubs never heard.
  */
 export async function courtOffersDue(db: Db, now: Date, reach: { telegram: boolean; email: boolean; push: boolean }): Promise<(CourtOffer & { player: Player })[]> {
   // Only the slots an offer can use (two to six hours ahead, and the hour after): a read from a platform keeps three days on the row (rule 12).
   const soon = cacheBetween(new Date(now.getTime() + COURT_OFFERS.minLeadMs), new Date(now.getTime() + COURT_OFFERS.maxLeadMs + HOUR_MS));
+  // The wants the next query reads, as one probe for each club.
+  const wanted = db
+    .select({ one: sql`1` })
+    .from(demandSignals)
+    .where(and(eq(demandSignals.venueSlug, clubs.slug), gt(demandSignals.expiresAt, now), or(isNull(demandSignals.notifiedAt), lte(demandSignals.notifiedAt, new Date(now.getTime() - WANT_COOLDOWN_MS)))));
   const fed = await db
-    .select({ slug: clubs.slug, name: clubs.name, availability: soon })
+    .select({ slug: clubs.slug, name: clubs.name, availability: soon, availabilityUrl: clubs.availabilityUrl, availabilityKind: clubs.availabilityKind })
     .from(clubs)
-    .where(and(isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt), gte(clubs.availabilityAt, new Date(now.getTime() - COURT_OFFERS.freshMs))))
+    .where(
+      and(
+        isNull(clubs.rejectedAt),
+        or(isNotNull(clubs.approvedAt), eq(clubs.source, "directory")),
+        gte(clubs.availabilityAt, new Date(now.getTime() - COURT_OFFERS.freshMs)),
+        sql`${clubs.availability}->>'error' is null`,
+        exists(wanted),
+      ),
+    )
     .orderBy(desc(clubs.availabilityAt))
     .limit(COURT_OFFERS.clubsPerRun);
   const open = fed.flatMap((c) => {
-    const hours = offerableHours(c.availability, now);
-    return hours.length && c.availability ? [{ club: { slug: c.slug, name: c.name, tz: c.availability.tz }, hours }] : [];
+    // The club's own feed wins; a platform's read counts only while it is fresh enough to show.
+    const state = freeCourtsState(c, now);
+    const a = state.kind === "feed" || state.kind === "platform" ? state.a : null;
+    const hours = offerableHours(a, now);
+    return hours.length && a ? [{ club: { slug: c.slug, name: c.name, tz: a.tz }, hours }] : [];
   });
   if (open.length === 0) return [];
   const slugs = open.map((c) => c.club.slug);

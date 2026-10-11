@@ -14,7 +14,9 @@ export type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, Scr
  * Playtomic and MATCHi, whose public club pages show free courts, and Book & Go, whose clubs' own web
  * apps load a public feed of free courts (10 October 2026). A Book & Go club books on its own domain,
  * so its reader knows each club by the host of its booking link (`BOOKANDGO_APPS` in `./bookandgo.ts`).
- * The Padel Society shows free courts only inside its app, so it has no reader. The tests pass their
+ * The Padel Society shows free courts only inside its app, so it has no reader. PodPlay and Playbypoint
+ * have no reader either: nobody has checked yet whether their public pages show free times. The
+ * service board counts the listed clubs each of them leaves unread (`scrapeBoard`). The tests pass their
  * own adapter (`tests/scrape.test.ts`), so no test double ships in production.
  */
 export const ADAPTERS: readonly AvailabilityAdapter[] = [playtomicAdapter, matchiAdapter, bookandgoAdapter];

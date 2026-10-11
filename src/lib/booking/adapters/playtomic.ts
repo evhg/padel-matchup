@@ -17,7 +17,16 @@ import { errorClass } from "./errorClass";
  *      Singapore that opens at 07:00 shows its first slot as start_date "2026-10-10", "23:00:00".
  *      Only free start times are listed, one per offered duration; booked time is simply absent.
  *   3. "Continue" opens /api/web-app/payments?type=CUSTOMER_MATCH&tenant_id&resource_id&start&duration&sport_id,
- *      Playtomic's own checkout. We hand that link to the player and never follow it.
+ *      Playtomic's own checkout. This file builds that link for each slot (`playtomicBookUrl`) and
+ *      never follows it, and the frame keeps no link (`freeSlotsFromScrape`): no player is handed it.
+ *      "Book this court" opens the club's public page on the match's day (`prepareBooking`). Whether
+ *      it may open this checkout instead is the owner's decision, not yet taken (DECIDING rule 36).
+ *
+ * A read of today alone takes one request: the tenant id from the club's last clean read comes back as
+ * `target.ref`, so the club page is not read again. The frame hands it back only while the club's link is
+ * the one that read gave it (`prevForLink` in scrape.ts). A full read (all three days, about hourly)
+ * takes the tenant id from the club page. It reads the page only when this process has no copy of that
+ * page from the last 24 hours (`clubCache`, keyed by the page), so a full read is three or four requests.
  *
  * Limits: an honest User-Agent, one request a second to Playtomic, at most 8 requests a call,
  * 10 seconds per request, the club page cached for a day. 401, 403 and 429 mean stop ("blocked").
@@ -27,8 +36,8 @@ import { errorClass } from "./errorClass";
  * above asks for exactly that. This reader reads those paths under the owner's decision of 10 October
  * 2026 (DECIDING rule 35): "platforms forbid scraping in their terms but we are just testing ... So
  * scraping at risk of being blocked is acceptable, just do it." robots.txt does not bind a reader under
- * that rule; the frame keeps the load low instead (today every 15 minutes at most, the next two days at
- * most hourly) and stops at the first sign of a block.
+ * that rule; the frame keeps the load low instead (today every 15 minutes, the next two days about
+ * hourly) and stops at the first sign of a block.
  */
 
 export const PLAYTOMIC_UA = "KicksmashBot/1.0 (+https://kicksma.sh/about)";
@@ -272,7 +281,10 @@ async function scrape(target: ScrapeTarget, fetchImpl: typeof fetch, now: Date):
   if (!page) return fail("error", null, 0, "not a Playtomic club link");
   let requests = 0;
 
-  let club = clubCache.get(page);
+  // Today alone, a tenant id from the last clean read and the club's own zone: no club page to read.
+  const zone = target.tz && isValidTimeZone(target.tz) ? target.tz : null;
+  const known = target.days === 1 && typeof target.ref === "string" && UUID.test(target.ref) && zone ? { at: now.getTime(), club: { tenantId: target.ref.toLowerCase(), slug: "", name: null, timezone: zone, courts: [] } } : null;
+  let club = known ?? clubCache.get(page);
   if (!club || now.getTime() - club.at > CLUB_TTL_MS || now.getTime() < club.at) {
     const got = await get(page, fetchImpl, "text/html");
     requests++;
@@ -308,7 +320,7 @@ async function scrape(target: ScrapeTarget, fetchImpl: typeof fetch, now: Date):
     }
   }
   slots.sort((a, b) => a.start.localeCompare(b.start) || (a.court ?? "").localeCompare(b.court ?? "") || a.end.localeCompare(b.end));
-  return { ok: true, slots, requests, tz };
+  return { ok: true, slots, requests, tz, ref: club.club.tenantId };
 }
 
 export const playtomicAdapter: AvailabilityAdapter = {

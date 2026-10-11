@@ -183,11 +183,17 @@ describe("what a page may carry", () => {
       unclosedTitle: "<title ".repeat(Math.floor(PREVIEW_MAX_BYTES / 7)),
       longName: `<meta ${"a".repeat(4000)} property="og:title" content="Still read">`.repeat(Math.floor(PREVIEW_MAX_BYTES / 4060)),
     };
+    // The fastest of three parses, under one second: a stall (5 s and 42 s before the bounds) fails every
+    // one of the three, while a busy machine (four gates at once: 262 ms on 11 October) slows only some.
     for (const [name, html] of Object.entries(pages)) {
       expect(html.length, name).toBeLessThanOrEqual(PREVIEW_MAX_BYTES);
-      const started = performance.now();
-      parsePreview(html);
-      expect(performance.now() - started, name).toBeLessThan(250);
+      let fastest = Infinity;
+      for (let i = 0; i < 3; i++) {
+        const started = performance.now();
+        parsePreview(html);
+        fastest = Math.min(fastest, performance.now() - started);
+      }
+      expect(fastest, name).toBeLessThan(1000);
     }
     // A tag of ordinary length after a long one is still read.
     expect(parsePreview(`<meta ${"a".repeat(5000)}><meta property="og:title" content="Court 3">`)?.title).toBe("Court 3");
