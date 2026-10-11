@@ -20,8 +20,8 @@ import { detectPlatform, platformById } from "./platforms";
  *   internal routes", is gone. The link is the one Playtomic's own club page opens for "Continue"
  *   (`playtomicBookUrl`), given only when Playtomic listed exactly the match's start and length on a
  *   court in a fresh read (`checkoutFor`), and only while Playtomic's page still builds that link
- *   (`builderCheck` in `./scrape.ts`); else the day page. A player who is not signed in to Playtomic
- *   meets its sign-in first. The kind is also kept for a club-granted connector (`ClubBookingConnector`).
+ *   (`builderCheck` in `./adapters/playtomic.ts`); else the day page. A player who is not signed in to
+ *   Playtomic meets its sign-in first. The kind is also kept for a club-granted connector (`ClubBookingConnector`).
  * - "slot": the club's public page open on the match's day for padel. The player taps the court and
  *   the time, which every caller shows beside the button ("Sat 12 Oct, 18:00, 90 min, Court 2"), so
  *   a parameter the platform stops reading costs one tap and nothing else.
@@ -41,8 +41,10 @@ export type PreparedBooking = { url: string; prepared: Prepared; platform: strin
 /**
  * The checkout switches, one a platform, beside the code's own "observed" date: off gives the day page.
  * The row `checkout_off_<platform>` (or `checkout_off_all`) through `POST /api/admin/metrics` turns one
- * off with no deploy: the reader then keeps no offers, and within one read of each club (15 minutes)
- * no match page has one to fill a checkout with. Playtomic's link was read from its club page's own
+ * off with no deploy: the reader then keeps no offers from the next read of each club, clean or timed
+ * out. A platform at rest or switched off writes no rows, so the last offers still fill a checkout until
+ * they are `CHECKOUT_FRESH_MS` old: 90 minutes at most. This code reads no switch row itself. Playtomic's
+ * link was read from its club page's own
  * script on 11 October 2026 (`/_next/static/chunks/7105-b679921c03870a3f.js`).
  */
 export const CHECKOUT: Record<string, { on: boolean; observed: string; builder: string } | undefined> = {
@@ -63,10 +65,10 @@ export type CheckoutCache = Pick<ClubAvailability, "fetchedAt" | "day" | "tz" | 
  * is a clean read of Playtomic from the link the club has now (`linkKey`), with the club's id (`ref`);
  * the match is still to come; the read of its day is `CHECKOUT_FRESH_MS` old or less (today's read for
  * today, the last full read for a later day); and a court was listed at exactly the match's start with
- * exactly its length. The match's own court first, else another listed court, named beside the button.
- * Pure.
+ * exactly its length, with its name. The match's own court first, else another listed court, named
+ * beside the button; never a court with no name (`pickCourt`). Pure.
  */
-export function checkoutFor(club: Pick<Club, "bookingUrl" | "website">, cache: CheckoutCache | null | undefined, slot: BookingSlot, now: Date): { url: string; court: string | null } | null {
+export function checkoutFor(club: Pick<Club, "bookingUrl" | "website">, cache: CheckoutCache | null | undefined, slot: BookingSlot, now: Date): { url: string; court: string } | null {
   if (!checkoutOn("playtomic") || !cache || cache.error || cache.source !== "scrape:playtomic" || !cache.offers) return null;
   const link = readLink(club);
   if (!link || cache.linkKey !== linkKey(link) || !cache.ref || !UUID.test(cache.ref) || !isValidTimeZone(cache.tz)) return null;
@@ -79,7 +81,8 @@ export function checkoutFor(club: Pick<Club, "bookingUrl" | "website">, cache: C
     offeredCourts(cache.offers, cache.tz, slot.start, slot.minutes).filter((c) => UUID.test(c.id)),
     slot.court,
   );
-  return court ? { url: playtomicBookUrl(cache.ref.toLowerCase(), court.id.toLowerCase(), slot.start, slot.minutes), court: court.name } : null;
+  // Only a court with a name (`pickCourt`): the page names the court the link holds, every time.
+  return court?.name ? { url: playtomicBookUrl(cache.ref.toLowerCase(), court.id.toLowerCase(), slot.start, slot.minutes), court: court.name } : null;
 }
 
 /**

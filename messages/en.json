@@ -360,7 +360,7 @@
     "playAgainNext": "Next game: {when} · {code}",
     "playAgainLands": "At that day and time, a tap opens that game. It makes no second one.",
     "bookAndPayOn": "Book and pay on {platform}",
-    "checkoutHint": "{platform} asks you to sign in first, then shows this court and time."
+    "checkoutSignIn": "{platform} may ask you to sign in first."
   },
   "creator": {
     "tools": "Organizer tools",

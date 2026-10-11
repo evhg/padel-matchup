@@ -360,7 +360,7 @@
     "playAgainNext": "Próximo partido: {when} · {code}",
     "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro.",
     "bookAndPayOn": "Reservar y pagar en {platform}",
-    "checkoutHint": "{platform} te pide iniciar sesión primero y después muestra esta pista y esta hora."
+    "checkoutSignIn": "{platform} puede pedirte que inicies sesión primero."
   },
   "creator": {
     "tools": "Herramientas de organizador",

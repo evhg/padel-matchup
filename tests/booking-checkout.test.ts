@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily, type Club, type ClubAvailability } from "@/db/schema";
-import type { ScrapedSlot, ScrapeTarget } from "@/lib/booking/adapters/types";
+import type { AvailabilityAdapter, ScrapedSlot, ScrapeResult, ScrapeTarget } from "@/lib/booking/adapters/types";
 import { chunkNumber, holdsCheckoutBuilder, huntOrder, playtomicAdapter, playtomicScripts, resetPlaytomicState } from "@/lib/booking/adapters/playtomic";
 import { fnv1a, linkKey } from "@/lib/booking/linkKey";
 import { offeredCourts, offersFromScrape, pickCourt } from "@/lib/booking/offers";
@@ -107,6 +107,24 @@ describe("the offers a read keeps", () => {
     expect(pickCourt(courts, "Centre court")?.id).toBe(PADEL1);
     expect(pickCourt(courts, null)?.id).toBe(PADEL1);
     expect(pickCourt([], "2")).toBeNull();
+  });
+
+  it("never a court with no name: the page could not say which court the link holds, and it may be the match's own", () => {
+    // A read of today alone sees no names; a row with no offers before it has none to lend (review, 11 October 2026).
+    const unnamed = [
+      { id: PADEL1, name: null },
+      { id: PADEL2, name: null },
+    ];
+    expect(pickCourt(unnamed, "1")).toBeNull();
+    expect(pickCourt(unnamed, null)).toBeNull();
+    // One named, one not: the named one only when it is the match's court, or when the match names none.
+    const half = [
+      { id: PADEL1, name: "Padel 1" },
+      { id: PADEL2, name: null },
+    ];
+    expect(pickCourt(half, "1")?.id).toBe(PADEL1);
+    expect(pickCourt(half, null)?.id).toBe(PADEL1);
+    expect(pickCourt(half, "2")).toBeNull();
   });
 });
 
@@ -279,7 +297,7 @@ describe("the read keeps the offers, and only the match page reads them", () => 
       { resource_id: PADEL1, start_date: date, slots: [{ start_time: "11:30:00", duration: 90, price: "1500 THB" }] },
     ]);
   type World = { calls: string[]; fetchImpl: typeof fetch; clock: Clock };
-  const world = (page: string, scripts: Record<string, string> = {}): World => {
+  const world = (page: string, scripts: Record<string, string> = {}, answer: (date: string) => string = dayOf): World => {
     let t = 0.25;
     const calls: string[] = [];
     const fetchImpl = (async (input: RequestInfo | URL) => {
@@ -287,7 +305,7 @@ describe("the read keeps the offers, and only the match page reads them", () => 
       calls.push(u.pathname);
       t += 200.123;
       if (u.pathname === "/clubs/the-padel-co") return new Response(page, { status: 200, headers: { "content-type": "text/html" } });
-      if (u.pathname === "/api/clubs/availability") return new Response(dayOf(u.searchParams.get("date")!), { status: 200, headers: { "content-type": "application/json" } });
+      if (u.pathname === "/api/clubs/availability") return new Response(answer(u.searchParams.get("date")!), { status: 200, headers: { "content-type": "application/json" } });
       if (u.pathname in scripts) return new Response(scripts[u.pathname], { status: 200 });
       return new Response("nope", { status: 404 });
     }) as typeof fetch;
@@ -302,10 +320,10 @@ describe("the read keeps the offers, and only the match page reads them", () => 
   const seed = () => db.insert(clubs).values({ slug: "the-padel-co", name: "The Padel Co", manageToken: "tok-the-padel-co-abcdefghijklmnop", source: "directory", tz: TZ, website: LINK, bookingPlatform: "playtomic" });
   const row = async () => (await db.select().from(clubs).where(eq(clubs.slug, "the-padel-co")))[0];
   const metric = async (key: string) => Number((await db.select().from(metricsDaily).where(and(eq(metricsDaily.key, key), eq(metricsDaily.day, "2026-10-10"))))[0]?.value ?? 0);
-  const run = async (w: World, now = NOW) => {
+  const run = async (w: World, now = NOW, adapter: AvailabilityAdapter = playtomicAdapter) => {
     const spy = wallClock();
     try {
-      return await runScrape(db, now, { adapters: [playtomicAdapter], fetchImpl: w.fetchImpl, clock: w.clock });
+      return await runScrape(db, now, { adapters: [adapter], fetchImpl: w.fetchImpl, clock: w.clock });
     } finally {
       spy.mockRestore();
     }
@@ -351,6 +369,26 @@ describe("the read keeps the offers, and only the match page reads them", () => 
     expect(offeredCourts(a.offers, TZ, bkk("2026-10-10", "18:00"), 60)).toEqual([{ id: PADEL2, name: "Padel 2" }]);
   });
 
+  it("a read of today alone over a row with no offers yet has no names: a match on a named court gets the day page, never another court", async () => {
+    // The row as the code before the offers wrote it (and as a checkout switched back on finds it): a
+    // clean full read 20 minutes ago, with the tenant id and the link's key, and no offers to lend names.
+    await seed();
+    const before: ClubAvailability = { fetchedAt: ago(20), day: "2026-10-10", days: DAYS, tz: TZ, source: "scrape:playtomic", platform: "playtomic", slots: [], error: null, fullAt: ago(20), ref: TENANT, linkKey: linkKey(LINK) };
+    await db.update(clubs).set({ availability: before, availabilityAt: new Date(NOW.getTime() - 20 * MIN) }).where(eq(clubs.slug, "the-padel-co"));
+    // Tonight, 18:00 in Bangkok (11:00 UTC), both courts are free for 90 minutes.
+    const both = (date: string) => JSON.stringify([PADEL2, PADEL1].map((id) => ({ resource_id: id, start_date: date, slots: [{ start_time: "11:00:00", duration: 90, price: "1500 THB" }] })));
+    const w = world(withScripts(KNOWN), {}, both);
+    await run(w);
+    expect(w.calls).toEqual(["/api/clubs/availability"]);
+    const c = (await getClubForBooking(db, "the-padel-co", { cache: true }))!;
+    const tonight = bkk("2026-10-10", "18:00");
+    expect(offeredCourts(c.cache!.offers, TZ, tonight, 90).map((x) => x.name)).toEqual([null, null]);
+    const dayPage = { url: "https://playtomic.com/clubs/the-padel-co?date=2026-10-10&sport=PADEL", prepared: "slot", platform: "playtomic" };
+    // The match is on court 1: the lowest id is Padel 2, which the page could not even name.
+    expect(prepareBooking(c, { start: tonight, minutes: 90, tz: TZ, court: "1" }, { cache: c.cache, now: NOW })).toEqual(dayPage);
+    expect(prepareBooking(c, { start: tonight, minutes: 90, tz: TZ, court: null }, { cache: c.cache, now: NOW })).toEqual(dayPage);
+  });
+
   it("the builder gone from the page: no offers kept, the state and a counter say so; found again in a new script, the offers come back", async () => {
     await seed();
     // The page no longer loads the known script, and none of its scripts builds the link.
@@ -372,6 +410,26 @@ describe("the read keeps the offers, and only the match page reads them", () => 
     expect(await metric("checkout_found_playtomic")).toBe(1);
     expect(await metric("checkout_builder_playtomic")).toBe(fnv1a(moved));
     expect(offeredCourts((await row()).availability!.offers, TZ, bkk("2026-10-11", "18:00"), 90)).toHaveLength(1);
+  });
+
+  it("a read that times out over a good read keeps that read, and drops its offers while the checkout is off", async () => {
+    await seed();
+    await run(world(withScripts(KNOWN)));
+    expect((await row()).availability).toHaveProperty("offers");
+    // The owner switches the checkout off; the club's next read times out (review, 11 October 2026).
+    await setMetric(db, "checkout_off_playtomic", 1, "2026-10-10");
+    const timeout: ScrapeResult = { ok: false, status: null, reason: "timeout", requests: 1, detail: "availability 2026-10-10: TimeoutError" };
+    const slow: AvailabilityAdapter = { ...playtomicAdapter, scrape: async (t, f) => (await f(t.bookingUrl), timeout) };
+    const later = new Date(NOW.getTime() + 20 * MIN);
+    const r = await run(world(withScripts(KNOWN)), later, slow);
+    expect(r.failed).toEqual([{ slug: "the-padel-co", platform: "playtomic", error: "timeout", why: "availability 2026-10-10: TimeoutError" }]);
+    // The good read stays, its times included, and its offers go.
+    const a = (await row()).availability!;
+    expect(a).toMatchObject({ error: null, fullAt: NOW.toISOString() });
+    expect(a.slots.length).toBeGreaterThan(0);
+    expect(a).not.toHaveProperty("offers");
+    const c = (await getClubForBooking(db, "the-padel-co", { cache: true }))!;
+    expect(prepareBooking(c, MATCH, { cache: c.cache, now: later })?.prepared).toBe("slot");
   });
 
   it("the switch row turns the checkout off with no deploy: no offers, and no look for a builder", async () => {

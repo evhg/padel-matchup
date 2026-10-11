@@ -109,7 +109,10 @@ const numberIn = (s: string) => /(\d{1,3})/.exec(s)?.[1].replace(/^0+(?=\d)/, ""
 /**
  * Which listed court the checkout books: the match's own court when the platform lists it ("2" is
  * "Court 2"), else the first listed court by name, so the player sees which court the link holds.
- * Null when none is listed. Pure.
+ * Never a court with no name, because the page could not say which court the link holds. A read of
+ * today alone sees no names, and a row with no offers before it has none to lend (review, 11 October
+ * 2026). And when the match names a court that no listed name matches, a listed court with no name may
+ * be that very court, so nothing is picked. Null then, and when none is listed: the day page. Pure.
  */
 export function pickCourt(courts: readonly OfferedCourt[], wanted: string | null | undefined): OfferedCourt | null {
   if (courts.length === 0) return null;
@@ -120,6 +123,8 @@ export function pickCourt(courts: readonly OfferedCourt[], wanted: string | null
     const n = numberIn(want);
     const numbered = n ? courts.filter((c) => c.name && numberIn(c.name) === n) : [];
     if (numbered.length === 1) return numbered[0];
+    if (courts.some((c) => !c.name)) return null;
   }
-  return [...courts].sort((a, b) => (a.name ?? "￿").localeCompare(b.name ?? "￿", "en", { numeric: true }) || a.id.localeCompare(b.id))[0];
+  const first = [...courts].sort((a, b) => (a.name ?? "￿").localeCompare(b.name ?? "￿", "en", { numeric: true }) || a.id.localeCompare(b.id))[0];
+  return first.name ? first : null;
 }

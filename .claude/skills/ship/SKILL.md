@@ -386,6 +386,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and the old club's courts shown under its name, for up to 88 minutes (review, 11 October 2026). The
   cache now keeps `linkKey`, and the run uses nothing from a read of another link (`prevForLink`).
   When a cache stores what a read found, store what it read too, and check it before reuse.
+- **A cheap read leans on a full one, so test it on a row that has none.** The read of today alone skips
+  Playtomic's club page, so it sees no court names, and the merge takes names from the row's offers.
+  Every test began from a full read that had written names. On the first read after the deploy no row
+  had offers, so the checkout booked the lowest court id and the page named no court (review, 11 October
+  2026). Seed the row the way the old code left it, run the cheap read alone, and check the screen's
+  answer (`tests/booking-checkout.test.ts`, "a read of today alone over a row with no offers yet").
 - **A fetch signal aborts the body too, not only the call.** The court-time frame caught its own
   deadline around `fetch()` alone, so a page whose headers came in time and whose body did not was
   written as a plain failure and lost its cache, while the test of a request that never answers stayed

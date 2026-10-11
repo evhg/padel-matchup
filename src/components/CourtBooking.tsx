@@ -13,7 +13,9 @@ import { setCourtBookedAction } from "@/actions/slots";
  * `book.checkout` is the platform's name when the link is its checkout, filled in (the owner, 11 October
  * 2026, "Playtomic checkout, filled"): the button says "Book and pay on Playtomic", the one place the
  * platform is named (the owner the same day: "the name shows only at the booking step"), and one line
- * says the platform asks for its sign-in first, because its sign-in page shows no court and no time.
+ * says the platform may ask for its sign-in first, because its sign-in page shows no court and no time.
+ * Only "may": a player signed in there already skips it, and nobody saw what the platform shows after
+ * its sign-in (review, 11 October 2026).
  */
 export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: string; book: { url: string; checkout: string | null } | null; slotLine: string; booked: { name: string | null } | null; canMark: boolean }) {
   const t = useTranslations("event");
@@ -45,7 +47,7 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
           </span>
           {book.checkout && (
             <span className="basis-full text-xs text-muted" data-testid="book-checkout-hint">
-              {t("checkoutHint", { platform: book.checkout })}
+              {t("checkoutSignIn", { platform: book.checkout })}
             </span>
           )}
         </div>

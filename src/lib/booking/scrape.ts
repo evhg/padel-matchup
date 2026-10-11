@@ -838,9 +838,11 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       continue;
     }
     // A timeout over a good read: the good read stays, with its own time, so the pages show it for as
-    // long as they would have, and only the club's place in the queue moves (to the back).
+    // long as they would have, and only the club's place in the queue moves (to the back). While this run
+    // keeps no offers (the checkout switched off, or its builder lost), the kept read loses its offers.
     if (keepsGoodRead(result, club.prev, platform)) {
-      if (await write(club.slug, sql`${clubs.availability}`)) run.failed.push({ slug: club.slug, platform, error: "timeout", why: failureWhy(result.ok ? null : result.detail) });
+      const kept = offers ? sql`${clubs.availability}` : sql`${clubs.availability} - 'offers'`;
+      if (await write(club.slug, kept)) run.failed.push({ slug: club.slug, platform, error: "timeout", why: failureWhy(result.ok ? null : result.detail) });
       continue;
     }
     const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now, link, offers });

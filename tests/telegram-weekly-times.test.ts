@@ -12,7 +12,7 @@ import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { strings } from "@/lib/telegram/card";
 import { crewStartPayload } from "@/lib/telegram/deepLinks";
 import type { TgMessage, TgUpdate } from "@/lib/telegram/api";
-import { postWeeklyTimes, weeklyTimesDue, WEEKLY_TIMES } from "@/lib/telegram/weeklyTimes";
+import { dueWeekdays, postWeeklyTimes, weeklyTimesDue, WEEKLY_TIMES } from "@/lib/telegram/weeklyTimes";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, HOUR, makePlayer } from "./helpers/db";
 
@@ -132,7 +132,7 @@ describe("the weekly best times in a crew's group", () => {
 
   it("posts once, unasked and silent: the free courts near the slot as buttons, the crew's club first, and no platform's name", async () => {
     const { chat } = await listeningCrew(-400100);
-    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 1, none: 0, booked: 0 });
+    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 1, none: 0, booked: 0, cut: 0 });
     expect(sent("sendMessage")).toHaveLength(1);
     const post = sent("sendMessage")[0];
     expect(post.body.chat_id).toBe(chat.id);
@@ -148,8 +148,8 @@ describe("the weekly best times in a crew's group", () => {
     expect(JSON.stringify(post.body)).not.toMatch(/playtomic/i);
     // At most one a week: the next hourly runs before the slot post nothing more.
     calls = [];
-    expect(await postWeeklyTimes(db, later(HOUR))).toEqual({ posted: 0, none: 0, booked: 0 });
-    expect(await postWeeklyTimes(db, later(3 * HOUR))).toEqual({ posted: 0, none: 0, booked: 0 });
+    expect(await postWeeklyTimes(db, later(HOUR))).toEqual({ posted: 0, none: 0, booked: 0, cut: 0 });
+    expect(await postWeeklyTimes(db, later(3 * HOUR))).toEqual({ posted: 0, none: 0, booked: 0, cut: 0 });
     expect(calls).toEqual([]);
     expect(Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, "tg_weekly_times")))[0]?.value ?? 0)).toBe(1);
   });
@@ -168,7 +168,7 @@ describe("the weekly best times in a crew's group", () => {
     await listeningCrew(-400300);
     await db.update(clubs).set({ availability: feed([span("2026-10-15", "08:00", "10:00")]) }).where(eq(clubs.slug, rawai));
     await db.update(clubs).set({ availability: feed([span("2026-10-15", "08:00", "10:00")], { source: "scrape:playtomic", platform: "playtomic", days: ["2026-10-14", "2026-10-15", "2026-10-16"], fullAt: NOW.toISOString() }) }).where(eq(clubs.slug, chalong));
-    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 0, none: 1, booked: 0 });
+    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 0, none: 1, booked: 0, cut: 0 });
     expect(calls).toEqual([]);
   });
 
@@ -184,7 +184,7 @@ describe("the weekly best times in a crew's group", () => {
     await db.update(groups).set({ recurDow: 4, recurTime: "19:00" }).where(eq(groups.id, other.id));
     await db.insert(telegramChats).values({ chatId: -400600, type: "supergroup", title: "Friday", groupId: other.id });
     calls = [];
-    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 0, none: 0, booked: 0 });
+    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 0, none: 0, booked: 0, cut: 0 });
     expect(sent("sendMessage")).toEqual([]);
   });
 
@@ -197,6 +197,23 @@ describe("the weekly best times in a crew's group", () => {
     expect(buttons[0]).toEqual({ text: "Thu, Oct 15 19:00 · Rawai Padel Club", callback_data: `j:${game.code}` });
     calls = [];
     expect(await tap(chat, user(9, "Lena"), `j:${game.code}`, 7000, buttons.map((b) => b.callback_data!))).toBe("join:joined");
+  });
+
+  it("the crew's game at the slot: no other time that overlaps it, at any club, so a tap never gives the crew two games at once", async () => {
+    // Review, 11 October 2026: Chalong at 19:30 stood beside the crew's game at Rawai at 19:00, and its
+    // tap made the crew a second game half an hour into the first.
+    const { crew, owner } = await listeningCrew(-401000);
+    const game = await createEvent(db, { creatorPlayerId: owner.id, type: "match", startsAt: at("2026-10-15", "19:00"), tz: TZ, venueName: "Rawai Padel Club", whenFull: "waitlist", groupId: crew.id });
+    expect((await postWeeklyTimes(db, NOW)).posted).toBe(1);
+    expect(buttonsOf(sent("sendMessage")[0])).toEqual([{ text: "Thu, Oct 15 19:00 · Rawai Padel Club", callback_data: `j:${game.code}` }]);
+  });
+
+  it("a game of the crew that ends before a free time leaves that time a choice", async () => {
+    const { crew, owner } = await listeningCrew(-401100);
+    // 17:30 to 19:00 at Rawai: the 19:00 court starts as it ends.
+    await createEvent(db, { creatorPlayerId: owner.id, type: "match", startsAt: at("2026-10-15", "17:30"), durationMinutes: 90, tz: TZ, venueName: "Rawai Padel Club", whenFull: "waitlist", groupId: crew.id });
+    expect((await postWeeklyTimes(db, NOW)).posted).toBe(1);
+    expect(buttonsOf(sent("sendMessage")[0]).map((b) => b.callback_data!.split(":")[0])).toEqual(["bt", "bt"]);
   });
 
   it("a time of the post makes the match there, as a \"times?\" button does", async () => {
@@ -216,8 +233,48 @@ describe("the weekly best times in a crew's group", () => {
     const { crew, owner } = await listeningCrew(-400900);
     const game = await createEvent(db, { creatorPlayerId: owner.id, type: "match", startsAt: at("2026-10-15", "19:00"), tz: TZ, venueName: "Rawai Padel Club", whenFull: "waitlist", groupId: crew.id });
     await db.update(events).set({ courtBookedAt: NOW, courtBookedBy: owner.id }).where(eq(events.id, game.id));
-    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 0, none: 0, booked: 1 });
+    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 0, none: 0, booked: 1, cut: 0 });
     expect(sent("sendMessage")).toEqual([]);
+  });
+
+  it("reads only the crews whose slot can be due, so crews of other days never crowd the due one out", async () => {
+    // Review, 11 October 2026: the read took 200 listening groups in no order and checked each in code,
+    // so past 200 the same groups missed their post every hour. Monday's crews cannot be due on a Wednesday.
+    const creator = await makePlayer(db, "Many");
+    const monday = await db
+      .insert(groups)
+      .values(Array.from({ length: WEEKLY_TIMES.maxGroups }, (_, i) => ({ code: `M${String(i).padStart(5, "0")}`, name: `Monday crew ${i}`, creatorPlayerId: creator.id, tz: TZ, recurDow: 1, recurTime: "19:00" })))
+      .returning({ id: groups.id });
+    await db.insert(telegramChats).values(monday.map((g, i) => ({ chatId: -500000 - i, type: "supergroup", title: "Monday crew", groupId: g.id, listeningSince: NOW })));
+    await listeningCrew(-401200);
+    expect(await postWeeklyTimes(db, NOW)).toEqual({ posted: 1, none: 0, booked: 0, cut: 0 });
+  });
+
+  it("the read's weekdays hold every slot that can be due, in the zones furthest from UTC", () => {
+    let due = 0;
+    for (const tz of ["Pacific/Kiritimati", "Etc/GMT+12", TZ, "UTC"]) {
+      for (let h = 0; h < 7 * 24; h++) {
+        const now = new Date(NOW.getTime() + h * HOUR + 17 * 60_000);
+        for (let dow = 0; dow < 7; dow++) {
+          for (const time of ["00:15", "23:45"]) {
+            if (!weeklyTimesDue({ recurDow: dow, recurTime: time, tz, archivedAt: null }, now)) continue;
+            due++;
+            expect(dueWeekdays(now)).toContain(dow);
+          }
+        }
+      }
+    }
+    expect(due).toBeGreaterThan(100);
+    // And it leaves days out: on a Wednesday at noon UTC, only Wednesday to Friday can be due.
+    expect(dueWeekdays(NOW)).toEqual([3, 4, 5]);
+  });
+
+  it("past the cap, the groups it leaves out are counted", async () => {
+    await listeningCrew(-401300);
+    await listeningCrew(-401400);
+    await listeningCrew(-401500);
+    expect(await postWeeklyTimes(db, NOW, { maxGroups: 2 })).toEqual({ posted: 2, none: 0, booked: 0, cut: 1 });
+    expect(Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, "tg_weekly_times_cut")))[0]?.value ?? 0)).toBe(1);
   });
 
   it("around a slot, bestTimes keeps the starts near it and ranks the crew's own clubs, then the nearest", () => {

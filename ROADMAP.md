@@ -1034,12 +1034,15 @@ Everything in this list is live. The README describes each in detail.
     minutes old listed exactly that start and length; else the club's day page, as before. The reader
     keeps the exact starts Playtomic lists (about 1 KB a club, in the cache, read only by the match
     page), and each read of a club page checks that its script still builds the link. While it does
-    not, the match pages give the day page, and a counter and the service board say so. The player's
-    browser opens the link; our server never does (`src/lib/booking/prepare.ts`, `offers.ts`).
+    not, the reader keeps no starts, so the match pages give the day page from the next read of each
+    club, within 90 minutes at most, and a counter and the service board say so. The link holds only a
+    court the read named, so the page always names the court beside the button. The player's browser
+    opens the link; our server never does (`src/lib/booking/prepare.ts`, `offers.ts`).
   - **The weekly best times.** 24 hours before a crew's weekly slot, the bot posts up to three courts
     free near the slot in the crew's own Telegram group, once, silently, unasked. A button makes the
-    match, or joins the crew's game when it is on already. Nothing when no court is free or the court is
-    booked; /quiet stops it (`src/lib/telegram/weeklyTimes.ts`).
+    match, or joins the crew's game when it is on already; a time that overlaps a game of the crew gets
+    no button, so a tap never gives the crew two games at once. Nothing when no court is free or the
+    court is booked; /quiet stops it (`src/lib/telegram/weeklyTimes.ts`).
   - **No platform's name in the chat or the chips.** The "times?" answer, the weekly post, the time
     chips, the line under the time and /play name no platform. The booking step and the club page's
     source line still do (`src/lib/domain/bestTimes.ts` carries no name).

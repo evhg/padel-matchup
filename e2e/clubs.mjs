@@ -429,7 +429,7 @@ try {
   );
   const ptSlot = await page.getByTestId("book-slot").innerText();
   const ptHint = await page.getByTestId("book-checkout-hint").innerText().catch(() => "");
-  check("beside it, the court the link holds, and that Playtomic asks for its sign-in first", /Court [12]/.test(ptSlot) && ptSlot.includes("90 min") && ptHint.includes("Playtomic asks you to sign in first"), JSON.stringify({ ptSlot, ptHint }));
+  check("beside it, the court the link holds, and that Playtomic may ask for its sign-in first", /Court [12]/.test(ptSlot) && ptSlot.includes("90 min") && ptHint.includes("Playtomic may ask you to sign in first"), JSON.stringify({ ptSlot, ptHint }));
   await shot(page, "c9-checkout");
   // The club's old booking page again, which the rest of the suite expects.
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
