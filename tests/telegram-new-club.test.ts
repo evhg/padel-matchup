@@ -12,7 +12,7 @@ import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { findOrCreateTelegramPlayer } from "@/lib/telegram/identity";
 import { strings } from "@/lib/telegram/card";
 import { clubKeyWords, parseNewCommand } from "@/lib/telegram/parse";
-import type { TgMessage, TgUpdate } from "@/lib/telegram/api";
+import { esc, type TgMessage, type TgUpdate } from "@/lib/telegram/api";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb } from "./helpers/db";
 
@@ -248,6 +248,20 @@ describe("a /new match at a club named in full goes on the club's board, with on
     expect(boardNote()).toBeUndefined();
     // "public" is the organiser's own word: the match goes on the board.
     expect((await eventOf(await say(chat, eve, "/new tomorrow 16:00 Warehaus public"))).publicListing).toBe(true);
+  });
+
+  it("/games with nothing listed tells a crew's group that its matches need \"public\" to show, and any other chat the full name", async () => {
+    const crewChat = { id: -610006, type: "group" as const, title: "Singapore crew" };
+    const plain = { id: -610007, type: "group" as const, title: "Singapore friends" };
+    const gus = user(67, "Gus");
+    for (const chat of [crewChat, plain]) expect(await say(chat, gus, "/tz singapore")).toBe("tz");
+    const crew = await createGroup(db, { name: "Singapore crew", creatorPlayerId: (await findOrCreateTelegramPlayer(db, gus)).id, tz: "Asia/Singapore" });
+    await db.update(telegramChats).set({ groupId: crew.id }).where(eq(telegramChats.chatId, crewChat.id));
+    calls = [];
+    expect(await say(crewChat, gus, "/games")).toBe("games:0+0");
+    expect(await say(plain, gus, "/games")).toBe("games:0+0");
+    expect(sent("sendMessage").map((c) => c.body.text)).toEqual([esc(strings("en").gamesNone("Singapore", true)), esc(strings("en").gamesNone("Singapore"))]);
+    expect(strings("en").gamesNone("Singapore", true)).toContain("public");
   });
 
   it("in a group the note goes to the organiser alone, and as a quiet reply only when Telegram will not deliver that", async () => {

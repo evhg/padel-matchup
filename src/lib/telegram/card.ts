@@ -184,7 +184,10 @@ const STRINGS = {
     coachLinkOther: "This assistant is already linked to another Telegram account.",
     gamesTitle: (city: string) => `Open matches · ${city}`,
     gamesMine: "Your upcoming matches",
-    gamesNone: (city: string) => `No open matches listed in ${city} right now. Create one with a listed club's full name, and it shows here: /new tomorrow 19:00 <club>.`,
+    gamesNone: (city: string, crew = false) =>
+      crew
+        ? `No open matches listed in ${city} right now. A match made in this crew's group stays off the list unless its line says public: /new tomorrow 19:00 <club> public.`
+        : `No open matches listed in ${city} right now. Create one with a listed club's full name, and it shows here: /new tomorrow 19:00 <club>.`,
     boardOn: (club: string) => `On ${club}'s board: people who play there can find it, and the club's regulars hear about a free spot.`,
     boardOff: "Take it off the board",
     boardOffDone: (club: string) => `Off ${club}'s board. Only people with the link can find it.`,
@@ -403,7 +406,10 @@ const STRINGS = {
 
     gamesTitle: (city: string) => `Открытые матчи · ${city}`,
     gamesMine: "Ваши ближайшие матчи",
-    gamesNone: (city: string) => `Сейчас в ${city} нет открытых матчей. Создайте матч с полным названием клуба из списка, и он появится здесь: /new завтра 19:00 <клуб>.`,
+    gamesNone: (city: string, crew = false) =>
+      crew
+        ? `Сейчас в ${city} нет открытых матчей. Матч из чата этой группы не попадает в список, если в строке нет слова «публично»: /new завтра 19:00 <клуб> публично.`
+        : `Сейчас в ${city} нет открытых матчей. Создайте матч с полным названием клуба из списка, и он появится здесь: /new завтра 19:00 <клуб>.`,
     boardOn: (club: string) => `Матч на доске клуба ${club}: его видят те, кто там играет, а постоянные игроки клуба узнают о свободном месте.`,
     boardOff: "Убрать с доски",
     boardOffDone: (club: string) => `Матч убран с доски клуба ${club}. Его найдут только по ссылке.`,
@@ -613,7 +619,10 @@ const STRINGS = {
     coachLinkOther: "Este asistente ya está vinculado a otra cuenta de Telegram.",
     gamesTitle: (city: string) => `Partidos abiertos · ${city}`,
     gamesMine: "Tus próximos partidos",
-    gamesNone: (city: string) => `No hay partidos abiertos en ${city} ahora mismo. Crea uno con el nombre completo de un club de la lista y aparecerá aquí: /new mañana 19:00 <club>.`,
+    gamesNone: (city: string, crew = false) =>
+      crew
+        ? `No hay partidos abiertos en ${city} ahora mismo. Un partido creado en el chat de este grupo no sale en la lista si la línea no dice public: /new mañana 19:00 <club> public.`
+        : `No hay partidos abiertos en ${city} ahora mismo. Crea uno con el nombre completo de un club de la lista y aparecerá aquí: /new mañana 19:00 <club>.`,
     boardOn: (club: string) => `En el tablón de ${club}: lo ven quienes juegan allí, y los habituales del club se enteran de una plaza libre.`,
     boardOff: "Quitar del tablón",
     boardOffDone: (club: string) => `Fuera del tablón de ${club}. Solo lo encuentra quien tiene el enlace.`,
