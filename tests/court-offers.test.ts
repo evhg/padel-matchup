@@ -239,6 +239,36 @@ describe("a free court offered to the players who asked for that hour", () => {
     expect(await offer(NOW)).toBe(0);
   });
 
+  /**
+   * The read of 15 minutes writes every platform's club, the ones that failed too, so the clubs with a
+   * fresh write outgrow the 30 a run takes (production had 27 on 11 October 2026). The run takes the
+   * clubs a want can hear about, never just the newest writes: at 31, the oldest of the three 15-minute
+   * groups fell out of every hourly run, and a want there never heard.
+   */
+  it("finds the club a want names among more fresh clubs than a run takes", async () => {
+    // 31 directory clubs read in the last 31 minutes, beside the club's own feed written now; the want is at the oldest.
+    for (let i = 1; i <= COURT_OFFERS.clubsPerRun + 1; i++) await listed(`read-${String(i).padStart(2, "0")}`, "directory", READ_AT_NOON, at(-i * 60_000));
+    const far = await player("Oldest group");
+    await want(far, { venueSlug: `read-${COURT_OFFERS.clubsPerRun + 1}` });
+    expect(await offer(NOW)).toBe(1);
+    expect(told[0].to.id).toBe(far.id);
+  });
+
+  it("gives no place in the run to a club whose read failed, even one a want names", async () => {
+    // 30 newer clubs whose read failed, each with a want, and one clean read 40 minutes old with a want.
+    for (let i = 1; i <= COURT_OFFERS.clubsPerRun; i++) {
+      const s = `failed-${String(i).padStart(2, "0")}`;
+      await listed(s, "directory", { ...READ_AT_NOON, error: "timeout", slots: [] }, at(-i * 60_000));
+      await want(await player(`Failed ${i}`), { venueSlug: s });
+    }
+    await listed("tropical-padel", "directory", READ_AT_NOON, at(-40 * 60_000));
+    const clean = await player("Clean read");
+    await want(clean, { venueSlug: "tropical-padel" });
+    expect(await offer(NOW)).toBe(1);
+    expect(told[0].to.id).toBe(clean.id);
+    expect(told[0].text).toContain("A court is free at Tropical Padel today at 14:00");
+  });
+
   it("holds the cap, and the rest hear the next hour while the court is still ahead", async () => {
     for (let i = 0; i < COURT_OFFERS.perRun + 5; i++) await want(await player(`Wanter ${i}`));
     expect(await offer(NOW)).toBe(COURT_OFFERS.perRun);
