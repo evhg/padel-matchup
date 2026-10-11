@@ -139,6 +139,7 @@ const STRINGS = {
     newPast: "That was more than a day ago. For a match you already played, give today's or yesterday's date.",
     tooMany: "That is a lot of matches for one day. Try again tomorrow.",
     resultBtn: "🏁 Result",
+    bookCourt: "🎟 Book this court",
     didntPlayBtn: "We didn't play",
     toastDidntPlay: "Marked as cancelled. Nobody is asked for a score.",
     didntPlayDone: (title: string) => `${title}: marked as not played. Nobody is asked for a score.`,
@@ -361,6 +362,7 @@ const STRINGS = {
     newPast: "Это больше суток назад. Для уже сыгранного матча укажите сегодняшнюю или вчерашнюю дату.",
     tooMany: "Слишком много матчей за день. Попробуйте завтра.",
     resultBtn: "🏁 Результат",
+    bookCourt: "🎟 Забронировать корт",
     didntPlayBtn: "Мы не играли",
     toastDidntPlay: "Отмечено как отменённый. Счёт никто не спросит.",
     didntPlayDone: (title: string) => `${title}: отмечено как несыгранный. Счёт никто не спросит.`,
@@ -571,6 +573,7 @@ const STRINGS = {
     newPast: "Eso fue hace más de un día. Para un partido ya jugado, pon la fecha de hoy o de ayer.",
     tooMany: "Son muchos partidos para un día. Inténtalo mañana.",
     resultBtn: "🏁 Resultado",
+    bookCourt: "🎟 Reservar esta pista",
     didntPlayBtn: "No jugamos",
     toastDidntPlay: "Marcado como cancelado. Nadie tiene que poner el resultado.",
     didntPlayDone: (title: string) => `${title}: marcado como no jugado. Nadie tiene que poner el resultado.`,
@@ -740,8 +743,11 @@ export function bookedLine(detail: EventDetail, locale: BotLocale): string | nul
   return `🎟 ${strings(locale).courtBooked(b.name)}`;
 }
 
-/** The one message per match the bot keeps edited. HTML parse mode. */
-export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
+/**
+ * The one message per match the bot keeps edited. HTML parse mode. `booking` is "Book this court", read
+ * by the card sync (`courtBookingFor` in `src/lib/channels/cards.ts`): a URL button, so no link preview.
+ */
+export function renderCard(detail: EventDetail & { booking?: { url: string } | null }, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
   const s = strings(locale);
   // Inside Telegram the match opens in the Mini App (signed in, no browser) once the owner has created it; the web page otherwise.
@@ -801,6 +807,7 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
               { text: s.share, switch_inline_query: ev.code },
               ...(ev.venueMapUrl ? [{ text: s.map, url: ev.venueMapUrl }] : []),
             ],
+            ...(detail.booking && !started ? [[{ text: s.bookCourt, url: detail.booking.url }]] : []),
           ],
         };
   return { text: lines.join("\n"), keyboard, complete };
