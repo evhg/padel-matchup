@@ -1,13 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { players } from "@/db/schema";
-import { zonedTimeToUtc } from "@/lib/dates";
+import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
+import { pasteBooking, type PasteResult } from "@/lib/booking/paste";
+import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
+import { clientKeyFrom } from "@/lib/ipKey";
+import { getSessionPlayer } from "@/lib/session";
 import { setBanter } from "@/lib/domain/banter";
 import { cancelEvent, createEvent, duplicateEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
@@ -170,6 +175,31 @@ const updateSchema = z.object({
   payNote: z.string().max(120).optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateSchema>;
+
+const pasteSchema = z.object({
+  /** What the person pasted: a platform's share text, its link, or both. Read up to 4,000 characters. */
+  text: z.string().max(100_000).transform((t) => t.slice(0, PASTE_TEXT_MAX)),
+  /** Links the message carried apart from its text (a Telegram message's link entities). */
+  links: z.array(z.string().max(2000)).max(20).optional(),
+  /** The browser's zone, for a paste that names no club. */
+  tz: z.string().max(64).optional(),
+});
+
+/**
+ * "Paste your booking" (the owner, 11 October 2026): the share text or the link of a court booked in a
+ * platform's app, read into the create form's fields, and the form's address with them filled. Thirty
+ * reads a day from one address; one read of a platform's link at most (DECIDING rule 35). Writes
+ * nothing but the two counters (`pasteBooking` in src/lib/booking/paste.ts says what each read costs).
+ */
+export async function readBookingAction(raw: { text: string; links?: string[]; tz?: string }): Promise<PasteResult> {
+  const input = pasteSchema.safeParse(raw);
+  if (!input.success) return { ok: false, reason: "empty" };
+  const db = await getDb();
+  const h = await headers();
+  const me = await getSessionPlayer(db);
+  const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? "UTC";
+  return pasteBooking(db, { text: input.data.text, links: input.data.links, tz, rateKey: clientKeyFrom(h), playerId: me?.id ?? null, selfName: me?.displayName ?? null });
+}
 
 /** "Play again": any participant or the organizer clones this event one week later and becomes its organizer. */
 export async function duplicateEventAction(code: string): Promise<ActionResult<{ code: string }>> {

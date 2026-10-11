@@ -8,20 +8,24 @@
  * A host is only a hint: a club on its own domain (book.pop-padel.com is Playbypoint, krosspadel.com
  * is Book & Go) carries `booking_platform`, which wins over the host wherever both exist
  * (`prepareBooking`, `BookingButton`). The research of 10 October 2026 added Book & Go, PodPlay and
- * The Padel Society, and dropped playven.com (gone) and padelmates.com (parked).
+ * The Padel Society, and dropped playven.com (gone) and padelmates.com (parked). On 11 October 2026 a
+ * pasted booking (`src/lib/domain/bookingPaste.ts`) added Setpoint, The Padel Society's share links
+ * (thepadelsociety.app.link, a Branch link) and matchi.com. A platform here with no reader in
+ * `adapters/` is never read by the 15-minute job: its lanes come from `ADAPTERS`, not from this list.
  */
 export type Platform = { id: string; name: string; hosts: readonly string[] };
 
 export const PLATFORMS: readonly Platform[] = [
   { id: "playtomic", name: "Playtomic", hosts: ["playtomic.io", "playtomic.com"] },
-  { id: "matchi", name: "MATCHi", hosts: ["matchi.se"] },
+  { id: "matchi", name: "MATCHi", hosts: ["matchi.se", "matchi.com"] },
   { id: "playbypoint", name: "Playbypoint", hosts: ["playbypoint.com"] },
   { id: "padelmates", name: "Padel Mates", hosts: ["padelmates.se"] },
   { id: "courtsite", name: "Courtsite", hosts: ["courtsite.my", "courtsite.com"] },
   { id: "skedda", name: "Skedda", hosts: ["skedda.com"] },
   { id: "bookandgo", name: "Book & Go", hosts: ["bookandgo.app"] },
   { id: "podplay", name: "PodPlay", hosts: ["podplay.app", "podify.club"] },
-  { id: "padelsociety", name: "The Padel Society", hosts: ["thepadelsociety.co"] },
+  { id: "padelsociety", name: "The Padel Society", hosts: ["thepadelsociety.co", "thepadelsociety.app", "thepadelsociety.app.link"] },
+  { id: "setpoint", name: "Setpoint", hosts: ["getsetpoint.io"] },
 ];
 
 /** The platform behind a booking link, by host (subdomains included), or null for a club's own site. */

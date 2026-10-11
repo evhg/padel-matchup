@@ -58,6 +58,11 @@ export const LIMITS = {
   /** Sign-ins by name into one record in a day, from anywhere: a record is not taken over and over. */
   thatsMePerRecordPerDay: 3,
   clientErrorReportsPerIpPerDay: 60,
+  /**
+   * Pasted bookings read from one address in a day ("Paste your booking"). Each may open one link a
+   * platform gave the person (DECIDING rule 35), so a script cannot make Kicksmash read links for it.
+   */
+  bookingPastesPerIpPerDay: 30,
   feedbackPerIpPerDay: 5,
   // Public API and MCP: open without a key, roomier with one.
   apiKeysPerIpPerDay: 10,

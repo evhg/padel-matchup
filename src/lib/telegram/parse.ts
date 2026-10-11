@@ -47,7 +47,8 @@ export type ParsedNew = {
 // Cyrillic has no \b in JS regexes; these lookarounds are the word boundary for both alphabets.
 const word = (re: string, flags = "iu") => new RegExp(`(?<![\\p{L}\\d])(?:${re})(?![\\p{L}\\d])`, flags);
 
-const WEEKDAYS: Record<string, number> = {
+/** Weekday words in English, Russian and Spanish, to 0 (Sunday) … 6. Shared with the pasted booking's reader (`src/lib/domain/bookingPaste.ts`). */
+export const WEEKDAYS: Record<string, number> = {
   sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6,
   вс: 0, воскресенье: 0, пн: 1, понедельник: 1, вт: 2, вторник: 2, ср: 3, среда: 3, среду: 3, чт: 4, четверг: 4, пт: 5, пятница: 5, пятницу: 5, сб: 6, суббота: 6, субботу: 6,
   // "mar" for martes is left out on purpose: it is the sea in half the court names of a Spanish coast.
