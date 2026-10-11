@@ -770,10 +770,11 @@ Everything in this list is live. The README describes each in detail.
   the tag of the one before. The rule is `src/lib/domain/eventTags.ts`. The API and the MCP take
   `category` and `ageMin` on create (anything else is refused with a 422) and every match object and
   board row carries them. Filters on a listing come later.
-- **A crew's own Telegram group (9 October 2026, migrations 0085 and 0086).** The owner's decision:
+- **A crew's own Telegram group (9 October 2026, migrations 0089 and 0090).** The owner's decision:
   a crew can run its own Telegram group with the bot as an admin, opted in group by group (DECIDING
-  rule 31). A crew's admin finds "Run a Telegram group for this crew" on its page: one link picks
-  or makes a group and adds the bot as an admin with two rights (pin, invite links).
+  rule 31). A crew's admin finds "Run a Telegram group for this crew" on its page, under a line that
+  asks for a new group only for this crew's padel: one link picks the group and adds the bot as an
+  admin with two rights (pin, invite links).
   The bot ties the group to the crew, pins its notice ("It reads messages in this group … It never
   keeps the text"), and makes the invite link the crew page then shows its members ("Join the crew's
   Telegram group"). From then on "in", "+1", "я в деле", "me apunto" take the seat of the one open
@@ -787,6 +788,15 @@ Everything in this list is live. The README describes each in detail.
   sender's, by name or by its area, and a listed club in its zone by the club's own words, never by
   a city or an area alone. /quiet from a group admin stops it acting on words. No message text is
   stored anywhere.
+  Changed on 11 October 2026, after an audit: the first group tied stays the crew's (a second group
+  and another crew's link are refused until /quiet); the bot stops reading when it loses the right to
+  pin, and the invite link follows the right to invite and goes at /quiet; the pinned example asks at
+  the crew's own court; the bot also reads the question asked after the match ("Let's play Thursday
+  7pm at Warehaus, who's in?"); a seat taken by a word or a tap sends that person alone the calendar
+  feed's button, once; the card carries "Book this court"; and a /new line names a listed club only in
+  full, never by a city, an island, a district or a word such as "Asia" (the owner, 10 October 2026:
+  "Yes, but only on the club's own words"). Such a /new match goes on the club's board, where the
+  club's regulars hear about a free spot, and the bot's answer has one tap to take it off.
 - **Fixed pairs (10 October 2026, decision F, migrations 0091 and 0092).** The owner: "Fixed pairs in
   social tournaments (two partners play every round together), as Phuket nights often do." The create
   form's format step has "Fixed pairs", off by default, for americano, mexicano and King of the Court,
@@ -1021,10 +1031,12 @@ linked and four have an email address.
    a 24-hour window, and is not counted against the 250-a-day limit, because that limit rations only
    the messages we start. Our replies in that window are charged from 1 October 2026 (Meta, read 10
    October 2026; docs/OPERATING.md). Since 10 October 2026 the JOIN message takes the seat at once. That first message also hands over the phone number with permission, so nothing has to be
-   collected in advance. Explicitly **never** a card channel: Meta's Groups API only makes its own
-   groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
-   and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
-   A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
+   collected in advance. The thread is not a card channel, and the crew's own chat never gets a bot:
+   Meta's Groups API makes only the business's own groups, joined by an invite link, eight people at
+   most, with an Official Business Account and no edit of a message ("Next, in order", item 6). What the thread
+   loses is real and worth saying: nobody sees "three of four" without tapping, and the group cannot
+   enter a score. A separate adapter: the `CardChannel` interface does not fit the thread and must not
+   be bent to it.
    The piece of code found missing on 25 September 2026 is built (26 September, under Built): the
    match's changes, a free spot, the score ask and the result card now reach a WhatsApp player as four
    utility templates, and a send that cannot go falls through to email and push. What remains is the
@@ -1062,7 +1074,14 @@ linked and four have an email address.
    than ours to invent.
 5. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
+6. **A crew's own WhatsApp group (Meta's Groups API).** The owner's decision of 9 October 2026 was
+   "Telegram crew group now, Meta clock starts today". A business cannot join a group that somebody
+   else made. Meta's Groups API lets the business make its own group, and players join it by an
+   invite link. The API needs an Official Business Account, allows 8 people at most, and allows no
+   edit of a message (Meta's Groups API page, read 11 October 2026). So the card would be a new
+   message at each change that matters, as on LINE (`canEdit: false`). This waits for the owner: the
+   Meta business portfolio, the number, and the request for an Official Business Account. Nothing in
+   the repository or in production shows that these steps started.
 
 ## Open, small, and ready for the next session
 
