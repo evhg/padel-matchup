@@ -107,6 +107,8 @@ export function EventFields({
   showType = true,
   patterns = [],
   hasLevel = true,
+  missing = [],
+  check = [],
   startLocked = false,
 }: {
   values: EventFormValues;
@@ -116,10 +118,26 @@ export function EventFields({
   patterns?: TimePatternInput[];
   /** False when the organizer has no level yet: a range then also asks for theirs. */
   hasLevel?: boolean;
+  /** A pasted booking's gaps: each one is marked, in words, until the organiser fills it. */
+  missing?: readonly ("venue" | "date" | "time")[];
+  /** A pasted booking's guesses: the organiser's last venue, a date its weekday disagrees with. Each is marked until the organiser changes it. */
+  check?: readonly ("venue" | "date")[];
   /** The match has started and this viewer is not the organiser (`mayMoveStart`): the day, the time and the zone show, and do not change. */
   startLocked?: boolean;
 }) {
   const t = useTranslations();
+  const lacks = {
+    venue: missing.includes("venue") && !values.venueName.trim(),
+    date: missing.includes("date") && !values.date,
+    time: missing.includes("time") && !values.time,
+  };
+  const gap = "ring-2 ring-warn";
+  // What the paste filled and the organiser must look at: marked while it is still the value the paste gave.
+  const [pasted] = useState({ venue: values.venueName, date: values.date });
+  const doubt = {
+    venue: check.includes("venue") && values.venueName === pasted.venue,
+    date: check.includes("date") && values.date === pasted.date,
+  };
   const locale = useLocale();
   const [tzOpen, setTzOpen] = useState(false);
   // Until the organiser taps a length, it follows the type: 90 for a match, 120 for a tournament.
@@ -269,13 +287,24 @@ export function EventFields({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{t("create.date")}</label>
-          <input className="input" type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} disabled={startLocked} required />
+          <input className={`input ${lacks.date || doubt.date ? gap : ""}`} type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} disabled={startLocked} required aria-describedby={lacks.date ? "paste-no-date" : doubt.date ? "paste-check-day" : undefined} />
         </div>
         <div>
           <label className="label">{t("create.time")}</label>
-          <input className="input" type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} disabled={startLocked} required />
+          <input className={`input ${lacks.time ? gap : ""}`} type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} disabled={startLocked} required aria-describedby={lacks.time ? "paste-no-time" : undefined} />
         </div>
       </div>
+      {(lacks.date || lacks.time) && (
+        <div className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-missing-when">
+          {lacks.date && <p id="paste-no-date">✏️ {t("create.pasteNoDay")}</p>}
+          {lacks.time && <p id="paste-no-time">✏️ {t("create.pasteNoTime")}</p>}
+        </div>
+      )}
+      {doubt.date && (
+        <p id="paste-check-day" className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-check-day">
+          ✏️ {t("create.pasteCheckDay")}
+        </p>
+      )}
       <div className="-mt-3 text-sm text-muted">
         {t("create.timezone")}:{" "}
         {startLocked ? (
@@ -338,7 +367,19 @@ export function EventFields({
         </div>
       </div>
 
-      <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />
+      <div>
+        <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />
+        {lacks.venue && (
+          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-missing-club">
+            ✏️ {t("create.pasteNoClub")}
+          </p>
+        )}
+        {doubt.venue && (
+          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-check-club">
+            ✏️ {t("create.pasteCheckClub")}
+          </p>
+        )}
+      </div>
 
       <div className="-mt-2">
         <label className="label">

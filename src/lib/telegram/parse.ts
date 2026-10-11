@@ -47,7 +47,8 @@ export type ParsedNew = {
 // Cyrillic has no \b in JS regexes; these lookarounds are the word boundary for both alphabets.
 const word = (re: string, flags = "iu") => new RegExp(`(?<![\\p{L}\\d])(?:${re})(?![\\p{L}\\d])`, flags);
 
-const WEEKDAYS: Record<string, number> = {
+/** Weekday words in English, Russian and Spanish, to 0 (Sunday) … 6. Shared with the pasted booking's reader (`src/lib/domain/bookingPaste.ts`). */
+export const WEEKDAYS: Record<string, number> = {
   sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, wednesday: 3, thu: 4, thur: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6,
   вс: 0, воскресенье: 0, пн: 1, понедельник: 1, вт: 2, вторник: 2, ср: 3, среда: 3, среду: 3, чт: 4, четверг: 4, пт: 5, пятница: 5, пятницу: 5, сб: 6, суббота: 6, субботу: 6,
   // "mar" for martes is left out on purpose: it is the sea in half the court names of a Spanish coast.
@@ -330,6 +331,9 @@ const placeWords = (s: string) =>
     .map((w) => LATIN[w] ?? w);
 /** The words of a name that tell one court from another: no generic word, no city, nothing under three letters. */
 const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENERIC.has(w) && !CITY_NAMES.has(w));
+
+/** The words of a name that tell one court from another, as `matchVenue` reads them ("WAREHAUS.club" → ["warehaus"]). */
+export const distinctWords = (text: string): string[] => distinct(placeWords(text));
 
 /** True when the words name a place at all ("Bangtao", "Phuket", "the beers"); false for nothing but small or generic words ("the", "padel"). */
 export const namesAPlace = (text: string | null | undefined): boolean => Boolean(text) && placeWords(text!).some((w) => w.length >= 3 && !GENERIC.has(w));

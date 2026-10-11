@@ -313,6 +313,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and `booking_platform` by hand, and the directory import writes neither, so fifty green tests
   described a job that read almost no club (10 October 2026). Run the import's own statement in the
   test (`node scripts/import-clubs.mjs --sql`) before asking which rows a query finds.
+- **The browser suites' server has none of the directory's clubs.** No file in `drizzle/` inserts
+  the directory; the ones that name it (0081, 0097) only update rows production already holds. So a
+  suite's PGlite has no WAREHAUS.club and no club but the ones a suite claims. A paste of "Warehaus Sun 12 Oct …" that read the club in every unit test (each seeds
+  its own rows) came back with the venue empty in the browser (11 October 2026). A browser check that
+  needs a club the reader knows uses the one `e2e/clubs.mjs` claims, and a check of a club nobody
+  knows says so in its comment.
 - **A fake clock in whole numbers hides what the real one does.** The court-time frame gave each
   request the time left to its deadline as its timeout, and `AbortSignal.timeout` throws on anything
   but a whole number. `performance.now()` always carries a fraction, so every request that started in a
@@ -341,6 +347,20 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
   MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
   a stub that set `url`, passed. Test a reader through the frame that production calls it through.
+- **A timeout bounds the wait, not the work.** The read of a pasted link stopped its network at four
+  seconds, and then parsed the 256 KB it had: one long `<meta` tag took 41 s of CPU, because
+  `<meta\b[^>]*>` and an unbounded attribute name backtrack (11 October 2026). A parser of a
+  stranger's page finds each end once (`indexOf`) and bounds every repeat; `tests/booking-unfurl.test.ts`
+  times four pages built to stall it.
+- **A host on an allowlist lends us to whoever holds its zone.** `thepadelsociety.app` went into
+  `PLATFORMS`, and the only place the name appeared was the app's Android package id
+  (`com.thepadelsociety.app`). A package id is not a domain, and that domain's name servers did not answer. The check reads the host's name, never its
+  address, so the zone's holder picks where the server connects. A host joins the list only when the
+  platform is shown to hold it.
+- **A second read at a later clock is another read.** The bot's "Create match" read the pasted words
+  again at the tap, so "Sunday 18:00" pasted at 17:50 and tapped at 18:01 made next Sunday's match, and
+  a link its words left incomplete was fetched twice. A button carries what its answer showed
+  (`pb:c:<start>`), and the second read uses the answer's clock and refuses another start.
 - **A header a test passes by hand is not a header the page reads.** The view counter skipped a
   request with the `RSC` header, and its unit test passed `rsc: true` itself. Next.js deletes `RSC`
   and the other router headers before `headers()` returns (`getHeaders` in
@@ -511,6 +531,11 @@ Wall clock first, credits second. What actually moved it, measured:
   prove where it landed: `node -e 'JSON.parse(...).email.telegramLine'` must not be undefined. Move a
   stray key by string edit (the line out of the nested block, then in under the section's opening
   line), never by round-tripping the file.
+- **Under the `i` flag, `\p{Lu}` takes any letter.** The pasted booking's reader asked for a capital
+  with `/(\p{Lu}…)/iu` so that "with danny" would not read "danny" as a player, and `/\p{Lu}/iu.test("a")`
+  is true: the case-insensitive flag folds a property class too. Check a capital in code, with a
+  pattern that has no `i` (`/^\p{Lu}/u.test(piece)`), and let the big pattern find the place only
+  (11 October 2026, `src/lib/domain/bookingPaste.ts`).
 - **A backslash in a raw `sql` template is one edit away from gone.** `'\\s+'` in the source is `\s+`
   in the query; one script edit wrote `'\s+'`, which a JavaScript template reads as a plain `s`, so
   the same-name match collapsed every letter s instead of the spaces and a test caught it. Use the

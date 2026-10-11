@@ -8,9 +8,9 @@ import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { listedClubNames } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
-import { getEventByCode, getVenues } from "@/lib/domain/queries";
+import { settleNewMatch } from "@/lib/domain/newMatch";
+import { getEventByCode, getVenues, type EventDetail } from "@/lib/domain/queries";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
-import { joinEvent } from "@/lib/domain/slots";
 import { sendCalendarInvite } from "@/lib/notify";
 import { answerCallbackQuery, deleteMessage, editMessageText, esc, sendMessage, telegramBotId, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
 import { strings, type BotLocale, type BotStrings } from "../card";
@@ -38,8 +38,23 @@ export async function knownVenues(db: Db, chat: TelegramChat, from: TgUser, tz: 
   return { venues, clubs: await listedClubNames(db, tz) };
 }
 
-/** The creation itself, shared by the one-line command, the tap-through, the reply steps and a crew's "who's in …?": rate limit, event, organizer in, chat defaults, card, webhook. */
-export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input: ChatMatchInput & { startsAt: Date; /** A free court's length (the best times); the default otherwise. */ durationMinutes?: number | null }, tz: string, ctx: OpContext, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<{ ok: true; ev: Event } | { ok: false; reason: "past" | "too_many" | "invalid" }> {
+/** What a pasted booking adds to a chat's match: the names already playing (held as reserved spots) and the court the organiser booked. */
+type ChatMatchExtras = {
+  /** A free court's length (the best times) or a booking's; the default otherwise. */
+  durationMinutes?: number | null;
+  /** Names to hold as reserved spots, as the web form holds them (`settleNewMatch`). */
+  names?: readonly string[] | null;
+  /** The organiser booked the court before the match existed: it is marked booked by them. */
+  booked?: boolean;
+};
+
+/**
+ * The creation itself, shared by the one-line command, the tap-through, the reply steps, a crew's
+ * "who's in …?", the best times and a pasted booking: rate limit, event, then what the web's create
+ * does once a match exists (`settleNewMatch`: the organiser in, the names held, the court marked
+ * booked), chat defaults, card, webhook. The card is drawn after all of it, so it is right the first time.
+ */
+export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser, input: ChatMatchInput & ChatMatchExtras & { startsAt: Date }, tz: string, ctx: OpContext, o: { replyTo?: number | null; threadId?: number | null } = {}): Promise<{ ok: true; ev: Event; detail: EventDetail; held: number; booked: boolean } | { ok: false; reason: "past" | "too_many" | "invalid" }> {
   const now = new Date();
   if (input.startsAt.getTime() < now.getTime() - DAY_MS) return { ok: false, reason: "past" };
   const player = await findOrCreateTelegramPlayer(db, from);
@@ -67,18 +82,20 @@ export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser
   } catch {
     return { ok: false, reason: "invalid" };
   }
-  const seated = await joinEvent(db, { eventId: ev.id, playerId: player.id }).catch(() => null);
+  const settled = await settleNewMatch(db, { event: ev, organiser: player, names: input.names ?? undefined, booked: input.booked });
   await rememberChatDefaults(db, chat, ev);
   const detail = (await getEventByCode(db, ev.code))!;
   // The organizer's own calendar invitation, as from the web form (the match page says it was sent, so it is): after the reply, only when they hold a seat.
-  if (seated?.outcome === "joined") {
+  if (settled.joined) {
     ctx.afterwards(async () => {
       await sendCalendarInvite(db, ev, player, "joined", detail).catch(() => undefined);
     });
   }
   await postCard(db, detail, chat, o);
-  ctx.emit("match.created", ev.code);
-  return { ok: true, ev };
+  // One event, and the booked court rides on it, as on the web: a second event would sync every card twice.
+  if (settled.booked) ctx.emit("match.created", ev.code, { courtBooked: true });
+  else ctx.emit("match.created", ev.code);
+  return { ok: true, ev, detail, held: settled.held, booked: settled.booked };
 }
 
 const formKeyboard = (chat: TelegramChat, s: BotStrings): InlineKeyboard => {

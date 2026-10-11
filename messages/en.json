@@ -122,7 +122,16 @@
     "carriedTitle": "{count, plural, one {# player from your schedule} other {# players from your schedule}}",
     "carriedHelp": "Each one takes a spot and gets a link to pass on. You can change the list afterwards.",
     "doorFindCoach": "Find a coach: prices, free hours, book a lesson",
-    "feedbackHelp": "Kicksmash is built from what players say. Tell us one thing, and you hear what changed."
+    "feedbackHelp": "Kicksmash is built from what players say. Tell us one thing, and you hear what changed.",
+    "pasteDoor": "Booked already? Paste it",
+    "pasteHint": "Paste the booking link and the text from your booking app.",
+    "pasteRead": "Read my booking",
+    "pasteReading": "Reading your booking…",
+    "pasteEmpty": "Paste the link or the text of your booking first.",
+    "pasteLimit": "You read many bookings here today. Fill in the form below, or paste again tomorrow.",
+    "pasteFailed": "We could not read it just now. Fill in the form below, or try again.",
+    "carriedFromBooking": "{count, plural, one {# player from your booking} other {# players from your booking}}",
+    "pasteNothing": "We found no booking in it. Paste the link or the text from your booking app."
   },
   "create": {
     "title": "New match",
@@ -216,7 +225,14 @@
     "freeThenOn": "✓ {platform} shows a free court then.",
     "busyThenOn": "{platform} shows no free court then.",
     "freeThenOnClub": "✓ {platform} shows a free court then ({time} at the club).",
-    "busyThenOnClub": "{platform} shows no free court then ({time} at the club)."
+    "busyThenOnClub": "{platform} shows no free court then ({time} at the club).",
+    "bookedByMe": "Court booked by me",
+    "bookedByMeHelp": "The match page tells the players the court is booked.",
+    "pasteNoDay": "Your booking did not give the day. Pick it here.",
+    "pasteNoTime": "Your booking did not give the time. Pick it here.",
+    "pasteNoClub": "Your booking did not name the club. Pick it here.",
+    "pasteCheckClub": "We took the club of your last match. Check it here.",
+    "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day."
   },
   "share": {
     "title": "Your match is live",
@@ -919,7 +935,8 @@
     "privacyLink": "The full privacy page →",
     "termsLink": "The full terms →",
     "botTitle": "KicksmashBot",
-    "botBody": "KicksmashBot reads the free court times that booking platforms such as Playtomic and MATCHi show on a club's public page, so players can see when a court is free. It reads today's times every 15 minutes at most and the next two days once an hour at most, one request a second, with its name on each request. It never signs in, books or pays, and it stops when a platform blocks it. To ask it to read less, or to stop, write to us:"
+    "botBody": "KicksmashBot reads the free court times that booking platforms such as Playtomic and MATCHi show on a club's public page, so players can see when a court is free. It reads today's times every 15 minutes at most and the next two days once an hour at most, one request a second, with its name on each request. It never signs in, books or pays, and it stops when a platform blocks it. To ask it to read less, or to stop, write to us:",
+    "botPaste": "When you paste a booking link into Kicksmash, it reads that one link once, the way a chat app reads a link to show its preview. It does not read a platform that blocked it or asked it to stop. It keeps only the match that you make from it."
   },
   "notices": {
     "title": "Notices",

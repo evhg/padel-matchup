@@ -909,6 +909,20 @@ Everything in this list is live. The README describes each in detail.
   booking links and platforms (Book & Go, PodPlay and The Padel Society are recognised now), which
   migration 0097 writes to the directory's own rows. Nothing books or pays: a player does, in the
   club's own app.
+- **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
+  app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
+  link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
+  fills the club, the day, the time, the length, the court, the price and the players.
+  `src/lib/domain/bookingPaste.ts` is the reader. `src/lib/booking/unfurl.ts` reads a pasted link once,
+  as a chat app's preview robot reads it (DECIDING rule 35). It skips a platform that rests after a
+  block or that a switch holds. On the first page, "Booked already? Paste it" opens the form filled. The
+  form marks what the booking left out and what to check, and keeps the match off the venue board. The
+  create button holds the players and marks the court booked by the organiser ("Court booked by me").
+  In a private chat, the bot says what it read. "Create match" makes the match when the person's own
+  words gave the club, the day and the time. The answer then becomes the match's link, ready for the
+  WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
+  Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
+  Its preview gives the match id only, so the words that the person pastes carry the rest.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
   37). Production had one group of four or five in Phuket, every full match made by hand with the same

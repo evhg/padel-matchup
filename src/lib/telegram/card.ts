@@ -176,7 +176,7 @@ const STRINGS = {
     feedbackAdded: "Added to your note, thank you.",
     toastSaved: "Saved ✅",
     share: "📤 Share",
-    privateHelp: "Here you can also:\n/new tomorrow 19:00 Rawai creates a match; share its card into any chat with 📤\n/games shows open matches near you (add a city: /games phuket)\nPaste a kicksma.sh link or a code and I show the card.\n/coach: your lessons book, if you coach (students book themselves, packages count themselves).",
+    privateHelp: "Here you can also:\n/new tomorrow 19:00 Rawai creates a match; share its card into any chat with 📤\n/games shows open matches near you (add a city: /games phuket)\nPaste a kicksma.sh link or a code and I show the card.\nPaste your court booking (its link or its text) and I make the match.\n/coach: your lessons book, if you coach (students book themselves, packages count themselves).",
     coachLink: "Your assistant: students book available times themselves, packages count themselves, every reschedule happens while you coach. Open it here; setup takes a minute.",
     coachOpen: "Open my assistant",
     coachLinkExpired: "That link has expired. Open kicksma.sh/coach and tap the button again.",
@@ -208,6 +208,33 @@ const STRINGS = {
     timesExists: "That match is already on.",
     timesGone: "That time is no longer on offer. Ask again for the free times.",
     courtBooked: (name: string | null) => (name ? `Court booked ✓ (by ${name})` : "Court booked ✓"),
+    // A pasted booking in the private chat (src/lib/telegram/handlers/paste.ts): what was read, then one tap.
+    pasteCreate: "✅ Create match",
+    pasteEdit: "✏️ Edit first",
+    pasteWith: (names: string) => `with ${names}`,
+    pasteCourt: (court: string) => `court ${court}`,
+    pasteAnd: " and ",
+    pasteOr: " or ",
+    pasteLinkOf: (platform: string) => `${platform} link`,
+    pasteFields: { club: "the club", date: "the day", time: "the time" },
+    pasteMissing: (fields: string) => `It does not say ${fields}. Tap Edit first and fill it in.`,
+    pasteReady: "Tap Create match, or Edit first to change something.",
+    pasteMade: (spots: number) =>
+      spots === 1
+        ? "Your match is ready ✓ One spot is open. Paste this link into the group where you look for your fourth player:"
+        : spots > 1
+          ? `Your match is ready ✓ ${spots} spots are open. Paste this link into the group where you look for players:`
+          : "Your match is ready ✓ The line-up is full. This is its link:",
+    pasteExists: "You already have this match. This is its link:",
+    pasteNotYours: "This is not your booking.",
+    pasteLost: "I cannot see your booking now. Paste it again.",
+    pasteIncomplete: "This time I could not read the club, the day and the time. Tap Edit first.",
+    pasteLimit: "You pasted thirty bookings today. That is the limit. Try again tomorrow.",
+    // The answer offers Edit first alone when the organiser must look at something before the match is made.
+    pasteLastClub: (name: string) => `${name} (your last club?)`,
+    pasteCheckClub: "I took the club of your last match. Tap Edit first and check it.",
+    pasteCheckDay: "The weekday and the date in your booking do not match. Tap Edit first and check the day.",
+    pasteCheckLink: "Part of it came from the link. Tap Edit first, check it and create the match.",
   },
   ru: {
     match: "Падел-матч",
@@ -356,7 +383,7 @@ const STRINGS = {
     feedbackAdded: "Добавил к вашей заметке, спасибо.",
     toastSaved: "Сохранено ✅",
     share: "📤 Поделиться",
-    privateHelp: "Здесь тоже можно:\n/new завтра 19:00 Равай создаёт матч; карточку можно отправить в любой чат через 📤\n/games показывает открытые матчи рядом (с городом: /games пхукет)\nВставьте ссылку kicksma.sh или код, и я покажу карточку\n/coach: ваша книга занятий, если вы тренер (ученики записываются сами, абонементы считаются сами).",
+    privateHelp: "Здесь тоже можно:\n/new завтра 19:00 Равай создаёт матч; карточку можно отправить в любой чат через 📤\n/games показывает открытые матчи рядом (с городом: /games пхукет)\nВставьте ссылку kicksma.sh или код, и я покажу карточку\nВставьте бронь корта (ссылку или текст), и я создам матч\n/coach: ваша книга занятий, если вы тренер (ученики записываются сами, абонементы считаются сами).",
     coachLink: "Ваш ассистент: ученики сами записываются на доступное время, абонементы считаются сами, все переносы — пока вы тренируете. Откройте здесь; настройка за минуту.",
     coachOpen: "Открыть ассистента",
     coachLinkExpired: "Эта ссылка устарела. Откройте kicksma.sh/coach и нажмите кнопку ещё раз.",
@@ -384,6 +411,31 @@ const STRINGS = {
     timesGone: "Это время больше не предлагается. Спросите свободное время ещё раз.",
     timesExists: "Этот матч уже есть.",
     courtBooked: (name: string | null) => (name ? `Корт забронирован ✓ (${name})` : "Корт забронирован ✓"),
+    pasteCreate: "✅ Создать матч",
+    pasteEdit: "✏️ Сначала изменить",
+    pasteWith: (names: string) => `игроки: ${names}`,
+    pasteCourt: (court: string) => `корт ${court}`,
+    pasteAnd: " и ",
+    pasteOr: " и ",
+    pasteLinkOf: (platform: string) => `Ссылка ${platform}`,
+    pasteFields: { club: "клуб", date: "день", time: "время" },
+    pasteMissing: (fields: string) => `В брони не указано: ${fields}. Нажмите «Сначала изменить» и заполните.`,
+    pasteReady: "Нажмите «Создать матч» или «Сначала изменить», если нужно что-то поправить.",
+    pasteMade: (spots: number) =>
+      spots === 1
+        ? "Матч готов ✓ Свободно одно место. Вставьте эту ссылку в группу, где вы ищете четвёртого игрока:"
+        : spots > 1
+          ? `Матч готов ✓ Свободных мест: ${spots}. Вставьте эту ссылку в группу, где вы ищете игроков:`
+          : "Матч готов ✓ Состав собран. Вот ссылка на матч:",
+    pasteExists: "Этот матч у вас уже есть. Вот ссылка на него:",
+    pasteNotYours: "Это не ваша бронь.",
+    pasteLost: "Я не вижу вашу бронь. Вставьте её ещё раз.",
+    pasteIncomplete: "В этот раз я не прочитал клуб, день и время. Нажмите «Сначала изменить».",
+    pasteLimit: "Сегодня вы вставили тридцать броней. Это предел. Попробуйте завтра.",
+    pasteLastClub: (name: string) => `${name} (ваш последний клуб?)`,
+    pasteCheckClub: "Я взял клуб вашего прошлого матча. Нажмите «Сначала изменить» и проверьте его.",
+    pasteCheckDay: "День недели и дата в вашей брони не совпадают. Нажмите «Сначала изменить» и проверьте день.",
+    pasteCheckLink: "Часть данных взята из ссылки. Нажмите «Сначала изменить», проверьте их и создайте матч.",
   },
   es: {
     match: "Partido de pádel",
@@ -532,7 +584,7 @@ const STRINGS = {
     feedbackAdded: "Añadido a tu nota, gracias.",
     toastSaved: "Guardado ✅",
     share: "📤 Compartir",
-    privateHelp: "Aquí también puedes:\n/new mañana 19:00 Rawai crea un partido; comparte su tarjeta en cualquier chat con 📤\n/games muestra partidos abiertos cerca de ti (añade una ciudad: /games phuket)\nPega un enlace de kicksma.sh o un código y te muestro la tarjeta.\n/coach: tu agenda de clases, si entrenas (los alumnos reservan solos, los bonos se cuentan solos).",
+    privateHelp: "Aquí también puedes:\n/new mañana 19:00 Rawai crea un partido; comparte su tarjeta en cualquier chat con 📤\n/games muestra partidos abiertos cerca de ti (añade una ciudad: /games phuket)\nPega un enlace de kicksma.sh o un código y te muestro la tarjeta.\nPega tu reserva de pista (el enlace o el texto) y creo el partido.\n/coach: tu agenda de clases, si entrenas (los alumnos reservan solos, los bonos se cuentan solos).",
     coachLink: "Tu asistente: los alumnos reservan las horas libres solos, los bonos se cuentan solos, cada cambio ocurre mientras entrenas. Ábrelo aquí; la configuración lleva un minuto.",
     coachOpen: "Abrir mi asistente",
     coachLinkExpired: "Ese enlace ha caducado. Abre kicksma.sh/coach y toca el botón otra vez.",
@@ -559,6 +611,31 @@ const STRINGS = {
     timesGone: "Esa hora ya no está disponible. Vuelve a pedir los horarios libres.",
     timesExists: "Ese partido ya existe.",
     courtBooked: (name: string | null) => (name ? `Pista reservada ✓ (por ${name})` : "Pista reservada ✓"),
+    pasteCreate: "✅ Crear partido",
+    pasteEdit: "✏️ Editar antes",
+    pasteWith: (names: string) => `con ${names}`,
+    pasteCourt: (court: string) => `pista ${court}`,
+    pasteAnd: " y ",
+    pasteOr: " ni ",
+    pasteLinkOf: (platform: string) => `Enlace de ${platform}`,
+    pasteFields: { club: "el club", date: "el día", time: "la hora" },
+    pasteMissing: (fields: string) => `No dice ${fields}. Toca Editar antes y complétalo.`,
+    pasteReady: "Toca Crear partido, o Editar antes para cambiar algo.",
+    pasteMade: (spots: number) =>
+      spots === 1
+        ? "Tu partido está listo ✓ Queda una plaza. Pega este enlace en el grupo donde buscas al cuarto jugador:"
+        : spots > 1
+          ? `Tu partido está listo ✓ Quedan ${spots} plazas. Pega este enlace en el grupo donde buscas jugadores:`
+          : "Tu partido está listo ✓ El grupo está completo. Este es su enlace:",
+    pasteExists: "Ya tienes este partido. Este es su enlace:",
+    pasteNotYours: "Esta reserva no es tuya.",
+    pasteLost: "Ahora no veo tu reserva. Pégala otra vez.",
+    pasteIncomplete: "Esta vez no pude leer el club, el día y la hora. Toca Editar antes.",
+    pasteLimit: "Hoy pegaste treinta reservas. Es el límite. Prueba mañana.",
+    pasteLastClub: (name: string) => `${name} (¿tu último club?)`,
+    pasteCheckClub: "Tomé el club de tu último partido. Toca Editar antes y compruébalo.",
+    pasteCheckDay: "El día de la semana y la fecha de tu reserva no coinciden. Toca Editar antes y comprueba el día.",
+    pasteCheckLink: "Una parte salió del enlace. Toca Editar antes, compruébala y crea el partido.",
   },
 } as const;
 

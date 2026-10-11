@@ -16,8 +16,10 @@ import { detectPlatform, platformById } from "./platforms";
  *   a parameter the platform stops reading costs one tap and nothing else.
  * - "club": the club's booking page as it is (else its website).
  *
- * Pure: no network. Kicksmash's server never opens these links; the player's browser does. A chat
- * message that ever carries one turns its link preview off, because a preview is a fetch.
+ * Pure: no network. Kicksmash's server never opens a "Book this court" link; the player's browser
+ * does. A chat message that ever carries one turns its link preview off, because a preview is a fetch.
+ * The server opens a booking link in one case only: a person pasted it, and it is read once, as a chat
+ * app's preview robot reads it (`readLinkPreview` in `./unfurl.ts`, DECIDING rule 35).
  */
 export type Prepared = "checkout" | "slot" | "club";
 export type BookingSlot = { start: Date; minutes: number; tz: string; court?: string | null };

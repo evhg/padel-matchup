@@ -122,7 +122,16 @@
     "carriedTitle": "{count, plural, one {# jugador de tu cuadro} other {# jugadores de tu cuadro}}",
     "carriedHelp": "Cada uno ocupa una plaza y recibe un enlace para reenviar. Puedes cambiar la lista después.",
     "doorFindCoach": "Encuentra un entrenador: precios, horas libres, reserva una clase",
-    "feedbackHelp": "Kicksmash se construye con lo que dicen los jugadores. Di una cosa y sabrás qué cambió."
+    "feedbackHelp": "Kicksmash se construye con lo que dicen los jugadores. Di una cosa y sabrás qué cambió.",
+    "pasteDoor": "¿Ya reservaste? Pega tu reserva",
+    "pasteHint": "Pega el enlace de la reserva y el texto de tu app de reservas.",
+    "pasteRead": "Leer mi reserva",
+    "pasteReading": "Leyendo tu reserva…",
+    "pasteEmpty": "Primero pega el enlace o el texto de tu reserva.",
+    "pasteLimit": "Hoy ya leíste muchas reservas aquí. Rellena el formulario de abajo o pégala mañana.",
+    "pasteFailed": "Ahora no pudimos leerla. Rellena el formulario de abajo o vuelve a intentarlo.",
+    "carriedFromBooking": "{count, plural, one {# jugador de tu reserva} other {# jugadores de tu reserva}}",
+    "pasteNothing": "No encontramos ninguna reserva ahí. Pega el enlace o el texto de tu app de reservas."
   },
   "create": {
     "title": "Nuevo partido",
@@ -216,7 +225,14 @@
     "freeThenOn": "✓ {platform} muestra una pista libre a esa hora.",
     "busyThenOn": "{platform} no muestra ninguna pista libre a esa hora.",
     "freeThenOnClub": "✓ {platform} muestra una pista libre a esa hora (las {time} en el club).",
-    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club)."
+    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club).",
+    "bookedByMe": "Pista reservada por mí",
+    "bookedByMeHelp": "La página del partido dice a los jugadores que la pista está reservada.",
+    "pasteNoDay": "Tu reserva no dice el día. Elígelo aquí.",
+    "pasteNoTime": "Tu reserva no dice la hora. Elígela aquí.",
+    "pasteNoClub": "Tu reserva no nombra el club. Elígelo aquí.",
+    "pasteCheckClub": "Tomamos el club de tu último partido. Compruébalo aquí.",
+    "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -919,7 +935,8 @@
     "privacyLink": "La página completa de privacidad →",
     "termsLink": "Las condiciones completas →",
     "botTitle": "KicksmashBot",
-    "botBody": "KicksmashBot lee las horas de pista libres que las plataformas de reservas, como Playtomic y MATCHi, muestran en la página pública de un club, para que los jugadores vean cuándo hay una pista libre. Lee las horas de hoy como mucho cada 15 minutos y las de los dos días siguientes como mucho una vez por hora, con una petición por segundo y su nombre en cada petición. Nunca inicia sesión, ni reserva, ni paga, y se detiene si una plataforma lo bloquea. Para pedirle que lea menos o que pare, escríbenos:"
+    "botBody": "KicksmashBot lee las horas de pista libres que las plataformas de reservas, como Playtomic y MATCHi, muestran en la página pública de un club, para que los jugadores vean cuándo hay una pista libre. Lee las horas de hoy como mucho cada 15 minutos y las de los dos días siguientes como mucho una vez por hora, con una petición por segundo y su nombre en cada petición. Nunca inicia sesión, ni reserva, ni paga, y se detiene si una plataforma lo bloquea. Para pedirle que lea menos o que pare, escríbenos:",
+    "botPaste": "Cuando pegas en Kicksmash el enlace de una reserva, lo lee una sola vez, igual que una app de chat lee un enlace para mostrar su vista previa. No lee una plataforma que lo bloqueó o le pidió parar. Solo guarda el partido que creas con ella."
   },
   "notices": {
     "title": "Avisos",
