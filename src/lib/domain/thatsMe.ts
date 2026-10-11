@@ -367,8 +367,8 @@ export async function settleFoldSeats(db: Db, eventId: string, keepId: string, d
 
 export type ThatsMeResult = { ok: true; player: Player; folded: boolean; seats: SeatChange | null } | { ok: false; reason: ThatsMeRefusal | "not_found" };
 
-/** A record that gained a way to be reached or proved since the rule read it. */
-const reachedSince = (p: Player) => Boolean(p.email || p.recoveryEmail || p.phone || p.telegramId || p.discordId || p.lineId || p.publicProfile);
+/** A record that gained a way to be reached or proved since the rule read it: asked just before a sign-in by name writes (`commitThatsMe`, `takeHeldLink`). */
+export const reachedSince = (p: Player) => Boolean(p.email || p.recoveryEmail || p.phone || p.telegramId || p.discordId || p.lineId || p.publicProfile);
 
 /** A tap that passed the rule, before anything is changed: the match, the record named, and whether the browser's own record folds into it. */
 export type ThatsMeDecision = { ok: true; event: { id: string; code: string }; id: string; fold: boolean };

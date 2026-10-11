@@ -47,6 +47,7 @@ const S = {
     joined: (when: string, left: number) => `You are in. ${when}.${left > 0 ? "" : " That is everyone — the match is on."}`,
     waitlisted: (when: string) => `The match is full, so you are on the waitlist. ${when}. I will tell you if a spot opens.`,
     already: "You are already in this one.",
+    heldRecord: "The organiser holds this place for a player with earlier matches here. Ask the organiser for its link.",
     left: "You are out. I have told the organiser.",
     notIn: "You are not in this match.",
     full: "It filled up while you were tapping. You are on the waitlist.",
@@ -69,6 +70,7 @@ const S = {
     joined: (when: string, left: number) => `Вы в игре. ${when}.${left > 0 ? "" : " Все в сборе — матч состоится."}`,
     waitlisted: (when: string) => `Мест нет, вы в листе ожидания. ${when}. Сообщу, если место освободится.`,
     already: "Вы уже записаны сюда.",
+    heldRecord: "Организатор держит это место для игрока, который уже играл здесь. Попросите у организатора ссылку на это место.",
     left: "Вы вышли. Организатору сообщил.",
     notIn: "Вас нет в этом матче.",
     full: "Место заняли, пока вы нажимали. Вы в листе ожидания.",
@@ -91,6 +93,7 @@ const S = {
     joined: (when: string, left: number) => `Estás dentro. ${when}.${left > 0 ? "" : " Ya estáis todos — el partido va."}`,
     waitlisted: (when: string) => `Está completo, así que estás en la lista de espera. ${when}. Te aviso si se libera una plaza.`,
     already: "Ya estás en este.",
+    heldRecord: "El organizador guarda esta plaza para un jugador que ya jugó aquí. Pide al organizador el enlace de la plaza.",
     left: "Estás fuera. Se lo he dicho al organizador.",
     notIn: "No estás en este partido.",
     full: "Se llenó mientras tocabas. Estás en la lista de espera.",
@@ -294,7 +297,13 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   // A seat the organiser held for this very number (a name and the phone typed on the web): it is theirs.
   const heldForMe = detail.roster.find((x) => x.status === "invited" && x.inviteCode && sameNumber(x.invitedPhone, msg.from));
   if (heldForMe) {
-    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from }).catch(() => null);
+    // A place that keeps another player's record refuses the number (`held_record`): the thread says so
+    // and stops, because the JOIN below would seat this number a second time beside that place.
+    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from }).catch((e: unknown) => (isDomainError(e) && e.message === "held_record" ? ("held_record" as const) : null));
+    if (res === "held_record") {
+      await sendText(msg.from, s.heldRecord);
+      return "wa:held_record";
+    }
     if (res?.outcome === "confirmed") {
       if (res.event.groupId) await joinGroup(db, res.event.groupId, player.id, "match").catch(() => undefined);
       const now = (await getEventByCode(db, code)) ?? detail;

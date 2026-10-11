@@ -31,7 +31,8 @@ export function CreatorPanel({
   /** Banter on the organiser's matches (`players.banter`): one tap turns it off, one turns it on again. */
   banter: boolean;
   emailEnabled: boolean;
-  manageUrl: string;
+  /** Null for a session by name that proved nothing (`manageUrlFor`): the link is a lasting credential. */
+  manageUrl: string | null;
   isCancelled: boolean;
   groupInvite: { text: string; count: number; url: string } | null;
   /** The names already in the match and the open spots, while there are any: "Paste the names from the group". */
@@ -114,14 +115,16 @@ export function CreatorPanel({
         </div>
       )}
 
-      <div className="mt-4 border-t border-line pt-4">
-        <h3 className="font-extrabold">{t("creator.manageLinkTitle")}</h3>
-        <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
-        <div className="mt-2 flex items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{manageUrl}</code>
-          <CopyButton value={manageUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+      {manageUrl && (
+        <div className="mt-4 border-t border-line pt-4">
+          <h3 className="font-extrabold">{t("creator.manageLinkTitle")}</h3>
+          <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{manageUrl}</code>
+            <CopyButton value={manageUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

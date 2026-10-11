@@ -14,6 +14,7 @@ import {
   claimSlotPaid,
   confirmInvite,
   declineInvite,
+  hasLifeOutside,
   leaveEvent,
   promotedOf,
   removeFromSlot,
@@ -58,7 +59,9 @@ export async function joinAction(code: string, name?: string, level?: number | n
     // beside it, a seat or a waiting place, and the place could never be taken by name after that. The
     // page offers "Take Danny's held place" instead; this refuses the join, whatever the page showed,
     // before any record is made (`whoJoins`).
-    const who = await whoJoins(detail, await getSessionPlayer(db), name, new Date(), () => requirePlayer(db, name, { namesHere }));
+    // So is the plain join of the name of a place that keeps a past player's record, from a browser that
+    // knows nobody: it would make a second Danny beside his place (`hasLifeOutside`, only for such a name).
+    const who = await whoJoins(detail, await getSessionPlayer(db), name, new Date(), () => requirePlayer(db, name, { namesHere }), (id) => hasLifeOutside(db, id, detail.event.id));
     if ("held" in who) throw new ActionFailure("name_held");
     const me = who.player;
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");

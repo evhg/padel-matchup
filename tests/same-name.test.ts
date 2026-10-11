@@ -209,19 +209,22 @@ describe("the same name, one side proved", () => {
     expect(await exists(ivy2.id)).toBe(false);
     expect((await getGroupMember(db, crew.id, ivy.id))?.role).toBe("member");
 
-    // By claim: the other Jo organised a match Jo sat in, and runs an asking crew.
+    // By claim: the other Jo organised a match Jo sat in, and is a member of an asking crew.
     const jo = await makePlayer(db, "Jo");
     await restoreByEmail(db, "jo@example.com", jo.id);
     const jo2 = await makePlayer(db, "Jo");
     await match(jo2, "Bangkok Padel", 4, jo);
-    const crew2 = await createGroup(db, { name: "Jo's crew", creatorPlayerId: jo2.id, tz: "Asia/Bangkok" });
-    await updateGroup(db, crew2.id, jo2.id, { askToJoin: true });
+    const crew2 = await createGroup(db, { name: "Jo's asking crew", creatorPlayerId: boss.id, tz: "Asia/Bangkok", memberIds: [jo2.id] });
+    await updateGroup(db, crew2.id, boss.id, { askToJoin: true });
     const [row] = await sameNameRows(db, jo.id);
-    expect(row).toMatchObject({ id: jo2.id, sharedMatch: true, inAskingGroup: true });
+    expect(row).toMatchObject({ id: jo2.id, sharedMatch: true, inAskingGroup: true, runsCrew: false });
     expect(mayClaim(row)).toBe(true);
     expect(await claimSameNameRow(db, jo.id, jo2.id)).toBe(true);
     expect(await exists(jo2.id)).toBe(false);
-    expect((await getGroupMember(db, crew2.id, jo.id))?.role).toBe("admin");
+    expect((await getGroupMember(db, crew2.id, jo.id))?.role).toBe("member");
+    // Had the other Jo created that crew, no shared match would hand its admin role on by name (the
+    // owner, 11 October 2026: "No admin role by name alone").
+    expect(mayClaim({ ...row, runsCrew: true })).toBe(false);
   });
 
   it("a place on the waiting list of the same match is not a shared match", async () => {
@@ -288,7 +291,10 @@ describe("the same name, one side proved", () => {
     expect(await getGroupMember(db, open.id, ned.id)).toBeNull();
   });
 
-  it("a row that runs a crew does not fold at the proof through a shared organiser alone, and folds after a shared match", async () => {
+  // "As "That's me" already does": "That's me" refuses a record that runs a crew whatever else it shares.
+  // A shared match is no exception here, because a stranger of the same name can take a free seat beside
+  // the record in a match still to come and so make one (review of 11 October 2026).
+  it("a row that runs a crew never folds by name: not through a shared organiser, and not after a shared match still to come or played", async () => {
     const org = await makePlayer(db, "Org Sixteen", { email: "org16@example.com" });
     // At the moment of proof: Oli and the other Oli played for the same organiser, never in one match.
     const oli = await makePlayer(db, "Oli");
@@ -302,14 +308,34 @@ describe("the same name, one side proved", () => {
     const [row] = await sameNameRows(db, oli.id);
     expect(row).toMatchObject({ id: oli2.id, shared: true, sharedMatch: false, inAskingGroup: false, runsCrew: true });
     expect(await claimSameNameRow(db, oli.id, oli2.id)).toBe(false);
-    // Then the two sit in one match together: the claim folds the row, the crew's role with it.
-    await match(org, "Rawai Padel Club", 5, oli, oli2);
+    // Oli takes a free seat beside the crew's creator in a match five days on: a shared match, not played.
+    const coming = await match(org, "Rawai Padel Club", 5, oli2, oli);
     const [again] = await sameNameRows(db, oli.id);
     expect(again).toMatchObject({ sharedMatch: true, runsCrew: true });
-    expect(mayClaim(again)).toBe(true);
-    expect(await claimSameNameRow(db, oli.id, oli2.id)).toBe(true);
-    expect(await exists(oli2.id)).toBe(false);
-    expect((await getGroupMember(db, crew.id, oli.id))?.role).toBe("admin");
+    expect(mayClaim(again)).toBe(false);
+    expect(claimBlock(again)).toBe("runs_crew");
+    expect(await claimSameNameRow(db, oli.id, oli2.id), "a free seat beside a crew's creator is not a way into the crew").toBe(false);
+    // Played and over: still no admin role by name.
+    await db.update(events).set({ startsAt: at(-3), status: "past" }).where(eq(events.id, coming.id));
+    expect(await claimSameNameRow(db, oli.id, oli2.id)).toBe(false);
+    expect(await exists(oli2.id)).toBe(true);
+    expect((await getGroupMember(db, crew.id, oli2.id))?.role).toBe("admin");
+    expect(await getGroupMember(db, crew.id, oli.id)).toBeNull();
+  });
+
+  it("a row that runs a crew does not fold at the proof either, though the two sat in one match", async () => {
+    const org = await makePlayer(db, "Org Seventeen", { email: "org17@example.com" });
+    const una = await makePlayer(db, "Una");
+    const una2 = await makePlayer(db, "Una");
+    await match(org, "Rawai Padel Club", 4, una2, una);
+    const crew = await createGroup(db, { name: "Una's crew", creatorPlayerId: una2.id, tz: "Asia/Bangkok" });
+    await restoreByEmail(db, "una@example.com", una.id);
+    expect(await exists(una2.id)).toBe(true);
+    expect((await getGroupMember(db, crew.id, una2.id))?.role).toBe("admin");
+    // A row that runs a crew and is in an asking group: the card names the crew, which no shared match changes.
+    expect(claimBlock({ sharedMatch: true, inAskingGroup: true, runsCrew: true })).toBe("runs_crew");
+    expect(claimBlock({ sharedMatch: true, inAskingGroup: true, runsCrew: false })).toBeNull();
+    expect(claimBlock({ sharedMatch: false, inAskingGroup: true, runsCrew: false })).toBe("asking_group");
   });
 
   it("folds at a Telegram link too, when the two sat in one match together", async () => {

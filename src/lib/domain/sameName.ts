@@ -19,8 +19,8 @@ import { mergePlayers } from "./merge";
  *   - **Otherwise the person decides**: "Are these yours?" on My matches, with the matches shown;
  *     except a row that is a member of a group that asks to join, which needs a match the two sat
  *     in together first, a match still to come included (the owner, 10 October 2026: "Need a shared
- *     match first"; `mayClaim`), and a row that runs a crew (its creator, or an admin of it), which
- *     needs the same (the owner, 11 October 2026: "No admin role by name alone").
+ *     match first"; `mayClaim`), and never a row that runs a crew (its creator, or an admin of it),
+ *     as "That's me" refuses one (the owner, 11 October 2026: "No admin role by name alone").
  *     The automatic fold asks the same of such a row: a shared organiser or club is not enough there.
  *   - **Never** a row that can be reached (an address, a phone, a chat account, a push subscription):
  *     that is somebody, and a name does not say it is the same somebody.
@@ -50,15 +50,18 @@ export const proved = (p: Pick<Player, "emailVerifiedAt" | "telegramId">) => Boo
  * called off is no match. A match still to come counts, played or not: the owner has not decided that
  * case (review of 11 October 2026). The owner, 11 October 2026, "No admin role by name alone": in a
  * crew without "Ask to join" the claim moved the crew's admin role (or its creator's place) by name
- * alone, and the change refuses that, as "That's me" already does. So a row that runs a crew needs the
- * same shared match. Every other row is claimed as before. Pure: the card, `claimSameNameRow` and
- * `foldSameNameRows` all ask it, so they cannot disagree.
+ * alone, and the change refuses that, "as "That's me" already does". "That's me" refuses a record that
+ * runs a crew whatever else it shares (`runs_a_crew`), so this refuses such a row with no exception: a
+ * shared match is none, because a stranger of the same name can make one by taking a free seat beside
+ * the record in a match still to come (review of 11 October 2026). The other reading, a shared match
+ * that started and was not called off, waits for the owner. Every other row is claimed as before.
+ * Pure: the card, `claimSameNameRow` and `foldSameNameRows` all ask it, so they cannot disagree.
  */
-export const mayClaim = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup" | "runsCrew">): boolean => row.sharedMatch || (!row.inAskingGroup && !row.runsCrew);
+export const mayClaim = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup" | "runsCrew">): boolean => !row.runsCrew && (row.sharedMatch || !row.inAskingGroup);
 
 /** Why the card shows a row without "Yes, these are mine": the line it shows in place of the button. Null when the row may be claimed. Pure. */
 export const claimBlock = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup" | "runsCrew">): "asking_group" | "runs_crew" | null =>
-  mayClaim(row) ? null : row.inAskingGroup ? "asking_group" : "runs_crew";
+  mayClaim(row) ? null : row.runsCrew ? "runs_crew" : "asking_group";
 
 const rowsOf = (r: unknown): Record<string, unknown>[] => (Array.isArray(r) ? r : ((r as { rows?: Record<string, unknown>[] }).rows ?? []));
 const yes = (v: unknown) => v === true || v === "t" || v === "true";

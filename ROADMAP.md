@@ -552,8 +552,8 @@ Everything in this list is live. The README describes each in detail.
   "Not me" is remembered in that browser only. A row that is a member of a group that asks to join
   needs the shared context for that answer too (the owner, 10 October 2026: "Need a shared match
   first"); without it the card says so and offers only "Not me". A row that created a crew or is an
-  admin of one needs a shared match too, in any crew (the owner, 11 October 2026: "No admin role by
-  name alone"). A row with an address, a phone,
+  admin of one is never merged by name, shared match or not, in any crew (the owner, 11 October 2026:
+  "No admin role by name alone"; the reading with a played shared match waits for the owner). A row with an address, a phone,
   a chat account or a push subscription is never merged by name. A merge now also moves the
   person's wants, which point at a player without a foreign key and were left behind on the folded
   row until now.
@@ -1011,9 +1011,9 @@ Everything in this list is live. The README describes each in detail.
   offers "Played with you", and a held name with one past player of that name offers "Keep Danny's
   matches" (`src/lib/domain/heldRecord.ts`). The personal link signs a browser that knows nobody in as
   that record, by name, inside the "That's me" limits; a record with an email or Telegram proves
-  itself first, and any other record is refused. A join by the record takes its own place. The same
+  itself first, a record with another limit is sent to the organiser, and any other record is refused. A join by the record takes its own place, and a plain join of its name from a browser that knows nobody is refused. A place with a phone keeps no record. A session by name gets no manage link. The same
   day: "That's me" signs in a record that organised only past matches, and "Are these yours?" moves
-  no crew's admin role without a shared match. Danny's two production records are not merged: that
+  no crew's admin role by name, shared match or not. Danny's two production records are not merged: that
   is a production action the owner confirms.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or

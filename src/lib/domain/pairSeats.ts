@@ -7,7 +7,7 @@ import { recomputeStatus } from "./events";
 import { isNamedSeat, partnerOf, seatUnits } from "./fixedPairs";
 import { isOver } from "./matchLength";
 import { normalizeName } from "./players";
-import { joinEvent, lockEvent, reserveLocked, type JoinOutcome } from "./slots";
+import { confirmLocked, isHeldPlace, joinEvent, lockEvent, reserveLocked, type JoinOutcome } from "./slots";
 
 /**
  * The seats of a fixed-pairs night (the owner's decision F, 9 October 2026): pairs sign up together,
@@ -101,20 +101,27 @@ export async function joinPair(db: Db, input: { eventId: string; playerId: strin
     assertOpen(ev, now);
     assertPairs(ev);
     const seats = await seatsOf(tx, ev);
-    const mine = seats.find((s) => s.playerId === input.playerId);
-    const free = seats.filter((s) => s.position <= ev.capacity && (s.status === "empty" || s.status === "declined"));
+    let mine = seats.find((s) => s.playerId === input.playerId);
+    // The place the organiser holds for this very record (a past player picked for it): the join takes
+    // it first, as `joinEvent` does on every door, and the partner's name then pairs with it. It used to
+    // read as a single already in, so the partner was held beside a place still nobody's.
+    const heldTaken = Boolean(mine && isHeldPlace(mine, ev.capacity));
+    let event = ev;
+    if (mine && heldTaken) ({ slot: mine, event } = await confirmLocked(tx, ev, mine, { playerId: input.playerId, now }));
+    const free = seats.filter((s) => s.id !== mine?.id && s.position <= ev.capacity && (s.status === "empty" || s.status === "declined"));
     const pairId = newPairId();
     if (mine) {
-      if (partnerOf(seats, mine)) return { outcome: "already_in", slot: mine, event: ev };
+      const outcome = heldTaken ? ("joined" as const) : ("already_in" as const);
+      if (partnerOf(seats, mine)) return { outcome, slot: mine, event };
       // From round 1 the pairs are the field: a new pair mid-night would put one player in two rows.
       await assertBeforeRound1(tx, ev);
       const onRoster = mine.position <= ev.capacity;
       // Still in, alone: "full" would tell a seated player they did not get in.
-      if (onRoster && free.length === 0) return { outcome: "already_in", slot: mine, event: ev, partner: null, noSeatForPartner: true };
+      if (onRoster && free.length === 0) return { outcome, slot: mine, event, partner: null, noSeatForPartner: true };
       const partner = await reservePartner(tx, ev, { actorPlayerId: input.playerId, name: partnerName, slotId: onRoster ? free[0].id : null, pairId, now });
       const [slot] = await tx.update(slots).set({ pairId }).where(eq(slots.id, mine.id)).returning();
       const status = await recomputeStatus(tx, ev);
-      return { outcome: "already_in", slot, event: { ...ev, status }, partner };
+      return { outcome, slot, event: { ...ev, status }, partner };
     }
     if (free.length >= 2) {
       const [slot] = await tx

@@ -68,6 +68,9 @@ export function OpenSpot({
   const [level, setLevel] = useState<number | null>(myLevel);
   /** The past player picked from "Played with you", while the name still reads as picked. */
   const [picked, setPicked] = useState<string | null>(null);
+  // A place held for a phone is that number's, and keeps no record (`reserveLocked`): a phone typed after
+  // the pick turns it back into a place held by name, and the line under the name says no more than that.
+  const keepsPick = picked !== null && picked === name && !phone.trim();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLDivElement>(null);
@@ -109,7 +112,7 @@ export function OpenSpot({
     if (!name.trim()) return setError(t("identity.nameRequired"));
     start(async () => {
       setError(null);
-      const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId, pick: picked !== null && picked === name });
+      const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId, pick: keepsPick });
       startTransition(() => {
         if (!r.ok) setError(errText(r.error));
         else {
@@ -246,9 +249,9 @@ export function OpenSpot({
           crew member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
         {mode === "join" && !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
-        {mode === "reserve" && picked !== null && picked === name && (
+        {mode === "reserve" && keepsPick && (
           <p className="text-xs font-semibold text-ok" data-testid="picked-past-player">
-            ✓ {t("creator.keepsRecord", { name: picked })}
+            ✓ {t("creator.keepsRecord", { name })}
           </p>
         )}
         {mode === "reserve" && pastChips.length > 0 && (

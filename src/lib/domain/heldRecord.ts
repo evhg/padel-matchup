@@ -8,7 +8,7 @@ import { bumpMetric } from "./metrics";
 import { LIMITS, takeRate } from "./ratelimit";
 import { DELETED_PLAYER_NAME } from "./result";
 import { confirmInvite, hasLifeOutside, liveRefusal, lockEvent, type ConfirmOutcome } from "./slots";
-import { thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefusal, type ThatsMeRow } from "./thatsMe";
+import { reachedSince, thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefusal, type ThatsMeRow } from "./thatsMe";
 
 /**
  * A held place that keeps a past player's record (the owner, 11 October 2026). The question was:
@@ -35,9 +35,10 @@ import { thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefusal, type Thats
  *     holds a name: the create form, a pasted booking, the americano names, "Paste the names", /new.
  *   - The link: the record itself, or a browser that knows nobody and the record passes every "That's
  *     me" limit but the namesake one, because the link names the record (`heldLinkVerdict`); then the
- *     session is marked by name, as "That's me" marks it. A record outside the limits (an email, a
- *     Telegram and so on) asks for its proof first (`sign_in_first`). Any other record is refused
- *     (`confirmInvite`, `held_record`).
+ *     session is marked by name, as "That's me" marks it. A record with an email or a Telegram asks
+ *     for its proof first (`sign_in_first`); a record outside the limits for another reason reads
+ *     whose place it is (`ask_organiser`). Any other record is refused (`confirmInvite`,
+ *     `held_record`). A place with a phone keeps no record: it is the WhatsApp number's (`reserveLocked`).
  */
 
 /** A record that played with the organiser: its name and the start of the last match they shared. */
@@ -159,12 +160,14 @@ export async function heldRecordOf(db: Db, slot: Pick<Slot, "kind" | "status" | 
 /**
  * May the personal link sign a browser that knows nobody in as the record its place keeps? Every
  * "That's me" limit (`whyNot`) but the namesake one: the link names the record itself, never a name
- * that two records could carry. The record's place in this match is its context. Null when nothing
- * stands in the way. Pure.
+ * that two records could carry. The record's place in this match is its context, declined too:
+ * `heldRecordOf` found that place first, and "That's me" reads no declined place as a place in the
+ * match, so a decline from any browser that holds the link locked the record out of its own link
+ * (review of 11 October 2026). Null when nothing stands in the way. Pure.
  */
 export function heldLinkVerdict(row: ThatsMeRow | undefined): ThatsMeRefusal | null {
   if (!row) return "nobody";
-  return whyNot({ ...row, sameName: 1 });
+  return whyNot({ ...row, sameName: 1, inContext: true });
 }
 
 /** The limits read for one record of one match: one bounded read (`thatsMeRows`, for the record's own name). */
@@ -206,9 +209,13 @@ export async function decideHeldLink(db: Db, input: { inviteCode: string; rateKe
 /**
  * The tap's write: the personal link's own (`confirmInvite`) for the record, and the fact, with no name
  * in it, when the place was filled. The caller signs the browser in as the record, marked by name,
- * only on `confirmed`, and counts `signin_held_link`.
+ * only on `confirmed`, and counts `signin_held_link`. The record is read again first, as "That's me"
+ * reads it (`commitThatsMe`): a record that got an address or an account since the decision now proves
+ * itself, so the link refuses it (`held_record`). One read by the primary key.
  */
 export async function takeHeldLink(db: Db, d: Extract<HeldLinkDecision, { ok: true }>, now = new Date()): Promise<ConfirmOutcome> {
+  const [record] = await db.select().from(players).where(eq(players.id, d.playerId)).limit(1);
+  if (!record || reachedSince(record)) throw new DomainError("forbidden", "held_record");
   const res = await confirmInvite(db, { inviteCode: d.inviteCode, playerId: d.playerId, now });
   if (res.outcome === "confirmed") {
     await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: d.playerId, subject: { type: "player", id: d.playerId }, code: d.event.code, data: { folded: false, via: "link" }, at: now });
@@ -220,15 +227,34 @@ export async function takeHeldLink(db: Db, d: Extract<HeldLinkDecision, { ok: tr
 export type HeldRecordViewer = "nobody" | "record" | "other";
 
 /**
+ * The limits a record can lift on the personal link's page: the page offers the email code and
+ * Telegram (`ReturningPlayer bare`), each only where the deployment runs it (rule 4), and these are
+ * the records that one of them signs in. Pure.
+ */
+export function provableHere(o: { email: boolean; telegram: boolean }): ReadonlySet<ThatsMeRefusal> {
+  return new Set<ThatsMeRefusal>([...(o.email ? (["email", "recovery_email"] as const) : []), ...(o.telegram ? (["telegram"] as const) : [])]);
+}
+const BOTH_DOORS = provableHere({ email: true, telegram: true });
+
+/**
  * The personal link's page over a place that keeps a record: the record itself sees what it always saw;
  * another record never gets "I'm in" (the server refuses it), and reads whose place it is; a browser
- * that knows nobody gets "I'm in" when the record passes the limits (`passes`), else the way to prove
- * who it is first (`sign_in_first`). Only the views that offer "I'm in" change. Pure.
+ * that knows nobody gets "I'm in" when the record passes the limits (`refusal` null). Otherwise it gets
+ * the way to prove who it is first (`sign_in_first`) only when the page offers a door the record can
+ * open (`doors`, from `provableHere`); for any other limit (a phone, a push subscription, a match still
+ * to come, a crew it runs) it reads whose place it is and is sent to the organiser (`ask_organiser`),
+ * never to a door a bare record cannot use. Only the views that offer "I'm in" change. Pure.
  */
-export function heldRecordView<V extends string>(view: V, state: "invited" | "declined" | string, viewer: HeldRecordViewer, passes: boolean): V | "held_for" | "open_again" | "sign_in_first" {
+export function heldRecordView<V extends string>(
+  view: V,
+  state: "invited" | "declined" | string,
+  viewer: HeldRecordViewer,
+  refusal: ThatsMeRefusal | null,
+  doors: ReadonlySet<ThatsMeRefusal> = BOTH_DOORS,
+): V | "held_for" | "open_again" | "sign_in_first" | "ask_organiser" {
   if (view !== "actions" && view !== "declined") return view;
   if (viewer === "other") return state === "invited" ? "held_for" : "open_again";
-  if (viewer === "nobody" && !passes) return "sign_in_first";
+  if (viewer === "nobody" && refusal) return doors.has(refusal) ? "sign_in_first" : "ask_organiser";
   return view;
 }
 

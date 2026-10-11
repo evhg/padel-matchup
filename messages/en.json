@@ -516,7 +516,8 @@
     "heldForHelp": "Send this link to {name}.",
     "asRecord": "You join as {name}, with the matches you played before.",
     "signInFirst": "Is this you, {name}? Sign in first.",
-    "signInFirstHelp": "This place keeps the matches of {name}. Get back in with the email or Telegram you used before, then tap I'm in."
+    "signInFirstHelp": "This place keeps the matches of {name}. Get back in with the email or Telegram you used before, then tap I'm in.",
+    "askOrganiserHelp": "Is this you, {name}? Open this link on the phone you used before, or ask the organiser."
   },
   "shareText": {
     "event": "🎾 Padel {day} at {time} — {venue}. {spots}. Tap to join: {url}",

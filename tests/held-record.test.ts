@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { confirmInviteAction, reserveAction } from "@/actions/slots";
+import { attachHeldRecordAction, confirmInviteAction, declineInviteAction, joinAction, reserveAction } from "@/actions/slots";
+import { matchToPublic } from "@/lib/api/serialize";
+import { handleWhatsappMessage } from "@/lib/whatsapp/bot";
 import { personalTokenFor } from "@/actions/shared";
 import { metricsDaily } from "@/db/schema";
 import { dayKey } from "@/lib/domain/metrics";
@@ -21,6 +23,7 @@ import {
   pastPlayerNamed,
   pastPlayerRows,
   pickable,
+  provableHere,
   takeHeldLink,
   type PastPlayer,
 } from "@/lib/domain/heldRecord";
@@ -115,6 +118,8 @@ describe("the personal link signs in as the record, inside the \"That's me\" lim
   it.each([
     ["old Danny: nothing to prove him, his place here", {}, null],
     ["a namesake beside him: the link names the record, not a name", { sameName: 2 }, null],
+    // A declined place keeps the record, and "That's me" reads no declined place as a place in the match.
+    ["his place declined: the place itself is his context", { inContext: false }, null],
     ["a record with an email", { email: true }, "email"],
     ["a record with a Telegram account", { telegram: true }, "telegram"],
     ["a record with a push subscription", { push: true }, "push"],
@@ -131,15 +136,32 @@ describe("the personal link signs in as the record, inside the \"That's me\" lim
   });
 
   it("shows the record \"I'm in\", another record whose place it is, and a browser that knows nobody \"I'm in\" or the way to prove itself", () => {
-    expect(heldRecordView("actions", "invited", "record", false)).toBe("actions");
-    expect(heldRecordView("actions", "invited", "other", true)).toBe("held_for");
-    expect(heldRecordView("declined", "declined", "other", true)).toBe("open_again");
-    expect(heldRecordView("actions", "invited", "nobody", true)).toBe("actions");
-    expect(heldRecordView("actions", "invited", "nobody", false)).toBe("sign_in_first");
-    expect(heldRecordView("declined", "declined", "nobody", false)).toBe("sign_in_first");
+    expect(heldRecordView("actions", "invited", "record", "email")).toBe("actions");
+    expect(heldRecordView("actions", "invited", "other", null)).toBe("held_for");
+    expect(heldRecordView("declined", "declined", "other", null)).toBe("open_again");
+    expect(heldRecordView("actions", "invited", "nobody", null)).toBe("actions");
+    expect(heldRecordView("declined", "declined", "nobody", null)).toBe("declined");
     // Only the views that offer "I'm in" change.
-    expect(heldRecordView("confirmed", "confirmed", "other", false)).toBe("confirmed");
-    expect(heldRecordView("cancelled", "cancelled", "nobody", false)).toBe("cancelled");
+    expect(heldRecordView("confirmed", "confirmed", "other", null)).toBe("confirmed");
+    expect(heldRecordView("cancelled", "cancelled", "nobody", "email")).toBe("cancelled");
+  });
+
+  // The page offers the email code and Telegram (`ReturningPlayer bare`). A record with a phone, a push
+  // subscription or a match still to come has neither, so "Sign in first" would send it to a door it
+  // cannot open: such a link says whose place it is and points at the organiser.
+  it("asks a browser that knows nobody to sign in first only when the record can open the door the page offers", () => {
+    for (const r of ["email", "recovery_email", "telegram"] as const) {
+      expect(heldRecordView("actions", "invited", "nobody", r), r).toBe("sign_in_first");
+      expect(heldRecordView("declined", "declined", "nobody", r), r).toBe("sign_in_first");
+    }
+    for (const r of ["phone", "discord", "line", "push", "coach_book", "coach_student", "claimed_club", "public_profile", "organises_matches", "runs_a_crew", "organises_events", "asking_group", "no_context", "nobody"] as const) {
+      expect(heldRecordView("actions", "invited", "nobody", r), r).toBe("ask_organiser");
+    }
+    // A door the deployment does not run is no door (rule 4): with no email, an email record asks the organiser.
+    const telegramOnly = provableHere({ email: false, telegram: true });
+    expect(heldRecordView("actions", "invited", "nobody", "email", telegramOnly)).toBe("ask_organiser");
+    expect(heldRecordView("actions", "invited", "nobody", "telegram", telegramOnly)).toBe("sign_in_first");
+    expect(heldRecordView("actions", "invited", "nobody", "telegram", provableHere({ email: false, telegram: false }))).toBe("ask_organiser");
   });
 });
 
@@ -358,6 +380,48 @@ describe("a held place that keeps a past player's record", () => {
     expect(await placeOf(tdsv.id, danny.id)).toMatchObject({ id: slot.id, status: "confirmed" });
   });
 
+  it("on a fixed-pairs night, the record's join with a partner's name takes its own held place, and the partner's place sits beside it", async () => {
+    const erik = await makePlayer(db, `Erik ${++n}`, { email: `erik${n}@example.com` });
+    const danny = await makePlayer(db, "Danny");
+    await made(danny, -28, [danny, erik]);
+    const night = await made(erik, 6, [erik], { type: "tournament", capacity: 8 });
+    await db.update(events).set({ fixedPairs: true }).where(eq(events.id, night.id));
+    const { slot } = await pick(night, "Danny");
+    const decision = await joinWithPolicy(db, (await getEventByCode(db, night.code))!, danny, null, "Zoe");
+    expect(decision).toMatchObject({ kind: "joined", result: { outcome: "joined" } });
+    const mine = await placeOf(night.id, danny.id);
+    expect(mine, "Danny sits in the place Erik held for him").toMatchObject({ id: slot.id, status: "confirmed" });
+    const [zoe] = await db.select().from(slots).where(and(eq(slots.eventId, night.id), eq(slots.invitedName, "Zoe")));
+    expect(zoe).toMatchObject({ kind: "reserved", status: "invited", pairId: mine.pairId });
+    expect(mine.pairId).toBeTruthy();
+  });
+
+  it("the link reads the record again before it signs in: a record that got an email since the decision is refused", async () => {
+    const { danny, tdsv } = await owners();
+    const { slot } = await pick(tdsv, "Danny");
+    const d = await decideHeldLink(db, { inviteCode: slot.inviteCode!, rateKey: key(), now: NOW });
+    if (!d || !d.ok) throw new Error("refused");
+    await db.update(players).set({ email: `danny-late${n}@example.com` }).where(eq(players.id, danny.id));
+    await expect(takeHeldLink(db, d, NOW)).rejects.toMatchObject({ code: "forbidden", message: "held_record" });
+    expect(await placeOf(tdsv.id, danny.id)).toMatchObject({ id: slot.id, status: "invited" });
+  });
+
+  it("the public shape of the match shows a held place by its held name, with no level: the record has not joined", async () => {
+    const erik = await makePlayer(db, `Erik ${++n}`, { email: `erik${n}@example.com` });
+    const danny = await makePlayer(db, "Danny", { level: 3.5 });
+    await made(danny, -28, [danny, erik]);
+    const tdsv = await made(erik, 6, [erik]);
+    // Erik typed "danny"; "Keep Danny's matches" gave the place the record that played in September.
+    const { slot } = await reserveSlot(db, { eventId: tdsv.id, actorPlayerId: erik.id, name: "danny", now: NOW });
+    await attachHeldRecord(db, { eventId: tdsv.id, slotId: slot.id, organiserId: erik.id, now: NOW });
+    const shape = matchToPublic((await getEventByCode(db, tdsv.code))!, "https://kicksma.sh");
+    expect(shape.players.find((p) => p.status === "invited")).toEqual({ name: "danny", level: null, organizer: false, status: "invited" });
+    // Once he takes the place, he is a seated player, with his level.
+    await confirmInvite(db, { inviteCode: slot.inviteCode!, playerId: danny.id, now: NOW });
+    const after = matchToPublic((await getEventByCode(db, tdsv.code))!, "https://kicksma.sh");
+    expect(after.players.find((p) => p.status === "confirmed")).toMatchObject({ name: "Danny", level: 3.5 });
+  });
+
   it("a place nobody took is not a seat to readers: no payer, no \"removed\" notice, not played, and released on account deletion", async () => {
     const { erik, danny, tdsv } = await owners();
     await db.update(events).set({ cost: "400 THB" }).where(eq(events.id, tdsv.id));
@@ -457,5 +521,83 @@ describe("the picker and the personal link, called as a browser calls them", () 
     const { erik, tdsv } = await owners();
     await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny" }));
     expect((await held(tdsv.id)).playerId).toBeNull();
+  });
+
+  // Anybody with the link may tap "Can't make it", and with nobody waiting the declined place keeps old
+  // Danny. Until this fix the limits read the place as no part of the match ("no_context"), so the link
+  // asked a bare record to sign in with an email it never had, and refused the tap.
+  it("a place declined from a browser that knows nobody still keeps old Danny: the link then signs a fresh browser in as him, by name", async () => {
+    const { erik, danny, tdsv } = await owners();
+    const picked = await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny", pick: true }));
+    const code = picked.result.ok ? picked.result.data.inviteCode : "";
+    expect((await asAction({}, () => declineInviteAction(tdsv.code, code))).result).toEqual({ ok: true, data: { outcome: "declined" } });
+    expect(await held(tdsv.id)).toMatchObject({ playerId: danny.id, status: "declined" });
+    const before = await dannys();
+    const { result, cookies } = await asAction({}, () => confirmInviteAction(tdsv.code, code, {}));
+    expect(result).toEqual({ ok: true, data: { outcome: "confirmed" } });
+    expect(cookies[PLAYER_COOKIE], "signed in as old Danny, marked by name").toBe(sealPlayerId(danny.id, { byName: true }));
+    expect(await dannys(), "no second Danny").toBe(before);
+    expect(await held(tdsv.id)).toMatchObject({ playerId: danny.id, status: "confirmed" });
+  });
+
+  // DECIDING rule 34: a plain join must not seat a second record of a held place's name. "Keep Danny's
+  // matches" put a record on the place, and the guard then read the place as a placeholder and let the
+  // typed name make a second Danny and take a second seat.
+  it("after \"Keep Danny's matches\", a typed Danny from a browser that knows nobody is refused: no second Danny, no second seat", async () => {
+    const { erik, danny, tdsv } = await owners();
+    await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny" }));
+    const place = await held(tdsv.id);
+    expect((await asAction({}, () => joinAction(tdsv.code, "Danny"))).result, "held by name: refused already").toMatchObject({ ok: false, error: "name_held" });
+    expect((await asAction(as(erik), () => attachHeldRecordAction(tdsv.code, place.id))).result).toEqual({ ok: true, data: { name: "Danny" } });
+    const before = await dannys();
+    const { result, cookies } = await asAction({}, () => joinAction(tdsv.code, " danny "));
+    expect(result).toMatchObject({ ok: false, error: "name_held" });
+    expect(cookies[PLAYER_COOKIE], "no record was made for the browser").toBeUndefined();
+    expect(await dannys()).toBe(before);
+    const taken = (await app.select().from(slots).where(eq(slots.eventId, tdsv.id))).filter((s) => s.status === "joined" || s.status === "confirmed");
+    expect(taken.map((s) => s.playerId)).toEqual([erik.id]);
+    expect(await held(tdsv.id)).toMatchObject({ id: place.id, playerId: danny.id, status: "invited" });
+  });
+
+  /** A WhatsApp message through the bot, with the channel on and the Cloud API faked; the environment is put back after. */
+  const whatsapp = async (from: string, body: string): Promise<string> => {
+    const keys = ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID"] as const;
+    const saved = keys.map((k) => process.env[k]);
+    process.env.WHATSAPP_TOKEN = "t";
+    process.env.WHATSAPP_PHONE_ID = "123";
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ messages: [{ id: "wamid.out" }] }), { status: 200 }));
+    try {
+      return await handleWhatsappMessage(app, { from, id: `wamid.held${++n}`, timestamp: "0", type: "text", text: { body } }, { profile: { name: "Danny" }, wa_id: from });
+    } finally {
+      vi.unstubAllGlobals();
+      keys.forEach((k, i) => (saved[i] === undefined ? delete process.env[k] : (process.env[k] = saved[i])));
+    }
+  };
+  const takenIn = async (eventId: string) => (await app.select().from(slots).where(eq(slots.eventId, eventId))).filter((s) => s.status === "joined" || s.status === "confirmed");
+
+  // The phone field stays in the reserve form after a chip tap. A place with a number is that number's
+  // (the WhatsApp JOIN takes it), so it keeps no record, as "Keep Danny's matches" refuses one.
+  it("a pick with a phone typed after it holds the place by name: the number's JOIN takes that place, and nobody takes a second one", async () => {
+    const { erik, tdsv } = await owners();
+    const number = `6681${String(7000000 + n).padStart(7, "0")}`;
+    const picked = await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny", pick: true, phone: `+${number}` }));
+    expect(picked.result).toMatchObject({ ok: true });
+    expect(await held(tdsv.id)).toMatchObject({ playerId: null, invitedPhone: `+${number}` });
+    expect(await whatsapp(number, `JOIN ${tdsv.code}`)).toBe("wa:confirmed");
+    const taken = await takenIn(tdsv.id);
+    expect(taken).toHaveLength(2);
+    expect(taken.find((s) => s.playerId !== erik.id)?.kind, "the number sits in the place held for it").toBe("reserved");
+  });
+
+  it("a JOIN from the number of a place that keeps a record is answered and stops there: never a second seat", async () => {
+    const { erik, danny, tdsv } = await owners();
+    await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny", pick: true }));
+    const place = await held(tdsv.id);
+    // The row the picker left before this fix: a record and a number on one place.
+    const number = `6681${String(8000000 + n).padStart(7, "0")}`;
+    await app.update(slots).set({ invitedPhone: `+${number}` }).where(eq(slots.id, place.id));
+    expect(await whatsapp(number, `JOIN ${tdsv.code}`)).toBe("wa:held_record");
+    expect((await takenIn(tdsv.id)).map((s) => s.playerId)).toEqual([erik.id]);
+    expect(await held(tdsv.id)).toMatchObject({ id: place.id, playerId: danny.id, status: "invited" });
   });
 });

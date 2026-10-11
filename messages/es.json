@@ -516,7 +516,8 @@
     "heldForHelp": "Envía este enlace a {name}.",
     "asRecord": "Entras como {name}, con los partidos que ya jugaste.",
     "signInFirst": "¿Eres {name}? Primero entra con tu cuenta.",
-    "signInFirstHelp": "Esta plaza guarda los partidos de {name}. Vuelve a entrar con el email o el Telegram que usaste antes y pulsa Me apunto."
+    "signInFirstHelp": "Esta plaza guarda los partidos de {name}. Vuelve a entrar con el email o el Telegram que usaste antes y pulsa Me apunto.",
+    "askOrganiserHelp": "¿Eres {name}? Abre este enlace en el teléfono que usaste antes o pregunta al organizador."
   },
   "shareText": {
     "event": "🎾 Pádel {day} a las {time} — {venue}. {spots}. Toca para apuntarte: {url}",

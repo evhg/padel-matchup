@@ -433,7 +433,7 @@ export async function seatNames(db: Db, input: { eventId: string; actorPlayerId:
 
 export async function reserveSlot(
   db: Db,
-  /** `playerId`: the past player the organiser picked for the place (`pastPlayerNamed` in `heldRecord.ts`); the place keeps that record. */
+  /** `playerId`: the past player the organiser picked for the place (`pastPlayerNamed` in `heldRecord.ts`); the place keeps that record, unless a phone is given (`reserveLocked`). */
   input: { eventId: string; actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; playerId?: string | null; now?: Date },
 ): Promise<{ slot: Slot; event: Event }> {
   const now = input.now ?? new Date();
@@ -453,10 +453,14 @@ export async function reserveLocked(
 ): Promise<{ slot: Slot; event: Event }> {
   const { name, now } = input;
   assertLive(ev, now);
+  // A place held for a number is that number's: the WhatsApp JOIN from it takes the place. So it keeps
+  // no record, as "Keep Danny's matches" refuses one (`keepRecordFor`); a record there would refuse the
+  // number (`held_record`), and the bot would seat it a second time (review of 11 October 2026).
+  const playerId = input.playerId && !normalizePhone(input.phone) ? input.playerId : null;
   // One place per record and match (`slots_event_player_idx`): a record already here is refused by
   // name, never by the index's error.
-  if (input.playerId) {
-    const [here] = await tx.select({ id: slots.id }).from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, input.playerId))).limit(1);
+  if (playerId) {
+    const [here] = await tx.select({ id: slots.id }).from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, playerId))).limit(1);
     if (here) throw new DomainError("invalid", "already_in");
   }
   const claimable = and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"]));
@@ -477,7 +481,7 @@ export async function reserveLocked(
       .update(slots)
       .set({
         ...VACANT,
-        playerId: input.playerId ?? null,
+        playerId,
         kind: "reserved",
         status: "invited",
         inviteCode,

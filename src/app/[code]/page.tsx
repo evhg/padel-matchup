@@ -3,7 +3,7 @@ import { detectPlatform, madeToShare } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { getViewer, nameOnly } from "@/actions/shared";
+import { getViewer, manageUrlFor, nameOnly } from "@/actions/shared";
 import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/source";
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
@@ -76,7 +76,7 @@ import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
-import { eventUrl, inviteUrl, manageUrl, whatsappShareUrl } from "@/lib/share";
+import { eventUrl, inviteUrl, whatsappShareUrl } from "@/lib/share";
 import { heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
@@ -384,6 +384,8 @@ async function EventPage({ params, searchParams }: Props) {
   const reserving = viewer.isCreator && !cancelled && !over;
   const rolodexAll = reserving ? await getRolodex(db, ev.creatorPlayerId) : [];
   const namesAlone = reserving && (await nameOnly(me));
+  // The manage link is a lasting credential: none for a session by name that proved nothing (`manageUrlFor`).
+  const organiserManageUrl = viewer.isCreator ? await manageUrlFor(me, ev) : null;
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
   // The same list twice over: the organiser's suggestions leave these people out, and a stranger
@@ -926,7 +928,7 @@ async function EventPage({ params, searchParams }: Props) {
             creatorNotify={creator.emailNotifications}
             banter={creator.banter}
             emailEnabled={emailEnabled()}
-            manageUrl={manageUrl(base, code, ev.manageCode)}
+            manageUrl={organiserManageUrl}
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
             paste={!cancelled && !over ? { namesHere, spots: spotsLeft } : null}

@@ -705,6 +705,13 @@ Wall clock first, credits second. What actually moved it, measured:
   match page (Leave instead of Join), as a payer, as "played" on My matches, and as a "you were
   removed" notice for a place never taken. Every reader that means "took a seat" asks for `joined` or
   `confirmed`, never for a `player_id` that is not null (`tests/held-record.test.ts` breaks each one).
+- **A new kind of row reaches every state and every door the old kind did.** The held place that keeps
+  a record was built and tested as "invited". The review found it four more ways: declined (the "That's
+  me" read counts no declined place, so the record lost its own link), with a phone typed after the
+  pick (the WhatsApp JOIN was refused and then seated the number a second time), under a typed name
+  (the plain-join guard read it as a placeholder and made a second Danny), and on a fixed-pairs night
+  (the partner was held beside a place still nobody's). For a new kind of row, list its states and the
+  doors that write or read it (web, WhatsApp, API, fixed pairs), and test the row through each one.
 - **The key is whatever production already types, not what the name makes.** The club directory was
   written with `venueSlug(name)` slugs — "warehaus-club" for WAREHAUS.club. Production's eight matches
   and both coaches key on `warehaus`, so every one of those clubs would have got a second page with

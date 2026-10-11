@@ -77,7 +77,13 @@ export function matchToPublic(detail: EventDetail, base: string, group?: { code:
   const ev = detail.event;
   const players: PublicPlayer[] = detail.roster
     .filter((s) => isOccupied(s) || s.status === "invited")
-    .map((s) => ({ name: playerName(s.player, s.invitedName), level: s.player?.level ?? null, organizer: s.playerId === ev.creatorPlayerId, status: s.status as PublicPlayer["status"] }));
+    // A held place is not a seat (rule 6 gives levels for seated players only): a place that keeps a past
+    // player's record shows the name the organiser held and no level until the record takes the place.
+    .map((s) =>
+      isOccupied(s)
+        ? { name: playerName(s.player, s.invitedName), level: s.player?.level ?? null, organizer: s.playerId === ev.creatorPlayerId, status: s.status as PublicPlayer["status"] }
+        : { name: playerName(null, s.invitedName ?? s.player?.displayName ?? null), level: null, organizer: false, status: s.status as PublicPlayer["status"] },
+    );
   const range = { min: ev.levelMin, max: ev.levelMax };
   const res = ev.type === "match" ? matchResult(detail.scores, detail.roster.map((s) => ({ team: s.team, status: s.status, name: playerName(s.player, s.invitedName) }))) : null;
   // A cancelled match has no court to book: the page and the cards hide the mark, and so does the API.
