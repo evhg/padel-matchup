@@ -286,6 +286,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
   MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
   a stub that set `url`, passed. Test a reader through the frame that production calls it through.
+- **A header a test passes by hand is not a header the page reads.** The view counter skipped a
+  request with the `RSC` header, and its unit test passed `rsc: true` itself. Next.js deletes `RSC`
+  and the other router headers before `headers()` returns (`getHeaders` in
+  `next/dist/server/async-storage/request-store.js`), so every 20-second refresh of a live night
+  counted a view (11 October 2026). Read a header through the request store a page uses
+  (`createRequestStoreForRender` in `tests/group-line.test.ts`), and prove the wiring in the browser:
+  `window.next.router.refresh()` is the call AutoRefresh makes. Wait for its response, never for
+  `finished()`: Playwright never reports a refresh response as finished, and the check hangs.
 
 ### Wall clock
 
