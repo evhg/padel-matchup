@@ -1,5 +1,8 @@
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
+import { listenItems, metricsDaily } from "@/db/schema";
 import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
+import { WINDOW_MS } from "@/lib/listen/window";
 
 /**
  * What the Anthropic key costs us. Two sources: our own token counters priced at the
@@ -83,10 +86,40 @@ export async function recordModelCall(db: Db, o: { status: number; ok: boolean; 
   const now = o.now ?? new Date();
   const day = dayKey(now);
   const at = Math.floor(now.getTime() / 1000);
+  // Before `anthropic_ok_at` moves: the restore reads it to know this is the first accepted call.
+  if (o.ok) await restoreRefusedItems(db, now).catch(() => undefined);
   await Promise.all([
     o.usage?.input ? bumpMetric(db, "anthropic_in", o.usage.input, day) : null,
     o.usage?.output ? bumpMetric(db, "anthropic_out", o.usage.output, day) : null,
     o.ok ? setMetric(db, "anthropic_ok_at", at, day) : bumpMetric(db, "anthropic_failed", 1, day),
     !o.ok && keyRefused(o.status) ? setMetric(db, "anthropic_refused_at", at, day) : null,
   ]);
+}
+
+/**
+ * What a listening item's `last_error` says when the key itself was refused: the Messages API's own
+ * words for a 401, and the line `draftReply` writes when the answer carries none.
+ */
+export const KEY_REFUSAL_ERRORS = ["API key is invalid.", "invalid x-api-key", "HTTP 401", "HTTP 403"] as const;
+
+/**
+ * From 5 to 11 October 2026 the dead key failed 176 listening items for good, before a refusal kept
+ * items new, and a failed item is never drafted again. On the first accepted call after a refusal,
+ * the items the key failed that are still inside the listening window go back to new, so the new
+ * key drafts them, three a run, inside the day's budget. That is also the first accepted call the
+ * window records at all, which covers a key replaced before this code ran. One update, and once: the
+ * accepted call then writes `anthropic_ok_at`, and the condition stays false until the next refusal.
+ * When it is false Postgres checks it once and reads no item.
+ */
+export async function restoreRefusedItems(db: Db, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - WINDOW_MS);
+  // A day as text ("2026-10-04"), never a Date: the metrics are read from the window's first day.
+  const firstDay = dayKey(cutoff);
+  const newest = (key: string) => sql`(select coalesce(max(m.value), 0) from ${metricsDaily} m where m.day >= ${firstDay} and m.key = ${key})`;
+  const rows = await db
+    .update(listenItems)
+    .set({ status: "new", lastError: null, draftedAt: null })
+    .where(and(eq(listenItems.status, "failed"), inArray(listenItems.lastError, [...KEY_REFUSAL_ERRORS]), gt(listenItems.postedAt, cutoff), sql`${newest("anthropic_refused_at")} >= ${newest("anthropic_ok_at")}`))
+    .returning({ id: listenItems.id });
+  return rows.length;
 }

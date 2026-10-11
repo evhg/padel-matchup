@@ -9,6 +9,7 @@ import { postRedditComment, redditEnabled } from "./reddit";
 import { fetchAll, type FeedSpec } from "./sources";
 import { listenModel } from "@/lib/ops/anthropic";
 import { reportError } from "@/lib/alerts";
+import { WINDOW_MS } from "./window";
 
 /**
  * The listening loop, hourly:
@@ -17,8 +18,7 @@ import { reportError } from "@/lib/alerts";
  *   3. ask the owner on Telegram, at most a few per day, one tap to post
  * Nothing is ever posted without that tap.
  */
-/** How long a thread stays fresh enough to answer; the research desk dates its web hits by the same window. */
-export const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+export { WINDOW_MS };
 /** Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. */
 export const LIMITS = { draftsPerRun: 3, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
 

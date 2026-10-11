@@ -74,7 +74,11 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
   const [existing] = await db.select().from(answers).where(eq(answers.sourceItemId, item.id)).limit(1);
   if (existing) return existing;
   if (!(await withinBudget(db, now))) return null;
+  // True while the Messages API call is in flight: a timeout or a network error then is a failed call,
+  // and a database error after the call is not (ack.ts, propose.ts and desk.ts do the same).
+  let calling = false;
   try {
+    calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
@@ -82,6 +86,7 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
+    calling = false;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
     const ok = res.ok && json !== null;
     await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]);
@@ -95,7 +100,7 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
       .returning();
     return row;
   } catch {
-    await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
+    if (calling) await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
     return null;
   }
 }

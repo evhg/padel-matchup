@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, metricsDaily } from "@/db/schema";
 import { serviceBoard } from "@/lib/ops/services";
-import { BUDGET, parseDraft, spentToday } from "@/lib/listen/draft";
+import { recordModelCall } from "@/lib/ops/anthropic";
+import { BUDGET, draftReply, parseDraft, spentToday } from "@/lib/listen/draft";
 import { approveItem, askOwner, draftPending, expireOld, listenTick, rememberCandidates, skipItem } from "@/lib/listen/tick";
 import type { FeedSpec } from "@/lib/listen/sources";
 import { createTestDb } from "./helpers/db";
@@ -239,6 +240,22 @@ describe("listen: a failed model call is visible", () => {
     expect(await metric("listen_drafts")).toBe(0);
   });
 
+  it("a refused key is still a refused key when the metrics write fails", async () => {
+    status = 401;
+    // The metrics table refuses every write; the refusal must still stop the run.
+    const broken = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "insert") return (table: unknown) => (table === metricsDaily ? { values: () => ({ onConflictDoUpdate: async () => { throw new Error("connection reset"); } }) } : target.insert(table as never));
+        const v = Reflect.get(target, prop, target);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    }) as Db;
+    const before = await metric("anthropic_failed");
+    const out = await draftReply(broken, { source: "reddit", url: "https://www.reddit.com/r/padel/comments/key8/x/", title: "Padel app question 8", body: "which app", author: null, postedAt: NOW }, fetch, NOW);
+    expect(out).toMatchObject({ draft: null, refused: true });
+    expect(await metric("anthropic_failed")).toBe(before);
+  });
+
   it("a new key that answers turns the row back and counts the draft", async () => {
     await rememberCandidates(db, [{ source: "reddit", externalId: "t3_key9", url: "https://www.reddit.com/r/padel/comments/key9/x/", title: "Padel app question 9", body: "which app to organise matches", author: null, postedAt: NOW, threadId: "t3_key9" }], NOW);
     status = 200;
@@ -248,5 +265,64 @@ describe("listen: a failed model call is visible", () => {
     const row = (await serviceBoard(db, later)).rows.find((r) => r.key === "anthropic")!;
     expect(row.state).not.toBe("alert");
     expect(row.usage).not.toContain("refused");
+  });
+});
+
+// From 5 to 11 October 2026 the dead key failed 176 listening items for good ("API key is invalid.",
+// "invalid x-api-key"), before a refusal kept items new. A failed item is never drafted again, so the
+// first call a new key gets accepted puts the refused ones still inside the window back to new, in one
+// update. Every other failure stays failed, and a later accepted call touches nothing.
+describe("listen: a new key drafts the questions the dead key failed", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+
+  const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000);
+  const secondsOn = (s: number) => new Date(NOW.getTime() + s * 1000);
+  const statusOf = async () => Object.fromEntries((await db.select().from(listenItems)).map((r) => [r.externalId, { status: r.status, lastError: r.lastError, draftedAt: r.draftedAt }]));
+
+  it("the first accepted call after a refusal puts the refused items in the window back to new, once", async () => {
+    const seed: [string, string, number][] = [
+      ["t3_dead1", "API key is invalid.", 2],
+      ["t3_dead2", "invalid x-api-key", 30],
+      ["t3_dead3", "HTTP 401", 100],
+      // Older than the 7-day window: expired in all but name, and stays as it is.
+      ["t3_dead4", "invalid x-api-key", 24 * 8],
+      // A failure that was not the key's.
+      ["t3_dead5", "unparseable answer", 5],
+      ["t3_dead6", "Overloaded", 6],
+    ];
+    await db.insert(listenItems).values(seed.map(([id, lastError, h]) => ({ source: "reddit", externalId: id, url: `https://www.reddit.com/r/padel/comments/${id}/x/`, title: `Padel app ${id}`, body: "which app", postedAt: hoursAgo(h), status: "failed", lastError, draftedAt: hoursAgo(h - 1) })));
+    // The dead key's refusal an hour ago; a further refusal changes nothing.
+    await recordModelCall(db, { status: 401, ok: false, now: hoursAgo(1) });
+    await recordModelCall(db, { status: 401, ok: false, now: hoursAgo(0.5) });
+    expect(Object.values(await statusOf()).every((r) => r.status === "failed")).toBe(true);
+
+    await recordModelCall(db, { status: 200, ok: true, usage: { input: 10, output: 5 }, now: NOW });
+    const after = await statusOf();
+    for (const id of ["t3_dead1", "t3_dead2", "t3_dead3"]) expect(after[id], id).toEqual({ status: "new", lastError: null, draftedAt: null });
+    for (const id of ["t3_dead4", "t3_dead5", "t3_dead6"]) expect(after[id].status, id).toBe("failed");
+
+    // Once: the next accepted call does not put back an item that failed after the new key worked.
+    await db.update(listenItems).set({ status: "failed", lastError: "invalid x-api-key" }).where(eq(listenItems.externalId, "t3_dead1"));
+    await recordModelCall(db, { status: 200, ok: true, now: secondsOn(60) });
+    expect((await statusOf()).t3_dead1.status).toBe("failed");
+
+    // A new refusal, then a key that works again: the window's refused items come back once more.
+    await recordModelCall(db, { status: 403, ok: false, now: secondsOn(120) });
+    await recordModelCall(db, { status: 200, ok: true, now: secondsOn(180) });
+    expect((await statusOf()).t3_dead1.status).toBe("new");
+  });
+
+  it("a key fixed before this code ran puts them back on its first accepted call too", async () => {
+    // No refusal and no accepted call recorded, as production on the day this ships.
+    await db.delete(metricsDaily);
+    await db.delete(listenItems);
+    await db.insert(listenItems).values({ source: "reddit", externalId: "t3_old1", url: "https://www.reddit.com/r/padel/comments/old1/x/", title: "Padel app", body: "which app", postedAt: hoursAgo(3), status: "failed", lastError: "API key is invalid.", draftedAt: hoursAgo(2) });
+    await recordModelCall(db, { status: 200, ok: true, now: NOW });
+    expect((await statusOf()).t3_old1.status).toBe("new");
   });
 });

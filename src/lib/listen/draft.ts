@@ -71,7 +71,10 @@ export async function withinBudget(db: Db, now = new Date()): Promise<boolean> {
 export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null; refused: boolean }> {
   if (!draftingEnabled()) return { draft: null, usage: { input: 0, output: 0 }, error: "drafting disabled", refused: false };
   const user = `Source: ${c.source}\nURL: ${c.url}\nPosted: ${c.postedAt.toISOString()}\nAuthor: ${c.author ?? "unknown"}\nTitle: ${c.title}\n\n${c.body || "(no body)"}`;
+  // True while the Messages API call is in flight: only then is an error a failed call.
+  let calling = false;
   try {
+    calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
@@ -79,15 +82,17 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message: string } } | null;
+    calling = false;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
     const ok = res.ok && json !== null;
-    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]);
+    // A metrics write that fails must not turn a refused key into an ordinary failure: the caller stops on `refused`.
+    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]).catch(() => undefined);
     if (!ok) return { draft: null, usage, error: json?.error?.message ?? `HTTP ${res.status}`, refused: keyRefused(res.status) };
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
     const draft = parseDraft(text);
     return { draft, usage, error: draft ? null : "unparseable answer", refused: false };
   } catch (e) {
-    await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
+    if (calling) await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
     return { draft: null, usage: { input: 0, output: 0 }, error: e instanceof Error ? e.message : String(e), refused: false };
   }
 }
