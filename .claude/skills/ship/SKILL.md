@@ -246,6 +246,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   minutes and sent it back on every save, so a note-only edit of a start with seconds, or one in an hour
   the clocks repeat, moved the start and met the guard above. Send a field only when it changed
   (`startToSend`, as the capacity already did).
+- **A form's state outlives the page under it.** `useState(initial)` reads `initial` once, and the page
+  renders again under the form (a live night every 20 seconds, the page after the player's own save).
+  So after the organiser corrected a started match's start, a seated player's form still held the old
+  start, "changed" against the new one, sent it, met the guard, and could save no note behind fields
+  they could not change (11 October 2026). A field the viewer may not change shows and sends the page's
+  value, not the form's (`shownStart`).
 - **A look-then-make with no unique index is a race, and the fix is a lock on the thing, not the row.**
   "One game per crew hour" read "no game", then made one; two taps, or a tap and the hourly job, each
   read "no game". No row exists to lock yet, and a called-off game keeps its row, so no unique index

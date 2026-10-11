@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition, type ReactNode } from "react";
 import { updateEventAction } from "@/actions/events";
-import { editErrorKey, startToSend } from "@/lib/editMatchForm";
+import { editErrorKey, shownStart, startToSend } from "@/lib/editMatchForm";
 import { EventFields, type EventFormValues } from "./EventFields";
 import type { VenueOption } from "./VenueCombobox";
 
@@ -20,6 +20,8 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // A locked viewer's day, time and zone are the page's own, never older ones the form kept (`shownStart`).
+  const shown = shownStart(values, initial, startLocked);
 
   const save = () =>
     start(async () => {
@@ -27,7 +29,7 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
       const r = await updateEventAction(code, {
         title: values.title,
         // The day, the time and the zone only when one of them changed (`startToSend`).
-        ...startToSend(values, initial),
+        ...startToSend(shown, initial),
         durationMinutes: values.durationMinutes,
         venueName: values.venueName,
         venueMapUrl: values.venueMapUrl,
@@ -57,7 +59,7 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
     return (
       <div className="flex flex-col gap-4 animate-pop">
         <h3 className="font-extrabold">{t("creator.edit")}</h3>
-        <EventFields values={values} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} startLocked={startLocked} />
+        <EventFields values={shown} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} startLocked={startLocked} />
         {error && <p className="text-sm font-semibold text-danger">{error}</p>}
         <div className="flex gap-2">
           <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>
