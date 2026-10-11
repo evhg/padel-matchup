@@ -339,8 +339,12 @@ pastes, once, as WhatsApp's link-preview robot reads it (DECIDING rule 35). The 
 KicksmashBot and `/about#bot`. The read goes only to a host in `PLATFORMS`, over https. It follows
 three redirects at most, stops after four seconds, and reads 256 KB of the page at most. It keeps the
 title, the description, and the kind of link and the match id from a Branch link. It never logs the
-link, because a pasted link can carry a token. Each caller gets thirty pastes a day (`rl:paste:*` rows).
-A paste opens a link only when its words leave out the club, the day or the time. Two day counters
+link, because a pasted link can carry a token. Each caller gets thirty pastes a day (`rl:paste:*` rows;
+in the bot the key is the Telegram account, and the "Create match" tap reads the booking again, so it
+counts as a paste too). A paste opens a link only when its words leave out the club, the day or the time.
+In the bot, a private message that is no booking costs no read; one with a day and a time but no
+platform's link costs one read of the listed clubs. `tg_match_by_paste` counts the matches the bot made
+from a paste. Two day counters
 show whether platforms still answer: `paste_preview_ok` and `paste_preview_fail`. When
 `paste_preview_fail` climbs and `paste_preview_ok` stays at zero, a platform changed its preview or
 stopped it. The form still fills from the person's words, so nothing breaks; tell the owner in one

@@ -941,7 +941,10 @@ until real use asks for one.
   and Setpoint in the list of platforms; "Booked already? Paste it" on the first page, which opens the
   form filled, says which fields the booking left out, and keeps the match off the venue board; and the
   create button, which then holds the players and marks the court booked by the organiser in the same
-  tap ("Court booked by me"). Still to come: the same paste in a chat with the bot. The Padel Society
+  tap ("Court booked by me"). The same paste works in a private chat with the bot
+  (`src/lib/telegram/handlers/paste.ts`): the bot says what it read, "Create match" makes the match with
+  the players held and the court booked, and the answer becomes the match's link, ready for the WhatsApp
+  group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel Society
   keeps a match's club, day and players in its app's private API, which Kicksmash never calls. Its
   preview gives the match id only, so the words the person pastes carry the rest.
 
