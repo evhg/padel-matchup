@@ -153,12 +153,14 @@ try {
   // A refresh of the open page is no view: router.refresh() is what the live night's AutoRefresh calls
   // every 20 seconds. Next.js removes the RSC header before the page reads it, so the page reads the
   // browser's Sec-Fetch-Dest instead (isFullPageLoad in src/lib/source.ts). A reload by hand is a view.
+  // (A refresh's response never reports finished() to Playwright, so the wait is for its answer, then time
+  // for the write after it, which a counted refresh would make.)
   for (let i = 0; i < 2; i++) {
     const refreshed = viewer.waitForResponse((r) => r.request().headers()["rsc"] === "1" && new URL(r.url()).pathname === `/${code}`, { timeout: 15000 });
     await viewer.evaluate(() => window.next.router.refresh());
-    await (await refreshed).finished();
+    await refreshed;
   }
-  await viewer.waitForTimeout(2000);
+  await viewer.waitForTimeout(3000);
   const afterRefresh = await viewsWa();
   check("a refresh of the open match page adds no view", afterRefresh === wasViews + 1, `${wasViews + 1} -> ${afterRefresh}`);
   await viewer.reload();
