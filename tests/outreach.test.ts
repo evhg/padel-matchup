@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
+import { eq } from "drizzle-orm";
+import { metricsDaily } from "@/db/schema";
 import { approveOutreach, askOwnerOutreach, createDraft, draftReplyTo, isAutomatedSender, listOutreach, notifyInbound, outreachWeek, parseAddress, recordInbound, renderDeskEmail, saveOutreachDraft, skipOutreach } from "@/lib/outreach/desk";
 import { signSvix, verifySvix } from "@/lib/outreach/svix";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
@@ -115,6 +117,21 @@ describe("press desk", () => {
     expect(mail?.body.headers).toEqual({ "In-Reply-To": "<m1@bandeja>", References: "<m1@bandeja>" });
     delete process.env.ANTHROPIC_API_KEY;
     expect((await listOutreach(db, ["received"])).length).toBe(2);
+  });
+
+  it("a reply draft whose model call never answers is no draft, and counts as a failed call", async () => {
+    stubNet();
+    const now = new Date("2026-09-17T09:00:00Z");
+    const { row } = await recordInbound(db, { emailId: "rcv_timeout", from: "Ana Ruiz <ana@padelnews.es>", to: ["claude@kicksma.sh"], subject: "A question", text: "Can you tell me more?", html: null, messageId: "<t1@padelnews>", inReplyTo: null }, now);
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+    const failed = async () => Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, "anthropic_failed"))).find((r) => r.day === "2026-09-17")?.value ?? 0);
+    const before = await failed();
+    expect(await draftReplyTo(db, row, now)).toBeNull();
+    expect(await failed()).toBe(before + 1);
+    delete process.env.ANTHROPIC_API_KEY;
   });
 
   it("verifies Resend's signature and turns an email.received event into a desk row", async () => {

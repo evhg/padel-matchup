@@ -7,7 +7,6 @@ import { cookies } from "next/headers";
 import { after } from "next/server";
 import { getDb } from "@/db";
 import { baseUrl, emailEnabled } from "@/lib/config";
-import { getPlayer } from "@/lib/domain/players";
 import { getEventDetail, getSlotByInviteCode } from "@/lib/domain/queries";
 import { isClaimable } from "@/lib/domain/events";
 import { namesFromChat, planPaste } from "@/lib/domain/pasteNames";
@@ -28,17 +27,18 @@ import {
 import { joinGroup } from "@/lib/domain/groups";
 import { setCourtBooked } from "@/lib/domain/courtBooked";
 import { formatLevel } from "@/lib/domain/levels";
-import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
-import { admission, hasRange } from "@/lib/domain/levels";
+import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
-import { afterJoin, afterLeave } from "@/lib/aftermath";
+import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
+import { decideHeldByName, takeHeldByName } from "@/lib/domain/heldByName";
+import { later } from "@/lib/alerts";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { emitMatchEvent } from "@/lib/api/webhooks";
-import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendCalendarInvite, sendInviteEmail } from "@/lib/notify";
+import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer } from "@/lib/session";
-import { ActionFailure, assertRate, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, clientKey, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
@@ -97,11 +97,8 @@ export async function bePartnerAction(code: string, slotId: string, name?: strin
     const ev = detail.event;
     // Somebody already in (the organiser let them in) pairs without a second check of the range.
     const seated = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
-    if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && me.id !== ev.creatorPlayerId && !seated) {
-      const fit = admission(ev, me);
-      if (fit === "unknown") throw new ActionFailure("level_required");
-      if (fit !== "ok") throw new ActionFailure("forbidden");
-    }
+    const gate = await partnerAdmission(db, ev, me, seated);
+    if (gate !== "ok") throw new ActionFailure(gate);
     const res = await bePartner(db, { eventId: ev.id, playerId: me.id, slotId });
     if (res.joined && ev.groupId) await joinGroup(db, ev.groupId, me.id, "match").catch(() => undefined);
     after(async () => {
@@ -273,29 +270,42 @@ export async function confirmInviteAction(
     const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email });
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
-    if (res.outcome === "confirmed") {
-      // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no
-      // invitation yet. The organiser hears that they wait, and the promotion sends the invitation.
-      const listed = res.slot.position <= res.event.capacity;
-      after(async () => {
-        const fresh = (await getPlayer(db, me.id)) ?? me;
-        await notifyCreator(db, res.event, listed ? "confirmed" : "waitlisted", fresh.displayName, fresh.id);
-        if (!listed) return;
-        const ev = await notifyLineupChange(db, res.event, before, fresh.id);
-        await sendCalendarInvite(db, ev ?? res.event, fresh);
-      });
-    }
-    // The named partner was in already: the reserved spot they leave can move the waiting list up.
-    if (res.outcome === "already_in" && res.promotion) {
-      const promotion = res.promotion;
-      after(async () => {
-        const fresh = await notifyLineupChange(db, res.event, before, promotedOf(promotion).map((p) => p.playerId));
-        await notifyPromotion(db, fresh ?? res.event, promotion);
-      });
-    }
+    // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no
+    // invitation yet. The organiser hears that they wait, and the promotion sends the invitation.
+    if (res.outcome === "confirmed") after(async () => void (await afterConfirm(db, res, me, { wasComplete: before })));
+    // In already by another door: the reserved spot went the way a leave goes, and the match hears it
+    // as it hears a leave. A fixed-pairs night that moved nobody up changed only its pairs.
+    if (res.outcome === "already_in" && (res.promotion || !res.event.fixedPairs)) after(async () => void (await afterRelease(db, res, { wasComplete: before })));
     revalidatePath(`/${code}`);
     revalidatePath(`/${code}/i/${inviteCode}`);
     return { outcome: res.outcome };
+  });
+}
+
+/**
+ * "Take Danny's held place" on the plain match link (DECIDING rule 34, the owner, 11 October 2026):
+ * the second of two taps. The rule decides before anything is made (`decideHeldByName`: the
+ * address's rate, the same as "That's me", then every limit); a browser that knows nobody then gets
+ * an ordinary new record carrying the held name (`requirePlayer`, with its own limit per address),
+ * and the place is filled by the personal link's own write under the match's lock, the rule asked
+ * once more (`takeHeldByName`). The organiser hears "Danny confirmed", as from the personal link.
+ * The session is not marked as signed in by name: a record made here has no history to hold back.
+ */
+export async function takeHeldPlaceAction(code: string, name: string): Promise<ActionResult<{ outcome: "confirmed" }>> {
+  return runA(async () => {
+    if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
+    const db = await getDb();
+    const viewer = await getSessionPlayer(db);
+    const d = await decideHeldByName(db, { code, name, viewer: viewer ? { id: viewer.id, name: viewer.displayName } : null, rateKey: await clientKey() });
+    if (!d.ok) throw new ActionFailure(d.reason === "too_many" ? "too_many" : "invalid");
+    const me = viewer ?? (await requirePlayer(db, d.name));
+    const res = await takeHeldByName(db, d, { id: me.id, name: me.displayName });
+    if (!res.ok) throw new ActionFailure("invalid");
+    if (res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
+    await later(() => bumpMetric(db, "held_by_name"));
+    after(async () => void (await afterConfirm(db, res, me, { wasComplete: res.wasComplete })));
+    revalidatePath(`/${code}`);
+    return { outcome: "confirmed" as const };
   });
 }
 

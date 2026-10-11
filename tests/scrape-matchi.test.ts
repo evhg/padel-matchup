@@ -12,6 +12,7 @@ import {
   parseMatchiSlots,
 } from "@/lib/booking/adapters/matchi";
 import type { ScrapeTarget } from "@/lib/booking/adapters/types";
+import { failureWhy } from "@/lib/booking/scrape";
 
 // Real responses from www.matchi.se, read as an anonymous visitor on 10 October 2026, trimmed to what
 // the parser needs: Padel Phuket @ Blue Tree (facility 2165) and Bangkok Padel's empty day.
@@ -174,7 +175,7 @@ describe("scrape()", () => {
 
   it("stops at a 403 and asks nothing more", async () => {
     const h = harness(() => html("Forbidden", 403));
-    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: false, status: 403, reason: "blocked", requests: 1, detail: "403 on /facilities/bluetree" });
+    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: false, status: 403, reason: "blocked", requests: 1, detail: "club page: HTTP 403" });
     expect(h.calls).toHaveLength(1);
   });
 
@@ -252,5 +253,31 @@ describe("scrape()", () => {
     const h = harness(realMatchi);
     expect(await h.adapter.scrape(target({ bookingUrl: "https://playtomic.io/x" }), h.fetchImpl, NOW)).toMatchObject({ ok: false, reason: "error", requests: 0 });
     expect(h.calls).toHaveLength(0);
+  });
+});
+
+// A failure's detail is the step and the status or the error's class, the shape `failureWhy` keeps, so
+// the club's cache says why it failed; never the path, the query or the error's message.
+describe("a failed read says why, in the shape the cache keeps", () => {
+  const refused = (code: string) => Object.assign(new TypeError("fetch failed: https://www.matchi.se/book/listSlots?facility=2165 10.0.0.12:443"), { cause: { code } });
+  const cases: [string, (url: URL) => Response | Promise<Response>, string][] = [
+    ["a 500 on the club page", () => html("oops", 500), "club page: HTTP 500"],
+    ["a 503 on a day's list", (url) => (url.pathname === "/book/listSlots" ? html("busy", 503) : realMatchi(url)), "availability 2026-10-10: HTTP 503"],
+    ["a reset connection on a day's list", (url) => (url.pathname === "/book/listSlots" ? Promise.reject(refused("ECONNRESET")) : realMatchi(url)), "availability 2026-10-10: TypeError ECONNRESET"],
+  ];
+  for (const [name, route, detail] of cases) {
+    it(`${name}: "${detail}"`, async () => {
+      const h = harness(route);
+      const r = await h.adapter.scrape(target(), h.fetchImpl, NOW);
+      expect(r.ok ? null : r.detail).toBe(detail);
+      expect(failureWhy(detail)).toBe(detail);
+    });
+  }
+
+  it("a page that does not answer: the step and TimeoutError", async () => {
+    const h = harness(() => new Promise<Response>(() => undefined), { timeoutMs: 20 });
+    const r = await h.adapter.scrape(target(), h.fetchImpl, NOW);
+    expect(r.ok ? null : r.detail).toBe("club page: TimeoutError");
+    expect(failureWhy("club page: TimeoutError")).toBe("club page: TimeoutError");
   });
 });

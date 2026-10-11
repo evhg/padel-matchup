@@ -7,7 +7,7 @@ import { coaches, events, players } from "@/db/schema";
 import { mcpToolNames } from "@/lib/api/mcp";
 import { openapiDocument } from "@/lib/api/openapi";
 import { boardToPublic, clubToPublic, coachToPublic, groupToPublic, matchToPublic, seriesPageToPublic, seriesToPublic } from "@/lib/api/serialize";
-import { claimClub, decideClub, getClub } from "@/lib/domain/clubs";
+import { claimClub, decideClub, getClubWithCache } from "@/lib/domain/clubs";
 import { createCoach, presetHours } from "@/lib/domain/coaching";
 import { createEvent } from "@/lib/domain/events";
 import { createGroup, getGroupDetail } from "@/lib/domain/groups";
@@ -126,7 +126,7 @@ describe("public shapes", () => {
       board: boardToPublic(board!, BASE),
       group: groupToPublic(await getGroupDetail(db, group, NOW), BASE),
       coach: coachToPublic(coachRow, BASE, { city: "phuket", slots: [new Date(NOW.getTime() + DAY)] }),
-      club: clubToPublic((await getClub(db, club.slug))!, BASE),
+      club: clubToPublic((await getClubWithCache(db, club.slug))!, BASE),
       series: seriesToPublic(series, next, BASE, "Org"),
       seriesPage: seriesPageToPublic(await seriesPage(db, series, NOW), BASE),
     };

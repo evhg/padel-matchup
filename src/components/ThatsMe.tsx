@@ -6,6 +6,32 @@ import { thatsMeAction } from "@/actions/identity";
 import { requestBackIn } from "./backInBus";
 
 /**
+ * Two taps, the owner's pattern for a tap that acts as somebody (10 October 2026): the first arms the
+ * button and sends nothing; a tap anywhere else, Escape or leaving the button disarms it. "That's me"
+ * and "Take Danny's held place" both stand on it.
+ */
+export function useTwoTap<T extends HTMLElement>() {
+  const [armed, setArmed] = useState(false);
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const away = (e: Event) => {
+      if (!ref.current?.contains(e.target as Node)) setArmed(false);
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setArmed(false);
+    };
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [armed]);
+  return { armed, setArmed, ref };
+}
+
+/**
  * "That's me" (DECIDING rule 34): two taps sign this browser in as the record of that name, or fold
  * the browser's own new record into it. The first tap only arms the button, which then asks "Sign in
  * as Ana?"; the second sends. A tap anywhere else, Escape or leaving the button disarms it, so a thumb
@@ -26,24 +52,8 @@ export function ThatsMeButton({
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
-  const [armed, setArmed] = useState(false);
+  const { armed, setArmed, ref: button } = useTwoTap<HTMLButtonElement>();
   const [error, setError] = useState<string | null>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!armed) return;
-    const away = (e: Event) => {
-      if (!button.current?.contains(e.target as Node)) setArmed(false);
-    };
-    const escape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setArmed(false);
-    };
-    document.addEventListener("pointerdown", away, true);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", away, true);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [armed]);
   const tap = () => {
     if (!armed) {
       setError(null);

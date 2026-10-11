@@ -7,7 +7,7 @@ import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
 import { confirmInvite, leaveEvent } from "@/lib/domain/slots";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
-import { afterJoin, afterLeave } from "@/lib/aftermath";
+import { afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
 import { isValidShareCode } from "@/lib/codes";
 import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
 import { rangeChoices } from "@/lib/domain/levelAsk";
@@ -288,7 +288,7 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   // A seat the organiser held for this very number (a name and the phone typed on the web): it is theirs.
   const heldForMe = detail.roster.find((x) => x.status === "invited" && x.inviteCode && sameNumber(x.invitedPhone, msg.from));
   if (heldForMe) {
-    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id }).catch(() => null);
+    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from }).catch(() => null);
     if (res?.outcome === "confirmed") {
       if (res.event.groupId) await joinGroup(db, res.event.groupId, player.id, "match").catch(() => undefined);
       const now = (await getEventByCode(db, code)) ?? detail;
@@ -298,6 +298,9 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
       await sendCalendarInvite(db, ev ?? res.event, player).catch(() => undefined);
       return "wa:confirmed";
     }
+    // In already by another door: the held place went the way a leave goes, and the match hears it as
+    // it hears a leave (the first player waiting is told they moved up). The JOIN below answers.
+    if (res?.outcome === "already_in") await afterRelease(db, res, { wasComplete: before }).catch(() => undefined);
   }
 
   // A new number whose profile name is already in the match: counted as the web counts it (`newid_name_here`).

@@ -37,6 +37,8 @@ import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { sendWaTemplate, waLocale, waMatchLine } from "@/lib/whatsapp/templates";
 import { markHeldDelivered, matchParams, quietSummariesDue, recordNotice, recordNotices, type NoticeInput } from "@/lib/domain/notices";
 import { kindOn, type Sender } from "@/lib/domain/noticeKinds";
+import { claimPlayAgainRound, playAgainRecipients, toldOfGame } from "@/lib/domain/playAgain";
+import { firstName } from "@/lib/domain/result";
 
 /**
  * All outbound notifications live here. Every function is safe to call when
@@ -259,12 +261,22 @@ export async function notifyGroupAskDecided(db: Db, group: Pick<Group, "code" | 
   await tell(db, player, text, { inline_keyboard: [[{ text: t("group.open"), url }]] }, { notice: { sender: approved ? "groupAskApproved" : "groupAskDeclined", params: { group: group.name } }, label: t("group.open") }).catch(() => undefined);
 }
 
-/** A group got a new match (by a member or the weekly slot): email + push to every other member. */
-export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludePlayerId?: string | null): Promise<{ emails: number; pushes: number }> {
+/**
+ * A group got a new match (by a member or the weekly slot): email + push to every other member.
+ * `onlyUntold`: the weekly slot found the crew's game already there ("Play again" made it, DECIDING
+ * rule 37), so only the members who have no place in it and no notice of it yet hear (`toldOfGame`):
+ * a player of the last match had the "Are you in?" message, and nobody hears about one game twice.
+ */
+export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludePlayerId?: string | null, o: { onlyUntold?: boolean } = {}): Promise<{ emails: number; pushes: number }> {
   const rows = await db.select({ player: playersTable }).from(groupMembersTable).innerJoin(playersTable, eq(playersTable.id, groupMembersTable.playerId)).where(eq(groupMembersTable.groupId, group.id));
+  let members = rows.map((r) => r.player).filter((p) => !(excludePlayerId && p.id === excludePlayerId));
+  if (o.onlyUntold) {
+    const told = await toldOfGame(db, ev.id, members.map((p) => p.id));
+    members = members.filter((p) => !told.has(p.id));
+    if (members.length === 0) return { emails: 0, pushes: 0 };
+  }
   const organizer = await getPlayer(db, ev.creatorPlayerId);
   const detail = await getEventDetail(db, ev);
-  const members = rows.map((r) => r.player).filter((p) => !(excludePlayerId && p.id === excludePlayerId));
   const released = await recordNotices(db, members.map((p) => ({ playerId: p.id, sender: "crewMatch", eventId: ev.id, params: { ...matchParams(ev), group: group.name }, startsAt: ev.startsAt, tz: ev.tz })));
   let emails = 0;
   let pushes = 0;
@@ -286,6 +298,48 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
     }
   }
   return { emails, pushes };
+}
+
+/**
+ * "Play again" (DECIDING rule 37; the owner, 11 October 2026: "Yes, one message each"): each player
+ * who sat in the last match hears once that the next game exists, "Ana made the next game: Sat, Oct 17
+ * 18:00 at Warehaus. Are you in?", with the name of the next game's organiser. The next game may be the
+ * crew's, already made by the weekly slot: then a player who already has a place in it or its crew
+ * notice is not told again (`toldOfGame`). One round per old match, however often anybody taps, and
+ * only a tap by its organiser or by a player seated from before its start may send it
+ * (`claimPlayAgainRound`); the rows for everybody in one insert (rule 12), kind `crew`; delivery only
+ * to the people the gate released. In Telegram the ✅ is the card's own `j:` join and "Open" the Mini
+ * App or the public page; every other channel carries the public match link, never a personal one,
+ * because a forwarded message keeps its buttons (as `notifyRefill`), and the email leaves out the
+ * "get this on Telegram" line, whose ticket would bind a friend's Telegram to the player. Only a
+ * played match sends (`claimPlayAgainRound`). No WhatsApp template says this,
+ * so a player whose only channel is WhatsApp finds it in the inbox on My matches.
+ *
+ * Returns how many people the round reached (inbox rows), 0 when the round was already sent.
+ */
+export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: Pick<Player, "id" | "displayName">, now = new Date()): Promise<number> {
+  if (!(await claimPlayAgainRound(db, old, next, tapper.id, now))) return 0;
+  const all = await playAgainRecipients(db, old, tapper.id);
+  const told = await toldOfGame(db, next.id, all.map((p) => p.id));
+  const people = all.filter((p) => !told.has(p.id));
+  if (people.length === 0) return 0;
+  const organizer = next.creatorPlayerId === tapper.id ? tapper : ((await getPlayer(db, next.creatorPlayerId)) ?? tapper);
+  const name = firstName(organizer.displayName);
+  const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "playAgain", eventId: next.id, params: { ...matchParams(next), name }, startsAt: next.startsAt, tz: next.tz })), now);
+  const detail = await getEventDetail(db, next);
+  const open = eventUrl(baseUrl(), next.code);
+  for (const p of people) {
+    if (released.get(p.id) !== "now") continue;
+    // No recipient handed to ctx: no personal link is made, and none could leak into the message.
+    const c = await ctx(db, next, p.locale, null, detail);
+    const s = botStrings(botLocale(p.locale));
+    const url = telegramEnabled() && p.telegramId ? (miniAppUrl(next.code) ?? open) : open;
+    const text = c.t("noticeItem.playAgain", { ...c.vars, name });
+    // `bind: false`: the email's "get this on Telegram" line carries a ticket that binds whoever taps it
+    // to this player, and this is the message most likely to be forwarded ("want to come?").
+    await tell(db, p, text, { inline_keyboard: [[{ text: s.in, callback_data: `j:${next.code}` }, { text: s.open, url }]] }, { notice: { released: "now" }, bind: false }).catch(() => undefined);
+  }
+  return people.length;
 }
 
 /**

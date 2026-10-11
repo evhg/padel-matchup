@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { startTransition, useState, useTransition } from "react";
 import { joinAction, leaveAction, withdrawJoinRequestAction } from "@/actions/slots";
 import { askLevelCheckAction } from "@/actions/verify";
-import { formatLevel, levelFit, type LevelRange } from "@/lib/domain/levels";
+import { formatLevel, joinBarLevel, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
 import { requestJoin } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 
@@ -32,6 +32,7 @@ export function JoinBar({
   partnerGoes = false,
   pairsLocked = false,
   tellGroupHref = null,
+  rangeWaived = null,
 }: {
   code: string;
   state: JoinState;
@@ -65,6 +66,11 @@ export function JoinBar({
    * back in it. A ghost button beside Leave, so it never competes with a primary action (DECIDING rule 1).
    */
   tellGroupHref?: string | null;
+  /**
+   * The organiser already played a finished, scored match with the viewer, so the range does not hold
+   * them (DECIDING rules 21 and 37): "ok" lets them in, "unverified" still asks for a confirmed level.
+   */
+  rangeWaived?: RangeWaiver;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
@@ -77,11 +83,9 @@ export function JoinBar({
   const [partner, setPartner] = useState("");
   const [addingPartner, setAddingPartner] = useState(false);
 
-  const fit = levelFit(levelRange, myLevel);
-  const needsLevel = Boolean(levelRange) && myLevel == null;
-  const outOfRange = fit === "below" || fit === "above";
-  // Inside the range, but the event wants a confirmed level and this one is only declared.
-  const unverified = Boolean(levelRange) && verifiedOnly && fit === "ok" && !verified;
+  // Outside the range, or inside it with only a declared level where the event wants a confirmed one;
+  // the same answer the server gives, a past game with the organiser included.
+  const { needsLevel, outOfRange, unverified } = joinBarLevel({ range: levelRange, level: myLevel, verifiedOnly, verified, waived: rangeWaived });
 
   // State updates after an awaited server action are wrapped in startTransition
   // so they join the router's transition instead of interrupting it (React 19).
@@ -181,7 +185,7 @@ export function JoinBar({
                 </button>
               )}
               <div className="flex justify-between gap-2 text-xs font-semibold text-muted">
-                <span>{outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : unverified && myLevel != null ? t("levelCheck.gate", { level: formatLevel(myLevel) }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
+                <span>{outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : unverified && myLevel != null ? t(rangeWaived === "unverified" ? "levelCheck.gateWaived" : "levelCheck.gate", { level: formatLevel(myLevel) }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
                 {error && <span className="text-danger">{error}</span>}
               </div>
             </div>

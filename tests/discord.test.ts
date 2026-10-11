@@ -10,6 +10,7 @@ import { saveMatchScore } from "@/lib/domain/scores";
 import { discordApplicationId, md, verifyInteraction, type DcInteraction } from "@/lib/discord/api";
 import { channelTicket, handleInteraction, postCardForDiscordTicket, postCardsForGroup, postDiscordResult, sendDiscordReminders, syncDiscord, verifyChannelTicket } from "@/lib/discord/bot";
 import { discordListenTick, looksLikeQuestion } from "@/lib/discord/listen";
+import { listenTick } from "@/lib/listen/tick";
 import { createGroup } from "@/lib/domain/groups";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
@@ -24,6 +25,7 @@ let guilds: { id: string; name: string }[] = [];
 let channels: Record<string, { id: string; type: number; name: string }[]> = {};
 let messages: Record<string, Record<string, unknown>[]> = {};
 let modelReply: Record<string, unknown> | null = null;
+let modelStatus = 200;
 
 function stubDiscord() {
   calls = [];
@@ -36,6 +38,7 @@ function stubDiscord() {
       const path = u.pathname.replace(/^\/api\/v10/, "") + u.search;
       calls.push({ method, path, body });
       const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
+      if (u.hostname === "api.anthropic.com" && modelStatus !== 200) return json({ type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }, modelStatus);
       if (u.hostname === "api.anthropic.com") return json({ content: [{ type: "text", text: JSON.stringify(modelReply ?? { relevant: false, reply: null, reason: "stub" }) }], usage: { input_tokens: 100, output_tokens: 40 } });
       if (method === "POST" && /^\/channels\/\d+\/messages$/.test(u.pathname.replace(/^\/api\/v10/, ""))) return json({ id: String(nextMessageId++), channel_id: u.pathname.split("/")[4] });
       if (method === "PATCH" && /\/channels\/\d+\/messages\/\d+$/.test(u.pathname)) return json({ id: u.pathname.split("/").pop() });
@@ -154,6 +157,7 @@ describe("discord bot (db, stubbed REST)", () => {
     channels = {};
     messages = {};
     modelReply = null;
+    modelStatus = 200;
     stubDiscord();
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -364,5 +368,44 @@ describe("discord bot (db, stubbed REST)", () => {
     delete process.env.DISCORD_BOT_TOKEN;
     const off = await discordListenTick(db, now);
     expect(off).toMatchObject({ guilds: 0, channels: 0, replied: 0 });
+  });
+
+  // A refused key (401) answers nobody, so it must lose nobody: the question it met gets no row, the
+  // cursor goes back to just before it, and the next run with a working key reads it and the ones after.
+  it("a refused key makes one call, records nothing, and leaves the questions for the next key", async () => {
+    const chan = "1545987795863085077";
+    guilds = [{ id: GUILD, name: "KickSmash" }];
+    channels[GUILD] = [{ id: chan, type: 0, name: "help" }];
+    messages[chan] = [{ id: "700", type: 0, content: "Hello there, first contact", author: user(41, "Ann") }];
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    const now = new Date(Math.ceil(Date.now() / HOUR) * HOUR + 9 * 24 * HOUR);
+    await discordListenTick(db, now);
+    messages[chan].push({ id: "701", type: 0, content: "How do I set a level range?", author: user(42, "Bo") }, { id: "702", type: 0, content: "How do I share a match in WhatsApp?", author: user(43, "Cy") });
+    // A feed item waits for its draft: the refusal the Discord half met stops the drafts after it too.
+    const [waiting] = await db.insert(listenItems).values({ source: "reddit", externalId: "t3_refused", url: "https://www.reddit.com/r/padel/comments/refused/x/", title: "Which app organises padel matches?", body: "app for padel", postedAt: now, status: "new" }).returning();
+    modelStatus = 401;
+    const model = () => sent("POST", /\/v1\/messages/).length;
+    const before = model();
+    const run = await listenTick(db, now, { feeds: [] });
+    expect(run.discord).toMatchObject({ read: 2, candidates: 2, replied: 0, refused: true });
+    expect(run.drafted).toBe(0);
+    expect(model() - before).toBe(1);
+    const [still] = await db.select().from(listenItems).where(eq(listenItems.id, waiting.id));
+    expect(still.status).toBe("new");
+    expect(await db.select().from(listenItems).where(eq(listenItems.externalId, `${chan}:701`))).toHaveLength(0);
+    const [cursor] = await db.select().from(discordChannels).where(eq(discordChannels.channelId, chan));
+    expect(cursor.lastMessageId).toBe("700");
+
+    modelStatus = 200;
+    modelReply = { relevant: true, kind: "asks_how_to", language: "en", reply: "Open More options on the create form.", reason: "how-to", mentionsKicksmash: true };
+    const next = await discordListenTick(db, now);
+    expect(next).toMatchObject({ read: 2, candidates: 2, replied: 2 });
+    expect(next.refused).toBeUndefined();
+    for (const id of ["701", "702"]) {
+      const [row] = await db.select().from(listenItems).where(eq(listenItems.externalId, `${chan}:${id}`));
+      expect(row.status).toBe("posted");
+    }
+    const [moved] = await db.select().from(discordChannels).where(eq(discordChannels.channelId, chan));
+    expect(moved.lastMessageId).toBe("702");
   });
 });

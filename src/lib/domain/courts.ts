@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubCourts, clubs, events, lessons, type Club, type ClubCourt, type CourtKind } from "@/db/schema";
+import { columnsButCache, type PickableClub } from "./clubColumns";
 import { DomainError } from "./errors";
 
 /**
@@ -71,8 +72,8 @@ export function countsOf(rows: Pick<CleanCourt, "kind">[]): Pick<Club, "courts" 
  * old rows go, the new ones come, the counts follow. An empty list clears the rows and leaves the
  * typed counts alone, so a club that lists nothing loses nothing.
  */
-export async function replaceCourts(db: Db, token: string, input: CourtInput[]): Promise<{ club: Club; courts: ClubCourt[] } | null> {
-  const [club] = await db.select().from(clubs).where(eq(clubs.manageToken, token)).limit(1);
+export async function replaceCourts(db: Db, token: string, input: CourtInput[]): Promise<{ club: PickableClub; courts: ClubCourt[] } | null> {
+  const [club] = await db.select(columnsButCache).from(clubs).where(eq(clubs.manageToken, token)).limit(1);
   if (!club) return null;
   const clean = cleanCourts(input);
   await db.delete(clubCourts).where(eq(clubCourts.clubSlug, club.slug));
@@ -82,7 +83,7 @@ export async function replaceCourts(db: Db, token: string, input: CourtInput[]):
     .update(clubs)
     .set({ ...counts, updatedAt: new Date() })
     .where(and(eq(clubs.slug, club.slug)))
-    .returning();
+    .returning(columnsButCache);
   return { club: fresh, courts: await listCourts(db, club.slug) };
 }
 

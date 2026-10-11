@@ -40,7 +40,7 @@ async function verifierOf(db: Db, check: LevelCheck): Promise<{ player: Player; 
     return p ? { player: p, url: `${base}/coach` } : null;
   }
   if (check.clubSlug) {
-    const [club] = await db.select().from(clubs).where(eq(clubs.slug, check.clubSlug)).limit(1);
+    const [club] = await db.select({ slug: clubs.slug, claimedBy: clubs.claimedBy, manageToken: clubs.manageToken }).from(clubs).where(eq(clubs.slug, check.clubSlug)).limit(1);
     if (!club?.claimedBy) return null;
     const [p] = await db.select().from(players).where(eq(players.id, club.claimedBy)).limit(1);
     return p ? { player: p, url: `${base}/v/${club.slug}/manage/${club.manageToken}` } : null;

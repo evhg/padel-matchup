@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
 import { eq } from "drizzle-orm";
-import { feedback } from "@/db/schema";
+import { feedback, metricsDaily } from "@/db/schema";
+import { dayKey } from "@/lib/domain/metrics";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
@@ -16,6 +17,13 @@ import { signSvix } from "@/lib/outreach/svix";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
 import { createTestDb } from "./helpers/db";
+
+// A model call that never answered (a timeout, a network error) is a failed call, and the board counts it.
+const failedCalls = async (db: Db, now: Date) => Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, "anthropic_failed"))).find((r) => r.day === dayKey(now))?.value ?? 0);
+const noAnswer = async (url: string | URL | Request) => {
+  if (String(url).includes("api.anthropic.com")) throw new TypeError("fetch failed");
+  return new Response(JSON.stringify({ ok: true, result: { message_id: 9 } }), { headers: { "content-type": "application/json" } });
+};
 
 type Call = { url: string; method: string; body: Record<string, unknown> };
 let calls: Call[] = [];
@@ -414,6 +422,16 @@ describe("the instant reply", () => {
     expect(ack.kind).toBe("feedback");
     expect(ack.reply).toContain("Ana");
   });
+
+  it("a model call that never answers counts as a failed call", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    vi.stubGlobal("fetch", noAnswer);
+    const now = new Date("2026-09-20T09:00:00Z");
+    const before = await failedCalls(db, now);
+    const ack = await composeAck(db, { text: "the court name could be bigger on the card", name: "Ana", locale: "es", source: "web" }, fetch, now);
+    expect(ack.by).toBe("fallback");
+    expect(await failedCalls(db, now)).toBe(before + 1);
+  });
 });
 
 describe("the note is the trigger: a proposal to the owner", () => {
@@ -496,6 +514,17 @@ describe("the note is the trigger: a proposal to the owner", () => {
     expect(await proposeToOwner(db, troll.id)).toBe("skipped:not_feedback");
     expect(tg).toHaveLength(1);
     expect(await proposeToOwner(db, "00000000-0000-0000-0000-000000000000")).toBe("skipped:not_found");
+  });
+
+  it("a proposal whose model call never answers still reaches the owner, and counts as a failed call", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    vi.stubGlobal("fetch", noAnswer);
+    const now = new Date("2026-09-21T09:00:00Z");
+    const row = await createFeedback(db, { source: "web", text: "a bigger court number on the card", locale: "en", name: "Tom" });
+    await markAcknowledged(db, row.id, "Thanks, Tom.");
+    const before = await failedCalls(db, now);
+    expect(await proposeToOwner(db, row.id, fetch, now)).toBe("sent");
+    expect(await failedCalls(db, now)).toBe(before + 1);
   });
 
   it("without the model the owner still gets the note at once, with a line saying the analysis is missing; without an owner nothing is sent", async () => {

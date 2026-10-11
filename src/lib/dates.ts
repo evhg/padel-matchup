@@ -128,6 +128,13 @@ export function formatEventTime(date: Date, tz: string, locale: string): string 
     hourCycle: locale.startsWith("en") ? "h23" : undefined,
   }).format(date);
 }
+/**
+ * "Saturday 18:00": a weekly slot's day and time in the event's zone, the weekday alone and in full, so
+ * no date's comma rides along ("Sun, 10:52") and a line can put it after "Every" or in brackets.
+ */
+export function formatWeeklyWhen(date: Date, tz: string, locale: string): string {
+  return `${weekdayName(date, tz, locale)} ${formatEventTime(date, tz, locale)}`;
+}
 /** "Sat 18:00": the weekday and the time in the event's zone, what a line in a group chat needs (src/lib/domain/groupLine.ts). */
 export function formatWeekdayTime(date: Date, tz: string, locale: string): string {
   return `${new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: "short" }).format(date)} ${formatEventTime(date, tz, locale)}`;

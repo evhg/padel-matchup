@@ -3,7 +3,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft";
 import type { SaidBefore } from "./store";
 import { feedbackLocale, promisesSomething, type FeedbackLocale } from "./strings";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The instant reply to a note. Written for that note when the model is
@@ -118,11 +118,14 @@ export function parseAck(text: string): { kind: Ack["kind"]; reply: string } | n
 export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = fetch, now = new Date()): Promise<Ack> {
   const fallback: Ack = { kind: "feedback", reply: fallbackAck(note), by: "fallback" };
   if (!draftingEnabled()) return fallback;
+  // True while the Messages API call is in flight: a timeout or a network error then is a failed call.
+  let calling = false;
   try {
     if (!(await withinBudget(db, now))) return fallback;
     const said = note.said;
     const memory = said?.lastReply ? `notes left before this one: ${said.notesBefore}\nlast reply this person was sent: ${said.lastReply.slice(0, 300)}\n` : "";
     const user = `locale: ${feedbackLocale(note.locale)}\nsource: ${note.source}\nreply channel: ${note.canReply === false ? "none" : (note.replyVia ?? note.source)}\nname: ${note.name ?? "(none)"}\n${memory}note:\n${note.text.slice(0, 2000)}`;
+    calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
@@ -130,10 +133,8 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
       signal: AbortSignal.timeout(12_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
-    if (json?.usage) {
-      await bumpMetric(db, "anthropic_in", json.usage.input_tokens || 0).catch(() => undefined);
-      await bumpMetric(db, "anthropic_out", json.usage.output_tokens || 0).catch(() => undefined);
-    }
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
+    calling = false;
     if (!res.ok || !json) return fallback;
     const parsed = parseAck((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (!parsed) return fallback;
@@ -147,6 +148,7 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
     if (parsed.kind === "not_feedback") return { kind: "not_feedback", reply: usable ? parsed.reply : notFeedbackLine(note.locale), by: usable ? "model" : "fallback" };
     return usable ? { kind: "feedback", reply: parsed.reply, by: "model" } : fallback;
   } catch {
+    if (calling) await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
     return fallback;
   }
 }

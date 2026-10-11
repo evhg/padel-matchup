@@ -8,7 +8,8 @@ import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { getGroupById, getGroupMember, joinGroup } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
-import { admission, hasRange } from "@/lib/domain/levels";
+import { hasRange } from "@/lib/domain/levels";
+import { admissionAt } from "@/lib/domain/playAgain";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
@@ -222,7 +223,8 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
   const token = await getOrCreatePersonalToken(db, player.id);
   const me = { name: player.displayName, personalToken: token, personalUrl: personalUrl(base, token) };
   if (hasRange(range) && player.id !== ev.creatorPlayerId) {
-    const fit = admission(ev, player);
+    // A player who already played a finished, scored match with the organiser is not held to the range (DECIDING rule 37).
+    const fit = await admissionAt(db, ev, player);
     if (fit === "unknown") throw new ApiError(422, "level_required", `This match is for levels ${range.min ?? 0}–${range.max ?? 7}. Pass the player's level (0–7) to join.`, "Levels are self-declared in quarter steps; 3.0 is a consistent intermediate player.");
     if (fit !== "ok") {
       const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === player.id);
@@ -232,7 +234,7 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
         const fresh = (await getEventByCode(db, ev.code))!;
         const next =
           fit === "unverified"
-            ? "This match takes confirmed levels only. The player's level is inside the range but nobody has confirmed it, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
+            ? "This match takes confirmed levels only, and nobody has confirmed the player's level, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
             : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
         const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
         // The ask carries no partner: say so, so nobody believes the pair is in.

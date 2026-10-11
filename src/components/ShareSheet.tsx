@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { tagForWhatsapp, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
 
 export function CopyButton({ value, label, className = "btn-ghost", copiedLabel }: { value: string; label: string; className?: string; copiedLabel?: string }) {
   const t = useTranslations();
@@ -37,31 +37,32 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
   }, []);
   const sm = size === "sm" ? " btn-sm" : "";
   const shareNative = async () => {
-    const plain = text.replace(url, "").trim();
+    // The phone's own sheet tags its link `?s=share`, as every other button tags its own.
+    const shared = nativeShareData(url, text);
     try {
       if (imageUrl && typeof navigator.canShare === "function") {
         const blob = await fetch(imageUrl).then((r) => r.blob());
         const file = new File([blob], "kicksmash.png", { type: blob.type || "image/png" });
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], text: `${plain} ${url}`.trim() });
+          await navigator.share({ files: [file], text: shared.textWithLink });
           return;
         }
       }
-      await navigator.share({ url, text: plain });
+      await navigator.share({ url: shared.url, text: shared.text });
     } catch {
       /* the person closed the sheet */
     }
   };
   return (
     <div className={`grid gap-2 ${size === "sm" ? "grid-cols-3" : "grid-cols-2"}`}>
-      {/* A match link sent by WhatsApp says so (`?s=wa`), so what starts from a tap in a group is counted as such. */}
+      {/* A match link says which button sent it (`?s=wa`, `?s=tg`, `?s=link`, `?s=share`), so what starts from a tap in a group is counted as such. */}
       <a href={whatsappShareUrl(tagForWhatsapp(text, url), phone)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#25D366] text-white hover:brightness-95`}>
         <WhatsAppIcon /> {t("share.whatsapp")}
       </a>
-      <a href={telegramShareUrl(url, text)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
+      <a href={telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(text, url, "tg"))} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
         <TelegramIcon /> {t("share.telegram")}
       </a>
-      <CopyButton value={url} label={t("share.copyLink")} className={`btn-ghost${sm}${size === "sm" ? "" : " col-span-2"}`} />
+      <CopyButton value={tagMatchUrl(url, "link")} label={t("share.copyLink")} className={`btn-ghost${sm}${size === "sm" ? "" : " col-span-2"}`} />
       {canShare && size === "lg" && (
         <button type="button" className="btn-ghost col-span-2" onClick={shareNative} data-testid="native-share">
           {imageUrl ? t("share.nativeShareImage") : t("share.nativeShare")}

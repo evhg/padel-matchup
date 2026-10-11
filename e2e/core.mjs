@@ -12,6 +12,16 @@ const newPage = async () => {
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
   return page;
 };
+// Where two headings sit on the screen: their places among the headings in <main>, -1 when one is missing.
+// Not a position in page.content(): the source also carries React's inline payload, whose messages hold the
+// same words, and when React recovers from a hydration mismatch (React error 418, a busy CI runner) it renders
+// the page again after those scripts. "Upcoming" then sat behind "Your personal link" in the source while the
+// screen was right (CI, 11 October 2026).
+const headingOrder = (page, first, second) =>
+  page.locator("main h2").evaluateAll((hs, [x, y]) => {
+    const at = (t) => hs.findIndex((h) => h.textContent.includes(t));
+    return [at(x), at(y)];
+  }, [first, second]);
 
 try {
   // ---- Context A: Dana ----
@@ -128,6 +138,60 @@ try {
   check("share page renders QR", (await a.locator("svg path").count()) > 0, code);
   check("share page says match is live + Go to match", (await a.getByText("Your match is live").count()) > 0 && (await a.getByRole("link", { name: /Go to match/ }).count()) > 0);
   check("share text includes court", (await a.locator('a[href^="https://wa.me"]').first().getAttribute("href")).includes(encodeURIComponent("Court 3")));
+  // Each share button tags the match link it sends, so the step from a shared link to a seat is counted (docs/OPERATING.md).
+  check("the Telegram share tags its link ?s=tg", new URL(await a.locator('a[href^="https://t.me/share"]').first().getAttribute("href")).searchParams.get("url").endsWith(`/${code}?s=tg`), code);
+  // "Copy link" puts the link on the clipboard and nowhere in the page, so the clipboard is caught here.
+  await a.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (v) => void (window.__copied = v) } }));
+  await a.getByRole("button", { name: "Copy link" }).first().click();
+  await a.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
+  check("the copied link is tagged ?s=link", String(await a.evaluate(() => window.__copied)).endsWith(`/${code}?s=link`), code);
+  // The phone's own share sheet ("Share…") renders only where navigator.share exists, and headless
+  // Chromium on Linux has none, so a stand-in catches what the button hands it. Only on the share page,
+  // so no later page of this browser grows a share button.
+  await a.addInitScript(() => {
+    if (location.pathname.endsWith("/share")) navigator.share = async (d) => void (window.__shared = d);
+  });
+  await a.reload();
+  await a.getByTestId("native-share").click({ timeout: 10000 }).catch(() => undefined);
+  await a.waitForFunction(() => typeof window.__shared === "object", null, { timeout: 5000 }).catch(() => undefined);
+  check("the phone's share sheet sends the link tagged ?s=share", String(await a.evaluate(() => window.__shared?.url)).endsWith(`/${code}?s=share`), code);
+  await a.evaluate(() => void delete navigator.share);
+  // A stranger who opens the WhatsApp link is the funnel's second step: one view_src_wa, written after
+  // the response (`later`), so it is read back until it lands.
+  const viewsWa = async () => {
+    const r = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select coalesce(sum(value), 0)::int as n from metrics_daily where key = 'view_src_wa'")}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+    return Number(r.rows?.[0]?.n ?? -1);
+  };
+  const wasViews = await viewsWa();
+  const viewer = await newPage();
+  await viewer.goto(`${BASE}/${code}?s=wa`);
+  let views = wasViews;
+  for (let i = 0; i < 20 && views <= wasViews; i++) {
+    await viewer.waitForTimeout(500);
+    views = await viewsWa();
+  }
+  check("a stranger's view of a ?s=wa link counts once under view_src_wa", wasViews >= 0 && views === wasViews + 1, `${wasViews} -> ${views}`);
+  // A refresh of the open page is no view: router.refresh() is what the live night's AutoRefresh calls
+  // every 20 seconds. Next.js removes the RSC header before the page reads it, so the page reads the
+  // browser's Sec-Fetch-Dest instead (isFullPageLoad in src/lib/source.ts). A reload by hand is a view.
+  // (A refresh's response never reports finished() to Playwright, so the wait is for its answer, then time
+  // for the write after it, which a counted refresh would make.)
+  for (let i = 0; i < 2; i++) {
+    const refreshed = viewer.waitForResponse((r) => r.request().headers()["rsc"] === "1" && new URL(r.url()).pathname === `/${code}`, { timeout: 15000 });
+    await viewer.evaluate(() => window.next.router.refresh());
+    await refreshed;
+  }
+  await viewer.waitForTimeout(3000);
+  const afterRefresh = await viewsWa();
+  check("a refresh of the open match page adds no view", afterRefresh === wasViews + 1, `${wasViews + 1} -> ${afterRefresh}`);
+  await viewer.reload();
+  let reloaded = afterRefresh;
+  for (let i = 0; i < 20 && reloaded <= afterRefresh; i++) {
+    await viewer.waitForTimeout(500);
+    reloaded = await viewsWa();
+  }
+  check("a full load of the match page adds one view", reloaded === afterRefresh + 1, `${afterRefresh} -> ${reloaded}`);
+  await viewer.context().close();
 
   await a.goto(`${BASE}/${code}`);
   await shot(a, "07-event-creator");
@@ -336,6 +400,55 @@ try {
   const heldCounts = await Promise.all(["Ana", "Bo", "Cy"].map((n) => a.getByText(`Reserved for ${n}`, { exact: true }).count()));
   check("three names pasted are three reserved spots", heldCounts.every((c) => c === 1), heldCounts.join(","));
   await shot(a, "12c-paste-names");
+
+  // ---- A held name takes its place on the plain link (DECIDING rule 34; the owner, 11 October 2026: "Yes, two taps") ----
+  // Cy is a pasted name: a held place with no email and no phone. Cy opens the match link from the
+  // group in a browser that has never seen anybody and types "cy". Before this, "Join" made a second
+  // Cy on the open seat and left the held place empty. The organiser removes Bo first, so the name
+  // field has an open seat to sit in, and that seat must still be open at the end.
+  await a.locator("main li", { hasText: "Reserved for Bo" }).getByRole("button", { name: "Remove player" }).click();
+  await a.getByText("Reserved for Bo", { exact: true }).waitFor({ state: "detached", timeout: 20000 });
+  const cyp = await newPage();
+  let heldSends = 0;
+  cyp.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) heldSends += 1;
+  });
+  await cyp.goto(`${BASE}/${code2}`);
+  await cyp.getByText("Reserved for Cy", { exact: true }).waitFor({ timeout: 20000 });
+  // The owner chose the typed name, not the row: a stranger who has typed nothing is offered no held
+  // place, whoever's row it is.
+  const heldOnRows = await cyp.getByTestId("take-held").count();
+  check("a held row offers nothing until the name is typed", heldOnRows === 0, `take-held buttons=${heldOnRows}`);
+  await cyp.getByRole("button", { name: "Join this match" }).click();
+  await cyp.getByTestId("open-spot-name").first().fill("cy");
+  const alreadyCy = cyp.getByTestId("already-here");
+  const takeCy = alreadyCy.getByRole("button", { name: "Take Cy's held place", exact: true });
+  const sureCy = alreadyCy.getByRole("button", { name: "Take Cy's held place?", exact: true });
+  await takeCy.waitFor({ timeout: 10000 });
+  await shot(cyp, "12d0-held-offer");
+  check("a typed held name reads \"cy is already in this match.\" and offers \"Take Cy's held place\"", ((await alreadyCy.textContent()) ?? "").startsWith("cy is already in this match.") && (await takeCy.count()) === 1, (await alreadyCy.textContent()) ?? "(none)");
+  heldSends = 0;
+  await takeCy.click();
+  await sureCy.waitFor({ timeout: 10000 });
+  await cyp.waitForTimeout(1000);
+  check("the first tap takes nothing: it asks \"Take Cy's held place?\" and sends nothing", heldSends === 0 && (await cyp.getByText("Reserved for Cy", { exact: true }).count()) === 1, `sends=${heldSends}`);
+  await cyp.locator("main h1").first().click();
+  await takeCy.waitFor({ timeout: 10000 });
+  check("a tap anywhere else takes the question back, and still nothing is sent", heldSends === 0 && (await sureCy.count()) === 0, `sends=${heldSends}`);
+  await takeCy.click();
+  await sureCy.click();
+  await cyp.locator("main li", { hasText: "Cy" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const afterTake = await cyp.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
+  const cys = (afterTake.players ?? []).filter((p) => /^cy$/i.test(p.name));
+  check(
+    "the second tap fills Cy's held place: one Cy, confirmed, no held row left, and the open seat still open",
+    cys.length === 1 && cys[0].status === "confirmed" && (await cyp.getByText("Reserved for Cy", { exact: true }).count()) === 0 && afterTake.spotsLeft === 1,
+    JSON.stringify({ players: (afterTake.players ?? []).map((p) => `${p.name}:${p.status}`), spotsLeft: afterTake.spotsLeft }),
+  );
+  const cyNote = await waitUntil(() => mails().find((m) => m.to === "dana@example.com" && /^Cy confirmed/.test(m.subject ?? "")));
+  check("the organiser hears \"Cy confirmed\", as from the personal link", Boolean(cyNote), cyNote ? cyNote.subject : "no mail to the organiser");
+  await shot(cyp, "12d-held-by-name");
+  await cyp.close();
   await a.goto(`${BASE}/${code}`);
 
   await a.reload();
@@ -410,8 +523,8 @@ try {
   await a.goto(BASE + "/me");
   check("/me shows the entered score", (await a.getByText("6-3").count()) > 0);
   check("/me shows the personal link card", (await a.getByText("Your personal link").count()) > 0);
-  const meHtml = await a.content();
-  check("/me: upcoming matches come before the personal link card", meHtml.indexOf(">Upcoming<") > 0 && meHtml.indexOf(">Upcoming<") < meHtml.indexOf("Your personal link"));
+  const meOrder = await headingOrder(a, "Upcoming", "Your personal link");
+  check("/me: upcoming matches come before the personal link card", meOrder[0] >= 0 && meOrder[0] < meOrder[1], meOrder.join(" "));
   check("/me: no restore offer when history exists", (await a.getByText("Played before").count()) === 0);
   check("/me: no 'Not now' anywhere", (await a.getByText("Not now").count()) === 0);
   check("/me: personal link card emails the link (no WhatsApp)", (await a.locator('a[href^="https://wa.me"]').count()) === 0 && (await a.getByRole("button", { name: /Email me this link/ }).count()) > 0);
@@ -449,7 +562,8 @@ try {
   const so = await newPage();
   await so.goto(BASE + "/me");
   const soHtml = await so.content();
-  check("/me signed out: returning players first, newcomers second", soHtml.indexOf("Been here before?") > 0 && soHtml.indexOf("First time here?") > soHtml.indexOf("Been here before?"), `${soHtml.indexOf("Been here before?")} ${soHtml.indexOf("First time here?")}`);
+  const soOrder = await headingOrder(so, "Been here before?", "First time here?");
+  check("/me signed out: returning players first, newcomers second", soOrder[0] >= 0 && soOrder[0] < soOrder[1], soOrder.join(" "));
   check("/me signed out: no 'enter your name to see your matches'", !soHtml.includes("Enter your name to see your matches"));
   await so.context().close();
 

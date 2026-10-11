@@ -137,7 +137,7 @@ try {
 
   // Play again from the tournament page (creator)
   await a.goto(`${BASE}/${code}`);
-  await a.getByRole("button", { name: /Play again next week/ }).first().click();
+  await a.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code2 = a.url().split("/").slice(-2)[0];
   check("play again created a new event", code2 !== code, code2);

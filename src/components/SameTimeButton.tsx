@@ -5,7 +5,12 @@ import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { createGroupFromEventAction } from "@/actions/groups";
 
-/** Under a result: one tap turns the crew into a group with this match's weekly slot. */
+/**
+ * "Make it weekly", under "Play again" on the score panel: one tap turns the crew into a group with this
+ * match's weekly slot. Its own words and the quieter weight, so the one primary action stays "Play
+ * again" (one next game) and nobody taps this one for next week's game (DECIDING rules 1 and 37). The
+ * label wraps: `.btn` keeps a label on one line, and a long one runs off both edges at 390 px.
+ */
 export function SameTimeButton({ code, when }: { code: string; when: string }) {
   const t = useTranslations("card");
   const locale = useLocale();
@@ -24,10 +29,10 @@ export function SameTimeButton({ code, when }: { code: string; when: string }) {
   }
   return (
     <div className="flex flex-col gap-1">
-      <button type="button" className="btn-secondary w-full" disabled={pending} data-testid="same-time" onClick={() => start(async () => { const r = await createGroupFromEventAction(code, undefined, true); if (r.ok) setDone({ code: r.data.code, name: r.data.name, created: r.data.created }); })}>
-        {pending ? "…" : `🔁 ${t("sameTime")}`}
+      <button type="button" className="btn-ghost w-full whitespace-normal text-center leading-tight" disabled={pending} data-testid="same-time" onClick={() => start(async () => { const r = await createGroupFromEventAction(code, undefined, true); if (r.ok) setDone({ code: r.data.code, name: r.data.name, created: r.data.created }); })}>
+        {pending ? "…" : `🔁 ${t("makeWeekly")}`}
       </button>
-      <p className="text-xs text-faint">{t("sameTimeHelp")}</p>
+      <p className="text-center text-xs text-faint">{t("sameTimeHelp")}</p>
     </div>
   );
 }

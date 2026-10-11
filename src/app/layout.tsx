@@ -10,6 +10,7 @@ import { getDb } from "@/db";
 import { APP_NAME, APP_TAGLINE, baseUrl } from "@/lib/config";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { later } from "@/lib/alerts";
+import { isCrawler } from "@/lib/source";
 import { getSessionPlayer } from "@/lib/session";
 import { htmlTextAttr, TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
 
@@ -47,7 +48,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     if (p) me = { id: p.id, name: p.displayName };
     // Our own page-render counter, so the service board knows when Vercel's analytics ceiling is near. Crawlers do not count.
     const ua = (await headers()).get("user-agent") ?? "";
-    if (!/bot|crawl|spider|slurp|facebookexternalhit|preview|uptime|monitor|curl|python-requests|Go-http-client/i.test(ua)) await later(() => bumpMetric(db, "pageviews"));
+    if (!isCrawler(ua)) await later(() => bumpMetric(db, "pageviews"));
   } catch (e) {
     console.error("[layout] db unavailable", e);
   }

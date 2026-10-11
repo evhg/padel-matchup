@@ -17,7 +17,7 @@ import {
 } from "@/lib/booking/adapters/bookandgo";
 import type { ScrapedSlot, ScrapeTarget } from "@/lib/booking/adapters/types";
 import { detectPlatform, PLATFORMS } from "@/lib/booking/platforms";
-import { availabilityFrom } from "@/lib/booking/scrape";
+import { availabilityFrom, failureWhy } from "@/lib/booking/scrape";
 import { utcToZonedParts } from "@/lib/dates";
 import { freezeClock } from "./helpers/clock";
 
@@ -311,7 +311,7 @@ describe("scrape()", () => {
 
   it("stops at a 403 and asks nothing more", async () => {
     const h = harness(() => json('{"message":"Forbidden"}', 403));
-    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: false, status: 403, reason: "blocked", requests: 1, detail: "403 on /apps/39/locations" });
+    expect(await h.adapter.scrape(target(), h.fetchImpl, NOW)).toEqual({ ok: false, status: 403, reason: "blocked", requests: 1, detail: "locations: HTTP 403" });
     expect(h.calls).toHaveLength(1);
   });
 
@@ -399,5 +399,31 @@ describe("scrape()", () => {
     // No link, price or court name on a slot: the link stays on the club row (its booking button).
     for (const s of a.slots) expect(Object.keys(s).sort()).toEqual(["end", "free", "start"]);
     expect(Math.max(...a.slots.map((s) => s.free))).toBeLessThanOrEqual(3);
+  });
+});
+
+// A failure's detail is the step and the status or the error's class, the shape `failureWhy` keeps, so
+// the club's cache says why it failed; never the path, the query or the error's message.
+describe("a failed read says why, in the shape the cache keeps", () => {
+  const firstDay = utcToZonedParts(NOW, SG).date;
+  const refused = () => Object.assign(new TypeError("fetch failed: https://api.bookandgo.app/api/v1/apps/39/court-bookings?date=x"), { cause: { code: "ECONNRESET" } });
+  const cases: [string, (url: URL) => Response | Promise<Response>, string][] = [
+    ["a 500 on the locations", () => json('{"message":"oops"}', 500), "locations: HTTP 500"],
+    ["a 502 on a day", (url) => (url.pathname.endsWith("/court-bookings") ? json("{}", 502) : realBookandgo(url)), `court-bookings ${firstDay}: HTTP 502`],
+    ["a reset connection on a day", (url) => (url.pathname.endsWith("/court-bookings") ? Promise.reject(refused()) : realBookandgo(url)), `court-bookings ${firstDay}: TypeError ECONNRESET`],
+  ];
+  for (const [name, route, detail] of cases) {
+    it(`${name}: "${detail}"`, async () => {
+      const h = harness(route);
+      const r = await h.adapter.scrape(target(), h.fetchImpl, NOW);
+      expect(r.ok ? null : r.detail).toBe(detail);
+      expect(failureWhy(detail)).toBe(detail);
+    });
+  }
+
+  it("an answer that never comes: the step and TimeoutError", async () => {
+    const h = harness(() => new Promise<Response>(() => undefined), { timeoutMs: 20 });
+    const r = await h.adapter.scrape(target(), h.fetchImpl, NOW);
+    expect(r.ok ? null : r.detail).toBe("locations: TimeoutError");
   });
 });

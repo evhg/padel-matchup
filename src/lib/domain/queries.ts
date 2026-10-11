@@ -70,6 +70,22 @@ export async function getSlotByInviteCode(db: Db, inviteCode: string): Promise<{
   return { slot: { ...row.slot, player: row.player }, event: row.event, creator };
 }
 
+/**
+ * Does this record hold a seat or a waiting place in the match with this code? For a personal link
+ * whose place was released or taken while its person was in by another door: the page says "You're
+ * already in this match" rather than "no longer valid". One read down the code's index and
+ * `slots_event_player_idx`.
+ */
+export async function holdsPlaceIn(db: Db, code: string, playerId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: slots.id })
+    .from(slots)
+    .innerJoin(events, eq(events.id, slots.eventId))
+    .where(and(eq(events.code, code), eq(slots.playerId, playerId), inArray(slots.status, ["joined", "confirmed"])))
+    .limit(1);
+  return Boolean(row);
+}
+
 export type MyEvent = {
   event: Event;
   slot: Slot;

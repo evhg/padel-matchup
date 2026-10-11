@@ -11,7 +11,7 @@ import { seatUnits } from "@/lib/domain/fixedPairs";
 import { FORMATS } from "@/lib/domain/formats";
 import type { NightPlan } from "@/lib/domain/tournamentPlan";
 import { FORMAT_HELP_KEYS, FORMAT_KEYS } from "./EventFields";
-import { PlayAgainButton } from "./PlayAgainButton";
+import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
@@ -37,6 +37,7 @@ export function AmericanoPanel({
   courtNames,
   rotationLength,
   canPlayAgain = false,
+  playAgain = null,
   cardHref,
   checkIn = null,
   fixedPairs = false,
@@ -63,6 +64,8 @@ export function AmericanoPanel({
   /** Rounds until everyone has partnered everyone once (field in fours), else null. */
   rotationLength: number | null;
   canPlayAgain?: boolean;
+  /** "Play again"'s day and time: the default (this night's a week on), the bounds, and whether the round went out. */
+  playAgain?: PlayAgainOffer | null;
   /** Link to the shareable standings card (once a score exists). */
   cardHref?: string;
   /** "Who is here?" before round 1, for whoever may start it: the named list and the waiting list. */
@@ -447,9 +450,9 @@ export function AmericanoPanel({
           )}
         </div>
       )}
-      {locked && canPlayAgain && (
+      {locked && canPlayAgain && playAgain && (
         <div className="mt-4 border-t border-line pt-4">
-          <PlayAgainButton code={code} />
+          <PlayAgainButton code={code} offer={playAgain} />
         </div>
       )}
     </section>

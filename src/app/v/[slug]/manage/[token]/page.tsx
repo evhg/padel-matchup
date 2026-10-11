@@ -17,7 +17,7 @@ import { getLocale } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { cityBySlug } from "@/lib/domain/cities";
-import { claimEmailForCode, clubStatus, getClubByToken } from "@/lib/domain/clubs";
+import { claimEmailForCode, clubStatus, getClubByTokenWithCache } from "@/lib/domain/clubs";
 import { ClaimCodeForm } from "@/components/ClaimCodeForm";
 import { listCourts } from "@/lib/domain/courts";
 import { coachingAtClub } from "@/lib/domain/coaching";
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ClubManagePage({ params }: Props) {
   const { slug, token } = await params;
   const db = await getDb();
-  const club = await getClubByToken(db, token);
+  const club = await getClubByTokenWithCache(db, token);
   if (!club || club.slug !== slug) notFound();
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const status = clubStatus(club);

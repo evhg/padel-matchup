@@ -46,7 +46,7 @@ export function looksLikeQuestion(m: Pick<DcMessage, "content" | "author" | "typ
 }
 
 export type DiscordQuestion = { channelId: string; guildId: string; messageId?: string | null; author: string; text: string };
-export type DiscordAnswer = { reply: string | null; author: string; itemId: string | null; reason: string };
+export type DiscordAnswer = { reply: string | null; author: string; itemId: string | null; reason: string; refused?: boolean };
 
 /** One question in, a reply out when the model finds one worth giving; the item is recorded either way. */
 export async function answerDiscordQuestion(db: Db, q: DiscordQuestion, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<DiscordAnswer> {
@@ -55,7 +55,9 @@ export async function answerDiscordQuestion(db: Db, q: DiscordQuestion, now = ne
   const externalId = q.messageId ? `${q.channelId}:${q.messageId}` : `${q.channelId}:ask:${now.getTime()}`;
   const url = q.messageId ? messageUrl(q.guildId, q.channelId, q.messageId) : `https://discord.com/channels/${q.guildId}/${q.channelId}`;
   const title = q.text.split("\n")[0].slice(0, 120);
-  const { draft, error } = await draftReply(db, { source: "discord", url, title, body: q.text, author: q.author, postedAt: now }, fetchImpl, now, { system: DISCORD_PROMPT });
+  const { draft, error, refused } = await draftReply(db, { source: "discord", url, title, body: q.text, author: q.author, postedAt: now }, fetchImpl, now, { system: DISCORD_PROMPT });
+  // The key was refused, not the question: no row, so the next run with a working key answers it.
+  if (refused) return { reply: null, author: q.author, itemId: null, reason: error ?? "key refused", refused };
   const language = draft?.language && draft.language !== "other" ? draft.language : guessLanguage(q.text);
   const [item] = await db
     .insert(listenItems)
@@ -89,7 +91,7 @@ export async function markDiscordReplyPosted(db: Db, itemId: string, replyUrl: s
   await growAnswer(db, itemId, now, fetchImpl);
 }
 
-export type DiscordListenSummary = { guilds: number; channels: number; read: number; candidates: number; replied: number; errors: string[] };
+export type DiscordListenSummary = { guilds: number; channels: number; read: number; candidates: number; replied: number; errors: string[]; refused?: boolean };
 
 /** Refreshes the channel list from the servers the bot is in. Channels it lost access to come back on their own when access returns. */
 export async function refreshChannels(db: Db): Promise<{ guilds: number; channels: DiscordChannel[]; errors: string[] }> {
@@ -113,7 +115,7 @@ export async function refreshChannels(db: Db): Promise<{ guilds: number; channel
 
 const newer = (a: string, b: string | null) => (b == null ? true : BigInt(a) > BigInt(b));
 
-/** The hourly step for Discord. Idempotent: the cursor moves whether or not a reply went out. */
+/** The hourly step for Discord. Idempotent: the cursor moves whether or not a reply went out, except past a refused key. */
 export async function discordListenTick(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<DiscordListenSummary> {
   const summary: DiscordListenSummary = { guilds: 0, channels: 0, read: 0, candidates: 0, replied: 0, errors: [] };
   if (!discordEnabled()) return summary;
@@ -125,7 +127,7 @@ export async function discordListenTick(db: Db, now = new Date(), fetchImpl: typ
   const channels = refreshed.channels.filter((c) => c.listen && !c.leftAt).slice(0, DISCORD_LIMITS.channelsPerRun);
   summary.channels = channels.length;
   for (const channel of channels) {
-    if (Date.now() - started > DISCORD_LIMITS.budgetMs) break;
+    if (summary.refused || Date.now() - started > DISCORD_LIMITS.budgetMs) break;
     // First contact: remember where the channel is, never answer old history.
     const res = await getMessages(channel.channelId, channel.lastMessageId ? { after: channel.lastMessageId, limit: 50 } : { limit: 1 });
     if (!res.ok) {
@@ -147,6 +149,14 @@ export async function discordListenTick(db: Db, now = new Date(), fetchImpl: typ
       if (seen) continue;
       const author = (m.author.global_name?.trim() || m.author.username).slice(0, 40);
       const a = await answerDiscordQuestion(db, { channelId: channel.channelId, guildId: channel.guildId, messageId: m.id, author, text: m.content ?? "" }, now, fetchImpl);
+      if (a.refused) {
+        // The key was refused: no further call this run, here or in the listening drafts after it. The
+        // cursor goes back to just before this message, so the next run reads it and the ones after it
+        // again; the `seen` check above skips those already answered.
+        summary.refused = true;
+        await db.update(discordChannels).set({ lastMessageId: (BigInt(m.id) - 1n).toString() }).where(eq(discordChannels.channelId, channel.channelId));
+        break;
+      }
       if (!a.reply || !a.itemId) continue;
       const sent = await createMessage(channel.channelId, { content: a.reply, replyTo: m.id });
       if (sent.ok) {

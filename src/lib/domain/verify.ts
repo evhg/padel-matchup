@@ -1,11 +1,13 @@
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { clubs, coaches, events, joinRequests, levelChecks, players, type Club, type Coach, type Event, type LevelCheck, type Player } from "@/db/schema";
+import { clubs, coaches, events, joinRequests, levelChecks, players, type Coach, type Event, type LevelCheck, type Player } from "@/db/schema";
 import { isClubLive } from "./clubs";
+import { columnsButCache, type PickableClub } from "./clubColumns";
 import { coachesAtClub } from "./coaching";
 import { DomainError } from "./errors";
 import { joinGroup } from "./groups";
-import { admission, clampLevel, normalizeLevel } from "./levels";
+import { clampLevel, normalizeLevel } from "./levels";
+import { admissionAt } from "./playAgain";
 import { decideJoinRequest } from "./requests";
 import type { JoinOutcome } from "./slots";
 
@@ -30,7 +32,7 @@ export async function verifiersFor(db: Db, ev: Pick<Event, "venueName" | "venueS
   // `warehaus`, and slugifying its name would look for coaches at a page nobody teaches on.
   if (ev.venueSlug) for (const c of await coachesAtClub(db, ev.venueSlug, { includeQuiet: true })) out.push({ kind: "coach", id: c.id, name: c.displayName });
   if (ev.venueSlug) {
-    const [club] = await db.select().from(clubs).where(eq(clubs.slug, ev.venueSlug)).limit(1);
+    const [club] = await db.select(columnsButCache).from(clubs).where(eq(clubs.slug, ev.venueSlug)).limit(1);
     if (club && isClubLive(club) && club.claimedBy) out.push({ kind: "club", slug: club.slug, name: club.name });
   }
   return out;
@@ -56,12 +58,12 @@ export async function confirmLevel(db: Db, input: { playerId: string; level?: un
 const targetWhere = (t: LevelCheckTarget) => ("coachId" in t ? eq(levelChecks.coachId, t.coachId) : eq(levelChecks.clubSlug, t.clubSlug));
 
 /** The coach or club behind a target, when it can still answer; null otherwise. */
-export async function resolveTarget(db: Db, t: LevelCheckTarget): Promise<{ coach: Coach; club: null } | { coach: null; club: Club } | null> {
+export async function resolveTarget(db: Db, t: LevelCheckTarget): Promise<{ coach: Coach; club: null } | { coach: null; club: PickableClub } | null> {
   if ("coachId" in t) {
     const [coach] = await db.select().from(coaches).where(and(eq(coaches.id, t.coachId), isNull(coaches.archivedAt))).limit(1);
     return coach ? { coach, club: null } : null;
   }
-  const [club] = await db.select().from(clubs).where(eq(clubs.slug, t.clubSlug)).limit(1);
+  const [club] = await db.select(columnsButCache).from(clubs).where(eq(clubs.slug, t.clubSlug)).limit(1);
   return club && isClubLive(club) && club.claimedBy ? { coach: null, club } : null;
 }
 
@@ -156,7 +158,8 @@ export type Admitted = { event: Event; join: JoinOutcome };
 /**
  * After a confirmation: every open ask to join a coming verified-only event
  * that the confirmed level now fits is approved, as if the organizer had
- * tapped. Full events keep the ask pending (the organizer still decides).
+ * tapped; for a past partner of the organiser, any confirmed level fits
+ * (`admissionAt`). Full events keep the ask pending (the organizer still decides).
  */
 export async function admitConfirmed(db: Db, player: Player, byPlayerId: string | null, now = new Date()): Promise<Admitted[]> {
   const rows = await db
@@ -167,7 +170,9 @@ export async function admitConfirmed(db: Db, player: Player, byPlayerId: string 
     .limit(20);
   const out: Admitted[] = [];
   for (const { request, event } of rows) {
-    if (admission(event, player) !== "ok") continue;
+    // The same door as the join (`admissionAt`): a past partner of the organiser skips the range and
+    // still needs the confirmation, which this is. One read only for a player the range would hold.
+    if ((await admissionAt(db, event, player, now)) !== "ok") continue;
     try {
       const res = await decideJoinRequest(db, { eventId: event.id, requestId: request.id, approve: true, actorPlayerId: byPlayerId, now });
       if (res.join) {

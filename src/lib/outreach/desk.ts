@@ -7,7 +7,7 @@ import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft
 import { stripHtml } from "@/lib/listen/parse";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The press desk. Drafts are written here (by the operator endpoint or the
@@ -268,8 +268,11 @@ export async function draftReplyTo(db: Db, inbound: Outreach, now = new Date(), 
     .filter((t) => t.id !== inbound.id)
     .map((t) => `--- ${t.kind === "inbound" ? `From ${t.counterpartEmail}` : `From us (${t.kind})`} · ${t.createdAt.toISOString()}\nSubject: ${t.subject}\n${t.body.slice(0, 3000)}`)
     .join("\n\n");
+  // True while the Messages API call is in flight: a timeout or a network error then is a failed call.
+  let calling = false;
   const user = `${history ? `Earlier in this thread:\n${history}\n\n` : ""}--- New email from ${inbound.counterpartName ?? inbound.counterpartEmail}${inbound.org ? ` (${inbound.org})` : ""}\nSubject: ${inbound.subject}\n${inbound.body.slice(0, 6000)}`;
   try {
+    calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
@@ -277,16 +280,15 @@ export async function draftReplyTo(db: Db, inbound: Outreach, now = new Date(), 
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
-    if (json?.usage) {
-      await bumpMetric(db, "anthropic_in", json.usage.input_tokens || 0).catch(() => undefined);
-      await bumpMetric(db, "anthropic_out", json.usage.output_tokens || 0).catch(() => undefined);
-    }
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
+    calling = false;
     if (!res.ok || !json) return null;
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();
     if (!text || /^NO_REPLY\b/.test(text)) return null;
     const subject = /^re:/i.test(inbound.subject) ? inbound.subject : `Re: ${inbound.subject}`;
     return await createDraft(db, { kind: "reply", moment: inbound.moment, to: inbound.counterpartEmail, name: inbound.counterpartName, org: inbound.org, subject, body: text, inReplyTo: inbound.messageId }, now);
   } catch {
+    if (calling) await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
     return null;
   }
 }

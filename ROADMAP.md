@@ -923,6 +923,31 @@ Everything in this list is live. The README describes each in detail.
   WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
   Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
   Its preview gives the match id only, so the words that the person pastes carry the rest.
+- **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
+  option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
+  37). Production had one group of four or five in Phuket, every full match made by hand with the same
+  people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
+  time in one control above the button, a week on by default; everything else carries over and a
+  crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
+  game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
+  one insert for the whole round, the switch and quiet hours respected, the inbox keeps it, the card's
+  own one-tap join in Telegram and the public match link everywhere else, and one round per old match
+  (the old match's row is locked, the fact `match.play_again` is the record), and only once the match
+  was played (started, not called off, scored), and only by its organiser or a player seated from
+  before the start, so a stranger who takes a seat in a coming match, or a free seat after the start,
+  cannot send it; once a match has started, only its organiser moves its start, so a latecomer cannot
+  move it past their own seat. A second tap at the same day and time lands on the game already
+  announced, and two taps at once, or a tap beside the hourly job, make one game at a crew's hour. The email
+  carries no "get this on Telegram" line, because its ticket binds whoever taps it. "Same time next week?"
+  moved from the card page to the score panel under it, renamed "Make it weekly" and made the quieter
+  button. The two taps never make two games at one hour, in either order: "Play again" at an hour the
+  weekly slot already filled lands on the crew's game and the round announces it, and the slot skips
+  an hour "Play again" already filled and tells only the crew members who have not heard of the game.
+  Nobody hears about one game twice (`toldOfGame`). A player who already sat in a finished, scored
+  match with the organiser, from before its start (a score typed in at the court counts, and so does a
+  scored americano), skips that organiser's level range on every door (`admissionAt` in
+  `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
+  No WhatsApp template carries the message yet.
 
 ## The finish line
 
@@ -930,16 +955,16 @@ Proposed to the owner on 24 September 2026: Kicksmash is finished when each stak
 `docs/VISION.md` is won for real, and again after that, by the vision's own test. Code alone does not
 reach it; people using the app do.
 
-| Stakeholder | Won when | On 24 September 2026 |
-|---|---|---|
-| Player | the match is played | 13 past matches: 3 filled, 3 of 3 scored; 10 never filled |
-| Coach | a student books, moves or cancels, and the coach typed nothing | 2 lessons |
-| Organiser | a weekend of 200 players runs from a phone | a rehearsal only |
-| Club | an off-peak court hour is filled from Kicksmash | 0 live, 66 listed, 1 refused test claim |
+| Stakeholder | Won when | On 24 September 2026 | On 11 October 2026 (production) |
+|---|---|---|---|
+| Player | the match is played | 13 past matches: 3 filled, 3 of 3 scored; 10 never filled | 16 past matches: 3 filled, 5 with a score |
+| Coach | a student books, moves or cancels, and the coach typed nothing | 2 lessons | 2 lessons, both from the web; none since |
+| Organiser | a weekend of 200 players runs from a phone | a rehearsal only | a rehearsal only: no serious tournament in production |
+| Club | an off-peak court hour is filled from Kicksmash | 0 live, 66 listed, 1 refused test claim | 0 live, 67 listed, none refused (the test claim was handed back to the directory) |
 
-What stands between here and there, in order: real use through each loop (a tournament weekend, a
-coach whose students book themselves, a club, crews that enter scores); reach (6 of about 18 people
-can get a message, and WhatsApp one-to-one waits on the owner's Meta account and number); the
+None of the four is won yet. What stands between here and there, in order: real use through each loop (a tournament weekend, a
+coach whose students book themselves, a club, crews that enter scores); reach (6 of 21 player records
+have a channel on 11 October 2026, and WhatsApp one-to-one waits on the owner's Meta account and number); the
 security steps at 100 real players (`docs/OPERATING.md`). Recommended with it: no new large feature
 until real use asks for one.
 
@@ -1018,7 +1043,8 @@ linked and four have an email address.
 
 ## Open, small, and ready for the next session
 
-Written 23 September 2026 for a clean hand-over. The desk notes are in
+Written 23 September 2026 for a clean hand-over, and checked against the code and production on 11
+October 2026. The desk notes are in
 `GET /api/admin/feedback?status=acknowledged`; the first eight characters of each id are given here.
 Standing order 5 in CLAUDE.md applies to every one that becomes a change: mark it `shipped`, thank
 the player, and invite them to try it.
@@ -1029,11 +1055,16 @@ the player, and invite them to try it.
    `VERCEL_TOKEN`, and decide who may call `/api/admin/*`. The steps, in order, are in
    `docs/OPERATING.md` under "Security at a hundred real players". What can hold until then is held
    by `tests/security.test.ts`: every operator route checks the token first, and `kicksmash` can use
-   every table.
-2. **Match times for a player with no channel.** A player who entered on the web without Telegram or
-   an email hears nothing about their court and time; "Your matches" should offer the channel.
-3. **The desk's order after entries close.** The draw's settings sit under every pair; once entries
-   close they belong above them.
+   every table. Still open on 11 October 2026: production has 21 player records, and the app still
+   connects as `postgres` (`pg_stat_activity`).
+2. **Built: match times for a player with no channel.** The match page's "Stay updated" card meets a
+   player the moment they join and offers WhatsApp, Telegram and email while they have none
+   (`src/lib/domain/stayUpdated.ts`), with a calendar feed for a chat player
+   (`src/lib/calendarFeed.ts`); the settings on My matches carry the Telegram link and the email.
+3. **The desk's order after entries close.** Still open on 11 October 2026: the manage page shows the
+   entries, then the courts, then each category's draw settings, whatever the entries' status. The
+   strip at the top (`WeekendStrip`) links to each part, but once entries close the draw's settings
+   still belong above the pairs.
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
 

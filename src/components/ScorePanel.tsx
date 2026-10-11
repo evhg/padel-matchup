@@ -6,7 +6,8 @@ import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { checkSets, MAX_SETS, tally } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
-import { PlayAgainButton } from "./PlayAgainButton";
+import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
+import { SameTimeButton } from "./SameTimeButton";
 import { ShareButtons } from "./ShareSheet";
 
 type P = { id: string; name: string; team: "a" | "b" | null; level?: number | null };
@@ -23,6 +24,9 @@ export function ScorePanel({
   locked,
   enteredBy,
   canPlayAgain = false,
+  playAgain = null,
+  weeklyOffered = false,
+  weeklyWhen = null,
   card,
 }: {
   code: string;
@@ -32,12 +36,22 @@ export function ScorePanel({
   reason: "not_started" | "cancelled" | "not_participant" | "locked" | null;
   locked: boolean;
   enteredBy: string | null;
-  /** Creator or participant: offer "Play again next week" once a result exists. */
+  /** Creator or participant: offer "Play again" once a result exists. */
   canPlayAgain?: boolean;
+  /** "Play again"'s day and time: the default (this match's a week on), the bounds, and whether the round went out. */
+  playAgain?: PlayAgainOffer | null;
+  /** "Make it weekly" under it, for a match with no crew yet. One next game and a weekly slot: two buttons, two help lines. */
+  weeklyOffered?: boolean;
+  /** The weekly slot in words, in the page's language as it renders now ("Sat 18:00"). */
+  weeklyWhen?: string | null;
   /** The shareable result card, once a result exists. */
   card?: ResultCardView | null;
 }) {
   const t = useTranslations();
+  // Only the fact that the offer was shown is latched: the tap makes the crew, the page then renders
+  // with a crew and no offer, and the "Done" the button shows must outlive that refresh. The words come
+  // from each render, so a change of language reaches them (a latched string kept the first language).
+  const [weekly] = useState(weeklyOffered);
   const [editing, setEditing] = useState(false);
   const [sets, setSets] = useState<S[]>(scores.length ? scores : [{ setNumber: 1, sideA: 6, sideB: 4 }]);
   const [teamA, setTeamA] = useState<string[]>(players.filter((p) => p.team === "a").map((p) => p.id));
@@ -152,9 +166,10 @@ export function ScorePanel({
               <ShareButtons url={card.shareUrl} text={card.shareText} imageUrl={card.image} />
             </div>
           )}
-          {canPlayAgain && (
-            <div className="mt-4 border-t border-line pt-4">
-              <PlayAgainButton code={code} />
+          {canPlayAgain && playAgain && (
+            <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
+              <PlayAgainButton code={code} offer={playAgain} />
+              {weekly && weeklyWhen && <SameTimeButton code={code} when={weeklyWhen} />}
             </div>
           )}
         </div>
