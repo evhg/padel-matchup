@@ -252,6 +252,11 @@ learning can be a test, a gate step or a script, make it one and put the story i
   player on the list and send them notices and a payment QR. `onCoachList` in `src/actions/coach.ts`
   refuses anybody not on the coach's list, and `tests/coach-student-ids.test.ts` calls the actions
   with a stranger's id.
+- **A hold-back is one door, not a list of screens.** A session by name gets no personal link
+  (DECIDING rule 34). My matches and the manifest held it back, but the organiser's share page and
+  the match's .ics download still gave it, so "That's me", then a match of one's own, gave the full
+  sign-in. Now `personalTokenFor` in `src/actions/shared.ts` is the only way a screen gets the
+  session's token, and `tests/by-name-link.test.ts` fails on a page that mints one itself.
 - **A seat is not a game played.** The "played" guard on "Play again" counted any seat in a started,
   scored match, and joining stays open until the booked length ends while any seated player may type
   the score. So a stranger could join five minutes in, type 6-0, send the round under their own name and
