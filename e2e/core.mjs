@@ -480,6 +480,16 @@ try {
   await a.getByRole("button", { name: "Save score" }).click();
   await a.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   check("Play again appears after the score", (await a.getByRole("button", { name: /Play again/ }).count()) === 1);
+  // Dana's next game at the same club exists already (the match three days ahead, made by hand): the panel
+  // names it and the control defaults to its day and time, so one tap lands on it, not beside it (the
+  // audit of 11 October 2026: EfUa offered a Friday while the group's Saturday game TDsv existed).
+  const nextLine = (await a.getByTestId("play-again-next").textContent().catch(() => null)) ?? "";
+  const nextDefault = await a.getByTestId("play-again-when").inputValue();
+  check(
+    "after the score, Play again names the organiser's next game at the club and defaults to its day and time",
+    nextLine.startsWith("Next game:") && nextLine.endsWith(`· ${code2}`) && nextDefault === `${sg("year")}-${sg("month")}-${sg("day")}T11:30` && (await a.getByText("At that day and time, a tap opens that game.", { exact: false }).count()) === 1,
+    JSON.stringify({ nextLine, nextDefault }),
+  );
   await shot(a, "11-score-locked");
   // ---- Four sets, one of them unusual (decision H; the owner's note "we played 4 sets but we couldn't add the result!") ----
   // 6-3 stays the first set, because /me is read for it below. The organiser's "Confirmed" chip stays

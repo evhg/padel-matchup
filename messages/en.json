@@ -358,7 +358,9 @@
     "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
     "playAgainPlain": "One next game, same settings.",
     "startLocked": "Only the organiser moves the start once the match has started.",
-    "joinBooking": "Join this booking on {platform}"
+    "joinBooking": "Join this booking on {platform}",
+    "playAgainNext": "Next game: {when} · {code}",
+    "playAgainLands": "At that day and time, a tap opens that game. It makes no second one."
   },
   "creator": {
     "tools": "Organizer tools",

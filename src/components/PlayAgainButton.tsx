@@ -15,6 +15,12 @@ export type PlayAgainOffer = {
   sent: boolean;
   /** This viewer's tap sends that message (the organiser, or a seat taken by the start): otherwise the line promises nothing. */
   sends: boolean;
+  /**
+   * The next game, when it exists already (the one the round announced, or the organiser's own at this
+   * club in the next 14 days): its code and its day and time, worded. The control defaults to it, and a
+   * tap at that time lands on it instead of making a second game.
+   */
+  next?: { code: string; when: string } | null;
 };
 
 /**
@@ -44,6 +50,13 @@ export function PlayAgainButton({ code, offer }: { code: string; offer: PlayAgai
   };
   return (
     <div data-testid="play-again" className="flex flex-col gap-2">
+      {offer.next && (
+        <p className="text-sm font-semibold" data-testid="play-again-next">
+          <a href={`/${offer.next.code}`} className="link">
+            {t("event.playAgainNext", { when: offer.next.when, code: offer.next.code })}
+          </a>
+        </p>
+      )}
       <input
         ref={when}
         type="datetime-local"
@@ -58,6 +71,7 @@ export function PlayAgainButton({ code, offer }: { code: string; offer: PlayAgai
         {pending ? t("common.working") : t("event.playAgainShort")}
       </button>
       <p className="text-center text-xs text-faint">{offer.sent ? t("event.playAgainSent") : offer.sends ? t("event.playAgainOne") : t("event.playAgainPlain")}</p>
+      {offer.next && <p className="text-center text-xs text-faint">{t("event.playAgainLands")}</p>}
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );

@@ -55,7 +55,7 @@ import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
-import { maySendPlayAgainRound, playAgainActor, playAgainDefault, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { maySendPlayAgainRound, nextGameOf, playAgainActor, playAgainOfferWhen, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
@@ -267,15 +267,27 @@ async function EventPage({ params, searchParams }: Props) {
     const p = utcToZonedParts(at, ev.tz);
     return `${p.date}T${p.time}`;
   };
-  const nextGame = playAgainDefault(ev, now);
   const playAgainOffered = canPlayAgain && !cancelled && (detail.scores.length > 0 || (isTournament && ev.scoreLockedByCreator));
-  const playAgainSent = playAgainOffered && Boolean(await playAgainRoundOf(db, ev.id));
+  const round = playAgainOffered ? await playAgainRoundOf(db, ev.id) : null;
+  const playAgainSent = Boolean(round);
+  // The game this match's players play next, when it exists already: the one its round announced, else
+  // the organiser's own at this club in the next 14 days (one read down `events_venue_slug_idx`). The
+  // control then defaults to its day and time, so one tap lands on it and the week is not split in two.
+  const upcoming = playAgainOffered ? await nextGameOf(db, ev, round?.nextCode ?? null, now) : null;
+  const nextGame = playAgainOfferWhen(ev, upcoming, now);
   // The organiser, or a seat taken by the start, on a played match: one more read, only while the round is unsent.
   // The organiser on the manage link with no player here taps as the organiser (`playAgainActor`).
   const tapper = playAgainOffered && !playAgainSent ? playAgainActor({ playerId: me?.id, isCreator: viewer.isCreator }, ev) : null;
   const playAgainSends = tapper ? await maySendPlayAgainRound(db, ev.id, tapper, now) : false;
   const playAgain = playAgainOffered
-    ? { defaultWhen: `${nextGame.date}T${nextGame.time}`, minWhen: wall(now), maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)), sent: playAgainSent, sends: playAgainSends }
+    ? {
+        defaultWhen: `${nextGame.date}T${nextGame.time}`,
+        minWhen: wall(now),
+        maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)),
+        sent: playAgainSent,
+        sends: playAgainSends,
+        next: upcoming ? { code: upcoming.code, when: `${formatEventDay(upcoming.startsAt, upcoming.tz, locale)} ${formatEventTime(upcoming.startsAt, upcoming.tz, locale)}` } : null,
+      }
     : null;
   // "Make it weekly" sits under it for a match with no crew yet (it makes the weekly slot). The slot's
   // words are given on every render, in the language of that render, also once the crew exists.

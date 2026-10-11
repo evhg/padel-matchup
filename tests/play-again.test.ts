@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, facts, groupMembers, groups, notices, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { NO_SIDE_EFFECTS, joinAsPlayer } from "@/lib/api/operations";
@@ -12,7 +12,7 @@ import { autoCreateGroupMatches, createGroup, createGroupFromEvent, weeklyGroupF
 import { joinWithPolicy, partnerAdmission } from "@/lib/domain/joining";
 import { joinBarLevel, waivedByPlay } from "@/lib/domain/levels";
 import { saveNoticeSettings } from "@/lib/domain/notices";
-import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, playAgainActor, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, organiserNextGame, playAgainActor, playAgainOfferWhen, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { getEventByCode } from "@/lib/domain/queries";
 import { admitConfirmed, confirmLevel } from "@/lib/domain/verify";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
@@ -281,14 +281,18 @@ describe("Play again", () => {
       expect(await db.select().from(events).where(and(eq(events.groupId, group.id), eq(events.startsAt, startsAt)))).toHaveLength(1);
     });
 
-    it("finds no game for a match with no crew, another hour, or a game called off", async () => {
+    it("finds no game at another hour, another organiser's game with no crew, or a game called off", async () => {
       const ana = await makePlayer(db, "Ana");
       const old = await played([ana, await makePlayer(db, "Ben")]);
       const { group } = await weeklyGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
       const [slot] = (await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id);
       const [fresh] = await db.select().from(events).where(eq(events.id, old.id));
       expect(await existingNextGame(db, fresh, new Date(slot.event.startsAt.getTime() + HOUR))).toBeNull();
-      expect(await existingNextGame(db, { ...fresh, groupId: null }, slot.event.startsAt)).toBeNull();
+      // With no crew, the game is still Ana's at the same club and hour: the tap lands on it.
+      expect((await existingNextGame(db, { ...fresh, groupId: null }, slot.event.startsAt))?.code).toBe(slot.event.code);
+      // Another organiser's match with no crew has no game of its own there.
+      const cy = await makePlayer(db, "Cy");
+      expect(await existingNextGame(db, { ...fresh, groupId: null, creatorPlayerId: cy.id }, slot.event.startsAt)).toBeNull();
       await db.update(events).set({ status: "cancelled" }).where(eq(events.id, slot.event.id));
       expect(await existingNextGame(db, fresh, slot.event.startsAt)).toBeNull();
     });
@@ -310,6 +314,67 @@ describe("Play again", () => {
       expect(await toldAbout(next.id)).toEqual([`${ben.id}:noticeItem.playAgain`, `${eve.id}:noticeItem.crewMatch`].sort());
       // The next hour does not look at the slot again.
       expect((await autoCreateGroupMatches(db, new Date(TUESDAY.getTime() + HOUR))).filter((c) => c.group.id === group.id)).toHaveLength(0);
+    });
+  });
+
+  // The audit of 11 October 2026: EfUa, played on Friday 9 October at 11:00 and scored, offered "Play
+  // again" at Friday 16 October 11:00, while TDsv, the group's game on Saturday 17 October at 11:00, made
+  // by hand by the same organiser at the same club, already existed. One tap split the week in two.
+  describe("the organiser's next game, made by hand", () => {
+    const EFUA = new Date("2026-10-09T04:00:00.000Z");
+    const TDSV = new Date("2026-10-17T04:00:00.000Z");
+    const week = async () => {
+      const erik = await makePlayer(db, "Erik");
+      const [jakob, danny, alberto] = [await makePlayer(db, "Jakob"), await makePlayer(db, "Danny"), await makePlayer(db, "Alberto")];
+      const efua = await played([erik, jakob, danny, alberto], {}, { startsAt: EFUA });
+      const tdsv = await createEvent(db, { creatorPlayerId: erik.id, type: "match", startsAt: TDSV, tz: TZ, whenFull: "waitlist", venueName: "Warehaus" });
+      for (const p of [erik, jakob]) await joinEvent(db, { eventId: tdsv.id, playerId: p.id, now: NOW });
+      return { erik, jakob, danny, alberto, efua, tdsv };
+    };
+
+    it("finds the organiser's next game at the same club in the next fourteen days, and the control defaults to it", async () => {
+      const { efua, tdsv } = await week();
+      expect((await organiserNextGame(db, efua, NOW))?.code).toBe(tdsv.code);
+      expect(playAgainOfferWhen(efua, tdsv, NOW)).toEqual({ date: "2026-10-17", time: "11:00" });
+      // With no next game the default is still the week on.
+      expect(playAgainOfferWhen(efua, null, NOW)).toEqual({ date: "2026-10-16", time: "11:00" });
+    });
+
+    it("finds nothing at another club, by another organiser, called off, past fourteen days, or of another kind", async () => {
+      const { erik, efua, tdsv } = await week();
+      const other = await makePlayer(db, "Other");
+      await db.update(events).set({ status: "cancelled" }).where(eq(events.id, tdsv.id));
+      await createEvent(db, { creatorPlayerId: erik.id, type: "match", startsAt: TDSV, tz: TZ, whenFull: "waitlist", venueName: "Kross Padel" });
+      await createEvent(db, { creatorPlayerId: other.id, type: "match", startsAt: TDSV, tz: TZ, whenFull: "waitlist", venueName: "Warehaus" });
+      await createEvent(db, { creatorPlayerId: erik.id, type: "match", startsAt: new Date(NOW.getTime() + 15 * DAY), tz: TZ, whenFull: "waitlist", venueName: "Warehaus" });
+      await createEvent(db, { creatorPlayerId: erik.id, type: "tournament", startsAt: TDSV, tz: TZ, whenFull: "waitlist", venueName: "Warehaus", capacity: 8 });
+      expect(await organiserNextGame(db, efua, NOW)).toBeNull();
+      expect(await organiserNextGame(db, { ...efua, venueSlug: null }, NOW)).toBeNull();
+    });
+
+    it("lands a tap at that day and time on it: no second game, and the round goes only to the players not in it", async () => {
+      const { erik, jakob, danny, alberto, efua, tdsv } = await week();
+      // Danny taps the control's default, which is TDsv's day and time.
+      const startsAt = playAgainStart(efua, playAgainOfferWhen(efua, tdsv, NOW), NOW);
+      expect(startsAt.toISOString()).toBe(TDSV.toISOString());
+      const tap = await nextGameFor(db, efua, { creatorPlayerId: danny.id, startsAt, now: NOW });
+      expect(tap).toMatchObject({ made: false, event: { code: tdsv.code } });
+      expect(await db.select().from(events).where(and(eq(events.startsAt, TDSV), inArray(events.creatorPlayerId, [erik.id, danny.id])))).toHaveLength(1);
+      // Erik and Jakob are in TDsv already; Danny tapped. Alberto hears once, and nobody twice.
+      expect(await notifyPlayAgain(db, efua, tap.event, danny, NOW)).toBe(1);
+      const told = await db.select({ playerId: notices.playerId }).from(notices).where(eq(notices.eventId, tdsv.id));
+      expect(told.map((r) => r.playerId)).toEqual([alberto.id]);
+      expect(await notifyPlayAgain(db, efua, tap.event, erik, NOW)).toBe(0);
+      // A second tap at that time lands there too, whoever taps.
+      expect(await nextGameFor(db, efua, { creatorPlayerId: jakob.id, startsAt, now: NOW })).toMatchObject({ made: false, event: { code: tdsv.code } });
+    });
+
+    it("still makes a game at another day and time", async () => {
+      const { erik, efua, tdsv } = await week();
+      const other = playAgainStart(efua, { date: "2026-10-16", time: "11:00" }, NOW);
+      const tap = await nextGameFor(db, efua, { creatorPlayerId: erik.id, startsAt: other, now: NOW });
+      expect(tap.made).toBe(true);
+      expect(tap.event.code).not.toBe(tdsv.code);
     });
   });
 

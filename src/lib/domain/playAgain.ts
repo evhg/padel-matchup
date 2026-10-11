@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, exists, gt, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { events, facts, notices, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
@@ -49,6 +49,19 @@ export function playAgainDefault(src: Pick<Event, "startsAt" | "tz">, now: Date)
     if (zonedTimeToUtc(date, last.time, src.tz).getTime() > now.getTime()) return { date, time: last.time };
     weeks += 1;
   }
+}
+
+/**
+ * The control's default when the organiser's next game exists already (`organiserNextGame`): that game's
+ * day and time, as this match's wall clock, so one tap lands on it rather than beside it. Else the week-on
+ * default. Pure.
+ */
+export function playAgainOfferWhen(src: Pick<Event, "startsAt" | "tz">, next: Pick<Event, "startsAt"> | null, now: Date): { date: string; time: string } {
+  if (next && next.startsAt.getTime() > now.getTime()) {
+    const p = utcToZonedParts(next.startsAt, src.tz);
+    return { date: p.date, time: p.time };
+  }
+  return playAgainDefault(src, now);
 }
 
 /** The start of the next game: the pick, read in the match's own zone, else the default. Refuses a time already gone. */
@@ -215,18 +228,77 @@ export async function lockCrewHour(tx: Db, groupId: string, startsAt: Date): Pro
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
 }
 
+/** How far ahead the match page looks for the organiser's next game at the same club. */
+export const NEXT_GAME_DAYS = 14;
+
+/** The organiser's games at this club, of this kind, not called off, other than the old match: conditions on `events`. */
+const organiserAtClub = (old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">): SQL[] => [
+  eq(events.venueSlug, old.venueSlug ?? ""),
+  eq(events.creatorPlayerId, old.creatorPlayerId),
+  eq(events.type, old.type),
+  ne(events.status, "cancelled"),
+  ne(events.id, old.id),
+];
+
+/**
+ * The next game this match's organiser already has at the same club in the next fourteen days, made by
+ * hand or by an earlier tap: the week's game the crew plays, which "Play again" must not split in two.
+ * The first by its start, the first made at that start. One read down `events_venue_slug_idx` (the
+ * club and the start): the club's games in that window, filtered on the organiser. Null with no club.
+ */
+export async function organiserNextGame(db: Db, old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">, now: Date): Promise<Event | null> {
+  if (!old.venueSlug) return null;
+  const [ev] = await db
+    .select()
+    .from(events)
+    .where(and(...organiserAtClub(old), gt(events.startsAt, now), lte(events.startsAt, new Date(now.getTime() + NEXT_GAME_DAYS * 24 * 3600_000))))
+    .orderBy(asc(events.startsAt), asc(events.createdAt), asc(events.id))
+    .limit(1);
+  return ev ?? null;
+}
+
+/**
+ * The game the match page names as "Next game": the one this match's round announced, while it is
+ * still to come and not called off (one read down `events_code_idx`), else the organiser's next game
+ * at the club (`organiserNextGame`). Null when there is neither.
+ */
+export async function nextGameOf(db: Db, old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">, announced: string | null, now: Date): Promise<Event | null> {
+  if (announced) {
+    const [ev] = await db.select().from(events).where(eq(events.code, announced)).limit(1);
+    if (ev && ev.status !== "cancelled" && ev.startsAt.getTime() > now.getTime()) return ev;
+  }
+  return organiserNextGame(db, old, now);
+}
+
+/**
+ * The organiser's own game at this club at exactly this start: the game the page's "Next game" names,
+ * which a tap at its day and time lands on. One read down `events_venue_slug_idx`. Null with no club.
+ */
+export async function organiserGameAt(db: Db, old: Pick<Event, "id" | "creatorPlayerId" | "venueSlug" | "type">, startsAt: Date): Promise<Event | null> {
+  if (!old.venueSlug) return null;
+  const [ev] = await db
+    .select()
+    .from(events)
+    .where(and(...organiserAtClub(old), eq(events.startsAt, startsAt)))
+    .orderBy(asc(events.createdAt), asc(events.id))
+    .limit(1);
+  return ev ?? null;
+}
+
 /**
  * A game "Play again" lands on instead of making one: the game this old match's round already
  * announced at that day and time (`sameNextGame`), else the crew's own game at that hour
- * (`crewGameAt`), so the crew never splits across two matches at one hour. Null: make the game.
+ * (`crewGameAt`), else the organiser's own game at that club and that start (`organiserGameAt`: a
+ * game made by hand, as the week's game often is), so the group never splits across two matches at
+ * one hour. Null: make the game.
  */
-export async function existingNextGame(db: Db, old: Pick<Event, "id" | "groupId">, startsAt: Date): Promise<Event | null> {
+export async function existingNextGame(db: Db, old: Pick<Event, "id" | "groupId" | "creatorPlayerId" | "venueSlug" | "type">, startsAt: Date): Promise<Event | null> {
   const same = await sameNextGame(db, old.id, startsAt);
   if (same) {
     const [ev] = await db.select().from(events).where(eq(events.code, same)).limit(1);
     if (ev) return ev;
   }
-  return crewGameAt(db, old.groupId, startsAt);
+  return (await crewGameAt(db, old.groupId, startsAt)) ?? (await organiserGameAt(db, old, startsAt));
 }
 
 /**

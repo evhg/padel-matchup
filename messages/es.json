@@ -358,7 +358,9 @@
     "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días.",
     "playAgainPlain": "Un partido más, con la misma configuración.",
     "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
-    "joinBooking": "Únete a esta reserva en {platform}"
+    "joinBooking": "Únete a esta reserva en {platform}",
+    "playAgainNext": "Próximo partido: {when} · {code}",
+    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro."
   },
   "creator": {
     "tools": "Herramientas de organizador",

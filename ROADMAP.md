@@ -925,8 +925,8 @@ Everything in this list is live. The README describes each in detail.
   Its preview gives the match id only, so the words that the person pastes carry the rest.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
-  37). Production had one group of four or five in Phuket, every full match made by hand with the same
-  people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
+  37). Production had one group of four or five in Phuket, and every full match was made by hand with
+  the same people. "Play again" on the score panel now asks for the day and the
   time in one control above the button, a week on by default; everything else carries over and a
   crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
   game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
@@ -947,7 +947,13 @@ Everything in this list is live. The README describes each in detail.
   match with the organiser, from before its start (a score typed in at the court counts, and so does a
   scored americano), skips that organiser's level range on every door (`admissionAt` in
   `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
-  No WhatsApp template carries the message yet.
+  No WhatsApp template carries the message yet. After the audit of 11 October 2026: the score panel
+  names the next game when it exists already (the game the round announced, or the organiser's own
+  game at the same club in the next 14 days, made by hand or not), the control defaults to its day and
+  time, and a tap there lands on it (`nextGameOf`, `organiserGameAt`). Outside Telegram the message has
+  one line under the question and "I'm in", which opens the match page at the join step (`?join=1`).
+  A night played again keeps its named courts, and a read that fails after the claim takes the claim
+  back, so the round is never spent on nobody.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and
