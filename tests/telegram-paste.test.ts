@@ -20,14 +20,14 @@ import { createTestDb } from "./helpers/db";
  * back from `calls`; the platform's link answers with the synthetic Branch page (match 12345, a
  * made-up click id), never a live request.
  *
- * NOW is Sunday 11 October 2026, 05:00 UTC, 12:00 in Phuket. "Sun 12 Oct" is read as its date, Monday
- * 12 October, 18:00 to 19:30 in the club's zone (Asia/Bangkok), which is 11:00 to 12:30 UTC.
+ * NOW is Sunday 11 October 2026, 05:00 UTC, 12:00 in Phuket. "Mon 12 Oct" is Monday 12 October, 18:00
+ * to 19:30 in the club's zone (Asia/Bangkok), which is 11:00 to 12:30 UTC.
  */
 const NOW = new Date("2026-10-11T05:00:00Z");
 freezeClock(NOW);
 const TZ = "Asia/Bangkok";
 const LINK = "https://thepadelsociety.app.link/AbCdEf12345";
-const OWNER_TEXT = `Warehaus Sun 12 Oct 18:00-19:30 court 3 with Danny, Alberto ${LINK}`;
+const OWNER_TEXT = `Warehaus Mon 12 Oct 18:00-19:30 court 3 with Danny, Alberto ${LINK}`;
 const BRANCH_PAGE = readFileSync(path.join(import.meta.dirname, "fixtures/paste/branch-preview.html"), "utf8");
 const BOT = { id: 123456, is_bot: true, first_name: "Kicksmash" };
 const en = strings("en");

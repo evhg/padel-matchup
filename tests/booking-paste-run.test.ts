@@ -47,7 +47,7 @@ describe("a pasted booking, read on the server", () => {
 
   it("reads the owner's case and gives the form's address", async () => {
     const s = stub();
-    const r = await paste("Warehaus Sun 12 Oct 18:00-19:30 court 3 with Danny, Alberto https://thepadelsociety.app.link/AbCdEf12345", { rateKey: "k-owner" }, s.fetchImpl);
+    const r = await paste("Warehaus Mon 12 Oct 18:00-19:30 court 3 with Danny, Alberto https://thepadelsociety.app.link/AbCdEf12345", { rateKey: "k-owner" }, s.fetchImpl);
     expect(r).toEqual({
       ok: true,
       read: expect.objectContaining({ club: expect.objectContaining({ slug: "warehaus" }), date: "2026-10-12", time: "18:00", names: ["Danny", "Alberto"], missing: [] }),

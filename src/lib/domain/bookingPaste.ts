@@ -52,6 +52,8 @@ export type BookingRead = {
   cost: string | null;
   names: string[];
   missing: ("club" | "date" | "time")[];
+  /** The paste named a weekday and a date that fall on different days ("Sun 12 Oct" when 12 October is a Monday). The date is kept; the organiser checks it. */
+  dayClash: boolean;
 };
 
 export type BookingPreview = { title?: string | null; description?: string | null; ref?: BookingRef | null };
@@ -159,8 +161,17 @@ const MONTH_ALT = MONTHS.map(([re]) => re).join("|");
 const MONTH_RES = MONTHS.map(([re, n]) => [new RegExp(`^(?:${re})$`, "iu"), n] as const);
 const monthOf = (word: string): number | null => MONTH_RES.find(([re]) => re.test(word.replace(/\.$/, "")))?.[1] ?? null;
 
+/**
+ * The short Spanish weekdays are also names ("Dom", "Vie", "Sab"), so they count as a day only right
+ * before a figure ("dom 12 oct", "vie 19:00"); every other weekday word counts wherever it stands.
+ */
+const SHORT_ES_DAYS = ["dom", "lun", "mié", "mie", "jue", "vie", "sáb", "sab"];
+const byLength = (words: string[]) => words.sort((a, b) => b.length - a.length).join("|");
 // "el jueves": the article goes with the day.
-const WEEKDAY_RE = W(`(?:el\\s+)?(?:${Object.keys(WEEKDAYS).sort((a, b) => b.length - a.length).join("|")})\\.?`);
+const WEEKDAY_RE = W(`(?:el\\s+)?(?:${byLength(Object.keys(WEEKDAYS).filter((w) => !SHORT_ES_DAYS.includes(w)))})\\.?`);
+const SHORT_WEEKDAY_RE = W(`(?:el\\s+)?(?:${byLength([...SHORT_ES_DAYS])})\\.?(?=,?\\s*\\d)`);
+/** A day said in words, with no date: "tomorrow 19.10" then has its time in the figures. */
+const DAY_WORD_RE = W("today|tonight|tomorrow|tmrw?|day after tomorrow|сегодня|завтра|послезавтра|hoy|ma[ñn]ana|pasado ma[ñn]ana|esta noche|esta tarde");
 
 const CURRENCY_BEFORE = "US\\$|S\\$|A\\$|HK\\$|RM|Rp|฿|€|\\$|£|₽|THB|SGD|USD|EUR|GBP|AED|RUB|MYR|IDR|AUD|HKD|VND|INR";
 const CURRENCY_AFTER = `${CURRENCY_BEFORE}|baht|бат(?:ов|а)?|евро|руб(?:лей|ля|\\.)?|р\\.|euros?|dirhams?|дирхам(?:ов|а)?`;
@@ -178,6 +189,10 @@ const BOOKING_WORDS = [
   "venue", "location", "address", "today", "tomorrow", "hoy", "mañana", "сегодня", "завтра", "open", "free", "spot", "needed", "wanted", "tbd", "level", "nivel",
   "уровень", "indoor", "outdoor", "center", "centre", "central", "society", "playtomic", "matchi", "setpoint", "podplay", "skedda", "courtsite", "playbypoint",
   "friends", "amigos", "друзьями", "coach", "lights",
+  // A way to pay and a letter's sign-off: "Paid with Visa", "Kind Regards, Front Desk".
+  "visa", "mastercard", "amex", "card", "cards", "cash", "promptpay", "apple", "google", "pay", "paypal", "transfer", "wallet", "credit", "debit", "tarjeta",
+  "efectivo", "transferencia", "карта", "картой", "наличные", "наличными", "перевод", "regards", "cheers", "best", "thanks", "desk", "reception",
+  "support", "staff", "management", "saludos", "atentamente", "уважением",
 ];
 const CITY_WORDS = [...CITIES.flatMap((c) => [c.slug, c.name.toLowerCase(), ...c.needles]), ...Object.keys(ZONE_ALIASES)];
 // The weekdays in full and the English short forms; "Dom", "Lun" and "Vie" stay names.
@@ -250,6 +265,8 @@ function readCourt(m: RegExpMatchArray): string | null {
   if (/^\d{1,3}[a-zA-Z]?$/.test(token)) return (name ? `${word} ${token} · ${name}` : token).slice(0, FIELD_MAX);
   // A named court is a name: a capital, or one letter ("Court A").
   if (!/^\p{Lu}/u.test(token) && token.length > 1) return null;
+  // "Court: Center Court": the name and its own court word, after a label.
+  if (m[3] && /^(?:court|корт|pista|cancha)$/iu.test(m[3].trim())) return `${token} ${m[3].trim()}`.slice(0, FIELD_MAX);
   return `${word} ${token}`.slice(0, FIELD_MAX);
 }
 
@@ -305,11 +322,13 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
     .replace(/\r/g, "")
     .replace(/[\u2018\u2019\u02bc]/g, "'")
     .replace(LINK_RE, " ")} `;
-  const take = (re: RegExp, on: (m: RegExpMatchArray) => boolean | void) => {
+  // `on` refuses a match with false (it stays), takes it with nothing (it goes), or puts back the string it returns.
+  const take = (re: RegExp, on: (m: RegExpMatchArray) => boolean | void | string) => {
     const flags = re.flags.includes("g") ? re.flags : `${re.flags}g`;
     text = text.replace(new RegExp(re.source, flags), (...m) => {
       const match = m.slice(0, -2) as unknown as RegExpMatchArray;
-      return on(match) === false ? match[0] : " ";
+      const r = on(match);
+      return r === false ? match[0] : typeof r === "string" ? r : " ";
     });
   };
   const once = (fn: (m: RegExpMatchArray) => boolean | void) => {
@@ -331,6 +350,12 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
   );
   // A level ("Level 3.5-4.5") is not a date.
   take(W("(?:level|lvl|nivel|уровень|ур\\.?)\\s*\\d(?:[.,]\\d{1,2})?(?:\\s*[-–]\\s*\\d(?:[.,]\\d{1,2})?)?"), () => undefined);
+  // "dom 12 oct", "vie 19:00": a short Spanish weekday, read while its figure is still beside it.
+  take(SHORT_WEEKDAY_RE, (m) => {
+    const wd = WEEKDAYS[m[0].toLowerCase().replace(/^el\s+/, "").replace(/\.$/, "")];
+    if (wd === undefined) return false;
+    out.weekday ??= wd;
+  });
   // The length, before the clock: "1h30", "1.5 hr", "90 min", "полтора часа".
   take(
     W("(\\d)\\s*(?:h|hr|hrs|ч|час(?:а|ов)?|hours?|horas?)\\s*(\\d{1,2})(?![:.]\\d)\\s*(?:m|min|mins|minutes|мин|minutos)?\\.?"),
@@ -361,7 +386,8 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
   take(W("полтора часа|hora y media|an hour and a half|one and a half hours?"), () => {
     out.minutes ??= 90;
   });
-  // The court: "Court 3", "COURT 3 Center Court", "корт 3", "pista 3".
+  // The court: "Court 3", "COURT 3 Center Court", "корт 3", "pista 3". A label in front of the court's own word goes first ("Court: Court 3").
+  take(/(?<![\p{L}\d])(?:court|корт|pista|cancha)\s*:\s*(?=(?:court|корт|pista|cancha)(?![\p{L}]))/iu, () => undefined);
   take(
     COURT_RE,
     once((m) => {
@@ -416,6 +442,27 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
       TWELVE_RE,
       once((m) => {
         const c = clock(Number(m[1]), Number(m[2] ?? 0), m[3]);
+        if (c === null) return false;
+        out.time = hhmm(c);
+      }),
+    );
+  // A clock with a dot after "at" ("в 20.10", "a las 19.30") is the time, never the twentieth of October.
+  if (!out.time)
+    take(
+      W("(?:at|в|@|a las|a la)\\s*(\\d{1,2})\\.(\\d{2})(?![.,]\\d)"),
+      once((m) => {
+        const c = clock(Number(m[1]), Number(m[2]), undefined);
+        if (c === null) return false;
+        out.time = hhmm(c);
+      }),
+    );
+  // So is the one dotted pair of a text that gives its day in words and no other clock: "tomorrow 19.10".
+  const DOTTED = /(?<![\d.,/:])(\d{1,2})\.(\d{2})(?!\d|[.,:/]\d)/gu;
+  if (!out.day && !out.time && DAY_WORD_RE.test(text) && (text.match(DOTTED) ?? []).length === 1 && !/\d:\d{2}/.test(text))
+    take(
+      DOTTED,
+      once((m) => {
+        const c = clock(Number(m[1]), Number(m[2]), undefined);
         if (c === null) return false;
         out.time = hhmm(c);
       }),
@@ -483,6 +530,15 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
     out.weekday ??= wd;
   });
 
+  // How it was paid is neither a player nor the club: "Paid with Visa", "Pagado con tarjeta", "Оплачено картой".
+  take(
+    new RegExp(
+      `(?<![\\p{L}\\d])(?:paid|pagado|pagada|оплачено|оплачен[аы]?|оплата)(?:\\s+(?:with|by|via|in|using|con|por|en|через|по|картой|наличными))?[^\\n.;,|·•()]*?(?=$|\\n|[.;,|·•()]|\\s[-–—]\\s|\\s(?:at|@|on|в|на|en)\\s)`,
+      "imu",
+    ),
+    () => undefined,
+  );
+
   if (o.names) {
     const self = normalName(o.selfName);
     const selfFirst = self.split(" ")[0] ?? "";
@@ -498,16 +554,46 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
       out.names.push(name);
       return true;
     };
-    const pieces = (s: string) => s.split(/\s*(?:[,;/&+]|\s(?:and|и|y|e)\s)\s*/iu);
-    const keepAll = (list: string[], capital: boolean) => list.map((p) => keep(p, capital)).some(Boolean);
+    // "and Danny" is a piece too: a list's last word before it is a piece of its own ("Dom and Danny").
+    const pieces = (s: string) => s.split(/\s*(?:[,;/&+]|\s(?:and|и|y|e)\s)\s*/iu).map((p) => p.replace(/^(?:and|и|y|e)\s+/iu, ""));
+    /**
+     * The names among the pieces, and what is no name, to put back where it stood: "Alberto Warehaus"
+     * gives Alberto, and Warehaus stays in the text for the club. A piece is cut out only for the names in it.
+     */
+    const namesOf = (list: string[], capital: boolean): { any: boolean; left: string[] } => {
+      let any = false;
+      const left: string[] = [];
+      for (const raw of list) {
+        const piece = raw.trim();
+        if (!piece) continue;
+        if (keep(piece, capital)) {
+          any = true;
+          continue;
+        }
+        const words = piece.split(/\s+/);
+        const at = words.findIndex((w, i) => i > 0 && notAName(w, o.clubWords));
+        if (at > 0 && keep(words.slice(0, at).join(" "), capital)) {
+          any = true;
+          left.push(words.slice(at).join(" "));
+        } else left.push(piece);
+      }
+      return { any, left };
+    };
+    const putBack = (left: string[]) => (left.length ? ` , ${left.join(" , ")} , ` : " ");
     // "Team A: Danny, Alberto", "Players: …", "Equipo 1: …", "Команда: …". A line with no name in it stays, for the club.
-    take(/^[ \t]*(?:team|equipo|команда|players?|jugadores|игроки|pair|pareja|пара)[ \t]*[\p{L}\d]{0,2}[ \t]*[:：\-–][ \t]*(.+)$/imu, (m) => keepAll(pieces(m[1]), false));
+    take(/^[ \t]*(?:team|equipo|команда|players?|jugadores|игроки|pair|pareja|пара)[ \t]*[\p{L}\d]{0,2}[ \t]*[:：\-–][ \t]*(.+)$/imu, (m) => {
+      const got = namesOf(pieces(m[1]), false);
+      return got.any ? putBack(got.left) : false;
+    });
     // "with Danny and Alberto", "con Ana y Bea", "с Данни и Альберто": names with a capital, up to the next piece of the
-    // booking ("at Warehaus" stays). The phrase goes either way: "with danny" names no club.
+    // booking ("at Warehaus" stays). The phrase goes either way: "with danny" names no club. Only the names go: what
+    // is no name stays for the club ("с 18:00 до 19:30, Warehaus").
     take(
-      new RegExp(`(?<![\\p{L}\\d])(?:with|w\\/|con|с|со)\\s+([^\\n.;|·•()]+?)(?=$|\\n|[.;|·•()]|\\s[-–—]\\s|\\s(?:at|@|in|on|в|на|en)\\s)`, "imu"),
+      new RegExp(`(?<![\\p{L}\\d])(with|w\\/|con|с|со)\\s+([^\\n.;|·•()]+?)(?=$|\\n|[.;|·•()]|\\s[-–—]\\s|\\s(?:at|@|in|on|в|на|en)\\s)`, "imu"),
       (m) => {
-        keepAll(pieces(m[1]), true);
+        // A Russian "с" is also "from" ("с 18:00"): it opens names only before a capital.
+        if (/^со?$/iu.test(m[1]) && !/^\p{Lu}/u.test(m[2].trim())) return false;
+        return putBack(namesOf(pieces(m[2]), true).left);
       },
     );
     // A list of names on its own lines ("Danny\nAlberto", "1. Danny\n2. Alberto"), or one line of two or more ("Danny, Alberto").
@@ -610,22 +696,32 @@ const realDate = (y: number, m: number, d: number): string | null => {
 const shift = (date: string, days: number) => new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 const dowOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
 
+/** A booking is for the coming year at most: a day further on is a slip (a wrong year), and the bot's answer shows no year to catch it. */
+const DAYS_AHEAD_MAX = 400;
+/** A day without a year this far behind today is next year's ("3 Jan" on 28 December); nearer, it is a booking played or a slip. */
+const DAYS_BEHIND_NEXT_YEAR = 60;
+
 /**
- * The day in the zone. A day without a year is the next one on or after today; a date with its year
- * more than a day behind us is refused (a booking already played); a weekday is the next one, a week
- * on when it is today and the time has gone.
+ * The day in the zone. A date with its year more than a day behind us is refused (a booking already
+ * played); a Thai Buddhist-era year (2569) is the same year in the common era (2026). A day without a
+ * year is this year's when it is today or later, next year's when this year's is more than sixty days
+ * behind, and refused in between. Nothing more than about thirteen months ahead. A weekday is the next
+ * one, a week on when it is today and the time has gone.
  */
 function dayIn(s: Pick<Scan, "day" | "rel" | "weekday" | "time">, today: { date: string; time: string }): string | null {
+  const ahead = (date: string | null) => (date && date <= shift(today.date, DAYS_AHEAD_MAX) ? date : null);
   if (s.day) {
-    const { y, m, d } = s.day;
+    const { m, d } = s.day;
+    const y = s.day.y !== null && s.day.y >= 2500 && s.day.y <= 2600 ? s.day.y - 543 : s.day.y;
     if (y !== null) {
       const date = realDate(y, m, d);
-      return date && date >= shift(today.date, -1) ? date : null;
+      return date && date >= shift(today.date, -1) ? ahead(date) : null;
     }
     const year = Number(today.date.slice(0, 4));
     const date = realDate(year, m, d);
-    if (date && date >= today.date) return date;
-    return realDate(year + 1, m, d);
+    if (date && date >= today.date) return ahead(date);
+    if (date && date >= shift(today.date, -DAYS_BEHIND_NEXT_YEAR)) return null;
+    return ahead(realDate(year + 1, m, d));
   }
   if (s.rel !== null) return shift(today.date, s.rel);
   if (s.weekday !== null) {
@@ -701,15 +797,26 @@ export function readBooking(input: {
     cost: mine.cost ?? theirs?.cost ?? null,
     names: mine.names,
     missing: [],
+    dayClash: Boolean(date && daySource?.day && daySource.weekday !== null && dowOf(date) !== daySource.weekday),
   };
   read.missing = [...(read.club ? [] : ["club" as const]), ...(read.date ? [] : ["date" as const]), ...(read.time ? [] : ["time" as const])];
   return read;
 }
 
 /**
+ * Does the paste show a booking, so that "Court booked by me" may start ticked? A platform's link, or a
+ * time with something only a booking carries: the club it named, a court or a price. The organiser's
+ * last venue is a guess about the club, not a sign of a booking. Pure.
+ */
+export const showsBooking = (read: BookingRead): boolean =>
+  Boolean(read.platform) || (Boolean(read.time) && ((Boolean(read.club) && read.clubFrom !== "history") || Boolean(read.court) || Boolean(read.cost)));
+
+/**
  * The create form, filled: `/?src=paste` and every field read, in the names the form already takes
- * (`venue`, `date`, `time`, `tz`, `names`) and the new ones (`len`, `court`, `cost`, `booked`). The
- * length goes only when it is one the form offers (60, 90 or 120). Pure.
+ * (`venue`, `date`, `time`, `tz`, `names`) and the new ones (`len`, `court`, `cost`, `booked`,
+ * `check`). The length goes only when it is one the form offers (60, 90 or 120); `booked=1` only when
+ * the paste shows a booking (`showsBooking`); `check` names the fields the organiser must look at: the
+ * venue when it is their last one, the date when the weekday disagrees with it. Pure.
  */
 export function bookingHref(read: BookingRead): string {
   const q = new URLSearchParams({ src: "paste" });
@@ -722,6 +829,8 @@ export function bookingHref(read: BookingRead): string {
   if (read.court) q.set("court", read.court);
   if (read.cost) q.set("cost", read.cost);
   if (read.names.length) q.set("names", read.names.join(","));
-  q.set("booked", "1");
+  if (showsBooking(read)) q.set("booked", "1");
+  const check = [...(read.club && read.clubFrom === "history" ? ["venue"] : []), ...(read.dayClash ? ["date"] : [])];
+  if (check.length) q.set("check", check.join(","));
   return `/?${q.toString()}`;
 }

@@ -77,7 +77,7 @@ describe("the create form's address", () => {
   it("reads back exactly what the reader's own link wrote (bookingHref)", () => {
     // Sunday 11 October 2026, 13:00 in Phuket: the owner's own paste, with no link.
     const read = readBooking({
-      text: "Warehaus Sun 12 Oct 18:00-19:30 court 3 with Danny, Alberto",
+      text: "Warehaus Mon 12 Oct 18:00-19:30 court 3 with Danny, Alberto",
       clubs: [{ slug: "warehaus", name: "WAREHAUS.club", tz: "Asia/Bangkok" }],
       now: new Date("2026-10-11T06:00:00Z"),
       tz: "Asia/Bangkok",
