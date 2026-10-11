@@ -326,6 +326,8 @@ try {
   await lars.waitForURL(/\/v\/padel-kreuzberg/, { timeout: 20000 });
   check("the club has a page at once", (await painted(lars.getByRole("heading", { name: "Padel Kreuzberg" }))) >= 1);
   check("the page says no club runs it", (await painted(lars.getByTestId("club-unclaimed"))) === 1);
+  // Until 11 October 2026 every listed club's badges said "Managed by the club" beside that line.
+  check("and wears no managed badge", (await lars.getByText("Managed by the club").count()) === 0);
   check("and names the person who put it on the map", (await painted(lars.getByTestId("club-added-by").getByText("Listed by Lars"))) === 1);
   check("the page shows the court split they gave", (await painted(lars.getByText("6 courts"))) >= 1);
   await lars.goto(`${BASE}/clubs`);
