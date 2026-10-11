@@ -34,16 +34,23 @@ export function countedSource(v: string | string[] | null | undefined): string |
   return (MATCH_SOURCES as readonly string[]).includes(s) ? s : "other";
 }
 
-/** A link preview, a crawler or a monitor: not a person, so no page view of theirs is counted. */
-export const isCrawler = (ua: string) => /bot|crawl|spider|slurp|facebookexternalhit|preview|uptime|monitor|curl|python-requests|Go-http-client/i.test(ua);
+/**
+ * A link preview, a crawler or a monitor: not a person, so no page view of theirs is counted. WhatsApp
+ * builds its preview on the sender's own phone, as `WhatsApp/2.x.y A` (or `i`), with no cookie; its
+ * in-app browser starts with `Mozilla/5.0` and is a person.
+ */
+export const isCrawler = (ua: string) => /bot|crawl|spider|slurp|facebookexternalhit|preview|uptime|monitor|curl|python-requests|Go-http-client/i.test(ua) || /^WhatsApp\//.test(ua);
 
 /**
  * The counter for a view of a match page, the step between a shared link and a seat: a person with no
  * seat on it, under the link's tag (`view_src_<tag>`, `view_src_none` with no tag). Read beside
  * `join_src_<tag>` and `newid_src_<tag>` (docs/OPERATING.md, "From a shared link to a seat").
+ * `rsc` is true when the request carries the `RSC` header: `router.refresh()` (the live night's
+ * AutoRefresh, every 20 seconds), a client navigation or a prefetch. Only a full page load, which is
+ * what a tapped link makes, is a view.
  */
-export function viewCounter(o: { source: string | null; seated: boolean; ua: string }): string | null {
-  if (o.seated || isCrawler(o.ua)) return null;
+export function viewCounter(o: { source: string | null; seated: boolean; ua: string; rsc: boolean }): string | null {
+  if (o.rsc || o.seated || isCrawler(o.ua)) return null;
   return `view_src_${countedSource(o.source) ?? "none"}`;
 }
 

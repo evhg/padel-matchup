@@ -147,8 +147,10 @@ export default async function EventPage({ params, searchParams }: Props) {
   const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
   // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
-  // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response.
-  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: (await headers()).get("user-agent") ?? "" });
+  // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
+  // a full page load only: a refresh, a client navigation and a prefetch carry the RSC header.
+  const h = await headers();
+  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", rsc: h.has("rsc") });
   if (viewKey) await later(() => bumpMetric(db, viewKey));
 
   // Level range: players outside it ask to join; the organizer decides.

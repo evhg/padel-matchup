@@ -204,8 +204,11 @@ the whole path. No step needs a migration, and no counter holds a name, an addre
    counted, because it leaves the app; the tag travels with the link instead.
 2. **The view.** `view_src_<tag>`: the match page opened by a person with no seat on it and who is not
    the organiser, under the link's tag (`view_src_none` with no tag, `view_src_other` for a word
-   the app did not write). Link previews and crawlers do not count (`viewCounter` in
-   `src/lib/source.ts`). A reload counts again, so read it as views, not people.
+   the app did not write). Link previews and crawlers do not count, and that includes the WhatsApp
+   preview, which the sender's own phone fetches (`viewCounter` in `src/lib/source.ts`). Only a
+   full page load counts. The 20-second refresh on a live night, a move inside the app and a
+   prefetch send the `RSC` header, and do not count. A reload by hand counts again, so read it as
+   views, not people.
 3. **The seat.** `join_src_<tag>`: a join from a browser that came through that tag in the last day
    (the `ks_src` cookie).
 4. **The new record.** `newid_src_<tag>`: of those, a record made from a name alone.

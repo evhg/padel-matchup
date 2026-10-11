@@ -104,14 +104,23 @@ describe("every share button says where the link went", () => {
 
   it("counts a match page view by a visitor with no seat, under the link's tag", () => {
     const phone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
-    expect(viewCounter({ source: "wa", seated: false, ua: phone })).toBe("view_src_wa");
-    expect(viewCounter({ source: "link", seated: false, ua: phone })).toBe("view_src_link");
-    expect(viewCounter({ source: null, seated: false, ua: phone })).toBe("view_src_none");
-    expect(viewCounter({ source: "my-cousin", seated: false, ua: phone })).toBe("view_src_other");
+    const view = (o: { source: string | null; seated?: boolean; ua?: string; rsc?: boolean }) => viewCounter({ seated: false, ua: phone, rsc: false, ...o });
+    expect(view({ source: "wa" })).toBe("view_src_wa");
+    expect(view({ source: "link" })).toBe("view_src_link");
+    expect(view({ source: null })).toBe("view_src_none");
+    expect(view({ source: "my-cousin" })).toBe("view_src_other");
     // A player already in, or the organiser, is not a step of the funnel; a link preview is not a visitor.
-    expect(viewCounter({ source: "wa", seated: true, ua: phone })).toBeNull();
-    expect(viewCounter({ source: "wa", seated: false, ua: "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" })).toBeNull();
-    expect(viewCounter({ source: "tg", seated: false, ua: "TelegramBot (like TwitterBot)" })).toBeNull();
+    expect(view({ source: "wa", seated: true })).toBeNull();
+    expect(view({ source: "wa", ua: "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" })).toBeNull();
+    expect(view({ source: "tg", ua: "TelegramBot (like TwitterBot)" })).toBeNull();
+    // The sender's own phone fetches the link to build WhatsApp's preview, with no cookie: not a view.
+    expect(view({ source: "wa", ua: "WhatsApp/2.23.20.0 A" })).toBeNull();
+    expect(view({ source: "link", ua: "WhatsApp/2.24.1.78 i" })).toBeNull();
+    // WhatsApp's in-app browser is a person, and still counts.
+    expect(view({ source: "wa", ua: `${phone} WhatsApp/2.24.1.78` })).toBe("view_src_wa");
+    // Only a full page load is a view. A refresh of an open page (AutoRefresh polls every 20 s on a
+    // live night), a client navigation and a prefetch send the RSC header, and are not.
+    expect(view({ source: "wa", rsc: true })).toBeNull();
     expect(isCrawler("")).toBe(false);
   });
 });
