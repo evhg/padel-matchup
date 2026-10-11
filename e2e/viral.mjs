@@ -77,6 +77,55 @@ try {
   const anaOnce = rows.filter((r) => /\bAna\b/.test(r)).length === 1;
   check("the four carried players are seated with invite links, and Ana is not seated twice", reserved && anaOnce && (await p.getByText("3 spots left").count()) === 1, JSON.stringify(rows.slice(0, 6)).slice(0, 220));
 
+  // ---- Paste your booking, the door: the owner's own words (11 October 2026), a court at Warehaus
+  // booked in a platform's app with Danny and Alberto, pasted on the landing page. No link, so the
+  // server reads nothing from outside. Warehaus is no club row on this server (the directory is
+  // production's data; coach.mjs says the same), so the club is the one field left to the organiser,
+  // and the day and the hour are read in the browser's zone. The day is three days out there, written
+  // as a booking app writes it, from the moment the suite runs (rule 11). The whole journey to a
+  // booked match, at a club this server knows, is in clubs.mjs. ----
+  const kim = await newPage();
+  const kimZone = "Europe/Madrid"; // the iphone context's zone (e2e/lib.mjs)
+  const bkAt = new Date(Date.now() + 3 * 86400 * 1000);
+  const bkDay = new Intl.DateTimeFormat("en-CA", { timeZone: kimZone }).format(bkAt);
+  const bkText = `Warehaus ${new Intl.DateTimeFormat("en-GB", { timeZone: kimZone, weekday: "short", day: "numeric", month: "short" }).format(bkAt)} 18:00-19:30 court 3 with Danny, Alberto`;
+  await kim.goto(`${BASE}/`);
+  check("the landing page offers 'Booked already? Paste it' beside Find a game, closed", (await kim.getByTestId("paste-door").innerText()).includes("Booked already? Paste it") && (await kim.getByTestId("paste-sheet").count()) === 0);
+  await kim.getByTestId("paste-door").click();
+  const pasteBox = kim.getByLabel("Paste the booking link and the text from your booking app.");
+  check("it opens one box with the hint", await pasteBox.isVisible());
+  await kim.getByRole("button", { name: "Read my booking" }).click();
+  check("an empty box answers with a sentence, and stays", (await kim.getByTestId("paste-note").innerText()) === "Paste the link or the text of your booking first." && new URL(kim.url()).search === "");
+  await pasteBox.fill(bkText);
+  await shot(kim, "v6-paste-door");
+  await kim.getByRole("button", { name: "Read my booking" }).click();
+  // Watch the address and the answer together: a refused read stays on the page with a sentence.
+  const pasteBy = Date.now() + 30_000;
+  while (new URL(kim.url()).searchParams.get("src") !== "paste" && Date.now() < pasteBy) {
+    if ((await kim.getByTestId("paste-note").count()) && !(await kim.getByTestId("paste-note").innerText()).startsWith("Paste the link")) throw new Error(`paste refused: ${await kim.getByTestId("paste-note").innerText()}`);
+    await kim.waitForTimeout(250);
+  }
+  check("'Read my booking' opens the create form from the booking", new URL(kim.url()).searchParams.get("src") === "paste", kim.url());
+  await kim.getByTestId("carried-players").waitFor({ timeout: 20000 });
+  const filled = {
+    venue: await kim.getByLabel(/Venue/).inputValue(),
+    date: await kim.locator('main input[type="date"]').inputValue(),
+    time: await kim.locator('main input[type="time"]').inputValue(),
+    zone: await kim.getByRole("button", { name: "Europe/Madrid", exact: true }).count(),
+    length: await kim.getByTestId("length-choice").getByRole("button", { name: "90 min" }).getAttribute("aria-pressed"),
+    court: await kim.getByPlaceholder("e.g. 3 or Centre court").inputValue(),
+  };
+  check("the form is filled with the day, 18:00, 90 minutes and court 3, and the club is left empty", JSON.stringify(filled) === JSON.stringify({ venue: "", date: bkDay, time: "18:00", zone: 1, length: "true", court: "3" }), JSON.stringify(filled));
+  check("the club the booking did not give is asked for in words, and only the club", (await kim.getByTestId("paste-missing-club").innerText()).includes("Your booking did not name the club. Pick it here.") && (await kim.getByTestId("paste-missing-when").count()) === 0);
+  check("the players come as 'from your booking', not from a schedule", (await kim.getByTestId("carried-players").innerText()).includes("2 players from your booking") && (await kim.getByTestId("carried-players").innerText()).includes("Danny · Alberto"));
+  check("'Court booked by me' stands ticked above the create button", await kim.getByTestId("booked-by-me").isChecked());
+  await shot(kim, "v7-paste-form");
+  // What the booking did not say stays empty on the form, and says so in words.
+  await kim.goto(`${BASE}/?src=paste&venue=Rawai%20Padel%20Club&tz=Asia%2FBangkok&names=Danny&booked=1`);
+  await kim.getByTestId("paste-missing-when").waitFor({ timeout: 20000 });
+  check("a booking with no day and no hour leaves both empty and asks for them in place", (await kim.locator('main input[type="date"]').inputValue()) === "" && (await kim.locator('main input[type="time"]').inputValue()) === "" && (await kim.getByText("Your booking did not give the day. Pick it here.").count()) === 1 && (await kim.getByText("Your booking did not give the time. Pick it here.").count()) === 1);
+  await kim.context().close();
+
   // ---- Result card ----
   await p.goto(`${BASE}/PAST`);
   // The match page leads with the card once the score is in: the picture, and WhatsApp one tap away (a WhatsApp group only ever gets it by hand).

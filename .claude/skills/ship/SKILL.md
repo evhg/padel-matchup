@@ -258,6 +258,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and `booking_platform` by hand, and the directory import writes neither, so fifty green tests
   described a job that read almost no club (10 October 2026). Run the import's own statement in the
   test (`node scripts/import-clubs.mjs --sql`) before asking which rows a query finds.
+- **The browser suites' server has none of the directory's clubs.** No file in `drizzle/` inserts
+  the directory; the ones that name it (0081, 0097) only update rows production already holds. So a
+  suite's PGlite has no WAREHAUS.club and no club but the ones a suite claims. A paste of "Warehaus Sun 12 Oct …" that read the club in every unit test (each seeds
+  its own rows) came back with the venue empty in the browser (11 October 2026). A browser check that
+  needs a club the reader knows uses the one `e2e/clubs.mjs` claims, and a check of a club nobody
+  knows says so in its comment.
 - **A fake clock in whole numbers hides what the real one does.** The court-time frame gave each
   request the time left to its deadline as its timeout, and `AbortSignal.timeout` throws on anything
   but a whole number. `performance.now()` always carries a fraction, so every request that started in a

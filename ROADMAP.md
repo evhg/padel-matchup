@@ -938,10 +938,12 @@ until real use asks for one.
   person checks the form. Built so far: the reader (`src/lib/domain/bookingPaste.ts`), the one read of a
   pasted link as a chat app's preview robot reads it (`src/lib/booking/unfurl.ts`, DECIDING rule 35 as
   changed that day), the server's side with its limit (`src/lib/booking/paste.ts`, `readBookingAction`)
-  and Setpoint in the list of platforms. Still to come: the box on the first page that fills the form,
-  and the same paste in a chat with the bot. The Padel Society keeps a match's club, day and players in
-  its app's private API, which Kicksmash never calls. Its preview gives the match id only, so the words
-  the person pastes carry the rest.
+  and Setpoint in the list of platforms; "Booked already? Paste it" on the first page, which opens the
+  form filled, says which fields the booking left out, and keeps the match off the venue board; and the
+  create button, which then holds the players and marks the court booked by the organiser in the same
+  tap ("Court booked by me"). Still to come: the same paste in a chat with the bot. The Padel Society
+  keeps a match's club, day and players in its app's private API, which Kicksmash never calls. Its
+  preview gives the match id only, so the words the person pastes carry the rest.
 
 ## Next, in order
 
