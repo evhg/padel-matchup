@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
+import { activity, events, groupMembers, groups, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isOver } from "./matchLength";
 import { DomainError } from "./errors";
@@ -32,10 +32,37 @@ export async function lockEvent(tx: Db, eventId: string): Promise<Event> {
   return ev;
 }
 
+/**
+ * Why a match takes nobody now: it is cancelled, or it is over. Null while it is live. Joinable until
+ * the match's own length has run out, not a fixed two hours after the start. Pure: the writes below
+ * and the held place by name (`heldByName.ts`) ask the same question.
+ */
+export function liveRefusal(ev: Pick<Event, "status" | "startsAt" | "durationMinutes">, now: Date): "cancelled" | "past" | null {
+  if (ev.status === "cancelled") return "cancelled";
+  if (ev.status === "past" || isOver(ev, now)) return "past";
+  return null;
+}
+
 function assertLive(ev: Event, now: Date) {
-  if (ev.status === "cancelled") throw new DomainError("cancelled");
-  // Joinable until the match's own length has run out, not a fixed two hours after the start.
-  if (ev.status === "past" || isOver(ev, now)) throw new DomainError("past");
+  const why = liveRefusal(ev, now);
+  if (why) throw new DomainError(why);
+}
+
+/**
+ * The organiser of this match, or a co-organiser (an admin or the creator of the crew it belongs to).
+ * Two reads down primary keys at most, and none for a match outside a crew.
+ */
+export async function runsMatch(db: Db, ev: Pick<Event, "creatorPlayerId" | "groupId">, playerId: string): Promise<boolean> {
+  if (playerId === ev.creatorPlayerId) return true;
+  if (!ev.groupId) return false;
+  const [admin] = await db
+    .select({ id: groupMembers.playerId })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, ev.groupId), eq(groupMembers.playerId, playerId), eq(groupMembers.role, "admin")))
+    .limit(1);
+  if (admin) return true;
+  const [creator] = await db.select({ id: groups.id }).from(groups).where(and(eq(groups.id, ev.groupId), eq(groups.creatorPlayerId, playerId))).limit(1);
+  return Boolean(creator);
 }
 
 const VACANT: Partial<typeof slots.$inferInsert> = {
@@ -392,7 +419,10 @@ export async function reserveLocked(
 export type ConfirmOutcome =
   | { outcome: "confirmed"; slot: Slot; event: Event }
   | { outcome: "already_confirmed"; slot: Slot; event: Event }
-  /** Already in by another door. On a fixed-pairs night the freed reserved spot may move the waiting list up (`promotion`). */
+  /**
+   * Already in by another door. The reserved spot is freed the way a leave frees a seat, so the
+   * waiting list may move up (`promotion`); on a fixed-pairs night the pair forms first.
+   */
   | { outcome: "already_in"; slot: Slot; event: Event; promotion?: Promotion | null }
   | { outcome: "gone"; event: Event };
 
@@ -422,6 +452,9 @@ export async function confirmInvite(
       .limit(1);
     const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
     if (elsewhere) {
+      // The organiser or a co-organiser, in the match already, on somebody else's link: the place is
+      // not theirs to take, and the tap used to free it without a word to anybody.
+      if (await runsMatch(tx, ev, input.playerId)) throw new DomainError("forbidden");
       if (ev.fixedPairs) {
         // A fixed-pairs night: the partner somebody named was in already, alone. The pair forms where
         // they sit (same side of the list, before round 1, nobody else's partner), and the reserved
@@ -437,33 +470,46 @@ export async function confirmInvite(
         const status = await recomputeStatus(tx, ev);
         return { outcome: "already_in", slot: mine, event: { ...ev, status }, promotion: first ? { ...first, also } : null };
       }
-      // Player already got in through the public link: release the reservation.
-      await tx.update(slots).set(VACANT).where(eq(slots.id, slot.id));
+      // Already in through the public link: the reserved spot is not a second seat. It goes the way a
+      // leave goes (`vacateAndPromote`), so the first player waiting moves up and is told; it used to
+      // go empty with the waiting list left where it was.
+      const promotion = await vacateAndPromote(tx, ev, slot);
       if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
-      await recomputeStatus(tx, ev);
-      return { outcome: "already_in", slot: elsewhere, event: ev };
+      const status = await recomputeStatus(tx, ev);
+      return { outcome: "already_in", slot: elsewhere, event: { ...ev, status }, promotion };
     }
 
-    const email = normalizeEmail(input.email);
-    const [confirmed] = await tx
-      .update(slots)
-      .set({
-        playerId: input.playerId,
-        status: "confirmed",
-        joinedAt: now,
-        invitedEmail: email ?? slot.invitedEmail,
-      })
-      .where(eq(slots.id, slot.id))
-      .returning();
-    if (email) {
-      await tx.update(players).set({ email }).where(and(eq(players.id, input.playerId), sql`${players.email} is null`));
-    }
-    // Round 1 was generated with a placeholder for this name: hand its matches to the real player.
-    if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "confirmed" });
-    const status = await recomputeStatus(tx, ev);
-    return { outcome: "confirmed", slot: confirmed, event: { ...ev, status } };
+    const done = await confirmLocked(tx, ev, slot, { playerId: input.playerId, email: input.email, now });
+    return { outcome: "confirmed", ...done };
   });
+}
+
+/**
+ * The write that fills a held place: the player takes it, confirmed, at `now`. The personal link
+ * (`confirmInvite`) and the name typed on the plain link (`takeHeldByName` in `heldByName.ts`) both
+ * end here, so the organiser hears the same "Danny confirmed" either way. The lock is the caller's.
+ */
+export async function confirmLocked(tx: Db, ev: Event, slot: Slot, input: { playerId: string; email?: string | null; now: Date }): Promise<{ slot: Slot; event: Event }> {
+  const email = normalizeEmail(input.email);
+  const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
+  const [confirmed] = await tx
+    .update(slots)
+    .set({
+      playerId: input.playerId,
+      status: "confirmed",
+      joinedAt: input.now,
+      invitedEmail: email ?? slot.invitedEmail,
+    })
+    .where(eq(slots.id, slot.id))
+    .returning();
+  if (email) {
+    await tx.update(players).set({ email }).where(and(eq(players.id, input.playerId), sql`${players.email} is null`));
+  }
+  // Round 1 was generated with a placeholder for this name: hand its matches to the real player.
+  if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
+  await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "confirmed" });
+  const status = await recomputeStatus(tx, ev);
+  return { slot: confirmed, event: { ...ev, status } };
 }
 
 export type DeclineOutcome =

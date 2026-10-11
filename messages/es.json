@@ -95,7 +95,10 @@
     "thatsMeIn": "Soy yo",
     "thatsMeCrew": "En este grupo ya juega {name}. ¿Eres tú?",
     "thatsMeNo": "Con este nombre no ha funcionado.",
-    "thatsMeSure": "¿Entrar como {name}?"
+    "thatsMeSure": "¿Entrar como {name}?",
+    "takeHeld": "Ocupar la plaza guardada para {name}",
+    "takeHeldSure": "¿Ocupar la plaza guardada para {name}?",
+    "takeHeldNo": "Esa plaza ya no está guardada para {name}."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -361,7 +364,7 @@
     "manageLinkTitle": "Enlace de organizador",
     "rolodexHint": "Empieza a escribir para elegir entre jugadores con los que ya has jugado.",
     "inviteAll": "Enviar todas las invitaciones en un mensaje",
-    "inviteAllHelp": "Un mensaje con el enlace personal de cada uno. Ideal para un grupo.",
+    "inviteAllHelp": "Un mensaje con el enlace personal de cada uno. Envía cada enlace a su persona. En el grupo, publica el enlace abierto del partido: allí cada nombre guardado puede ocupar su plaza.",
     "reserveSpot": "Reservar plaza {n}",
     "reserveSheetHelp": "Guarda esta plaza para alguien. Recibirás un enlace personal para reenviárselo.",
     "reserveInline": "Reservar esta plaza para…",
@@ -475,7 +478,9 @@
     "nameLabel": "Tu nombre",
     "alreadyIn": "Ya estás en este partido.",
     "playedBefore": "¿Ya jugaste con {email}?",
-    "playedBeforeHelp": "Conocemos ese email de un partido anterior. Recupera primero tu historial con un código y confirma esta plaza como tú."
+    "playedBeforeHelp": "Conocemos ese email de un partido anterior. Recupera primero tu historial con un código y confirma esta plaza como tú.",
+    "heldFor": "Esta plaza está guardada para {name}.",
+    "heldForHelp": "Envía este enlace a {name}."
   },
   "shareText": {
     "event": "🎾 Pádel {day} a las {time} — {venue}. {spots}. Toca para apuntarte: {url}",

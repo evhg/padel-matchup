@@ -39,6 +39,7 @@ import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { StayUpdated } from "@/components/StayUpdated";
 import { ThatsMeButton, ThatsMeLine } from "@/components/ThatsMe";
+import { TakeHeldButton } from "@/components/TakeHeld";
 import { LevelAfterJoin } from "@/components/LevelAfterJoin";
 import { getDb } from "@/db";
 import { feedKeyFor, feedLinks, stayChannels } from "@/lib/calendarFeed";
@@ -78,6 +79,7 @@ import { heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
+import { heldOffers } from "@/lib/domain/heldByName";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
 
@@ -353,6 +355,11 @@ export default async function EventPage({ params, searchParams }: Props) {
   // organiser, a manage link included, has their own way in).
   const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere);
   const offerOnRoster = (id: string | null) => Boolean(id) && (offer.ids.has(id!) || offer.fold?.id === id);
+  // The held place by name (DECIDING rule 34, the owner, 11 October 2026): "Take Danny's held place"
+  // on the row and for the typed name, wherever `heldVerdict` says yes. Over the rows this page read
+  // already, so it costs no read; never for the organiser, a manage link included.
+  const held = viewer.isCreator ? [] : heldOffers(ev, [...roster, ...waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null })), me ? { id: me.id, name: me.displayName } : null, now);
+  const heldNameOf = new Map(held.map((h) => [h.slotId, h.name]));
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
@@ -448,6 +455,11 @@ export default async function EventPage({ params, searchParams }: Props) {
                       : t("event.inviteSent")
                     : t("event.inviteNotAccepted")}
                 </div>
+                {heldNameOf.has(s.id) && (
+                  <div className="mt-1">
+                    <TakeHeldButton code={code} name={heldNameOf.get(s.id)!} />
+                  </div>
+                )}
               </div>
             ) : (
               <OpenSpot
@@ -461,6 +473,7 @@ export default async function EventPage({ params, searchParams }: Props) {
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
+                held={held.map((h) => h.name)}
                 levelRange={ranged ? levelRange : null}
                 myLevel={me?.level ?? null}
               />
