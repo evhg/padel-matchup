@@ -111,9 +111,13 @@ function icsFor(ev: Event, c: Ctx, attendee: { name: string; email: string } | u
   });
 }
 
-/** The downloadable .ics for the current viewer (Apple Calendar & co.). */
-export async function icsForDownload(db: Db, detail: EventDetail, viewer: Recipient | null): Promise<string> {
-  const c = await ctx(db, detail.event, viewer?.locale ?? detail.creator.locale, viewer, detail);
+/**
+ * The downloadable .ics for the current viewer (Apple Calendar & co.). Its link signs the viewer in
+ * (/p/{token}/{code}) unless `personalLink` is false: the route passes false for a session by name that
+ * proved nothing (DECIDING rule 34), which gets the public match link in its viewer's language.
+ */
+export async function icsForDownload(db: Db, detail: EventDetail, viewer: Recipient | null, o: { personalLink?: boolean } = {}): Promise<string> {
+  const c = await ctx(db, detail.event, viewer?.locale ?? detail.creator.locale, o.personalLink === false ? null : viewer, detail);
   return icsFor(detail.event, c, undefined, "PUBLISH");
 }
 

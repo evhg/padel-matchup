@@ -50,6 +50,20 @@ async function requireCoach(db: Awaited<ReturnType<typeof getDb>>) {
   return { me, coach: found.coach, role: found.role };
 }
 
+/**
+ * A player id that a coach's screen sent back: it passes only for a person on this coach's list (any
+ * status). Anybody can open a coach's book, and until 11 October 2026 the match page showed the player
+ * ids of everybody seated in a started match. So a bare id is no relationship. Without this check a
+ * coach could put any player on the list as accepted, sell them a package or book them a lesson, and
+ * each step sent that player a notice. The screens offer only the people on the list (`listStudents`),
+ * so a real tap always passes. One read down the key of `coach_students`.
+ */
+async function onCoachList(db: Awaited<ReturnType<typeof getDb>>, coachId: string, playerId: unknown): Promise<string> {
+  if (typeof playerId !== "string" || !/^[0-9a-f-]{36}$/i.test(playerId)) throw new ActionFailure("invalid");
+  if ((await studentStatus(db, coachId, playerId)) === "none") throw new ActionFailure("not_found");
+  return playerId;
+}
+
 const revalidateCoach = (handle: string) => {
   revalidatePath("/coach");
   revalidatePath("/coach/students");
@@ -244,13 +258,14 @@ export async function coachBookAction(input: { studentPlayerId?: string | null; 
   return runA(async () => {
     const db = await getDb();
     const { me, coach } = await requireCoach(db);
+    // A student picked from the list must be on it; an empty pick is a new name, typed below.
+    let studentPlayerId = input.studentPlayerId ? await onCoachList(db, coach.id, input.studentPlayerId) : null;
     const locale = await getLocale();
     let startsAt: Date;
     if (input.startsAt) startsAt = new Date(input.startsAt);
     else if (input.day && input.time && /^\d{4}-\d{2}-\d{2}$/.test(input.day) && /^\d{2}:\d{2}$/.test(input.time)) startsAt = zonedTimeToUtc(input.day, input.time, coach.tz);
     else throw new DomainError("invalid", "time");
     if (Number.isNaN(startsAt.getTime())) throw new DomainError("invalid", "time");
-    let studentPlayerId = input.studentPlayerId ?? null;
     if (!studentPlayerId) {
       const name = (input.newName ?? "").trim();
       if (!name) throw new ActionFailure("name_required");
@@ -375,6 +390,7 @@ export async function setStudentStatusAction(playerId: string, status: "accepted
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
+    await onCoachList(db, coach.id, playerId);
     const before = await studentStatus(db, coach.id, playerId);
     await setStudentStatus(db, coach.id, playerId, status);
     if (status === "accepted" && before !== "accepted") {
@@ -494,7 +510,7 @@ export async function addPackageAction(input: { studentPlayerId: string; size: n
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    const pkg = await createPackage(db, { coachId: coach.id, studentPlayerId: input.studentPlayerId, size: input.size, validDays: input.validDays, amount: input.amount, paid: input.paid });
+    const pkg = await createPackage(db, { coachId: coach.id, studentPlayerId: await onCoachList(db, coach.id, input?.studentPlayerId), size: input.size, validDays: input.validDays, amount: input.amount, paid: input.paid });
     revalidateCoach(coach.handle);
     return { packageId: pkg.id };
   });
@@ -644,7 +660,7 @@ export async function blockStudentAction(playerId: string, blocked: boolean): Pr
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    await setStudentStatus(db, coach.id, playerId, blocked ? "blocked" : "accepted");
+    await setStudentStatus(db, coach.id, await onCoachList(db, coach.id, playerId), blocked ? "blocked" : "accepted");
     revalidateCoach(coach.handle);
     return null;
   });

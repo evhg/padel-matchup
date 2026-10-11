@@ -226,6 +226,37 @@ learning can be a test, a gate step or a script, make it one and put the story i
   game (11 October 2026). A server action is a public endpoint: whatever the screen waits for (a
   score, the end, the organiser) the write checks too, in the domain, and a test calls it as the
   stranger would.
+- **A convenience restore by id is a sign-in by id.** `restoreIdentity` had to bring back a lost
+  cookie from the browser's own localStorage. It took any player id and set the session cookie. The
+  match page sent the id of every seated player to every viewer of a started match. So anybody could
+  become anybody seated there, the organiser too, past every limit of "That's me" (11 October 2026).
+  The crew page and three tables of standings also sent ids. A React key goes to the browser in the
+  page's payload, also from a server component. Now a door that makes a session takes only a value
+  that the server signed for that player and that purpose (`restoreSeal`). The screens send seat ids
+  or handles. A mark that lives in a cookie of its own is a mark the browser can delete, so the
+  by-name mark is inside the signed session cookie. `tests/restore-identity.test.ts` calls the action
+  as a stranger, and `e2e/checks/publicIds.mjs` reads every public page for a player id after the
+  suites. A dev server puts the props of server components in its payload, so only a production
+  build shows what a browser gets.
+- **`JSON.stringify` is not escaping.** Eight pages wrote their structured data as
+  `dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}`. A browser ends a script tag at the
+  first `</script>`, also inside a JSON string. So a competition named `</script><img onerror=…>`,
+  which anybody can make with no sign-in, ran its script for every visitor of /t/<slug>, and a coach's
+  or a series' name did the same on their pages (found in the review of the restore seal, 11 October
+  2026). Such a script reads the visitor's restore seal and personal link. Now `jsonLdHtml` writes the
+  tag, and `tests/json-ld.test.ts` fails on any other `dangerouslySetInnerHTML` in src/. The session
+  cookie is `httpOnly`, so a script cannot read it. The seal in localStorage is open to every script
+  on the page, so a typed word that reaches raw HTML costs more since the seal.
+- **An id from the browser is a name, not a relationship.** The four coach actions that take a
+  student's player id (status, block, package, lesson) wrote for any id. So a coach could put any
+  player on the list and send them notices and a payment QR. `onCoachList` in `src/actions/coach.ts`
+  refuses anybody not on the coach's list, and `tests/coach-student-ids.test.ts` calls the actions
+  with a stranger's id.
+- **A hold-back is one door, not a list of screens.** A session by name gets no personal link
+  (DECIDING rule 34). My matches and the manifest held it back, but the organiser's share page and
+  the match's .ics download still gave it, so "That's me", then a match of one's own, gave the full
+  sign-in. Now `personalTokenFor` in `src/actions/shared.ts` is the only way a screen gets the
+  session's token, and `tests/by-name-link.test.ts` fails on a page that mints one itself.
 - **A seat is not a game played.** The "played" guard on "Play again" counted any seat in a started,
   scored match, and joining stays open until the booked length ends while any seated player may type
   the score. So a stranger could join five minutes in, type 6-0, send the round under their own name and

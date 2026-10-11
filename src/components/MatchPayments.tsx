@@ -4,17 +4,17 @@ import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { claimPaidAction, setPaidAction } from "@/actions/slots";
 
-export type PaymentRow = { slotId: string; playerId: string; name: string; claimed: boolean; paid: boolean };
+export type PaymentRow = { slotId: string; name: string; claimed: boolean; paid: boolean };
 
 /**
  * Who has paid, for a match that names a cost. No money passes through Kicksmash: a player says the
  * money is sent, the organiser says it arrived, and those are two different claims by two different
  * people. Everyone sees the same list, so nobody has to ask in the chat who is still owing.
  */
-export function MatchPayments({ code, cost, rows, isOrganiser, mePlayerId }: { code: string; cost: string; rows: PaymentRow[]; isOrganiser: boolean; mePlayerId: string | null }) {
+export function MatchPayments({ code, cost, rows, isOrganiser, mySlotId }: { code: string; cost: string; rows: PaymentRow[]; isOrganiser: boolean; /** The viewer's own seat, so a player id never reaches the browser. */ mySlotId: string | null }) {
   const t = useTranslations("event");
   const [pending, start] = useTransition();
-  const mine = rows.find((r) => r.playerId === mePlayerId);
+  const mine = mySlotId ? rows.find((r) => r.slotId === mySlotId) : undefined;
   const owing = rows.filter((r) => !r.paid).length;
 
   return (

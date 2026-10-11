@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { getLocale } from "next-intl/server";
 import { z } from "zod";
-import { getDb } from "@/db";
+import { eq } from "drizzle-orm";
+import { getDb, type Db } from "@/db";
+import { groupMembers } from "@/db/schema";
 import { tell } from "@/lib/coach/notify";
 import { baseUrl } from "@/lib/config";
 import { recordFact } from "@/lib/domain/facts";
@@ -16,7 +18,7 @@ import { getPlayer } from "@/lib/domain/players";
 import { translatorFor } from "@/lib/email/templates";
 import { isValidInviteCode } from "@/lib/codes";
 import { suggestGroupName } from "@/lib/domain/groupNames";
-import { getSessionPlayer } from "@/lib/session";
+import { getSessionPlayer, memberHandle } from "@/lib/session";
 import { ActionFailure, assertRate, loadEvent, requirePlayer, runA, type ActionResult } from "./shared";
 
 async function loadGroup(code: string) {
@@ -110,12 +112,22 @@ export async function leaveGroupAction(code: string): Promise<ActionResult<null>
   });
 }
 
-export async function removeGroupMemberAction(code: string, playerId: string): Promise<ActionResult<null>> {
+/** The member a crew admin's button names by its handle (`memberHandle`): one read of the crew's members, by its key. */
+async function memberByHandle(db: Db, groupId: string, handle: unknown): Promise<string> {
+  if (typeof handle !== "string" || handle.length !== 22) throw new ActionFailure("invalid");
+  const rows = await db.select({ playerId: groupMembers.playerId }).from(groupMembers).where(eq(groupMembers.groupId, groupId));
+  const found = rows.find((r) => memberHandle(groupId, r.playerId) === handle);
+  if (!found) throw new ActionFailure("invalid");
+  return found.playerId;
+}
+
+/** Admin only: `handle` names the member (`memberHandle`), never a player id. */
+export async function removeGroupMemberAction(code: string, handle: string): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, group } = await loadGroup(code);
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
-    await removeGroupMember(db, group.id, me.id, playerId);
+    await removeGroupMember(db, group.id, me.id, await memberByHandle(db, group.id, handle));
     revalidatePath(`/g/${code}`);
     return null;
   });
@@ -123,16 +135,15 @@ export async function removeGroupMemberAction(code: string, playerId: string): P
 
 /**
  * Admin only: the group goes to another member, and the old admin stays on as a member. The new
- * admin hears it through `tell()`, after the response, and the fact log keeps the hand-over.
+ * admin hears it through `tell()`, after the response, and the fact log keeps the hand-over. `handle`
+ * names the member (`memberHandle`), never a player id.
  */
-export async function handOverGroupAction(code: string, playerId: string): Promise<ActionResult<null>> {
+export async function handOverGroupAction(code: string, handle: string): Promise<ActionResult<null>> {
   return runA(async () => {
-    const parsed = z.string().uuid().safeParse(playerId);
-    if (!parsed.success) throw new ActionFailure("invalid");
-    const to = parsed.data;
     const { db, group } = await loadGroup(code);
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
+    const to = await memberByHandle(db, group.id, handle);
     const handed = await handOverGroup(db, group.id, me.id, to);
     after(async () => {
       await recordFact(db, { kind: "group.handed_over", channel: "web", actorPlayerId: me.id, subject: { type: "group", id: handed.id }, code: handed.code, data: { to } });

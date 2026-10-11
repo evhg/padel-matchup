@@ -15,7 +15,8 @@ import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 
 export type PanelMatch = { id: string; court: number; a: [string, string]; b: [string, string]; sideA: number | null; sideB: number | null };
 export type PanelRound = { id: string; roundNumber: number; resting: string[]; matches: PanelMatch[] };
-export type PanelStanding = { playerId: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null; court?: number | null };
+/** `key` is a seat id, never a player id: the panel goes to every viewer of the night (src/lib/seatProps.ts). */
+export type PanelStanding = { key: string; name: string; rank: number; points: number; played: number; wins: number; diff: number; level?: number | null; court?: number | null };
 /** A name on the check-in: the roster spot's id, the name as the roster shows it, and on a fixed-pairs night the pair key. */
 export type CheckInName = { id: string; name: string; pairId?: string | null };
 
@@ -283,7 +284,7 @@ export function AmericanoPanel({
             </thead>
             <tbody>
               {standings.map((s) => (
-                <tr key={s.playerId} className={`border-t border-line ${locked && s.rank === 1 ? "bg-accent-soft" : ""}`}>
+                <tr key={s.key} className={`border-t border-line ${locked && s.rank === 1 ? "bg-accent-soft" : ""}`}>
                   <td className="py-2 font-extrabold tabular-nums">{s.rank}</td>
                   <td className="py-2 font-semibold">
                     {s.name}

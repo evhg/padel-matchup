@@ -4,6 +4,7 @@ import { isValidShareCode } from "@/lib/codes";
 import { getEventByCode } from "@/lib/domain/queries";
 import { icsForDownload } from "@/lib/notify";
 import { getSessionPlayer } from "@/lib/session";
+import { nameOnly } from "@/actions/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
   const detail = await getEventByCode(db, code);
   if (!detail) return new NextResponse("Not found", { status: 404 });
   const me = await getSessionPlayer(db);
-  const ics = await icsForDownload(db, detail, me);
+  // A session by name that proved nothing gets the public link: the personal one is a full sign-in (DECIDING rule 34).
+  const ics = await icsForDownload(db, detail, me, { personalLink: !(await nameOnly(me)) });
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

@@ -284,7 +284,8 @@ export function GroupRequests({ code, items }: { code: string; items: GroupAskIt
   );
 }
 
-export type MemberRow = { playerId: string; name: string; level: number | null; role: "admin" | "member"; isMe: boolean; removable: boolean };
+/** A crew member as the crew page shows them. No player id: the page goes to everybody with its link. `handle` names a member the admin may remove (`memberHandle`), and is null otherwise. */
+export type MemberRow = { key: string; name: string; level: number | null; role: "admin" | "member"; isMe: boolean; handle: string | null };
 
 export function GroupMembers({ code, members }: { code: string; members: MemberRow[] }) {
   const t = useTranslations();
@@ -293,7 +294,7 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
   return (
     <ul className="mt-3 flex flex-col gap-2">
       {members.map((m) => (
-        <li key={m.playerId} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
+        <li key={m.key} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
           <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-on-ink">{m.name.slice(0, 1).toUpperCase()}</span>
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate font-bold">{m.name}</span>
@@ -301,15 +302,16 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
             {m.isMe && <span className="chip-open">{t("common.you")}</span>}
             {m.role === "admin" && <span className="chip-muted">{t("group.admin")}</span>}
           </div>
-          {m.removable && (
+          {m.handle && (
             <button
               type="button"
               className="btn-ghost btn-xs"
-              disabled={pending && busy === m.playerId}
+              disabled={pending && busy === m.handle}
               onClick={() => {
-                setBusy(m.playerId);
+                const handle = m.handle!;
+                setBusy(handle);
                 start(async () => {
-                  await removeGroupMemberAction(code, m.playerId);
+                  await removeGroupMemberAction(code, handle);
                   setBusy(null);
                 });
               }}
@@ -324,7 +326,7 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
 }
 
 /** Admin: name, the weekly slot that creates matches automatically, whether new people ask to join, and under them the group handed to another member. */
-export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, weekdays, others, askToJoin = false }: { code: string; name: string; recurDow: number | null; recurTime: string | null; recurLeadDays: number; weekdays: string[]; others: { playerId: string; name: string }[]; askToJoin?: boolean }) {
+export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, weekdays, others, askToJoin = false }: { code: string; name: string; recurDow: number | null; recurTime: string | null; recurLeadDays: number; weekdays: string[]; others: { handle: string; name: string }[]; askToJoin?: boolean }) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -420,12 +422,12 @@ export function GroupSettings({ code, name, recurDow, recurTime, recurLeadDays, 
 }
 
 /** Inside the settings: the admin picks a current member and hands the group over. They stay a member. */
-function HandOver({ code, name, others }: { code: string; name: string; others: { playerId: string; name: string }[] }) {
+function HandOver({ code, name, others }: { code: string; name: string; others: { handle: string; name: string }[] }) {
   const t = useTranslations();
   const [to, setTo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const pick = others.find((o) => o.playerId === to);
+  const pick = others.find((o) => o.handle === to);
   return (
     <div className="flex flex-col gap-2 border-t border-line pt-3">
       <label className="block">
@@ -433,7 +435,7 @@ function HandOver({ code, name, others }: { code: string; name: string; others: 
         <select className="input px-3" value={to} onChange={(e) => setTo(e.target.value)}>
           <option value="">{t("group.handOverPick")}</option>
           {others.map((o) => (
-            <option key={o.playerId} value={o.playerId}>
+            <option key={o.handle} value={o.handle}>
               {o.name}
             </option>
           ))}
@@ -449,7 +451,7 @@ function HandOver({ code, name, others }: { code: string; name: string; others: 
           if (!pick || !confirm(t("group.handOverConfirm", { name, member: pick.name }))) return;
           start(async () => {
             setError(null);
-            const r = await handOverGroupAction(code, pick.playerId);
+            const r = await handOverGroupAction(code, pick.handle);
             if (!r.ok) setError(r.error === "not_member" ? t("group.handOverGone") : t(`errors.${errKey(r.error)}` as "errors.generic"));
           });
         }}
