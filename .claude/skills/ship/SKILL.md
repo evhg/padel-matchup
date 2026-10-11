@@ -638,10 +638,12 @@ Wall clock first, credits second. What actually moved it, measured:
   the tournament paths printed "no suite" until `e2e/tournament.mjs` existed, because `ALL` is the
   directory listing and a rule's suites are filtered against it. Write the suite, then ask
   `node scripts/suites.mjs --files … --why`, and read its answer, never assume it.
-- **A migration lands in production the moment the schema is final, not after the gate.** The gate
-  proves the code; the tables are additive and the same either way. Applying 0053 while the browser
-  suite ran cost nothing, and the merge never waited on it. Then read the row back
-  (`select … from drizzle.__drizzle_migrations order by id desc limit 3`) before writing "applied".
+- **A migration lands in production when its pull request merges, through the Migrate workflow, and
+  never by hand.** 0053 was once applied through the Supabase MCP while the browser suite ran; since
+  the workflow (AGENTS.md rule 7), a migration applied by hand is one the workflow then skips, so the
+  two disagree about what production holds. After the merge, read the row back through
+  `/api/admin/sql` (`select … from drizzle.__drizzle_migrations order by id desc limit 3`) before
+  writing "applied".
 
 - **A "hidden" element in a Playwright timeout is often a crushed one.** `locator resolved to hidden
   <div …>500 THB · not paid</div>` — the element was there and on screen, but a row built for one
@@ -731,12 +733,12 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### The feedback desk
 
-- **A web-form note has no way back to the person.** `deliverToPerson` answers by email or Telegram,
-  and a note from the in-app form carries neither — only a `player_id`. So "shipped" on such a note is
-  bookkeeping (status, `shipped_at`, `pr_url`, the `feedback_shipped` metric) and the one-sentence
-  "what changed" that DECIDING.md promises reaches nobody. Until the desk can reach a player by their
-  own channels (`channelFor` already knows how), close the note honestly and say so to the owner rather
-  than reporting the person was told.
+- **A web-form note reaches its player through the player's own channels.** A note from the in-app
+  form carries only a `player_id`, and for a while "shipped" on such a note told nobody: Erik's two
+  notes were fixed and he never heard. `deliverToPerson` now tries the player's Telegram, then their
+  email, then a push to their device, the order every lesson notice takes. Only a player with none of
+  the three gets `no_channel`; then close the note honestly and tell the owner the person was not told,
+  rather than reporting that they were.
 - **A rule that closes one door should close every door with the same name.** The sixty-day rule took
   a quiet coach off a student's screen and left them in the public directory, the club page's coach
   list, the sitemap and the level verifiers. Three of those are "somebody chooses a coach here" and got
