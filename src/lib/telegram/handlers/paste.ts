@@ -32,9 +32,10 @@ import { createMatchInChat } from "./new";
  * `PLATFORMS` (in the words, or behind them as a `text_link`), or words that name a club, a day and a
  * time. Anything else goes on to what the chat did before, and a group never reaches this file.
  *
- * "Create match" appears only when the person's own words give the club, the day and the time, the
- * club is one they named (not their last venue), and the weekday agrees with the date. Anything the
- * platform's preview filled, or the bot guessed, goes to "Edit first", where the organiser checks it.
+ * "Create match" appears only when the person's own paste gives the club (from its words or its link),
+ * the day and the time, the club is one they named (not their last venue), and the weekday agrees with
+ * the date. Anything the platform's preview filled, or the bot guessed, goes to "Edit first", where the
+ * organiser checks it.
  * The button carries the start it showed (`pb:c:<epoch minutes in base 36>`). The tap reads the
  * booking again from the person's own message, which the bot's answer replies to, with the clock of
  * that answer and never the link (DECIDING rule 35: the link is read once, for the paste). Only that
