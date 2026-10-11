@@ -11,12 +11,15 @@ import { detectPlatform } from "./platforms";
  *   password in the link, no port but 443); anything else is null with no request;
  * - one GET, no cookie, no sign-in; at most three redirects, each held to the same check, and a
  *   redirect to an app store, a custom scheme or any other host ends the read with what it has;
- * - four seconds in all, and the first 256 KB of an HTML page, then the read stops;
+ * - four seconds for the network, and the first 256 KB of an HTML page, then the read stops; the
+ *   parse of that page is linear in its length (a tag of 4 KB at most, an attribute name of 64
+ *   letters at most), so a page built to stall it costs milliseconds, not the minute it once did;
  * - only the title and the description (og:, twitter: and <title>), and, from a Branch link's click
  *   data, the kind of link and the platform's own id for it; every other key is dropped;
  * - a 401, 403 or 429, any other answer that is not a page, a timeout or a page with nothing in it is
  *   null, and nothing is tried again. The link and the page are never logged: a pasted link can carry
- *   a token. Pure apart from the one fetch; the caller counts (`paste_preview_ok`, `paste_preview_fail`).
+ *   a token. Pure apart from the one fetch; the caller decides whether the platform may be read now
+ *   (`mayRead` in `paste.ts`) and counts (`paste_preview_ok`, `paste_preview_fail`, `paste_preview_off`).
  */
 
 /**
@@ -110,19 +113,42 @@ export function clickData(html: string): { ref: LinkPreview["ref"]; title: strin
   return null;
 }
 
-/** The preview a page carries: its og and twitter tags, its <title>, and a Branch link's click data. Null for a page with none of them. Pure. */
+/** The longest tag the parse reads; a longer one is skipped whole. */
+const TAG_MAX = 4096;
+const ATTR_RE = /([a-zA-Z:_-]{1,64})\s{0,8}=\s{0,8}(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+
+/**
+ * Each `<name …>` tag of the page, in order, up to its first ">", without a regular expression that
+ * looks ahead for the ">": the next ">" is found once, so a page of tags that never close is read in
+ * one pass. A tag longer than `TAG_MAX` is skipped; with no ">" left in the page, nothing after it is a tag.
+ */
+function* tagsOf(html: string, name: string): Generator<{ tag: string; end: number }> {
+  const open = new RegExp(`<${name}(?![a-zA-Z0-9_-])`, "gi");
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    const end = html.indexOf(">", m.index);
+    if (end < 0) return;
+    open.lastIndex = end + 1;
+    if (end - m.index < TAG_MAX) yield { tag: html.slice(m.index, end + 1), end: end + 1 };
+  }
+}
+
+/** The preview a page carries: its og and twitter tags, its <title>, and a Branch link's click data. Null for a page with none of them. Pure, and linear in the page's length. */
 export function parsePreview(html: string): LinkPreview | null {
   const meta = new Map<string, string>();
   let n = 0;
-  for (const tag of html.matchAll(/<meta\b[^>]*>/gi)) {
+  for (const { tag } of tagsOf(html, "meta")) {
     if (++n > 400) break;
     const attrs = new Map<string, string>();
-    for (const a of tag[0].matchAll(/([a-zA-Z:_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) attrs.set(a[1].toLowerCase(), a[2] ?? a[3] ?? a[4] ?? "");
+    for (const a of tag.matchAll(ATTR_RE)) attrs.set(a[1].toLowerCase(), a[2] ?? a[3] ?? a[4] ?? "");
     const key = (attrs.get("property") ?? attrs.get("name") ?? "").toLowerCase();
     const content = attrs.get("content");
     if (key && content !== undefined && !meta.has(key)) meta.set(key, decodeEntities(content));
   }
-  const titleTag = /<title\b[^>]*>([^<]{0,2000})<\/title>/i.exec(html)?.[1];
+  let titleTag: string | undefined;
+  for (const { end } of tagsOf(html, "title")) {
+    titleTag = /^[^<]{0,2000}(?=<\/title>)/i.exec(html.slice(end, end + 2010))?.[0];
+    break;
+  }
   const click = clickData(html);
   const title = clean(meta.get("og:title")) ?? clean(meta.get("twitter:title")) ?? clean(titleTag ? decodeEntities(titleTag) : null) ?? click?.title ?? null;
   const description = clean(meta.get("og:description")) ?? clean(meta.get("twitter:description")) ?? click?.description ?? null;

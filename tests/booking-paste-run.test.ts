@@ -69,6 +69,47 @@ describe("a pasted booking, read on the server", () => {
     expect(Object.fromEntries(rows.map((r) => [r.key, r.value]))).toEqual({ paste_preview_ok: 1, paste_preview_fail: 1 });
   });
 
+  it("reads no link of a platform that is switched off or resting after a block, as the 15-minute reader reads none", async () => {
+    const link = "https://playtomic.com/clubs/rawai-padel";
+    const at = (key: string, value: number, day = dayKey(NOW)) => db.insert(metricsDaily).values({ day, key, value }).onConflictDoUpdate({ target: [metricsDaily.day, metricsDaily.key], set: { value } });
+    const tries = async (rateKey: string) => {
+      const s = stub();
+      const r = await paste("my booking", { rateKey, links: [link] }, s.fetchImpl);
+      return { calls: s.calls.length, read: r.ok ? r.read : null };
+    };
+    // The switch in the deployment's environment: no read, and no database read either.
+    const before = process.env.SCRAPE_DISABLED;
+    try {
+      for (const value of ["playtomic", "all", " Playtomic , matchi"]) {
+        process.env.SCRAPE_DISABLED = value;
+        expect((await tries("k-off-env")).calls, value).toBe(0);
+      }
+      process.env.SCRAPE_DISABLED = "matchi";
+      expect((await tries("k-off-env")).calls).toBe(1);
+    } finally {
+      if (before === undefined) delete process.env.SCRAPE_DISABLED;
+      else process.env.SCRAPE_DISABLED = before;
+    }
+    // The owner's switch (`scrape_off_<platform>`, `scrape_off_all`), whatever its day.
+    await at("scrape_off_playtomic", 1, "2026-09-01");
+    const off = await tries("k-off-row");
+    expect(off.calls).toBe(0);
+    // The words still fill the form: the club comes from the link itself, with no read.
+    expect(off.read).toMatchObject({ club: { slug: "rawai-padel" }, clubFrom: "link", date: null, time: null });
+    await at("scrape_off_playtomic", 0, "2026-09-01");
+    await at("scrape_off_all", 1);
+    expect((await tries("k-off-row")).calls).toBe(0);
+    await at("scrape_off_all", 0);
+    // A rest after a block, until its end, and not a second after.
+    await at("scrape_rest_until_playtomic", Math.floor(NOW.getTime() / 1000) + 3600);
+    expect((await tries("k-rest")).calls).toBe(0);
+    await at("scrape_rest_until_playtomic", Math.floor(NOW.getTime() / 1000) - 1);
+    expect((await tries("k-rest")).calls).toBe(1);
+    // A skipped read counts on its own, never as a platform that failed to answer.
+    const [skipped] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.day, dayKey(NOW)), eq(metricsDaily.key, "paste_preview_off")));
+    expect(skipped?.value).toBe(6);
+  });
+
   it("refuses an empty paste before it counts anything", async () => {
     expect(await paste("   ", { rateKey: "k-empty" })).toEqual({ ok: false, reason: "empty" });
     const rows = await db.select().from(metricsDaily).where(like(metricsDaily.key, "rl:paste:k-empty%"));

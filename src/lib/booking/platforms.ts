@@ -12,6 +12,10 @@
  * pasted booking (`src/lib/domain/bookingPaste.ts`) added Setpoint, The Padel Society's share links
  * (thepadelsociety.app.link, a Branch link) and matchi.com. A platform here with no reader in
  * `adapters/` is never read by the 15-minute job: its lanes come from `ADAPTERS`, not from this list.
+ * A host goes in only when the platform is shown to hold it: the read of a pasted link
+ * (`src/lib/booking/unfurl.ts`) connects to any of these hosts and their subdomains, so whoever holds a
+ * host's zone chooses where that read goes. thepadelsociety.app is left out for that reason: only the
+ * app's Android package id (com.thepadelsociety.app) names it, and its name servers did not answer.
  */
 export type Platform = { id: string; name: string; hosts: readonly string[] };
 
@@ -24,7 +28,7 @@ export const PLATFORMS: readonly Platform[] = [
   { id: "skedda", name: "Skedda", hosts: ["skedda.com"] },
   { id: "bookandgo", name: "Book & Go", hosts: ["bookandgo.app"] },
   { id: "podplay", name: "PodPlay", hosts: ["podplay.app", "podify.club"] },
-  { id: "padelsociety", name: "The Padel Society", hosts: ["thepadelsociety.co", "thepadelsociety.app", "thepadelsociety.app.link"] },
+  { id: "padelsociety", name: "The Padel Society", hosts: ["thepadelsociety.co", "thepadelsociety.app.link"] },
   { id: "setpoint", name: "Setpoint", hosts: ["getsetpoint.io"] },
 ];
 

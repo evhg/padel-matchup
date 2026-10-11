@@ -46,7 +46,13 @@ describe("the read of a pasted link", () => {
     expect(await readLinkPreview("https://example.com/booking/1", { fetchImpl })).toBeNull();
     expect(await readLinkPreview("https://evilplaytomic.com/clubs/x", { fetchImpl })).toBeNull();
     expect(await readLinkPreview("https://app.link/x", { fetchImpl })).toBeNull();
+    // thepadelsociety.app is no host of The Padel Society's that anybody showed: its name servers did
+    // not answer on 11 October 2026, and whoever holds the zone would choose where the read connects.
+    // Its Branch links (thepadelsociety.app.link) and its site (thepadelsociety.co) are the hosts.
+    expect(await readLinkPreview("https://x.thepadelsociety.app/", { fetchImpl })).toBeNull();
+    expect(await readLinkPreview("https://thepadelsociety.app/match/1", { fetchImpl })).toBeNull();
     expect(calls).toHaveLength(0);
+    expect(previewTarget("https://www.thepadelsociety.co/club/warehaus")?.hostname).toBe("www.thepadelsociety.co");
   });
 
   it("makes no request for plain http, an address in figures, a user name or another port", async () => {
@@ -166,6 +172,25 @@ describe("what a page may carry", () => {
     // Click data that is no JSON, or no object, is nothing.
     expect(clickData('content="x?link_click_id=link-1-bm90IGpzb24"')).toBeNull();
     expect(clickData(withClick([1, 2, 3]))).toBeNull();
+  });
+
+  it("reads a page built to stall it in a moment: a long tag, a tag that never closes, a title that never closes", () => {
+    // Each page is 256 KB, as much as a read takes. Before these bounds, the first took 42 s of CPU and
+    // the second 5 s, after the four-second limit could no longer fire: the parse runs on the page in hand.
+    const pages = {
+      longTag: `<meta ${"a".repeat(PREVIEW_MAX_BYTES - 7)}>`,
+      unclosedMeta: "<meta ".repeat(Math.floor(PREVIEW_MAX_BYTES / 6)),
+      unclosedTitle: "<title ".repeat(Math.floor(PREVIEW_MAX_BYTES / 7)),
+      longName: `<meta ${"a".repeat(4000)} property="og:title" content="Still read">`.repeat(Math.floor(PREVIEW_MAX_BYTES / 4060)),
+    };
+    for (const [name, html] of Object.entries(pages)) {
+      expect(html.length, name).toBeLessThanOrEqual(PREVIEW_MAX_BYTES);
+      const started = performance.now();
+      parsePreview(html);
+      expect(performance.now() - started, name).toBeLessThan(250);
+    }
+    // A tag of ordinary length after a long one is still read.
+    expect(parsePreview(`<meta ${"a".repeat(5000)}><meta property="og:title" content="Court 3">`)?.title).toBe("Court 3");
   });
 
   it("decodes entities, trims every value to 300 characters and keeps one line", () => {

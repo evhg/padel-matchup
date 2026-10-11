@@ -7,7 +7,8 @@ import { bookingHref, clubNamed, linksIn, PASTE_TEXT_MAX, readBooking, type Book
 import { listClubsForPicking } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
-import { detectPlatform } from "./platforms";
+import { detectPlatform, type Platform } from "./platforms";
+import { disabledPlatforms, readPlatformStates } from "./scrape";
 import { readLinkPreview } from "./unfurl";
 
 export type PasteResult = { ok: true; read: BookingRead; href: string } | { ok: false; reason: "empty" | "limit" };
@@ -32,13 +33,29 @@ async function lastVenueOf(db: Db, playerId: string): Promise<string | null> {
 }
 
 /**
+ * May the read of a pasted link go to this platform now? Not while the 15-minute reader of free court
+ * times may not (DECIDING rule 35: it never gets around a block): the deployment's `SCRAPE_DISABLED`
+ * (no database read), the owner's switch (`scrape_off_<platform>`, `scrape_off_all`), or a rest after
+ * a block (`scrape_rest_until_<platform>`). One read of `metrics_daily`, the same one the reader makes
+ * (`readPlatformStates`), and only when a link is about to be read. A "stop" after a page that changed
+ * shape is about that reader's parser, not about the platform, so it does not hold this read.
+ */
+async function mayRead(db: Db, platform: Platform, now: Date): Promise<boolean> {
+  const disabled = disabledPlatforms();
+  if (disabled === "all" || disabled.has(platform.id)) return false;
+  const [state] = await readPlatformStates(db, [platform.id], now, disabled);
+  return Boolean(state) && !state.off && !(state.restUntil && state.restUntil > now);
+}
+
+/**
  * A pasted booking, read: the form's fields and the link that opens the form with them. What it costs
  * (AGENTS.md rule 12): one counter write for the limit (`takeRate`, thirty a day for each caller);
  * one read of the clubs (`listClubsForPicking`, every listed club without its cache; no cache in
  * front of it today); when the paste still lacks the club, the day or the time and carries a
- * platform's link, one outbound read of that link (`readLinkPreview`: one request and at most three
- * redirects, four seconds) and one counter after the answer; when no club is found and the caller is
- * signed in, one read of their latest venue. Nothing is stored but the two counters.
+ * platform's link, one read of that platform's switches (`mayRead`), then one outbound read of that
+ * link (`readLinkPreview`: one request and at most three redirects, four seconds) and one counter
+ * after the answer; when no club is found and the caller is signed in, one read of their latest
+ * venue. Nothing is stored but the counters.
  *
  * `rateKey` is the caller's key: a hash of the address on the web (`clientKeyFrom`), the account on a bot.
  */
@@ -71,9 +88,11 @@ export async function pasteBooking(
 
   // One link at most, the first a platform gave, and only for what the person's words left out.
   const link = links.find((l) => detectPlatform(l));
-  if (link && read.missing.length > 0) {
-    const got = await readLinkPreview(link, { fetchImpl: o.fetchImpl });
-    await later(() => bumpMetric(db, got ? "paste_preview_ok" : "paste_preview_fail", 1, dayKey(now)));
+  const platform = link ? detectPlatform(link) : null;
+  if (link && platform && read.missing.length > 0) {
+    const allowed = await mayRead(db, platform, now);
+    const got = allowed ? await readLinkPreview(link, { fetchImpl: o.fetchImpl }) : null;
+    await later(() => bumpMetric(db, !allowed ? "paste_preview_off" : got ? "paste_preview_ok" : "paste_preview_fail", 1, dayKey(now)));
     if (got) {
       preview = { title: got.title, description: got.description, ref: got.ref };
       read = readBooking({ ...base, preview });
