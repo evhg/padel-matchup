@@ -1,3 +1,6 @@
+import type { Db } from "@/db";
+import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
+
 /**
  * What the Anthropic key costs us. Two sources: our own token counters priced at the
  * model's list rates (always available), and the organisation's cost report when an
@@ -61,4 +64,29 @@ export async function fetchCostReport(from: Date, to: Date, fetchImpl: typeof fe
   } catch {
     return null;
   }
+}
+
+/** A 401 or a 403 from the Messages API: the key itself was refused, so every further call this run is refused too. */
+export const keyRefused = (status: number) => status === 401 || status === 403;
+
+/** What the service board says when the newest answer to our key was a refusal. */
+export const KEY_REFUSED_LINE = "the key was refused: set a new ANTHROPIC_API_KEY";
+
+/**
+ * After every Messages API call, whatever its feature: the tokens it spent, and a failure where the
+ * board and the digest can see it. From 5 October 2026 every call answered 401 for six days while
+ * `listen_drafts` counted each one as a draft and the board stayed green. A refusal and an accepted
+ * call each leave a time (`anthropic_refused_at`, `anthropic_ok_at`, epoch seconds), and the board
+ * is red while the refusal is the newer of the two. `status` is 0 when no answer came at all.
+ */
+export async function recordModelCall(db: Db, o: { status: number; ok: boolean; usage?: { input: number; output: number }; now?: Date }): Promise<void> {
+  const now = o.now ?? new Date();
+  const day = dayKey(now);
+  const at = Math.floor(now.getTime() / 1000);
+  await Promise.all([
+    o.usage?.input ? bumpMetric(db, "anthropic_in", o.usage.input, day) : null,
+    o.usage?.output ? bumpMetric(db, "anthropic_out", o.usage.output, day) : null,
+    o.ok ? setMetric(db, "anthropic_ok_at", at, day) : bumpMetric(db, "anthropic_failed", 1, day),
+    !o.ok && keyRefused(o.status) ? setMetric(db, "anthropic_refused_at", at, day) : null,
+  ]);
 }

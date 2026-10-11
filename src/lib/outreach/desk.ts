@@ -7,7 +7,7 @@ import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft
 import { stripHtml } from "@/lib/listen/parse";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The press desk. Drafts are written here (by the operator endpoint or the
@@ -277,10 +277,7 @@ export async function draftReplyTo(db: Db, inbound: Outreach, now = new Date(), 
       signal: AbortSignal.timeout(45_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
-    if (json?.usage) {
-      await bumpMetric(db, "anthropic_in", json.usage.input_tokens || 0).catch(() => undefined);
-      await bumpMetric(db, "anthropic_out", json.usage.output_tokens || 0).catch(() => undefined);
-    }
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
     if (!res.ok || !json) return null;
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();
     if (!text || /^NO_REPLY\b/.test(text)) return null;

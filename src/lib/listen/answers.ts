@@ -16,7 +16,7 @@ import { metricsDaily } from "@/db/schema";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { draftingEnabled, withinBudget } from "./draft";
 import { ownerTelegramId } from "./tick";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * Answers: once the owner approved a reply, the same question becomes an
@@ -83,9 +83,9 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
-    const day = dayKey(now);
-    await Promise.all([bumpMetric(db, "listen_drafts", 1, day), usage.input ? bumpMetric(db, "anthropic_in", usage.input, day) : null, usage.output ? bumpMetric(db, "anthropic_out", usage.output, day) : null]);
-    if (!res.ok || !json) return null;
+    const ok = res.ok && json !== null;
+    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]);
+    if (!ok) return null;
     const gen = parseGenerated((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (!gen || gen.skip) return null;
     const slug = await uniqueSlug(db, gen.slug!);
@@ -95,6 +95,7 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
       .returning();
     return row;
   } catch {
+    await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
     return null;
   }
 }
@@ -194,7 +195,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const [matches] = await db.select({ n: sql<number>`count(*)` }).from(events).where(gte(events.createdAt, since));
   const [chats] = await db.select({ n: sql<number>`count(*)` }).from(telegramChats).where(and(isNull(telegramChats.leftAt), sql`${telegramChats.type} <> 'private'`));
   const newAnswers = await db.select().from(answers).where(and(isNotNull(answers.publishedAt), isNull(answers.unpublishedAt), isNull(answers.digestedAt))).orderBy(desc(answers.publishedAt)).limit(10);
-  const spend = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','listen_drafts','errors_server','errors_client','errors_cron','api_calls','api_calls_agent','mcp_calls','research_searches','research_items','research_finds','tavily_calls')`)).groupBy(metricsDaily.key);
+  const spend = await db.select({ key: metricsDaily.key, total: sql<number>`sum(${metricsDaily.value})` }).from(metricsDaily).where(and(gte(metricsDaily.day, dayKey(since)), sql`${metricsDaily.key} in ('anthropic_in','anthropic_out','anthropic_failed','listen_drafts','errors_server','errors_client','errors_cron','api_calls','api_calls_agent','mcp_calls','research_searches','research_items','research_finds','tavily_calls')`)).groupBy(metricsDaily.key);
   const spent = Object.fromEntries(spend.map((r) => [r.key, Number(r.total)]));
   const openErrors = await listErrors(db, { since, limit: 5 });
   const mail = await outreachWeek(db, since);
@@ -227,7 +228,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
     unlisted.length ? `Played at, not listed: ${unlisted.map((v) => `${esc(v.name)} (${v.matches})`).join(" · ")} — add a club to data/clubs.json, or wait for it to claim its page` : "Played at, not listed: nothing this week; every court people used is a club we know.",
     `Coaches: ${Number(newCoaches.n)} new · doors: ${coachDoors.length ? coachDoors.join(" · ") : `none tagged (${COACH_DOORS.join(", ")})`}`,
     `Replies posted: ${Number(posted.n)} · approved for manual posting: ${Number(approvedManual.n)}`,
-    `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k`,
+    `Drafts: ${spent.listen_drafts ?? 0} · tokens in ${Math.round((spent.anthropic_in ?? 0) / 1000)}k, out ${Math.round((spent.anthropic_out ?? 0) / 1000)}k${spent.anthropic_failed ? ` · ${spent.anthropic_failed} model calls failed` : ""}`,
     `Press desk: sent ${mail.sent} · received ${mail.received} · waiting for your tap ${mail.waiting}`,
     `Research desk: searches ${spent.research_searches ?? 0} · new threads ${spent.research_items ?? 0} · new places ${spent.research_finds ?? 0} · credits ${spent.tavily_calls ?? 0}`,
     `Assistants and programs: API calls ${spent.api_calls ?? 0} (from assistants ${spent.api_calls_agent ?? 0}) · MCP calls ${spent.mcp_calls ?? 0}`,

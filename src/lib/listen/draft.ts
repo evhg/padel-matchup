@@ -3,7 +3,7 @@ import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { sql } from "drizzle-orm";
 import { metricsDaily } from "@/db/schema";
 import type { Candidate } from "./parse";
-import { listenModel } from "@/lib/ops/anthropic";
+import { keyRefused, listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * Drafting: one model call per candidate, strict JSON out, a daily budget
@@ -47,24 +47,29 @@ Respond with JSON only: {"relevant": boolean, "kind": "asks_for_tool"|"asks_how_
 
 export type Usage = { input: number; output: number };
 
-/** Tokens and drafts spent today, from the metrics table. */
-export async function spentToday(db: Db, day = dayKey()): Promise<{ drafts: number; input: number; output: number }> {
+/** Tokens, drafts and failed calls spent today, from the metrics table. */
+export async function spentToday(db: Db, day = dayKey()): Promise<{ drafts: number; failed: number; input: number; output: number }> {
   const rows = await db
     .select({ key: metricsDaily.key, value: metricsDaily.value })
     .from(metricsDaily)
-    .where(sql`${metricsDaily.day} = ${day} and ${metricsDaily.key} in ('listen_drafts', 'anthropic_in', 'anthropic_out')`);
+    .where(sql`${metricsDaily.day} = ${day} and ${metricsDaily.key} in ('listen_drafts', 'anthropic_failed', 'anthropic_in', 'anthropic_out')`);
   const get = (k: string) => Number(rows.find((r) => r.key === k)?.value ?? 0);
-  return { drafts: get("listen_drafts"), input: get("anthropic_in"), output: get("anthropic_out") };
+  return { drafts: get("listen_drafts"), failed: get("anthropic_failed"), input: get("anthropic_in"), output: get("anthropic_out") };
 }
 
 export async function withinBudget(db: Db, now = new Date()): Promise<boolean> {
   const s = await spentToday(db, dayKey(now));
-  return s.drafts < BUDGET.draftsPerDay && s.input < BUDGET.inputTokensPerDay && s.output < BUDGET.outputTokensPerDay;
+  // A failed call is a call: it counts against the day's ceiling as it did when it was counted as a draft.
+  return s.drafts + s.failed < BUDGET.draftsPerDay && s.input < BUDGET.inputTokensPerDay && s.output < BUDGET.outputTokensPerDay;
 }
 
-/** One Messages API call with the JSON contract; usage is recorded even when the answer is unusable. */
-export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null }> {
-  if (!draftingEnabled()) return { draft: null, usage: { input: 0, output: 0 }, error: "drafting disabled" };
+/**
+ * One Messages API call with the JSON contract; usage is recorded even when the answer is unusable.
+ * A call counts as a draft only when the API accepted it; any other answer counts under
+ * `anthropic_failed`, and `refused` says the key itself was refused (401, 403), so the caller stops.
+ */
+export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null; refused: boolean }> {
+  if (!draftingEnabled()) return { draft: null, usage: { input: 0, output: 0 }, error: "drafting disabled", refused: false };
   const user = `Source: ${c.source}\nURL: ${c.url}\nPosted: ${c.postedAt.toISOString()}\nAuthor: ${c.author ?? "unknown"}\nTitle: ${c.title}\n\n${c.body || "(no body)"}`;
   try {
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
@@ -75,14 +80,15 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message: string } } | null;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
-    const day = dayKey(now);
-    await Promise.all([bumpMetric(db, "listen_drafts", 1, day), usage.input ? bumpMetric(db, "anthropic_in", usage.input, day) : null, usage.output ? bumpMetric(db, "anthropic_out", usage.output, day) : null]);
-    if (!res.ok || !json) return { draft: null, usage, error: json?.error?.message ?? `HTTP ${res.status}` };
+    const ok = res.ok && json !== null;
+    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]);
+    if (!ok) return { draft: null, usage, error: json?.error?.message ?? `HTTP ${res.status}`, refused: keyRefused(res.status) };
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
     const draft = parseDraft(text);
-    return { draft, usage, error: draft ? null : "unparseable answer" };
+    return { draft, usage, error: draft ? null : "unparseable answer", refused: false };
   } catch (e) {
-    return { draft: null, usage: { input: 0, output: 0 }, error: e instanceof Error ? e.message : String(e) };
+    await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
+    return { draft: null, usage: { input: 0, output: 0 }, error: e instanceof Error ? e.message : String(e), refused: false };
   }
 }
 

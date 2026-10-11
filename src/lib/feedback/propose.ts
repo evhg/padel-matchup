@@ -6,7 +6,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The note is the trigger. The moment a real note is acknowledged, one model call turns it
@@ -82,10 +82,7 @@ async function askModel(db: Db, note: Feedback, fetchImpl: typeof fetch, now: Da
       signal: AbortSignal.timeout(20_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; stop_reason?: string; error?: { message?: string } } | null;
-    if (json?.usage) {
-      await bumpMetric(db, "anthropic_in", json.usage.input_tokens || 0).catch(() => undefined);
-      await bumpMetric(db, "anthropic_out", json.usage.output_tokens || 0).catch(() => undefined);
-    }
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
     if (!res.ok || !json) return { proposal: null, reason: `the model answered HTTP ${res.status}` };
     const proposal = parseProposal((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (proposal) return { proposal, reason: null };

@@ -7,7 +7,7 @@ import { emailEnabled } from "@/lib/config";
 import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
 import { searchConsoleEnabled } from "@/lib/search/console";
-import { anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
+import { KEY_REFUSED_LINE, anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
 import { PLAN, pacedTarget } from "@/lib/research/budget";
 import { platformById } from "@/lib/booking/platforms";
 import { scrapeBoard } from "@/lib/booking/scrape";
@@ -108,7 +108,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const today = dayKey(now);
   const since = monthStart(now);
   const month = await sumSince(db, ["pageviews", "emails_sent", "telegram_sent", "telegram_429", "discord_sent", "push_sent", "anthropic_in", "anthropic_out", "anthropic_cost_cents", "tavily_calls", "indexnow_daily", "api_calls", "mcp_calls", "feedback_received", "feedback_shipped", "errors_server", "errors_cron"], since);
-  const day = await sumSince(db, ["emails_sent", "telegram_sent", "telegram_429", "discord_sent", "push_sent", "pageviews"], today);
+  const day = await sumSince(db, ["emails_sent", "telegram_sent", "telegram_429", "discord_sent", "push_sent", "pageviews", "anthropic_failed"], today);
   const dbBytes = (await latest(db, "db_bytes"))?.value ?? 0;
   const hourlyAt = (await latest(db, "cron_hourly_at"))?.value ?? 0;
   const pushAt = (await latest(db, "cron_push_at"))?.value ?? 0;
@@ -121,6 +121,9 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const historyKept = await latest(db, "backup_history_kept");
   const domainExp = (await latest(db, "domain_expires_at"))?.value ?? 0;
   const costReported = (await latest(db, "anthropic_cost_cents"))?.value ?? 0;
+  // Red while the newest answer to our key is a refusal (src/lib/ops/anthropic.ts, recordModelCall).
+  const keyRefusedAt = (await latest(db, "anthropic_refused_at"))?.value ?? 0;
+  const keyRefused = keyRefusedAt > ((await latest(db, "anthropic_ok_at"))?.value ?? 0);
   const incidents = await openUptimeIncidents(db);
 
   const rows: ServiceRow[] = [];
@@ -186,8 +189,9 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
     role: "feedback replies, listening drafts, answer pages",
     used: Math.round(anthropicUsd * 100) / 100,
     limit: cap,
-    usage: `$${anthropicUsd.toFixed(2)} ${reportedUsd !== null ? "billed" : "estimated"} this month · ${fmt((month.anthropic_in ?? 0) / 1000)}k in, ${fmt((month.anthropic_out ?? 0) / 1000)}k out`,
+    usage: `${keyRefused ? `${KEY_REFUSED_LINE} · ` : ""}$${anthropicUsd.toFixed(2)} ${reportedUsd !== null ? "billed" : "estimated"} this month · ${fmt((month.anthropic_in ?? 0) / 1000)}k in, ${fmt((month.anthropic_out ?? 0) / 1000)}k out${day.anthropic_failed ? ` · ${fmt(day.anthropic_failed)} failed today` : ""}`,
     ceiling: `$${cap} / month, your cap`,
+    ...(keyRefused ? { state: "alert" as const } : {}),
     note: reportedUsd !== null ? "Billed figure from the organisation's cost report, refreshed hourly." : `Estimated from our own token counters at ${listenModel()} list prices${anthropicAdminKey() ? "; the cost report could not be read" : "; add ANTHROPIC_ADMIN_KEY for the billed figure"}.`,
   });
   const tavilyOn = Boolean(process.env.TAVILY_API_KEY);

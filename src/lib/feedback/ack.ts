@@ -3,7 +3,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft";
 import type { SaidBefore } from "./store";
 import { feedbackLocale, promisesSomething, type FeedbackLocale } from "./strings";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The instant reply to a note. Written for that note when the model is
@@ -130,10 +130,7 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
       signal: AbortSignal.timeout(12_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
-    if (json?.usage) {
-      await bumpMetric(db, "anthropic_in", json.usage.input_tokens || 0).catch(() => undefined);
-      await bumpMetric(db, "anthropic_out", json.usage.output_tokens || 0).catch(() => undefined);
-    }
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
     if (!res.ok || !json) return fallback;
     const parsed = parseAck((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (!parsed) return fallback;
