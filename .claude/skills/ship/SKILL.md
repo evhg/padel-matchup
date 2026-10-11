@@ -736,8 +736,9 @@ Wall clock first, credits second. What actually moved it, measured:
 - **A web-form note reaches its player through the player's own channels.** A note from the in-app
   form carries only a `player_id`, and for a while "shipped" on such a note told nobody: Erik's two
   notes were fixed and he never heard. `deliverToPerson` now tries the player's Telegram, then their
-  email, then a push to their device, the order every lesson notice takes. Only a player with none of
-  the three gets `no_channel`; then close the note honestly and tell the owner the person was not told,
+  email, then a push to their device. That is like `channelFor`, without WhatsApp, and it sends the
+  email whatever `email_notifications` says, because the answer is to the player's own note. Only a
+  player with none of the three gets `no_channel`; then close the note honestly and tell the owner the person was not told,
   rather than reporting that they were.
 - **A rule that closes one door should close every door with the same name.** The sixty-day rule took
   a quiet coach off a student's screen and left them in the public directory, the club page's coach
