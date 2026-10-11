@@ -63,11 +63,16 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
   }
   // From a venue board: the venue is prefilled and the listing switched on. From a free court offered
   // to a player who asked for that hour (`offerFreeCourts`): the day and the time come too, in the
-  // club's zone. From a pasted booking (`src=paste`): whatever the booking said, the rest left empty
-  // for the organiser to fill, and the listing off, so the match reaches the venue board only when
-  // the organiser switches it on.
+  // club's zone. From a pasted booking (`src=paste`): whatever the booking said; a day or a time it did
+  // not say stays the form's own (the usual slot, else tomorrow at 18:00), marked as not from the
+  // booking; the zone is the booking's, else the person's own; and the listing is off, so the match
+  // reaches the venue board only when the organiser switches it on.
   if ((link.venue || link.fromPaste) && !groupValues) {
-    const hour = link.fromPaste ? { date: link.date ?? "", time: link.time ?? "", ...(link.tz ? { tz: link.tz } : {}) } : link.date && link.time && link.tz ? { date: link.date, time: link.time, tz: link.tz } : {};
+    const hour = link.fromPaste
+      ? { ...(link.date ? { date: link.date } : {}), ...(link.time ? { time: link.time } : {}), ...(link.tz ? { tz: link.tz } : {}) }
+      : link.date && link.time && link.tz
+        ? { date: link.date, time: link.time, tz: link.tz }
+        : {};
     groupValues = {
       venueName: link.venue ?? "",
       venueMapUrl: link.venue ? (venues.find((v) => v.name === link.venue)?.mapUrl ?? "") : "",

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, type ListenItem } from "@/db/schema";
 import { baseUrl, ownerTelegramId } from "@/lib/config";
@@ -7,7 +7,7 @@ import { draftReply, draftingEnabled, withinBudget } from "./draft";
 import { guessLanguage, looksRelevant, type Candidate } from "./parse";
 import { postRedditComment, redditEnabled } from "./reddit";
 import { fetchAll, type FeedSpec } from "./sources";
-import { listenModel } from "@/lib/ops/anthropic";
+import { listenModel, modelGate, REQUEUED_ERROR } from "@/lib/ops/anthropic";
 import { reportError } from "@/lib/alerts";
 import { WINDOW_MS } from "./window";
 
@@ -19,8 +19,12 @@ import { WINDOW_MS } from "./window";
  * Nothing is ever posted without that tap.
  */
 export { WINDOW_MS };
-/** Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. */
-export const LIMITS = { draftsPerRun: 3, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
+/**
+ * Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. The
+ * items a refused key held go first, ten a run at once, each call cut at `requeuedTimeoutMs`, inside
+ * the same budget (`draftRequeued`).
+ */
+export const LIMITS = { draftsPerRun: 3, requeuedPerRun: 10, requeuedTimeoutMs: 20_000, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
 
 export { ownerTelegramId };
 
@@ -35,41 +39,93 @@ export async function rememberCandidates(db: Db, items: Candidate[], now = new D
   return rows.length;
 }
 
-/** Drafts for the newest gated items, inside the budget. */
-export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ drafted: number; relevant: number; errors: number; refused: boolean }> {
-  const out = { drafted: 0, relevant: 0, errors: 0, refused: false };
+type DraftRun = { drafted: number; relevant: number; errors: number; refused: boolean };
+
+/** What one model answer does to its item: drafted or irrelevant, failed, or left new when the key was refused. */
+async function settleDraft(db: Db, item: ListenItem, got: Awaited<ReturnType<typeof draftReply>>, now: Date, out: DraftRun): Promise<void> {
+  const { draft, error, refused } = got;
+  if (refused) {
+    // The key was refused, not the item: it stays new (and keeps its mark) for the next key.
+    out.errors++;
+    out.refused = true;
+    return;
+  }
+  if (!draft) {
+    out.errors++;
+    await db.update(listenItems).set({ status: "failed", lastError: error, draftedAt: now }).where(eq(listenItems.id, item.id));
+    return;
+  }
+  out.drafted++;
+  if (draft.relevant && draft.reply) out.relevant++;
+  await db
+    .update(listenItems)
+    .set({
+      status: draft.relevant && draft.reply ? "drafted" : "irrelevant",
+      kind: draft.kind,
+      language: draft.language === "other" ? guessLanguage(`${item.title} ${item.body}`) : draft.language,
+      draft: draft.reply,
+      draftReason: draft.reason,
+      draftModel: listenModel(),
+      draftedAt: now,
+      lastError: null,
+    })
+    .where(eq(listenItems.id, item.id));
+}
+
+const candidateOf = (item: ListenItem) => ({ source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt });
+
+/**
+ * The catch-up: the items a refused key held. Two kinds: the items it failed, which a working key put
+ * back (`restoreRefusedItems`, marked `REQUEUED_ERROR`), and every new item posted before the newest
+ * refusal in the window, with or without the mark. The second kind covers the items that a refusal
+ * left new (it writes nothing since 11 October 2026), and the 176 that the code before the mark put
+ * back with none. With no refusal in the window, only marked items. The oldest first, because they
+ * expire first, and `requeuedPerRun` of them at once, so ten calls take the time of one. An item that
+ * expires before the next run (`expireOld`, an hour from now) is left: its draft would expire unread.
+ * These calls sit outside the day's forty (`REQUEUED_METRICS` in draft.ts); the owner's monthly cap
+ * still holds them (`modelGate`), and so does a key refused again. What it costs (AGENTS.md rule 12):
+ * one read of `metrics_daily` (`modelGate`) each run, then one read down `listen_items_status_idx`
+ * (new items, by their post time) while the key is not refused and the month is under the cap.
+ */
+async function draftRequeued(db: Db, now: Date, fetchImpl: typeof fetch, out: DraftRun): Promise<void> {
+  const gate = await modelGate(db, now);
+  if (gate.refused || gate.usd >= gate.cap) return;
+  const last = new Date(now.getTime() - WINDOW_MS + 60 * 60_000);
+  const marked = eq(listenItems.lastError, REQUEUED_ERROR);
+  const held = gate.refusedAt > 0 ? or(marked, lte(listenItems.postedAt, new Date(gate.refusedAt * 1000))) : marked;
+  const items = await db
+    .select()
+    .from(listenItems)
+    .where(and(eq(listenItems.status, "new"), gt(listenItems.postedAt, last), held))
+    .orderBy(asc(listenItems.postedAt))
+    .limit(LIMITS.requeuedPerRun);
+  if (items.length === 0) return;
+  const answers = await Promise.all(items.map((item) => draftReply(db, candidateOf(item), fetchImpl, now, { requeued: true, timeoutMs: LIMITS.requeuedTimeoutMs })));
+  for (const [i, item] of items.entries()) await settleDraft(db, item, answers[i], now, out);
+}
+
+/** Drafts for the items a refused key held (`draftRequeued`), then for the newest gated items, inside the budget. */
+export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<DraftRun> {
+  const out: DraftRun = { drafted: 0, relevant: 0, errors: 0, refused: false };
   if (!draftingEnabled()) return out;
-  const pending = await db.select().from(listenItems).where(eq(listenItems.status, "new")).orderBy(desc(listenItems.postedAt)).limit(LIMITS.draftsPerRun);
   const started = Date.now();
+  await draftRequeued(db, now, fetchImpl, out);
+  if (out.refused) return out;
+  // The newest items, inside the day's forty. A marked item is the catch-up's alone. An unmarked item
+  // that a refused key held may come here too: while the key is refused, the first accepted call can
+  // only come from here, because the catch-up waits for it.
+  const pending = await db
+    .select()
+    .from(listenItems)
+    .where(and(eq(listenItems.status, "new"), sql`${listenItems.lastError} is distinct from ${REQUEUED_ERROR}`))
+    .orderBy(desc(listenItems.postedAt))
+    .limit(LIMITS.draftsPerRun);
   for (const item of pending) {
     if (Date.now() - started > LIMITS.draftBudgetMs) break;
     if (!(await withinBudget(db, now))) break;
-    const { draft, error, refused } = await draftReply(db, { source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt }, fetchImpl, now);
-    if (refused) {
-      // The key was refused, not the item: it stays new for the next key, and no further call is made this run.
-      out.errors++;
-      out.refused = true;
-      break;
-    }
-    if (!draft) {
-      out.errors++;
-      await db.update(listenItems).set({ status: "failed", lastError: error, draftedAt: now }).where(eq(listenItems.id, item.id));
-      continue;
-    }
-    out.drafted++;
-    if (draft.relevant && draft.reply) out.relevant++;
-    await db
-      .update(listenItems)
-      .set({
-        status: draft.relevant && draft.reply ? "drafted" : "irrelevant",
-        kind: draft.kind,
-        language: draft.language === "other" ? guessLanguage(`${item.title} ${item.body}`) : draft.language,
-        draft: draft.reply,
-        draftReason: draft.reason,
-        draftModel: listenModel(),
-        draftedAt: now,
-      })
-      .where(eq(listenItems.id, item.id));
+    await settleDraft(db, item, await draftReply(db, candidateOf(item), fetchImpl, now), now, out);
+    // No further call this run once the key was refused.
+    if (out.refused) break;
   }
   return out;
 }

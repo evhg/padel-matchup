@@ -292,11 +292,12 @@ describe("the club", () => {
 });
 
 describe("the preview", () => {
-  const generic = { title: "Join Padel Match Invitation", description: "Let's join our match to play together", ref: { type: "matchInvite", id: "12345" } };
+  const generic = { title: "Join Padel Match Invitation", description: "Let's join our match to play together" };
 
-  it("passes a Padel Society ref through, and its generic words fill nothing", () => {
+  it("fills nothing from a Padel Society link's generic words, and carries no match id the reader never used", () => {
     const r = read("https://thepadelsociety.app.link/AbCdEf12345", { preview: generic });
-    expect(r).toMatchObject({ ref: { type: "matchInvite", id: "12345" }, platform: { id: "padelsociety" }, club: null, date: null, time: null, names: [], missing: ["club", "date", "time"] });
+    expect(r).toMatchObject({ platform: { id: "padelsociety" }, club: null, date: null, time: null, names: [], missing: ["club", "date", "time"] });
+    expect(r).not.toHaveProperty("ref");
   });
 
   it("fills only what the person's text left out", () => {

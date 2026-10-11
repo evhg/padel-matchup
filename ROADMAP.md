@@ -629,7 +629,7 @@ Everything in this list is live. The README describes each in detail.
   and a crew with fewer than two matches behind it never makes it. Production's one crew has one
   scored match, so nobody sees the table yet.
 - **A group page shows names, not levels, and a crew can ask to join (9 October 2026, decision E,
-  migration 0085).** The owner: "names visible, levels hidden, optional Ask to join", for social
+  migration 0087).** The owner: "names visible, levels hidden, optional Ask to join", for social
   proof and privacy. On the group page's member list a visitor sees the members' first names and
   the count, and members see each other's levels; `GET /api/v1/groups/{code}` and the MCP tool
   `get_group` carry the names and the count, never a level. A match's own roster still shows the
@@ -932,7 +932,9 @@ Everything in this list is live. The README describes each in detail.
 - **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
   app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
   link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
-  fills the club, the day, the time, the length, the court, the price and the players.
+  fills what the paste gives: the club, the day, the time, the length, the court, the price and the
+  players, where the words, a screenshot or the link's preview carry them. The owner's own Padel Society
+  link alone gives none of them (see the end of this entry).
   `src/lib/domain/bookingPaste.ts` is the reader. `src/lib/booking/unfurl.ts` reads a pasted link once,
   as a chat app's preview robot reads it (DECIDING rule 35). It skips a platform that rests after a
   block or that a switch holds. On the first page, "Booked already? Paste it" opens the form filled. The
@@ -942,11 +944,21 @@ Everything in this list is live. The README describes each in detail.
   words gave the club, the day and the time. The answer then becomes the match's link, ready for the
   WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
   Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
-  Its preview gives the match id only, so the words that the person pastes carry the rest.
+  A session wrote that limit into DECIDING rule 35 on 11 October 2026; the owner has not decided it.
+  Its preview gives the match id only, so the words that the person pastes carry the rest. Since the
+  audit of 11 October 2026: the WhatsApp thread answers a pasted booking with what it read and the
+  filled form (`src/lib/whatsapp/paste.ts`); it does nothing until the owner's WhatsApp number is set.
+  The paste box names book@ ("Or forward the confirmation to book@kicksma.sh"). No door puts UTC in the
+  form's link any more: the zone is the club's, else the browser's or the chat's, else the form takes
+  the person's own. A day or a time the booking did not give keeps the form's own and is marked as not
+  the booking's. The bot shows "Create match" only when the paste gives a club, a day and a time. Such a
+  paste always shows a booking (`showsBooking`), so the mark "court booked" is true.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
-  37). Production had one group of four or five in Phuket, and every full match was made by hand with
-  the same people. "Play again" on the score panel now asks for the day and the
+  37). Production had one group of four or five in Phuket, every full match made by hand with the same
+  people. The last one made before this change was EfUa (made on 4 October, played on 9 October). The
+  next, TDsv for 17 October, was made by hand on 11 October, about two hours before this change shipped.
+  "Play again" on the score panel now asks for the day and the
   time in one control above the button, a week on by default; everything else carries over and a
   crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
   game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
@@ -967,6 +979,7 @@ Everything in this list is live. The README describes each in detail.
   match with the organiser, from before its start (a score typed in at the court counts, and so does a
   scored americano), skips that organiser's level range on every door (`admissionAt` in
   `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
+  A session added this waiver without a decision; the owner chose to keep it on 11 October 2026.
   No WhatsApp template carries the message yet. After the audit of 11 October 2026: the score panel
   names the next game when it exists already (the game the round announced, or the organiser's own
   game at the same club in the next 14 days, made by hand or not, in the last match's crew or with no
@@ -1149,6 +1162,26 @@ the player, and invite them to try it.
    1.5 s and then trickles the rest still gives 418 on both builds (main 3 in 20 loads, the lean build
    1 in 15). Start the root cause there, at the `<h1>` under `<main>` on `/me`. Do not relax a browser
    check that already reads order from the elements (`headingOrder` in `e2e/core.mjs`).
+5. **Four more ways to bring in a booked court: not built.** The owner asked "Some other ideas?" on
+   11 October 2026, and a session named four. None is built, and none is decided. To build one is
+   the owner's decision.
+   - **Web Share Target**: "Share" in a platform's app lists Kicksmash, and the share opens the
+     filled form. The web manifest has no `share_target` today.
+   - **An `.ics` file**: a booking's calendar file, read into the form. Kicksmash writes `.ics`
+     files and reads none.
+   - **A slot check**: the paste compares its day and time with the club's free court times, and
+     says when the court shows free. The paste does not read the free-times cache.
+   - **`/booked` in a group**: a command in a crew's Telegram group that pastes a booking there. The
+     paste works in a private chat only.
+6. **The paste doors wait on two outside facts.** No mail has reached book@ (`book_mail_answered`
+   and `book_mail_skipped` are empty on 11 October 2026): one test mail from the owner shows whether
+   Resend routes it. The screenshot read and the other AI features wait on a working
+   `ANTHROPIC_API_KEY`.
+7. **Decision B: a second organiser in Phuket.** The owner chose "A now + B this week" on 11 October
+   2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
+   October 2026 one organiser had made matches since 10 October. The next session counts the
+   organisers with a match since 11 October and reports it to the owner (DECIDING rule 37).
+
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
 

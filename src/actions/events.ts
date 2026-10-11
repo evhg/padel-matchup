@@ -197,7 +197,8 @@ export async function readBookingAction(raw: { text: string; links?: string[]; t
   const db = await getDb();
   const h = await headers();
   const me = await getSessionPlayer(db);
-  const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? "UTC";
+  // The browser's zone, else the edge's; with neither the form's link carries none and the form takes the person's own (never UTC).
+  const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? null;
   return pasteBooking(db, { text: input.data.text, links: input.data.links, tz, rateKey: clientKeyFrom(h), playerId: me?.id ?? null, selfName: me?.displayName ?? null });
 }
 
@@ -219,7 +220,7 @@ export async function readScreenshotAction(form: FormData): Promise<ShotResult> 
   const db = await getDb();
   const h = await headers();
   const me = await getSessionPlayer(db);
-  const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? "UTC";
+  const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? null;
   return readScreenshot(db, { bytes, type: image.type, text: input.data.text, tz, rateKey: clientKeyFrom(h), playerId: me?.id ?? null, selfName: me?.displayName ?? null });
 }
 

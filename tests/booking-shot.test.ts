@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { and, eq, like } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, metricsDaily } from "@/db/schema";
-import { readScreenshot } from "@/lib/booking/screenshot";
+import { forgetScreenshotOffer, OFFER_TTL_MS, readScreenshot, screenshotOffered } from "@/lib/booking/screenshot";
 import { bookingHref, PASTE_TEXT_MAX, readBooking, type PickClub } from "@/lib/domain/bookingPaste";
 import { parseShotReply, sniffShot, SHOT_MAX_BYTES, type BookingShot } from "@/lib/domain/bookingShot";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
@@ -208,6 +208,46 @@ describe("a screenshot, read on the server", () => {
     // A desk's accepted call clears it, and screenshots read again.
     await setMetric(db, "anthropic_ok_at", Math.floor(NOW.getTime() / 1000) + 60, DAY_KEY);
     expect((await shot({ rateKey: "k-401c" }, next.fetchImpl)).ok).toBe(true);
+  });
+
+  it("takes no paste and no screenshot of anybody's allowance while the key is refused or the month is spent", async () => {
+    // Anthropic refused the key at 14:00 UTC on 11 October 2026 and had accepted nothing since the 5th.
+    // Each tap then cost the person one of their thirty pastes and one of their five screenshots, for a
+    // line that says "not available now". The key's state is read first now, before any allowance.
+    await setMetric(db, "anthropic_refused_at", Math.floor(NOW.getTime() / 1000) - 3600, DAY_KEY);
+    const m = model();
+    for (let i = 0; i < LIMITS.bookingShotsPerIpPerDay + 1; i++) expect(await shot({ rateKey: "k-refused" }, m.fetchImpl)).toEqual({ ok: false, reason: "shot", why: "refused" });
+    expect(m.calls).toHaveLength(0);
+    expect(await counters("rl:")).toEqual({});
+    // A spent month holds them the same way.
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, "anthropic_refused_at"));
+    process.env.ANTHROPIC_MONTHLY_CAP_USD = "20";
+    await setMetric(db, "anthropic_cost_cents", 2000, DAY_KEY);
+    expect(await shot({ rateKey: "k-refused" }, m.fetchImpl)).toEqual({ ok: false, reason: "shot", why: "cost" });
+    expect(await counters("rl:")).toEqual({});
+    // Once the key works again, the same address still has all five.
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, "anthropic_cost_cents"));
+    for (let i = 0; i < LIMITS.bookingShotsPerIpPerDay; i++) expect((await shot({ rateKey: "k-refused" }, m.fetchImpl)).ok).toBe(true);
+  });
+
+  it("offers 'Add screenshot' only while a read could go, and looks at the key once in five minutes", async () => {
+    forgetScreenshotOffer();
+    const at = (ms: number) => new Date(NOW.getTime() + ms);
+    expect(await screenshotOffered(db, NOW)).toBe(true);
+    // The key is refused: within the five minutes this instance still remembers its last look...
+    await setMetric(db, "anthropic_refused_at", Math.floor(NOW.getTime() / 1000) + 10, DAY_KEY);
+    expect(await screenshotOffered(db, at(60_000))).toBe(true);
+    // ...and after them it reads again and hides the button, as the service board turns red.
+    expect(await screenshotOffered(db, at(OFFER_TTL_MS + 1))).toBe(false);
+    // An accepted call of any feature brings it back at the next look.
+    await setMetric(db, "anthropic_ok_at", Math.floor(NOW.getTime() / 1000) + 20, DAY_KEY);
+    expect(await screenshotOffered(db, at(2 * OFFER_TTL_MS + 2))).toBe(true);
+    // The month's spend at the owner's cap hides it too.
+    process.env.ANTHROPIC_MONTHLY_CAP_USD = "20";
+    await setMetric(db, "anthropic_cost_cents", 2000, DAY_KEY);
+    expect(await screenshotOffered(db, at(3 * OFFER_TTL_MS + 3))).toBe(false);
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, "anthropic_cost_cents"));
+    forgetScreenshotOffer();
   });
 
   it("holds the day's twenty for everybody, before the call", async () => {

@@ -25,6 +25,7 @@ import { subjectUuid } from "@/lib/ticket";
 import { readInbound, sendButtons, sendText, type WaContact, type WaInboundMessage } from "./api";
 import { bindInText, codeInJoinText, codeInMatchUrl, verifyBindTicket } from "./link";
 import { findOrCreateWhatsappPlayer, findWhatsappPlayer, linkWhatsapp, sameNumber } from "./identity";
+import { pasteInWhatsapp } from "./paste";
 
 /**
  * The conversation. One person, one thread, and the whole of a player's loop inside it: see the
@@ -205,6 +206,8 @@ async function bindFromPage(db: Db, from: string, bind: { ticket: string; code: 
  *   - a pasted match link, or the code alone: the match and its three buttons, I'm in among them; a
  *     link is not a request to join until the player says so.
  *   - a tap: `wj:` in, `wl:` out, `ww:` who is in, `wc:` the calendar, `wv:` a level, then in.
+ *   - a booked court, pasted (a platform's link, or a club, a day and a time): what was read and the
+ *     create form filled with it (`pasteInWhatsapp` in ./paste.ts); the form makes the match.
  *   - anything else: the help, which says all of the above.
  *
  * Meta can deliver one message twice, and a JOIN takes a seat, so a message id is answered once
@@ -228,6 +231,9 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   const lookCode = tap || band || joinCode ? null : (codeInMatchUrl(text) ?? (isValidShareCode(text.trim()) ? text.trim() : null));
   const code = tap ? tap[2] : band ? band[1] : (joinCode ?? lookCode);
   if (!code) {
+    // A booked court pasted into the thread: the filled form, before the help.
+    const pasted = msg.type === "text" ? await pasteInWhatsapp(db, msg.from, text, player, locale) : null;
+    if (pasted) return pasted;
     await sendText(msg.from, s.help);
     return "wa:help";
   }
