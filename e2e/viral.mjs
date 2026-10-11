@@ -97,6 +97,7 @@ try {
   await kim.getByRole("button", { name: "Read my booking" }).click();
   check("an empty box answers with a sentence, and stays", (await kim.getByTestId("paste-note").innerText()) === "Paste the link or the text of your booking first." && new URL(kim.url()).search === "");
   await pasteBox.fill(bkText);
+  check("the sentence goes once the box changes", (await kim.getByTestId("paste-note").count()) === 0);
   await shot(kim, "v6-paste-door");
   await kim.getByRole("button", { name: "Read my booking" }).click();
   // Watch the address and the answer together: a refused read stays on the page with a sentence.

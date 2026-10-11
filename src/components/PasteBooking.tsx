@@ -56,7 +56,21 @@ export function PasteBooking({ max }: { max: number }) {
           <label htmlFor={`${box}-text`} className="text-sm font-semibold">
             {t("pasteHint")}
           </label>
-          <textarea id={`${box}-text`} className="textarea mt-2" rows={4} maxLength={max} value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" spellCheck={false} data-testid="paste-text" />
+          {/* A sentence about the box goes the moment the box changes: it described what was there before. */}
+          <textarea
+            id={`${box}-text`}
+            className="textarea mt-2"
+            rows={4}
+            maxLength={max}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              setNote(null);
+            }}
+            autoComplete="off"
+            spellCheck={false}
+            data-testid="paste-text"
+          />
           {note && (
             <p className="mt-2 text-sm font-semibold text-warn" role="status" data-testid="paste-note">
               {note}
