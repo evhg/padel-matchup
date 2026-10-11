@@ -120,11 +120,16 @@ describe("a free court offered to the players who asked for that hour", () => {
     slug = club.slug;
   });
   afterAll(async () => close());
+  // The club shares its feed, as a club whose cache says `json_free` does in production: a cache with no
+  // feed behind it is not shown anywhere (`freeCourtsState`), so it offers nothing either.
+  const SHARED = { availabilityUrl: "https://rawai.example/free.json", availabilityKind: "json_free" };
   beforeEach(async () => {
     await db.delete(demandSignals);
     await db.delete(facts);
     await db.delete(events);
-    await db.update(clubs).set({ availability: FEED, availabilityAt: NOW }).where(eq(clubs.slug, slug));
+    await db.delete(clubs).where(eq(clubs.source, "directory"));
+    await db.delete(clubs).where(eq(clubs.source, "player"));
+    await db.update(clubs).set({ availability: FEED, availabilityAt: NOW, ...SHARED }).where(eq(clubs.slug, slug));
   });
 
   it("tells the player once, on their channel, with one button to the match form at that club and hour", async () => {
@@ -189,7 +194,7 @@ describe("a free court offered to the players who asked for that hour", () => {
     // 20:30 Bangkok. A read from a platform covers three days, so the court two to six hours ahead can be past midnight.
     const late = at(10.5 * HOUR);
     const read: ClubAvailability = { ...FEED, fetchedAt: late.toISOString(), source: "scrape:playtomic", platform: "playtomic", days: ["2026-09-15", "2026-09-16", "2026-09-17"], slots: [{ start: "2026-09-15T17:30:00.000Z", end: "2026-09-15T19:00:00.000Z", free: 1 }] };
-    await db.update(clubs).set({ availability: read, availabilityAt: late }).where(eq(clubs.slug, slug));
+    await db.update(clubs).set({ availability: read, availabilityAt: late, availabilityUrl: null, availabilityKind: null }).where(eq(clubs.slug, slug));
     await want(await player("Owl"), { weekday: null, onDate: "2026-09-16", fromTime: null, toTime: null });
     expect(await offer(late)).toBe(1);
     expect(told[0].text).toContain("A court is free at Rawai Padel Club tomorrow at 00:30");
@@ -204,6 +209,34 @@ describe("a free court offered to the players who asked for that hour", () => {
     expect(await offer(NOW)).toBe(0);
     await db.update(clubs).set({ rejectedAt: null }).where(eq(clubs.slug, slug));
     expect(await offer(NOW)).toBe(1);
+  });
+
+  /**
+   * Every club a platform's read covers is a directory row: Kicksmash listed it, and no club runs it.
+   * Until 11 October 2026 only an approved club offered a court, production had none, and no
+   * platform's read ever reached a want (`demand.court_offered`: 0 rows).
+   */
+  const READ_AT_NOON: ClubAvailability = { ...FEED, source: "scrape:playtomic", platform: "playtomic", days: ["2026-09-15", "2026-09-16", "2026-09-17"], fullAt: NOW.toISOString(), slots: [{ start: "2026-09-15T07:00:00.000Z", end: "2026-09-15T08:30:00.000Z", free: 2 }] };
+  const listed = async (s: string, source: "directory" | "player", availability: ClubAvailability, availabilityAt = NOW) =>
+    db.insert(clubs).values({ slug: s, name: s === "tropical-padel" ? "Tropical Padel" : "Some Club", source, tz: "Asia/Bangkok", manageToken: `tok-${s}-abcdefghijklmnopqrstu`, availability, availabilityAt });
+
+  it("offers a court from a platform's read at a club the directory lists", async () => {
+    await listed("tropical-padel", "directory", READ_AT_NOON);
+    const nok = await player("Read");
+    await want(nok, { venueSlug: "tropical-padel" });
+    expect(await offer(NOW)).toBe(1);
+    expect(told[0].to.id).toBe(nok.id);
+    expect(told[0].text).toContain("A court is free at Tropical Padel today at 14:00");
+  });
+
+  it("offers nothing from a platform's read too old to show, nor at a club only a player listed", async () => {
+    // A read kept through a timeout keeps its own time: the row was written now, the times three hours ago.
+    await listed("tropical-padel", "directory", { ...READ_AT_NOON, fetchedAt: at(-3 * HOUR).toISOString() });
+    await want(await player("Stale read"), { venueSlug: "tropical-padel" });
+    // A club anybody may list carries whatever was typed; the best times leave it out, and so do offers.
+    await listed("player-listed", "player", READ_AT_NOON);
+    await want(await player("Unvetted"), { venueSlug: "player-listed" });
+    expect(await offer(NOW)).toBe(0);
   });
 
   it("holds the cap, and the rest hear the next hour while the court is still ahead", async () => {
