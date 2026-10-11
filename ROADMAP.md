@@ -551,7 +551,9 @@ Everything in this list is live. The README describes each in detail.
   shows those matches (the day, the club, who else played), with "Yes, these are mine" and "Not me";
   "Not me" is remembered in that browser only. A row that is a member of a group that asks to join
   needs the shared context for that answer too (the owner, 10 October 2026: "Need a shared match
-  first"); without it the card says so and offers only "Not me". A row with an address, a phone,
+  first"); without it the card says so and offers only "Not me". A row that created a crew or is an
+  admin of one needs a shared match too, in any crew (the owner, 11 October 2026: "No admin role by
+  name alone"). A row with an address, a phone,
   a chat account or a push subscription is never merged by name. A merge now also moves the
   person's wants, which point at a player without a foreign key and were left behind on the folded
   row until now.

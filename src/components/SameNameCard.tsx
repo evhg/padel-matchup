@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { Db } from "@/db";
 import type { Player } from "@/db/schema";
 import { formatEventDay } from "@/lib/dates";
-import { mayClaim, proved, sameNameMatches, sameNameRows } from "@/lib/domain/sameName";
+import { claimBlock, proved, sameNameMatches, sameNameRows } from "@/lib/domain/sameName";
 import { SameNameButtons } from "./SameNameButtons";
 
 /** The cookie that remembers "Not me", per browser: ids of rows this person said are somebody else. */
@@ -16,7 +16,8 @@ export const NOT_MINE_COOKIE = "ks_notmine";
  * 2026). A row that shares a match, an organiser or a club was already folded in at the moment of
  * proof; what reaches this card is the rest. A row that is a member of a group that asks to join,
  * with no match the two sat in together, shows its days only, without "Yes, these are mine" (the
- * owner, 10 October 2026: "Need a shared match first"; `mayClaim`): no club and no names, because
+ * owner, 10 October 2026: "Need a shared match first"; `mayClaim`), and so does a row that runs a crew
+ * (the owner, 11 October 2026: "No admin role by name alone"): no club and no names, because
  * those would tell a stranger of the same name where to go to pass the guard, and one line says that
  * a name alone cannot add them. "Not me" stays.
  */
@@ -34,7 +35,8 @@ export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
       <p className="mt-1 text-sm text-muted">{t("sameHelp", { name: player.displayName })}</p>
       <ul className="mt-3 flex flex-col gap-3">
         {rows.map((r) => {
-          const claimable = mayClaim(r);
+          const blocked = claimBlock(r);
+          const claimable = blocked === null;
           return (
             <li key={r.id} className="rounded-2xl border border-line p-3" data-testid={`same-name-${r.id}`}>
               <div className="font-bold">{t("sameCount", { count: r.matches })}</div>
@@ -47,7 +49,7 @@ export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
                   </li>
                 ))}
               </ul>
-              <SameNameButtons rowId={r.id} notMine={[...notMine]} claimable={claimable} />
+              <SameNameButtons rowId={r.id} notMine={[...notMine]} blocked={blocked} />
             </li>
           );
         })}

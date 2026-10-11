@@ -484,7 +484,8 @@
     "biggerTextHelp": "Larger words everywhere in the app, on this device.",
     "sameAskingGroup": "This name is a member of a group that asks to join. First play one match at the same club or with the same organiser. Then you can add these matches.",
     "identityByName": "You came in by tapping your name, so your personal link stays hidden until you confirm an email with a code or link Telegram.",
-    "sameNameOnly": "A name alone cannot add these matches. They belong to a member of a group that asks to join."
+    "sameNameOnly": "A name alone cannot add these matches. They belong to a member of a group that asks to join.",
+    "sameRunsCrew": "A name alone cannot add these matches. They belong to somebody who runs a crew."
   },
   "notFound": {
     "title": "Link not found",
