@@ -63,7 +63,7 @@ const LIMIT_TABLE: [string, Partial<ThatsMeRow>, ThatsMeRefusal | null][] = [
   ["a record that claimed a club", { claimedClub: true }, "claimed_club"],
   ["a record with a public profile", { publicProfile: true }, "public_profile"],
   ["a coach's student: accepted on a list, or holding a lesson package", { coachStudent: true }, "coach_student"],
-  ["a record that organises another match or tournament", { organisesMatches: true }, "organises_matches"],
+  ["a record that organises a match or tournament still to come or under way", { organisesMatches: true }, "organises_matches"],
   ["a record that created or runs another crew", { runsCrew: true }, "runs_a_crew"],
   ["a record that organises a series or a competition", { organisesEvents: true }, "organises_events"],
   ["a member of a group that asks to join", { inAskingGroup: true }, "asking_group"],
@@ -322,6 +322,44 @@ describe("'That's me' on a real match", () => {
     await refuses("runs_a_crew", async (p) => {
       await crew(p.id);
     });
+  });
+
+  // The owner, 11 October 2026, chose ""That's me" for past organisers": "The change refuses only a
+  // record that organises an upcoming match." Old Danny made two matches in September, both played.
+  /** A match `p` organised, starting `days` from NOW, as `status`. Written straight to the row: the form refuses a start in the past. */
+  const organised = async (p: { id: string }, days: number, status: "open" | "full" | "past" | "cancelled" = "open", minutes = 90) => {
+    const ev = await createEvent(db, { creatorPlayerId: p.id, type: "match", startsAt: at(3), tz: "Asia/Bangkok", whenFull: "waitlist" });
+    await db.update(schema.events).set({ startsAt: at(days), status, durationMinutes: minutes }).where(eq(schema.events.id, ev.id));
+  };
+
+  it("signs in a record whose matches as organiser are all over or called off: old Danny's shape", async () => {
+    const name = `Danny${++n}`;
+    const danny = await makePlayer(db, name);
+    // 5 and 13 September in production: two matches he made, both played; here one swept to past, one still open but long over, one called off.
+    await organised(danny, -36, "past");
+    await organised(danny, -28, "open");
+    await organised(danny, 4, "cancelled");
+    const { ev } = await match([danny]);
+    const rows = await thatsMeRows(db, ev, { name, now: NOW });
+    expect(rows.find((r) => r.id === danny.id)?.organisesMatches).toBe(false);
+    const res = await thatsMe(db, { code: ev.code, name, viewerId: null, rateKey: key(), now: NOW });
+    expect(res).toMatchObject({ ok: true, folded: false });
+    expect(res.ok && res.player.id).toBe(danny.id);
+  });
+
+  it("refuses a record that organises a match under way, or one still to come, or a tournament still to come", async () => {
+    // Started 30 minutes ago, 90 minutes long: under way, so the organiser's powers are live.
+    await refuses("organises_matches", async (p) => organised(p, -30 / (24 * 60)));
+    await refuses("organises_matches", async (p) => organised(p, 2, "full"));
+    await refuses("organises_matches", async (p) => {
+      await createEvent(db, { creatorPlayerId: p.id, type: "tournament", capacity: 8, startsAt: at(6), tz: "Asia/Bangkok", whenFull: "waitlist" });
+    });
+    // The same record once the match under way is over: 60 minutes long, started 61 minutes ago.
+    const name = `Host${++n}`;
+    const host = await makePlayer(db, name);
+    await organised(host, -61 / (24 * 60), "open", 60);
+    const { ev } = await match([host]);
+    expect(await thatsMe(db, { code: ev.code, name, viewerId: null, rateKey: key(), now: NOW })).toMatchObject({ ok: true });
   });
 
   it("never signs in a coach's student: accepted on a coach's list, or holding a lesson package", async () => {

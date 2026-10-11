@@ -32,11 +32,13 @@ import { lockEvent, vacateAndPromote, type Promotion } from "./slots";
  *   - never more than one record per name: two of the same name there, and neither is offered.
  *
  * And, since the review of 10 October 2026, never a record that runs something for other people,
- * because the cookie alone carries those powers (`getViewer`): one that organises any match or
- * tournament, is the creator or an admin of any crew, organises a series or a competition; nor a
- * coach's student (an accepted place on a coach's list, or a lesson package), whose lessons and paid
- * packages a stranger could then move. A record that organised one match last week is somebody whose
- * other players' contacts sit in the organiser's view of that match.
+ * because the cookie alone carries those powers (`getViewer`): one that organises a match or
+ * tournament still to come or under way, is the creator or an admin of any crew, organises a series or
+ * a competition; nor a coach's student (an accepted place on a coach's list, or a lesson package),
+ * whose lessons and paid packages a stranger could then move. Until 11 October 2026 the first limit
+ * read "any match, ever", and it refused old Danny, who organised two matches in September. The owner,
+ * 11 October 2026, chose ""That's me" for past organisers": "The change refuses only a record that
+ * organises an upcoming match." A match called off or over runs nothing for anybody.
  *
  * If the browser already made a new record (the player typed the name and joined), "That's me" folds
  * that record into the old one with `mergePlayers`, never `proved`, when the browser's record is in
@@ -78,7 +80,7 @@ export type ThatsMeRow = {
   coachStudent: boolean;
   claimedClub: boolean;
   publicProfile: boolean;
-  /** The creator of any match or tournament, this one or another. */
+  /** The creator of a match or tournament that is not called off and not over (still to come, or under way), this one or another. */
   organisesMatches: boolean;
   /** The creator or an admin of any crew. */
   runsCrew: boolean;
@@ -238,8 +240,10 @@ const keyOf = (expr: SQL) => sql`lower(regexp_replace(btrim(regexp_replace(norma
  * Names are compared in the database on both sides, composed and with invisible characters taken
  * out, so "José" typed two ways and "Аня" against "аня" meet.
  */
-export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | null; viewerId?: string | null } = {}): Promise<ThatsMeRow[]> {
+export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | null; viewerId?: string | null; now?: Date } = {}): Promise<ThatsMeRow[]> {
   const name = o.name?.trim() ? o.name : null;
+  // "Organises" means a match still to come or under way (the owner, 11 October 2026), as `endedBy` reads an end: as text (rule 1).
+  const nowIso = (o.now ?? new Date()).toISOString();
   const viewerId = o.viewerId && /^[0-9a-f-]{36}$/i.test(o.viewerId) ? o.viewerId : null;
   const res = await db.execute(sql`
     with seats as (
@@ -286,7 +290,8 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
         or exists (select 1 from coaches ck join lesson_packages lp on lp.coach_id = ck.id and lp.student_player_id = p.id)) as coach_student,
       exists (select 1 from clubs cl where cl.claimed_by = p.id) as claimed_club,
       p.public_profile,
-      exists (select 1 from events e where e.creator_player_id = p.id) as organises_matches,
+      exists (select 1 from events e where e.creator_player_id = p.id and e.status in ('open', 'full')
+        and e.starts_at + make_interval(mins => e.duration_minutes) > ${nowIso}::timestamptz) as organises_matches,
       (exists (select 1 from group_members ga where ga.player_id = p.id and ga.role = 'admin')
         or exists (select 1 from groups gc where gc.creator_player_id = p.id)) as runs_crew,
       (exists (select 1 from series sr where sr.organizer_player_id = p.id) or exists (select 1 from competitions cp where cp.organizer_player_id = p.id)) as organises_events,
@@ -378,7 +383,7 @@ export async function decideThatsMe(db: Db, input: { code: string; name: string;
   const [ev] = await db.select({ id: events.id, groupId: events.groupId, creatorPlayerId: events.creatorPlayerId, code: events.code, status: events.status }).from(events).where(eq(events.code, input.code)).limit(1);
   // The page offers nothing on a cancelled match, and the tap does no more than the page offers.
   if (!ev || ev.status === "cancelled") return { ok: false, reason: "not_found" };
-  const rows = await thatsMeRows(db, ev, { name: input.name, viewerId: input.viewerId });
+  const rows = await thatsMeRows(db, ev, { name: input.name, viewerId: input.viewerId, now: input.now });
   const verdict = thatsMeVerdict(rows, input.viewerId);
   if (!verdict.ok) {
     await bumpMetric(db, "thats_me_refused").catch(() => undefined);
@@ -431,15 +436,15 @@ export const NO_OFFER: ThatsMeOffer = { ids: new Set(), names: [], fold: null };
  * only its own name, and only when that name is in the match twice or the match has a crew; anybody
  * else, and every record that can be reached, costs no read at all.
  */
-export async function thatsMeOffer(db: Db, m: ThatsMeMatch, viewer: Pick<Player, "id" | "displayName" | "email" | "recoveryEmail" | "phone" | "telegramId" | "discordId" | "lineId" | "publicProfile"> | null, namesHere: readonly string[]): Promise<ThatsMeOffer> {
+export async function thatsMeOffer(db: Db, m: ThatsMeMatch, viewer: Pick<Player, "id" | "displayName" | "email" | "recoveryEmail" | "phone" | "telegramId" | "discordId" | "lineId" | "publicProfile"> | null, namesHere: readonly string[], now = new Date()): Promise<ThatsMeOffer> {
   if (!viewer) {
-    const ok = claimableRows(await thatsMeRows(db, m));
+    const ok = claimableRows(await thatsMeRows(db, m, { now }));
     return { ids: new Set(ok.map((r) => r.id)), names: ok.map((r) => r.name), fold: null };
   }
   const bare = !viewer.email && !viewer.recoveryEmail && !viewer.phone && !viewer.telegramId && !viewer.discordId && !viewer.lineId && !viewer.publicProfile;
   const twice = namesHere.filter((n) => normalName(n) === normalName(viewer.displayName)).length >= 2;
   if (!bare || !(twice || m.groupId)) return NO_OFFER;
-  const rows = await thatsMeRows(db, m, { name: viewer.displayName, viewerId: viewer.id });
+  const rows = await thatsMeRows(db, m, { name: viewer.displayName, viewerId: viewer.id, now });
   const v = thatsMeVerdict(rows, viewer.id);
   const target = v.ok ? rows.find((r) => r.id === v.id) : undefined;
   return target ? { ids: new Set(), names: [], fold: { id: target.id, name: target.name } } : NO_OFFER;

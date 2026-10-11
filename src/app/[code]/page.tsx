@@ -3,7 +3,7 @@ import { detectPlatform, madeToShare } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { getViewer } from "@/actions/shared";
+import { getViewer, nameOnly } from "@/actions/shared";
 import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/source";
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
@@ -64,7 +64,7 @@ import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
 import { getShownClubLean, venuesForPicking } from "@/lib/domain/clubs";
-import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
+import { getEventByCode, getRolodex, rolodexForBrowser, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
@@ -371,7 +371,13 @@ async function EventPage({ params, searchParams }: Props) {
   // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.
   const clubTz = venueClub?.tz || ev.tz;
   const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), ev.court ? (/^\d{1,3}$/.test(ev.court) ? courtNumber(ev.court) : ev.court) : null].filter(Boolean).join(", ");
-  const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
+  // The organiser's suggestions, only while a spot can still be reserved (the open spot takes them in no
+  // other state, and a past match's payload carried them all the same). A session by name that proved
+  // nothing gets the names alone, never an email or a phone: since the owner's decision of 11 October
+  // 2026 "That's me" signs in a record that organised only past matches, and these are other people's.
+  const reserving = viewer.isCreator && !cancelled && !over;
+  const rolodexAll = reserving ? await getRolodex(db, ev.creatorPlayerId) : [];
+  const namesAlone = reserving && (await nameOnly(me));
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
   // The same list twice over: the organiser's suggestions leave these people out, and a stranger
@@ -383,7 +389,7 @@ async function EventPage({ params, searchParams }: Props) {
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
   // organiser, a manage link included, has their own way in).
-  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere);
+  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere, now);
   const offerOnRoster = (id: string | null) => Boolean(id) && (offer.ids.has(id!) || offer.fold?.id === id);
   // The held place by name (DECIDING rule 34, the owner, 11 October 2026): "Take Danny's held place"
   // for the typed name only, never on the row, wherever `heldVerdict` says yes. Over the rows this page
@@ -497,7 +503,7 @@ async function EventPage({ params, searchParams }: Props) {
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
                 slotId={s.id}
                 hasIdentity={Boolean(me)}
-                rolodex={viewer.isCreator ? rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone })) : []}
+                rolodex={viewer.isCreator ? rolodexForBrowser(rolodex, { namesAlone }) : []}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
