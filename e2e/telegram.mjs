@@ -30,6 +30,14 @@ try {
   check("bot added to a chat: 200 and a welcome (even if Telegram is unreachable here)", added.status === 200 && added.json?.outcome === "welcome", JSON.stringify(added.json));
   const chatter = await hook({ update_id: 3, message: { message_id: 1, date: 0, chat: group, from: ivan, text: "who is playing tonight?" } });
   check("ordinary chatter is ignored", chatter.json?.outcome === "ignored");
+  // A court booking pasted in the private chat (src/lib/telegram/handlers/paste.ts; the walk itself is in
+  // tests/telegram-paste.test.ts). No platform link here: this server would read it for real. And no club
+  // the server knows (it has none of the directory's), so words naming one stay a plain line.
+  const dmIvan = { id: ivan.id, type: "private" };
+  const unknownClub = await hook({ update_id: 90, message: { message_id: 90, date: 0, chat: dmIvan, from: ivan, text: "Nowhere Padel tomorrow 18:00-19:30 court 3" } });
+  check("a booking's words that name no club the bot knows get the private help, as before", unknownClub.json?.outcome === "private_other", JSON.stringify(unknownClub.json));
+  const otherTap = await hook({ update_id: 91, callback_query: { id: "cbpb", from: ivan, data: "pb:c", message: { message_id: 91, date: 0, chat: dmIvan, reply_to_message: { message_id: 89, date: 0, chat: dmIvan, from: { id: 515151, first_name: "Somebody" }, text: "Nowhere Padel tomorrow 18:00" } } } });
+  check("“Create match” under somebody else's booking does nothing", otherTap.json?.outcome === "paste_not_yours", JSON.stringify(otherTap.json));
   // The whole e2e run shares one address; a key keeps this suite clear of the per-address write allowance.
   const tgKey = await fetch(`${BASE}/api/v1/keys`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "e2e telegram", agent: "playwright" }) }).then((r) => r.json());
   const authed = { "content-type": "application/json", authorization: `Bearer ${tgKey.key}` };

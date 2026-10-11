@@ -120,14 +120,20 @@ export type ForceReply = { force_reply: true; input_field_placeholder?: string; 
  * An admin bot may send one to any member at any time; Telegram does not promise delivery, so nothing
  * that matters may depend on one arriving.
  */
-export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | ForceReply | null; replyTo?: number | null; threadId?: number | null; silent?: boolean; onlyFor?: number | null };
+export type SendOptions = { keyboard?: InlineKeyboard | ReplyKeyboard | ReplyKeyboardRemove | ForceReply | null; replyTo?: number | null; threadId?: number | null; silent?: boolean; onlyFor?: number | null; preview?: string | null };
+
+/**
+ * The bot shows no link preview, with one exception: `preview`, one link of our own (a match page)
+ * that the message hands on, shown under the text as the group will see it.
+ */
+const previewOptions = (url: string | null | undefined) => (url ? { url, prefer_small_media: true } : { is_disabled: true });
 
 export function sendMessage(chatId: number, text: string, o: SendOptions = {}) {
   return tg<TgMessage>("sendMessage", {
     chat_id: chatId,
     text,
     parse_mode: "HTML",
-    link_preview_options: { is_disabled: true },
+    link_preview_options: previewOptions(o.preview),
     disable_notification: o.silent ?? false,
     ...(o.keyboard ? { reply_markup: o.keyboard } : {}),
     ...(o.replyTo ? { reply_parameters: { message_id: o.replyTo, allow_sending_without_reply: true } } : {}),
@@ -170,13 +176,13 @@ export function editMessageReplyMarkup(chatId: number, messageId: number, keyboa
   return tg<TgMessage | true>("editMessageReplyMarkup", { chat_id: chatId, message_id: messageId, reply_markup: keyboard });
 }
 
-export function editMessageText(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard | null) {
+export function editMessageText(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard | null, o: { preview?: string | null } = {}) {
   return tg<TgMessage | true>("editMessageText", {
     chat_id: chatId,
     message_id: messageId,
     text,
     parse_mode: "HTML",
-    link_preview_options: { is_disabled: true },
+    link_preview_options: previewOptions(o.preview),
     reply_markup: keyboard ?? { inline_keyboard: [] },
   });
 }

@@ -27,6 +27,7 @@ import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } fro
 import { crewLeft, crewRightsChanged, crewStart, mayPinNotice, migrateChat, quietCommand } from "./handlers/crew";
 import { countSeat, heardInGroup, isListening, listenInGroup, repliedTo, replyToCard } from "./handlers/words";
 import { handleTimesCallback, timesInChat, TIMES_CALLBACK } from "./handlers/times";
+import { handlePasteCallback, PASTE_CALLBACK, pasteInChat } from "./handlers/paste";
 import { readWords } from "./words";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { cancelEvent } from "@/lib/domain/events";
@@ -103,6 +104,12 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     if (word) return playerMenu(db, msg, chat, from, word, ctx);
     // "times?" in the private chat: the free courts at the player's clubs, asked for (DECIDING rule 36).
     if (readWords(msg.text)?.kind === "times") return timesInChat(db, msg, chat, from, "word");
+  }
+  // A pasted court booking (a platform's link, or words naming a club, a day and a time): what was read and
+  // one tap to the match. Before the commands, the assistant and the help; anything else goes on as before.
+  if (isPrivate && !cmd && msg.text) {
+    const pasted = await pasteInChat(db, msg, chat, from);
+    if (pasted) return pasted;
   }
   if (cmd) {
     if (cmd.command === "new" && cmd.args.trim()) return createFromChat(db, msg, chat, from, cmd.args.trim(), ctx);
@@ -224,6 +231,8 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (guided) return handleGuidedNew(db, cb, guided[1], guided[2], ctx);
   // A free court from "times?": the match at that club and hour.
   if (TIMES_CALLBACK.test(data)) return handleTimesCallback(db, cb, data, ctx);
+  // "Create match" under a pasted booking: the booking is read again from the message it answers.
+  if (PASTE_CALLBACK.test(data)) return handlePasteCallback(db, cb, ctx);
   const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);

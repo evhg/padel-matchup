@@ -44,7 +44,17 @@ async function lastVenueOf(db: Db, playerId: string): Promise<string | null> {
  */
 export async function pasteBooking(
   db: Db,
-  input: { text: string; links?: readonly string[]; tz: string; rateKey: string; playerId?: string | null; selfName?: string | null; now?: Date },
+  input: {
+    text: string;
+    links?: readonly string[];
+    tz: string;
+    rateKey: string;
+    playerId?: string | null;
+    selfName?: string | null;
+    now?: Date;
+    /** The clubs, when the caller has read them already (the bot reads them to know a paste from a plain line): no second read. */
+    clubs?: readonly PickClub[];
+  },
   o: { fetchImpl?: typeof fetch } = {},
 ): Promise<PasteResult> {
   const now = input.now ?? new Date();
@@ -54,7 +64,7 @@ export async function pasteBooking(
   if (!(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
 
   const tz = isValidTimeZone(input.tz) ? input.tz : "UTC";
-  const clubs = (await listClubsForPicking(db)).map(pickClubOf);
+  const clubs = input.clubs ?? (await listClubsForPicking(db)).map(pickClubOf);
   const base = { text, links, clubs, now, tz, selfName: input.selfName ?? null };
   let preview: BookingPreview | null = null;
   let read = readBooking(base);
