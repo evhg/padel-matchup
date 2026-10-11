@@ -64,6 +64,8 @@ const createSchema = z.object({
   bookingUrl: z.string().max(500).optional(),
   cost: z.string().max(40).optional(),
   payNote: z.string().max(120).optional(),
+  /** "Court booked by me": the organiser booked the court before making the match (a pasted booking). */
+  booked: z.boolean().optional(),
   /** Signed chat ticket from the Telegram bot's /new. */
   telegramTicket: z.string().max(80).optional(),
   /** Signed channel ticket from the Discord bot's /new. */
@@ -112,38 +114,30 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       cost: input.cost,
       payNote: input.payNote,
     });
+    if (input.myLevel != null && me.level == null) {
+      const { setPlayerLevel } = await import("@/lib/domain/rating");
+      await setPlayerLevel(db, me.id, input.myLevel);
+    }
+    // The organiser's seat (organisers play too), the names they already have as reserved spots (the
+    // americano generator's players, a pasted booking's), and "Court booked by me". `settleNewMatch`
+    // says why none of it needs the event's own transaction.
+    const { settleNewMatch } = await import("@/lib/domain/newMatch");
+    const settled = await settleNewMatch(db, { event: ev, organiser: me, joinSelf: input.joinSelf, names: input.names, booked: input.booked });
+    // One event for the new match, and the court booked rides on it: the cards are first drawn after
+    // the mark, so they already say "Court booked ✓", and the hooks get `courtBooked` as "I booked it"
+    // sends it. A second event for the same moment would sync every card twice (rule 12).
     after(async () => {
       if (input.telegramTicket) await postCardForTicket(db, ev.code, input.telegramTicket);
       if (input.discordTicket) await postCardForDiscordTicket(db, ev.code, input.discordTicket);
-      await emitMatchEvent(db, "match.created", ev.code);
+      await emitMatchEvent(db, "match.created", ev.code, settled.booked ? { courtBooked: true } : {});
     });
     if (group) {
       after(async () => {
         await notifyGroupMatch(db, group, ev, me.id);
       });
     }
-    if (input.myLevel != null && me.level == null) {
-      const { setPlayerLevel } = await import("@/lib/domain/rating");
-      await setPlayerLevel(db, me.id, input.myLevel);
-    }
-    if (input.joinSelf !== false) {
-      // Organizers play too. Skip silently if the match was logged after the fact.
-      const { joinEvent } = await import("@/lib/domain/slots");
-      const joined = await joinEvent(db, { eventId: ev.id, playerId: me.id }).catch(() => null);
-      // The organizer's own calendar entry: the same invite every player gets, the moment the match exists.
-      if (joined?.outcome === "joined") after(() => sendCalendarInvite(db, ev, me));
-    }
-    // The americano generator's players: each takes a spot with a link to pass on, so a rotation
-    // built for eight named people does not ask for those eight names a second time.
-    if (input.names?.length) {
-      const { seatNames } = await import("@/lib/domain/slots");
-      await seatNames(db, { eventId: ev.id, actorPlayerId: me.id, names: input.names, skipName: me.displayName }).catch(() => 0);
-      // Fixed pairs: the names were typed as pairs, the organiser with the first one (`pairInOrder`).
-      if (ev.fixedPairs) {
-        const { pairInOrder } = await import("@/lib/domain/pairSeats");
-        await pairInOrder(db, { eventId: ev.id }).catch(() => 0);
-      }
-    }
+    // The organizer's own calendar entry: the same invite every player gets, the moment the match exists.
+    if (settled.joined) after(() => sendCalendarInvite(db, ev, me));
     code = ev.code;
     return { code: ev.code };
   });

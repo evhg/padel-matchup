@@ -119,7 +119,15 @@
     "carriedTitle": "{count, plural, one {# player from your schedule} other {# players from your schedule}}",
     "carriedHelp": "Each one takes a spot and gets a link to pass on. You can change the list afterwards.",
     "doorFindCoach": "Find a coach: prices, free hours, book a lesson",
-    "feedbackHelp": "Kicksmash is built from what players say. Tell us one thing, and you hear what changed."
+    "feedbackHelp": "Kicksmash is built from what players say. Tell us one thing, and you hear what changed.",
+    "pasteDoor": "Booked already? Paste it",
+    "pasteHint": "Paste the booking link and the text from your booking app.",
+    "pasteRead": "Read my booking",
+    "pasteReading": "Reading your booking…",
+    "pasteEmpty": "Paste the link or the text of your booking first.",
+    "pasteLimit": "You read many bookings here today. Fill in the form below, or paste again tomorrow.",
+    "pasteFailed": "We could not read it just now. Fill in the form below, or try again.",
+    "carriedFromBooking": "{count, plural, one {# player from your booking} other {# players from your booking}}"
   },
   "create": {
     "title": "New match",
@@ -213,7 +221,12 @@
     "freeThenOn": "✓ {platform} shows a free court then.",
     "busyThenOn": "{platform} shows no free court then.",
     "freeThenOnClub": "✓ {platform} shows a free court then ({time} at the club).",
-    "busyThenOnClub": "{platform} shows no free court then ({time} at the club)."
+    "busyThenOnClub": "{platform} shows no free court then ({time} at the club).",
+    "bookedByMe": "Court booked by me",
+    "bookedByMeHelp": "The match page tells the players the court is booked.",
+    "pasteNoDay": "Your booking did not give the day. Pick it here.",
+    "pasteNoTime": "Your booking did not give the time. Pick it here.",
+    "pasteNoClub": "Your booking did not name the club. Pick it here."
   },
   "share": {
     "title": "Your match is live",

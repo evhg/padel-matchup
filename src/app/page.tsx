@@ -4,6 +4,8 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { CreateScreen } from "@/components/CreateScreen";
 import { FeedbackInline } from "@/components/FeedbackInline";
+import { PasteBooking } from "@/components/PasteBooking";
+import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { Footer, Header } from "@/components/Header";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -12,8 +14,12 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("landing.metaTitle"), description: t("landing.metaDescription"), alternates: localeAlternates("/", locale), openGraph: { title: t("landing.metaTitle"), description: t("landing.metaDescription"), type: "website", url: "/" } };
 }
 
-/** The landing page is the create form. `?type=tournament&capacity=8` prefills it (used by the /americano generator); `?venue=…&date=…&time=…&tz=…` is a club's free court. */
-export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string }> }) {
+/**
+ * The landing page is the create form. `?type=tournament&capacity=8` prefills it (used by the /americano
+ * generator); `?venue=…&date=…&time=…&tz=…` is a club's free court; `?src=paste&…&len=&court=&cost=&booked=1`
+ * is a pasted booking (`bookingHref`), which "Booked already? Paste it" under the headline opens.
+ */
+export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string; src?: string; len?: string; court?: string; cost?: string; booked?: string }> }) {
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
   return (
     <>
@@ -23,12 +29,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
           heading={t("landing.formTitle")}
           // Decision C (9 October 2026): one compact chip to the open games, under the headline. It
           // must not push the form down by more than a line on a phone, so it is a pill, not a card.
+          // "Booked already? Paste it" shares that line as a quiet link (the owner, 11 October 2026),
+          // and opens its box under the line only when tapped.
           below={
-            <Link href="/play" prefetch={false} className="mt-1.5 inline-flex h-7 items-center gap-1 rounded-full bg-accent-soft px-3 text-sm font-bold text-ink hover:bg-accent hover:text-night" data-testid="landing-find-game">
-              🔎 {t("common.findGame")} →
-            </Link>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Link href="/play" prefetch={false} className="inline-flex h-7 items-center gap-1 rounded-full bg-accent-soft px-3 text-sm font-bold text-ink hover:bg-accent hover:text-night" data-testid="landing-find-game">
+                🔎 {t("common.findGame")} →
+              </Link>
+              <PasteBooking max={PASTE_TEXT_MAX} />
+            </div>
           }
-          prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, date: sp.date, time: sp.time, tz: sp.tz, tg: sp.tg, dc: sp.dc, names: sp.names }} />
+          prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, date: sp.date, time: sp.time, tz: sp.tz, tg: sp.tg, dc: sp.dc, names: sp.names, src: sp.src, len: sp.len, court: sp.court, cost: sp.cost, booked: sp.booked }} />
         <section className="mt-6 grid gap-2">
           {[t("landing.step1"), t("landing.step2"), t("landing.step3")].map((s, i) => (
             <div key={i} className="flex items-center gap-3 px-1 text-sm text-muted">

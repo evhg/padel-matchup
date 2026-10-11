@@ -107,6 +107,7 @@ export function EventFields({
   showType = true,
   patterns = [],
   hasLevel = true,
+  missing = [],
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
@@ -115,8 +116,16 @@ export function EventFields({
   patterns?: TimePatternInput[];
   /** False when the organizer has no level yet: a range then also asks for theirs. */
   hasLevel?: boolean;
+  /** A pasted booking's gaps: each one is marked, in words, until the organiser fills it. */
+  missing?: readonly ("venue" | "date" | "time")[];
 }) {
   const t = useTranslations();
+  const lacks = {
+    venue: missing.includes("venue") && !values.venueName.trim(),
+    date: missing.includes("date") && !values.date,
+    time: missing.includes("time") && !values.time,
+  };
+  const gap = "ring-2 ring-warn";
   const locale = useLocale();
   const [tzOpen, setTzOpen] = useState(false);
   // Until the organiser taps a length, it follows the type: 90 for a match, 120 for a tournament.
@@ -266,13 +275,19 @@ export function EventFields({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{t("create.date")}</label>
-          <input className="input" type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} required />
+          <input className={`input ${lacks.date ? gap : ""}`} type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} required aria-describedby={lacks.date ? "paste-no-date" : undefined} />
         </div>
         <div>
           <label className="label">{t("create.time")}</label>
-          <input className="input" type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} required />
+          <input className={`input ${lacks.time ? gap : ""}`} type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} required aria-describedby={lacks.time ? "paste-no-time" : undefined} />
         </div>
       </div>
+      {(lacks.date || lacks.time) && (
+        <div className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-missing-when">
+          {lacks.date && <p id="paste-no-date">✏️ {t("create.pasteNoDay")}</p>}
+          {lacks.time && <p id="paste-no-time">✏️ {t("create.pasteNoTime")}</p>}
+        </div>
+      )}
       <div className="-mt-3 text-sm text-muted">
         {t("create.timezone")}:{" "}
         {tzOpen ? (
@@ -328,7 +343,14 @@ export function EventFields({
         </div>
       </div>
 
-      <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />
+      <div>
+        <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />
+        {lacks.venue && (
+          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-missing-club">
+            ✏️ {t("create.pasteNoClub")}
+          </p>
+        )}
+      </div>
 
       <div className="-mt-2">
         <label className="label">

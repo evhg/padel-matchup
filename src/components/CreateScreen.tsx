@@ -6,25 +6,17 @@ import { getDb } from "@/db";
 import Link from "next/link";
 import { isValidInviteCode } from "@/lib/codes";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
+import { readCreateLink, type CreateLink } from "@/lib/domain/createPrefill";
 import { getGroupByCode, getGroupMember, latestGroupMatch, nextGroupSlot } from "@/lib/domain/groups";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { parseMatchLength } from "@/lib/domain/matchLength";
 import { venuesForPicking } from "@/lib/domain/clubs";
 import { getPlayerTimePatterns } from "@/lib/domain/queries";
 import { getSessionPlayer } from "@/lib/session";
-import { SEAT_NAMES_MAX } from "@/lib/domain/slots";
 import type { EventFormValues } from "./EventFields";
 
-/** A day, a time and a zone from the link, all three or none: a time without its zone is another hour. */
-function prefilledHour(p: { date?: string; time?: string; tz?: string } | undefined): Pick<EventFormValues, "date" | "time" | "tz"> | null {
-  const date = p?.date ?? "";
-  const time = p?.time ?? "";
-  const tz = p?.tz ?? "";
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) && isValidTimeZone(tz) ? { date, time, tz } : null;
-}
-
-/** The create form with its data. Rendered on / and /new. `below` sits under the heading (the landing page's "Find a game"). */
-export async function CreateScreen({ heading, below, prefill }: { heading: string; below?: React.ReactNode; prefill?: { type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string } }) {
+/** The create form with its data. Rendered on / and /new. `below` sits under the heading (the landing page's "Find a game" and "Paste it"). */
+export async function CreateScreen({ heading, below, prefill }: { heading: string; below?: React.ReactNode; prefill?: CreateLink & { type?: string; capacity?: string; group?: string; tg?: string; dc?: string } }) {
   const t = await getTranslations();
   const hdrs = await headers();
   const headerTz = hdrs.get("x-vercel-ip-timezone");
@@ -37,7 +29,9 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
   // The time zone alone puts Phuket and Bangkok in the same bucket, and Bangkok has twice the clubs
   // and sorts first, so the city the edge reports is what makes the list start where the person is.
   const headerCity = hdrs.get("x-vercel-ip-city");
-  const venues = await venuesForPicking(db, me?.id ?? null, { tz: tzFromHeader ? headerTz : null, city: headerCity ? decodeURIComponent(headerCity) : null }, new Date(), prefill?.venue ?? null);
+  // What the link carries, each value checked against the form's own bounds (`readCreateLink`).
+  const link = readCreateLink(prefill ?? {});
+  const venues = await venuesForPicking(db, me?.id ?? null, { tz: tzFromHeader ? headerTz : null, city: headerCity ? decodeURIComponent(headerCity) : null }, new Date(), link.venue);
   const patterns = me ? await getPlayerTimePatterns(db, me.id) : [];
 
   // From a group page: the group's usual settings prefill the form and every member gets pinged on create.
@@ -67,19 +61,32 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
     };
     void utcToZonedParts;
   }
-  // From a venue board: the venue is prefilled and the listing switched on.
-  const venuePrefill = prefill?.venue?.trim().slice(0, 80);
-  // From a free court offered to a player who asked for that hour (`offerFreeCourts`): the day and the time come too, in the club's zone.
-  if (venuePrefill && !groupValues) groupValues = { venueName: venuePrefill, venueMapUrl: venues.find((v) => v.name === venuePrefill)?.mapUrl ?? "", publicListing: true, ...prefilledHour(prefill) };
+  // From a venue board: the venue is prefilled and the listing switched on. From a free court offered
+  // to a player who asked for that hour (`offerFreeCourts`): the day and the time come too, in the
+  // club's zone. From a pasted booking (`src=paste`): whatever the booking said, the rest left empty
+  // for the organiser to fill, and the listing off, so the match reaches the venue board only when
+  // the organiser switches it on.
+  if ((link.venue || link.fromPaste) && !groupValues) {
+    const hour = link.fromPaste ? { date: link.date ?? "", time: link.time ?? "", ...(link.tz ? { tz: link.tz } : {}) } : link.date && link.time && link.tz ? { date: link.date, time: link.time, tz: link.tz } : {};
+    groupValues = {
+      venueName: link.venue ?? "",
+      venueMapUrl: link.venue ? (venues.find((v) => v.name === link.venue)?.mapUrl ?? "") : "",
+      publicListing: link.publicListing,
+      ...hour,
+      ...(link.durationMinutes ? { durationMinutes: link.durationMinutes } : {}),
+      ...(link.court ? { court: link.court } : {}),
+      ...(link.cost ? { cost: link.cost } : {}),
+    };
+  }
   // From the americano generator: the schedule was built for these people, so they travel with the
   // tap. Landing on a page that reads "Set up a match in 10 seconds" made the tap look like nothing
   // happened, which is what the owner reported on 20 September.
   const fromGenerator = prefill?.type === "tournament";
-  const carried = (prefill?.names ?? "")
-    .split(",")
-    .map((n) => n.trim().slice(0, 60))
-    .filter(Boolean)
-    .slice(0, SEAT_NAMES_MAX);
+  const carried = link.names;
+  // "Court booked by me", under the form, for a booking pasted or a link that says it is booked.
+  const booking = link.fromPaste || link.booked ? { booked: link.booked, missing: link.missing } : undefined;
+  // A new paste on this page is a new address on the same page: the form starts again from it.
+  const formKey = JSON.stringify(prefill ?? {});
   // A device that has never seen this person shows a name field. Somebody who has played before is
   // looking for their own matches, and the only door was navigating to My matches and knowing to.
   const returning = me ? null : <ReturningPlayer collapsed />;
@@ -102,12 +109,12 @@ export async function CreateScreen({ heading, below, prefill }: { heading: strin
       )}
       {carried.length > 0 && (
         <section className="card border-accent bg-accent-soft" data-testid="carried-players">
-          <p className="text-sm font-extrabold">{t("landing.carriedTitle", { count: carried.length })}</p>
+          <p className="text-sm font-extrabold">{t(link.fromPaste ? "landing.carriedFromBooking" : "landing.carriedTitle", { count: carried.length })}</p>
           <p className="mt-1 text-sm text-muted">{carried.join(" · ")}</p>
           <p className="mt-2 text-xs text-muted">{t("landing.carriedHelp")}</p>
         </section>
       )}
-      <CreateEventForm carriedNames={carried} defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames, ...(v.free ? { free: v.free } : {}) }))} hasIdentity={Boolean(me)} returning={returning} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
+      <CreateEventForm key={formKey} booking={booking} carriedNames={carried} defaultTz={defaultTz} tzFromHeader={tzFromHeader} venues={venues.map((v) => ({ name: v.name, mapUrl: v.mapUrl, where: v.where, country: v.country, province: v.province, courts: v.courts, courtNames: v.courtNames, ...(v.free ? { free: v.free } : {}) }))} hasIdentity={Boolean(me)} returning={returning} patterns={patterns.map((p) => ({ dow: p.dow, time: p.time }))} hasLevel={me?.level != null} initialType={prefill?.type === "tournament" ? "tournament" : "match"} initialCapacity={prefill?.capacity ? Number(prefill.capacity) : undefined} groupCode={group && isMember ? group.code : undefined} initialValues={groupValues} telegramTicket={prefill?.tg?.slice(0, 80)} discordTicket={prefill?.dc?.slice(0, 80)} />
     </>
   );
 }

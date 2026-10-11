@@ -311,12 +311,14 @@ export const SEAT_NAMES_MAX = 24;
  * they are seated already, so their name in the list is theirs, not a ninth player.
  *
  * Bounded by the free spots and by SEAT_NAMES_MAX. A name that finds no spot is dropped rather than
- * failing the create, because the tournament itself is what the person asked for.
+ * failing the create, because the tournament itself is what the person asked for. The whole list is
+ * one transaction under the event's lock (`reserveNames`, as the organiser's pasted names), where it
+ * was one transaction for each name; a pasted booking's players come this way too (`settleNewMatch`).
  */
 export async function seatNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; skipName?: string | null; now?: Date }): Promise<number> {
   const skip = normalizeName(input.skipName ?? "").toLowerCase();
   let skipped = false;
-  let seated = 0;
+  const names: string[] = [];
   for (const raw of input.names.slice(0, SEAT_NAMES_MAX)) {
     const name = normalizeName(raw);
     if (!name) continue;
@@ -325,12 +327,12 @@ export async function seatNames(db: Db, input: { eventId: string; actorPlayerId:
       skipped = true;
       continue;
     }
-    // One short transaction each, sequential (rule 8). A full event ends the loop.
-    const done = await reserveSlot(db, { eventId: input.eventId, actorPlayerId: input.actorPlayerId, name, now: input.now }).catch(() => null);
-    if (!done) break;
-    seated++;
+    names.push(name);
   }
-  return seated;
+  if (names.length === 0) return 0;
+  // A full event ends the list; anything else (a match already over) holds nobody and fails nothing.
+  const done = await reserveNames(db, { eventId: input.eventId, actorPlayerId: input.actorPlayerId, names, now: input.now }).catch(() => null);
+  return done?.held.length ?? 0;
 }
 
 export async function reserveSlot(

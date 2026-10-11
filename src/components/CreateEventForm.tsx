@@ -23,6 +23,7 @@ export function CreateEventForm({
   telegramTicket,
   discordTicket,
   carriedNames = [],
+  booking,
 }: {
   defaultTz: string;
   tzFromHeader: boolean;
@@ -45,8 +46,14 @@ export function CreateEventForm({
   telegramTicket?: string;
   /** Same for the Discord bot's /new. */
   discordTicket?: string;
-  /** Players carried from the americano generator: each takes a reserved spot the moment the match exists. */
+  /** Players carried from the americano generator or a pasted booking: each takes a reserved spot the moment the match exists. */
   carriedNames?: string[];
+  /**
+   * A booking pasted on the landing page (`src=paste`): "Court booked by me" above the create button,
+   * ticked when the booking said so, and the fields the booking did not carry, marked for the
+   * organiser to fill in place.
+   */
+  booking?: { booked: boolean; missing: readonly ("venue" | "date" | "time")[] };
 }) {
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
@@ -88,7 +95,9 @@ export function CreateEventForm({
     payNote: "",
     ...initialValues,
   });
-  const touched = useRef(Boolean(initialValues?.date));
+  // A pasted booking's day and hour are the club's, and an empty one is left empty for the organiser: the browser's zone moves neither.
+  const touched = useRef(Boolean(initialValues?.date) || Boolean(booking));
+  const [bookedByMe, setBookedByMe] = useState(Boolean(booking?.booked));
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -154,6 +163,7 @@ export function CreateEventForm({
         bookingUrl: values.bookingUrl || undefined,
         cost: values.cost || undefined,
         payNote: values.payNote || undefined,
+        booked: booking ? bookedByMe : undefined,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
@@ -171,8 +181,17 @@ export function CreateEventForm({
         </div>
       )}
       <div className="card">
-        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} />
+        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} missing={booking?.missing} />
       </div>
+      {booking && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ok-soft px-4 py-3">
+          <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={bookedByMe} onChange={(e) => setBookedByMe(e.target.checked)} data-testid="booked-by-me" />
+          <span className="min-w-0">
+            <span className="block font-bold">🎟 {t("create.bookedByMe")}</span>
+            <span className="block text-xs text-muted">{t("create.bookedByMeHelp")}</span>
+          </span>
+        </label>
+      )}
       {error && <p className="text-sm font-semibold text-danger" data-testid="create-error">{error}</p>}
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>
         {pending ? t("create.creating") : t("create.submit")}

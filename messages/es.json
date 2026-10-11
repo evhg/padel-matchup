@@ -119,7 +119,15 @@
     "carriedTitle": "{count, plural, one {# jugador de tu cuadro} other {# jugadores de tu cuadro}}",
     "carriedHelp": "Cada uno ocupa una plaza y recibe un enlace para reenviar. Puedes cambiar la lista después.",
     "doorFindCoach": "Encuentra un entrenador: precios, horas libres, reserva una clase",
-    "feedbackHelp": "Kicksmash se construye con lo que dicen los jugadores. Di una cosa y sabrás qué cambió."
+    "feedbackHelp": "Kicksmash se construye con lo que dicen los jugadores. Di una cosa y sabrás qué cambió.",
+    "pasteDoor": "¿Ya reservaste? Pega tu reserva",
+    "pasteHint": "Pega el enlace de la reserva y el texto de tu app de reservas.",
+    "pasteRead": "Leer mi reserva",
+    "pasteReading": "Leyendo tu reserva…",
+    "pasteEmpty": "Primero pega el enlace o el texto de tu reserva.",
+    "pasteLimit": "Hoy ya leíste muchas reservas aquí. Rellena el formulario de abajo o pégala mañana.",
+    "pasteFailed": "Ahora no pudimos leerla. Rellena el formulario de abajo o vuelve a intentarlo.",
+    "carriedFromBooking": "{count, plural, one {# jugador de tu reserva} other {# jugadores de tu reserva}}"
   },
   "create": {
     "title": "Nuevo partido",
@@ -213,7 +221,12 @@
     "freeThenOn": "✓ {platform} muestra una pista libre a esa hora.",
     "busyThenOn": "{platform} no muestra ninguna pista libre a esa hora.",
     "freeThenOnClub": "✓ {platform} muestra una pista libre a esa hora (las {time} en el club).",
-    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club)."
+    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club).",
+    "bookedByMe": "Pista reservada por mí",
+    "bookedByMeHelp": "La página del partido dice a los jugadores que la pista está reservada.",
+    "pasteNoDay": "Tu reserva no dice el día. Elígelo aquí.",
+    "pasteNoTime": "Tu reserva no dice la hora. Elígela aquí.",
+    "pasteNoClub": "Tu reserva no nombra el club. Elígelo aquí."
   },
   "share": {
     "title": "Tu partido está en marcha",
