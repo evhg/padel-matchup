@@ -301,7 +301,8 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     const r = say(chat, user(2, "Petr"), "I'M IN 🎾");
     expect(await r.outcome).toBe("word_join:joined");
     expect(reactions()).toEqual([{ message: r.id, emoji: "👍" }]);
-    expect(sent("sendMessage")).toHaveLength(0);
+    // The group hears nothing; Petr alone gets his calendar's button (below).
+    expect(groupMessages()).toHaveLength(0);
     expect(String(sent("editMessageText")[0].body.text)).toContain("Players 2/4");
     // Ordinary chat stays unread.
     calls = [];
@@ -500,6 +501,42 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_listening");
     expect(sent("sendMessage")).toHaveLength(0);
     expect(sent("pinChatMessage").map((c) => c.body.message_id)).toEqual([noticeId]);
+  });
+
+  it("a seat taken by a word or a tap in a crew's group sends that person alone the calendar feed's button, once ever", async () => {
+    const { chat } = await listeningCrew(-202400);
+    const { ev, card } = await matchWithCard(chat);
+    calls = [];
+    expect(await say(chat, user(81, "Rui"), "I'm in").outcome).toBe("word_join:joined");
+    const [offer] = sent("sendMessage");
+    expect(sent("sendMessage")).toHaveLength(1);
+    expect(offer.body.ephemeral_message_parameters).toEqual({ receiver_user_id: 81 });
+    expect(offer.body.text).toBe(strings("en").calendarFeed);
+    const [[button]] = (offer.body.reply_markup as { inline_keyboard: { text: string; url: string }[][] }).inline_keyboard;
+    expect(button.text).toBe(strings("en").calendarButton);
+    // The feed's page, never the personal link: the address names a key made from the token, not the token.
+    const [rui] = await db.select().from(players).where(eq(players.telegramId, 81));
+    expect(button.url).toMatch(/\/p\/[0-9a-f]{52}\/calendar$/);
+    expect(button.url).not.toContain(rui.personalToken!);
+    // Out and in again: no second button.
+    expect(await say(chat, user(81, "Rui"), "out").outcome).toBe("word_leave:left");
+    calls = [];
+    expect(await say(chat, user(81, "Rui"), "I'm in").outcome).toBe("word_join:joined");
+    expect(sent("sendMessage")).toHaveLength(0);
+    // A tap on the card's ✅ counts the same, once.
+    const tap = (from: ReturnType<typeof user>) => update({ callback_query: { id: `cb${updateId}`, from, message: { message_id: card.messageId, date: 0, chat }, data: `j:${ev.code}` } });
+    calls = [];
+    expect(await tap(user(82, "Sol"))).toBe("join:joined");
+    expect(sent("sendMessage").map((c) => c.body.ephemeral_message_parameters)).toEqual([{ receiver_user_id: 82 }]);
+    // A player whose address brings an invitation per match gets none.
+    process.env.RESEND_API_KEY = "re_test";
+    const [tia] = await db.insert(players).values({ displayName: "Tia", telegramId: 83, email: "tia@example.com" }).returning();
+    expect(tia.email).toBe("tia@example.com");
+    calls = [];
+    expect(await tap(user(83, "Tia"))).toBe("join:joined");
+    // (The fourth seat: the group's one "line-up complete" note goes out, and nothing to Tia.)
+    expect(sent("sendMessage").filter((c) => c.body.ephemeral_message_parameters)).toHaveLength(0);
+    delete process.env.RESEND_API_KEY;
   });
 
   it("\"I'm in\" in reply to a /new prompt is not the place of a new match", async () => {

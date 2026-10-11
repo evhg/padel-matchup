@@ -25,7 +25,7 @@ import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
 import { coachCommand, ROLE_COMMANDS, roleCommand, roleEnded, startCommand } from "./handlers/start";
 import { crewLeft, crewRightsChanged, crewStart, mayPinNotice, migrateChat, quietCommand } from "./handlers/crew";
-import { countSeat, heardInGroup, isListening, listenInGroup, repliedTo, replyToCard } from "./handlers/words";
+import { countSeat, heardInGroup, isListening, listenInGroup, offerCalendar, repliedTo, replyToCard } from "./handlers/words";
 import { handleTimesCallback, timesInChat, TIMES_CALLBACK } from "./handlers/times";
 import { handlePasteCallback, PASTE_CALLBACK, pasteInChat } from "./handlers/paste";
 import { readWords } from "./words";
@@ -310,6 +310,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") });
   await syncTelegram(db, code);
   await countSeat(db, "tap", outcome, player.id, detail.event);
+  if (chat && outcome === "joined") await offerCalendar(db, chat, player, cb.from.id, cb.message?.message_thread_id ?? null);
   return `${action === "j" ? "join" : "leave"}:${outcome}`;
 }
 

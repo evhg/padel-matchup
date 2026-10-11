@@ -1,9 +1,11 @@
 import { and, asc, eq, gt, gte, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, facts, slots, telegramCards, type TelegramChat } from "@/db/schema";
+import { events, facts, slots, telegramCards, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
+import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
 import { chatLocale } from "@/lib/channels/telegram";
+import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime, utcToZonedParts } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
 import { recordFact } from "@/lib/domain/facts";
@@ -95,6 +97,30 @@ export async function countSeat(db: Db, via: "word" | "tap", outcome: string, pl
   if (taken) await metric(db, "tg_seat_undone_10min");
 }
 
+/**
+ * A chat player's calendar: after a seat taken by a word or a tap in a crew's group, that person alone
+ * gets the button to their calendar feed, once ever (the fact `player.calendar_offered`, read down
+ * `facts_subject_idx`). The feed's page and address sign nobody in (`src/lib/calendarFeed.ts`), so the
+ * message may be forwarded. A player whose address on file brings an invitation per match gets none
+ * (`feedCalendar`), and the group sees nothing: an ephemeral message, which Telegram may not deliver.
+ */
+export async function offerCalendar(db: Db, chat: TelegramChat, player: Player, userId: number, threadId: number | null): Promise<boolean> {
+  if (!isListening(chat) || !GROUP_TYPES.has(chat.type) || !feedCalendar(player)) return false;
+  const [told] = await db
+    .select({ id: facts.id })
+    .from(facts)
+    .where(and(eq(facts.subjectType, "player"), eq(facts.subjectId, player.id), eq(facts.kind, "player.calendar_offered")))
+    .limit(1);
+  if (told) return false;
+  const locale = chatLocale(chat);
+  const s = strings(locale);
+  const page = feedLinks(baseUrl(), await feedKeyFor(db, player), locale).page;
+  const sent = await sendMessage(chat.chatId, esc(s.calendarFeed), { keyboard: { inline_keyboard: [[{ text: s.calendarButton, url: page }]] }, onlyFor: userId, threadId, silent: true });
+  if (!sent.ok) return false;
+  await recordFact(db, { kind: "player.calendar_offered", channel: "telegram", actorPlayerId: player.id, subject: { type: "player", id: player.id } });
+  return true;
+}
+
 /** Takes or frees the sender's seat as the card's ✅ and ❌ do, edits the card, and reacts once. */
 export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, detail: EventDetail, kind: "join" | "leave", ctx: OpContext): Promise<string> {
   // A join finds or creates the player as the ✅ button does; a leave never creates anybody.
@@ -117,6 +143,7 @@ export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, fro
     await sendMessage(chat.chatId, esc(outcome === "requested" ? s.toastRequested : s.toastLevel), { onlyFor: from.id, threadId: msg.message_thread_id ?? null, silent: true });
   }
   if (player) await countSeat(db, "word", outcome, player.id, detail.event);
+  if (player && outcome === "joined") await offerCalendar(db, chat, player, from.id, msg.message_thread_id ?? null);
   return `word_${kind}:${outcome}`;
 }
 
