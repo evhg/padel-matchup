@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, inArray, lt, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubCourts, clubs, events, lessons, type Club, type ClubCourt, type CourtKind } from "@/db/schema";
+import { columnsButCache } from "./clubColumns";
 import { DomainError } from "./errors";
 
 /**
@@ -72,7 +73,7 @@ export function countsOf(rows: Pick<CleanCourt, "kind">[]): Pick<Club, "courts" 
  * typed counts alone, so a club that lists nothing loses nothing.
  */
 export async function replaceCourts(db: Db, token: string, input: CourtInput[]): Promise<{ club: Club; courts: ClubCourt[] } | null> {
-  const [club] = await db.select().from(clubs).where(eq(clubs.manageToken, token)).limit(1);
+  const [club] = await db.select(columnsButCache).from(clubs).where(eq(clubs.manageToken, token)).limit(1);
   if (!club) return null;
   const clean = cleanCourts(input);
   await db.delete(clubCourts).where(eq(clubCourts.clubSlug, club.slug));

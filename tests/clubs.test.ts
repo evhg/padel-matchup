@@ -6,7 +6,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeSlotsFromBookings, localDay, parseDuration, parseFreeJson, parseIcs, refreshAllAvailability, refreshClubAvailability } from "@/lib/booking/availability";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, guessCity, listClubsClaimedBy, listLiveClubs, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, getClubByTokenWithCache, getClubWithCache, guessCity, listClubsClaimedBy, listLiveClubs, listPendingClubs, listShownClubs, markClaimVerified, updateClub } from "@/lib/domain/clubs";
 import { claimCheckLine } from "@/lib/telegram/clubs";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { askOwnerAboutClub } from "@/lib/telegram/clubs";
@@ -208,7 +208,7 @@ describe("clubs (db)", () => {
     expect(await refreshAllAvailability(db, now)).toEqual({ refreshed: 0, errors: 0 });
     club = (await decideClub(db, club.slug, true))!;
     expect(await refreshAllAvailability(db, now)).toEqual({ refreshed: 1, errors: 0 });
-    club = (await getClub(db, club.slug))!;
+    club = (await getClubWithCache(db, club.slug))!;
     expect(club.availability?.day).toBe("2026-09-06");
     expect(club.availability?.slots.map((s) => [s.start, s.free])).toEqual([
       ["2026-09-06T00:00:00.000Z", 3],
@@ -354,5 +354,40 @@ describe("founding places everywhere", () => {
     const nowhere = await claimClub(db, { name: "Somewhere Padel", playerId: r.id });
     expect(foundingKey({ city: null, country: nowhere.country, province: nowhere.province })).toBeNull();
     expect((await decideClub(db, nowhere.slug, true))!.founding).toBe(false);
+  });
+});
+
+// AGENTS.md rule 12: the cache of free courts (up to three days of slots from a platform) is the one
+// large column of a club, so a read takes it only where its page renders free times. The club page and
+// the manage page still carry what they render; every other read of a club leaves it behind.
+describe("a club read carries the cache of free courts only where a page renders it", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => ({ db, close } = await createTestDb()));
+  afterAll(async () => close());
+
+  it("the club page, the manage page and the lists keep it; the claim, the decision, the poster and the actions do not", async () => {
+    const NOW = new Date("2026-10-10T03:00:00.000Z"); // 10:00 in Bangkok
+    const owner = await makePlayer(db, "Nok");
+    const club = (await decideClub(db, (await claimClub(db, { name: "Cache Padel", playerId: owner.id, tz: "Asia/Bangkok" })).slug, true))!;
+    const pending = await claimClub(db, { name: "Pending Padel", playerId: owner.id, tz: "Asia/Bangkok" });
+    // Today 12:00 in Bangkok, and a slot two days out that a list never needs.
+    const cache = { fetchedAt: NOW.toISOString(), day: "2026-10-10", days: ["2026-10-10", "2026-10-11", "2026-10-12"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", fullAt: NOW.toISOString(), error: null, slots: [{ start: "2026-10-10T05:00:00.000Z", end: "2026-10-10T06:00:00.000Z", free: 2 }, { start: "2026-10-12T05:00:00.000Z", end: "2026-10-12T06:00:00.000Z", free: 1 }] };
+    await db.update(clubs).set({ availability: cache, availabilityAt: NOW }).where(eq(clubs.slug, club.slug));
+
+    // What the club page (`/v/[slug]`) and the manage page render: the whole cache.
+    expect((await getClubWithCache(db, club.slug))!.availability).toEqual(cache);
+    expect((await getClubByTokenWithCache(db, club.manageToken))!.availability).toEqual(cache);
+    // What /clubs and a city page render: today's slots, never the later days.
+    const listed = (await listShownClubs(db, null, 400, NOW)).find((c) => c.slug === club.slug)!;
+    expect(listed.availability?.slots).toEqual([cache.slots[0]]);
+
+    // Every other read: the club without its cache, and the rest of the row as it was.
+    const lean = { getClub: await getClub(db, club.slug), getClubByToken: await getClubByToken(db, club.manageToken), claimedBy: (await listClubsClaimedBy(db, owner.id)).find((c) => c.slug === club.slug), pending: (await listPendingClubs(db)).find((c) => c.slug === pending.slug) };
+    for (const [read, row] of Object.entries(lean)) {
+      expect(row, read).toBeTruthy();
+      expect(row, read).not.toHaveProperty("availability");
+    }
+    expect(lean.getClub).toMatchObject({ slug: club.slug, name: "Cache Padel", manageToken: club.manageToken, approvedAt: club.approvedAt });
   });
 });

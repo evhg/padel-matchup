@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
+import { columnsButCache, type PickableClub } from "@/lib/domain/clubColumns";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { platformById } from "./platforms";
 
@@ -150,7 +151,7 @@ export function parseFreeJson(json: unknown, o: { day: string; tz: string; now?:
 export const availabilityConfigured = (c: Pick<Club, "availabilityUrl" | "availabilityKind">) => Boolean(c.availabilityUrl && c.availabilityKind && (AVAILABILITY_KINDS as readonly string[]).includes(c.availabilityKind));
 
 /** Fetches the club's feed once and stores today's free slots on the row. Errors are stored, never thrown. */
-export async function refreshClubAvailability(db: Db, club: Club, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<ClubAvailability | null> {
+export async function refreshClubAvailability(db: Db, club: PickableClub, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<ClubAvailability | null> {
   if (!availabilityConfigured(club)) return null;
   const tz = club.tz && isValidTimeZone(club.tz) ? club.tz : "UTC";
   const day = localDay(now, tz);
@@ -186,7 +187,7 @@ export async function refreshClubAvailability(db: Db, club: Club, now = new Date
 export async function refreshAllAvailability(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch, max = 30): Promise<{ refreshed: number; errors: number }> {
   const stale = new Date(now.getTime() - 50 * 60 * 1000);
   const due = await db
-    .select()
+    .select(columnsButCache)
     .from(clubs)
     .where(and(isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt), isNotNull(clubs.availabilityUrl), or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, stale))))
     .limit(max);

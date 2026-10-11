@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { eq, sql } from "drizzle-orm";
 import { clubCourts, clubs, clubSlots, type Club } from "@/db/schema";
-import { claimClub, claimEmailForCode, clubStatus, decideClub, getClub, getClubByToken, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listPendingClubs, listShownClubs } from "@/lib/domain/clubs";
+import { claimClub, claimEmailForCode, clubStatus, decideClub, getClub, getClubByToken, getClubWithCache, isClubListed, isClubLive, listClubsForPicking, listLiveClubs, listPendingClubs, listShownClubs } from "@/lib/domain/clubs";
 import { addClubSlot } from "@/lib/domain/clubWeek";
 import { replaceCourts } from "@/lib/domain/courts";
 import { directoryListing } from "@/lib/domain/directory";
@@ -274,7 +274,7 @@ describe("a refused claim on a club the directory listed", () => {
   };
 
   it("hands the listing back as the directory has it when the refusal is about the claimant", async () => {
-    const listed = (await getClub(db, "warehaus"))!;
+    const listed = (await getClubWithCache(db, "warehaus"))!;
     expect(isClubListed(listed)).toBe(true);
     const claimed = await claimAsErik();
     // The claim is on the listing itself, not a second page, and it took the listing off the lists.
@@ -306,7 +306,7 @@ describe("a refused claim on a club the directory listed", () => {
   });
 
   it("hands back the directory's booking link and platform too, whatever link the claim typed (Blue Tree on MATCHi)", async () => {
-    const listed = (await getClub(db, "blue-tree"))!;
+    const listed = (await getClubWithCache(db, "blue-tree"))!;
     expect([listed.bookingUrl, listed.bookingPlatform]).toEqual(["https://www.matchi.se/facilities/bluetree", "matchi"]);
     const someone = await makePlayer(db, "Someone");
     await claimClub(db, { playerId: someone.id, name: "Padel Phuket @ Blue Tree", tz: "Asia/Bangkok", bookingUrl: "https://karon-padel-pay.example/checkout" });
@@ -392,12 +392,12 @@ describe("a refused claim on a club the directory listed", () => {
   });
 
   it("repairs production's row with the migration exactly as a refusal now would", async () => {
-    const listed = (await getClub(db, "warehaus"))!;
+    const listed = (await getClubWithCache(db, "warehaus"))!;
     const claimed = await claimAsErik();
     // Refused the old way, which is how production holds it: the hour, and nothing handed back.
     await db.update(clubs).set({ rejectedAt: REFUSED_AT, approvedAt: null, founding: false, notifyMessageId: 4242 }).where(eq(clubs.slug, "warehaus"));
     for (const statement of migration.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
-    const repaired = (await getClub(db, "warehaus"))!;
+    const repaired = (await getClubWithCache(db, "warehaus"))!;
     expect(facts(repaired)).toEqual(facts(listed));
     expect(repaired.manageToken).not.toBe(claimed.manageToken);
     expect(repaired.manageToken).toMatch(/^[A-Za-z0-9_-]{16,40}$/);
@@ -410,7 +410,7 @@ describe("a refused claim on a club the directory listed", () => {
     await claimAsErik();
     const live = (await decideClub(db, "warehaus", true, REFUSED_AT))!;
     for (const statement of migration.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
-    expect(await getClub(db, "warehaus")).toEqual(live);
+    expect(await getClubWithCache(db, "warehaus")).toEqual(live);
     expect(await db.select().from(clubCourts).where(eq(clubCourts.clubSlug, "warehaus"))).toHaveLength(2);
   });
 });

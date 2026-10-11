@@ -60,7 +60,7 @@ import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
-import { getShownClub, venuesForPicking } from "@/lib/domain/clubs";
+import { getShownClubLean, venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
@@ -303,7 +303,7 @@ export default async function EventPage({ params, searchParams }: Props) {
   // pages allow (src/lib/booking/prepare.ts), for the organiser and the players; the match's own
   // booking link, when the organiser gave one, stays where it was. One read, only for them.
   const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
-  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClub(db, ev.venueSlug) : null;
+  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClubLean(db, ev.venueSlug) : null;
   // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
   const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
   // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.

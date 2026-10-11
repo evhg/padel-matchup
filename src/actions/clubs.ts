@@ -7,8 +7,7 @@ import { getDb } from "@/db";
 import { refreshClubAvailability } from "@/lib/booking/availability";
 import { isValidTimeZone } from "@/lib/dates";
 import { emailEnabled } from "@/lib/config";
-import type { Club } from "@/db/schema";
-import { CLAIM_ROLES, CLUB_ADD_LIMITS, CLUB_LIMITS, addClub, claimClub, claimEmailForCode, decideClub, getClubByToken, isClubLive, markClaimVerified, updateClub } from "@/lib/domain/clubs";
+import { CLAIM_ROLES, CLUB_ADD_LIMITS, CLUB_LIMITS, addClub, claimClub, claimEmailForCode, decideClub, getClubByToken, isClubLive, markClaimVerified, updateClub, type PickableClub } from "@/lib/domain/clubs";
 import { getPlayer } from "@/lib/domain/players";
 import { tell } from "@/lib/coach/notify";
 import { getSessionPlayer } from "@/lib/session";
@@ -64,7 +63,7 @@ export type UpdateClubInput = z.infer<typeof updateSchema>;
  * A work email at the club's own domain gets a 6-digit code at once; the address it went to comes
  * back so the screen can ask for the code. Null when the contact proves nothing by itself, or email is off.
  */
-async function sendClaimCode(db: Awaited<ReturnType<typeof getDb>>, club: Club, locale: string | null | undefined): Promise<string | null> {
+async function sendClaimCode(db: Awaited<ReturnType<typeof getDb>>, club: PickableClub, locale: string | null | undefined): Promise<string | null> {
   const email = claimEmailForCode(club);
   if (!email || !emailEnabled()) return null;
   const issued = await issueEmailCode(db, email);

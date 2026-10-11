@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { utcToZonedParts, weekdayName } from "@/lib/dates";
 import { isClubLive } from "@/lib/domain/clubs";
+import { columnsButCache } from "@/lib/domain/clubColumns";
 import { isPackageOpen } from "@/lib/domain/coaching";
 import { monthCounts, monthRange } from "./chains";
 import { coachStatement, statementCsv, type StatementLabels } from "./statement";
@@ -306,7 +307,7 @@ export async function monthlyWraps(
     }
   }
   const clubRows = await db
-    .select({ club: clubs, player: players })
+    .select({ club: columnsButCache, player: players })
     .from(clubs)
     .innerJoin(players, eq(players.id, clubs.claimedBy));
   for (const { club, player } of clubRows) {
