@@ -274,6 +274,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
   that the input was visible. Neither ever typed an address and pressed the button. Every door gets one
   check that goes all the way through and waits for the answer the far side sends — an unknown address
   answering "We don't know that email yet" proves the handler ran; a visible input proves nothing.
+- **A place in `page.content()` is not a place on the screen.** "Upcoming comes before the personal link"
+  compared two `indexOf`s in the page's source and went red in CI with the screen right (11 October
+  2026). The source also holds React's inline payload, whose messages carry the same words. On a busy
+  machine hydration can start while that payload is still arriving; React then replays the suspended
+  `<main>`, meets its own `<h1>`, throws error 418 and renders the page again, after the scripts. Main
+  does it too. Read order from the elements (`headingOrder` in `e2e/core.mjs`). To see the 418 locally:
+  the CI browser (`playwright install chromium-headless-shell` into a scratch `PLAYWRIGHT_BROWSERS_PATH`)
+  and four busy loops on the CPU, then load a signed-in `/me` in fresh contexts: 1 to 2 in 50.
 - **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one
   and postgres-js throws `Received an instance of Date`, so the gate goes green and CI's real-Postgres
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use

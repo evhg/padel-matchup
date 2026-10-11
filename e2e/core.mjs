@@ -12,6 +12,16 @@ const newPage = async () => {
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
   return page;
 };
+// Where two headings sit on the screen: their places among the headings in <main>, -1 when one is missing.
+// Not a position in page.content(): the source also carries React's inline payload, whose messages hold the
+// same words, and when React recovers from a hydration mismatch (React error 418, a busy CI runner) it renders
+// the page again after those scripts. "Upcoming" then sat behind "Your personal link" in the source while the
+// screen was right (CI, 11 October 2026).
+const headingOrder = (page, first, second) =>
+  page.locator("main h2").evaluateAll((hs, [x, y]) => {
+    const at = (t) => hs.findIndex((h) => h.textContent.includes(t));
+    return [at(x), at(y)];
+  }, [first, second]);
 
 try {
   // ---- Context A: Dana ----
@@ -464,8 +474,8 @@ try {
   await a.goto(BASE + "/me");
   check("/me shows the entered score", (await a.getByText("6-3").count()) > 0);
   check("/me shows the personal link card", (await a.getByText("Your personal link").count()) > 0);
-  const meHtml = await a.content();
-  check("/me: upcoming matches come before the personal link card", meHtml.indexOf(">Upcoming<") > 0 && meHtml.indexOf(">Upcoming<") < meHtml.indexOf("Your personal link"));
+  const meOrder = await headingOrder(a, "Upcoming", "Your personal link");
+  check("/me: upcoming matches come before the personal link card", meOrder[0] >= 0 && meOrder[0] < meOrder[1], meOrder.join(" "));
   check("/me: no restore offer when history exists", (await a.getByText("Played before").count()) === 0);
   check("/me: no 'Not now' anywhere", (await a.getByText("Not now").count()) === 0);
   check("/me: personal link card emails the link (no WhatsApp)", (await a.locator('a[href^="https://wa.me"]').count()) === 0 && (await a.getByRole("button", { name: /Email me this link/ }).count()) > 0);
@@ -503,7 +513,8 @@ try {
   const so = await newPage();
   await so.goto(BASE + "/me");
   const soHtml = await so.content();
-  check("/me signed out: returning players first, newcomers second", soHtml.indexOf("Been here before?") > 0 && soHtml.indexOf("First time here?") > soHtml.indexOf("Been here before?"), `${soHtml.indexOf("Been here before?")} ${soHtml.indexOf("First time here?")}`);
+  const soOrder = await headingOrder(so, "Been here before?", "First time here?");
+  check("/me signed out: returning players first, newcomers second", soOrder[0] >= 0 && soOrder[0] < soOrder[1], soOrder.join(" "));
   check("/me signed out: no 'enter your name to see your matches'", !soHtml.includes("Enter your name to see your matches"));
   await so.context().close();
 
