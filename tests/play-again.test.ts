@@ -7,13 +7,14 @@ import type { Db } from "@/db";
 import { events, facts, groupMembers, groups, notices, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { NO_SIDE_EFFECTS, joinAsPlayer } from "@/lib/api/operations";
 import { anonymizePlayer } from "@/lib/domain/anonymize";
-import { createEvent, duplicateEvent, nextWeekAfter, updateEvent, type CreateEventInput } from "@/lib/domain/events";
+import { createEvent, duplicateEvent, mayMoveStart, nextWeekAfter, updateEvent, type CreateEventInput } from "@/lib/domain/events";
 import { autoCreateGroupMatches, createGroup, createGroupFromEvent, weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { joinWithPolicy, partnerAdmission } from "@/lib/domain/joining";
 import { joinBarLevel, waivedByPlay } from "@/lib/domain/levels";
 import { saveNoticeSettings } from "@/lib/domain/notices";
-import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, playAgainActor, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { getEventByCode } from "@/lib/domain/queries";
+import { admitConfirmed, confirmLevel } from "@/lib/domain/verify";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { notifyGroupMatch, notifyPlayAgain } from "@/lib/notify";
 import { formatWeeklyWhen, timePatternOf } from "@/lib/dates";
@@ -189,6 +190,24 @@ describe("Play again", () => {
       expect((await updateEvent(db, old.id, ana.id, { startsAt: later }, NOW)).event.startsAt.toISOString()).toBe(later.toISOString());
     });
 
+    it("lets the organiser on the manage link move a start already gone, with no player or another one, and still refuses a seated player", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const [ben, co] = [await makePlayer(db, "Ben"), await makePlayer(db, "Co")];
+      const old = await played([ana, ben], {}, { scored: false });
+      const later = new Date(LAST.getTime() + 30 * 60_000);
+      // Ben sat from before the start, and has no manage link.
+      await expect(updateEvent(db, old.id, ben.id, { startsAt: later }, NOW, { asOrganiser: false })).rejects.toMatchObject({ code: "forbidden", message: "startsAt" });
+      expect(mayMoveStart(old, { playerId: ben.id, asOrganiser: false }, NOW)).toBe(false);
+      // Ana on her second browser: the manage link, and no player in that browser.
+      expect((await updateEvent(db, old.id, null, { startsAt: later }, NOW, { asOrganiser: true })).event.startsAt.toISOString()).toBe(later.toISOString());
+      // A co-organiser on the manage link: another player, and the organiser's rights.
+      const later2 = new Date(LAST.getTime() + 45 * 60_000);
+      expect((await updateEvent(db, old.id, co.id, { startsAt: later2 }, NOW, { asOrganiser: true })).event.startsAt.toISOString()).toBe(later2.toISOString());
+      // Before the start, anybody who may edit the match may move it; the form asks the same question.
+      expect(mayMoveStart({ ...old, startsAt: new Date(NOW.getTime() + HOUR) }, { playerId: ben.id, asOrganiser: false }, NOW)).toBe(true);
+      expect(mayMoveStart(old, { playerId: null, asOrganiser: false }, NOW)).toBe(false);
+    });
+
     it("says to the page whether this viewer's tap sends the round", async () => {
       const ana = await makePlayer(db, "Ana");
       const [ben, zed] = [await makePlayer(db, "Ben"), await makePlayer(db, "Zed")];
@@ -200,6 +219,20 @@ describe("Play again", () => {
       expect(await maySendPlayAgainRound(db, old.id, ana.id, NOW)).toBe(true);
       expect(await maySendPlayAgainRound(db, old.id, ben.id, NOW)).toBe(true);
       expect(await maySendPlayAgainRound(db, old.id, zed.id, NOW)).toBe(false);
+    });
+
+    it("tells the organiser on the manage link, with no player in that browser, that the tap sends the round", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const ben = await makePlayer(db, "Ben");
+      const old = await played([ana, ben]);
+      // Ana's second browser: the manage link and no player. The tap goes as Ana, so the line must say it sends.
+      const onManageLink = playAgainActor({ playerId: null, isCreator: true }, old);
+      expect(onManageLink).toBe(ana.id);
+      expect(await maySendPlayAgainRound(db, old.id, onManageLink!, NOW)).toBe(true);
+      // A player in the browser taps as that player, manage link or not; a visitor with neither is nobody.
+      expect(playAgainActor({ playerId: ben.id, isCreator: true }, old)).toBe(ben.id);
+      expect(playAgainActor({ playerId: ben.id, isCreator: false }, old)).toBe(ben.id);
+      expect(playAgainActor({ playerId: null, isCreator: false }, old)).toBeNull();
     });
   });
 
@@ -543,6 +576,24 @@ describe("Play again", () => {
       expect(await admissionAt(db, ev, sure, NOW)).toBe("ok");
       expect(await join(ev, pal)).toEqual({ kind: "requested" });
       expect(await join(ev, sure)).toMatchObject({ kind: "joined" });
+    });
+
+    it("lets a past partner's waiting ask in once a coach confirms a level outside the range, and keeps a stranger's waiting", async () => {
+      const org = await makePlayer(db, "Org", { level: 3.25 });
+      const coach = await makePlayer(db, "Coach");
+      // Low played with Org; Other did not. Both are below the range and ask to join with a declared level.
+      const low = await makePlayer(db, "Low", { level: 2 });
+      const other = await makePlayer(db, "Other", { level: 2 });
+      await played([org, low]);
+      const ev = await ranged(org, { levelVerifiedOnly: true });
+      expect(await join(ev, low)).toEqual({ kind: "requested" });
+      expect(await join(ev, other)).toMatchObject({ kind: "requested" });
+      // The coach confirms both at 2, outside the range: only the past game with Org lets Low in.
+      const lowSure = await confirmLevel(db, { playerId: low.id, level: 2, byPlayerId: coach.id, source: "coach", now: NOW });
+      const admitted = await admitConfirmed(db, lowSure, coach.id, NOW);
+      expect(admitted.map((a) => [a.event.id, a.join.outcome])).toEqual([[ev.id, "joined"]]);
+      const otherSure = await confirmLevel(db, { playerId: other.id, level: 2, byPlayerId: coach.id, source: "coach", now: NOW });
+      expect(await admitConfirmed(db, otherSure, coach.id, NOW)).toEqual([]);
     });
 
     it("tells the join bar why: a confirmed level, not the range, is what a past partner still needs", async () => {

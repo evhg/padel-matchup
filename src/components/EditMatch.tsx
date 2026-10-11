@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition, type ReactNode } from "react";
 import { updateEventAction } from "@/actions/events";
+import { editErrorKey, startToSend } from "@/lib/editMatchForm";
 import { EventFields, type EventFormValues } from "./EventFields";
 import type { VenueOption } from "./VenueCombobox";
 
@@ -10,9 +11,10 @@ import type { VenueOption } from "./VenueCombobox";
  * The "Edit match" button and the form behind it. The organiser has it inside their tools; every
  * player with a seat has it too (`canEditMatchDetails`), because whoever books the court is often
  * not whoever made the match. `beside` sits next to the button when the form is shut - the
- * organiser's Cancel match.
+ * organiser's Cancel match. `startLocked`: the match has started and this viewer is not the organiser
+ * (`mayMoveStart`), so the day, the time and the zone show and do not change, and one line says why.
  */
-export function EditMatch({ code, initial, venues, beside }: { code: string; initial: EventFormValues; venues: VenueOption[]; beside?: ReactNode }) {
+export function EditMatch({ code, initial, venues, beside, startLocked = false }: { code: string; initial: EventFormValues; venues: VenueOption[]; beside?: ReactNode; startLocked?: boolean }) {
   const t = useTranslations();
   const [values, setValues] = useState<EventFormValues>(initial);
   const [open, setOpen] = useState(false);
@@ -24,10 +26,9 @@ export function EditMatch({ code, initial, venues, beside }: { code: string; ini
       setError(null);
       const r = await updateEventAction(code, {
         title: values.title,
-        date: values.date,
-        time: values.time,
+        // The day, the time and the zone only when one of them changed (`startToSend`).
+        ...startToSend(values, initial),
         durationMinutes: values.durationMinutes,
-        tz: values.tz,
         venueName: values.venueName,
         venueMapUrl: values.venueMapUrl,
         court: values.court,
@@ -46,7 +47,7 @@ export function EditMatch({ code, initial, venues, beside }: { code: string; ini
         payNote: values.payNote,
       });
       if (!r.ok) {
-        setError(t("errors.invalid"));
+        setError(t(editErrorKey(r)));
         return;
       }
       setOpen(false);
@@ -56,7 +57,7 @@ export function EditMatch({ code, initial, venues, beside }: { code: string; ini
     return (
       <div className="flex flex-col gap-4 animate-pop">
         <h3 className="font-extrabold">{t("creator.edit")}</h3>
-        <EventFields values={values} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} />
+        <EventFields values={values} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} startLocked={startLocked} />
         {error && <p className="text-sm font-semibold text-danger">{error}</p>}
         <div className="flex gap-2">
           <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>

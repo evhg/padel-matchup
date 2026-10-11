@@ -331,7 +331,8 @@
     "playAgainOne": "One next game, same settings. Each player of this match gets one “Are you in?” message.",
     "playAgainSent": "One next game, same settings. This match's players already had their one “Are you in?” message.",
     "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
-    "playAgainPlain": "One next game, same settings."
+    "playAgainPlain": "One next game, same settings.",
+    "startLocked": "Only the organiser moves the start once the match has started."
   },
   "creator": {
     "tools": "Organizer tools",

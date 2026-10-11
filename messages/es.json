@@ -331,7 +331,8 @@
     "playAgainOne": "Un partido más, con la misma configuración. Cada jugador de este partido recibe un mensaje «¿Te apuntas?».",
     "playAgainSent": "Un partido más, con la misma configuración. Los jugadores de este partido ya recibieron su único mensaje «¿Te apuntas?».",
     "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días.",
-    "playAgainPlain": "Un partido más, con la misma configuración."
+    "playAgainPlain": "Un partido más, con la misma configuración.",
+    "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio."
   },
   "creator": {
     "tools": "Herramientas de organizador",

@@ -50,12 +50,12 @@ import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
 import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
-import { canEditMatchDetails, isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
+import { canEditMatchDetails, isClaimable, isOccupied, isSeated, mayMoveStart } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
-import { maySendPlayAgainRound, playAgainDefault, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { maySendPlayAgainRound, playAgainActor, playAgainDefault, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
@@ -266,7 +266,9 @@ export default async function EventPage({ params, searchParams }: Props) {
   const playAgainOffered = canPlayAgain && !cancelled && (detail.scores.length > 0 || (isTournament && ev.scoreLockedByCreator));
   const playAgainSent = playAgainOffered && Boolean(await playAgainRoundOf(db, ev.id));
   // The organiser, or a seat taken by the start, on a played match: one more read, only while the round is unsent.
-  const playAgainSends = playAgainOffered && !playAgainSent && me ? await maySendPlayAgainRound(db, ev.id, me.id, now) : false;
+  // The organiser on the manage link with no player here taps as the organiser (`playAgainActor`).
+  const tapper = playAgainOffered && !playAgainSent ? playAgainActor({ playerId: me?.id, isCreator: viewer.isCreator }, ev) : null;
+  const playAgainSends = tapper ? await maySendPlayAgainRound(db, ev.id, tapper, now) : false;
   const playAgain = playAgainOffered
     ? { defaultWhen: `${nextGame.date}T${nextGame.time}`, minWhen: wall(now), maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)), sent: playAgainSent, sends: playAgainSends }
     : null;
@@ -325,6 +327,8 @@ export default async function EventPage({ params, searchParams }: Props) {
   // The organiser and every seated player may change the details (canEditMatchDetails), so both get the form.
   const canEdit = canEditMatchDetails(detail, { isCreator: viewer.isCreator, playerId: me?.id });
   const venues = canEdit ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
+  // Once it has started, only the organiser moves the start (`mayMoveStart`, the rule `updateEvent` holds).
+  const startLocked = canEdit && !mayMoveStart(ev, { playerId: me?.id, asOrganiser: viewer.isCreator }, now);
   // The court: "Book this court" opens the club's own booking, prepared as far as its platform's public
   // pages allow (src/lib/booking/prepare.ts), for the organiser and the players; the match's own
   // booking link, when the organiser gave one, stays where it was. One read, only for them.
@@ -845,7 +849,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             <h2 className="text-lg font-extrabold">{t("event.changeDetails")}</h2>
             <p className="mt-0.5 text-sm text-muted">{t("event.changeDetailsHelp")}</p>
             <div className="mt-3">
-              <EditMatch code={code} initial={editInitial} venues={venueOptions} />
+              <EditMatch code={code} initial={editInitial} venues={venueOptions} startLocked={startLocked} />
             </div>
           </section>
         )}

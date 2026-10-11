@@ -120,6 +120,13 @@ function roundSender(q: Db, actorPlayerId: string, now: Date): SQL[] {
   return [...playedOut(now), or(eq(events.creatorPlayerId, actorPlayerId), exists(satIn))!];
 }
 
+/**
+ * Who taps "Play again", as `duplicateEventAction` takes it: the player in this browser, or else the
+ * organiser when the manage link proved them (a second browser with no player). Nobody otherwise.
+ */
+export const playAgainActor = (viewer: { playerId: string | null | undefined; isCreator: boolean }, ev: Pick<Event, "creatorPlayerId">): string | null =>
+  viewer.playerId ?? (viewer.isCreator ? ev.creatorPlayerId : null);
+
 /** Would this player's tap send the round (`roundSender`)? The page's help line promises it only then. One read by the key. */
 export async function maySendPlayAgainRound(db: Db, oldId: string, actorPlayerId: string, now: Date): Promise<boolean> {
   const [row] = await db

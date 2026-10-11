@@ -237,6 +237,15 @@ learning can be a test, a gate step or a script, make it one and put the story i
   still change `starts_at` after the start. So a latecomer moved the start past their own seat and
   counted as having played (11 October 2026). When a guard compares two columns, list every write to
   each of them: `updateEvent` now lets only the organiser move a start already gone.
+- **The organiser is a proof, not a player id.** That start guard compared `actorPlayerId` with the
+  creator, and the manage link proves the organiser with no player at all (a second browser, a
+  co-organiser), so the organiser could no longer correct a started match's start, and the page told
+  them their "Play again" tap sent nothing while it did (11 October 2026). A rule that means "the
+  organiser" takes `getViewer`'s `isCreator` (`asOrganiser`), and its test calls it with a null player.
+- **A form that sends back what it shows sends a rounded value.** The edit form showed the start in
+  minutes and sent it back on every save, so a note-only edit of a start with seconds, or one in an hour
+  the clocks repeat, moved the start and met the guard above. Send a field only when it changed
+  (`startToSend`, as the capacity already did).
 - **A look-then-make with no unique index is a race, and the fix is a lock on the thing, not the row.**
   "One game per crew hour" read "no game", then made one; two taps, or a tap and the hourly job, each
   read "no game". No row exists to lock yet, and a called-off game keeps its row, so no unique index

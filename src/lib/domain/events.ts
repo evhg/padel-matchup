@@ -260,7 +260,14 @@ export type UpdateEventResult = {
   promotedPlayerIds: string[];
 };
 
-export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput, now = new Date()): Promise<UpdateEventResult> {
+/**
+ * `asOrganiser`: the caller already proved the organiser, by the session or by the manage link
+ * (`getViewer`'s `isCreator`). The manage link proves it with no player at all, on a second browser or
+ * for a co-organiser, so `actorPlayerId` alone cannot say it. Never taken from what a client sends.
+ */
+export type UpdateEventActor = { asOrganiser?: boolean };
+
+export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput, now = new Date(), actor: UpdateEventActor = {}): Promise<UpdateEventResult> {
   // Asked before the transaction opens. Inside one, this query waits on a connection the transaction
   // is already holding, and the whole call hangs until it times out.
   const venueName = patch.venueName === undefined ? undefined : cleanText(patch.venueName, 80);
@@ -306,7 +313,7 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         // the start (`playedOut` and its readers in playAgain.ts), and joining stays open after it: a
         // latecomer who could move the start past their own seat would count as having played, send the
         // "Play again" round and skip the organiser's level range. The organiser's own range, their call.
-        if (ev.startsAt.getTime() <= now.getTime() && actorPlayerId !== ev.creatorPlayerId) throw new DomainError("forbidden", "startsAt");
+        if (!mayMoveStart(ev, { playerId: actorPlayerId, asOrganiser: Boolean(actor.asOrganiser) }, now)) throw new DomainError("forbidden", "startsAt");
         set.startsAt = patch.startsAt;
         calendarChanged = true;
         // Re-opening a finished event by moving it into the future.
@@ -481,6 +488,14 @@ export const isSeated = (detail: { roster: Pick<Slot, "status" | "playerId">[] }
  */
 export const canEditMatchDetails = (detail: { roster: Pick<Slot, "status" | "playerId">[] }, viewer: { isCreator: boolean; playerId: string | null | undefined }): boolean =>
   viewer.isCreator || isSeated(detail, viewer.playerId);
+
+/**
+ * Who may move a match's start (`updateEvent`): anybody who may edit it, until the start; after it,
+ * only the organiser, by the session or by the manage link (`asOrganiser`). The edit form asks the same
+ * question, so a seated player on a started match sees the time it cannot change, and why.
+ */
+export const mayMoveStart = (ev: Pick<Event, "startsAt" | "creatorPlayerId">, actor: { playerId: string | null | undefined; asOrganiser: boolean }, now: Date): boolean =>
+  ev.startsAt.getTime() > now.getTime() || actor.asOrganiser || (Boolean(actor.playerId) && actor.playerId === ev.creatorPlayerId);
 
 /**
  * open ↔ full is derived from roster occupancy. cancelled/past are terminal

@@ -224,6 +224,8 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
     const { db, detail, viewer } = await requireMatchEditor(code);
     const tz = input.tz ?? detail.event.tz;
     const startsAt = input.date && input.time ? zonedTimeToUtc(input.date, input.time, tz) : undefined;
+    // The organiser by the session or by the manage link (a second browser, a co-organiser) moves a start
+    // already gone; a seated player does not (`mayMoveStart`).
     const result = await updateEvent(db, detail.event.id, viewer.player?.id ?? null, {
       title: input.title,
       startsAt,
@@ -244,7 +246,7 @@ export async function updateEventAction(code: string, raw: UpdateEventInput): Pr
       bookingUrl: input.bookingUrl,
       cost: input.cost,
       payNote: input.payNote,
-    });
+    }, new Date(), { asOrganiser: viewer.isCreator });
     if (result.calendarChanged) after(() => notifyEventUpdated(db, result.event));
     after(async () => {
       await emitMatchEvent(db, "match.updated", code, { calendarChanged: result.calendarChanged });
