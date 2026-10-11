@@ -1,7 +1,14 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { afterAll } from "vitest";
+
+// What `next start` does before any app code loads (next/dist/server/node-environment-baseline.js):
+// without it, Next's request storage is a stand-in that throws on `run`, so a test cannot call a server
+// action inside a request (`asAction` in tests/helpers/action.ts). Set before the first file imports
+// Next, because each storage is made once, when its module loads, and the worker keeps it for every file.
+if (typeof (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage !== "function") (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage = AsyncLocalStorage;
 
 /**
  * Runs once per test file. A test that reaches the app's own database (`getDb()` with no DATABASE_URL, the

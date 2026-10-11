@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { getViewer } from "@/actions/shared";
+import { getViewer, personalTokenFor } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
@@ -14,7 +14,6 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
-import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { playerHasPush } from "@/lib/domain/push";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { getEventByCode } from "@/lib/domain/queries";
@@ -55,7 +54,8 @@ async function SharePage({ params }: Props) {
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
   const text = t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
   const mUrl = manageUrl(baseUrl(), code, ev.manageCode);
-  const token = viewer.player ? await getOrCreatePersonalToken(db, viewer.player.id) : null;
+  // No personal link for a session by name that proved nothing (DECIDING rule 34): it would be a full sign-in.
+  const token = await personalTokenFor(db, viewer.player);
   const hasPush = viewer.player && pushEnabled() ? await playerHasPush(db, viewer.player.id) : false;
 
   return (

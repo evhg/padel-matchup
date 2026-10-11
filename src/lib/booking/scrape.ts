@@ -1,15 +1,16 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
-import { clubs, demandSignals, events, metricsDaily, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
+import { clubs, metricsDaily, type Club, type ClubAvailability, type ClubFreeSlot } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { LISTED_SOURCES } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
 import { ADAPTERS, adapterFor, type AvailabilityAdapter, type ScrapedSlot, type ScrapeFailure, type ScrapeResult, type ScrapeTarget } from "./adapters";
 import { AVAILABILITY_KINDS, localDay } from "./availability";
-import { platformById } from "./platforms";
+import { PLATFORMS, detectPlatform, platformById } from "./platforms";
 
 /**
- * Free court times read from the booking platforms' public club pages, every fifteen minutes.
+ * Free court times read from the booking platforms' public club pages: today every fifteen minutes for
+ * every club a reader can read, the next two days about once an hour.
  *
  * The owner's decision of 10 October 2026 (DECIDING rule 35): "platforms forbid scraping in their terms
  * but we are just testing, and on top every app scrapes every other app ... So scraping at risk of being
@@ -17,7 +18,8 @@ import { platformById } from "./platforms";
  * `adapters/<platform>.ts` and parses nothing here. The frame holds every reader to the limits that
  * stay, because they are about other people's accounts and money, not about scraping:
  *   - a GET or a HEAD only, with no cookie and no authorization header: it never signs in and never
- *     books, reserves, pays or posts anything;
+ *     books, reserves, pays or posts anything. (A session wrote "never signs in" on 10 October 2026.
+ *     The owner offered a sign-in of their own the same day, and has not decided the limit: rule 35.)
  *   - an honest User-Agent, one request a second per platform, at most eight a club, and a cache of
  *     every page for the run;
  *   - the first 401, 403 or 429, or a challenge (`isBlock`), stops that platform for the run, and the
@@ -27,35 +29,45 @@ import { platformById } from "./platforms";
  *
  * robots.txt does not bind a reader under rule 35 (the owner accepted the risk of a block); the frame
  * keeps the load low instead: each platform's own slice of at most eight clubs a run, today every 15
- * minutes for a club people use, the next two days at most hourly. `/about#bot` says who we are.
+ * minutes for every club, the next two days about once an hour, and at most three of those longer
+ * reads in a lane a run. `/about#bot` says who we are.
+ *
+ * The owner asked for a read "every 15min" of all courts (10 October 2026). Until 11 October 2026 only
+ * a club people used was read that often, and production had none on a platform, so every club was
+ * read once an hour. Now every push tick runs, and each takes the clubs whose read is 14 minutes old:
+ * a club read on one tick comes due three ticks later, so the clubs fall into three groups and no tick
+ * reads them all.
  *
  * The job rides the five-minute push job (`/api/cron/push`), which calls `scrapeIfDue`: it costs no
- * invocation of its own and no migration. It runs when the last run is fourteen minutes old or more.
+ * invocation of its own and no migration. It runs on every tick, when the last run is four minutes old
+ * or more.
  */
-/** What the hourly thresholds allow for a run that lands late on its tick (`clubDueMs`, `fullDueMs`). */
+/** What the thresholds allow for a run that lands late on its tick (`fullDueMs`, `fullLateMs`). */
 const DUE_SLACK_MS = 2 * 60_000;
 
 export const SCRAPE = {
-  /** A run starts when the last one began this long ago or more: every third push tick, with a minute of slack for a late one. */
-  dueMs: 14 * 60_000,
-  /** A club people use (`usedBackMs`, `usedAheadMs`) is read again after this long: every run. */
-  usedDueMs: 14 * 60_000,
+  /** A run starts when the last one began this long ago or more: every push tick, with a minute of slack for a late one. */
+  dueMs: 4 * 60_000,
   /**
-   * Any other club is read again after this long: once an hour, on the fourth run. The hour less
-   * `DUE_SLACK_MS`, because a run's `now` lands a little after its tick, by a different amount each
-   * time: a read written at 0:00:00.812 was not an hour old at 1:00:00.301, so a quiet club was read
-   * every 75 minutes until 11 October 2026. `fullDueMs` moves with it, so the read that comes due is a
-   * full one. Two reads of a club are still never under 58 minutes apart, and on the push job's
-   * five-minute ticks that is the hour: rule 35's rate does not change.
+   * A club is read again after this long: every third tick, so every 15 minutes. A run's `now` lands a
+   * little after its tick, by a different amount each time, so the threshold sits a minute under the 15:
+   * a club read on one tick is never due on the next two, and always due on the third.
    */
-  clubDueMs: 60 * 60_000 - DUE_SLACK_MS,
-  /** The clubs one platform's lane takes in a run. Each lane has its own 45 seconds, so one platform never crowds out another. */
+  clubDueMs: 14 * 60_000,
+  /** The clubs one platform's lane takes in a run: with three groups, 24 clubs a platform every 15 minutes. Each lane has its own 45 seconds, so one platform never crowds out another. */
   perLane: 8,
+  /**
+   * The full reads (all three days) one lane makes in a run; a due club past them has today alone read
+   * while its last full read is under `fullLateMs` old. So the hourly reads spread over the ticks
+   * instead of landing on one, and a tick stays far inside its 45 seconds.
+   */
+  fullPerLane: 3,
   budgetMs: 45_000,
   /**
-   * A run this long or longer is a fair run for a lane's first club: one that a deadline cuts even then is
-   * written as a timeout and goes to the back. The push job passes 50 s less its own work, so this is not
-   * the whole 45 s: a tick a little slower than 5 s must still move a slow first club along.
+   * A run this long or longer is a fair run for a lane's first club: one that a deadline cuts even then
+   * goes to the back. A good read of its link on this platform stays and only `availability_at` moves
+   * (`keepsGoodRead`); with none, it is written as a timeout. The push job passes 50 s less its own work,
+   * so this is not the whole 45 s: a tick a little slower than 5 s must still move a slow first club along.
    */
   fairRunMs: 30_000,
   /** One request a second per platform. */
@@ -65,11 +77,18 @@ export const SCRAPE = {
   /** Today and the next two days, in the club's zone. */
   days: 3,
   /**
-   * The next two days are read at most this often. In between, a club read every run (one people use)
-   * has today alone read, and keeps the later days of its last full read: half the requests (the
-   * decision of 10 October 2026 on this reader's review, to lower the load on a platform).
+   * The next two days are read at most this often. In between, a club has today alone read, and keeps
+   * the later days of its last full read (the decision of 10 October 2026 on this reader's review, to
+   * lower the load on a platform). The hour less `DUE_SLACK_MS`: a read written at 0:00:00.812 was not
+   * an hour old at 1:00:00.301, so the full read came on the fifth visit until 11 October 2026.
    */
   fullDueMs: 60 * 60_000 - DUE_SLACK_MS,
+  /**
+   * A full read that `fullPerLane` put off waits at most this long: past it, the club is read in full
+   * whatever the cap says. Under the two hours the best times show a platform's later days for
+   * (`BEST_TIMES.platformShownMs`), so the later days never drop off a screen while they wait.
+   */
+  fullLateMs: 90 * 60_000 - DUE_SLACK_MS,
   requestTimeoutMs: 10_000,
   /** No request starts with less than this left before the deadline: it would run past it. */
   minRequestMs: 1_000,
@@ -79,9 +98,6 @@ export const SCRAPE = {
   restsMs: [6 * 3600_000, 24 * 3600_000, 7 * 24 * 3600_000],
   /** How far back the rest and stop rows are read; a row older than this counts as cleared. */
   stateDays: 60,
-  /** A club is "used" when a crew played there lately, a match there is coming up, or a player wants to play there. */
-  usedBackMs: 28 * 24 * 3600_000,
-  usedAheadMs: 14 * 24 * 3600_000,
   userAgent: "KicksmashBot/1.0 (+https://kicksma.sh/about)",
 } as const;
 
@@ -129,16 +145,23 @@ export function disabledPlatforms(raw: string | undefined = process.env.SCRAPE_D
   return ids.includes("all") ? "all" : new Set(ids);
 }
 
-/** This deployment's code, as a number: a "changed" stop holds until a deploy of a new commit, which has another (a redeploy of the same commit keeps it). FNV-1a, 32 bits. Pure. */
-export function deployKey(env: Record<string, string | undefined> = process.env): number {
-  const id = env.VERCEL_GIT_COMMIT_SHA || env.VERCEL_DEPLOYMENT_ID || "local";
+/** FNV-1a, 32 bits. Pure. */
+function fnv1a(s: string): number {
   let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h;
 }
+
+/** This deployment's code, as a number: a "changed" stop holds until a deploy of a new commit, which has another (a redeploy of the same commit keeps it). FNV-1a, 32 bits. Pure. */
+export function deployKey(env: Record<string, string | undefined> = process.env): number {
+  return fnv1a(env.VERCEL_GIT_COMMIT_SHA || env.VERCEL_DEPLOYMENT_ID || "local");
+}
+
+/** The link a read came from, as the cache keeps it (`linkKey`): eight hex digits, never the link. Pure. */
+export const linkKey = (link: string): string => fnv1a(link).toString(16).padStart(8, "0");
 
 export type PlatformState = { platform: string; off: boolean; stopped: boolean; restUntil: Date | null; level: number };
 export const usable = (s: PlatformState, now: Date) => !s.off && !s.stopped && !(s.restUntil && s.restUntil > now);
@@ -276,8 +299,7 @@ const noFeed = () => or(isNull(clubs.availabilityUrl), isNull(clubs.availability
 
 /** What a run needs of a club, and nothing more: never the cache itself, which is the one large column (AGENTS.md rule 12). */
 export type DueClub = Pick<Club, "slug" | "bookingUrl" | "bookingPlatform" | "website" | "tz" | "availabilityAt"> & {
-  used: boolean;
-  /** The last cache without its slots or `why`: where it came from, whether it read clean, the days it covers. */
+  /** The last cache without its slots or `why`: where it came from, whether it read clean, the days it covers, the platform's id for the club (`ref`). */
   prev: Omit<ClubAvailability, "slots" | "why"> | null;
 };
 
@@ -295,20 +317,18 @@ function hostPattern(platform: string): string | null {
   return `^https?://([^/?#]*\\.)?(${hosts.map((h) => h.replace(/\./g, "\\.")).join("|")})([/?#:]|$)`;
 }
 
+/** The clubs a lane may read: listed, not refused, and no feed of their own. The board counts the same rows (`scrapeCoverage`). */
+const listedForRead = () => and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), inArray(clubs.source, [...LISTED_SOURCES])), noFeed());
+
 /**
  * The clubs one platform's lane reads in this run: listed, not refused, no feed of their own, and a link
- * on that platform: the booking link, or, with none, the website. A club people use (a crew's match there
- * in the last four weeks, a match there in the next two, a player's want there) is due after 14 minutes,
- * any other after an hour; the oldest cache goes first. One query a platform, bounded; `clubs` is small
- * and the two subqueries use their venue indexes. It selects six columns and the cache's header, never
- * the slots.
+ * on that platform: the booking link, or, with none, the website. Every such club is due after 14
+ * minutes, and the oldest cache goes first. Until 11 October 2026 only a club people used was due that
+ * soon and every other one waited an hour. One query a platform, bounded; `clubs` is small. It selects
+ * six columns and the cache's header, never the slots.
  */
 export async function dueClubs(db: Db, now: Date, platform: string, limit: number): Promise<DueClub[]> {
   if (limit <= 0) return [];
-  const back = new Date(now.getTime() - SCRAPE.usedBackMs).toISOString();
-  const nowIso = now.toISOString();
-  const ahead = new Date(now.getTime() + SCRAPE.usedAheadMs).toISOString();
-  const used = sql<boolean>`(exists (select 1 from ${events} e where e.venue_slug = ${clubs}.slug and ((e.group_id is not null and e.starts_at >= ${back}::timestamptz and e.starts_at < ${nowIso}::timestamptz) or (e.starts_at >= ${nowIso}::timestamptz and e.starts_at < ${ahead}::timestamptz))) or exists (select 1 from ${demandSignals} d where d.venue_slug = ${clubs}.slug and d.expires_at > ${nowIso}::timestamptz))`;
   const host = hostPattern(platform);
   const onPlatform = or(
     and(isNotNull(clubs.bookingUrl), or(eq(clubs.bookingPlatform, platform), host ? and(isNull(clubs.bookingPlatform), sql`${clubs.bookingUrl} ~* ${host}`) : undefined)),
@@ -322,22 +342,13 @@ export async function dueClubs(db: Db, now: Date, platform: string, limit: numbe
       website: clubs.website,
       tz: clubs.tz,
       availabilityAt: clubs.availabilityAt,
-      used,
       prev: sql<Omit<ClubAvailability, "slots" | "why"> | null>`(${clubs.availability} - 'slots' - 'why')`.mapWith(clubs.availability),
     })
     .from(clubs)
-    .where(
-      and(
-        isNull(clubs.rejectedAt),
-        or(isNotNull(clubs.approvedAt), inArray(clubs.source, [...LISTED_SOURCES])),
-        onPlatform,
-        noFeed(),
-        or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)), and(used, lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.usedDueMs)))),
-      ),
-    )
+    .where(and(listedForRead(), onPlatform, or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)))))
     .orderBy(sql`${clubs.availabilityAt} asc nulls first`, clubs.slug)
     .limit(limit);
-  return rows.map((r) => ({ ...r, used: Boolean(r.used), prev: (r.prev as Omit<ClubAvailability, "slots" | "why"> | null) ?? null }));
+  return rows.map((r) => ({ ...r, prev: (r.prev as Omit<ClubAvailability, "slots" | "why"> | null) ?? null }));
 }
 
 /** Why the frame refused a reader's request. Thrown into the reader, which may catch it; the frame still knows. */
@@ -443,36 +454,72 @@ async function bounded<T>(p: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-/** A club a lane will read, the reader for it, and the link it reads. */
-type Picked = { club: DueClub; adapter: AvailabilityAdapter; link: string };
-type Outcome = { club: DueClub; platform: string; result: ScrapeResult; todayOnly: boolean };
+/** A club a lane will read, the reader for it, the link it reads, and whether today alone is read. */
+type Picked = { club: DueClub; adapter: AvailabilityAdapter; link: string; todayOnly: boolean };
+type Outcome = { club: DueClub; platform: string; link: string; result: ScrapeResult; todayOnly: boolean };
 
 /**
  * Is a read of today alone enough for this club? Only when its last read covered all three days, read
- * clean on this platform less than `fullDueMs` ago, and still covers the next two days in the zone it was
- * read in (a midnight since then means a day it never read). Pure.
+ * clean on this platform less than `maxAgeMs` ago (`fullDueMs`, or `fullLateMs` for a full read the cap
+ * put off), and still covers the next two days in the zone it was read in (a midnight since then means a
+ * day it never read). Pure.
  */
-export function todayOnlyRead(prev: DueClub["prev"], platform: string, now: Date): boolean {
+export function todayOnlyRead(prev: DueClub["prev"], platform: string, now: Date, maxAgeMs: number = SCRAPE.fullDueMs): boolean {
   if (!prev || prev.error !== null || prev.source !== `scrape:${platform}` || !prev.fullAt || !Array.isArray(prev.days)) return false;
   const full = Date.parse(prev.fullAt);
-  if (!Number.isFinite(full) || full > now.getTime() || now.getTime() - full >= SCRAPE.fullDueMs) return false;
+  if (!Number.isFinite(full) || full > now.getTime() || now.getTime() - full >= maxAgeMs) return false;
   const zone = zoneOf(prev.tz);
   return Boolean(zone) && scrapeDays(now, zone!).slice(1).every((d) => prev.days!.includes(d));
 }
 
+/**
+ * Which of a lane's due clubs (oldest first) read all three days and which today alone. A club whose
+ * full read is due gets one while the lane has fewer than `fullPerLane`; past that, a club whose full
+ * read is under `fullLateMs` old has today alone read and its full read waits for its next visit. A
+ * club that has nothing to keep (never read, a failed read, a midnight since) is always read in full.
+ * So each club's hourly read lands on its own tick, and the ticks stay even. Pure.
+ */
+export function planReads(prevs: readonly DueClub["prev"][], platform: string, now: Date, fullPerLane: number = SCRAPE.fullPerLane): boolean[] {
+  let full = 0;
+  return prevs.map((prev) => {
+    if (todayOnlyRead(prev, platform, now)) return true;
+    if (full >= fullPerLane && todayOnlyRead(prev, platform, now, SCRAPE.fullLateMs)) return true;
+    full++;
+    return false;
+  });
+}
+
+/**
+ * The club's last read when it came from this link, else nothing. The platform's id for the club (`ref`)
+ * and the kept later days belong to the link they were read from, and the manage page and the
+ * directory's import change a link and keep the cache. Until 11 October 2026 a club that moved to another
+ * Playtomic club had the old tenant id sent for today, and the old club's courts kept under its name, for
+ * up to 88 minutes (`fullLateMs`). So a read from another link is read in full: no `ref`, nothing kept,
+ * and a timeout keeps no old read (`keepsGoodRead`). A read with no `linkKey` was written before that
+ * day, so the first visit after that deploy reads each club in full once. Pure.
+ */
+export function prevForLink(prev: DueClub["prev"], link: string): DueClub["prev"] {
+  return prev && prev.linkKey === linkKey(link) ? prev : null;
+}
+
+/** A platform's id for a club as the cache keeps it, or nothing: a short plain token, never a link or a sentence. */
+const REF = /^[A-Za-z0-9._:-]{1,80}$/;
+const cleanRef = (ref: unknown): string | undefined => (typeof ref === "string" && REF.test(ref) ? ref : undefined);
+
 /** One platform's clubs, one after another, until the platform blocks, changes, or the time runs out. */
 async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typeof fetch; clock: Clock; deadline: number; now: Date; full: boolean }): Promise<Outcome[]> {
   const out: Outcome[] = [];
-  for (const { club, adapter, link } of queue) {
+  for (const { club, adapter, link, todayOnly } of queue) {
     if (lane.blocked !== null || lane.changed || lane.outOfTime) break;
     // Not even one request fits before the deadline: leave the club due for the next run.
     if (!fits(lane, o)) {
       lane.outOfTime = true;
       break;
     }
-    // The club's zone as the row has it: never "UTC" in place of a zone nobody gave (readers F2).
-    const todayOnly = todayOnlyRead(club.prev, lane.platform, o.now);
-    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: todayOnly ? 1 : SCRAPE.days };
+    // The club's zone as the row has it: never "UTC" in place of a zone nobody gave (readers F2). The
+    // platform's id for the club goes with a read of today alone, which may then skip the club page.
+    const ref = todayOnly ? cleanRef(club.prev?.ref) : undefined;
+    const target: ScrapeTarget = { clubSlug: club.slug, platform: lane.platform, bookingUrl: link, tz: club.tz, days: todayOnly ? 1 : SCRAPE.days, ...(ref ? { ref } : {}) };
     const lf = laneFetch(lane, o);
     let result: ScrapeResult;
     try {
@@ -493,17 +540,18 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     // Cut short by the deadline, and counted (`scrape_cut_<platform>`). A cut club is not written and
     // stays due, so the next run starts with it and its last good read keeps showing. One exception: the
     // lane's first club in a fair run (30 s or more, `fairRunMs`) did not fit even then, and a later run
-    // would do the same, so no club behind it would ever be read. Only then is it written as a timeout,
-    // which sends it to the back. A very busy push tick leaves less than that, and a first club cut in
-    // such a run keeps its cache: the next fair run reads it.
+    // would do the same, so no club behind it would ever be read. Only then is it written, which sends it
+    // to the back: a good read of its link on this platform stays (`keepsGoodRead`), else it is written as
+    // a timeout. A very busy push tick leaves less than that, and a first club cut in such a run is not
+    // written and stays due: the next fair run reads it.
     if (lane.outOfTime && lane.blocked === null) {
       lane.cut++;
       if (out.length > 0 || !o.full) break;
       result = { ok: false, status: null, reason: "timeout", requests: lf.count(), detail: "frame: budget" };
-      out.push({ club, platform: lane.platform, result, todayOnly });
+      out.push({ club, platform: lane.platform, link, result, todayOnly });
       break;
     }
-    out.push({ club, platform: lane.platform, result, todayOnly });
+    out.push({ club, platform: lane.platform, link, result, todayOnly });
     if (!result.ok && result.reason === "blocked") lane.blocked ??= result.status ?? 0;
     if (!result.ok && result.reason === "changed") {
       // One stale or mistyped link is that club's error. The platform stops when a second club in the
@@ -539,12 +587,14 @@ function failedCache(platform: string, now: Date, error: string, tz: string | nu
 /**
  * A clean read of today alone, as the part of the cache it replaces: today's pieces, the three days the
  * cache still covers, and the time of the last full read. `keepFrom` is the club's next midnight: the
- * row keeps its own pieces from there on (`writeToday` in `runScrape`). Pure.
+ * row keeps its own pieces from there on (`writeToday` in `runScrape`). `link` is the link read, which
+ * the cache keeps as its `linkKey`. Pure.
  */
-export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string }): { availability: ClubAvailability; keepFrom: string } {
+export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string; link?: string }): { availability: ClubAvailability; keepFrom: string } {
   const days = scrapeDays(o.now, o.tz);
   const slots = freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days: days.slice(0, 1) });
-  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt };
+  const ref = cleanRef(result.ref);
+  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt, ...(ref ? { ref } : {}), ...(o.link ? { linkKey: linkKey(o.link) } : {}) };
   return { availability, keepFrom: zonedTimeToUtc(days[1], "00:00", o.tz).toISOString() };
 }
 
@@ -581,11 +631,14 @@ export function failureWhy(detail: string | null | undefined): string | null {
   return second !== undefined && WHY_CODE.test(second) ? `${step}: ${first} ${second}` : `${step}: ${first}`;
 }
 
-/** What a reader's answer becomes on the club row. `tz` is a zone we know. Pure. */
-export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
+/** What a reader's answer becomes on the club row. `tz` is a zone we know; `link` is the link read, kept as `linkKey`. Pure. */
+export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date; link?: string }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
-  const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform };
-  if (result.ok) return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt };
+  const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, ...(o.link ? { linkKey: linkKey(o.link) } : {}) };
+  if (result.ok) {
+    const ref = cleanRef(result.ref);
+    return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt, ...(ref ? { ref } : {}) };
+  }
   // `error` stays the reason and the status, which the pages and the counters read; `why` is for us.
   const why = failureWhy(result.detail);
   return { ...base, slots: [], error: `${result.reason}${result.status ? ` ${result.status}` : ""}`, ...(why ? { why } : {}) };
@@ -597,6 +650,7 @@ export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz
  * seconds. Then the rests, the stops and the day's counters, and only then the club rows, one after
  * another (never a burst on the pool), so a row the database refuses cannot lose a block. A club whose
  * link no reader can read is written as an error with no request, so it moves to the back of the queue.
+ * A read that timed out never writes over the club's last good read (`keepsGoodRead`).
  * Returns what it did; never throws for a reader's failure or a club row's.
  */
 export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {}): Promise<ScrapeRun> {
@@ -620,13 +674,16 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
   for (const s of open) {
     const mine = adapters.filter((a) => a.platform === s.platform);
     const queue: Picked[] = [];
+    const readable: Omit<Picked, "todayOnly">[] = [];
     for (const club of await dueClubs(db, now, s.platform, perLane)) {
       const link = readLink(club);
       // The platform the row names goes with its booking link; a website is read by whichever reader takes it.
       const adapter = adapterFor(link, club.bookingUrl ? club.bookingPlatform : null, mine);
-      if (link && adapter) queue.push({ club, adapter, link });
+      if (link && adapter) readable.push({ club: { ...club, prev: prevForLink(club.prev, link) }, adapter, link });
       else unreadable.push({ club, platform: s.platform });
     }
+    const plan = planReads(readable.map((r) => r.club.prev), s.platform, now);
+    readable.forEach((r, i) => queue.push({ ...r, todayOnly: plan[i] }));
     if (queue.length) lanes.push({ lane: { platform: s.platform, lastAt: -Infinity, blocked: null, changed: false, changedAt: new Set(), outOfTime: false, cut: 0, requests: 0, cache: new Map() }, queue });
   }
 
@@ -639,10 +696,12 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
     if (result.ok) p.ok++;
     else if (result.reason !== "blocked" && result.reason !== "changed") p.errors++;
   }
-  // A link no reader can read is not a read that failed: it is counted once, when it is first written
-  // (`scrape_unreadable_<platform>`), and not under `scrape_error_<platform>` every hour it is due again.
+  // A link no reader can read is not a read that failed: it is counted under `scrape_unreadable_<platform>`
+  // once a day for each such club, the first time that day it is written, and never under
+  // `scrape_error_<platform>`. Counted only when first written, a club written so before the counter
+  // existed (Kross Padel Indoor, 10 October 2026) was never counted at all (`unreadableToCount`).
   for (const { platform } of unreadable) tally(platform);
-  for (const { club, platform } of unreadable) if (club.prev?.error !== UNREADABLE) await bumpMetric(db, scrapeCounter("unreadable", platform), 1, day);
+  for (const { club, platform } of unreadable) if (unreadableToCount(club.prev, now)) await bumpMetric(db, scrapeCounter("unreadable", platform), 1, day);
 
   for (const { lane } of lanes) {
     const s = states.find((x) => x.platform === lane.platform)!;
@@ -690,14 +749,20 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       slug,
       sql`jsonb_set(${JSON.stringify(t.availability)}::jsonb, '{slots}', ${JSON.stringify(t.availability.slots)}::jsonb || coalesce((select jsonb_agg(s order by s->>'start') from jsonb_array_elements(case when jsonb_typeof(${clubs.availability}->'slots') = 'array' then ${clubs.availability}->'slots' else '[]'::jsonb end) s where s->>'start' >= ${t.keepFrom}), '[]'::jsonb))`,
     );
-  for (const { club, platform, result, todayOnly } of outcomes) {
+  for (const { club, platform, link, result, todayOnly } of outcomes) {
     // The zone the reader read the days in, else the club's own; a clean read in no known zone is an error.
     const zone = result.ok && result.tz && isValidTimeZone(result.tz) ? result.tz : zoneOf(club.tz);
     if (result.ok && zone && todayOnly && club.prev?.fullAt) {
-      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt }))) run.fresh++;
+      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt, link }))) run.fresh++;
       continue;
     }
-    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now });
+    // A timeout over a good read: the good read stays, with its own time, so the pages show it for as
+    // long as they would have, and only the club's place in the queue moves (to the back).
+    if (keepsGoodRead(result, club.prev, platform)) {
+      if (await write(club.slug, sql`${clubs.availability}`)) run.failed.push({ slug: club.slug, platform, error: "timeout", why: failureWhy(result.ok ? null : result.detail) });
+      continue;
+    }
+    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now, link });
     const written = await write(club.slug, availability);
     if (written && result.ok && zone) run.fresh++;
     if (written && availability.error) run.failed.push({ slug: club.slug, platform, error: availability.error, why: availability.why ?? null });
@@ -711,8 +776,29 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
 }
 
 /**
+ * A read that timed out (the platform's ten seconds, or the frame's budget for a lane's first club) is
+ * the network's failure, not the club's. Until 11 October 2026 it wrote "timeout" and no times over the
+ * club's last good read, so four clubs lost their times for an hour on 11 October. Now, when the last
+ * read on this platform was clean, it keeps that read. Pure.
+ */
+export function keepsGoodRead(result: ScrapeResult, prev: DueClub["prev"], platform: string): boolean {
+  return !result.ok && result.reason === "timeout" && prev !== null && prev.error === null && prev.source === `scrape:${platform}`;
+}
+
+/**
+ * Is this club's "unreadable link" new today? Yes when its cache does not say so yet, or said so on an
+ * earlier day (UTC, as `metrics_daily` counts days). So `scrape_unreadable_<platform>` counts each such
+ * club once a day. Pure.
+ */
+export function unreadableToCount(prev: DueClub["prev"], now: Date): boolean {
+  if (prev?.error !== UNREADABLE) return true;
+  const at = Date.parse(prev.fetchedAt);
+  return !Number.isFinite(at) || dayKey(new Date(at)) !== dayKey(now);
+}
+
+/**
  * Called by every push tick. Nothing at all while no reader exists or every platform is switched off;
- * one read of `metrics_daily` otherwise, and a run when the last one began fourteen minutes ago or more.
+ * one read of `metrics_daily` otherwise, and a run when the last one began four minutes ago or more.
  */
 export async function scrapeIfDue(db: Db, now = new Date(), o: ScrapeOptions = {}): Promise<ScrapeRun | { skipped: "no_reader" | "off" | "not_due" }> {
   if (!(o.adapters ?? ADAPTERS).length) return { skipped: "no_reader" };
@@ -727,29 +813,96 @@ export async function scrapeIfDue(db: Db, now = new Date(), o: ScrapeOptions = {
   return runScrape(db, now, o);
 }
 
-export type PlatformLine = { platform: string; state: "fresh" | "resting" | "off" | "stopped"; fresh: number; restUntil: Date | null; requestsToday: number; blockedToday: number };
+/**
+ * What the run does with a listed club's platform: reads it (`read`); never picks it, because it has no
+ * link on that platform (`no_link`: Mandala Racquet Club named Playtomic with only its own site); picks
+ * it and finds no reader that takes the link (`unreadable`: Kross Padel Indoor, on its own domain); or
+ * has no reader for that platform at all (`no_reader`: The Padel Society, PodPlay, Playbypoint).
+ */
+export type Coverage = "read" | "no_link" | "unreadable" | "no_reader";
 
-/** The service board's line per platform: fresh (clubs read clean in the last hour), resting until, stopped, or off. Two queries. */
+/**
+ * A listed club's platform and its `Coverage`, by the rules `dueClubs` and `runScrape` follow: the
+ * platform the row names, else the one its booking link's host names, else its website's; picked by
+ * that platform's lane when the booking link goes with the platform, or, with no booking link, when the
+ * website is on it; read when a reader of the platform takes the link. Null for a club with no platform.
+ * `tests/scrape.test.ts` holds it to the run on the directory's own rows. Pure.
+ */
+export function coverageOf(c: Pick<Club, "bookingUrl" | "bookingPlatform" | "website">, adapters: readonly AvailabilityAdapter[] = ADAPTERS): { platform: string; coverage: Coverage } | null {
+  const platform = c.bookingPlatform ?? detectPlatform(c.bookingUrl)?.id ?? detectPlatform(c.website)?.id ?? null;
+  if (!platform) return null;
+  const mine = adapters.filter((a) => a.platform === platform);
+  if (!mine.length) return { platform, coverage: "no_reader" };
+  const on = (u: string | null) => detectPlatform(u)?.id === platform;
+  const picked = c.bookingUrl ? c.bookingPlatform === platform || (!c.bookingPlatform && on(c.bookingUrl)) : on(c.website);
+  if (!picked) return { platform, coverage: "no_link" };
+  return { platform, coverage: adapterFor(readLink(c), c.bookingUrl ? c.bookingPlatform : null, mine) ? "read" : "unreadable" };
+}
+
+/** Any platform's host, as a Postgres regular expression: the website side of the board's one read. */
+const anyPlatformHost = `^https?://([^/?#]*\\.)?(${PLATFORMS.flatMap((p) => p.hosts).map((h) => h.replace(/\./g, "\\.")).join("|")})([/?#:]|$)`;
+
+/**
+ * The listed clubs on each platform that the run never reads, by `Coverage`: one bounded read of three
+ * short columns, on the service board only (never a page a player waits on).
+ */
+export async function scrapeCoverage(db: Db, adapters: readonly AvailabilityAdapter[] = ADAPTERS): Promise<Map<string, Record<Coverage, number>>> {
+  const rows = await db
+    .select({ bookingUrl: clubs.bookingUrl, bookingPlatform: clubs.bookingPlatform, website: clubs.website })
+    .from(clubs)
+    .where(and(listedForRead(), or(isNotNull(clubs.bookingPlatform), isNotNull(clubs.bookingUrl), sql`${clubs.website} ~* ${anyPlatformHost}`)))
+    .limit(2_000);
+  const out = new Map<string, Record<Coverage, number>>();
+  for (const r of rows) {
+    const c = coverageOf(r, adapters);
+    if (!c) continue;
+    const counts = out.get(c.platform) ?? { read: 0, no_link: 0, unreadable: 0, no_reader: 0 };
+    counts[c.coverage]++;
+    out.set(c.platform, counts);
+  }
+  return out;
+}
+
+/**
+ * `unread`: the listed clubs on this platform that the run never reads (no link a reader takes, or no
+ * reader at all). A platform with no reader has a line of its own (`no_reader`) while a listed club names it.
+ */
+export type PlatformLine = { platform: string; state: "fresh" | "resting" | "off" | "stopped" | "no_reader"; fresh: number; restUntil: Date | null; requestsToday: number; blockedToday: number; unread: number };
+
+/**
+ * The service board's line per platform: fresh (clubs read clean in the last hour, by the read's own
+ * time, so a good read a timeout kept is not counted again), resting until, stopped, or off, and the
+ * listed clubs it never reads; then a line for each platform with listed clubs and no reader. Three queries.
+ */
 export async function scrapeBoard(db: Db, now: Date, adapters: readonly AvailabilityAdapter[] = ADAPTERS): Promise<PlatformLine[]> {
   const ids = [...new Set(adapters.map((a) => a.platform))];
   if (!ids.length) return [];
   const states = await readPlatformStates(db, ids, now);
+  const hourAgoIso = new Date(now.getTime() - 3600_000).toISOString();
   const fresh = await db
     .select({ source: sql<string>`${clubs.availability}->>'source'`, n: sql<number>`count(*)` })
     .from(clubs)
-    .where(and(gte(clubs.availabilityAt, new Date(now.getTime() - 3600_000)), sql`${clubs.availability}->>'source' like 'scrape:%'`, sql`${clubs.availability}->>'error' is null`))
+    .where(and(gte(clubs.availabilityAt, new Date(now.getTime() - 3600_000)), sql`${clubs.availability}->>'fetchedAt' >= ${hourAgoIso}`, sql`${clubs.availability}->>'source' like 'scrape:%'`, sql`${clubs.availability}->>'error' is null`))
     .groupBy(sql`${clubs.availability}->>'source'`);
   const today = await db
     .select({ key: metricsDaily.key, value: metricsDaily.value })
     .from(metricsDaily)
     .where(and(eq(metricsDaily.day, dayKey(now)), inArray(metricsDaily.key, ids.flatMap((p) => [scrapeCounter("requests", p), scrapeCounter("blocked", p)]))));
+  const coverage = await scrapeCoverage(db, adapters);
   const count = (k: string) => Number(today.find((r) => r.key === k)?.value ?? 0);
-  return states.map((s) => ({
+  const unread = (p: string) => {
+    const c = coverage.get(p);
+    return c ? c.no_link + c.unreadable + c.no_reader : 0;
+  };
+  const read: PlatformLine[] = states.map((s) => ({
     platform: s.platform,
     state: s.off ? "off" : s.stopped ? "stopped" : s.restUntil && s.restUntil > now ? "resting" : "fresh",
     fresh: Number(fresh.find((r) => r.source === `scrape:${s.platform}`)?.n ?? 0),
     restUntil: s.restUntil && s.restUntil > now ? s.restUntil : null,
     requestsToday: count(scrapeCounter("requests", s.platform)),
     blockedToday: count(scrapeCounter("blocked", s.platform)),
+    unread: unread(s.platform),
   }));
+  const unreadPlatforms = [...coverage.keys()].filter((p) => !ids.includes(p)).sort();
+  return [...read, ...unreadPlatforms.map((p): PlatformLine => ({ platform: p, state: "no_reader", fresh: 0, restUntil: null, requestsToday: 0, blockedToday: 0, unread: unread(p) }))];
 }

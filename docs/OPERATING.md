@@ -189,7 +189,8 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   browser that does not know them.
 - **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 34), with
   `signin_thats_me_fold` when it folded the browser's own new record into the old one;
-  `signin_restore` (the saved id brought back without proof); `signin_personal_link`;
+  `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
+  11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
   counts only when the cookie changes to another record; a link to a browser already signed in
   counts nothing. `thats_me_refused` counts a "That's me" the rule turned down. "That's me" takes
@@ -248,10 +249,10 @@ The free plan gives a thousand search credits a month. The hourly job spends the
 Three jobs run from Supabase `pg_cron` through `pg_net`, and the service board's `pg_cron` row says when each last ran:
 
 - the hourly job → `/api/cron/hourly`. Vercel's own cron also calls it once a day at 07:00 UTC (`vercel.json`), which is all the Hobby plan allows. It has 60 seconds for everything. The score nudges take a 20-second share of that: in Telegram each nudge is the result card as a picture, rendered once per match (3 to 6 seconds cold, measured on 24 September 2026), so about four matches ending in the same hour fit in one run. A match past the share is not marked and goes the next hour; the run's `scoreRemindersDeferred` counts them. When that number is often above zero, the nudges need their own route.
-  After it reads the clubs' feeds of free courts, the run offers each free court two to six hours ahead to the players whose want names that club, day and hour (`offerFreeCourts` in `src/lib/notify.ts`, the rules in `src/lib/domain/courtOffers.ts`): at most twenty notices a run, one per player, one court a day for each want, and a want that heard anything in the last six hours hears nothing. The run's `courtOffers` counts them, and each one is a `demand.court_offered` fact. The free courts come from a club's own feed or from a fresh read of its booking platform (below), and only a club that runs its page here (approved) offers them; a club Kicksmash only lists does not.
+  After it reads the clubs' feeds of free courts, the run offers each free court two to six hours ahead to the players whose want names that club, day and hour (`offerFreeCourts` in `src/lib/notify.ts`, the rules in `src/lib/domain/courtOffers.ts`): at most twenty notices a run, one per player, one court a day for each want, and a want that heard anything in the last six hours hears nothing. The run's `courtOffers` counts them, and each one is a `demand.court_offered` fact. The free courts come from a club's own feed or from a read of its booking platform from the last two hours (below), as the club page shows them (`freeCourtsState`). A club that runs its page here (approved) offers them, and so does a club that the directory lists, as the best times do. A club that only a player listed does not. Until 11 October 2026 only an approved club offered a court. Production had none, so no platform's read ever reached a want.
   Once a day, the first run after 03:00 UTC (after the day's backup) removes the player rows nothing ties to a person: no contact, no public profile, nothing in the database pointing at them (read from the schema; their saved clubs and a coach page with no lesson ever booked go with them; a note, a want or a seat keeps them), and at least 14 days old (`src/lib/domain/disposable.ts`, the owner's decision of 24 September 2026). `GET /api/admin/disposable` lists what today's run would remove and changes nothing; the run's `disposed` and the daily metric `players_disposed` count what went.
   Every run, near its end, sends what players' quiet hours held (the owner's decision D, 9 October 2026; `sendQuietSummaries` in `src/lib/notify.ts`): each person whose quiet hours ended with notices waiting hears once, one short message per channel they have (Telegram, email when activity emails are on, each push device; WhatsApp has no template for it, so a WhatsApp-only player reads the inbox), and those notices count as delivered. At most 200 people a run, read on the partial index `notices_due_idx`; the rest go the next hour. Then it prunes the inbox: rows older than 90 days (`INBOX_DAYS`), at most 5,000 a run, oldest by `notices_created_idx`. The run's `noticeSummaries` and `noticesPruned` count them, and so do the daily metrics `notice_summaries` and `notices_pruned`. The inbox grows by one row per notice per player, a few kilobytes a day at today's size; 90 days keeps it far below the database's 500 MB.
-- the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour). Every third tick it also reads the free court times on the booking platforms (below).
+- the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour). Each tick also reads the free court times of about a third of the clubs on the booking platforms (below).
 - `kicksmash-sync`, every 10 minutes → `/api/cron/sync`: the coaches' calendars, both ways.
 
 **The three definitions live in the repository** since migration 0069 (`src/lib/ops/cronJobs.ts`,
@@ -271,18 +272,32 @@ DECIDING rule 35, the owner's decision of 10 October 2026: Kicksmash reads the f
 the booking platforms show on their public club pages, and accepts the risk of being blocked.
 
 **The job.** `scrapeIfDue` in `src/lib/booking/scrape.ts`, called at the end of each push tick. A run
-starts when the last one began 14 minutes ago or more, so it runs every third tick: every 15 minutes.
-Each platform picks its own clubs, at most eight: listed, no feed of their own, and a link on that
-platform. The link is the booking link, else the website (the directory lists most clubs with the
-platform's page as their website and no booking link). A club people use (a crew's match there in the
-last four weeks, a match there in the next two, a player's want there) is due after 14 minutes, any
-other club after an hour, and the oldest cache goes first. Each platform has its own lane: one request
-a second, at most eight requests a club. The run stops before 45 seconds, or before 50 seconds less
-the push tick's own time. A full read covers three days; a club read every run has today alone read
-in between, at most an hour after its last full read, and keeps the later days of that read. It
-writes the free courts into `clubs.availability` and `availability_at` as pieces that never overlap:
-for each piece, the courts free for the whole of it. A link no reader can read is written as an error
-with no request, so it moves to the back. A feed the club shared always wins.
+starts when the last one began 4 minutes ago or more, so it runs on every tick. Each platform picks
+its own clubs, at most eight: listed, no feed of their own, and a link on that platform. The link is
+the booking link, else the website (the directory lists most clubs with the platform's page as their
+website and no booking link). Every such club is due when its last read is 14 minutes old, and the
+oldest cache goes first. So a club that one tick reads comes due three ticks later. The clubs fall into
+three groups, each tick reads one group, and each club is read every 15 minutes. At eight clubs a lane,
+a platform keeps that pace for 24 clubs. Past 24, the oldest still go first, and each club waits longer.
+Until 11 October 2026 only a club that people used was due after 14 minutes, and any other club waited
+an hour. Production had no such club on a platform, so each club was read once an hour.
+
+Each platform has its own lane: one request a second, at most eight requests a club. The run stops
+before 45 seconds, or before 50 seconds less the push tick's own time. A full read covers three days,
+about once an hour (`fullDueMs`, 58 minutes). Between full reads, a club has today alone read and keeps
+the later days of its last full read. A lane makes at most three full reads a run (`fullPerLane`). A
+club past them has today alone read, and its full read waits for its next visit, never past 88
+minutes (`fullLateMs`). So the full reads spread over the ticks. Playtomic reads today in one request:
+the cache keeps the club's tenant id (`ref`), and the reader then skips the club page. The cache also
+keeps a key of the link that the read came from (`linkKey`, eight hex digits, never the link). The run
+uses the kept id, the kept days and a kept good read only while the club's link gives the same key.
+After a change of link, the club gets a full read at its next visit. A full read reads the club page
+only when the function instance has no copy of that page from the last 24 hours. The run writes the
+free courts into `clubs.availability` and `availability_at` as pieces that never overlap: for each piece, the courts
+free for the whole of it. A link no reader can read is written as an error with no request, so it
+moves to the back. A read that times out keeps the club's last good read: only `availability_at`
+moves, so the club goes to the back and its times show as long as they would have. A feed the club
+shared always wins.
 
 **The readers.** Playtomic, MATCHi and Book & Go, one file each in `src/lib/booking/adapters/`.
 Book & Go clubs book on their own domain, so `BOOKANDGO_APPS` in `bookandgo.ts` maps each booking
@@ -290,19 +305,47 @@ host to the club's app (Prime Padel 39, MBP Sports 51, Sterling 83). A new Book 
 line there, and its club row needs `booking_platform = 'bookandgo'`, because no link names the platform.
 
 **The cost.** No invocation of its own: it rides the push job's 288 invocations a day. It adds no
-migration and no table. A run with nothing to read costs one read of `metrics_daily` and one small
-query for each platform. At most it is 96 runs a day of up to 45 seconds each: 72 minutes of function
-time a day, about 36 hours a month. On the Hobby plan that time counts against the provisioned
-memory, not the active CPU, because the run mostly waits: at the 2 GB a Hobby function has, about 72
-of the 360 GB-hours a month (20%) at the worst case, on top of the other jobs. Each run sends at most
-45 requests to each platform and writes at most eight club rows for each.
+migration and no table. A run with nothing to read costs one write and one read of `metrics_daily`,
+and one small query for each platform.
+
+The requests a day, for production's clubs on 11 October 2026, and Mandala Racquet Club. Its Playtomic link (`the-mandala-club`) is not in production yet: a change to `data/clubs.json` reaches production only through a migration. "Before" is from `metrics_daily`: the
+count by 14:05 UTC, and that rate over a whole day. "Now" is the most the code sends: a club's full
+read every hour, and three reads of today between them.
+
+| Platform | Clubs read | Before (by 14:05 UTC, a whole day) | Now, at most |
+|---|---|---|---|
+| Playtomic | 20, and 21 with Mandala | 1,016, about 1,730 | 21 × (4 + 3 × 1) × 24 = 3,528 |
+| MATCHi | 2 | 104, about 180 | 2 × (4 + 3 × 2) × 24 = 480 |
+| Book & Go | 4 | 156, about 270 | 4 × (4 + 3 × 2) × 24 = 960 |
+
+A Playtomic full read is at most the club page and three days, and a read of today is one request
+(the tenant id above). MATCHi and Book & Go read their club page or their list of locations again for
+today, so a read of today is two requests. The two Prime Padel clubs share one Book & Go app, and the
+lane's cache answers the second club, so Book & Go sends about 720. The pace does not change: one
+request a second for each platform, at most eight a club, and a stop at the first block.
+
+The function time. A typical tick reads about seven Playtomic clubs: about five of today and two full
+reads, about 13 requests, and 15 to 20 seconds. The lanes run side by side, so the slowest lane sets
+the time. That is about 72 minutes of function time a day, about 36 hours a month. Before 11 October
+2026 it was 96 runs of about 25 seconds, about 40 minutes a day. On the Hobby plan that time counts
+against the provisioned memory, not the active CPU, because the run mostly waits: at the 2 GB a Hobby
+function has, about 72 of the 360 GB-hours a month (20%). The worst case is every tick at its full 45
+seconds: about 216 GB-hours (60%). That happens only when a platform is slow on every tick, and
+`scrape_cut_<platform>` then shows it. Each run sends at most 45 requests to each platform and writes
+at most eight club rows for each. A tick in steady state sends at most 17 to Playtomic: three full
+reads and five reads of today (`tests/scrape.test.ts`, "21 clubs"). The three ticks after midnight
+in the clubs' zone are the exception. Then the kept days of each club miss the new third day, so each
+club gets a full read past the cap of three. That is eight, eight and five clubs, so 32, 32 and 20
+requests (`tests/scrape.test.ts`, "after the clubs' midnight"). The first three ticks of the code that
+adds `linkKey` do the same once, because no older read has a key. A club whose link changed also
+gets one full read past the cap.
 
 **The egress** (Supabase, 5 GB a month). A read from a platform keeps three days on the club row.
 Measured on the fixtures (10 October 2026): one day of The Cage Padel Tribe is 9 pieces and 0.7 KB,
 the worst day (the count changing every half hour, 07:00 to 23:00) is 32 pieces and 2.5 KB, and the
 cache without its slots is about 0.3 KB. Nothing reads the whole cache on a hot path. The pick selects
 six columns and the cache without its slots: at most about 4 KB for each platform a run, so at most
-about 22 MB a month for two platforms. `/clubs`, the city pages, the API and MCP read only the next 26
+about 100 MB a month for three platforms on every tick, and about 25 MB at today's 27 clubs. `/clubs`, the city pages, the API and MCP read only the next 26
 hours of each club's slots: about 1 to 3 KB for a club with a fresh read, so up to about 60 KB a render
 with 20 such clubs. The picker lists and the Telegram place keyboard read no cache at all. The hourly
 court offers read the slots two to seven hours ahead for at most 30 clubs: at most about 25 MB a month.
@@ -334,10 +377,16 @@ commit keeps it.
 
 **The counters**, one a day in `metrics_daily`: `scrape_ok_<platform>`, `scrape_blocked_<platform>`,
 `scrape_changed_<platform>`, `scrape_error_<platform>`, `scrape_requests_<platform>`,
-`scrape_cut_<platform>`, `scrape_unreadable_<platform>` (a club whose link no reader can read, counted
-once when it is first written, never as a read that failed), `scrape_clubs_fresh`, and `cron_scrape_at` for the last run. The service board has one line for
-each platform: fresh (the clubs read clean in the last hour), resting until, stopped, or off. A
-stopped platform is red, and the owner hears once a month.
+`scrape_cut_<platform>`, `scrape_unreadable_<platform>` (a club whose link no reader can read: each such
+club once a day, the first time that day it is written, never as a read that failed),
+`scrape_clubs_fresh`, and `cron_scrape_at` for the last run. Until 11 October 2026 the unreadable
+counter counted a club only when it was first written, so Kross Padel Indoor, first written the day
+before the counter existed, was never counted. The service board has one line for each platform with
+a reader: fresh (the clubs read clean in the last hour, by the time of the read itself), resting
+until, stopped, or off, and the listed clubs on it that the job never reads (a platform named with no
+link on it, or a link no reader takes). A platform that listed clubs name and no reader reads (The
+Padel Society, PodPlay, Playbypoint) has a line of its own, "no reader", with the number of its
+clubs (`scrapeBoard`, `coverageOf`). A stopped platform is red, and the owner hears once a month.
 
 **When a club's read fails.** The club's cache keeps `error` as the reason and the status
 ("error", "timeout", "blocked 403"), which is what the pages and the counters read. Beside it,
@@ -349,13 +398,15 @@ link, an address, a body or a token. Every reader names its steps in that shape:
 ("club page", "availability <day>") and Book & Go ("locations", "court-bookings <day>"). No page, no API shape and no list read of
 free courts shows `why`. Ask
 `select slug, availability->>'error', availability->>'why' from clubs where availability->>'error'
-is not null`. The push job's answer also lists every club the run wrote as failed (`scrape.failed`),
+is not null`. The push job's answer also lists every club whose read failed (`scrape.failed`), a
+timeout over a good read included,
 and pg_net keeps that answer for about six hours in `net._http_response`, which outlives Vercel's
 hour of logs. A request that the run's own deadline cuts short is not the club's failure: the club is
 not written and stays due for the next run, and its last good read keeps showing. The one exception
 is the lane's first club in a fair run (30 s or more; the push job passes 50 s less its own work): it
-did not fit even then, so the next run would cut it again and read no club behind it. It is written as
-"timeout" with `why` "frame: budget", and goes to the back of the queue. A run on a very busy tick has
+did not fit even then, so the next run would cut it again and read no club behind it. It goes to the
+back of the queue. With a good read behind it, that read stays; with none, it is written as "timeout"
+with `why` "frame: budget". A run on a very busy tick has
 less than 30 s, and a first club it cuts is not written: the next fair run reads it.
 
 **When clubs are cut.** `scrape_cut_<platform>` counts the clubs whose read the run's deadline cut

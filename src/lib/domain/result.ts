@@ -25,6 +25,9 @@ export const firstName = (name: string | null | undefined) => (name ?? "").trim(
 /** The name `anonymizePlayer` leaves on a deleted account, so old line-ups still add up. Never a first name to show. */
 export const DELETED_PLAYER_NAME = "Deleted player";
 
+/** A record `anonymizePlayer` emptied: its name is the placeholder and it holds no personal token. Nobody signs in as it again. */
+export const isDeletedPlayer = (p: { displayName: string; personalToken: string | null }) => p.displayName === DELETED_PLAYER_NAME && !p.personalToken;
+
 export const WINNER_ONLY_SETS = { a: [{ setNumber: 1, sideA: 1, sideB: 0 }], b: [{ setNumber: 1, sideA: 0, sideB: 1 }] } as const;
 
 /** Names per side and who won, from the saved sets and the roster's team assignment. Null without a score. */

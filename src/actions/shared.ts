@@ -10,6 +10,7 @@ import { isDomainError, type DomainErrorCode } from "@/lib/domain/errors";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { canEditMatchDetails } from "@/lib/domain/events";
 import { createPlayer, normalizeName } from "@/lib/domain/players";
+import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { countNewRecord } from "@/lib/domain/signins";
 import { countedSource, SOURCE_COOKIE } from "@/lib/source";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer, signedInByName } from "@/lib/session";
@@ -84,6 +85,18 @@ export async function requirePlayer(db: Db, name?: string | null, o: { namesHere
  */
 export async function nameOnly(player: Player | null): Promise<boolean> {
   return player ? nameOnlySession(await signedInByName(player.id), player) : false;
+}
+
+/**
+ * The personal token for a screen or a file that hands the session's own personal link to its browser
+ * (My matches, the home-screen card, the manifest, the match's .ics). Null for a session by name that
+ * has proved nothing (`nameOnly`): the personal link is a full sign-in, so it would undo the hold-back.
+ * Until 11 October 2026 the organiser's share page and the .ics download gave it to such a session:
+ * "That's me", then a match of one's own or any match's calendar file, and the link was there.
+ */
+export async function personalTokenFor(db: Db, player: Player | null): Promise<string | null> {
+  if (!player || (await nameOnly(player))) return null;
+  return getOrCreatePersonalToken(db, player.id);
 }
 
 export type Viewer = { player: Player | null; isCreator: boolean };

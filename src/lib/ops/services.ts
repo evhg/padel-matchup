@@ -143,11 +143,17 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const pushAge = pushAt ? minutesAgo(pushAt, now) : null;
   push({ key: "pg_cron", name: "Supabase pg_cron + pg_net", role: "hourly job, the five-minute push job, the ten-minute calendar sync", used: null, limit: null, usage: `hourly ${hourlyAge === null ? "never" : `${hourlyAge} min ago`} · push ${pushAge === null ? "never" : `${pushAge} min ago`} · sync ${syncAge === null ? "never" : `${syncAge} min ago`}`, ceiling: `hourly < ${CEILINGS.hourlyCronMaxAgeMin} min · push < ${CEILINGS.pushCronMaxAgeMin} min · sync < ${CEILINGS.syncCronMaxAgeMin} min`, note: "Reminders, waitlists, lessons, offers, calendars, listening, backups, digests all hang off these three.", state: hourlyAge !== null && hourlyAge < CEILINGS.hourlyCronMaxAgeMin && pushAge !== null && pushAge < CEILINGS.pushCronMaxAgeMin && (syncAge === null || syncAge < CEILINGS.syncCronMaxAgeMin) ? "ok" : "alert" });
 
-  // Free court times read from the booking platforms' public pages (DECIDING rule 35): one line per platform with a reader.
+  // Free court times read from the booking platforms' public pages (DECIDING rule 35): one line per
+  // platform with a reader, and one per platform that listed clubs name but no reader reads.
   const scrapeLines = await scrapeBoard(db, now);
   if (!scrapeLines.length) push({ key: "scrape", name: "Court times from platforms", role: "free courts read from the booking platforms' public pages", used: null, limit: null, usage: "no platform reader yet", ceiling: "1 request / second / platform · 8 clubs / platform / run · 45 s", note: "A reader per platform goes in src/lib/booking/adapters/. Until one exists the job reads nothing.", state: "off" });
+  const clubsOf = (n: number) => `${fmt(n)} listed club${n === 1 ? "" : "s"}`;
   for (const l of scrapeLines) {
     const name = platformById(l.platform)?.name ?? l.platform;
+    if (l.state === "no_reader") {
+      push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `no reader: ${clubsOf(l.unread)} on ${name} get no times`, ceiling: "none: nothing is read", note: "No file in src/lib/booking/adapters/ reads this platform, so the job never visits its clubs.", state: "info" });
+      continue;
+    }
     const usage =
       l.state === "off"
         ? "off (switched off: scrape_off_* row or SCRAPE_DISABLED)"
@@ -156,7 +162,8 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
           : l.state === "resting"
             ? `resting until ${l.restUntil!.toISOString().slice(0, 16).replace("T", " ")} UTC after a block`
             : `fresh: ${fmt(l.fresh)} club${l.fresh === 1 ? "" : "s"} read in the last hour`;
-    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Read every 15 minutes by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" ? "warn" : "ok" });
+    const unread = l.unread ? ` · ${clubsOf(l.unread)} not read: no link a reader takes` : "";
+    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}${unread}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Today read every 15 minutes, the next two days about hourly, by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" ? "warn" : "ok" });
   }
 
   // Mail

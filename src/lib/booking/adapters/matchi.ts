@@ -14,7 +14,9 @@ import { errorClass } from "./errorClass";
  *      fragment with the FREE slots of that local day only. Per start time a panel: the date
  *      ("Saturday, 10 Oct 2026"), the hour ("13<sup>00</sup>"), then one row per free court with
  *      its name, the length ("60min"), and a Book link (to MATCHi's own sign-in, then the booking).
- *      A day with nothing free says "No available time slots in the selected period."
+ *      A day with nothing free says "No available time slots in the selected period." The reader puts
+ *      each Book link on its slot (`bookUrl`); the frame keeps no link (`freeSlotsFromScrape`), so no
+ *      player is handed one. "Book this court" opens the club's page on the day (`prepareBooking`).
  *   3. GET /book/getSlotPrices?slotId=…: JSON [{slotId, currency, price}], but only for the slots of
  *      ONE start time (the ids of one button); ids from two start times return an empty body. A day
  *      has fifteen or more start times, so prices do not fit the budget and priceText stays null.

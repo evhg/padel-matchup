@@ -7,6 +7,7 @@ import net from "node:net";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { publicIdLeaks } from "./checks/publicIds.mjs";
 
 const PORT = Number(process.env.E2E_PORT ?? 3001);
 const BASE = `http://localhost:${PORT}`;
@@ -147,7 +148,11 @@ for (const f of suites) {
   });
   if (code !== 0) failed.push(f);
 }
+// After the suites, on whatever they left in the database: no page, feed or API answer a stranger can
+// open carries a player id (e2e/checks/publicIds.mjs, where the reason is).
+const leaks = await publicIdLeaks(BASE, env.CRON_SECRET);
 console.log(`\n${suites.length - failed.length}/${suites.length} suites passed`);
 if (failed.length) console.log(`failed suites: ${failed.join(", ")} (each suite's own "failed:" line above names the checks)`);
 if (missingOnServer) console.log(`✗ the server logged MISSING_MESSAGE ${missingOnServer} time(s): a page's withClientMessages list misses a namespace (see the [server] lines above)`);
-process.exit(failed.length || missingOnServer ? 1 : 0);
+if (leaks.length) console.log(`✗ ${leaks.length} public page(s) carry a player id (the lines under "no player id on a public page" above)`);
+process.exit(failed.length || missingOnServer || leaks.length ? 1 : 0);

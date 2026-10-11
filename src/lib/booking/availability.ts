@@ -13,18 +13,20 @@ import { platformById } from "./platforms";
  *     Google Calendar export one). Free courts = courts − overlapping bookings,
  *     hour by hour, inside opening hours.
  *   - json_free: a JSON document of free slots, {"slots":[{"start","end","free"}]}.
- * 2. The free court times a booking platform shows on its public club page, read every fifteen
- *    minutes by `scrape.ts` through one reader per platform (`adapters/`). A feed the club shared
- *    always wins over a read for that club.
+ * 2. The free court times a booking platform shows on its public club page, today read every fifteen
+ *    minutes and the next two days about hourly by `scrape.ts`, through one reader per platform
+ *    (`adapters/`). A feed the club shared always wins over a read for that club.
  *
  * This header said "No scraping, no credentials, nothing a club did not hand us" from 7 September
  * 2026; a session wrote that line, and the owner never asked for it. The owner's decision of
  * 10 October 2026 replaces it (DECIDING rule 35): "platforms forbid scraping in their terms but we
  * are just testing, and on top every app scrapes every other app, for example padel society scrapes
  * playtomic and matchi for court availability. So scraping at risk of being blocked is acceptable,
- * just do it." What stays: we never sign in to a platform, never store a player's password, token or
- * session, never book, reserve, pay or post there, and never get around a login wall, a captcha or a
- * block. The player books and pays on the platform.
+ * just do it." What the code does: it never signs in to a platform, never stores a player's password,
+ * token or session, never books, reserves, pays or posts there, and never gets around a login wall, a
+ * captcha or a block. The player books and pays on the platform. A session wrote "never signs in" on
+ * 10 October 2026; the owner offered their own sign-in for testing the same day and has not decided
+ * the limit (DECIDING rule 35).
  */
 export const AVAILABILITY_KINDS = ["ics_bookings", "json_free"] as const;
 export type AvailabilityKind = (typeof AVAILABILITY_KINDS)[number];
@@ -273,10 +275,11 @@ export function slotDay(start: string, tz: string): string {
  * which is what keeps a list of clubs small now that a read from a platform holds three days (AGENTS.md
  * rule 12, the Supabase egress in docs/OPERATING.md). Every writer stores instants from `toISOString()`,
  * so comparing the text compares the times. `why` stays behind too: no list reads it, only the row and
- * the run's answer (`failureWhy` in `scrape.ts`). Null where the row has no cache.
+ * the run's answer (`failureWhy` in `scrape.ts`). So do `ref`, the platform's id for the club, and
+ * `linkKey`, which only the run reads. Null where the row has no cache.
  */
 export function cacheBetween(from: Date, until: Date): SQL<ClubAvailability | null> {
   const lo = from.toISOString();
   const hi = until.toISOString();
-  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
+  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why' - 'ref' - 'linkKey') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
 }

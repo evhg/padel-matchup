@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { APP_NAME, APP_TAGLINE, baseUrl } from "@/lib/config";
-import { getOrCreatePersonalToken } from "@/lib/domain/identity";
 import { personalPath } from "@/lib/personal";
 import { getPlayer } from "@/lib/domain/players";
 import { getSessionPlayerId } from "@/lib/session";
-import { nameOnly } from "@/actions/shared";
+import { personalTokenFor } from "@/actions/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +21,8 @@ export async function GET() {
       const db = await getDb();
       // A session that came in by "That's me" and has proved nothing since gets the plain start page, never its personal link (DECIDING rule 34).
       const me = await getPlayer(db, playerId);
-      if (me && !(await nameOnly(me))) startUrl = `${personalPath(await getOrCreatePersonalToken(db, playerId))}?source=homescreen`;
+      const token = await personalTokenFor(db, me);
+      if (token) startUrl = `${personalPath(token)}?source=homescreen`;
     }
   } catch (e) {
     console.warn("[manifest] falling back to anonymous start_url", e);

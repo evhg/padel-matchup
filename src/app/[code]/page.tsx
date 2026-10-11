@@ -82,6 +82,7 @@ import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
 import { heldOffers } from "@/lib/domain/heldByName";
 import { withClientMessages } from "@/i18n/withClientMessages";
+import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string; join?: string }> };
 
@@ -168,7 +169,10 @@ async function EventPage({ params, searchParams }: Props) {
   const myRequest = me ? requests.find((r) => r.playerId === me.id) : undefined;
   const pendingRequests = viewer.isCreator ? requests.filter((r) => r.status === "pending") : [];
   // Sequential, like everything else on this page: the pooler stalls on pipelined bursts (rule 8).
-  const payments = ev.cost ? (await paymentsFor(db, ev.id)).map((r) => ({ slotId: r.slotId, playerId: r.playerId, name: r.name, claimed: Boolean(r.claimedAt), paid: Boolean(r.paidAt) })) : [];
+  const paid = ev.cost ? await paymentsFor(db, ev.id) : [];
+  // Seat ids only: a player id never goes to a browser (src/lib/seatProps.ts). The viewer's own row is named by its seat.
+  const payments = paid.map((r) => ({ slotId: r.slotId, name: r.name, claimed: Boolean(r.claimedAt), paid: Boolean(r.paidAt) }));
+  const mySeatPaid = me ? (paid.find((r) => r.playerId === me.id)?.slotId ?? null) : null;
   // Confirmed levels only: who can confirm the viewer's, and whom they already asked.
   const verifiers = ranged && ev.levelVerifiedOnly && !cancelled && !over ? await verifiersFor(db, ev) : [];
   const myChecks = me && verifiers.length > 0 ? await myLevelChecks(db, me.id) : [];
@@ -260,6 +264,8 @@ async function EventPage({ params, searchParams }: Props) {
   // Leaving takes the partner along only when they are still the name this player gave (one read, only then).
   const partnerGoes = myPartner?.status === "invited" && mySlot ? await partnerGoesWith(db, ev, mySlot) : false;
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
+  // A row of standings is keyed by its player's seat, never by the player id (src/lib/seatProps.ts).
+  const seatOf = seatOfPlayer(namedSlots);
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
   // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
@@ -298,7 +304,7 @@ async function EventPage({ params, searchParams }: Props) {
   // After the result is in, the organizer can confirm the levels of the people they played with.
   const levelCandidates = participants
     .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)
-    .map((s) => ({ id: s.player!.id, name: s.player!.displayName, level: s.player!.level!, verified: isLevelVerified(s.player!) }));
+    .map((s) => ({ id: s.id, name: s.player!.displayName, level: s.player!.level!, verified: isLevelVerified(s.player!) }));
   const creatorBanner = viewer.isCreator && started && !cancelled && ((ev.type === "match" && detail.scores.length === 0) || (isTournament && (tstate?.scoredMatches ?? 0) === 0 && (tstate?.rounds.length ?? 0) > 0));
   // A tournament has no "final score": the banner names the first round still waiting for one.
   const waitingRound = tstate?.rounds.find((r) => r.matches.some((m) => m.sideA == null || m.sideB == null))?.roundNumber ?? null;
@@ -741,7 +747,7 @@ async function EventPage({ params, searchParams }: Props) {
           <ScorePanel
             code={code}
             scores={detail.scores.map((s) => ({ setNumber: s.setNumber, sideA: s.sideA, sideB: s.sideB }))}
-            players={participants.map((s) => ({ id: s.playerId!, name: s.player?.displayName ?? s.invitedName ?? "", team: s.team, level: s.player?.level ?? null }))}
+            players={scorePlayers(participants)}
             canEdit={perm.allowed}
             reason={perm.allowed ? null : perm.reason}
             locked={ev.scoreLockedByCreator}
@@ -787,8 +793,8 @@ async function EventPage({ params, searchParams }: Props) {
             }))}
             standings={
               tstate.pairStandings
-                ? tstate.pairStandings.map((r) => ({ playerId: r.key, name: `${nameOf.get(r.pair[0]) ?? "?"} & ${nameOf.get(r.pair[1]) ?? "?"}`, rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: null, court: r.court }))
-                : tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))
+                ? tstate.pairStandings.map((r, i) => ({ key: seatOf.get(r.pair[0]) ?? `p${i}`, name: `${nameOf.get(r.pair[0]) ?? "?"} & ${nameOf.get(r.pair[1]) ?? "?"}`, rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: null, court: r.court }))
+                : tstate.standings.map((r, i) => ({ key: seatOf.get(r.playerId) ?? `p${i}`, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))
             }
             canPlayAgain={canPlayAgain}
             playAgain={playAgain}
@@ -915,7 +921,7 @@ async function EventPage({ params, searchParams }: Props) {
         )}
         {/* A cost named means somebody has to chase it. Everyone sees the same list instead. */}
         {ev.cost && (isMember || viewer.isCreator) && payments.length > 0 && (
-          <MatchPayments code={ev.code} cost={ev.cost} rows={payments} isOrganiser={viewer.isCreator} mePlayerId={me?.id ?? null} />
+          <MatchPayments code={ev.code} cost={ev.cost} rows={payments} isOrganiser={viewer.isCreator} mySlotId={mySeatPaid} />
         )}
         {/* The quiet door for what should change, where players actually are: opens in place, never a popup. */}
         <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />

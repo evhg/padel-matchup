@@ -5,6 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
 import { LEVEL_BANDS, LEVEL_PRESETS, LEVEL_SCALES, MATCH_K, TOURNAMENT_K, formatLevel, fromScale, type BandKey } from "@/lib/domain/levels";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 // Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export default async function LevelsPage() {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <section className="card">
           <span className="chip-muted">🎚️ {t("levels.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("levels.title")}</h1>

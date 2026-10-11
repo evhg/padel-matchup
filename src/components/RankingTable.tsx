@@ -19,8 +19,9 @@ export function RankingTable({ rows, events, highlightId }: { rows: RankingRow[]
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.playerId} className={`border-t border-line ${highlightId === r.playerId ? "bg-accent-soft" : ""}`}>
+          {/* Keyed by place, never by player id: the keys travel to the browser with the rows (a public page). */}
+          {rows.map((r, i) => (
+            <tr key={i} className={`border-t border-line ${highlightId === r.playerId ? "bg-accent-soft" : ""}`}>
               <td className="py-2 font-extrabold tabular-nums">{r.rank}</td>
               <td className="py-2 font-semibold">
                 {r.name}

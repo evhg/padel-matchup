@@ -14,6 +14,7 @@ import { localeAlternates } from "@/lib/seo";
 import { rhythmLabel } from "@/lib/seriesText";
 import { getSessionPlayer } from "@/lib/session";
 import { withClientMessages } from "@/i18n/withClientMessages";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -76,7 +77,7 @@ async function SeriesPage({ params }: Props) {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <section className="card">
           <span className="chip-muted">🏆 {t("series.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{s.name}</h1>
@@ -141,8 +142,8 @@ async function SeriesPage({ params }: Props) {
                   </Link>
                   {podium.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                      {podium.map((p) => (
-                        <span key={p.playerId}>
+                      {podium.map((p, i) => (
+                        <span key={i}>
                           {MEDALS[p.rank - 1]} {p.name}
                         </span>
                       ))}

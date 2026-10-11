@@ -3,14 +3,18 @@ import { utcToZonedParts } from "@/lib/dates";
 import { detectPlatform, platformById } from "./platforms";
 
 /**
- * The booking hand-off: where "Book this court" sends a player, prepared as far as a platform's public
- * pages allow. The owner, 10 October 2026: Kicksmash prepares everything up to payment, and a player
- * books and pays in the club's own app (DECIDING rule 36). Kicksmash never signs in as a player, never
- * books and never pays.
+ * The booking hand-off: where "Book this court" sends a player. The owner, 10 October 2026:
+ * "kicksmash can do everything except the actual payment; this means create the booking and then hand
+ * off to the human to complete the payment" (DECIDING rule 36). This file does less: it creates no
+ * booking. It opens a page, a club's public page on the match's day or the club's booking page, and
+ * the player picks the court and the time, signs in, books and pays there. Kicksmash never signs in as
+ * a player, never books and never pays.
  *
  * - "checkout": the platform's own payment step with the club, court, day, time and length chosen.
- *   No platform documents one, so nothing returns it today. It is kept for a club-granted connector
- *   (`ClubBookingConnector`, below), never for a platform's internal routes.
+ *   Nothing returns it today. The Playtomic reader can build Playtomic's checkout link for each free
+ *   court (`playtomicBookUrl`); whether "Book this court" may open it is the owner's decision, not yet
+ *   taken. A session wrote "never for a platform's internal routes" on 10 October 2026; the owner has
+ *   not decided that limit. The kind is also kept for a club-granted connector (`ClubBookingConnector`).
  * - "slot": the club's public page open on the match's day for padel. The player taps the court and
  *   the time, which every caller shows beside the button ("Sat 12 Oct, 18:00, 90 min, Court 2"), so
  *   a parameter the platform stops reading costs one tap and nothing else.

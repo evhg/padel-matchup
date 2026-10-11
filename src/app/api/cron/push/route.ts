@@ -26,9 +26,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * The free court times on the booking platforms' public pages, every third tick (DECIDING rule 35):
- * after the tick's own work, with what is left of the route's sixty seconds and never more than
- * forty-five. It rides this job so it costs no invocation of its own (docs/OPERATING.md).
+ * The free court times on the booking platforms' public pages, on every tick (DECIDING rule 35): each
+ * tick reads the clubs whose read is 14 minutes old, about a third of them, after the tick's own work,
+ * with what is left of the route's sixty seconds and never more than forty-five. It rides this job so it
+ * costs no invocation of its own (docs/OPERATING.md).
  */
 async function readCourtTimes(db: Awaited<ReturnType<typeof getDb>>, now: Date, started: number) {
   try {
