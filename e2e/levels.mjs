@@ -145,6 +145,36 @@ try {
   check("one tap on Intermediate puts the 3.0 chip on her roster row and the card is gone", (await fay.getByTestId("level-after-join").count()) === 0);
   await fay.goto(`${BASE}/me`);
   check("the tap saved it as self-declared, as My matches does", (await fay.getByText("Self-declared").count()) > 0 && (await fay.locator("section", { hasText: "Your level" }).getByText("3.0", { exact: true }).count()) > 0);
+
+  // ---- Played together (DECIDING rule 21, the owner, 11 October 2026): Quin (1.5) sat in a scored match
+  // with Pia, so Pia's Gold match lets him straight in. The match is half an hour old and scored at the
+  // court: a score is what makes it finished, not the end of the booked length. ----
+  const api = await newPage();
+  const key = await api.request.post(`${BASE}/api/v1/keys`, { data: { name: "e2e levels", agent: "playwright" } }).then((r) => r.json());
+  const auth = { authorization: `Bearer ${key.key}` };
+  const past = await api.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Pia", level: 3.5 } } }).then((r) => r.json());
+  const pcode = past.match?.code;
+  const joined = [];
+  for (const [name, level] of [["Quin", 1.5], ["Rae", 3.5], ["Sol", 3.5]]) joined.push(await api.request.post(`${BASE}/api/v1/matches/${pcode}/join`, { headers: auth, data: { name, level } }).then((r) => r.json()));
+  const pia = await newPage();
+  await pia.goto(`${past.organizer.personalUrl}?next=/${pcode}`);
+  await pia.waitForURL((u) => u.pathname === `/${pcode}`, { timeout: 20000 });
+  await pia.getByRole("button", { name: "Enter score" }).click();
+  await pia.getByRole("button", { name: /^Pia/ }).click();
+  await pia.getByRole("button", { name: /^Rae/ }).click();
+  await pia.getByRole("button", { name: "Save score" }).click();
+  await pia.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
+  const gold = await api.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", levelMin: 3, levelMax: 4.5, organizer: { name: "Pia", token: past.organizer.personalToken } } }).then((r) => r.json());
+  const gcode = gold.match?.code;
+  const quin = await newPage();
+  await quin.goto(`${joined[0].player.personalUrl}?next=/${gcode}`);
+  await quin.waitForURL((u) => u.pathname === `/${gcode}`, { timeout: 20000 });
+  await quin.getByRole("button", { name: "Join this match" }).waitFor({ timeout: 20000 });
+  check("a player who sat in a scored match with the organiser meets Join on her Gold match, not Ask to join", (await quin.getByRole("button", { name: "Ask to join" }).count()) === 0, `${pcode} → ${gcode}`);
+  await quin.getByRole("button", { name: "Join this match" }).click();
+  await quin.getByText("You're in").waitFor({ timeout: 20000 });
+  await shot(quin, "l8-played-together");
+  check("and the tap seats him at once, with no request to wait for", (await quin.getByText("Request sent").count()) === 0 && (await quin.getByText("2/4 players").count()) > 0);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {

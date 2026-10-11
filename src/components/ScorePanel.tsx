@@ -6,7 +6,7 @@ import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { checkSets, MAX_SETS, tally } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
-import { PlayAgainButton } from "./PlayAgainButton";
+import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 import { SameTimeButton } from "./SameTimeButton";
 import { ShareButtons } from "./ShareSheet";
 
@@ -24,7 +24,7 @@ export function ScorePanel({
   locked,
   enteredBy,
   canPlayAgain = false,
-  nextWhen = "",
+  playAgain = null,
   sameTimeWhen = null,
   card,
 }: {
@@ -37,11 +37,11 @@ export function ScorePanel({
   enteredBy: string | null;
   /** Creator or participant: offer "Play again" once a result exists. */
   canPlayAgain?: boolean;
-  /** "Play again"'s default day and time: this match's a week on, as its own wall clock ("2026-10-17T18:00"). */
-  nextWhen?: string;
+  /** "Play again"'s day and time: the default (this match's a week on), the bounds, and whether the round went out. */
+  playAgain?: PlayAgainOffer | null;
   /**
-   * "Same time next week?" beside it, for a match with no crew yet, worded as the weekly slot
-   * ("Sat 18:00"); null hides it. One next game and a weekly slot: two buttons, two help lines.
+   * "Make it weekly" under it, for a match with no crew yet, worded as the weekly slot ("Sat 18:00");
+   * null hides it. One next game and a weekly slot: two buttons, two help lines.
    */
   sameTimeWhen?: string | null;
   /** The shareable result card, once a result exists. */
@@ -165,9 +165,9 @@ export function ScorePanel({
               <ShareButtons url={card.shareUrl} text={card.shareText} imageUrl={card.image} />
             </div>
           )}
-          {canPlayAgain && nextWhen && (
+          {canPlayAgain && playAgain && (
             <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
-              <PlayAgainButton code={code} defaultWhen={nextWhen} />
+              <PlayAgainButton code={code} offer={playAgain} />
               {weekly && <SameTimeButton code={code} when={weekly} />}
             </div>
           )}

@@ -218,7 +218,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
   2026): the two claims never overlapped. The test that caught it opens the first tap's transaction
   itself, locks and writes, starts the second claim inside it, waits, then commits; without the lock
   the second claim reads nothing and sends again (`tests/play-again.test.ts`, "a second tap wait").
-  PGlite has one connection and cannot show the race, so run that test with `TEST_DATABASE_URL`.
+  PGlite has one connection and cannot show the race, so the test skips itself there
+  (`it.skipIf(!process.env.TEST_DATABASE_URL)`): a pass on PGlite would read as proof it is not.
+- **A rule the screen holds is not a rule.** "Play again" showed only under a result, and the server
+  action checked only for a seat, so a stranger who took a free seat in a coming match could call it
+  by its action id and message the whole line-up, and spend the match's one round before the real
+  game (11 October 2026). A server action is a public endpoint: whatever the screen waits for (a
+  score, the end, the organiser) the write checks too, in the domain, and a test calls it as the
+  stranger would.
 - **A reader of free text falls through to silence, never to "keep the rest".** The crew group's
   "who's in …?" kept whatever words were left as the match's venue, so "who's in for beers at 8?" made
   a match at "for beers" and showed it on the card and the crew page. When a parser meets chat, what it

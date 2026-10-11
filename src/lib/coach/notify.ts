@@ -73,7 +73,7 @@ async function releaseFor(db: Db, p: Player, n: TellNotice): Promise<Release> {
   return recordNotice(db, { ...n, playerId: p.id });
 }
 
-export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard: Keyboard | undefined, o: { notice: TellNotice; /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string; /** The notice as a WhatsApp template. Without it WhatsApp is never tried: a coach's notices have no template. */ whatsapp?: WaNotice }): Promise<Release> {
+export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard: Keyboard | undefined, o: { notice: TellNotice; /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string; /** The notice as a WhatsApp template. Without it WhatsApp is never tried: a coach's notices have no template. */ whatsapp?: WaNotice; /** False leaves the email's "get this on Telegram" line out: its link binds whoever taps it to this player, so a message meant to be forwarded must not carry it. */ bind?: boolean }): Promise<Release> {
   if (!p) return "off";
   const release = await releaseFor(db, p, o.notice);
   if (release !== "now") return release;
@@ -97,7 +97,7 @@ export async function tell(db: Db, p: Player | null | undefined, text: string, k
   if (via === "email" && p.email) {
     const { t } = await translatorFor(p.locale);
     const [heading, ...rest] = text.split("\n");
-    const { html, text: plain } = layout({ heading, body: rest.join("\n") || heading, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("email.openMatch"), cta: { label: o.label ?? t("email.openMatch"), url }, telegram: telegramLine(t("email.telegramLine"), p) });
+    const { html, text: plain } = layout({ heading, body: rest.join("\n") || heading, footer: t("email.footer", { app: APP_NAME }), eventUrl: url, openLabel: t("email.openMatch"), cta: { label: o.label ?? t("email.openMatch"), url }, telegram: o.bind === false ? undefined : telegramLine(t("email.telegramLine"), p) });
     await sendEmail({ to: p.email, subject: heading, html, text: plain }).catch(() => undefined);
     return release;
   }

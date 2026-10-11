@@ -330,7 +330,9 @@
     "bookYourself": "Reservas y pagas tú, en la app del club, y luego lo marcas aquí.",
     "playAgainShort": "Jugar otra vez",
     "playAgainWhen": "Día y hora del próximo partido",
-    "playAgainOne": "Un partido más, con la misma configuración. Cada jugador de este partido recibe un mensaje «¿Te apuntas?»."
+    "playAgainOne": "Un partido más, con la misma configuración. Cada jugador de este partido recibe un mensaje «¿Te apuntas?».",
+    "playAgainSent": "Un partido más, con la misma configuración. Los jugadores de este partido ya recibieron su único mensaje «¿Te apuntas?».",
+    "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -1218,7 +1220,8 @@
     "photoHelp": "Los cuatro después del partido. La tarjeta pasa a ser esa foto con el resultado encima. Tuya para publicar; no se pide dos veces.",
     "photoFailed": "No se pudo usar esa imagen. Prueba con otra.",
     "removePhoto": "Quitar la foto",
-    "waiting": "Esperando el resultado"
+    "waiting": "Esperando el resultado",
+    "makeWeekly": "Hacerlo semanal"
   },
   "group": {
     "title": "Grupo",

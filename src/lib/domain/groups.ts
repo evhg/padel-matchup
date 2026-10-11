@@ -8,6 +8,7 @@ import { createEvent, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
 import { cleanAskNote, joinDoor, nextAsk, type JoinVia } from "./groupAccess";
 import { normalizeRange } from "./levels";
+import { playAgainRoundOf } from "./playAgain";
 import { joinEvent } from "./slots";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -103,14 +104,21 @@ export async function createGroupFromEvent(db: Db, input: { eventId: string; act
 }
 
 /**
- * "Same time next week?": the match's crew becomes a group with a weekly slot at the match's
- * own day and time, so the next card posts itself. An existing group keeps its settings.
+ * "Make it weekly" ("Same time next week?" in the chat): the match's crew becomes a group with a weekly
+ * slot at the match's own day and time, so the next card posts itself. An existing group keeps its
+ * settings. The next game "Play again" already made from this match becomes the crew's too (DECIDING
+ * rule 37: the next game belongs to the old one's crew), so the slot sees it and never makes a second
+ * match for the same hour (`autoCreateGroupMatches`).
  */
 export async function weeklyGroupFromEvent(db: Db, input: { eventId: string; actorPlayerId: string; fallbackName: string }): Promise<{ group: Group; created: boolean }> {
   const [ev] = await db.select().from(events).where(eq(events.id, input.eventId));
   if (!ev) throw new DomainError("not_found");
   const existed = Boolean(ev.groupId);
   const group = await createGroupFromEvent(db, { eventId: ev.id, actorPlayerId: input.actorPlayerId, fallbackName: input.fallbackName });
+  if (!existed) {
+    const round = await playAgainRoundOf(db, ev.id);
+    if (round?.nextCode) await db.update(events).set({ groupId: group.id }).where(and(eq(events.code, round.nextCode), isNull(events.groupId), ne(events.status, "cancelled")));
+  }
   if (existed || group.recurDow !== null) return { group, created: false };
   const { dow, time } = timePatternOf(ev.startsAt, ev.tz);
   const [updated] = await db.update(groups).set({ recurDow: dow, recurTime: time, recurLastCreatedFor: null }).where(eq(groups.id, group.id)).returning();
@@ -483,6 +491,17 @@ export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<
   for (const g of candidates) {
     const startsAt = recurrenceDue(g, now);
     if (!startsAt) continue;
+    // The crew already has a game at this hour ("Play again" made it, DECIDING rule 37): the slot is
+    // taken, not made twice. One read down `events_group_idx`, only for a group whose slot is due.
+    const [taken] = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.groupId, g.id), eq(events.startsAt, startsAt), ne(events.status, "cancelled")))
+      .limit(1);
+    if (taken) {
+      await db.update(groups).set({ recurLastCreatedFor: startsAt }).where(eq(groups.id, g.id));
+      continue;
+    }
     const latest = await latestGroupMatch(db, g, startsAt);
     const event = await createEvent(db, {
       creatorPlayerId: g.creatorPlayerId,

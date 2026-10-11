@@ -55,7 +55,7 @@ import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
 import { admission, hasRange, isLevelVerified } from "@/lib/domain/levels";
-import { admissionAt, playAgainDefault } from "@/lib/domain/playAgain";
+import { admissionAt, playAgainDefault, playAgainRoundOf, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
@@ -254,10 +254,19 @@ export default async function EventPage({ params, searchParams }: Props) {
   const levelOf = new Map<string, number | null>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, s.player?.level ?? null]));
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
-  // "Play again"'s default: this match's day and time a week on, as the wall clock where it is played.
+  // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
+  // the wall clock where it is played; and whether its one round already went out (one read, only for
+  // somebody who is offered the button on a scored match or a locked americano).
+  const wall = (at: Date) => {
+    const p = utcToZonedParts(at, ev.tz);
+    return `${p.date}T${p.time}`;
+  };
   const nextGame = playAgainDefault(ev, now);
-  const nextWhen = `${nextGame.date}T${nextGame.time}`;
-  // "Same time next week?" sits beside it for a match with no crew yet (it makes the weekly slot).
+  const playAgainOffered = canPlayAgain && !cancelled && (detail.scores.length > 0 || (isTournament && ev.scoreLockedByCreator));
+  const playAgain = playAgainOffered
+    ? { defaultWhen: `${nextGame.date}T${nextGame.time}`, minWhen: wall(now), maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)), sent: Boolean(await playAgainRoundOf(db, ev.id)) }
+    : null;
+  // "Make it weekly" sits under it for a match with no crew yet (it makes the weekly slot).
   const sameTimeWhen = ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster }, me.id)) ? `${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}` : null;
   // After the result is in, the organizer can confirm the levels of the people they played with.
   const levelCandidates = participants
@@ -683,7 +692,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             locked={ev.scoreLockedByCreator}
             enteredBy={enteredBy}
             canPlayAgain={canPlayAgain}
-            nextWhen={nextWhen}
+            playAgain={playAgain}
             sameTimeWhen={sameTimeWhen}
             card={resultCard}
           />
@@ -726,7 +735,7 @@ export default async function EventPage({ params, searchParams }: Props) {
                 : tstate.standings.map((r) => ({ playerId: r.playerId, name: nameOf.get(r.playerId) ?? "?", rank: r.rank, points: r.points, played: r.played, wins: r.wins, diff: r.diff, level: levelOf.get(r.playerId) ?? null, court: "court" in r ? r.court : null }))
             }
             canPlayAgain={canPlayAgain}
-            nextWhen={nextWhen}
+            playAgain={playAgain}
             cardHref={`/${code}/card`}
             checkIn={checkIn}
           />

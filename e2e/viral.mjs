@@ -1,6 +1,6 @@
 // Viral pieces: robots/sitemap, the public americano generator with its prefill link,
 // and the shareable result card.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot, widestDayFits } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, switchLang, widestDayFits } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -113,11 +113,36 @@ try {
   check("the organizer's score is confirmed at once", true);
   await p.getByTestId("result-card").waitFor({ timeout: 20000 });
   check("right after the score the match page offers the court photo on the card", (await p.getByTestId("result-card").getByTestId("photo-add").count()) === 1);
-  // Beside the card: "Play again" with its one control, a week on by default, and "Same time next week?" (DECIDING rule 37).
+  // Beside the card: "Play again" with its one control, a week on by default, and "Make it weekly" (DECIDING rule 37).
   const bangkokDay = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
   const score = p.locator("#score");
   const nextWhen = await score.getByTestId("play-again-when").inputValue();
   check("the score panel offers Play again, a week on by default, and the weekly slot beside it", nextWhen.startsWith(`${bangkokDay(playedAt + 7 * 24 * 3600 * 1000)}T`) && (await score.getByTestId("same-time").count()) === 1, nextWhen);
+  // At 390 px the field takes its own line and "Play again" keeps the panel's width under it; the field
+  // carries its bounds; "Make it weekly" says so and its label stays inside its button, in Russian too.
+  const panelLayout = () =>
+    score.evaluate((el) => {
+      const box = (q) => el.querySelector(q).getBoundingClientRect();
+      const field = box("[data-testid=play-again-when]");
+      const play = box("[data-testid=play-again] button");
+      const weekly = el.querySelector("[data-testid=same-time]");
+      const w = weekly.getBoundingClientRect();
+      const panel = el.getBoundingClientRect();
+      return { stacked: play.top >= field.bottom - 1 && Math.abs(play.width - field.width) <= 1, weeklyFits: weekly.scrollWidth <= weekly.clientWidth + 1 && w.left >= panel.left - 0.5 && w.right <= panel.right + 0.5, label: weekly.textContent };
+    });
+  const enPanel = await panelLayout();
+  const bounds = { min: await score.getByTestId("play-again-when").getAttribute("min"), max: await score.getByTestId("play-again-when").getAttribute("max") };
+  await switchLang(p, "ru");
+  await score.getByTestId("same-time").getByText(/каждую неделю/).waitFor({ timeout: 20000 });
+  const ruPanel = await panelLayout();
+  await shot(p, "v3b-score-panel-ru");
+  await switchLang(p, "en");
+  await score.getByTestId("same-time").getByText("Make it weekly").waitFor({ timeout: 20000 });
+  check(
+    "at 390 px Play again sits full width under its field, the field has its bounds, and Make it weekly fits in English and Russian",
+    enPanel.stacked && enPanel.weeklyFits && ruPanel.stacked && ruPanel.weeklyFits && /Make it weekly/.test(enPanel.label) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(bounds.min ?? "") && (bounds.max ?? "") > (bounds.min ?? ""),
+    JSON.stringify({ enPanel, ruPanel, bounds }),
+  );
   await p.goto(`${BASE}/${mcode}/card`);
   check("the card page praises the winners and leaves the weekly group to the match page", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 0);
   const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGNgYGD4z8DAwAAABAAC/wKzCgAAAABJRU5ErkJggg==", "base64");
@@ -139,6 +164,14 @@ try {
   const nextCode = p.url().split("/").slice(-2)[0];
   await p.goto(`${BASE}/${nextCode}`);
   check("Play again makes the next game on the day and at the time picked", nextCode !== mcode && (await p.getByText(/19:30/).count()) > 0, nextCode);
+  // The round goes out after the answer: back on the last game, the help line no longer promises a message.
+  let roundSaid = false;
+  for (let i = 0; i < 10 && !roundSaid; i++) {
+    await p.goto(`${BASE}/${mcode}`);
+    roundSaid = (await p.getByTestId("play-again").getByText("already had their one", { exact: false }).count()) === 1;
+    if (!roundSaid) await p.waitForTimeout(1000);
+  }
+  check("once the players heard, the last game's Play again says so instead of promising the message again", roundSaid);
   await p.goto(`${BASE}/built`);
   check("the page of ideas that became the app opens", (await p.getByTestId("built-empty").count()) + (await p.getByTestId("built-list").count()) === 1);
   let momentsSeen = false;

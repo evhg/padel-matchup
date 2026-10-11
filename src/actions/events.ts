@@ -19,7 +19,7 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayAgain, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
-import { playAgainStart } from "@/lib/domain/playAgain";
+import { playAgainStart, sameNextGame } from "@/lib/domain/playAgain";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -177,10 +177,13 @@ const playAgainSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 /**
  * "Play again": any participant or the organizer clones this event on the day and at the time they
  * picked (a week on when they did not) and becomes its organizer. Each player of this match then hears
- * once, "I'm in?" (DECIDING rule 37), after the response and once per old match, however often anybody taps.
+ * once, "I'm in?" (DECIDING rule 37), after the response and once per old match, however often anybody
+ * taps, and only once the match was played. A second tap at the day and time the round already
+ * announced lands on that game instead of making a second one beside it (`sameNextGame`).
  */
 export async function duplicateEventAction(code: string, pick?: { date: string; time: string } | null): Promise<ActionResult<{ code: string }>> {
   let newCode: string | null = null;
+  let sameCode: string | null = null;
   const res = await runA(async () => {
     const when = playAgainSchema.parse(pick);
     const { db, detail } = await loadEvent(code);
@@ -190,6 +193,8 @@ export async function duplicateEventAction(code: string, pick?: { date: string; 
     const creatorId = viewer.player?.id ?? detail.event.creatorPlayerId;
     const now = new Date();
     const startsAt = playAgainStart(detail.event, when, now);
+    sameCode = await sameNextGame(db, detail.event.id, startsAt);
+    if (sameCode) return { code: sameCode };
     const ev = await duplicateEvent(db, { sourceEventId: detail.event.id, creatorPlayerId: creatorId, startsAt, now });
     const { joinEvent } = await import("@/lib/domain/slots");
     const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
@@ -202,6 +207,7 @@ export async function duplicateEventAction(code: string, pick?: { date: string; 
     newCode = ev.code;
     return { code: ev.code };
   });
+  if (res.ok && sameCode) redirect(`/${sameCode}`);
   if (res.ok && newCode) redirect(`/${newCode}/share`);
   return res;
 }

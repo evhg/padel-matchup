@@ -1,15 +1,18 @@
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, facts, notices, scores, type Event, type Player } from "@/db/schema";
+import { events, facts, groups, notices, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { NO_SIDE_EFFECTS, joinAsPlayer } from "@/lib/api/operations";
 import { anonymizePlayer } from "@/lib/domain/anonymize";
 import { createEvent, duplicateEvent, nextWeekAfter, type CreateEventInput } from "@/lib/domain/events";
-import { createGroup } from "@/lib/domain/groups";
+import { autoCreateGroupMatches, createGroup, weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { joinWithPolicy } from "@/lib/domain/joining";
 import { waivedByPlay } from "@/lib/domain/levels";
 import { saveNoticeSettings } from "@/lib/domain/notices";
-import { admissionAt, claimPlayAgainRound, playAgainDefault, playAgainRecipients, playAgainStart, playedWithOrganiser, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { admissionAt, claimPlayAgainRound, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { notifyPlayAgain } from "@/lib/notify";
@@ -54,6 +57,20 @@ describe("Play again", () => {
       expect(playAgainStart({ startsAt: LAST, tz: TZ }, null, NOW).toISOString()).toBe(nextWeekAfter(LAST, NOW).toISOString());
       // An empty pick is no pick.
       expect(playAgainStart({ startsAt: LAST, tz: TZ }, { date: "", time: "" }, NOW).toISOString()).toBe("2026-10-17T11:00:00.000Z");
+    });
+
+    it("counts the weeks from the last game however long ago it was", () => {
+      // Three weeks and a day before the last game: the default is still the first Saturday after now.
+      expect(playAgainDefault({ startsAt: new Date(LAST.getTime() - 21 * DAY), tz: TZ }, NOW)).toEqual({ date: "2026-10-17", time: "18:00" });
+    });
+
+    it("keeps the wall-clock time across a change of clocks", () => {
+      // Madrid: Saturday 24 October 18:00 CEST (16:00 UTC). The clocks go back on Sunday 25 October, so
+      // a week on is 18:00 CET, 17:00 UTC, and not 17:00 on the wall as seven times 24 hours would make it.
+      const madrid = { startsAt: new Date("2026-10-24T16:00:00.000Z"), tz: "Europe/Madrid" };
+      const sunday = new Date("2026-10-25T10:00:00.000Z");
+      expect(playAgainDefault(madrid, sunday)).toEqual({ date: "2026-10-31", time: "18:00" });
+      expect(playAgainStart(madrid, null, sunday).toISOString()).toBe("2026-10-31T17:00:00.000Z");
     });
 
     it("takes the day and the time the organiser picked, as a wall clock where the match is", () => {
@@ -113,14 +130,16 @@ describe("Play again", () => {
     const old = await played([ana, ben]);
     const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, now: NOW });
     const again = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ben.id, now: NOW });
-    const taps = await Promise.all([claimPlayAgainRound(db, old, next, ana.id), claimPlayAgainRound(db, old, again, ben.id)]);
+    const taps = await Promise.all([claimPlayAgainRound(db, old, next, ana.id, NOW), claimPlayAgainRound(db, old, again, ben.id, NOW)]);
     expect(taps.filter(Boolean)).toHaveLength(1);
-    expect(await claimPlayAgainRound(db, old, next, ana.id)).toBe(false);
+    expect(await claimPlayAgainRound(db, old, next, ana.id, NOW)).toBe(false);
     const rows = await db.select().from(facts).where(and(eq(facts.kind, PLAY_AGAIN_FACT), eq(facts.subjectId, old.id)));
     expect(rows).toHaveLength(1);
   });
 
-  it("makes a second tap wait while the first is still writing, then send nothing", async () => {
+  // PGlite has one connection, so it queues the second transaction and passes with the lock removed:
+  // a pass there proves nothing. The test runs where the race is real, on Postgres (CI, or TEST_DATABASE_URL).
+  it.skipIf(!process.env.TEST_DATABASE_URL)("makes a second tap wait while the first is still writing, then send nothing", async () => {
     const ana = await makePlayer(db, "Ana");
     const ben = await makePlayer(db, "Ben");
     const old = await played([ana, ben]);
@@ -132,10 +151,29 @@ describe("Play again", () => {
     await db.transaction(async (tx) => {
       await tx.select({ id: events.id }).from(events).where(eq(events.id, old.id)).for("update");
       await tx.insert(facts).values({ kind: PLAY_AGAIN_FACT, channel: "web", actorPlayerId: ana.id, subjectType: "match", subjectId: old.id, code: old.code, data: { next: next.code } });
-      second = claimPlayAgainRound(db, old, next, ben.id);
+      second = claimPlayAgainRound(db, old, next, ben.id, NOW);
       await new Promise((r) => setTimeout(r, 300));
     });
     expect(await second!).toBe(false);
+  });
+
+  it("hands a second tap at the same day and time the game the round already announced", async () => {
+    const ana = await makePlayer(db, "Ana");
+    const ben = await makePlayer(db, "Ben");
+    const old = await played([ana, ben]);
+    const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt: playAgainStart(old, null, NOW), now: NOW });
+    // No round yet: nothing to hand on, and the help line still promises the message.
+    expect(await playAgainRoundOf(db, old.id)).toBeNull();
+    expect(await sameNextGame(db, old.id, next.startsAt)).toBeNull();
+    expect(await claimPlayAgainRound(db, old, next, ana.id, NOW)).toBe(true);
+    expect(await playAgainRoundOf(db, old.id)).toEqual({ nextCode: next.code });
+    // Ben taps the default too: he lands on Ana's game, the one his message is about.
+    expect(await sameNextGame(db, old.id, next.startsAt)).toBe(next.code);
+    // Another day is another game.
+    expect(await sameNextGame(db, old.id, new Date(next.startsAt.getTime() + DAY))).toBeNull();
+    // A game that was called off is not handed on.
+    await db.update(events).set({ status: "cancelled" }).where(eq(events.id, next.id));
+    expect(await sameNextGame(db, old.id, next.startsAt)).toBeNull();
   });
 
   describe("the message", () => {
@@ -205,6 +243,54 @@ describe("Play again", () => {
       expect(await db.select().from(notices).where(eq(notices.eventId, next.id))).toHaveLength(3);
     });
 
+    it("sends nothing for a match nobody has played yet, and keeps its round for after the game", async () => {
+      // Zed, a stranger, takes the free seat of Ana's match three days ahead and taps "Play again".
+      const ana = await makePlayer(db, "Ana");
+      const [ben, cy, zed] = [await makePlayer(db, "Ben", { telegramId: ++tg }), await makePlayer(db, "Cy", { telegramId: ++tg }), await makePlayer(db, "Zed")];
+      const start = new Date(NOW.getTime() + 3 * DAY);
+      const ahead = await played([ana, ben, cy], {}, { scored: false, startsAt: start });
+      await joinEvent(db, { eventId: ahead.id, playerId: zed.id, now: NOW });
+      const next = await duplicateEvent(db, { sourceEventId: ahead.id, creatorPlayerId: zed.id, now: NOW });
+      expect(await notifyPlayAgain(db, ahead, next, zed, NOW)).toBe(0);
+      // A score typed in before the start does not make it played.
+      await db.insert(scores).values([{ eventId: ahead.id, setNumber: 1, sideA: 6, sideB: 1 }]);
+      expect(await notifyPlayAgain(db, ahead, next, zed, NOW)).toBe(0);
+      expect(calls.filter((c) => c.method === "sendMessage")).toHaveLength(0);
+      expect(await playAgainRoundOf(db, ahead.id)).toBeNull();
+      // After the game, with its score, Ana's tap still has the one round.
+      const after = new Date(start.getTime() + 2 * HOUR);
+      const real = await duplicateEvent(db, { sourceEventId: ahead.id, creatorPlayerId: ana.id, now: after });
+      expect(await notifyPlayAgain(db, ahead, real, ana, after)).toBe(3);
+    });
+
+    it("sends nothing for a match that was called off, even with a score", async () => {
+      const { ana, old, next } = await round();
+      await db.update(events).set({ status: "cancelled" }).where(eq(events.id, old.id));
+      expect(await notifyPlayAgain(db, old, next, ana, NOW)).toBe(0);
+      expect(calls.filter((c) => c.method === "sendMessage")).toHaveLength(0);
+    });
+
+    it("by email carries the public match link and no link that binds or signs anybody in", async () => {
+      const sinkFile = path.join(mkdtempSync(path.join(tmpdir(), "play-again-")), "mail.jsonl");
+      process.env.RESEND_API_KEY = "re_test_only";
+      process.env.EMAIL_SINK_FILE = sinkFile;
+      process.env.TELEGRAM_BOT_USERNAME = "kicksmash_test_bot";
+      const ana = await makePlayer(db, "Ana");
+      // Fay has an address and no Telegram: the email is her channel, the one a "get this on Telegram" line would ride on.
+      const fay = await makePlayer(db, "Fay", { email: "fay@example.com" });
+      const old = await played([ana, fay]);
+      const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, now: NOW });
+      expect(await notifyPlayAgain(db, old, next, ana, NOW)).toBe(1);
+      const [mail] = readFileSync(sinkFile, "utf8").trim().split("\n").map((l) => JSON.parse(l) as { to: string; subject: string; text: string });
+      expect(mail.to).toBe("fay@example.com");
+      expect(mail.subject).toContain("Ana made the next game");
+      expect(mail.text).toContain(`/${next.code}`);
+      // Forwarded to a friend, it must not hand the friend Fay's account.
+      expect(mail.text).not.toContain("start=p_");
+      expect(mail.text).not.toContain("t.me/");
+      expect(mail.text).not.toContain("/p/");
+    });
+
     it("lets the player in with the one tap", async () => {
       const { ben, next } = await round();
       const { handleTelegramUpdate } = await import("@/lib/telegram/bot");
@@ -261,12 +347,61 @@ describe("Play again", () => {
       expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
     });
 
-    it("still holds a player whose scored match is not over yet", async () => {
+    it("counts a match scored at the court, before its booked length is over", async () => {
       const org = await makePlayer(db, "Org", { level: 3.25 });
       const pal = await makePlayer(db, "Pal", { level: 2 });
-      // Started half an hour ago: a 90-minute match is still on, even with a score typed in.
-      await played([org, pal], {}, { startsAt: new Date(NOW.getTime() - HOUR / 2) });
+      // Started 75 minutes ago and booked for 90: the score is in, so the game is finished in practice,
+      // and Pal's "I'm in" on the next game must not turn into a request for the last quarter of an hour.
+      await played([org, pal], {}, { startsAt: new Date(NOW.getTime() - 75 * 60_000) });
+      expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(true);
+      expect(await join(await ranged(org), pal)).toMatchObject({ kind: "joined" });
+    });
+
+    it("does not count a score on a match that has not started", async () => {
+      const org = await makePlayer(db, "Org", { level: 3.25 });
+      const pal = await makePlayer(db, "Pal", { level: 2 });
+      await played([org, pal], {}, { startsAt: new Date(NOW.getTime() + HOUR) });
       expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
+    });
+
+    it("still holds a player whose scored match with the organiser was then called off", async () => {
+      const org = await makePlayer(db, "Org", { level: 3.25 });
+      const pal = await makePlayer(db, "Pal", { level: 2 });
+      const ev = await played([org, pal]);
+      await db.update(events).set({ status: "cancelled" }).where(eq(events.id, ev.id));
+      expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
+      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
+    });
+
+    it("still holds a player when the organiser only waited on the list, or declined the seat", async () => {
+      const org = await makePlayer(db, "Org", { level: 3.25 });
+      const pal = await makePlayer(db, "Pal", { level: 2 });
+      // Org made a full match and sat on its waiting list: Pal held a seat, Org never played with Pal.
+      const [x, y, z] = [await makePlayer(db, "X"), await makePlayer(db, "Y"), await makePlayer(db, "Z")];
+      const full = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: LAST, tz: TZ, whenFull: "waitlist", capacity: 4 });
+      for (const p of [pal, x, y, z, org]) await joinEvent(db, { eventId: full.id, playerId: p.id, now: new Date(LAST.getTime() - HOUR) });
+      await db.insert(scores).values([{ eventId: full.id, setNumber: 1, sideA: 6, sideB: 3 }]);
+      expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
+      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
+      // Org's seat inside the line-up, but declined: not a taken seat either.
+      const other = await makePlayer(db, "Pat", { level: 2 });
+      const ev = await played([org, other]);
+      await db.update(slots).set({ status: "declined" }).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, org.id)));
+      expect(await playedWithOrganiser(db, org.id, other.id, NOW)).toBe(false);
+    });
+
+    it("counts a scored americano with the organiser, and not one with no score", async () => {
+      const org = await makePlayer(db, "Org", { level: 3.25 });
+      const pal = await makePlayer(db, "Pal", { level: 2 });
+      const [x, y] = [await makePlayer(db, "X"), await makePlayer(db, "Y")];
+      const night = await played([org, pal, x, y], { type: "tournament", capacity: 4 }, { scored: false });
+      expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
+      const [r] = await db.insert(tournamentRounds).values({ eventId: night.id, roundNumber: 1 }).returning();
+      await db.insert(tournamentMatches).values({ roundId: r.id, court: 1, a1: org.id, a2: pal.id, b1: x.id, b2: y.id });
+      // A round drawn but not scored is not a game played.
+      expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
+      await db.update(tournamentMatches).set({ sideA: 16, sideB: 8 }).where(eq(tournamentMatches.roundId, r.id));
+      expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(true);
     });
 
     it("still holds a player who played with somebody else, or on the organiser's waiting list", async () => {
@@ -308,6 +443,47 @@ describe("Play again", () => {
       expect(await admissionAt(db, ev, fits, NOW)).toBe("ok");
       expect(select).not.toHaveBeenCalled();
       select.mockRestore();
+    });
+  });
+
+  describe("the weekly slot beside it", () => {
+    // The hourly run on Tuesday 13 October, inside the slot's five days of lead time before Saturday 17 October.
+    const TUESDAY = new Date("2026-10-13T05:00:00.000Z");
+    const groupRow = async (id: string) => (await db.select().from(groups).where(eq(groups.id, id)))[0];
+    const inSlot = async (groupId: string, at: Date) => db.select().from(events).where(and(eq(events.groupId, groupId), eq(events.startsAt, at)));
+
+    it("never makes a second match for the hour \"Play again\" already took (the weekly slot first)", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const old = await played([ana, await makePlayer(db, "Ben")]);
+      const { group } = await weeklyGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
+      const [fresh] = await db.select().from(events).where(eq(events.id, old.id));
+      const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt: playAgainStart(fresh, null, NOW), now: NOW });
+      expect(next.groupId).toBe(group.id);
+      expect((await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id)).toHaveLength(0);
+      expect(await inSlot(group.id, next.startsAt)).toHaveLength(1);
+      // The slot counts as made, so the next hour does not look at it again.
+      expect((await groupRow(group.id)).recurLastCreatedFor?.toISOString()).toBe(next.startsAt.toISOString());
+    });
+
+    it("takes the game \"Play again\" made into the crew, so the slot sees it (\"Play again\" first)", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const old = await played([ana, await makePlayer(db, "Ben")]);
+      const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt: playAgainStart(old, null, NOW), now: NOW });
+      expect(await claimPlayAgainRound(db, old, next, ana.id, NOW)).toBe(true);
+      const { group } = await weeklyGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
+      expect((await getEventByCode(db, next.code))!.event.groupId).toBe(group.id);
+      expect((await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id)).toHaveLength(0);
+      expect(await inSlot(group.id, next.startsAt)).toHaveLength(1);
+    });
+
+    it("still makes the slot's match when the game at that hour was called off", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const old = await played([ana, await makePlayer(db, "Ben")]);
+      const { group } = await weeklyGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
+      const [fresh] = await db.select().from(events).where(eq(events.id, old.id));
+      const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt: playAgainStart(fresh, null, NOW), now: NOW });
+      await db.update(events).set({ status: "cancelled" }).where(eq(events.id, next.id));
+      expect((await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id)).toHaveLength(1);
     });
   });
 

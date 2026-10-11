@@ -330,7 +330,9 @@
     "bookYourself": "You book and pay in the club's own app, then tell the others here.",
     "playAgainShort": "Play again",
     "playAgainWhen": "Day and time of the next game",
-    "playAgainOne": "One next game, same settings. Each player of this match gets one “I'm in?” message."
+    "playAgainOne": "One next game, same settings. Each player of this match gets one “I'm in?” message.",
+    "playAgainSent": "One next game, same settings. This match's players already had their one “I'm in?” message.",
+    "playAgainWhenRange": "Pick a day and time between now and 90 days ahead."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -1218,7 +1220,8 @@
     "photoHelp": "The four of you after the match. The card becomes that photo with the score on it. Yours to post, never asked twice.",
     "photoFailed": "That picture could not be used. Try another one.",
     "removePhoto": "Remove the photo",
-    "waiting": "Waiting for the score"
+    "waiting": "Waiting for the score",
+    "makeWeekly": "Make it weekly"
   },
   "group": {
     "title": "Group",

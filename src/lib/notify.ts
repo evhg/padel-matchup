@@ -297,13 +297,15 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
  * (`claimPlayAgainRound`); the rows for everybody in one insert (rule 12), kind `crew`; delivery only
  * to the people the gate released. In Telegram the ✅ is the card's own `j:` join and "Open" the Mini
  * App or the public page; every other channel carries the public match link, never a personal one,
- * because a forwarded message keeps its buttons (as `notifyRefill`). No WhatsApp template says this,
+ * because a forwarded message keeps its buttons (as `notifyRefill`), and the email leaves out the
+ * "get this on Telegram" line, whose ticket would bind a friend's Telegram to the player. Only a
+ * played match sends (`claimPlayAgainRound`). No WhatsApp template says this,
  * so a player whose only channel is WhatsApp finds it in the inbox on My matches.
  *
  * Returns how many people the round reached (inbox rows), 0 when the round was already sent.
  */
 export async function notifyPlayAgain(db: Db, old: Event, next: Event, organizer: Pick<Player, "id" | "displayName">, now = new Date()): Promise<number> {
-  if (!(await claimPlayAgainRound(db, old, next, organizer.id))) return 0;
+  if (!(await claimPlayAgainRound(db, old, next, organizer.id, now))) return 0;
   const people = await playAgainRecipients(db, old, organizer.id);
   if (people.length === 0) return 0;
   const name = firstName(organizer.displayName);
@@ -317,7 +319,9 @@ export async function notifyPlayAgain(db: Db, old: Event, next: Event, organizer
     const s = botStrings(botLocale(p.locale));
     const url = telegramEnabled() && p.telegramId ? (miniAppUrl(next.code) ?? open) : open;
     const text = c.t("noticeItem.playAgain", { ...c.vars, name });
-    await tell(db, p, text, { inline_keyboard: [[{ text: s.in, callback_data: `j:${next.code}` }, { text: s.open, url }]] }, { notice: { released: "now" } }).catch(() => undefined);
+    // `bind: false`: the email's "get this on Telegram" line carries a ticket that binds whoever taps it
+    // to this player, and this is the message most likely to be forwarded ("want to come?").
+    await tell(db, p, text, { inline_keyboard: [[{ text: s.in, callback_data: `j:${next.code}` }, { text: s.open, url }]] }, { notice: { released: "now" }, bind: false }).catch(() => undefined);
   }
   return people.length;
 }
