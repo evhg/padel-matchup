@@ -404,7 +404,7 @@ async function listedClubByName(db: Db, name: string): Promise<PickableClub | nu
  * Claims a club page. A live or pending claim by someone else blocks; a
  * rejected one can be claimed again (the owner sees it again).
  */
-export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
+export async function claimClub(db: Db, input: ClaimInput): Promise<PickableClub> {
   const name = input.name.trim().slice(0, 80);
   const typed = venueSlug(name);
   if (!typed || name.length < 2) throw new DomainError("invalid", "club_name");
@@ -443,13 +443,13 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   // manage link like everything else.
   const values = { ...fields, city, country, province, name, tz, source: "claim", claimedBy: input.playerId, claimedAt: new Date(), claimRole, claimContact, claimVerifiedAt, rejectedAt: null, approvedAt: same ? existing.approvedAt : null, updatedAt: new Date() };
   if (existing) {
-    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning();
+    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning(columnsButCache);
     return row;
   }
   const [row] = await db
     .insert(clubs)
     .values({ slug, manageToken: newToken(), ...values })
-    .returning();
+    .returning(columnsButCache);
   return row;
 }
 
@@ -467,7 +467,7 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
  */
 export type AddClubInput = ClubInput & { name: string; playerId: string; tz?: string | null };
 
-export async function addClub(db: Db, input: AddClubInput): Promise<Club> {
+export async function addClub(db: Db, input: AddClubInput): Promise<PickableClub> {
   const name = input.name.trim().slice(0, 80);
   const slug = venueSlug(name);
   if (!slug || name.length < 2) throw new DomainError("invalid", "club_name");
@@ -482,13 +482,13 @@ export async function addClub(db: Db, input: AddClubInput): Promise<Club> {
   const tz = input.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
   const values = { ...fields, city, country, province, name, tz, source: "player", addedBy: input.playerId, claimedBy: null, approvedAt: null, rejectedAt: null, claimDecision: null, founding: false, updatedAt: new Date() };
   if (existing) {
-    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, existing.slug)).returning();
+    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, existing.slug)).returning(columnsButCache);
     return row;
   }
   const [row] = await db
     .insert(clubs)
     .values({ slug, manageToken: newToken(), ...values })
-    .returning();
+    .returning(columnsButCache);
   return row;
 }
 

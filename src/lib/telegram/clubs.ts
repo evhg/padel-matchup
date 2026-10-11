@@ -3,7 +3,7 @@ import type { Club, Player } from "@/db/schema";
 import { platformById } from "@/lib/booking/platforms";
 import { baseUrl } from "@/lib/config";
 import { cityBySlug } from "@/lib/domain/cities";
-import { type ClaimReason, claimEmailForCode, setClubNotifyMessage } from "@/lib/domain/clubs";
+import { type ClaimReason, claimEmailForCode, type PickableClub, setClubNotifyMessage } from "@/lib/domain/clubs";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { editMessageText, esc, sendMessage, telegramEnabled } from "./api";
 
@@ -48,7 +48,7 @@ const isListing = (club: Pick<Club, "source">) => club.source === "player";
 const rejectRow = (token: string, keys: ClaimReason[], label: Record<ClaimReason, string>) => keys.map((k) => ({ text: label[k], callback_data: `cr:${token}:${REASON_CODE[k]}` }));
 const REJECT_LABEL: Record<ClaimReason, string> = { unconfirmed: "❌ Not confirmed", taken: "❌ Someone else runs it", not_a_club: "❌ Not a club", duplicate: "❌ Duplicate" };
 
-export function clubClaimMessage(club: Club, claimant: Player): string {
+export function clubClaimMessage(club: PickableClub, claimant: Player): string {
   const platform = platformById(club.bookingPlatform)?.name;
   const lines = [
     `<b>Club claim</b> · ${esc(club.name)}`,
@@ -66,7 +66,7 @@ export function clubClaimMessage(club: Club, claimant: Player): string {
 }
 
 /** A player put a club on the map. It is listed already, so the message asks only whether it is real. */
-export function clubListingMessage(club: Club, addedBy: Player): string {
+export function clubListingMessage(club: PickableClub, addedBy: Player): string {
   const split = [club.courtsIndoor != null ? `${club.courtsIndoor} indoor` : null, club.courtsOutdoor != null ? `${club.courtsOutdoor} outdoor` : null].filter(Boolean).join(" · ");
   return [
     `<b>Club listed by a player</b> · ${esc(club.name)}`,
@@ -81,7 +81,7 @@ export function clubListingMessage(club: Club, addedBy: Player): string {
     .join("\n");
 }
 
-export async function askOwnerAboutClub(db: Db, club: Club, claimant: Player): Promise<boolean> {
+export async function askOwnerAboutClub(db: Db, club: PickableClub, claimant: Player): Promise<boolean> {
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return false;
   const page = [{ text: "Open page", url: `${baseUrl()}/v/${club.slug}` }, ...websiteButton(club)];

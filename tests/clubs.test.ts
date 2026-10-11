@@ -6,7 +6,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeSlotsFromBookings, localDay, parseDuration, parseFreeJson, parseIcs, refreshAllAvailability, refreshClubAvailability } from "@/lib/booking/availability";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, getClubByTokenWithCache, getClubWithCache, guessCity, listClubsClaimedBy, listLiveClubs, listPendingClubs, listShownClubs, markClaimVerified, setClubTimezone, updateClub } from "@/lib/domain/clubs";
+import { addClub, claimClub, claimEmailForCode, cleanClubInput, CLUB_LIMITS, clubStatus, decideClub, foundingKey, foundingPlacesLeft, freeCourtHours, getClub, getClubByToken, getClubByTokenWithCache, getClubWithCache, guessCity, listClubsClaimedBy, listLiveClubs, listPendingClubs, listShownClubs, markClaimVerified, setClubTimezone, updateClub } from "@/lib/domain/clubs";
 import { replaceCourts } from "@/lib/domain/courts";
 import { claimCheckLine } from "@/lib/telegram/clubs";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
@@ -204,12 +204,12 @@ describe("clubs (db)", () => {
   it("reads a club's feed into today's free courts, keeps errors honest, refreshes only live stale clubs", async () => {
     const p = await makePlayer(db, "Lin");
     const now = new Date("2026-09-06T00:30:00Z"); // 07:30 in Bangkok
-    let club = await claimClub(db, { name: "Chalong Padel", playerId: p.id, tz: "Asia/Bangkok", courts: 3, opensAt: "07:00", closesAt: "10:00", availabilityUrl: "https://chalong.example/bookings.ics", availabilityKind: "ics_bookings" });
+    const claimed = await claimClub(db, { name: "Chalong Padel", playerId: p.id, tz: "Asia/Bangkok", courts: 3, opensAt: "07:00", closesAt: "10:00", availabilityUrl: "https://chalong.example/bookings.ics", availabilityKind: "ics_bookings" });
     // Pending clubs are not refreshed by the hourly job.
     expect(await refreshAllAvailability(db, now)).toEqual({ refreshed: 0, errors: 0 });
-    expect(await decideClub(db, club.slug, true)).toBeTruthy();
+    expect(await decideClub(db, claimed.slug, true)).toBeTruthy();
     expect(await refreshAllAvailability(db, now)).toEqual({ refreshed: 1, errors: 0 });
-    club = (await getClubWithCache(db, club.slug))!;
+    let club = (await getClubWithCache(db, claimed.slug))!;
     expect(club.availability?.day).toBe("2026-09-06");
     expect(club.availability?.slots.map((s) => [s.start, s.free])).toEqual([
       ["2026-09-06T00:00:00.000Z", 3],
@@ -400,7 +400,15 @@ describe("a club read carries the cache of free courts only where a page renders
       approve: await decideClub(db, club.slug, true, NOW),
       reject: await decideClub(db, pending.slug, false, NOW),
     };
-    for (const [write, row] of Object.entries(written)) {
+    // A claim and a listing over a row with a cache: neither caller renders free times.
+    await db.update(clubs).set({ availability: cache, availabilityAt: NOW }).where(eq(clubs.slug, pending.slug));
+    const claimedOrListed = {
+      claimClub: await claimClub(db, { name: "Cache Padel", playerId: owner.id, tz: "Asia/Bangkok" }),
+      addClub: await addClub(db, { name: "Pending Padel", playerId: owner.id, tz: "Asia/Bangkok" }),
+    };
+    expect(claimedOrListed.claimClub).toMatchObject({ slug: club.slug, claimedBy: owner.id });
+    expect(claimedOrListed.addClub).toMatchObject({ slug: pending.slug, source: "player" });
+    for (const [write, row] of [...Object.entries(written), ...Object.entries(claimedOrListed)]) {
       expect(row, write).toBeTruthy();
       expect(row, write).not.toHaveProperty("availability");
     }
