@@ -8,6 +8,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { cityBySlug, venueInCity } from "@/lib/domain/cities";
 import { getCityBoard, getVenueBoard } from "@/lib/domain/venueBoard";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
+import { findOrCreateTelegramPlayer } from "@/lib/telegram/identity";
 import { strings } from "@/lib/telegram/card";
 import { clubKeyWords, parseNewCommand } from "@/lib/telegram/parse";
 import type { TgMessage, TgUpdate } from "@/lib/telegram/api";
@@ -161,7 +162,10 @@ describe("a /new match at a club named in full goes on the club's board, with on
     expect(note.body.text).toBe(strings("en").boardOn("WAREHAUS.club"));
     expect(note.body.reply_markup).toEqual({ inline_keyboard: [[{ text: strings("en").boardOff, callback_data: `vb:${ev.code}:0` }]] });
 
-    // Somebody else's tap changes nothing.
+    // Somebody else's tap changes nothing. Bo is a player the bot knows, so the organiser check is the
+    // only thing that refuses him (a stranger with no player row would be refused before it).
+    const bo = await findOrCreateTelegramPlayer(db, user(62, "Bo"));
+    expect(bo.id).not.toBe(ev.creatorPlayerId);
     expect(await tap(chat, user(62, "Bo"), `vb:${ev.code}:0`)).toBe("board_not_organizer");
     expect((await eventOf(outcome)).publicListing).toBe(true);
     // The organiser's: off the board, the note says so and offers the way back.
