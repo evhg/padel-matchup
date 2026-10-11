@@ -1,5 +1,5 @@
 import type { Db } from "@/db";
-import { APP_NAME, apexHost, baseUrl } from "@/lib/config";
+import { APP_NAME, apexHost, baseUrl, bookAddress } from "@/lib/config";
 import { readBooking } from "@/lib/domain/bookingPaste";
 import { bookAnswer, mailBookingRead, mailShowsBooking, mailText, ownDomain, quotesOurAnswer } from "@/lib/domain/bookMail";
 import { markedAmong } from "@/lib/domain/emailMarks";
@@ -36,7 +36,7 @@ import { pasteBooking } from "./paste";
  * through Resend and two counters (`book_mail_answered`, `emails_sent`), at most
  * `bookMailAnswersPerDay` (thirty) times a day: Resend's free plan sends a hundred for the whole app.
  */
-export const bookAddress = () => `book@${apexHost()}`;
+export { bookAddress };
 const bookFrom = () => `${APP_NAME} <${bookAddress()}>`;
 
 /** The mail is for our book@ (any of its recipients, the whole address: book@ at another domain is not ours). */
@@ -62,7 +62,7 @@ export async function answerBookMail(db: Db, mail: InboundMail, o: { fetchImpl?:
 
   const { text, links, own } = mailText(mail.subject, mail.text, mail.html);
   // The shape first, with no read: a platform's link, or a day and a time.
-  if (!mailShowsBooking(readBooking({ text, links, clubs: [], now, tz: "UTC" }))) return skip("nothing");
+  if (!mailShowsBooking(readBooking({ text, links, clubs: [], now, tz: null }))) return skip("nothing");
   if (!(await takeRate(db, "bookmail_id", mail.emailId, 1, "day", now))) return skip("again");
   // Three answers a day to one address, before the day's cap: a forged From cannot spend the thirty on one stranger.
   const to = addressKey(from.email);
@@ -83,7 +83,9 @@ export async function answerBookMail(db: Db, mail: InboundMail, o: { fetchImpl?:
       return skip("marked");
     }
     // No player, no last venue, no account: the sender's address proves nobody. And no link is opened.
-    const got = await pasteBooking(db, { text, links, tz: "UTC", rateKey: `mail:${to}`, playerId: null, selfName: from.name, now }, { fetchImpl: o.fetchImpl, preview: false });
+    // No zone either: a mail says none, so the form's link carries the club's zone or none, and the form
+    // takes the person's own. Until 11 October 2026 it carried UTC, and 11:00 typed in Phuket became 18:00.
+    const got = await pasteBooking(db, { text, links, tz: null, rateKey: `mail:${to}`, playerId: null, selfName: from.name, now }, { fetchImpl: o.fetchImpl, preview: false });
     if (!got.ok || !mailBookingRead(got.read)) {
       await giveBack();
       return skip(!got.ok && got.reason === "limit" ? "limit" : "nothing");

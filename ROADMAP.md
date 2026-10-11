@@ -912,7 +912,9 @@ Everything in this list is live. The README describes each in detail.
 - **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
   app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
   link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
-  fills the club, the day, the time, the length, the court, the price and the players.
+  fills what the paste gives: the club, the day, the time, the length, the court, the price and the
+  players, where the words, a screenshot or the link's preview carry them. The owner's own Padel Society
+  link alone gives none of them (see the end of this entry).
   `src/lib/domain/bookingPaste.ts` is the reader. `src/lib/booking/unfurl.ts` reads a pasted link once,
   as a chat app's preview robot reads it (DECIDING rule 35). It skips a platform that rests after a
   block or that a switch holds. On the first page, "Booked already? Paste it" opens the form filled. The
@@ -922,7 +924,14 @@ Everything in this list is live. The README describes each in detail.
   words gave the club, the day and the time. The answer then becomes the match's link, ready for the
   WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
   Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
-  Its preview gives the match id only, so the words that the person pastes carry the rest.
+  Its preview gives the match id only, so the words that the person pastes carry the rest. Since the
+  audit of 11 October 2026: the WhatsApp thread answers a pasted booking with what it read and the
+  filled form (`src/lib/whatsapp/paste.ts`); it does nothing until the owner's WhatsApp number is set.
+  The paste box names book@ ("Or forward the confirmation to book@kicksma.sh"). No door puts UTC in the
+  form's link any more: the zone is the club's, else the browser's or the chat's, else the form takes
+  the person's own. A day or a time the booking did not give keeps the form's own and is marked as not
+  the booking's. The bot's "Create match" is offered only when the words name a club, a day and a time,
+  so the paste always shows a booking (`showsBooking`) when it marks the court booked.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
   37). Production had one group of four or five in Phuket, every full match made by hand with the same
@@ -1097,6 +1106,22 @@ the player, and invite them to try it.
    1.5 s and then trickles the rest still gives 418 on both builds (main 3 in 20 loads, the lean build
    1 in 15). Start the root cause there, at the `<h1>` under `<main>` on `/me`. Do not relax a browser
    check that already reads order from the elements (`headingOrder` in `e2e/core.mjs`).
+5. **Four more ways to bring in a booked court: not built.** The owner asked "Some other ideas?" on
+   11 October 2026, and a session named four. None is built, and none is decided. To build one is
+   the owner's decision.
+   - **Web Share Target**: "Share" in a platform's app lists Kicksmash, and the share opens the
+     filled form. The web manifest has no `share_target` today.
+   - **An `.ics` file**: a booking's calendar file, read into the form. Kicksmash writes `.ics`
+     files and reads none.
+   - **A slot check**: the paste compares its day and time with the club's free court times, and
+     says when the court shows free. The paste does not read the free-times cache.
+   - **`/booked` in a group**: a command in a crew's Telegram group that pastes a booking there. The
+     paste works in a private chat only.
+6. **The paste doors wait on two outside facts.** No mail has reached book@ (`book_mail_answered`
+   and `book_mail_skipped` are empty on 11 October 2026): one test mail from the owner shows whether
+   Resend routes it. The screenshot read and the other AI features wait on a working
+   `ANTHROPIC_API_KEY`.
+
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
 

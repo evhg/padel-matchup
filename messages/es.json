@@ -135,7 +135,8 @@
     "pasteShot": "Añadir captura",
     "pasteShotOff": "Ahora no podemos leer una captura. Pega el enlace o el texto de tu reserva.",
     "pasteShotBad": "No pudimos abrir esa imagen. Añade una captura de tu reserva.",
-    "pasteShotNote": "Un modelo de IA lee tu captura una vez. No la guardamos."
+    "pasteShotNote": "Un modelo de IA lee tu captura una vez. No la guardamos.",
+    "pasteMail": "O reenvía la confirmación a {address}."
   },
   "create": {
     "title": "Nuevo partido",

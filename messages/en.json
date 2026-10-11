@@ -135,7 +135,8 @@
     "pasteShot": "Add screenshot",
     "pasteShotOff": "Reading a screenshot is not available now. Paste the link or the text instead.",
     "pasteShotBad": "We could not open that picture. Add a screenshot of your booking.",
-    "pasteShotNote": "An AI model reads your screenshot once. We do not keep it."
+    "pasteShotNote": "An AI model reads your screenshot once. We do not keep it.",
+    "pasteMail": "Or forward the confirmation to {address}."
   },
   "create": {
     "title": "New match",

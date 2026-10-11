@@ -71,15 +71,16 @@ async function readPaste(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUse
   const links = linksIn(text, extra);
   let clubs: PickClub[] | undefined;
   if (!links.some((l) => detectPlatform(l))) {
-    const guess = chat.tz ?? "UTC";
+    const guess = chat.tz ?? null;
     const shape = readBooking({ text, links, clubs: [], now, tz: guess });
     if (!shape.date || !shape.time) return null;
     clubs = (await listClubsForPaste(db)).map(pickClubOf);
     const named = readBooking({ text, links, clubs, now, tz: guess });
     if (!named.club || !named.date || !named.time) return null;
   }
-  // The day and the time are the club's; the chat's zone counts only when no club is found.
-  const tz = (await chatZone(db, chat, null)) ?? "UTC";
+  // The day and the time are the club's; the chat's zone counts only when no club is found, and with
+  // neither the form's link carries no zone, so the form takes the person's own (never UTC).
+  const tz = await chatZone(db, chat, null);
   // Looked up, never created: a paste nobody taps leaves no player row behind.
   const me = known ?? (await findTelegramPlayer(db, from.id));
   const got = await pasteBooking(db, { text, links: extra, tz, rateKey: `tg:${from.id}`, playerId: me?.id ?? null, selfName: me?.displayName ?? from.first_name, now, clubs }, { preview: o.preview });
@@ -117,7 +118,7 @@ export function pasteSummary(read: BookingRead, locale: BotLocale, o: { now?: Da
   // The day as a calendar day, with no zone to move it: the date was read in the club's zone already.
   if (read.date) {
     const day = new Date(`${read.date}T12:00:00Z`);
-    const thisYear = o.now ? utcToZonedParts(o.now, read.tz).date.slice(0, 4) : read.date.slice(0, 4);
+    const thisYear = o.now ? utcToZonedParts(o.now, read.tz ?? "UTC").date.slice(0, 4) : read.date.slice(0, 4);
     parts.push(read.date.slice(0, 4) === thisYear ? formatEventDay(day, "UTC", locale) : new Intl.DateTimeFormat(locale, { timeZone: "UTC", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(day));
   }
   const len = parseMatchLength(read.minutes);
@@ -159,7 +160,8 @@ export async function pasteInChat(db: Db, msg: TgMessage, chat: TelegramChat, fr
   const { read } = got;
   const check = pasteCheck(got);
   // The start the answer shows travels with the button, so the tap makes the match on that day and no other.
-  const start = read.date && read.time && read.club && !check ? zonedTimeToUtc(read.date, read.time, read.tz) : null;
+  // No zone, no start: a club with no zone and a chat with none go to the form, which takes the person's own.
+  const start = read.date && read.time && read.club && read.tz && !check ? zonedTimeToUtc(read.date, read.time, read.tz) : null;
   const create = start ? [{ text: s.pasteCreate, callback_data: `pb:c:${Math.round(start.getTime() / 60_000).toString(36)}` }] : [];
   const keyboard: InlineKeyboard = { inline_keyboard: [[...create, { text: s.pasteEdit, url: editUrl(got.href, chat) }]] };
   await sendMessage(chat.chatId, pasteSummary(read, chatLocale(chat), { now, check }), { keyboard, replyTo: msg.message_id, silent: true });
@@ -202,7 +204,7 @@ export async function handlePasteCallback(db: Db, cb: NonNullable<TgUpdate["call
     return got ? "paste_limit" : "paste_lost";
   }
   const { read } = got;
-  if (!read.club || !read.date || !read.time) {
+  if (!read.club || !read.date || !read.time || !read.tz) {
     await answerCallbackQuery(cb.id, s.pasteIncomplete, { alert: true });
     return "paste_incomplete";
   }

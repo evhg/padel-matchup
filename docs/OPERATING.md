@@ -436,7 +436,9 @@ outcome to Vercel's function log as `book_mail` and the outcome, with no address
 `skipped:` and the reason (`sender`, `machine`, `own`, `quote`, `nothing`, `again`, `limit`, `cap`,
 `marked`, `send`). When `book_mail_skipped` climbs and `book_mail_answered` stays at zero, read those
 lines in the runtime log of `/api/inbound/resend`. If book@ gets no mail at all, Resend's receiving
-domain may not route that address: send one test mail and look for `email.received` in Resend.
+domain may not route that address: send one test mail and look for `email.received` in Resend. The
+paste box on the first page names book@ only while `RESEND_WEBHOOK_SECRET` and `RESEND_API_KEY` are
+both set (`bookMailOpen`). On 11 October 2026 no mail had reached book@ yet.
 
 **A booking screenshot.** "Add screenshot" in the landing page's paste box sends one picture to the
 AI model for one read (DECIDING rule 9, the owner, 11 October 2026). The call uses `ANTHROPIC_API_KEY`

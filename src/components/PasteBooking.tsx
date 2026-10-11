@@ -24,10 +24,13 @@ import { shrinkShot } from "@/lib/shrinkShot";
  * one plain line and the words still work. While the key is refused or the month's spend is at the
  * cap, the box does not offer the screenshot at all (`shot`, from `screenshotOffered`).
  *
+ * Under the hint, the third door: "Or forward the confirmation to book@kicksma.sh" (`mail`, only where
+ * book@ can answer: `bookMailOpen`). Without it, only the owner knew the address existed.
+ *
  * No `<form>`: this sits beside the create form, and a form inside a form is the bug that once left
  * the landing page's way back in dead (e2e/core.mjs counts nested forms).
  */
-export function PasteBooking({ max, shot = true }: { max: number; shot?: boolean }) {
+export function PasteBooking({ max, shot = true, mail = null }: { max: number; shot?: boolean; mail?: string | null }) {
   const t = useTranslations("landing");
   const router = useRouter();
   const box = useId();
@@ -83,6 +86,13 @@ export function PasteBooking({ max, shot = true }: { max: number; shot?: boolean
           <label htmlFor={`${box}-text`} className="text-sm font-semibold">
             {t("pasteHint")}
           </label>
+          {mail && (
+            <p className="mt-0.5 text-xs text-muted" data-testid="paste-mail">
+              <a className="hover:underline" href={`mailto:${mail}`}>
+                {t("pasteMail", { address: mail })}
+              </a>
+            </p>
+          )}
           {/* A sentence about the box goes the moment the box changes: it described what was there before. */}
           <textarea
             id={`${box}-text`}

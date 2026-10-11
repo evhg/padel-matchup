@@ -11,8 +11,9 @@ import { SEAT_NAMES_MAX } from "./slots";
  * Three doors write these links. A venue board or a free court offered to a player
  * (`?venue=&date=&time=&tz=`) lists the match on the club's board, as it always did. The americano
  * generator carries `names`. A pasted booking (`bookingHref` in `bookingPaste.ts`: `src=paste` with
- * `len`, `court`, `cost`, `names`, `booked=1` and `invite`) fills what the booking said, leaves the rest empty
- * and says which fields those are, and never lists the match on the board: the organiser booked a
+ * `len`, `court`, `cost`, `names`, `booked=1` and `invite`) fills what the booking said, keeps the form's
+ * own day and time where it said none, says which fields the booking left out, and never lists the
+ * match on the board: the organiser booked a
  * court for their own four, and the board is theirs to choose (the switch under More options).
  * Pure.
  */
@@ -90,11 +91,12 @@ export function readCreateLink(sp: CreateLink): LinkPrefill {
   // The venue as the venue board always read it: trimmed and held to 80.
   const venue = typeof sp.venue === "string" ? sp.venue.trim().slice(0, VENUE_MAX) || null : null;
   const tz = typeof sp.tz === "string" && isValidTimeZone(sp.tz) ? sp.tz : null;
-  // A day and a time mean nothing without their zone. A club's link brings all three or none; a
-  // pasted booking may lack the day or the time, and the form then asks for the one it lacks.
-  let date = tz && isDate(sp.date) ? sp.date : null;
-  let time = tz && isTime(sp.time) ? sp.time : null;
-  if (!fromPaste && !(date && time)) date = time = null;
+  // A club's link brings the day, the time and their zone, all three or none. A pasted booking may lack
+  // any of them: the form keeps its own day and time for one it lacks and says so, and without a zone
+  // (a mail, a chat with none) the day and the time are the person's own wall clock, in the form's zone.
+  let date = (tz || fromPaste) && isDate(sp.date) ? sp.date : null;
+  let time = (tz || fromPaste) && isTime(sp.time) ? sp.time : null;
+  if (!fromPaste && !(date && time && tz)) date = time = null;
   const names = (sp.names ?? "")
     .split(",")
     .map((n) => n.trim().slice(0, NAME_MAX))

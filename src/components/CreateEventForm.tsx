@@ -64,7 +64,8 @@ export function CreateEventForm({
   const t = useTranslations();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
   const defaultFor = (tz: string) => (patterns[0] ? nextOccurrence(patterns[0].dow, patterns[0].time, tz) : tomorrowAt(tz));
-  const initial = defaultFor(defaultTz);
+  // In the zone the form opens in: a pasted booking's club's zone, else the person's own.
+  const initial = defaultFor(initialValues?.tz ?? defaultTz);
   const cap = initialCapacity && Number.isInteger(initialCapacity) && initialCapacity >= 4 && initialCapacity <= 64 && initialCapacity % 4 === 0 ? initialCapacity : 8;
   const mine = venues[0]?.where === "yours" ? venues[0] : null;
   const [values, setValues] = useState<EventFormValues>({
@@ -101,8 +102,11 @@ export function CreateEventForm({
     payNote: "",
     ...initialValues,
   });
-  // A pasted booking's day and hour are the club's, and an empty one is left empty for the organiser: the browser's zone moves neither.
-  const touched = useRef(Boolean(initialValues?.date) || Boolean(booking));
+  // What the link fixed, which the browser's zone below never moves: a pasted booking's day, hour and
+  // zone (the club's, the chat's or the browser's). A paste with no zone takes the browser's here, as a
+  // plain create does, and keeps the day and the hour it read.
+  const fixed = { date: Boolean(initialValues?.date), time: Boolean(initialValues?.time) };
+  const touched = useRef(booking ? Boolean(initialValues?.tz) : Boolean(initialValues?.date));
   const [bookedByMe, setBookedByMe] = useState(Boolean(booking?.booked));
   // A create link anybody can write may carry an invitation (another booking's): the form shows the link itself, and one tap takes it off.
   const [invite, setInvite] = useState(booking?.invite ?? null);
@@ -117,7 +121,7 @@ export function CreateEventForm({
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (browserTz && browserTz !== defaultTz) {
         const d = defaultFor(browserTz);
-        setValues((v) => ({ ...v, tz: browserTz, date: d.date, time: d.time }));
+        setValues((v) => ({ ...v, tz: browserTz, ...(fixed.date ? {} : { date: d.date }), ...(fixed.time ? {} : { time: d.time }) }));
       }
     } catch {
       /* ignore */

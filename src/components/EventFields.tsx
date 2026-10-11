@@ -126,10 +126,18 @@ export function EventFields({
   startLocked?: boolean;
 }) {
   const t = useTranslations();
+  // A day or a time the booking did not give shows the form's own (the usual slot, else tomorrow at
+  // 18:00), and stays marked as not the booking's until the organiser picks one: a guess in the shape
+  // of a fact must say it is a guess.
+  const [picked, setPicked] = useState({ date: false, time: false });
+  const pick = (patch: Partial<EventFormValues>) => {
+    if ("date" in patch || "time" in patch) setPicked((p) => ({ date: p.date || "date" in patch, time: p.time || "time" in patch }));
+    onChange(patch);
+  };
   const lacks = {
     venue: missing.includes("venue") && !values.venueName.trim(),
-    date: missing.includes("date") && !values.date,
-    time: missing.includes("time") && !values.time,
+    date: missing.includes("date") && (!values.date || !picked.date),
+    time: missing.includes("time") && (!values.time || !picked.time),
   };
   const gap = "ring-2 ring-warn";
   // What the paste filled and the organiser must look at: marked while it is still the value the paste gave.
@@ -275,7 +283,7 @@ export function EventFields({
           {timeChips.map((c) => {
             const active = values.date === c.date && values.time === c.time && (!c.tz || values.tz === c.tz);
             return (
-              <button key={c.key} type="button" aria-pressed={active} data-testid={c.free ? "free-chip" : undefined} onClick={() => onChange(c.tz ? { date: c.date, time: c.time, tz: c.tz } : { date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
+              <button key={c.key} type="button" aria-pressed={active} data-testid={c.free ? "free-chip" : undefined} onClick={() => pick(c.tz ? { date: c.date, time: c.time, tz: c.tz } : { date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
                 {c.free ? `✓ ${c.label}` : c.label}
               </button>
             );
@@ -287,11 +295,11 @@ export function EventFields({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label">{t("create.date")}</label>
-          <input className={`input ${lacks.date || doubt.date ? gap : ""}`} type="date" value={values.date} onChange={(e) => onChange({ date: e.target.value })} disabled={startLocked} required aria-describedby={lacks.date ? "paste-no-date" : doubt.date ? "paste-check-day" : undefined} />
+          <input className={`input ${lacks.date || doubt.date ? gap : ""}`} type="date" value={values.date} onChange={(e) => pick({ date: e.target.value })} disabled={startLocked} required aria-describedby={lacks.date ? "paste-no-date" : doubt.date ? "paste-check-day" : undefined} />
         </div>
         <div>
           <label className="label">{t("create.time")}</label>
-          <input className={`input ${lacks.time ? gap : ""}`} type="time" step={300} value={values.time} onChange={(e) => onChange({ time: e.target.value })} disabled={startLocked} required aria-describedby={lacks.time ? "paste-no-time" : undefined} />
+          <input className={`input ${lacks.time ? gap : ""}`} type="time" step={300} value={values.time} onChange={(e) => pick({ time: e.target.value })} disabled={startLocked} required aria-describedby={lacks.time ? "paste-no-time" : undefined} />
         </div>
       </div>
       {(lacks.date || lacks.time) && (

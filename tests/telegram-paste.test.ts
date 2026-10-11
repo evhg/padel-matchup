@@ -232,7 +232,10 @@ describe("a booking pasted in the private chat", () => {
     const buttons = buttonsOf(answer.call);
     expect(buttons.map((b) => b.text)).toEqual([en.pasteEdit]);
     // The invitation is made to share, so "Edit first" carries it to the form (the owner, 11 October 2026).
-    expect(buttons[0].url).toMatch(/^https:\/\/kicksma\.sh\/\?src=paste&tz=UTC&booked=1&invite=https%3A%2F%2Fthepadelsociety\.app\.link%2FAbCdEf12345&tg=/);
+    // No club and a chat with no zone: the link carries no zone, so the form takes the person's own. It
+    // carried UTC until 11 October 2026, and 11:00 typed on the form in Phuket became 18:00 there.
+    expect(buttons[0].url).toMatch(/^https:\/\/kicksma\.sh\/\?src=paste&booked=1&invite=https%3A%2F%2Fthepadelsociety\.app\.link%2FAbCdEf12345&tg=/);
+    expect(buttons[0].url).not.toContain("tz=");
 
     // The same link behind words (a text_link entity) is read the same way.
     outside = [];
@@ -314,7 +317,7 @@ describe("a booking pasted in the private chat", () => {
   });
 
   it("shows the year of a day in another year", () => {
-    const read = { platform: null, ref: null, club: null, clubFrom: null, date: "2027-01-03", time: "18:00", tz: TZ, minutes: null, court: null, cost: null, names: [], missing: ["club" as const], dayClash: false };
+    const read = { platform: null, club: null, clubFrom: null, date: "2027-01-03", time: "18:00", tz: TZ, minutes: null, court: null, cost: null, names: [], missing: ["club" as const], dayClash: false };
     expect(pasteSummary(read, "en", { now: NOW })).toContain("Sun, Jan 3, 2027");
     expect(pasteSummary({ ...read, date: "2026-12-03" }, "en", { now: NOW })).toContain("Thu, Dec 3,");
     expect(pasteSummary({ ...read, date: "2026-12-03" }, "en", { now: NOW })).not.toContain("2026");

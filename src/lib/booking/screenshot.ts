@@ -107,7 +107,8 @@ export async function readScreenshot(
     type: string;
     text: string;
     links?: readonly string[];
-    tz: string;
+    /** The browser's zone, or null when none is known: the form then takes the person's own. */
+    tz: string | null;
     rateKey: string;
     playerId?: string | null;
     selfName?: string | null;

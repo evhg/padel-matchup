@@ -60,6 +60,16 @@ describe("a pasted booking, read on the server", () => {
     expect(s.calls).toHaveLength(0);
   });
 
+  it("gives the form no zone when the caller knows none and no club gives one, never UTC", async () => {
+    // A browser that sent no zone on a host with no edge zone header (and book@, and a chat with none).
+    const r = await paste("Mon 12 Oct 11:00-12:30 https://thepadelsociety.app.link/AbCdEf12345", { rateKey: "k-nozone", tz: null }, stub().fetchImpl, false);
+    expect(r.ok && r.read.tz).toBeNull();
+    expect(r.ok && r.href).toBe("/?src=paste&date=2026-10-12&time=11%3A00&len=90&booked=1&invite=https%3A%2F%2Fthepadelsociety.app.link%2FAbCdEf12345");
+    // The club's own zone, when the words name one.
+    const at = await paste("Warehaus Mon 12 Oct 11:00", { rateKey: "k-nozone", tz: null });
+    expect(at.ok && at.href).toContain("tz=Asia%2FBangkok");
+  });
+
   it("opens one platform link, once, when the words leave something out, and counts it", async () => {
     const s = stub();
     const links = ["https://example.com/elsewhere", "https://thepadelsociety.app.link/AbCdEf12345", "https://playtomic.com/clubs/x"];
