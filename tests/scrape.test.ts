@@ -991,7 +991,7 @@ describe("every club every 15 minutes, spread over the push ticks", () => {
   });
 
   it("21 clubs: each read every 15 minutes, in full about hourly, and no tick over 17 requests once the first hour is over", async () => {
-    // Production's 21 Playtomic clubs. A full read is four requests (the club page and three days) and
+    // Production's 20 Playtomic clubs, and Mandala once its link is there. A full read is four requests (the club page and three days) and
     // a read of today one (the tenant id kept, above). Run k is the push tick at k × 5 minutes.
     //   Before 11 October 2026: every club once an hour in full, about 21 × 4 × 24 = 2,016 requests a day.
     //   Now: each club 4 + 3 × 1 = 7 an hour, 21 × 7 × 24 = 3,528 a day, at most 17 in one tick.
