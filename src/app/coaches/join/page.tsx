@@ -7,6 +7,7 @@ import { baseUrl } from "@/lib/config";
 import { CITIES } from "@/lib/domain/cities";
 import { localeAlternates } from "@/lib/seo";
 import { COACH_SOURCE_COOKIE, cleanSource } from "@/lib/source";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function CoachesFrontPage({ searchParams }: Props) {
       <Header />
       <SourceTag source={source} cookie={COACH_SOURCE_COOKIE} />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <section className="card">
           <span className="chip-muted">🎾 {t("eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("title")}</h1>

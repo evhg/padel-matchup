@@ -20,6 +20,7 @@ import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 import { bandLabel, dayRange } from "@/lib/tournamentText";
 import { withClientMessages } from "@/i18n/withClientMessages";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ claim?: string; claimed?: string }> };
@@ -84,7 +85,7 @@ async function TournamentPage({ params, searchParams }: Props) {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         {live && <AutoRefresh seconds={60} />}
         <section className="card">
           <span className="chip-muted">🏆 {t("tournament.eyebrow")}</span>

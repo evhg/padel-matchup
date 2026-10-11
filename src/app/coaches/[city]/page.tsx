@@ -13,6 +13,7 @@ import { busyForCoaches, coachCardFacts, listPublicCoaches, hasPhoto, NO_BUSY, o
 import { getSessionPlayer } from "@/lib/session";
 import { localeAlternates } from "@/lib/seo";
 import { withClientMessages } from "@/i18n/withClientMessages";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ async function CoachesInCityPage({ params }: Props) {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
-        {coaches.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
+        {coaches.length > 0 && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />}
         <section className="card">
           <span className="chip-muted">🎾 {city.name}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("title", { city: city.name })}</h1>

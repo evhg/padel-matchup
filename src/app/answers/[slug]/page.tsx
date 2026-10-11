@@ -6,6 +6,7 @@ import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { answerPath, getPublishedAnswer } from "@/lib/listen/answers";
+import { jsonLdHtml } from "@/lib/jsonLd";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -44,7 +45,7 @@ export default async function AnswerPage({ params }: Props) {
     <>
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12" lang={a.language}>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <article className="card">
           <Link href="/answers" prefetch={false} className="text-xs font-bold uppercase tracking-wider text-faint hover:text-ink">
             ← {t("answers.eyebrow")}
