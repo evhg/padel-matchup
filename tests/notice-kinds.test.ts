@@ -163,6 +163,7 @@ describe("the kind map covers every sender", () => {
     "src/lib/telegram/handlers/crew.ts": "the crew's own group: its pinned notice and replies in the room (DECIDING rule 31)",
     "src/lib/telegram/handlers/words.ts": "an answer in the crew's group to the person who just wrote, seen by them alone",
     "src/lib/telegram/handlers/times.ts": "one reply to the person who asked (\"times?\", /times) in the chat they asked in (DECIDING rule 36)",
+    "src/lib/telegram/weeklyTimes.ts": "the crew's own group, once a week before its slot, never a person's own chat (DECIDING rules 5 and 36)",
     "src/lib/telegram/handlers/paste.ts": "one reply to the person who pasted a booking in their private chat, and that reply turned into the match's link on their tap",
     "src/lib/telegram/player.ts": "a reply to the person's own tap",
     "src/lib/telegram/coach.ts": "the coach's assistant answering the coach or student who wrote",
