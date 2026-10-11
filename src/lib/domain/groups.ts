@@ -574,7 +574,8 @@ export async function getGroupById(db: Db, id: string): Promise<Group | null> {
  * removal, or the bot losing the right to invite), and whether the bot reads it now. One indexed read
  * (`telegram_chats_group_idx`). The first group tied stays the crew's group because a second one is
  * never tied while it is (`crewStart` refuses it), so at most one row here opted in; that row comes
- * first, then any row the bot reads, then a row with a link, then the older one.
+ * first, then any row the bot reads, then a row with a link, then the older one. The opted-in row goes
+ * first even when the bot does not read it now: a group quieted before 11 October 2026 kept its link.
  */
 export async function crewTelegramInvite(db: Db, groupId: string): Promise<{ invite: string | null; listening: boolean }> {
   const [row] = await db

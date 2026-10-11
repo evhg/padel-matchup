@@ -476,6 +476,15 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(older.id), listening: true });
   });
 
+  it("the crew page hands out the link of the group that opted in, not the link an older quieted group kept", async () => {
+    const { chat, crew } = await listeningCrew(-202600);
+    // The bot may no longer pin there, so it stops reading; it may still invite, so the group keeps its link.
+    expect(await promote(chat, { status: "administrator", can_pin_messages: false, can_invite_users: true })).toBe("crew_quiet:no_pin");
+    // A group quieted before /quiet dropped the link (11 October 2026) kept it: older, read by nobody, opted out.
+    await db.insert(telegramChats).values({ chatId: -202601, type: "supergroup", title: "Old crew chat", groupId: crew.id, inviteLink: "https://t.me/+quieted", createdAt: new Date(NOW.getTime() - 30 * 24 * 3600_000) });
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: false });
+  });
+
   it("a first group the bot is gone from, with no word from Telegram, frees the crew; a failed question does not", async () => {
     const owner = await makePlayer(db, "Ana");
     const crew = await createGroup(db, { name: "Sunday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
