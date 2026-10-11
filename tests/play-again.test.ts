@@ -18,6 +18,7 @@ import { admitConfirmed, confirmLevel } from "@/lib/domain/verify";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { notifyGroupMatch, notifyPlayAgain } from "@/lib/notify";
 import { formatWeeklyWhen, timePatternOf } from "@/lib/dates";
+import { baseUrl } from "@/lib/config";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 import ruMessages from "../messages/ru.json";
@@ -551,6 +552,11 @@ describe("Play again", () => {
       expect(mail.to).toBe("fay@example.com");
       expect(mail.subject).toContain("Ana made the next game");
       expect(mail.text).toContain(`/${next.code}`);
+      // One real line under the heading, never the heading twice (audit of 11 October 2026), and "I'm in"
+      // to the public page with the join step open: one tap there, from the browser that knows Fay.
+      expect(mail.text.split("Ana made the next game").length - 1).toBe(1);
+      expect(mail.text).toContain("Tap “I'm in” and the match page opens at the join step.");
+      expect(mail.text).toContain(`I'm in: ${baseUrl()}/${next.code}?join=1`);
       // Forwarded to a friend, it must not hand the friend Fay's account.
       expect(mail.text).not.toContain("start=p_");
       expect(mail.text).not.toContain("t.me/");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { startTransition, useState, useTransition } from "react";
+import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { joinAction, leaveAction, withdrawJoinRequestAction } from "@/actions/slots";
 import { askLevelCheckAction } from "@/actions/verify";
 import { formatLevel, joinBarLevel, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
@@ -33,6 +33,7 @@ export function JoinBar({
   pairsLocked = false,
   tellGroupHref = null,
   rangeWaived = null,
+  openJoin = false,
 }: {
   code: string;
   state: JoinState;
@@ -71,6 +72,11 @@ export function JoinBar({
    * them (DECIDING rules 21 and 37): "ok" lets them in, "unverified" still asks for a confirmed level.
    */
   rangeWaived?: RangeWaiver;
+  /**
+   * The page was opened from an "I'm in" outside Telegram (`?join=1`, `playAgainJoinUrl`): the join step
+   * opens by itself, as after a tap on Join. It never joins: a link that a mail scanner follows seats nobody.
+   */
+  openJoin?: boolean;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
@@ -134,6 +140,16 @@ export function JoinBar({
         else setAskedKeys((k) => (k.includes(v.key) ? k : [...k, v.key]));
       });
     });
+
+  // "I'm in" from a message: open the step the Join button opens, once, after the open spots below
+  // registered (their effects run before this one, which sits after them on the page).
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!openJoin || opened.current || (state !== "join" && state !== "join_waitlist")) return;
+    opened.current = true;
+    if (fixedPairs || (hasIdentity && !needsLevel)) setInline(true);
+    else if (!requestJoin()) setInline(true);
+  }, [openJoin, state, fixedPairs, hasIdentity, needsLevel]);
 
   if (state === "cancelled" || state === "past") return null;
 

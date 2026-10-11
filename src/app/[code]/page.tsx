@@ -81,7 +81,7 @@ import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
 import { heldOffers } from "@/lib/domain/heldByName";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
-type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
+type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string; join?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
@@ -121,7 +121,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 async function EventPage({ params, searchParams }: Props) {
-  const source = cleanSource((await searchParams)?.s);
+  const query = await searchParams;
+  const source = cleanSource(query?.s);
+  // "I'm in" in a message outside Telegram (`playAgainJoinUrl`): the join step opens by itself; nothing is joined.
+  const openJoin = query?.join === "1";
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
   const db = await getDb();
@@ -908,6 +911,7 @@ async function EventPage({ params, searchParams }: Props) {
         pairsLocked={(tstate?.rounds.length ?? 0) > 0}
         tellGroupHref={tellGroup}
         rangeWaived={rangeWaived}
+        openJoin={openJoin}
       />
     </>
   );

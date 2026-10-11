@@ -341,15 +341,29 @@ export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: P
     if (released.get(p.id) !== "now") continue;
     // No recipient handed to ctx: no personal link is made, and none could leak into the message.
     const c = await ctx(db, next, p.locale, null, detail);
-    const s = botStrings(botLocale(p.locale));
-    const url = telegramEnabled() && p.telegramId ? (miniAppUrl(next.code) ?? open) : open;
     const text = c.t("noticeItem.playAgain", { ...c.vars, name });
     // `bind: false`: the email's "get this on Telegram" line carries a ticket that binds whoever taps it
     // to this player, and this is the message most likely to be forwarded ("want to come?").
-    await tell(db, p, text, { inline_keyboard: [[{ text: s.in, callback_data: `j:${next.code}` }, { text: s.open, url }]] }, { notice: { released: "now" }, bind: false }).catch(() => undefined);
+    if (telegramEnabled() && p.telegramId) {
+      const s = botStrings(botLocale(p.locale));
+      await tell(db, p, text, { inline_keyboard: [[{ text: s.in, callback_data: `j:${next.code}` }, { text: s.open, url: miniAppUrl(next.code) ?? open }]] }, { notice: { released: "now" }, bind: false }).catch(() => undefined);
+      continue;
+    }
+    // Email and push: the line, one line under it (never the same sentence twice), and "I'm in" to the
+    // public page with its join step open (`playAgainJoinUrl`). No personal link: a forward is safe.
+    const join = playAgainJoinUrl(next.code);
+    const body = c.t("email.playAgainBody", c.vars);
+    await tell(db, p, `${text}\n${body}`, { inline_keyboard: [[{ text: c.t("email.playAgainIn"), url: join }]] }, { notice: { released: "now" }, bind: false, label: c.t("email.playAgainIn") }).catch(() => undefined);
   }
   return people.length;
 }
+
+/**
+ * The public match page with its join step open (`?join=1`, read by the match page): the "I'm in" of a
+ * message outside Telegram. A link opens a page and changes nothing: a mail scanner that follows it
+ * seats nobody, and the page asks for the tap.
+ */
+export const playAgainJoinUrl = (code: string): string => `${eventUrl(baseUrl(), code)}?join=1`;
 
 /**
  * May this player get the club programme's email about a new match? Only a player who switched
