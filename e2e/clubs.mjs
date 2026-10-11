@@ -398,7 +398,9 @@ try {
     await chip.click();
     // The club's own zone, as its feed was read: the claim took it from the claimant's phone, so it is not Bangkok here.
     const clubTz = String(feedNow.freeCourts?.tz ?? "").replace(/_/g, " ");
-    const filled = [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: clubTz, exact: true }).count(), (await page.getByTestId("free-then").innerText()).trim()];
+    // The time, the zone button and the free-then line paint a moment after the tap: read until they agree.
+    const read = async () => [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: clubTz, exact: true }).count(), (await page.getByTestId("free-then").innerText({ timeout: 1000 }).catch(() => "")).trim()];
+    const filled = await settles(read, (v) => label.endsWith(v[0]) && v[1] === 1 && v[2] === "✓ The club shows a free court then.");
     check("the create form offers the club's free time as a chip, and a tap fills the time and the club's zone", clubTz !== "" && label.endsWith(filled[0]) && filled[1] === 1 && filled[2] === "✓ The club shows a free court then.", JSON.stringify({ label, clubTz, filled }));
   } else {
     check("past the club's last free hour, the form offers no free time rather than a guess", (await page.getByTestId("free-times").count()) === 0);
