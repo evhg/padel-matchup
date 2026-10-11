@@ -7,22 +7,24 @@ import type { Db } from "@/db";
 import { events, facts, groupMembers, groups, notices, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { NO_SIDE_EFFECTS, joinAsPlayer } from "@/lib/api/operations";
 import { anonymizePlayer } from "@/lib/domain/anonymize";
-import { createEvent, duplicateEvent, nextWeekAfter, type CreateEventInput } from "@/lib/domain/events";
-import { autoCreateGroupMatches, createGroup, weeklyGroupFromEvent } from "@/lib/domain/groups";
+import { createEvent, duplicateEvent, nextWeekAfter, updateEvent, type CreateEventInput } from "@/lib/domain/events";
+import { autoCreateGroupMatches, createGroup, createGroupFromEvent, weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { joinWithPolicy, partnerAdmission } from "@/lib/domain/joining";
-import { waivedByPlay } from "@/lib/domain/levels";
+import { joinBarLevel, waivedByPlay } from "@/lib/domain/levels";
 import { saveNoticeSettings } from "@/lib/domain/notices";
-import { admissionAt, claimPlayAgainRound, existingNextGame, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { admissionAt, claimPlayAgainRound, crewGameAt, existingNextGame, lockCrewHour, maySendPlayAgainRound, nextGameFor, rangeWaiverAt, playAgainDefault, playAgainRecipients, playAgainRoundOf, playAgainStart, playedWithOrganiser, sameNextGame, PLAY_AGAIN_FACT, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { notifyGroupMatch, notifyPlayAgain } from "@/lib/notify";
+import { formatWeeklyWhen, timePatternOf } from "@/lib/dates";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
+import ruMessages from "../messages/ru.json";
 
 /**
  * "Play again", the owner's decision of 11 October 2026 (option A, "Make the one working group repeat
  * itself"): the organiser picks the day and the time, everything else carries over, the new match is
- * the crew's when the old one was, and each player of the last match hears once, "I'm in?". With it,
+ * the crew's when the old one was, and each player of the last match hears once, "Are you in?". With it,
  * a player who already played a finished, scored match with the organiser is not held to that
  * organiser's level range.
  *
@@ -166,6 +168,39 @@ describe("Play again", () => {
       expect(await claimPlayAgainRound(db, old, next, wait.id, NOW)).toBe(false);
       expect(await claimPlayAgainRound(db, old, next, org.id, NOW)).toBe(true);
     });
+
+    it("refuses a latecomer's move of the start, so a seat taken after it never counts as taken before it", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const [ben, zed] = [await makePlayer(db, "Ben"), await makePlayer(db, "Zed")];
+      const old = await played([ana, ben], {}, { scored: false });
+      // Zed takes the free seat five minutes in and types 6-0. Then he moves the start to one minute after his seat.
+      await joinEvent(db, { eventId: old.id, playerId: zed.id, now: new Date(LAST.getTime() + 5 * 60_000) });
+      await db.insert(scores).values([{ eventId: old.id, setNumber: 1, sideA: 6, sideB: 0 }]);
+      const later = new Date(LAST.getTime() + 6 * 60_000);
+      await expect(updateEvent(db, old.id, zed.id, { startsAt: later }, NOW)).rejects.toMatchObject({ code: "forbidden", message: "startsAt" });
+      // Ben sat from before the start, and the start is the organiser's to move once it is gone.
+      await expect(updateEvent(db, old.id, ben.id, { startsAt: later }, NOW)).rejects.toMatchObject({ code: "forbidden" });
+      const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: zed.id, now: NOW });
+      expect(await claimPlayAgainRound(db, old, next, zed.id, NOW)).toBe(false);
+      expect(await playedWithOrganiser(db, ana.id, zed.id, NOW)).toBe(false);
+      // The edit form sends the time it shows: the same start with a new note still saves.
+      expect((await updateEvent(db, old.id, zed.id, { note: "Court 2", startsAt: LAST }, NOW)).event.note).toBe("Court 2");
+      // The organiser may still correct the time of their own match.
+      expect((await updateEvent(db, old.id, ana.id, { startsAt: later }, NOW)).event.startsAt.toISOString()).toBe(later.toISOString());
+    });
+
+    it("says to the page whether this viewer's tap sends the round", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const [ben, zed] = [await makePlayer(db, "Ben"), await makePlayer(db, "Zed")];
+      const old = await played([ana, ben], {}, { scored: false });
+      await joinEvent(db, { eventId: old.id, playerId: zed.id, now: new Date(LAST.getTime() + 5 * 60_000) });
+      // Nobody has played it yet: no tap sends.
+      expect(await maySendPlayAgainRound(db, old.id, ana.id, NOW)).toBe(false);
+      await db.insert(scores).values([{ eventId: old.id, setNumber: 1, sideA: 6, sideB: 0 }]);
+      expect(await maySendPlayAgainRound(db, old.id, ana.id, NOW)).toBe(true);
+      expect(await maySendPlayAgainRound(db, old.id, ben.id, NOW)).toBe(true);
+      expect(await maySendPlayAgainRound(db, old.id, zed.id, NOW)).toBe(false);
+    });
   });
 
   describe("the crew's game already at that hour", () => {
@@ -227,6 +262,72 @@ describe("Play again", () => {
       expect(await toldAbout(next.id)).toEqual([`${ben.id}:noticeItem.playAgain`, `${eve.id}:noticeItem.crewMatch`].sort());
       // The next hour does not look at the slot again.
       expect((await autoCreateGroupMatches(db, new Date(TUESDAY.getTime() + HOUR))).filter((c) => c.group.id === group.id)).toHaveLength(0);
+    });
+  });
+
+  describe("one game per crew hour", () => {
+    const TUESDAY = new Date("2026-10-13T05:00:00.000Z");
+    const crewWith = async () => {
+      const ana = await makePlayer(db, "Ana");
+      const ben = await makePlayer(db, "Ben");
+      const old = await played([ana, ben]);
+      const { group } = await weeklyGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
+      const [fresh] = await db.select().from(events).where(eq(events.id, old.id));
+      return { ana, ben, old: fresh, group, startsAt: playAgainStart(fresh, null, NOW) };
+    };
+
+    it("always finds the first game made at that hour, whichever row the database reads first", async () => {
+      const { ana, old, group, startsAt } = await crewWith();
+      // Two games at one hour, as a race before the lock could leave them. Their times are set apart by hand, both ways.
+      const g1 = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt, now: NOW });
+      const g2 = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt, now: NOW });
+      await db.update(events).set({ createdAt: new Date(NOW.getTime() + 60_000) }).where(eq(events.id, g1.id));
+      await db.update(events).set({ createdAt: NOW }).where(eq(events.id, g2.id));
+      expect((await crewGameAt(db, group.id, startsAt))?.code).toBe(g2.code);
+      await db.update(events).set({ createdAt: new Date(NOW.getTime() - 60_000) }).where(eq(events.id, g1.id));
+      expect((await crewGameAt(db, group.id, startsAt))?.code).toBe(g1.code);
+    });
+
+    it("lands a tap on the crew's game at that hour, and makes one when there is none", async () => {
+      const { ana, ben, old, group, startsAt } = await crewWith();
+      const first = await nextGameFor(db, old, { creatorPlayerId: ana.id, startsAt, now: NOW });
+      expect(first.made).toBe(true);
+      const second = await nextGameFor(db, old, { creatorPlayerId: ben.id, startsAt, now: NOW });
+      expect(second).toMatchObject({ made: false, event: { code: first.event.code } });
+      expect(await db.select().from(events).where(and(eq(events.groupId, group.id), eq(events.startsAt, startsAt)))).toHaveLength(1);
+      // The weekly slot finds it too.
+      expect((await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id).map((c) => c.adopted)).toEqual([true]);
+    });
+
+    // A lock is proven by a transaction the test holds open, on real Postgres: PGlite has one connection
+    // and queues the second caller, so it would pass with the lock removed.
+    it.skipIf(!process.env.TEST_DATABASE_URL)("makes a second tap wait while the first is still making the game, then land on it", async () => {
+      const { ana, ben, old, group, startsAt } = await crewWith();
+      let second: Promise<{ event: Event; made: boolean }> | null = null;
+      let made: Event | null = null;
+      await db.transaction(async (tx) => {
+        await lockCrewHour(tx, group.id, startsAt);
+        made = await duplicateEvent(tx, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt, now: NOW });
+        second = nextGameFor(db, old, { creatorPlayerId: ben.id, startsAt, now: NOW });
+        await new Promise((r) => setTimeout(r, 300));
+      });
+      expect(await second!).toMatchObject({ made: false, event: { code: made!.code } });
+      expect(await db.select().from(events).where(and(eq(events.groupId, group.id), eq(events.startsAt, startsAt)))).toHaveLength(1);
+    });
+
+    it.skipIf(!process.env.TEST_DATABASE_URL)("makes the weekly slot wait while a tap is still making the game, then take it", async () => {
+      const { ana, old, group, startsAt } = await crewWith();
+      let job: ReturnType<typeof autoCreateGroupMatches> | null = null;
+      let made: Event | null = null;
+      await db.transaction(async (tx) => {
+        await lockCrewHour(tx, group.id, startsAt);
+        made = await duplicateEvent(tx, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt, now: NOW });
+        job = autoCreateGroupMatches(db, TUESDAY);
+        await new Promise((r) => setTimeout(r, 300));
+      });
+      const mine = (await job!).filter((c) => c.group.id === group.id);
+      expect(mine.map((c) => ({ code: c.event.code, adopted: c.adopted }))).toEqual([{ code: made!.code, adopted: true }]);
+      expect(await db.select().from(events).where(and(eq(events.groupId, group.id), eq(events.startsAt, startsAt)))).toHaveLength(1);
     });
   });
 
@@ -315,7 +416,7 @@ describe("Play again", () => {
 
       const [dm] = dms(Number(ben.telegramId));
       const text = String(dm.body.text);
-      expect(text).toContain("Ana made the next game: Sat, Oct 17 18:00 at Warehaus. I'm in?");
+      expect(text).toContain("Ana made the next game: Sat, Oct 17 18:00 at Warehaus. Are you in?");
       expect(text).not.toContain("Ortiz");
       const buttons = (dm.body.reply_markup as { inline_keyboard: { text: string; callback_data?: string; url?: string }[][] }).inline_keyboard.flat();
       expect(buttons).toContainEqual({ text: "✅ I'm in", callback_data: `j:${next.code}` });
@@ -442,6 +543,30 @@ describe("Play again", () => {
       expect(await admissionAt(db, ev, sure, NOW)).toBe("ok");
       expect(await join(ev, pal)).toEqual({ kind: "requested" });
       expect(await join(ev, sure)).toMatchObject({ kind: "joined" });
+    });
+
+    it("tells the join bar why: a confirmed level, not the range, is what a past partner still needs", async () => {
+      const org = await makePlayer(db, "Org", { level: 3.25 });
+      const low = await makePlayer(db, "Low", { level: 2 });
+      const pal = await makePlayer(db, "Pal", { level: 2 });
+      const fits = await makePlayer(db, "Fits", { level: 3.25 });
+      const stranger = await makePlayer(db, "Stranger", { level: 2 });
+      await played([org, low, pal, fits]);
+      const strict = await ranged(org, { levelVerifiedOnly: true });
+      const plain = await ranged(org);
+      expect(await rangeWaiverAt(db, strict, low, NOW)).toBe("unverified");
+      expect(await rangeWaiverAt(db, plain, pal, NOW)).toBe("ok");
+      // Nothing waived: a stranger, a level the range lets in, the organiser.
+      expect(await rangeWaiverAt(db, strict, stranger, NOW)).toBeNull();
+      expect(await rangeWaiverAt(db, strict, fits, NOW)).toBeNull();
+      expect(await rangeWaiverAt(db, strict, org, NOW)).toBeNull();
+      // The bar: "unverified" asks for a confirmation (the verifier chips), never "outside the range".
+      const bar = (waived: "ok" | "unverified" | null, level: number, verified = false) => joinBarLevel({ range: { min: 3, max: 3.5 }, level, verifiedOnly: true, verified, waived });
+      expect(bar("unverified", 2)).toEqual({ needsLevel: false, outOfRange: false, unverified: true });
+      expect(bar(null, 2)).toEqual({ needsLevel: false, outOfRange: true, unverified: false });
+      expect(bar("ok", 2, true)).toEqual({ needsLevel: false, outOfRange: false, unverified: false });
+      expect(bar(null, 3.25)).toEqual({ needsLevel: false, outOfRange: false, unverified: true });
+      expect(bar(null, 3.25, true)).toEqual({ needsLevel: false, outOfRange: false, unverified: false });
     });
 
     it("still holds a player who took a seat after the start, and one whose organiser took a seat only after it", async () => {
@@ -614,6 +739,20 @@ describe("Play again", () => {
       expect(await inSlot(group.id, next.startsAt)).toHaveLength(1);
     });
 
+    it("takes the game \"Play again\" made into a crew made without a weekly slot, so a slot set later sees it", async () => {
+      const ana = await makePlayer(db, "Ana");
+      const old = await played([ana, await makePlayer(db, "Ben")]);
+      const next = await duplicateEvent(db, { sourceEventId: old.id, creatorPlayerId: ana.id, startsAt: playAgainStart(old, null, NOW), now: NOW });
+      expect(await claimPlayAgainRound(db, old, next, ana.id, NOW)).toBe(true);
+      const group = await createGroupFromEvent(db, { eventId: old.id, actorPlayerId: ana.id, fallbackName: "Crew" });
+      expect((await getEventByCode(db, next.code))!.event.groupId).toBe(group.id);
+      // An admin sets the weekly slot at that hour later, in the group's settings.
+      const { dow, time } = timePatternOf(LAST, TZ);
+      await db.update(groups).set({ recurDow: dow, recurTime: time }).where(eq(groups.id, group.id));
+      expect((await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id).map((c) => ({ code: c.event.code, adopted: c.adopted }))).toEqual([{ code: next.code, adopted: true }]);
+      expect(await inSlot(group.id, next.startsAt)).toHaveLength(1);
+    });
+
     it("still makes the slot's match when the game at that hour was called off", async () => {
       const ana = await makePlayer(db, "Ana");
       const old = await played([ana, await makePlayer(db, "Ben")]);
@@ -623,6 +762,15 @@ describe("Play again", () => {
       await db.update(events).set({ status: "cancelled" }).where(eq(events.id, next.id));
       expect((await autoCreateGroupMatches(db, TUESDAY)).filter((c) => c.group.id === group.id)).toHaveLength(1);
     });
+  });
+
+  it("names the weekly slot as a weekday and a time, with no comma, in a form every language can say", () => {
+    expect(formatWeeklyWhen(LAST, TZ, "en")).toBe("Saturday 18:00");
+    expect(formatWeeklyWhen(LAST, TZ, "ru")).toBe("суббота 18:00");
+    expect(formatWeeklyWhen(LAST, TZ, "es")).toBe("sábado 18:00");
+    // "Каждый" agrees with Sunday and not with Saturday or Wednesday: the line has no word that has to agree.
+    expect(ruMessages.card.sameTimeDone).not.toMatch(/Кажд(ый|ую|ое)\s*\{when\}/);
+    expect(ruMessages.card.sameTimeDone).toContain("{when}");
   });
 
   it("keeps the old match untouched", async () => {

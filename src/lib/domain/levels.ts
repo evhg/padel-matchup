@@ -259,3 +259,20 @@ export function waivedByPlay(
   if (!ev.levelVerifiedOnly) return "ok";
   return isLevelVerified({ level: p.level ?? null, levelVerifiedLevel: p.levelVerifiedLevel ?? null }) ? "ok" : "unverified";
 }
+
+/** What a past game with the organiser did to the range for this viewer (`rangeWaiverAt` in `playAgain.ts`): nothing (null), let in, or still asked for a confirmed level. */
+export type RangeWaiver = "ok" | "unverified" | null;
+
+/**
+ * The join bar's reading of the viewer's level, the same answer the server gives. `waived` "unverified"
+ * is a past partner on a confirmed-levels-only match: the range no longer holds them, a confirmed level
+ * is what they need, so the bar asks for one (the verifier chips) and never says "outside the range".
+ */
+export function joinBarLevel(o: { range: LevelRange | null; level: number | null; verifiedOnly: boolean; verified: boolean; waived: RangeWaiver }): { needsLevel: boolean; outOfRange: boolean; unverified: boolean } {
+  const fit = levelFit(o.range, o.level);
+  return {
+    needsLevel: Boolean(o.range) && o.level == null,
+    outOfRange: !o.waived && (fit === "below" || fit === "above"),
+    unverified: o.waived === "unverified" || (!o.waived && Boolean(o.range) && o.verifiedOnly && fit === "ok" && !o.verified),
+  };
+}

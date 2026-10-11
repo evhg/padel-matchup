@@ -1,10 +1,11 @@
-import { and, eq, exists, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNotNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import { events, facts, notices, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player } from "@/db/schema";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
-import { admission, rangeHolds, waivedByPlay, type Admission } from "./levels";
+import { duplicateEvent } from "./events";
+import { admission, rangeHolds, waivedByPlay, type Admission, type RangeWaiver } from "./levels";
 import { noticeKey } from "./noticeKinds";
 import { DELETED_PLAYER_NAME } from "./result";
 
@@ -14,7 +15,7 @@ import { DELETED_PLAYER_NAME } from "./result";
  *
  * The organiser picks the day and the time; the last game's day and time a week on is the default.
  * Everything else carries over (`duplicateEvent`), and a crew's match stays the crew's. Each player who
- * sat in the last match hears once, "I'm in?", through the notice gate (`notifyPlayAgain` in
+ * sat in the last match hears once, "Are you in?", through the notice gate (`notifyPlayAgain` in
  * `src/lib/notify.ts`), and a second tap on the same old match sends nothing (`claimPlayAgainRound`).
  * And a player who already played a finished, scored match with the organiser is not held to that
  * organiser's level range (`admissionAt`).
@@ -104,25 +105,43 @@ export function playedOut(now: Date): SQL[] {
 export const PLAY_AGAIN_FACT = "match.play_again";
 
 /**
- * Claims the one round of "I'm in?" messages an old match may send: only for a match that was played
- * (`playedOut`), and only by its organiser or by a player who held a seat in its line-up from before
- * the start. Joining stays open until the booked length runs out and any seated player may type the
- * score, so a stranger who took a free seat five minutes in could otherwise type 6-0 and spend the
- * round under their own name. A tap that may not send leaves the round for one that may. The old
- * match's row is locked for the read and the write, so two taps at once make one round; the record is
- * the fact log, read on `facts_subject_idx`. True for the tap that may send.
+ * Who may send an old match's one round of "Are you in?" messages: only for a match that was played
+ * (`playedOut`), and only its organiser or a player who held a seat in its line-up from before the
+ * start. Joining stays open until the booked length runs out and any seated player may type the score,
+ * so a stranger who took a free seat five minutes in could otherwise type 6-0 and spend the round under
+ * their own name (and only the organiser may move a start already gone, `updateEvent`). Conditions on
+ * `events`; the tapper's seat by `slots_event_player_idx`: taken, inside the capacity, taken by the start.
+ */
+function roundSender(q: Db, actorPlayerId: string, now: Date): SQL[] {
+  const satIn = q
+    .select({ one: sql`1` })
+    .from(slots)
+    .where(and(eq(slots.eventId, events.id), eq(slots.playerId, actorPlayerId), inArray(slots.status, [...SEATED]), lte(slots.position, events.capacity), lte(slots.joinedAt, events.startsAt)));
+  return [...playedOut(now), or(eq(events.creatorPlayerId, actorPlayerId), exists(satIn))!];
+}
+
+/** Would this player's tap send the round (`roundSender`)? The page's help line promises it only then. One read by the key. */
+export async function maySendPlayAgainRound(db: Db, oldId: string, actorPlayerId: string, now: Date): Promise<boolean> {
+  const [row] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.id, oldId), ...roundSender(db, actorPlayerId, now)))
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Claims the one round of "Are you in?" messages an old match may send, for a tap that may send it
+ * (`roundSender`). A tap that may not send leaves the round for one that may. The old match's row is
+ * locked for the read and the write, so two taps at once make one round; the record is the fact log,
+ * read on `facts_subject_idx`. True for the tap that may send.
  */
 export async function claimPlayAgainRound(db: Db, old: Pick<Event, "id" | "code">, next: Pick<Event, "code">, actorPlayerId: string, now = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {
-    // The tapper's seat, by `slots_event_player_idx`: taken, inside the capacity, and taken by the start.
-    const satIn = tx
-      .select({ one: sql`1` })
-      .from(slots)
-      .where(and(eq(slots.eventId, events.id), eq(slots.playerId, actorPlayerId), inArray(slots.status, [...SEATED]), lte(slots.position, events.capacity), lte(slots.joinedAt, events.startsAt)));
     const [row] = await tx
       .select({ id: events.id })
       .from(events)
-      .where(and(eq(events.id, old.id), ...playedOut(now), or(eq(events.creatorPlayerId, actorPlayerId), exists(satIn))))
+      .where(and(eq(events.id, old.id), ...roundSender(tx, actorPlayerId, now)))
       .for("update");
     if (!row) return false;
     const [done] = await tx
@@ -162,7 +181,8 @@ export async function sameNextGame(db: Db, oldId: string, startsAt: Date): Promi
 
 /**
  * The crew's game at this hour, when there is one that was not called off: the weekly slot may have made
- * it already ("Make it weekly"), or a member did. One read down `events_group_idx`. Null with no crew.
+ * it already ("Make it weekly"), or a member did. The first one made, should two ever exist, so every
+ * reader lands on the same game. One read down `events_group_idx`. Null with no crew.
  */
 export async function crewGameAt(db: Db, groupId: string | null, startsAt: Date): Promise<Event | null> {
   if (!groupId) return null;
@@ -170,8 +190,21 @@ export async function crewGameAt(db: Db, groupId: string | null, startsAt: Date)
     .select()
     .from(events)
     .where(and(eq(events.groupId, groupId), eq(events.startsAt, startsAt), ne(events.status, "cancelled")))
+    .orderBy(asc(events.createdAt), asc(events.id))
     .limit(1);
   return ev ?? null;
+}
+
+/**
+ * Holds one crew hour until the transaction ends: "is there a game at this hour?" and the write that
+ * follows run one caller at a time, so two "Play again" taps, or a tap and the hourly job, never each
+ * read "no game" and each make one. A transaction-scoped advisory lock on the group and the hour, as
+ * text (rule 1: no Date in a raw `sql` template); there is no unique index on (group, hour) to lean on,
+ * because a game called off keeps its row beside the new one.
+ */
+export async function lockCrewHour(tx: Db, groupId: string, startsAt: Date): Promise<void> {
+  const key = `crew-hour:${groupId}:${startsAt.toISOString()}`;
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
 }
 
 /**
@@ -189,8 +222,27 @@ export async function existingNextGame(db: Db, old: Pick<Event, "id" | "groupId"
 }
 
 /**
+ * The game a "Play again" tap ends on: the one already there (`existingNextGame`), else a new one with
+ * the old match's settings (`duplicateEvent`). For a crew's match the look and the write hold the crew
+ * hour (`lockCrewHour`), so two taps at once, or a tap beside the hourly job, make one game.
+ */
+export async function nextGameFor(db: Db, old: Event, input: { creatorPlayerId: string; startsAt: Date; now: Date }): Promise<{ event: Event; made: boolean }> {
+  const run = async (q: Db) => {
+    const there = await existingNextGame(q, old, input.startsAt);
+    if (there) return { event: there, made: false };
+    return { event: await duplicateEvent(q, { sourceEventId: old.id, creatorPlayerId: input.creatorPlayerId, startsAt: input.startsAt, now: input.now }), made: true };
+  };
+  const groupId = old.groupId;
+  if (!groupId) return run(db);
+  return db.transaction(async (tx) => {
+    await lockCrewHour(tx, groupId, input.startsAt);
+    return run(tx);
+  });
+}
+
+/**
  * Of these people, who already knows about this game: anybody with a place in it (a seat, the waiting
- * list or an invitation), and anybody who already got its crew notice or its "I'm in?" message. So
+ * list or an invitation), and anybody who already got its crew notice or its "Are you in?" message. So
  * nobody hears about one game twice, whichever of the weekly slot and "Play again" came first. Two
  * bounded reads: the game's places (`slots_event_position_idx`), and these people's notices
  * (`notices_player_created_idx`, at most ninety days of rows each).
@@ -245,4 +297,21 @@ export async function admissionAt(
   const fit = admission(ev, p);
   if (!rangeHolds(fit) || p.id === ev.creatorPlayerId) return fit;
   return waivedByPlay(ev, p, await playedWithOrganiser(db, ev.creatorPlayerId, p.id, now));
+}
+
+/**
+ * What a past game with the organiser does for this player's join on this match, for the join bar:
+ * "ok" (the range lets them in), "unverified" (the range is waived, and a confirmed-levels-only match
+ * still wants a confirmed level, so the bar asks for one), or null (nothing waived: the range does not
+ * hold them, or no past game). One read, only for a player the range would hold.
+ */
+export async function rangeWaiverAt(
+  db: Db,
+  ev: Pick<Event, "levelMin" | "levelMax" | "levelVerifiedOnly" | "creatorPlayerId">,
+  p: { id: string; level: number | null | undefined; levelVerifiedLevel?: number | null },
+  now = new Date(),
+): Promise<RangeWaiver> {
+  if (p.id === ev.creatorPlayerId || !rangeHolds(admission(ev, p))) return null;
+  const a = await admissionAt(db, ev, p, now);
+  return a === "ok" || a === "unverified" ? a : null;
 }

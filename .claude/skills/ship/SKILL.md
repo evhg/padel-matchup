@@ -232,6 +232,19 @@ learning can be a test, a gate step or a script, make it one and put the story i
   skip the organiser's level range ever after (11 October 2026). "Who played" is a seat taken at or
   before the start (`slots.joined_at <= events.starts_at`); production had no played seat taken later,
   so the rule cost nobody. When a check means "was there", ask what the door still lets in after it.
+- **A rule on a column holds only while every door that writes the column holds it too.** "Seated at
+  or before the start" compared `slots.joined_at` with `events.starts_at`, and any seated player could
+  still change `starts_at` after the start. So a latecomer moved the start past their own seat and
+  counted as having played (11 October 2026). When a guard compares two columns, list every write to
+  each of them: `updateEvent` now lets only the organiser move a start already gone.
+- **A look-then-make with no unique index is a race, and the fix is a lock on the thing, not the row.**
+  "One game per crew hour" read "no game", then made one; two taps, or a tap and the hourly job, each
+  read "no game". No row exists to lock yet, and a called-off game keeps its row, so no unique index
+  fits. `lockCrewHour` takes `pg_advisory_xact_lock(hashtext(text))` on the group and the hour, as text
+  (rule 1), around the look and the write; a reader that may still meet two rows orders by `created_at`.
+- **`scripts/i18n.mjs` once put a key inside a nested block.** It anchored on the last key line in the
+  section, and when the section ended with a block (`levelCheck.notify`), that line was inside it. The
+  JSON still parsed. It now anchors on the section's own keys and reads back where the key landed.
 - **A reader of free text falls through to silence, never to "keep the rest".** The crew group's
   "who's in …?" kept whatever words were left as the match's venue, so "who's in for beers at 8?" made
   a match at "for beers" and showed it on the card and the crew page. When a parser meets chat, what it

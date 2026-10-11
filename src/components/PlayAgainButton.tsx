@@ -11,8 +11,10 @@ export type PlayAgainOffer = {
   /** Now, and 90 days on: the server refuses anything outside, so the browser stops it first. */
   minWhen: string;
   maxWhen: string;
-  /** This match's players already had their one "I'm in?" message: the help line stops promising it. */
+  /** This match's players already had their one "Are you in?" message: the help line stops promising it. */
   sent: boolean;
+  /** This viewer's tap sends that message (the organiser, or a seat taken by the start): otherwise the line promises nothing. */
+  sends: boolean;
 };
 
 /**
@@ -55,7 +57,7 @@ export function PlayAgainButton({ code, offer }: { code: string; offer: PlayAgai
       <button type="button" className="btn-primary w-full" disabled={pending} onClick={go}>
         {pending ? t("common.working") : t("event.playAgainShort")}
       </button>
-      <p className="text-center text-xs text-faint">{offer.sent ? t("event.playAgainSent") : t("event.playAgainOne")}</p>
+      <p className="text-center text-xs text-faint">{offer.sent ? t("event.playAgainSent") : offer.sends ? t("event.playAgainOne") : t("event.playAgainPlain")}</p>
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );

@@ -260,7 +260,7 @@ export type UpdateEventResult = {
   promotedPlayerIds: string[];
 };
 
-export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput): Promise<UpdateEventResult> {
+export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput, now = new Date()): Promise<UpdateEventResult> {
   // Asked before the transaction opens. Inside one, this query waits on a connection the transaction
   // is already holding, and the whole call hangs until it times out.
   const venueName = patch.venueName === undefined ? undefined : cleanText(patch.venueName, 80);
@@ -302,6 +302,11 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     if (patch.startsAt !== undefined) {
       if (Number.isNaN(patch.startsAt.getTime())) throw new DomainError("invalid", "startsAt");
       if (patch.startsAt.getTime() !== ev.startsAt.getTime()) {
+        // Once the match has started, only the organiser moves its start. "Who played" is a seat taken by
+        // the start (`playedOut` and its readers in playAgain.ts), and joining stays open after it: a
+        // latecomer who could move the start past their own seat would count as having played, send the
+        // "Play again" round and skip the organiser's level range. The organiser's own range, their call.
+        if (ev.startsAt.getTime() <= now.getTime() && actorPlayerId !== ev.creatorPlayerId) throw new DomainError("forbidden", "startsAt");
         set.startsAt = patch.startsAt;
         calendarChanged = true;
         // Re-opening a finished event by moving it into the future.

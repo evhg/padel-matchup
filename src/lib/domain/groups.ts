@@ -8,7 +8,7 @@ import { createEvent, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
 import { cleanAskNote, joinDoor, nextAsk, type JoinVia } from "./groupAccess";
 import { normalizeRange } from "./levels";
-import { crewGameAt, playAgainRoundOf } from "./playAgain";
+import { crewGameAt, lockCrewHour, playAgainRoundOf } from "./playAgain";
 import { joinEvent } from "./slots";
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -100,25 +100,25 @@ export async function createGroupFromEvent(db: Db, input: { eventId: string; act
     memberIds: [ev.creatorPlayerId, ...memberIds],
   });
   await db.update(events).set({ groupId: group.id }).where(eq(events.id, ev.id));
+  // The next game "Play again" already made from this match becomes the crew's too (DECIDING rule 37:
+  // the next game belongs to the old one's crew), whichever door made the crew, so a weekly slot set
+  // at that hour later sees it and never makes a second game there (`autoCreateGroupMatches`).
+  const round = await playAgainRoundOf(db, ev.id);
+  if (round?.nextCode) await db.update(events).set({ groupId: group.id }).where(and(eq(events.code, round.nextCode), isNull(events.groupId), ne(events.status, "cancelled")));
   return group;
 }
 
 /**
  * "Make it weekly" ("Same time next week?" in the chat): the match's crew becomes a group with a weekly
  * slot at the match's own day and time, so the next card posts itself. An existing group keeps its
- * settings. The next game "Play again" already made from this match becomes the crew's too (DECIDING
- * rule 37: the next game belongs to the old one's crew), so the slot sees it and never makes a second
- * match for the same hour (`autoCreateGroupMatches`).
+ * settings. The next game "Play again" already made from this match becomes the crew's too
+ * (`createGroupFromEvent`), so the slot sees it and never makes a second match for the same hour.
  */
 export async function weeklyGroupFromEvent(db: Db, input: { eventId: string; actorPlayerId: string; fallbackName: string }): Promise<{ group: Group; created: boolean }> {
   const [ev] = await db.select().from(events).where(eq(events.id, input.eventId));
   if (!ev) throw new DomainError("not_found");
   const existed = Boolean(ev.groupId);
   const group = await createGroupFromEvent(db, { eventId: ev.id, actorPlayerId: input.actorPlayerId, fallbackName: input.fallbackName });
-  if (!existed) {
-    const round = await playAgainRoundOf(db, ev.id);
-    if (round?.nextCode) await db.update(events).set({ groupId: group.id }).where(and(eq(events.code, round.nextCode), isNull(events.groupId), ne(events.status, "cancelled")));
-  }
   if (existed || group.recurDow !== null) return { group, created: false };
   const { dow, time } = timePatternOf(ev.startsAt, ev.tz);
   const [updated] = await db.update(groups).set({ recurDow: dow, recurTime: time, recurLastCreatedFor: null }).where(eq(groups.id, group.id)).returning();
@@ -501,30 +501,38 @@ export async function autoCreateGroupMatches(db: Db, now = new Date()): Promise<
     // The crew already has a game at this hour ("Play again" made it, DECIDING rule 37): the slot is
     // taken, not made twice, and the job tells the members who have not heard of it. One read down
     // `events_group_idx`, only for a group whose slot is due; the slot counts as made, so once.
-    const taken = await crewGameAt(db, g.id, startsAt);
-    if (taken) {
+    // The look and the write hold the crew hour (`lockCrewHour`), so a "Play again" tap at the same
+    // moment either lands on this game or is the game this run takes.
+    const slot = await db.transaction(async (tx) => {
+      await lockCrewHour(tx, g.id, startsAt);
+      const taken = await crewGameAt(tx, g.id, startsAt);
+      if (taken) return { event: taken, adopted: true as const };
+      const latest = await latestGroupMatch(tx, g, startsAt);
+      const event = await createEvent(tx, {
+        creatorPlayerId: g.creatorPlayerId,
+        type: g.type,
+        startsAt,
+        durationMinutes: latest?.durationMinutes ?? null,
+        category: latest?.category ?? null,
+        ageMin: latest?.ageMin ?? null,
+        tz: g.tz,
+        venueName: g.venueName,
+        venueMapUrl: g.venueMapUrl,
+        court: g.court,
+        capacity: g.capacity,
+        whenFull: g.whenFull,
+        levelMin: g.levelMin,
+        levelMax: g.levelMax,
+        groupId: g.id,
+      });
+      return { event };
+    });
+    if ("adopted" in slot) {
       await db.update(groups).set({ recurLastCreatedFor: startsAt }).where(eq(groups.id, g.id));
-      created.push({ group: g, event: taken, adopted: true });
+      created.push({ group: g, event: slot.event, adopted: true });
       continue;
     }
-    const latest = await latestGroupMatch(db, g, startsAt);
-    const event = await createEvent(db, {
-      creatorPlayerId: g.creatorPlayerId,
-      type: g.type,
-      startsAt,
-      durationMinutes: latest?.durationMinutes ?? null,
-      category: latest?.category ?? null,
-      ageMin: latest?.ageMin ?? null,
-      tz: g.tz,
-      venueName: g.venueName,
-      venueMapUrl: g.venueMapUrl,
-      court: g.court,
-      capacity: g.capacity,
-      whenFull: g.whenFull,
-      levelMin: g.levelMin,
-      levelMax: g.levelMax,
-      groupId: g.id,
-    });
+    const event = slot.event;
     await joinEvent(db, { eventId: event.id, playerId: g.creatorPlayerId, now }).catch(() => undefined);
     await db.update(groups).set({ recurLastCreatedFor: startsAt }).where(eq(groups.id, g.id));
     created.push({ group: g, event });

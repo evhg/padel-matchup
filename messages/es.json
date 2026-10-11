@@ -330,7 +330,8 @@
     "playAgainWhen": "Día y hora del próximo partido",
     "playAgainOne": "Un partido más, con la misma configuración. Cada jugador de este partido recibe un mensaje «¿Te apuntas?».",
     "playAgainSent": "Un partido más, con la misma configuración. Los jugadores de este partido ya recibieron su único mensaje «¿Te apuntas?».",
-    "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días."
+    "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días.",
+    "playAgainPlain": "Un partido más, con la misma configuración."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -1080,7 +1081,8 @@
       "admittedBody": "Estás dentro: {matches}.",
       "declinedSubject": "Sobre tu nivel",
       "declinedBody": "{verifier} no confirmó tu nivel esta vez. Juega con esa persona y vuelve a pedirlo, o pregunta a otro entrenador."
-    }
+    },
+    "gateWaived": "Solo niveles confirmados. Nadie ha confirmado aún el tuyo ({level}): pide unirte y luego pide a un entrenador que lo confirme."
   },
   "wrap": {
     "coachSubject": "{month}: {done, plural, one {# clase} other {# clases}} contigo",

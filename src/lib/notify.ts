@@ -265,7 +265,7 @@ export async function notifyGroupAskDecided(db: Db, group: Pick<Group, "code" | 
  * A group got a new match (by a member or the weekly slot): email + push to every other member.
  * `onlyUntold`: the weekly slot found the crew's game already there ("Play again" made it, DECIDING
  * rule 37), so only the members who have no place in it and no notice of it yet hear (`toldOfGame`):
- * a player of the last match had the "I'm in?" message, and nobody hears about one game twice.
+ * a player of the last match had the "Are you in?" message, and nobody hears about one game twice.
  */
 export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludePlayerId?: string | null, o: { onlyUntold?: boolean } = {}): Promise<{ emails: number; pushes: number }> {
   const rows = await db.select({ player: playersTable }).from(groupMembersTable).innerJoin(playersTable, eq(playersTable.id, groupMembersTable.playerId)).where(eq(groupMembersTable.groupId, group.id));
@@ -303,7 +303,7 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
 /**
  * "Play again" (DECIDING rule 37; the owner, 11 October 2026: "Yes, one message each"): each player
  * who sat in the last match hears once that the next game exists, "Ana made the next game: Sat, Oct 17
- * 18:00 at Warehaus. I'm in?", with the name of the next game's organiser. The next game may be the
+ * 18:00 at Warehaus. Are you in?", with the name of the next game's organiser. The next game may be the
  * crew's, already made by the weekly slot: then a player who already has a place in it or its crew
  * notice is not told again (`toldOfGame`). One round per old match, however often anybody taps, and
  * only a tap by its organiser or by a player seated from before its start may send it

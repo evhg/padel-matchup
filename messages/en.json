@@ -328,9 +328,10 @@
     "bookYourself": "You book and pay in the club's own app, then tell the others here.",
     "playAgainShort": "Play again",
     "playAgainWhen": "Day and time of the next game",
-    "playAgainOne": "One next game, same settings. Each player of this match gets one “I'm in?” message.",
-    "playAgainSent": "One next game, same settings. This match's players already had their one “I'm in?” message.",
-    "playAgainWhenRange": "Pick a day and time between now and 90 days ahead."
+    "playAgainOne": "One next game, same settings. Each player of this match gets one “Are you in?” message.",
+    "playAgainSent": "One next game, same settings. This match's players already had their one “Are you in?” message.",
+    "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
+    "playAgainPlain": "One next game, same settings."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -1002,7 +1003,7 @@
     "levelCheckAsked": "{name} asks you to confirm their level",
     "coachListed": "A coach now takes bookings in {title}: {name}",
     "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}",
-    "playAgain": "{name} made the next game: {day} {time} at {venue}. I'm in?"
+    "playAgain": "{name} made the next game: {day} {time} at {venue}. Are you in?"
   },
   "privacy": {
     "title": "Privacy",
@@ -1080,7 +1081,8 @@
       "admittedBody": "You are in: {matches}.",
       "declinedSubject": "About your level",
       "declinedBody": "{verifier} did not confirm your level this time. Play with them and ask again, or ask another coach."
-    }
+    },
+    "gateWaived": "Confirmed levels only. Nobody has confirmed yours ({level}) yet: ask to join, then ask a coach to confirm."
   },
   "wrap": {
     "coachSubject": "{month}: {done, plural, one {# lesson} other {# lessons}} with you",

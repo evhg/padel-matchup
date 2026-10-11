@@ -915,13 +915,15 @@ Everything in this list is live. The README describes each in detail.
   people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
   time in one control above the button, a week on by default; everything else carries over and a
   crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
-  game: Sat, Oct 17 18:00 at Warehaus. I'm in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
+  game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
   one insert for the whole round, the switch and quiet hours respected, the inbox keeps it, the card's
   own one-tap join in Telegram and the public match link everywhere else, and one round per old match
   (the old match's row is locked, the fact `match.play_again` is the record), and only once the match
   was played (started, not called off, scored), and only by its organiser or a player seated from
   before the start, so a stranger who takes a seat in a coming match, or a free seat after the start,
-  cannot send it. A second tap at the same day and time lands on the game already announced. The email
+  cannot send it; once a match has started, only its organiser moves its start, so a latecomer cannot
+  move it past their own seat. A second tap at the same day and time lands on the game already
+  announced, and two taps at once, or a tap beside the hourly job, make one game at a crew's hour. The email
   carries no "get this on Telegram" line, because its ticket binds whoever taps it. "Same time next week?"
   moved from the card page to the score panel under it, renamed "Make it weekly" and made the quieter
   button. The two taps never make two games at one hour, in either order: "Play again" at an hour the

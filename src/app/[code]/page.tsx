@@ -48,14 +48,14 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
-import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { canEditMatchDetails, isClaimable, isOccupied, isSeated } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { getGroupById } from "@/lib/domain/groups";
-import { admission, hasRange, isLevelVerified } from "@/lib/domain/levels";
-import { admissionAt, playAgainDefault, playAgainRoundOf, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
+import { hasRange, isLevelVerified } from "@/lib/domain/levels";
+import { maySendPlayAgainRound, playAgainDefault, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
@@ -179,8 +179,9 @@ export default async function EventPage({ params, searchParams }: Props) {
   else if (ev.whenFull === "waitlist") joinState = "join_waitlist";
   else joinState = "full";
   // Somebody the organiser already played a finished, scored match with is not held to the range
-  // (DECIDING rule 37): the button says Join, not "Ask to join". One read, only for a viewer the range would hold.
-  const rangeWaived = Boolean(me) && ranged && !viewer.isCreator && (joinState === "join" || joinState === "join_waitlist") && admission(ev, me) !== "ok" && (await admissionAt(db, ev, me!, now)) === "ok";
+  // (DECIDING rules 21 and 37): the button says Join, not "Ask to join", or on a confirmed-levels-only
+  // match the bar asks for a confirmed level, as the server does. One read, only for a viewer the range would hold.
+  const rangeWaived = me && ranged && !viewer.isCreator && (joinState === "join" || joinState === "join_waitlist" || joinState === "requested") ? await rangeWaiverAt(db, ev, me, now) : null;
 
   const typeLabel = t(ev.type === "match" ? "event.match" : "event.tournament");
   const title = calendarTitle(ev, typeLabel);
@@ -256,20 +257,23 @@ export default async function EventPage({ params, searchParams }: Props) {
   const canPlayAgain = viewer.isCreator || isMember;
   // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
   // the wall clock where it is played; and whether its one round already went out (one read, only for
-  // somebody who is offered the button on a scored match or a locked americano).
+  // somebody who is offered the button on a scored match or a locked americano), and whether this viewer's tap sends it.
   const wall = (at: Date) => {
     const p = utcToZonedParts(at, ev.tz);
     return `${p.date}T${p.time}`;
   };
   const nextGame = playAgainDefault(ev, now);
   const playAgainOffered = canPlayAgain && !cancelled && (detail.scores.length > 0 || (isTournament && ev.scoreLockedByCreator));
+  const playAgainSent = playAgainOffered && Boolean(await playAgainRoundOf(db, ev.id));
+  // The organiser, or a seat taken by the start, on a played match: one more read, only while the round is unsent.
+  const playAgainSends = playAgainOffered && !playAgainSent && me ? await maySendPlayAgainRound(db, ev.id, me.id, now) : false;
   const playAgain = playAgainOffered
-    ? { defaultWhen: `${nextGame.date}T${nextGame.time}`, minWhen: wall(now), maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)), sent: Boolean(await playAgainRoundOf(db, ev.id)) }
+    ? { defaultWhen: `${nextGame.date}T${nextGame.time}`, minWhen: wall(now), maxWhen: wall(new Date(now.getTime() + PLAY_AGAIN_AHEAD_DAYS * 24 * 3600_000)), sent: playAgainSent, sends: playAgainSends }
     : null;
   // "Make it weekly" sits under it for a match with no crew yet (it makes the weekly slot). The slot's
   // words are given on every render, in the language of that render, also once the crew exists.
   const weeklyOffered = Boolean(ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster }, me.id)));
-  const weeklyWhen = ev.type === "match" ? `${formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]} ${formatEventTime(ev.startsAt, ev.tz, locale)}` : null;
+  const weeklyWhen = ev.type === "match" ? formatWeeklyWhen(ev.startsAt, ev.tz, locale) : null;
   // After the result is in, the organizer can confirm the levels of the people they played with.
   const levelCandidates = participants
     .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)

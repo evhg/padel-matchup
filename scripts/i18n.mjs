@@ -89,17 +89,34 @@ try {
     const open = lo - 1;
     const close = hi;
 
-    // The last key inside that range is the anchor, and the new line goes after it.
+    // The last key of the section itself is the anchor, and the new line goes after it. Only a key at
+    // the section's own depth counts: when the section ends with a nested block ("notify": { … }), the
+    // last key line inside that block is not a sibling, and the first version of this put
+    // levelCheck.gateWaived inside levelCheck.notify. A nested block as the anchor ends at its brace.
     let anchorLine = -1;
-    for (let n = open + 1; n < close; n++) if (/^\s*"[^"]+"\s*:/.test(lines[n])) anchorLine = n;
+    let anchorEnd = -1;
+    let depth = 0;
+    for (let n = open + 1; n < close; n++) {
+      if (depth === 0 && /^\s*"[^"]+"\s*:/.test(lines[n])) [anchorLine, anchorEnd] = [n, n];
+      for (const ch of structural(lines[n])) {
+        if (ch === "{" || ch === "[") depth++;
+        else if (ch === "}" || ch === "]") depth--;
+      }
+      // Back at the section's depth: the anchor's value ends on this line.
+      if (depth === 0 && anchorLine !== -1) anchorEnd = n;
+    }
     if (anchorLine === -1) throw new Error(`${locale}.json: found no key inside "${parentPath.join(".")}"; add ${key} by hand`);
 
     const anchor = lines[anchorLine].trim().split('"')[1];
     const indent = lines[anchorLine].slice(0, lines[anchorLine].length - lines[anchorLine].trimStart().length);
-    const needsComma = !lines[anchorLine].trimEnd().endsWith(",");
-    const before = needsComma ? lines[anchorLine].replace(/\s*$/, "") + "," : lines[anchorLine];
+    const needsComma = !lines[anchorEnd].trimEnd().endsWith(",");
+    const before = needsComma ? lines[anchorEnd].replace(/\s*$/, "") + "," : lines[anchorEnd];
     const added = `${indent}${JSON.stringify(leaf)}: ${JSON.stringify(values[i])}`;
-    const next = [...lines.slice(0, anchorLine), before, added, ...lines.slice(anchorLine + 1)].join("\n");
+    const next = [...lines.slice(0, anchorEnd), before, added, ...lines.slice(anchorEnd + 1)].join("\n");
+    // Where the new key landed, read back: a line inside a nested block parses as JSON too.
+    let landed = JSON.parse(next);
+    for (const seg of parentPath) landed = landed[seg];
+    if (landed?.[leaf] !== values[i]) throw new Error(`${locale}.json: ${key} would land somewhere else; add it by hand`);
 
     JSON.parse(next); // Never write a file that stopped being JSON.
       return { p, locale, next, anchor };
