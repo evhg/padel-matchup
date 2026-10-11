@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { activity, events, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
+import { activity, events, groupMembers, groups, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
 import { isOver } from "./matchLength";
 import { DomainError } from "./errors";
@@ -8,6 +8,7 @@ import { recomputeStatus } from "./events";
 import { isNamedSeat, partnerOf, seatUnits } from "./fixedPairs";
 import { mergePlayers } from "./merge";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
+import { normalName } from "./dupes";
 
 export type JoinOutcome =
   | { outcome: "joined"; slot: Slot; event: Event }
@@ -32,11 +33,70 @@ export async function lockEvent(tx: Db, eventId: string): Promise<Event> {
   return ev;
 }
 
-function assertLive(ev: Event, now: Date) {
-  if (ev.status === "cancelled") throw new DomainError("cancelled");
-  // Joinable until the match's own length has run out, not a fixed two hours after the start.
-  if (ev.status === "past" || isOver(ev, now)) throw new DomainError("past");
+/**
+ * Why a match takes nobody now: it is cancelled, or it is over. Null while it is live. Joinable until
+ * the match's own length has run out, not a fixed two hours after the start. Pure: the writes below
+ * and the held place by name (`heldByName.ts`) ask the same question.
+ */
+export function liveRefusal(ev: Pick<Event, "status" | "startsAt" | "durationMinutes">, now: Date): "cancelled" | "past" | null {
+  if (ev.status === "cancelled") return "cancelled";
+  if (ev.status === "past" || isOver(ev, now)) return "past";
+  return null;
 }
+
+function assertLive(ev: Event, now: Date) {
+  const why = liveRefusal(ev, now);
+  if (why) throw new DomainError(why);
+}
+
+/**
+ * The organiser of this match, or a co-organiser (an admin or the creator of the crew it belongs to).
+ * Two reads down primary keys at most, and none for a match outside a crew.
+ */
+export async function runsMatch(db: Db, ev: Pick<Event, "creatorPlayerId" | "groupId">, playerId: string): Promise<boolean> {
+  if (playerId === ev.creatorPlayerId) return true;
+  if (!ev.groupId) return false;
+  const [admin] = await db
+    .select({ id: groupMembers.playerId })
+    .from(groupMembers)
+    .where(and(eq(groupMembers.groupId, ev.groupId), eq(groupMembers.playerId, playerId), eq(groupMembers.role, "admin")))
+    .limit(1);
+  if (admin) return true;
+  const [creator] = await db.select({ id: groups.id }).from(groups).where(and(eq(groups.id, ev.groupId), eq(groups.creatorPlayerId, playerId))).limit(1);
+  return Boolean(creator);
+}
+
+/**
+ * May a record that holds a place in this match already use the personal link of a held place in it?
+ * "I'm in" from such a record does not seat it: it frees the held place (`confirmInvite`). The server
+ * asks this before that tap, and the invite page asks it before it shows "I'm in" (DECIDING rule 34).
+ *
+ *   - Yes when the place carries the record's own name: the person it is held for, in by another
+ *     door, frees it for the waiting list. The organiser or a co-organiser of that name too.
+ *   - Yes for a partner link on a fixed-pairs night, unless the record runs the match: the player who
+ *     named the partner holds that link, and the typed name ("Dani") can differ from the record
+ *     ("Daniel"). The tap makes the pair (rule 32).
+ *   - No for anybody else, because the tap would free another person's place.
+ *
+ * Reads `runsMatch` only for a partner link that does not carry the record's name.
+ */
+export async function mayUseHeldLink(
+  db: Db,
+  ev: Pick<Event, "fixedPairs" | "creatorPlayerId" | "groupId">,
+  slot: Pick<Slot, "invitedName" | "pairId">,
+  player: { id: string; displayName: string },
+): Promise<boolean> {
+  const held = normalName(slot.invitedName);
+  if (held && normalName(player.displayName) === held) return true;
+  if (!ev.fixedPairs || !slot.pairId) return false;
+  return !(await runsMatch(db, ev, player.id));
+}
+
+/** The same number, with or without its plus and whatever spaces it was typed with. */
+const samePhone = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  const digits = (p: string | null | undefined) => (normalizePhone(p) ?? "").replace(/^\+/, "");
+  return digits(a).length > 0 && digits(a) === digits(b);
+};
 
 const VACANT: Partial<typeof slots.$inferInsert> = {
   playerId: null,
@@ -392,13 +452,17 @@ export async function reserveLocked(
 export type ConfirmOutcome =
   | { outcome: "confirmed"; slot: Slot; event: Event }
   | { outcome: "already_confirmed"; slot: Slot; event: Event }
-  /** Already in by another door. On a fixed-pairs night the freed reserved spot may move the waiting list up (`promotion`). */
+  /**
+   * Already in by another door. The reserved spot is freed the way a leave frees a seat, so the
+   * waiting list may move up (`promotion`); on a fixed-pairs night the pair forms first.
+   */
   | { outcome: "already_in"; slot: Slot; event: Event; promotion?: Promotion | null }
   | { outcome: "gone"; event: Event };
 
 export async function confirmInvite(
   db: Db,
-  input: { inviteCode: string; playerId: string; email?: string | null; now?: Date },
+  /** `phone`: the number the request came from (the WhatsApp bot), never a number somebody typed. */
+  input: { inviteCode: string; playerId: string; email?: string | null; phone?: string | null; now?: Date },
 ): Promise<ConfirmOutcome> {
   const now = input.now ?? new Date();
   return db.transaction(async (tx) => {
@@ -422,6 +486,14 @@ export async function confirmInvite(
       .limit(1);
     const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
     if (elsewhere) {
+      // In the match already, on a held place's link: the tap frees that place, so only the person it
+      // is held for may make it (`mayUseHeldLink`). A place held for the number that writes (the
+      // WhatsApp JOIN) is theirs by that number. Anybody else with the link, the organiser included,
+      // used to free it, and the first player waiting took the seat.
+      if (!samePhone(slot.invitedPhone, input.phone)) {
+        const [who] = await tx.select({ id: players.id, displayName: players.displayName }).from(players).where(eq(players.id, input.playerId)).limit(1);
+        if (!who || !(await mayUseHeldLink(tx, ev, slot, who))) throw new DomainError("forbidden");
+      }
       if (ev.fixedPairs) {
         // A fixed-pairs night: the partner somebody named was in already, alone. The pair forms where
         // they sit (same side of the list, before round 1, nobody else's partner), and the reserved
@@ -437,33 +509,46 @@ export async function confirmInvite(
         const status = await recomputeStatus(tx, ev);
         return { outcome: "already_in", slot: mine, event: { ...ev, status }, promotion: first ? { ...first, also } : null };
       }
-      // Player already got in through the public link: release the reservation.
-      await tx.update(slots).set(VACANT).where(eq(slots.id, slot.id));
+      // Already in through the public link: the reserved spot is not a second seat. It goes the way a
+      // leave goes (`vacateAndPromote`), so the first player waiting moves up and is told; it used to
+      // go empty with the waiting list left where it was.
+      const promotion = await vacateAndPromote(tx, ev, slot);
       if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
-      await recomputeStatus(tx, ev);
-      return { outcome: "already_in", slot: elsewhere, event: ev };
+      const status = await recomputeStatus(tx, ev);
+      return { outcome: "already_in", slot: elsewhere, event: { ...ev, status }, promotion };
     }
 
-    const email = normalizeEmail(input.email);
-    const [confirmed] = await tx
-      .update(slots)
-      .set({
-        playerId: input.playerId,
-        status: "confirmed",
-        joinedAt: now,
-        invitedEmail: email ?? slot.invitedEmail,
-      })
-      .where(eq(slots.id, slot.id))
-      .returning();
-    if (email) {
-      await tx.update(players).set({ email }).where(and(eq(players.id, input.playerId), sql`${players.email} is null`));
-    }
-    // Round 1 was generated with a placeholder for this name: hand its matches to the real player.
-    if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
-    await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "confirmed" });
-    const status = await recomputeStatus(tx, ev);
-    return { outcome: "confirmed", slot: confirmed, event: { ...ev, status } };
+    const done = await confirmLocked(tx, ev, slot, { playerId: input.playerId, email: input.email, now });
+    return { outcome: "confirmed", ...done };
   });
+}
+
+/**
+ * The write that fills a held place: the player takes it, confirmed, at `now`. The personal link
+ * (`confirmInvite`) and the name typed on the plain link (`takeHeldByName` in `heldByName.ts`) both
+ * end here, so the organiser hears the same "Danny confirmed" either way. The lock is the caller's.
+ */
+export async function confirmLocked(tx: Db, ev: Event, slot: Slot, input: { playerId: string; email?: string | null; now: Date }): Promise<{ slot: Slot; event: Event }> {
+  const email = normalizeEmail(input.email);
+  const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
+  const [confirmed] = await tx
+    .update(slots)
+    .set({
+      playerId: input.playerId,
+      status: "confirmed",
+      joinedAt: input.now,
+      invitedEmail: email ?? slot.invitedEmail,
+    })
+    .where(eq(slots.id, slot.id))
+    .returning();
+  if (email) {
+    await tx.update(players).set({ email }).where(and(eq(players.id, input.playerId), sql`${players.email} is null`));
+  }
+  // Round 1 was generated with a placeholder for this name: hand its matches to the real player.
+  if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
+  await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "confirmed" });
+  const status = await recomputeStatus(tx, ev);
+  return { slot: confirmed, event: { ...ev, status } };
 }
 
 export type DeclineOutcome =

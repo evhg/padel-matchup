@@ -95,7 +95,10 @@
     "thatsMeIn": "That's me",
     "thatsMeCrew": "{name} already plays with this crew. Is that you?",
     "thatsMeNo": "That did not work for this name.",
-    "thatsMeSure": "Sign in as {name}?"
+    "thatsMeSure": "Sign in as {name}?",
+    "takeHeld": "Take {name}'s held place",
+    "takeHeldSure": "Take {name}'s held place?",
+    "takeHeldNo": "That place is no longer held for {name}."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -361,7 +364,7 @@
     "manageLinkTitle": "Organizer link",
     "rolodexHint": "Start typing to pick from players you've played with.",
     "inviteAll": "Send all invites in one message",
-    "inviteAllHelp": "One message listing each person's personal link. Good for a group chat.",
+    "inviteAllHelp": "One message with each person's personal link. Send it only to those people. In the group, post the match link.",
     "reserveSpot": "Reserve spot {n}",
     "reserveSheetHelp": "Hold this spot for someone. You'll get a personal link to forward to them.",
     "reserveInline": "Reserve this spot for…",
@@ -475,7 +478,9 @@
     "nameLabel": "Your name",
     "alreadyIn": "You're already in this match.",
     "playedBefore": "Played before with {email}?",
-    "playedBeforeHelp": "We know that email from an earlier match. Restore your history with a code first, then confirm this spot as you."
+    "playedBeforeHelp": "We know that email from an earlier match. Restore your history with a code first, then confirm this spot as you.",
+    "heldFor": "This place is held for {name}.",
+    "heldForHelp": "Send this link to {name}."
   },
   "shareText": {
     "event": "🎾 Padel {day} at {time} — {venue}. {spots}. Tap to join: {url}",

@@ -6,8 +6,9 @@ import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { requestBackIn } from "./backInBus";
 import { registerJoinHandler } from "./joinBus";
-import { nameIsHere } from "@/lib/domain/dupes";
+import { nameIsHere, normalName } from "@/lib/domain/dupes";
 import { LevelSelect } from "./LevelSelect";
+import { TakeHeldButton } from "./TakeHeld";
 import { ThatsMeButton } from "./ThatsMe";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
@@ -29,6 +30,7 @@ export function OpenSpot({
   emailEnabled,
   namesHere = [],
   claimable = [],
+  held = [],
   levelRange = null,
   myLevel = null,
 }: {
@@ -43,6 +45,8 @@ export function OpenSpot({
   namesHere?: readonly string[];
   /** Names on this line-up that "That's me" signs in by name (DECIDING rule 34): the page asked the rule already, and those rows wear the button too. */
   claimable?: readonly string[];
+  /** Names of places held on this line-up that a typed name may take (DECIDING rule 34, the held place by name): the page asked `heldVerdict` already. */
+  held?: readonly string[];
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
   myLevel?: number | null;
@@ -151,6 +155,8 @@ export function OpenSpot({
   }
 
   const hasNames = name.trim().length > 0;
+  // The held place this typed name may take, under the name the organiser gave it.
+  const heldName = mode === "join" && !hasIdentity ? held.find((h) => normalName(h) === normalName(name)) : undefined;
   return (
     <div ref={box} className="animate-pop">
       <div className="mb-2 flex items-center gap-3">
@@ -193,14 +199,18 @@ export function OpenSpot({
           become a second row with none of their history on it. If that name is already in this match,
           say so and offer the door instead — quietly, under the field, with the name field untouched,
           because a real namesake must still be able to join. A record the rule lets in by name signs
-          in with one tap (DECIDING rule 34); any other opens the way back in that needs proof. A crew
-          member who is not on this line-up joins, and is then offered the fold into their old record.
+          in with one tap (DECIDING rule 34); a place held for that name with nothing else on it is
+          taken in two taps, so no second row of the name appears and the open seat stays open; any
+          other opens the way back in that needs proof. A crew member who is not on this line-up joins,
+          and is then offered the fold into their old record.
         */}
         {mode === "join" && !hasIdentity && nameIsHere(name, namesHere) && (
           <p data-testid="already-here" className="text-sm text-muted">
             {t("identity.alreadyHere", { name: name.trim() })}{" "}
             {nameIsHere(name, claimable) ? (
               <ThatsMeButton code={code} name={name.trim()} className="link font-semibold" armedClassName="link font-extrabold text-ink" />
+            ) : heldName ? (
+              <TakeHeldButton code={code} name={heldName} />
             ) : (
               <button type="button" className="link font-semibold" onClick={() => requestBackIn()}>
                 {t("identity.thatsMe")}
