@@ -5,7 +5,7 @@ import { groupRequests } from "@/db/schema";
 import { joinAsPlayer, NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { groupToPublic } from "@/lib/api/serialize";
 import { createEvent } from "@/lib/domain/events";
-import { ASK_AGAIN_DAYS, askAgainFrom, canSeeMemberLevels, cleanAskNote, joinDoor, memberLevelFor, nextAsk } from "@/lib/domain/groupAccess";
+import { ASK_AGAIN_DAYS, askAgainFrom, canSeeMemberLevels, cleanAskNote, joinDoor, matchCrewGroupLink, memberLevelFor, nextAsk } from "@/lib/domain/groupAccess";
 import { anonymizePlayer } from "@/lib/domain/anonymize";
 import { createGroup, decideGroupRequest, getGroupByCode, getGroupDetail, getGroupMember, getGroupRequest, joinGroup, leaveGroup, pendingGroupRequests, updateGroup, withdrawGroupRequest } from "@/lib/domain/groups";
 import { joinWithPolicy } from "@/lib/domain/joining";
@@ -35,6 +35,20 @@ describe("who sees a member's level", () => {
     expect(canSeeMemberLevels(undefined)).toBe(false);
     expect(memberLevelFor(3.5, { role: "member" })).toBe(3.5);
     expect(memberLevelFor(3.5, null)).toBeNull();
+  });
+});
+
+// The audit of 11 October 2026: the crew's Telegram group was offered on the crew page alone. A crew
+// match's page now offers it too, to a member who holds a seat, never to a seat alone (rule 30).
+describe("the crew's Telegram group on a crew match's page", () => {
+  it("is offered to a member or an admin who holds a seat, and to nobody else", () => {
+    const tg = { invite: "https://t.me/+crewInvite" };
+    expect(matchCrewGroupLink({ role: "member" }, true, tg)).toBe(tg.invite);
+    expect(matchCrewGroupLink({ role: "admin" }, true, tg)).toBe(tg.invite);
+    expect(matchCrewGroupLink(null, true, tg), "a seat in an asking crew's match is only a seat").toBeNull();
+    expect(matchCrewGroupLink({ role: "member" }, false, tg), "a member with no seat here finds it on the crew page").toBeNull();
+    expect(matchCrewGroupLink({ role: "member" }, true, { invite: null }), "no link made yet").toBeNull();
+    expect(matchCrewGroupLink({ role: "member" }, true, null), "no bot on this deployment").toBeNull();
   });
 });
 

@@ -53,7 +53,9 @@ import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { canEditMatchDetails, isClaimable, isOccupied, isSeated, mayMoveStart } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
-import { getGroupById } from "@/lib/domain/groups";
+import { crewTelegramInvite, getGroupById, getGroupMember } from "@/lib/domain/groups";
+import { matchCrewGroupLink } from "@/lib/domain/groupAccess";
+import { telegramEnabled } from "@/lib/telegram/api";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { maySendPlayAgainRound, nextGameOf, playAgainActor, playAgainOfferWhen, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
@@ -322,6 +324,11 @@ async function EventPage({ params, searchParams }: Props) {
   const formatName = tstate ? t(({ americano: "create.formatAmericano", mexicano: "create.formatMexicano", king: "create.formatKing" } as const)[tstate.format]) : null;
 
   const group = ev.groupId ? await getGroupById(db, ev.groupId) : null;
+  // "Join the crew's Telegram group" (DECIDING rule 31): for a crew member who holds a seat here, the
+  // invite the crew page hands its members. Two reads by key (the member row, then `crewTelegramInvite`),
+  // only for a seated player of a crew match on a deployment with a bot (rules 4, 8 and 12).
+  const crewMember = group && me && isMember && telegramEnabled() ? await getGroupMember(db, group.id, me.id) : null;
+  const crewChat = crewMember ? matchCrewGroupLink(crewMember, isMember, await crewTelegramInvite(db, crewMember.groupId)) : null;
   // An Open that repeats: every edition names its series; a finished tournament offers its organizer the door once.
   const seriesRow = ev.seriesId ? await seriesOfEvent(db, ev) : null;
   const seriesNext = seriesRow ? await nextEdition(db, seriesRow.id, now) : null;
@@ -842,6 +849,11 @@ async function EventPage({ params, searchParams }: Props) {
             </div>
           )}
           {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
+          {crewChat && !cancelled && (
+            <a href={crewChat} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-4 w-full whitespace-normal leading-snug" data-testid="crew-telegram-join">
+              {t("group.telegramJoin")}
+            </a>
+          )}
         </section>
 
         {/* Share */}

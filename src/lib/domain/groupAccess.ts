@@ -24,6 +24,16 @@ export function canSeeMemberLevels(viewer: GroupViewer): boolean {
   return viewer?.role === "admin" || viewer?.role === "member";
 }
 
+/**
+ * "Join the crew's Telegram group" on a crew match's page (DECIDING rule 31): the invite link the crew
+ * page hands its members (`crewTelegramInvite`), for a viewer who is a member of the crew and holds a
+ * seat in this match. A seat alone is not membership: in a crew that asks to join, a seat is only a
+ * seat (rule 30), so a stranger who took a free seat gets no way into the crew's chat. Null otherwise.
+ */
+export function matchCrewGroupLink(viewer: GroupViewer, seated: boolean, tg: { invite: string | null } | null | undefined): string | null {
+  return canSeeMemberLevels(viewer) && seated && tg?.invite ? tg.invite : null;
+}
+
 /** A member as the viewer may see them: the level dropped unless `canSeeMemberLevels`. */
 export function memberLevelFor(level: number | null, viewer: GroupViewer): number | null {
   return canSeeMemberLevels(viewer) ? level : null;
