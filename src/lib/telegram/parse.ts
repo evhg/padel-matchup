@@ -43,9 +43,9 @@ export type ParsedNew = {
   /** True when `venue` is a court from the known lists rather than the words as typed. */
   venueKnown: boolean;
   /**
-   * A club of the directory that the line names in full (`matchVenue`'s `inFull`), or null. The owner's
-   * decision of 10 October 2026, "Yes, but only on the club's own words": such a /new match goes on the
-   * club's board, where the club's regulars can hear about a free spot (`createFromChat`).
+   * A club of the directory that the line names in full (`matchVenue`'s `inFull`, the owner's decision of
+   * 10 October 2026: "Yes, but only on the club's own words"), or null. `venue` may be the chat's own
+   * spelling of it. `createFromChat` lists the match on the club's board when it sits there.
    */
   club: string | null;
 };
@@ -305,8 +305,9 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
   const venue = words === "join" || words === "leave" ? "" : left;
   const known = venue && (opts.venues?.length || opts.clubs?.length) ? matchVenue(venue, opts.venues ?? [], opts.clubs ?? [], { inFull: true }) : null;
   // A club of the directory named in full by the line itself, not found through the chat's own courts.
-  const listed = known && opts.clubs?.length ? matchVenue(venue, [], opts.clubs, { inFull: true }) : null;
-  out.club = listed && listed === known ? listed : null;
+  // The chat may know the same club by its own spelling ("Warehaus" for WAREHAUS.club): whether the match
+  // sits at this club is the venue's slug's question (`createFromChat`), not a question of spelling.
+  out.club = known && opts.clubs?.length ? matchVenue(venue, [], opts.clubs, { inFull: true }) : null;
   out.place = (words === "join" || words === "leave" ? text.trim() : venue) || null;
   out.venueKnown = Boolean(known);
   out.venue = known ?? (venue ? venue.slice(0, 80) : null);

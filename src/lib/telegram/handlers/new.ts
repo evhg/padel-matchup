@@ -10,6 +10,7 @@ import { createEvent, updateEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
 import { settleNewMatch } from "@/lib/domain/newMatch";
 import { getEventByCode, getVenues, type EventDetail } from "@/lib/domain/queries";
+import { venueSlugFor } from "@/lib/domain/venueBoard";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { sendCalendarInvite } from "@/lib/notify";
 import { answerCallbackQuery, deleteMessage, editMessageText, esc, sendMessage, telegramBotId, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
@@ -108,13 +109,26 @@ const formKeyboard = (chat: TelegramChat, s: BotStrings): InlineKeyboard => {
 };
 
 /**
- * A /new line that names a club of the directory in full puts the match on that club's board (the
- * owner's decision of 10 October 2026: "Yes, but only on the club's own words", to "Then the match moves
- * onto that club's board, and the club's regulars can hear about a free 4th spot"). The board and the
- * free-spot notice to the club's regulars are the public listing's own paths (`getVenueBoard`, the
- * audience in `src/lib/domain/refill.ts`), so the listing is all this sets. "public" keeps its meaning.
+ * Whether a /new match goes on a board, and whether the answer offers to take it off (`byClub`).
+ *
+ * "public" lists any match, as before. Without it, a line that names a club of the directory in full
+ * lists the match when the match sits at that club: the same slug, so the sender's own spelling counts
+ * ("Warehaus" is WAREHAUS.club's `warehaus`). The board and the free-spot notice to the club's regulars
+ * are the public listing's own paths (`getVenueBoard`, the audience in `src/lib/domain/refill.ts`).
+ * The owner said yes on 10 October 2026 to a question that said such a match "moves onto that club's
+ * board". The audit of 11 October put this default to the owner again (option A, B or C). A session
+ * built option A the same day; the owner has not confirmed it.
+ *
+ * Never in a crew's own chat (`groupId`): a stranger who joins from the board becomes a member of the
+ * crew (`joinGroup`, "match"), and the crew page then gives them the crew group's invite link. There
+ * only "public" lists the match. Two reads of a club by name at most, for a line that names a club.
  */
-const listedFrom = (parsed: Pick<ParsedNew, "publicListing" | "club">) => ({ publicListing: parsed.publicListing || Boolean(parsed.club), byClub: !parsed.publicListing && Boolean(parsed.club) });
+async function listedFrom(db: Db, chat: TelegramChat, parsed: Pick<ParsedNew, "publicListing" | "club" | "venue">): Promise<{ publicListing: boolean; byClub: boolean }> {
+  if (parsed.publicListing) return { publicListing: true, byClub: false };
+  if (!parsed.club || !parsed.venue || chat.groupId) return { publicListing: false, byClub: false };
+  const atClub = parsed.venue === parsed.club || (await venueSlugFor(db, parsed.venue)) === (await venueSlugFor(db, parsed.club));
+  return { publicListing: atClub, byClub: atClub };
+}
 
 /** "vb:<code>:0" takes a /new match off its club's board, "vb:<code>:1" puts it back: the organiser's tap only. */
 export const BOARD_CALLBACK = /^vb:([A-Za-z0-9]{4}):([01])$/;
@@ -182,7 +196,7 @@ async function createFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: 
     await say(s.newHowTo, formKeyboard(chat, s));
     return "new_how";
   }
-  const listing = listedFrom(parsed);
+  const listing = await listedFrom(db, chat, parsed);
   const r = await createMatchInChat(db, chat, from, { ...parsed, startsAt: parsed.startsAt, publicListing: listing.publicListing }, tz, ctx, { replyTo: msg.message_id, threadId });
   if (!r.ok) {
     await say(r.reason === "past" ? s.newPast : r.reason === "too_many" ? s.tooMany : s.newHowTo, r.reason === "invalid" ? formKeyboard(chat, s) : undefined);
@@ -353,7 +367,7 @@ async function continueGuidedNew(db: Db, msg: TgMessage, chat: TelegramChat, fro
     await editMessageText(chat.chatId, parent.message_id, p.text, p.keyboard);
     return "new_where";
   }
-  const listing = listedFrom(parsed);
+  const listing = await listedFrom(db, chat, parsed);
   const r = await createMatchInChat(db, chat, from, { ...parsed, startsAt: parsed.startsAt, publicListing: listing.publicListing }, tz, ctx, { replyTo: msg.message_id, threadId: msg.message_thread_id ?? null });
   if (!r.ok) {
     await sendMessage(chat.chatId, esc(r.reason === "past" ? s.newPast : r.reason === "too_many" ? s.tooMany : s.newHowTo), { replyTo: msg.message_id, silent: true });

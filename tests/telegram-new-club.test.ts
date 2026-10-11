@@ -3,9 +3,10 @@ import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { clubs, events } from "@/db/schema";
+import { clubs, events, telegramChats, venues } from "@/db/schema";
 import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { cityBySlug, venueInCity } from "@/lib/domain/cities";
+import { createGroup } from "@/lib/domain/groups";
 import { getCityBoard, getVenueBoard } from "@/lib/domain/venueBoard";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { findOrCreateTelegramPlayer } from "@/lib/telegram/identity";
@@ -196,6 +197,55 @@ describe("a /new match at a club named in full goes on the club's board, with on
     const pub = await say(chat, bo, "/new tomorrow 16:00 Warehaus public");
     expect((await eventOf(pub)).publicListing).toBe(true);
     expect(boardNote()).toBeUndefined();
+  });
+
+  it("the sender's own spelling of the club is the same club: on its board, with the note, as for anybody else", async () => {
+    const chat = { id: 610005, type: "private" as const };
+    const fay = user(66, "Fay");
+    expect(await say(chat, fay, "/tz phuket")).toBe("tz");
+    // Fay has played at "Warehaus" before, as she typed it: her courts come first in the matcher.
+    const me = await findOrCreateTelegramPlayer(db, fay);
+    await db.insert(venues).values({ creatorPlayerId: me.id, name: "Warehaus" });
+    calls = [];
+    const outcome = await say(chat, fay, "/new tomorrow 19:00 Warehaus");
+    const ev = await eventOf(outcome);
+    expect([ev.venueName, ev.venueSlug, ev.publicListing]).toEqual(["Warehaus", "warehaus", true]);
+    expect((await getVenueBoard(db, "warehaus", NOW))!.events.map((b) => b.event.code)).toContain(ev.code);
+    expect(boardNote()!.body.text).toBe(strings("en").boardOn("Warehaus"));
+
+    // Her own court that only looks like a listed club sits on a board of its own, not the club's: it stays private.
+    await db.insert(clubs).values({ slug: "rawai-padel", name: "Rawai Padel", manageToken: "tok-rawai-newclub-abcdefghijklmnopq", source: "directory", tz: "Asia/Bangkok", city: "phuket" });
+    await db.insert(venues).values({ creatorPlayerId: me.id, name: "Rawai Padel Club" });
+    calls = [];
+    const own = await eventOf(await say(chat, fay, "/new tomorrow 18:00 Rawai Padel Club"));
+    expect([own.venueName, own.venueSlug, own.publicListing]).toEqual(["Rawai Padel Club", "rawai-padel-club", false]);
+    expect(boardNote()).toBeUndefined();
+  });
+
+  it("in a crew's own group a /new at a club stays off the board, by one line or by a reply to a prompt; \"public\" still lists it", async () => {
+    // A stranger who joins from the board becomes a member of the crew, and the crew page hands its members
+    // the crew group's invite link: so the crew's chat never lists a match by default.
+    const chat = { id: -610004, type: "group" as const, title: "Thursday crew" };
+    const eve = user(65, "Eve");
+    expect(await say(chat, eve, "/tz phuket")).toBe("tz");
+    const owner = await findOrCreateTelegramPlayer(db, eve);
+    const crew = await createGroup(db, { name: "Thursday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok" });
+    await db.update(telegramChats).set({ groupId: crew.id }).where(eq(telegramChats.chatId, chat.id));
+    calls = [];
+    const outcome = await say(chat, eve, "/new tomorrow 19:00 Warehaus");
+    const ev = await eventOf(outcome);
+    expect([ev.venueSlug, ev.groupId, ev.publicListing]).toEqual(["warehaus", crew.id, false]);
+    expect((await getVenueBoard(db, "warehaus", NOW))!.events.map((b) => b.event.code)).not.toContain(ev.code);
+    expect(boardNote()).toBeUndefined();
+    // The reply to the bot's place prompt ("… /new 11.10 18:00") goes the same way.
+    calls = [];
+    const prompt = { message_id: 777, date: 0, chat, from: { id: 123456, is_bot: true, first_name: "Kicksmash" }, text: "Where?\n/new 11.10 18:00" };
+    const replied = await update({ message: { message_id: messageId++, date: 0, chat, from: eve, text: "Warehaus", reply_to_message: prompt } });
+    expect(replied).toMatch(/^new_created:/);
+    expect((await eventOf(replied)).publicListing).toBe(false);
+    expect(boardNote()).toBeUndefined();
+    // "public" is the organiser's own word: the match goes on the board.
+    expect((await eventOf(await say(chat, eve, "/new tomorrow 16:00 Warehaus public"))).publicListing).toBe(true);
   });
 
   it("in a group the note goes to the organiser alone, and as a quiet reply only when Telegram will not deliver that", async () => {
