@@ -106,6 +106,20 @@ describe("Play again", () => {
     expect(plain.startsAt.toISOString()).toBe("2026-10-17T11:00:00.000Z");
   });
 
+  // Rule 37: "everything else carries over". An americano's named courts did not: the night played
+  // again read "Court 1, Court 2" (audit of 11 October 2026).
+  it("carries a night's named courts over, as the organiser named them", async () => {
+    const ana = await makePlayer(db, "Ana");
+    const night = await createEvent(db, { creatorPlayerId: ana.id, type: "tournament", startsAt: LAST, tz: TZ, whenFull: "waitlist", venueName: "Warehaus", capacity: 8, courts: 2 });
+    await db.update(events).set({ courtNames: ["Centre", "Glass"] }).where(eq(events.id, night.id));
+    const next = await duplicateEvent(db, { sourceEventId: night.id, creatorPlayerId: ana.id, now: NOW });
+    expect(next.courtNames).toEqual(["Centre", "Glass"]);
+    // A night with no names keeps none, and a match never carries any.
+    const plain = await createEvent(db, { creatorPlayerId: ana.id, type: "tournament", startsAt: LAST, tz: TZ, whenFull: "waitlist", capacity: 8, courts: 2 });
+    expect((await duplicateEvent(db, { sourceEventId: plain.id, creatorPlayerId: ana.id, now: NOW })).courtNames).toBeNull();
+    expect((await createEvent(db, { creatorPlayerId: ana.id, type: "match", startsAt: LAST, tz: TZ, whenFull: "waitlist", courtNames: ["Centre"] })).courtNames).toBeNull();
+  });
+
   it("is heard by each player who sat in the last match, and by nobody else", async () => {
     const ana = await makePlayer(db, "Ana");
     const [ben, cy, dee, eve] = [await makePlayer(db, "Ben"), await makePlayer(db, "Cy"), await makePlayer(db, "Dee"), await makePlayer(db, "Eve")];
@@ -488,6 +502,31 @@ describe("Play again", () => {
       const after = new Date(start.getTime() + 2 * HOUR);
       const real = await duplicateEvent(db, { sourceEventId: ahead.id, creatorPlayerId: ana.id, now: after });
       expect(await notifyPlayAgain(db, ahead, real, ana, after)).toBe(3);
+    });
+
+    // The audit of 11 October 2026: the round was claimed in its own transaction before anything was
+    // read, so a read that failed after it spent the one round on nobody, for good.
+    it("keeps the round when a read after the claim fails, and the next tap sends it", async () => {
+      const { ana, old, next } = await round();
+      // The database falls over on the read of the people to tell, wherever that read runs.
+      const failing = (h: Db): Db =>
+        new Proxy(h, {
+          get(t, k, r) {
+            if (k === "select")
+              return (fields?: Record<string, unknown>) => {
+                if (fields && "player" in fields) throw new Error("the database fell over");
+                return fields ? t.select(fields as never) : t.select();
+              };
+            if (k === "transaction") return (cb: (tx: Db) => Promise<unknown>) => t.transaction((tx) => cb(failing(tx as unknown as Db)));
+            const v = Reflect.get(t, k, r);
+            return typeof v === "function" ? v.bind(t) : v;
+          },
+        }) as Db;
+      await expect(notifyPlayAgain(failing(db), old, next, ana, NOW)).rejects.toThrow("the database fell over");
+      expect(await playAgainRoundOf(db, old.id)).toBeNull();
+      expect(calls.filter((c) => c.method === "sendMessage")).toHaveLength(0);
+      expect(await notifyPlayAgain(db, old, next, ana, NOW)).toBe(3);
+      expect(await playAgainRoundOf(db, old.id)).toEqual({ nextCode: next.code });
     });
 
     it("sends nothing for a match that was called off, even with a score", async () => {

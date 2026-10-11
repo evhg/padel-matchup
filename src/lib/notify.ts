@@ -307,7 +307,8 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
  * crew's, already made by the weekly slot: then a player who already has a place in it or its crew
  * notice is not told again (`toldOfGame`). One round per old match, however often anybody taps, and
  * only a tap by its organiser or by a player seated from before its start may send it
- * (`claimPlayAgainRound`); the rows for everybody in one insert (rule 12), kind `crew`; delivery only
+ * (`claimPlayAgainRound`, in one transaction with the reads that follow it, so a failed read never
+ * spends the round); the rows for everybody in one insert (rule 12), kind `crew`; delivery only
  * to the people the gate released. In Telegram the ✅ is the card's own `j:` join and "Open" the Mini
  * App or the public page; every other channel carries the public match link, never a personal one,
  * because a forwarded message keeps its buttons (as `notifyRefill`), and the email leaves out the
@@ -318,15 +319,23 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
  * Returns how many people the round reached (inbox rows), 0 when the round was already sent.
  */
 export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: Pick<Player, "id" | "displayName">, now = new Date()): Promise<number> {
-  if (!(await claimPlayAgainRound(db, old, next, tapper.id, now))) return 0;
-  const all = await playAgainRecipients(db, old, tapper.id);
-  const told = await toldOfGame(db, next.id, all.map((p) => p.id));
-  const people = all.filter((p) => !told.has(p.id));
-  if (people.length === 0) return 0;
-  const organizer = next.creatorPlayerId === tapper.id ? tapper : ((await getPlayer(db, next.creatorPlayerId)) ?? tapper);
+  // The claim and every read the round needs share one transaction: a read that fails takes the claim
+  // back with it, so the round waits for the next tap instead of being spent on nobody. The notice rows
+  // come after the commit, through the gate that never throws (`recordNotices`), so nothing after the
+  // claim can lose it.
+  const round = await db.transaction(async (tx) => {
+    if (!(await claimPlayAgainRound(tx, old, next, tapper.id, now))) return null;
+    const all = await playAgainRecipients(tx, old, tapper.id);
+    const told = await toldOfGame(tx, next.id, all.map((p) => p.id));
+    const people = all.filter((p) => !told.has(p.id));
+    if (people.length === 0) return { people, organizer: tapper, detail: null };
+    const organizer = next.creatorPlayerId === tapper.id ? tapper : ((await getPlayer(tx, next.creatorPlayerId)) ?? tapper);
+    return { people, organizer, detail: await getEventDetail(tx, next) };
+  });
+  if (!round?.detail) return 0;
+  const { people, organizer, detail } = round;
   const name = firstName(organizer.displayName);
   const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "playAgain", eventId: next.id, params: { ...matchParams(next), name }, startsAt: next.startsAt, tz: next.tz })), now);
-  const detail = await getEventDetail(db, next);
   const open = eventUrl(baseUrl(), next.code);
   for (const p of people) {
     if (released.get(p.id) !== "now") continue;

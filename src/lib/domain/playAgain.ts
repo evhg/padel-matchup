@@ -141,7 +141,8 @@ export async function maySendPlayAgainRound(db: Db, oldId: string, actorPlayerId
  * Claims the one round of "Are you in?" messages an old match may send, for a tap that may send it
  * (`roundSender`). A tap that may not send leaves the round for one that may. The old match's row is
  * locked for the read and the write, so two taps at once make one round; the record is the fact log,
- * read on `facts_subject_idx`. True for the tap that may send.
+ * read on `facts_subject_idx`. True for the tap that may send. `notifyPlayAgain` calls it inside the
+ * transaction that reads the round's people, so a read that fails there takes the claim back with it.
  */
 export async function claimPlayAgainRound(db: Db, old: Pick<Event, "id" | "code">, next: Pick<Event, "code">, actorPlayerId: string, now = new Date()): Promise<boolean> {
   return db.transaction(async (tx) => {

@@ -36,6 +36,8 @@ export type CreateEventInput = {
   format?: TournamentFormat | null;
   /** Tournament: two partners play every round together (decision F). Off when omitted; ignored for a match. */
   fixedPairs?: boolean;
+  /** Tournament: the organiser's names for the courts, by index (court 1 = [0]); ignored for a match. */
+  courtNames?: readonly (string | null)[] | null;
   /** Level range; omitted or 0–7 = open to everyone. */
   levelMin?: number | null;
   levelMax?: number | null;
@@ -88,6 +90,17 @@ function cleanUrl(v: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A tournament's court names as a write stores them: at most sixteen, each trimmed to twenty
+ * characters, an empty one kept as "Court n", and none at all when every name is empty. The cut
+ * `setTournamentSettings` makes, for whatever copies a night.
+ */
+export function cleanCourtNames(v: readonly (string | null)[] | null | undefined): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const names = v.slice(0, 16).map((n) => String(n ?? "").trim().slice(0, 20));
+  return names.some(Boolean) ? names : null;
 }
 
 /** The length a write stores: one of the three, the type's default when nobody said, and a refusal for anything else. */
@@ -165,6 +178,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           format: input.type === "tournament" ? formatOf(input.format) : null,
           fixedPairs: input.type === "tournament" && Boolean(input.fixedPairs),
           courts: input.type === "tournament" && input.courts ? Math.max(1, Math.min(16, Math.round(input.courts))) : null,
+          courtNames: input.type === "tournament" ? cleanCourtNames(input.courtNames) : null,
           pointsPerMatch: input.type === "tournament" && input.pointsPerMatch && !input.gamesTo ? Math.max(4, Math.min(99, Math.round(input.pointsPerMatch))) : null,
           gamesTo: input.type === "tournament" && input.gamesTo ? Math.max(2, Math.min(12, Math.round(input.gamesTo))) : null,
           levelMin: range.min,
@@ -228,6 +242,8 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     whenFull: src.whenFull,
     note: src.note,
     courts: src.courts,
+    // The night's named courts ("Centre", "Glass") are the club's, and the next night plays there too.
+    courtNames: src.courtNames,
     pointsPerMatch: src.pointsPerMatch,
     gamesTo: src.gamesTo,
     format: src.format,
