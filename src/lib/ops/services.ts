@@ -220,12 +220,25 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   // A table that filled its cap was cut short: the file is still a backup, but not of everything.
   const cutShort = backup && backupCapped && backupCapped.day === backup.day ? backupCapped.value : 0;
   // Each night rebuilds the repository's history with only the kept days (src/lib/backup.ts). One night
-  // that keeps the old history is harmless; more than two in a row and /privacy's "about sixty days" stops
-  // being true, so the row turns yellow and the job's log line says why.
+  // that does not rebuild it is harmless; more than two in a row and /privacy's "about sixty days" stops
+  // being true, so the row turns yellow. The age of the last rebuild against the last backup is the
+  // measure, so it also sees a night that counts neither metric: a run that the hourly job's 60 s stopped
+  // after `backup_done` and before the history step, which the next run answers "already" and never
+  // retries. Until 11 October 2026 only `backup_history_kept` could turn the row yellow, and such nights
+  // left it green. The job's log line says why a night kept the history.
   const keptLast = historyKept && (!historyRebuilt || historyKept.day > historyRebuilt.day) ? historyKept.day : null;
-  const historyStale = keptLast !== null && (!historyRebuilt || Date.parse(keptLast) - Date.parse(historyRebuilt.day) > 2 * 86_400_000);
-  const historyText = keptLast ? ` · history kept on ${keptLast}, last rebuilt ${historyRebuilt?.day ?? "never"}` : historyRebuilt ? ` · history rebuilt on ${historyRebuilt.day}` : "";
-  push({ key: "backup", name: "GitHub backup", role: "nightly export to the private repository", used: null, limit: null, usage: backup ? `last on ${backup.day}${cutShort ? ` · ${cutShort} table(s) cut at ${BACKUP_ROW_CAP.toLocaleString("en")} rows` : ""}${historyText}` : "never", ceiling: `under ${CEILINGS.backupMaxAgeHours} h old`, note: "Sixty days kept, and each night the history is rebuilt with only those days (docs/OPERATING.md says how to undo one). Token expiry would show here first. Restore one on a laptop with scripts/restore-backup.ts.", state: !backup || backupAgeH === null || backupAgeH > CEILINGS.backupMaxAgeHours ? "alert" : cutShort || historyStale ? "warn" : "ok" });
+  const rebuiltBehind = backup ? (historyRebuilt ? (Date.parse(backup.day) - Date.parse(historyRebuilt.day)) / 86_400_000 : Infinity) : 0;
+  const historyStale = rebuiltBehind > 2;
+  const historyText = keptLast
+    ? ` · history kept on ${keptLast}, last rebuilt ${historyRebuilt?.day ?? "never"}`
+    : !backup
+      ? ""
+      : !historyRebuilt
+        ? " · history never rebuilt"
+        : historyRebuilt.day === backup.day
+          ? ` · history rebuilt on ${historyRebuilt.day}`
+          : ` · history last rebuilt on ${historyRebuilt.day}`;
+  push({ key: "backup", name: "GitHub backup", role: "nightly export to the private repository", used: null, limit: null, usage: backup ? `last on ${backup.day}${cutShort ? ` · ${cutShort} table(s) cut at ${BACKUP_ROW_CAP.toLocaleString("en")} rows` : ""}${historyText}` : "never", ceiling: `under ${CEILINGS.backupMaxAgeHours} h old · history rebuilt within 2 days of it`, note: "About sixty days kept (the cutoff day too, so 61 nights), and each night the history is rebuilt with only those days (docs/OPERATING.md says how to undo one). Token expiry would show here first. Restore one on a laptop with scripts/restore-backup.ts.", state: !backup || backupAgeH === null || backupAgeH > CEILINGS.backupMaxAgeHours ? "alert" : cutShort || historyStale ? "warn" : "ok" });
   push({ key: "uptime", name: "GitHub Actions uptime probe", role: "outside check every ten minutes", used: null, limit: null, usage: incidents === 0 ? "no open incident" : `${incidents} open incident${incidents > 1 ? "s" : ""}`, ceiling: "public repository: free minutes", note: "Opens an issue and messages you while the site is down.", link: process.env.UPTIME_REPO ? `https://github.com/${process.env.UPTIME_REPO}/issues?q=label%3Auptime` : undefined, state: incidents === 0 ? "ok" : "alert" });
 
   // Domain

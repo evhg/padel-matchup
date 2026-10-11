@@ -574,7 +574,9 @@ file with the contents API only adds a commit, so the old copies stayed in the h
 after the night's file is written and the old days are pruned, `runBackup` reads the default branch's
 head, makes one new commit with the same tree and no parent ("backups as of <day>"; its body names the
 commit it replaces), and forces the branch onto it. Every older commit is then unreachable, and GitHub
-removes it at a time it does not give, which is why /privacy says "about 60 days". The guards, each
+removes it at a time it does not give. Until then, anybody with access to the repository can still
+read an old commit by its id. The prune keeps the cutoff day, so the folder holds 61 nights. That is
+why /privacy says "about the last 60 days" and says that GitHub deletes the older copies later. The guards, each
 proven in `tests/backup-history.test.ts`: no rebuild when tonight's write failed; the tree must be read
 whole and hold nothing but night files under `backups/` (a README, LICENSE, `.gitignore` or
 `.gitattributes` at the root is allowed, anything else means the token points at the wrong
@@ -583,14 +585,19 @@ the branch must not move between the first read and a second read just before th
 refused, failed or odd answer at any step stops before the update. A night that stops keeps the
 history as it was, still reports the backup as done, and says why in `backup.history` and
 `backup.historyReason` of the hourly job's answer and in its `[backup]` log line. The daily metrics
-`backup_history_rebuilt` and `backup_history_kept` count the nights, and the board's backup row names
-the last of each and turns yellow when a night kept the history and the last rebuild is more than two
-days older, or there was none. A branch protection rule or ruleset that blocks force pushes on that
-branch makes every night `github 422 at move the branch`. **To undo a rebuild**, take the commit the branch pointed at before
-it: the log line (`history rebuilt, <repo> main moved from <old> to <new>; to undo, point main back at
-<old>`), `backup.historyFrom` in the job's answer, or the body of the new commit. Then, while GitHub
-still holds that commit, point the branch back with the backup token:
-`curl -X PATCH -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" -d '{"sha":"<old>","force":true}' https://api.github.com/repos/$BACKUP_GITHUB_REPO/git/refs/heads/main`.
+`backup_history_rebuilt` and `backup_history_kept` count the nights. The board's backup row names the
+last rebuild and the last kept night. It turns yellow when the last rebuild is more than two days older
+than the last backup, or when no rebuild exists. So it also sees a night that counts neither metric:
+a run that the hourly job's 60 seconds stopped after `backup_done` and before the history step. The
+next run answers "already" for that day and does not try again. A branch protection rule or ruleset
+that blocks force pushes on that branch makes every night `github 422 at move the branch`. **To undo a
+rebuild**, take the branch and the commit it pointed at before it. The log line names both
+(`history rebuilt, <repo> <branch> moved from <old> to <new>; to undo, point <branch> back at <old>`).
+`backup.historyFrom` in the job's answer and the body of the new commit also give `<old>`. The branch
+is the repository's default branch, not always `main`:
+`curl -s -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" https://api.github.com/repos/$BACKUP_GITHUB_REPO | grep default_branch`
+shows it. Then, while GitHub still holds that commit, point the branch back with the backup token:
+`curl -X PATCH -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" -d '{"sha":"<old>","force":true}' https://api.github.com/repos/$BACKUP_GITHUB_REPO/git/refs/heads/<branch>`.
 Fix the cause before the next night, because the next rebuild cuts the history again.
 
 **Bounces and complaints.** Resend's webhook (`/api/inbound/resend`, the same one that carries

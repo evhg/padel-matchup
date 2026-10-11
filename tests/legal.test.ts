@@ -85,6 +85,20 @@ describe("the privacy page tells the truth about the code", () => {
     }
   });
 
+  it("says the backups keep about the kept days, not exactly, and that GitHub deletes the older copies later", () => {
+    // The prune keeps the cutoff day (src/lib/backup.ts), so the folder holds BACKUP_KEEP_DAYS + 1 nights,
+    // and an old commit stays readable by its id until GitHub removes it, at a time it does not give.
+    // Until 11 October 2026 the line said "only the last 60 days".
+    const ABOUT = { en: "about the last", ru: "примерно", es: "aproximadamente" } as const;
+    const LATER = { en: "GitHub deletes them later, and it does not say when", ru: "GitHub удаляет их позже и не говорит когда", es: "GitHub las borra más adelante y no dice cuándo" } as const;
+    for (const l of LOCALES) {
+      const backups = render(l, "privacy.keepBody").split("\n").find((x) => x.includes("GitHub"))!;
+      expect(backups, l).toMatch(new RegExp(`${ABOUT[l]}\\D*${BACKUP_KEEP_DAYS}\\s`));
+      expect(backups, l).not.toMatch(/only the last|только последн|solo guarde/);
+      expect(backups, l).toContain(LATER[l]);
+    }
+  });
+
   it("names the operator and the date, and no personal address", () => {
     for (const l of LOCALES) {
       for (const key of ["privacy.whoBody", "terms.whoBody"]) expect(render(l, key)).toContain(LEGAL_OPERATOR);
