@@ -3,10 +3,10 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, groupMembers, groups, metricsDaily, notices, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { decideHeldByName, heldOffers, heldSeatsOf, heldVerdict, takeHeldByName, type HeldMatch, type HeldRefusal, type HeldSeat } from "@/lib/domain/heldByName";
+import { decideHeldByName, heldOffers, heldSeatsOf, heldVerdict, inviteView, takeHeldByName, type HeldMatch, type HeldRefusal, type HeldSeat, type InviteState, type InviteView } from "@/lib/domain/heldByName";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { holdsPlaceIn } from "@/lib/domain/queries";
-import { confirmInvite, joinEvent, reserveNames, reserveSlot } from "@/lib/domain/slots";
+import { confirmInvite, joinEvent, mayUseHeldLink, reserveNames, reserveSlot } from "@/lib/domain/slots";
 import { joinPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterRelease } from "@/lib/aftermath";
 import { freezeClock } from "./helpers/clock";
@@ -14,9 +14,9 @@ import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 
 /**
  * The owner, 11 October 2026: "Yes, two taps (Recommended)". A held place with no email and no phone
- * ("Danny") can be taken on the plain match link by typing the name, or by its row: the first tap asks,
- * the second confirms, and the organiser hears "Danny confirmed" (DECIDING rule 34, extended). And the
- * three invite fixes the trace found beside it.
+ * ("Danny") can be taken on the plain match link by typing the name (never from its row): the first tap
+ * asks, the second confirms, and the organiser hears "Danny confirmed" (DECIDING rule 34, extended). And
+ * the three invite fixes the trace found beside it.
  */
 
 // A fixed clock (rule 11): every match starts a day or more after NOW.
@@ -50,6 +50,8 @@ const LIMIT_TABLE: [string, { m?: Partial<HeldMatch>; seats?: HeldSeat[]; name?:
   ["a record of that name seated in the match", { seats: [organiser, danny, seat({ id: "s3", playerId: "p3", playerName: "Danny", position: 3 })] }, "seated_namesake"],
   ["a record of that name on the waiting list", { seats: [organiser, danny, empty, seat({ id: "s5", playerId: "p5", playerName: "danny", position: 5 })] }, "seated_namesake"],
   ["the organiser's own browser", { viewer: { id: ORG, name: "Danny" } }, "organiser"],
+  // Only the organiser guard stands here: the organiser holds no place, so "already_in" cannot refuse.
+  ["the organiser's own browser, with no place in the match", { seats: [danny, empty], viewer: { id: ORG, name: "Danny" } }, "organiser"],
   ["a browser whose Danny holds a place here already", { seats: [organiser, danny, seat({ id: "s3", playerId: "v1", playerName: "Daniel", position: 3 })], viewer: { id: "v1", name: "Danny" } }, "already_in"],
   ["a browser that knows Ana", { viewer: { id: "v2", name: "Ana" } }, "other_name"],
 ];
@@ -65,6 +67,29 @@ describe("who may take a held place by name", () => {
     expect(heldOffers(live, [organiser, danny, empty, bo], null, NOW)).toEqual([{ slotId: "s2", name: "Danny" }]);
     expect(heldOffers(live, [organiser, danny, empty, bo], { id: "v2", name: "Ana" }, NOW)).toEqual([]);
     expect(heldOffers({ ...live, status: "cancelled" }, [organiser, danny], null, NOW)).toEqual([]);
+  });
+});
+
+// ------------------------------------------------------------------ the personal link's page
+
+/** What the page shows: the place's state, whether the viewer's record is in the match, and whether `mayUseHeldLink` said yes. */
+const VIEW_TABLE: [string, InviteState, boolean, boolean, InviteView][] = [
+  ["a stranger on a held place", "invited", false, true, "actions"],
+  ["the person it is held for, in by another door", "invited", true, true, "actions"],
+  ["anybody else in the match, on a held place", "invited", true, false, "held_for"],
+  ["a stranger on a declined place", "declined", false, true, "declined"],
+  ["the person who declined, in by another door", "declined", true, true, "declined"],
+  // The place is open, as the line-up says ("Bo declined · open"): never "This place is held for Bo".
+  ["anybody else in the match, on a declined place", "declined", true, false, "open_again"],
+  ["a viewer in the match on a link whose place is gone", "gone", true, true, "already_in"],
+  ["a stranger on a link whose place is gone", "gone", false, true, "gone"],
+  ["the record the place is confirmed for", "confirmed_mine", true, true, "confirmed"],
+  ["a cancelled match", "cancelled", true, false, "cancelled"],
+];
+
+describe("what the personal link's page shows", () => {
+  it.each(VIEW_TABLE)("%s", (_label, state, inMatch, theirs, view) => {
+    expect(inviteView(state, inMatch, theirs)).toBe(view);
   });
 });
 
@@ -257,7 +282,44 @@ describe("the held place by name on a real match", () => {
     await joinEvent(db, { eventId: ev.id, playerId: adm.id, now: NOW });
     const place = await heldRow(ev.id, "Danny");
     await expect(confirmInvite(db, { inviteCode: place.inviteCode!, playerId: adm.id, now: NOW })).rejects.toMatchObject({ code: "forbidden" });
-    // A plain member of the crew in the match is not refused: their place was released as before.
+  });
+
+  it("refuses any other player in the match on Danny's link: the place stays held and nobody waiting takes it", async () => {
+    const { ev } = await match(["Danny"]);
+    const place = await heldRow(ev.id, "Danny");
+    const [ana, cy, wil] = await Promise.all(["Ana", "Cy", "Wil"].map((x) => makePlayer(db, x)));
+    for (const p of [ana, cy, wil]) await joinEvent(db, { eventId: ev.id, playerId: p.id, now: NOW });
+    await expect(confirmInvite(db, { inviteCode: place.inviteCode!, playerId: ana.id, now: NOW })).rejects.toMatchObject({ code: "forbidden" });
+    expect((await db.select().from(slots).where(eq(slots.id, place.id)))[0]).toMatchObject({ status: "invited", playerId: null, invitedName: "Danny" });
+    expect((await db.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, wil.id))))[0].position).toBeGreaterThan(4);
+    // The invite page asks the same rule, so it shows Ana no "I'm in".
+    expect(await mayUseHeldLink(db, ev, place, ana)).toBe(false);
+  });
+
+  it("lets a co-organiser called Danny, in by the plain link, free his own held place", async () => {
+    const creator = await makePlayer(db, `Founder${++n}`, { email: `founder${n}@example.com` });
+    const [g] = await db.insert(groups).values({ code: `H${String(++n).padStart(5, "0")}`, name: `Crew ${n}`, creatorPlayerId: creator.id, tz: "Asia/Bangkok" }).returning();
+    const dannyAdmin = await makePlayer(db, "Danny");
+    await db.insert(groupMembers).values({ groupId: g.id, playerId: dannyAdmin.id, role: "admin" });
+    const { ev } = await match(["Danny"], { groupId: g.id });
+    await joinEvent(db, { eventId: ev.id, playerId: dannyAdmin.id, now: NOW });
+    const place = await heldRow(ev.id, "Danny");
+    expect(await mayUseHeldLink(db, ev, place, dannyAdmin)).toBe(true);
+    expect((await confirmInvite(db, { inviteCode: place.inviteCode!, playerId: dannyAdmin.id, now: NOW })).outcome).toBe("already_in");
+    expect((await db.select().from(slots).where(eq(slots.id, place.id)))[0]).toMatchObject({ status: "empty", inviteCode: null });
+  });
+
+  it("frees a place held for a number when that number writes, whatever name its record carries", async () => {
+    const { ev, org } = await match([]);
+    await reserveSlot(db, { eventId: ev.id, actorPlayerId: org.id, name: "Danny", phone: "+66 81 000 0077", now: NOW });
+    const place = await heldRow(ev.id, "Danny");
+    const daniel = await makePlayer(db, "Daniel");
+    await joinEvent(db, { eventId: ev.id, playerId: daniel.id, now: NOW });
+    // A typed name is no proof, and another number is none either.
+    await expect(confirmInvite(db, { inviteCode: place.inviteCode!, playerId: daniel.id, now: NOW })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(confirmInvite(db, { inviteCode: place.inviteCode!, playerId: daniel.id, phone: "66810000078", now: NOW })).rejects.toMatchObject({ code: "forbidden" });
+    // The WhatsApp JOIN from the number the place was held for: Meta sends it without the plus.
+    expect((await confirmInvite(db, { inviteCode: place.inviteCode!, playerId: daniel.id, phone: "66810000077", now: NOW })).outcome).toBe("already_in");
   });
 
   it("a Danny already in by the plain link who opens his link frees the held place the way a leave does: the first player waiting moves up, and the organiser hears it", async () => {
@@ -294,5 +356,39 @@ describe("the held place by name on a real match", () => {
     const pairOf = (id: string) => rows.find((s) => s.playerId === id)?.pairId;
     expect(pairOf(ana.id)).toBeTruthy();
     expect(pairOf(ana.id)).toBe(pairOf(bo.id));
+  });
+
+  it("pairs on a fixed-pairs night when the name Ana typed (\"Dani\") is not the record's (\"Daniel\"): the page offers \"I'm in\" and the tap makes the pair", async () => {
+    const { ev } = await match([], { fixedPairs: true, type: "tournament" });
+    const [ana, daniel] = await Promise.all(["Ana", "Daniel"].map((x) => makePlayer(db, x)));
+    await joinEvent(db, { eventId: ev.id, playerId: ana.id, now: NOW });
+    await joinEvent(db, { eventId: ev.id, playerId: daniel.id, now: NOW });
+    const res = await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Dani" });
+    const link = res.partner!;
+    expect(await mayUseHeldLink(db, ev, link, daniel)).toBe(true);
+    expect((await confirmInvite(db, { inviteCode: link.inviteCode!, playerId: daniel.id, now: NOW })).outcome).toBe("already_in");
+    const rows = await db.select().from(slots).where(eq(slots.eventId, ev.id));
+    const pairOf = (id: string) => rows.find((s) => s.playerId === id)?.pairId;
+    expect(pairOf(daniel.id)).toBeTruthy();
+    expect(pairOf(daniel.id)).toBe(pairOf(ana.id));
+  });
+
+  it("pairs the organiser on a fixed-pairs night when a player named them, and still refuses the organiser on somebody else's partner link", async () => {
+    const dana = await makePlayer(db, "Dana", { email: `dana${++n}@example.com` });
+    const ev = await createEvent(db, { creatorPlayerId: dana.id, type: "tournament", startsAt: at(1), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Rawai Padel", fixedPairs: true, capacity: 8 });
+    await joinEvent(db, { eventId: ev.id, playerId: dana.id, now: NOW });
+    const [ana, cy] = await Promise.all(["Ana", "Cy"].map((x) => makePlayer(db, x)));
+    await joinEvent(db, { eventId: ev.id, playerId: ana.id, now: NOW });
+    const named = (await joinPair(db, { eventId: ev.id, playerId: ana.id, partnerName: "Dana" })).partner!;
+    expect(await mayUseHeldLink(db, ev, named, dana)).toBe(true);
+    expect((await confirmInvite(db, { inviteCode: named.inviteCode!, playerId: dana.id, now: NOW })).outcome).toBe("already_in");
+    const rows = await db.select().from(slots).where(eq(slots.eventId, ev.id));
+    const pairOf = (id: string) => rows.find((s) => s.playerId === id)?.pairId;
+    expect(pairOf(dana.id)).toBeTruthy();
+    expect(pairOf(dana.id)).toBe(pairOf(ana.id));
+    // Cy names Bo; the organiser who checks Bo's link is not Bo, and the link stays Bo's.
+    const bo = (await joinPair(db, { eventId: ev.id, playerId: cy.id, partnerName: "Bo" })).partner!;
+    expect(await mayUseHeldLink(db, ev, bo, dana)).toBe(false);
+    await expect(confirmInvite(db, { inviteCode: bo.inviteCode!, playerId: dana.id, now: NOW })).rejects.toMatchObject({ code: "forbidden" });
   });
 });

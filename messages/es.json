@@ -364,7 +364,7 @@
     "manageLinkTitle": "Enlace de organizador",
     "rolodexHint": "Empieza a escribir para elegir entre jugadores con los que ya has jugado.",
     "inviteAll": "Enviar todas las invitaciones en un mensaje",
-    "inviteAllHelp": "Un mensaje con el enlace personal de cada uno. Envía cada enlace a su persona. En el grupo, publica el enlace abierto del partido: allí cada nombre guardado puede ocupar su plaza.",
+    "inviteAllHelp": "Un mensaje con el enlace personal de cada persona. Envíalo solo a esas personas. En el grupo, publica el enlace del partido.",
     "reserveSpot": "Reservar plaza {n}",
     "reserveSheetHelp": "Guarda esta plaza para alguien. Recibirás un enlace personal para reenviárselo.",
     "reserveInline": "Reservar esta plaza para…",

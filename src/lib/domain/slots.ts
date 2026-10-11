@@ -8,6 +8,7 @@ import { recomputeStatus } from "./events";
 import { isNamedSeat, partnerOf, seatUnits } from "./fixedPairs";
 import { mergePlayers } from "./merge";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
+import { normalName } from "./dupes";
 
 export type JoinOutcome =
   | { outcome: "joined"; slot: Slot; event: Event }
@@ -64,6 +65,38 @@ export async function runsMatch(db: Db, ev: Pick<Event, "creatorPlayerId" | "gro
   const [creator] = await db.select({ id: groups.id }).from(groups).where(and(eq(groups.id, ev.groupId), eq(groups.creatorPlayerId, playerId))).limit(1);
   return Boolean(creator);
 }
+
+/**
+ * May a record that holds a place in this match already use the personal link of a held place in it?
+ * "I'm in" from such a record does not seat it: it frees the held place (`confirmInvite`). The server
+ * asks this before that tap, and the invite page asks it before it shows "I'm in" (DECIDING rule 34).
+ *
+ *   - Yes when the place carries the record's own name: the person it is held for, in by another
+ *     door, frees it for the waiting list. The organiser or a co-organiser of that name too.
+ *   - Yes for a partner link on a fixed-pairs night, unless the record runs the match: the player who
+ *     named the partner holds that link, and the typed name ("Dani") can differ from the record
+ *     ("Daniel"). The tap makes the pair (rule 32).
+ *   - No for anybody else, because the tap would free another person's place.
+ *
+ * Reads `runsMatch` only for a partner link that does not carry the record's name.
+ */
+export async function mayUseHeldLink(
+  db: Db,
+  ev: Pick<Event, "fixedPairs" | "creatorPlayerId" | "groupId">,
+  slot: Pick<Slot, "invitedName" | "pairId">,
+  player: { id: string; displayName: string },
+): Promise<boolean> {
+  const held = normalName(slot.invitedName);
+  if (held && normalName(player.displayName) === held) return true;
+  if (!ev.fixedPairs || !slot.pairId) return false;
+  return !(await runsMatch(db, ev, player.id));
+}
+
+/** The same number, with or without its plus and whatever spaces it was typed with. */
+const samePhone = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  const digits = (p: string | null | undefined) => (normalizePhone(p) ?? "").replace(/^\+/, "");
+  return digits(a).length > 0 && digits(a) === digits(b);
+};
 
 const VACANT: Partial<typeof slots.$inferInsert> = {
   playerId: null,
@@ -428,7 +461,8 @@ export type ConfirmOutcome =
 
 export async function confirmInvite(
   db: Db,
-  input: { inviteCode: string; playerId: string; email?: string | null; now?: Date },
+  /** `phone`: the number the request came from (the WhatsApp bot), never a number somebody typed. */
+  input: { inviteCode: string; playerId: string; email?: string | null; phone?: string | null; now?: Date },
 ): Promise<ConfirmOutcome> {
   const now = input.now ?? new Date();
   return db.transaction(async (tx) => {
@@ -452,9 +486,14 @@ export async function confirmInvite(
       .limit(1);
     const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
     if (elsewhere) {
-      // The organiser or a co-organiser, in the match already, on somebody else's link: the place is
-      // not theirs to take, and the tap used to free it without a word to anybody.
-      if (await runsMatch(tx, ev, input.playerId)) throw new DomainError("forbidden");
+      // In the match already, on a held place's link: the tap frees that place, so only the person it
+      // is held for may make it (`mayUseHeldLink`). A place held for the number that writes (the
+      // WhatsApp JOIN) is theirs by that number. Anybody else with the link, the organiser included,
+      // used to free it, and the first player waiting took the seat.
+      if (!samePhone(slot.invitedPhone, input.phone)) {
+        const [who] = await tx.select({ id: players.id, displayName: players.displayName }).from(players).where(eq(players.id, input.playerId)).limit(1);
+        if (!who || !(await mayUseHeldLink(tx, ev, slot, who))) throw new DomainError("forbidden");
+      }
       if (ev.fixedPairs) {
         // A fixed-pairs night: the partner somebody named was in already, alone. The pair forms where
         // they sit (same side of the list, before round 1, nobody else's partner), and the reserved

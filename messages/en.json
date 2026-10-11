@@ -364,7 +364,7 @@
     "manageLinkTitle": "Organizer link",
     "rolodexHint": "Start typing to pick from players you've played with.",
     "inviteAll": "Send all invites in one message",
-    "inviteAllHelp": "One message with each person's personal link. Send each link to its own person. In the group, post the plain match link: a held name can take its place there.",
+    "inviteAllHelp": "One message with each person's personal link. Send it only to those people. In the group, post the match link.",
     "reserveSpot": "Reserve spot {n}",
     "reserveSheetHelp": "Hold this spot for someone. You'll get a personal link to forward to them.",
     "reserveInline": "Reserve this spot for…",

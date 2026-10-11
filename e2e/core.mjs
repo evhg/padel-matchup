@@ -414,6 +414,11 @@ try {
     if (r.method() === "POST" && r.headers()["next-action"]) heldSends += 1;
   });
   await cyp.goto(`${BASE}/${code2}`);
+  await cyp.getByText("Reserved for Cy", { exact: true }).waitFor({ timeout: 20000 });
+  // The owner chose the typed name, not the row: a stranger who has typed nothing is offered no held
+  // place, whoever's row it is.
+  const heldOnRows = await cyp.getByTestId("take-held").count();
+  check("a held row offers nothing until the name is typed", heldOnRows === 0, `take-held buttons=${heldOnRows}`);
   await cyp.getByRole("button", { name: "Join this match" }).click();
   await cyp.getByTestId("open-spot-name").first().fill("cy");
   const alreadyCy = cyp.getByTestId("already-here");

@@ -12,10 +12,10 @@ import { isValidInviteCode, isValidShareCode } from "@/lib/codes";
 import { emailEnabled } from "@/lib/config";
 import { formatEventDayLong, formatEventTime, tzLabel } from "@/lib/dates";
 import { playersWithEmail } from "@/lib/domain/identity";
-import { normalName } from "@/lib/domain/dupes";
+import { inviteView } from "@/lib/domain/heldByName";
 import { getSlotByInviteCode, holdsPlaceIn } from "@/lib/domain/queries";
 import { namedByOf } from "@/lib/domain/pairSeats";
-import { runsMatch } from "@/lib/domain/slots";
+import { mayUseHeldLink } from "@/lib/domain/slots";
 import { venueWithCourt } from "@/lib/labels";
 import { getSessionPlayer } from "@/lib/session";
 
@@ -65,12 +65,14 @@ export default async function InvitePage({ params, searchParams }: Props) {
   const state: "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled" =
     ev.status === "cancelled" ? "cancelled" : slot.status === "invited" ? "invited" : slot.status === "declined" ? "declined" : (slot.status === "confirmed" || slot.status === "joined") && mine ? "confirmed_mine" : "gone";
   // Somebody whose record is in this match already (the organiser checking the link, a player who
-  // opened a friend's): "I'm in" would only free this place. They see whose place it is instead. The
-  // person it is held for, in by another door, keeps "I'm in": it frees the place for the waiting list,
-  // and on a fixed-pairs night it makes the pair. One read, only for a browser that knows somebody.
+  // opened a friend's): "I'm in" would only free this place, so the page asks the server's own rule
+  // (`mayUseHeldLink`). The person it is held for, in by another door, keeps "I'm in": it frees the
+  // place for the waiting list, and on a fixed-pairs night it makes the pair. Anybody else reads whose
+  // place it is, or that it is open again (`inviteView`). One read, only for a browser that knows somebody.
   const notMine = state === "invited" || state === "declined" || state === "gone";
   const inAlready = me && notMine ? await holdsPlaceIn(db, code, me.id) : false;
-  const notTheirs = Boolean(me && inAlready && (state === "invited" || state === "declined") && (normalName(me.displayName) !== normalName(name) || (await runsMatch(db, ev, me.id))));
+  const theirs = me && inAlready && (state === "invited" || state === "declined") ? await mayUseHeldLink(db, ev, slot, me) : true;
+  const view = inviteView(state, Boolean(inAlready), theirs);
   const courtNumber = (n: string) => t("event.courtNumber", { n });
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
   // A fixed-pairs night: the player who named them, not the organiser, saved this spot; and a pair can
@@ -111,7 +113,7 @@ export default async function InvitePage({ params, searchParams }: Props) {
           {ev.note && <p className="mt-2 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
         </section>
 
-        {knownOwner && !notTheirs && slot.invitedEmail && (
+        {knownOwner && (view === "actions" || view === "declined") && slot.invitedEmail && (
           <section className="card border-court/30 bg-court-soft/30">
             <h2 className="font-extrabold">{t("invitePage.playedBefore", { email: slot.invitedEmail })}</h2>
             <p className="mt-0.5 mb-3 text-sm text-muted">{t("invitePage.playedBeforeHelp")}</p>
@@ -119,7 +121,7 @@ export default async function InvitePage({ params, searchParams }: Props) {
           </section>
         )}
         <section className="card">
-          {notTheirs && (
+          {view === "held_for" && (
             <>
               <h2 className="text-xl font-extrabold">{t("invitePage.heldFor", { name })}</h2>
               <p className="mt-1 text-sm text-muted">{t("invitePage.heldForHelp", { name })}</p>
@@ -128,15 +130,23 @@ export default async function InvitePage({ params, searchParams }: Props) {
               </Link>
             </>
           )}
-          {!notTheirs && state === "invited" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} />}
-          {!notTheirs && state === "declined" && (
+          {view === "open_again" && (
+            <>
+              <h2 className="text-xl font-extrabold">{t("event.declinedOpen", { name })}</h2>
+              <Link href={eventHref} className="btn-primary mt-4 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </>
+          )}
+          {view === "actions" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} />}
+          {view === "declined" && (
             <>
               <h2 className="text-xl font-extrabold">{t("invitePage.declined")}</h2>
               <p className="mt-1 mb-4 text-sm text-muted">{t("invitePage.declinedHelp")}</p>
               <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={false} reconfirm />
             </>
           )}
-          {state === "confirmed_mine" && (
+          {view === "confirmed" && (
             <>
               <h2 className={`text-xl font-extrabold ${waitingAt ? "" : "text-ok"}`}>{waitingAt ? t("event.youAreOnWaitlist", { position: waitingAt }) : `✓ ${t("invitePage.confirmed")}`}</h2>
               <p className="mt-1 text-sm text-muted">{waitingAt ? t("pairs.inviteWaiting") : t("invitePage.confirmedHelp")}</p>
@@ -146,16 +156,16 @@ export default async function InvitePage({ params, searchParams }: Props) {
               </Link>
             </>
           )}
-          {state === "gone" && (
+          {(view === "gone" || view === "already_in") && (
             <>
-              <h2 className="text-xl font-extrabold">{inAlready ? t("invitePage.alreadyIn") : t("invitePage.gone")}</h2>
-              {!inAlready && <p className="mt-1 text-sm text-muted">{t("invitePage.goneHelp")}</p>}
+              <h2 className="text-xl font-extrabold">{view === "already_in" ? t("invitePage.alreadyIn") : t("invitePage.gone")}</h2>
+              {view === "gone" && <p className="mt-1 text-sm text-muted">{t("invitePage.goneHelp")}</p>}
               <Link href={eventHref} className="btn-primary mt-4 w-full">
                 {t("invitePage.goToEvent")}
               </Link>
             </>
           )}
-          {state === "cancelled" && (
+          {view === "cancelled" && (
             <>
               <h2 className="text-xl font-extrabold text-danger">{t("event.cancelled")}</h2>
               <p className="mt-1 text-sm text-muted">{t("event.cancelledHelp")}</p>

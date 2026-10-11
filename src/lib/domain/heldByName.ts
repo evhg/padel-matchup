@@ -14,8 +14,9 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  * (`reserveNames`, `reserveSlot`). The personal link fills it with one tap. The plain match link, the
  * one the group chat carries, could not: "That's me" works on records, the held row could not be
  * tapped, and a Danny who typed his name and joined made a second Danny on an empty seat while his
- * held place stayed empty. Now the "already in this match" line and the held row offer "Take Danny's
- * held place", in two taps, inside these limits, each one checked again on the server:
+ * held place stayed empty. Now the "already in this match" line under a typed name offers "Take
+ * Danny's held place", in two taps, inside these limits, each one checked again on the server. The held
+ * row itself offers nothing: the owner chose the typed name.
  *
  *   - a reserved place that nobody took: no record on it (a tournament's placeholder is a record),
  *     no email and no phone, because a place held for an address belongs to that address;
@@ -89,7 +90,7 @@ export function heldVerdict(m: HeldMatch, seats: readonly HeldSeat[], name: stri
 
 export type HeldOffer = { slotId: string; name: string };
 
-/** Every held place on this line-up the browser may take: what the match page offers. Pure, over the rows the page already read. */
+/** Every held place on this line-up the browser may take: the names the open spot's typed name may take. Pure, over the rows the page already read. */
 export function heldOffers(m: HeldMatch, seats: readonly HeldSeat[], viewer: HeldViewer, now: Date): HeldOffer[] {
   return seats.flatMap((s) => {
     if (s.status !== "invited" || !s.invitedName) return [];
@@ -156,4 +157,26 @@ export async function takeHeldByName(db: Db, d: HeldDecision, taker: { id: strin
     const done = await confirmLocked(tx, ev, slot, { playerId: taker.id, now });
     return { ok: true, ...done, wasComplete };
   });
+}
+
+/** The state of a personal link's place as its page reads it. */
+export type InviteState = "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled";
+
+/** What a personal link's page shows. */
+export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled";
+
+/**
+ * What a personal link's page shows. `inMatch`: the viewer's record holds a place in this match
+ * already. `theirs`: `mayUseHeldLink` in `slots.ts` said yes for that record, the server's own rule.
+ * A viewer in the match on a place that is not theirs never gets "I'm in", which would only free the
+ * place: a held place says whose it is ("held_for"), and a declined one says that it is open
+ * ("open_again"), as the line-up does. Pure.
+ */
+export function inviteView(state: InviteState, inMatch: boolean, theirs: boolean): InviteView {
+  if (state === "cancelled") return "cancelled";
+  if (state === "confirmed_mine") return "confirmed";
+  if (state === "gone") return inMatch ? "already_in" : "gone";
+  const other = inMatch && !theirs;
+  if (state === "invited") return other ? "held_for" : "actions";
+  return other ? "open_again" : "declined";
 }

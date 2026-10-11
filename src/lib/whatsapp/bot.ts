@@ -288,7 +288,7 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   // A seat the organiser held for this very number (a name and the phone typed on the web): it is theirs.
   const heldForMe = detail.roster.find((x) => x.status === "invited" && x.inviteCode && sameNumber(x.invitedPhone, msg.from));
   if (heldForMe) {
-    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id }).catch(() => null);
+    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from }).catch(() => null);
     if (res?.outcome === "confirmed") {
       if (res.event.groupId) await joinGroup(db, res.event.groupId, player.id, "match").catch(() => undefined);
       const now = (await getEventByCode(db, code)) ?? detail;
