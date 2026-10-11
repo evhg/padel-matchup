@@ -6,6 +6,7 @@ import { AmericanoGenerator } from "@/components/AmericanoGenerator";
 import { parseGenLink } from "@/lib/domain/americano";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 // Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** Public, indexable utility page: the same rotation engine the live tournaments use, with a way in. */
-export default async function AmericanoPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+async function AmericanoPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // A shared link opens on the schedule it names, rendered on the server, so the person who receives
   // it reads the rounds before any JavaScript arrives.
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
@@ -61,3 +62,5 @@ export default async function AmericanoPage({ searchParams }: { searchParams: Pr
     </>
   );
 }
+
+export default withClientMessages(["americano", "feedback"], AmericanoPage);

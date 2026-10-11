@@ -32,6 +32,7 @@ import { whatsappEnabled } from "@/lib/whatsapp/api";
 const waitingChannels = () => [lineEnabled() ? null : "LINE", whatsappEnabled() ? null : "WhatsApp"].filter((x): x is string => Boolean(x));
 import { playerHasPush } from "@/lib/domain/push";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
 type Props = { searchParams: Promise<{ welcome?: string; s?: string | string[]; club?: string | string[]; setup?: string }> };
 
 /** The coach's book, or the four taps that create it. One screen, one job. */
-export default async function CoachPage({ searchParams }: Props) {
+async function CoachPage({ searchParams }: Props) {
   const db = await getDb();
   const [me, t, locale, sp] = await Promise.all([getSessionPlayer(db), getTranslations("coach"), getLocale(), searchParams]);
   // The shell renders on every branch of this page, so the count is read once, here, beside it.
@@ -166,3 +167,5 @@ export default async function CoachPage({ searchParams }: Props) {
     </>,
   );
 }
+
+export default withClientMessages(["coach.book", "coach.done", "coach.errors", "coach.eyebrow", "coach.home", "coach.how", "coach.import", "coach.invite", "coach.minutes", "coach.noPackage", "coach.packageLine", "coach.packageLineNoExpiry", "coach.page", "coach.settings", "coach.setup", "coach.students", "common", "creator", "errors", "event", "feedback", "identity", "level", "levelCheck", "push", "share"], CoachPage);

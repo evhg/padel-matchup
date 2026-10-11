@@ -23,6 +23,7 @@ import { embedHtml } from "@/lib/embed";
 import { rangeChip, tagChip } from "@/lib/levelText";
 import { recentResults } from "@/lib/domain/recentResults";
 import { RecentResults } from "@/components/RecentResults";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** Public board of organizer-listed open matches at one venue: what the poster's QR code points to. */
-export default async function VenueBoardPage({ params }: Props) {
+async function VenueBoardPage({ params }: Props) {
   const { slug } = await params;
   if (!isValidVenueSlug(slug)) notFound();
   const db = await getDb();
@@ -314,3 +315,5 @@ export default async function VenueBoardPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["embed", "feedback"], VenueBoardPage);

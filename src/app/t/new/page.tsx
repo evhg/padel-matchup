@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { CITIES } from "@/lib/domain/cities";
 import { listClubsForPicking } from "@/lib/domain/clubs";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** /t/new: the competition in one screen; the categories follow on the manage screen it opens. */
-export default async function NewTournamentPage() {
+async function NewTournamentPage() {
   const db = await getDb();
   const [t, me, clubs] = await Promise.all([getTranslations(), getSessionPlayer(db), listClubsForPicking(db)]);
   return (
@@ -33,3 +34,5 @@ export default async function NewTournamentPage() {
     </>
   );
 }
+
+export default withClientMessages(["common", "errors", "identity", "tournament"], NewTournamentPage);

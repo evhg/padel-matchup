@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, BASE_RE, crashed, finish, iphone, launch, makeCheck, resendEvent, shot, switchLang } from "./lib.mjs";
+import { BASE, BASE_RE, crashed, finish, iphone, launch, makeCheck, rawKeysOn, resendEvent, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -17,6 +17,13 @@ const newPage = async () => {
 // same words, and when React recovers from a hydration mismatch (React error 418, a busy CI runner) it renders
 // the page again after those scripts. "Upcoming" then sat behind "Your personal link" in the source while the
 // screen was right (CI, 11 October 2026).
+// A message key shown as text is a message the browser was not given: each page hands its client
+// components only the namespaces they read (withClientMessages), and a list that falls short shows
+// "me.title" where "My matches" should be. The busiest screens, in each language, as each person.
+const noRawKeys = async (page, where) => {
+  const keys = await rawKeysOn(page);
+  check(`${where} shows no message key as text`, keys.length === 0, keys.slice(0, 5).join(", "));
+};
 const headingOrder = (page, first, second) =>
   page.locator("main h2").evaluateAll((hs, [x, y]) => {
     const at = (t) => hs.findIndex((h) => h.textContent.includes(t));
@@ -28,6 +35,7 @@ try {
   const a = await newPage();
   await a.goto(BASE + "/");
   await shot(a, "01-landing");
+  await noRawKeys(a, "the landing page");
   check("no quick picks for a first-timer", (await a.getByText("Your usual times").count()) === 0);
   // The first page is the ten-second match and nothing else (the owner, 24 September 2026): the share
   // card belongs after the match, when every player gets it, not between the name and the time.
@@ -92,10 +100,12 @@ try {
   await a.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
   await a.getByText("You're in").waitFor({ timeout: 20000 });
   await shot(a, "03-event-joined");
+  await noRawKeys(a, "the match page, as a player who just joined");
   check("joined → 3/4 players", (await a.getByText("3/4 players").count()) > 0);
 
   await a.goto(BASE + "/me");
   await shot(a, "04-me");
+  await noRawKeys(a, "My matches, as a player");
   // A player's My matches at the big size, with its own switch on, in both themes; then the normal size again.
   await a.getByTestId("text-size-switch").click();
   check("the switch on My matches raises the text to 18px", (await rootSize()) === "18px");
@@ -135,6 +145,7 @@ try {
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code = a.url().split("/").slice(-2)[0];
   await shot(a, "06-share");
+  await noRawKeys(a, "the share page");
   check("share page renders QR", (await a.locator("svg path").count()) > 0, code);
   check("share page says match is live + Go to match", (await a.getByText("Your match is live").count()) > 0 && (await a.getByRole("link", { name: /Go to match/ }).count()) > 0);
   check("share text includes court", (await a.locator('a[href^="https://wa.me"]').first().getAttribute("href")).includes(encodeURIComponent("Court 3")));
@@ -195,6 +206,7 @@ try {
 
   await a.goto(`${BASE}/${code}`);
   await shot(a, "07-event-creator");
+  await noRawKeys(a, "the match page, as its organiser");
   check("creator sees organizer tools", (await a.getByText("Organizer tools").count()) > 0);
   check("event page shows venue with court", (await a.getByText("Club Padel Test · Court 3").count()) > 0);
   check("no Play again before a score", (await a.getByRole("button", { name: /Play again/ }).count()) === 0);
@@ -660,6 +672,7 @@ try {
   await switchLang(a, "ru");
   await a.getByText("Организатор").first().waitFor({ timeout: 20000 });
   await shot(a, "12-event-ru");
+  await noRawKeys(a, "the match page in Russian");
   check("RU renders", true);
   await switchLang(a, "en");
   await a.getByText("Organized by").first().waitFor({ timeout: 20000 });
@@ -733,6 +746,7 @@ try {
   await switchLang(a, "es");
   await a.getByText("Mis partidos").first().waitFor({ timeout: 20000 });
   check("Spanish locale switch", true);
+  await noRawKeys(a, "My matches in Spanish");
   await shot(a, "20-me-es");
   // Dana's address bounces (src/lib/domain/emailMarks.ts). Late in the suite on purpose: from here
   // nothing more is mailed to her, and the page where she can fix it says so.

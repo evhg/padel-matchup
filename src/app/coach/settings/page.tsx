@@ -13,6 +13,7 @@ import { listManagers } from "@/lib/coach/chains";
 import { serviceAccountEmail } from "@/lib/coach/gcal";
 import { coachBookContents, formatHoursLine, getCoachForActor, hasPhoto, listOffers, packagePriceFrom } from "@/lib/domain/coaching";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("settings.title"), robots: { index: false, follow: false } };
 }
 
-export default async function CoachSettingsPage() {
+async function CoachSettingsPage() {
   const db = await getDb();
   const me = await getSessionPlayer(db);
   const found = me ? await getCoachForActor(db, me.id) : null;
@@ -88,3 +89,5 @@ export default async function CoachSettingsPage() {
     </>
   );
 }
+
+export default withClientMessages(["coach.calendar", "coach.errors", "coach.how", "coach.managers", "coach.minutes", "coach.page", "coach.settings", "coach.setup", "common", "create", "feedback", "level", "share"], CoachSettingsPage);

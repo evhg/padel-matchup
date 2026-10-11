@@ -12,6 +12,7 @@ import { findPlayerByPersonalToken } from "@/lib/domain/identity";
 import { markHomescreen } from "@/lib/domain/push";
 import { safeNext } from "@/lib/personal";
 import { getSessionPlayerId } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
@@ -22,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * Personal link: renders My matches for the token's player directly (so a
  * home-screen shortcut works in any cookie jar) and hands the device the cookie.
  */
-export default async function PersonalPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ source?: string; next?: string }> }) {
+async function PersonalPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ source?: string; next?: string }> }) {
   const [{ token }, sp] = await Promise.all([params, searchParams]);
   const db = await getDb();
   const player = await findPlayerByPersonalToken(db, token);
@@ -52,3 +53,5 @@ export default async function PersonalPage({ params, searchParams }: { params: P
     </>
   );
 }
+
+export default withClientMessages(["common", "creator", "errors", "event", "homescreen", "identity", "level", "me", "notices", "passport", "push", "ranking", "share", "telegram"], PersonalPage);

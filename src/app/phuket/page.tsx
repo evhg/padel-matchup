@@ -4,6 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { CityPage } from "@/components/CityPage";
 import { baseUrl } from "@/lib/config";
 import { cityBySlug } from "@/lib/domain/cities";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 const city = cityBySlug("phuket")!;
@@ -16,6 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title, description, alternates: localeAlternates("/phuket", locale), openGraph: { title, description, type: "website", url: `${baseUrl()}/phuket` } };
 }
 
-export default function Page() {
+function Page() {
   return <CityPage city={city} />;
 }
+
+export default withClientMessages(["common", "ranking"], Page);

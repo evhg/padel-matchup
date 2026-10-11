@@ -369,6 +369,15 @@ learning can be a test, a gate step or a script, make it one and put the story i
   (`createRequestStoreForRender` in `tests/group-line.test.ts`), and prove the wiring in the browser:
   `window.next.router.refresh()` is the call AutoRefresh makes. Wait for its response, never for
   `finished()`: Playwright never reports a refresh response as finished, and the check hangs.
+- **The browser carried the whole catalogue on every page.** The root layout handed
+  `NextIntlClientProvider` every message (146 KB in English, 230 KB in Russian, inline in each page's
+  HTML and again in every 20-second refresh) while each page's client components read a few
+  namespaces of it. The provider's `messages` left out means "all of it", and nothing measured it.
+  Now the layout gives `ROOT_CLIENT_MESSAGES` (nothing) and a page gives its own list through
+  `withClientMessages`. A list that falls short shows a key as text ("me.title"), so the list is never
+  trusted: `tests/client-messages.test.ts` reads it back from the source and prints the line to paste,
+  and the browser suites fail on MISSING_MESSAGE. The provider sits in the page, not the layout: the
+  layout does not render again on a client-side navigation, so a list picked there follows the visitor.
 - **A missing header is a browser too, and the browser in the suite always sends it.** The next fix
   read `Sec-Fetch-Dest` and counted every request without it as a load. Safari before 16.4 (iOS 15)
   sends no `Sec-Fetch-*`, so its 20-second refresh still counted a view, and headless Chromium could

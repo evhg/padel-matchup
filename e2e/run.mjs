@@ -89,7 +89,14 @@ if ((await answers("127.0.0.1")) || (await answers("::1"))) {
 
 const server = spawn("pnpm", ["exec", "next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
 server.stdout.on("data", (d) => process.env.E2E_VERBOSE && process.stdout.write(`[server] ${d}`));
-server.stderr.on("data", (d) => process.stderr.write(`[server] ${d}`));
+// A client component rendered on the server with a message its page did not hand the browser logs
+// MISSING_MESSAGE here (next-intl's onError is console.error), and the HTML carries the key as text.
+// The browser side is watched in e2e/lib.mjs; this is the server side, for every page any suite loads.
+let missingOnServer = 0;
+server.stderr.on("data", (d) => {
+  missingOnServer += (String(d).match(/MISSING_MESSAGE/g) ?? []).length;
+  process.stderr.write(`[server] ${d}`);
+});
 const stop = () => {
   if (!server.killed) server.kill("SIGTERM");
   rmSync(dataDir, { recursive: true, force: true });
@@ -139,4 +146,5 @@ for (const f of suites) {
 }
 console.log(`\n${suites.length - failed.length}/${suites.length} suites passed`);
 if (failed.length) console.log(`failed suites: ${failed.join(", ")} (each suite's own "failed:" line above names the checks)`);
-process.exit(failed.length ? 1 : 0);
+if (missingOnServer) console.log(`✗ the server logged MISSING_MESSAGE ${missingOnServer} time(s): a page's withClientMessages list misses a namespace (see the [server] lines above)`);
+process.exit(failed.length || missingOnServer ? 1 : 0);
