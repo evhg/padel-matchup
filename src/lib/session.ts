@@ -140,6 +140,13 @@ export async function signedInByName(playerId: string): Promise<boolean> {
   return Boolean(v) && signs(v!, `byname:${playerId}`);
 }
 
+/**
+ * An opaque name for one member of one crew, for the admin's buttons (remove, hand over). The crew page
+ * goes to everybody with its link, so it never carries a player id; the action reads the crew's members
+ * and finds the one whose handle it was given (`memberByHandle` in src/actions/groups.ts).
+ */
+export const memberHandle = (groupId: string, playerId: string): string => sign(`member:${groupId}:${playerId}`).slice(0, 22);
+
 /** Per-event organizer access granted by visiting /{code}/manage/{manageCode}. */
 export const manageCookieName = (code: string) => `km_manage_${code}`;
 

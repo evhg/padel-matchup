@@ -25,10 +25,10 @@ import { countSignIn } from "@/lib/domain/signins";
 import { thatsMe } from "@/lib/domain/thatsMe";
 import { isDeletedPlayer } from "@/lib/domain/result";
 
-export type PublicPlayer = { id: string; name: string; email: string | null; locale: string };
+/** What an identity action tells the browser about its own player. Never the player id: an id once signed anybody in (`restoreIdentity` until 11 October 2026), and nothing on a screen needs it. */
+export type PublicPlayer = { name: string; email: string | null; locale: string };
 
-const pub = (p: { id: string; displayName: string; email: string | null; locale: string }): PublicPlayer => ({
-  id: p.id,
+const pub = (p: { displayName: string; email: string | null; locale: string }): PublicPlayer => ({
   name: p.displayName,
   email: p.email,
   locale: p.locale,

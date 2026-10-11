@@ -141,8 +141,8 @@ async function SeriesPage({ params }: Props) {
                   </Link>
                   {podium.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                      {podium.map((p) => (
-                        <span key={p.playerId}>
+                      {podium.map((p, i) => (
+                        <span key={i}>
                           {MEDALS[p.rank - 1]} {p.name}
                         </span>
                       ))}

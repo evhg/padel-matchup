@@ -48,7 +48,7 @@ export default async function SeriesRankingPage({ params }: Props) {
               </thead>
               <tbody>
                 {ranking.rows.map((r, i) => (
-                  <tr key={r.playerId} className={i < 3 ? "font-bold" : ""}>
+                  <tr key={i} className={i < 3 ? "font-bold" : ""}>
                     <td className="max-w-0 truncate py-1 pr-2">
                       {i + 1}. {r.name}
                     </td>
