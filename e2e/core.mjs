@@ -135,6 +135,17 @@ try {
   await a.getByRole("button", { name: "Copy link" }).first().click();
   await a.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
   check("the copied link is tagged ?s=link", String(await a.evaluate(() => window.__copied)).endsWith(`/${code}?s=link`), code);
+  // The phone's own share sheet ("Share…") renders only where navigator.share exists, and headless
+  // Chromium on Linux has none, so a stand-in catches what the button hands it. Only on the share page,
+  // so no later page of this browser grows a share button.
+  await a.addInitScript(() => {
+    if (location.pathname.endsWith("/share")) navigator.share = async (d) => void (window.__shared = d);
+  });
+  await a.reload();
+  await a.getByTestId("native-share").click({ timeout: 10000 }).catch(() => undefined);
+  await a.waitForFunction(() => typeof window.__shared === "object", null, { timeout: 5000 }).catch(() => undefined);
+  check("the phone's share sheet sends the link tagged ?s=share", String(await a.evaluate(() => window.__shared?.url)).endsWith(`/${code}?s=share`), code);
+  await a.evaluate(() => void delete navigator.share);
   // A stranger who opens the WhatsApp link is the funnel's second step: one view_src_wa, written after
   // the response (`later`), so it is read back until it lands.
   const viewsWa = async () => {
