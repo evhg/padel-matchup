@@ -64,9 +64,10 @@ export const SCRAPE = {
   fullPerLane: 3,
   budgetMs: 45_000,
   /**
-   * A run this long or longer is a fair run for a lane's first club: one that a deadline cuts even then is
-   * written as a timeout and goes to the back. The push job passes 50 s less its own work, so this is not
-   * the whole 45 s: a tick a little slower than 5 s must still move a slow first club along.
+   * A run this long or longer is a fair run for a lane's first club: one that a deadline cuts even then
+   * goes to the back. A good read of its link on this platform stays and only `availability_at` moves
+   * (`keepsGoodRead`); with none, it is written as a timeout. The push job passes 50 s less its own work,
+   * so this is not the whole 45 s: a tick a little slower than 5 s must still move a slow first club along.
    */
   fairRunMs: 30_000,
   /** One request a second per platform. */
@@ -144,16 +145,23 @@ export function disabledPlatforms(raw: string | undefined = process.env.SCRAPE_D
   return ids.includes("all") ? "all" : new Set(ids);
 }
 
-/** This deployment's code, as a number: a "changed" stop holds until a deploy of a new commit, which has another (a redeploy of the same commit keeps it). FNV-1a, 32 bits. Pure. */
-export function deployKey(env: Record<string, string | undefined> = process.env): number {
-  const id = env.VERCEL_GIT_COMMIT_SHA || env.VERCEL_DEPLOYMENT_ID || "local";
+/** FNV-1a, 32 bits. Pure. */
+function fnv1a(s: string): number {
   let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h;
 }
+
+/** This deployment's code, as a number: a "changed" stop holds until a deploy of a new commit, which has another (a redeploy of the same commit keeps it). FNV-1a, 32 bits. Pure. */
+export function deployKey(env: Record<string, string | undefined> = process.env): number {
+  return fnv1a(env.VERCEL_GIT_COMMIT_SHA || env.VERCEL_DEPLOYMENT_ID || "local");
+}
+
+/** The link a read came from, as the cache keeps it (`linkKey`): eight hex digits, never the link. Pure. */
+export const linkKey = (link: string): string => fnv1a(link).toString(16).padStart(8, "0");
 
 export type PlatformState = { platform: string; off: boolean; stopped: boolean; restUntil: Date | null; level: number };
 export const usable = (s: PlatformState, now: Date) => !s.off && !s.stopped && !(s.restUntil && s.restUntil > now);
@@ -448,7 +456,7 @@ async function bounded<T>(p: Promise<T>, ms: number): Promise<T> {
 
 /** A club a lane will read, the reader for it, the link it reads, and whether today alone is read. */
 type Picked = { club: DueClub; adapter: AvailabilityAdapter; link: string; todayOnly: boolean };
-type Outcome = { club: DueClub; platform: string; result: ScrapeResult; todayOnly: boolean };
+type Outcome = { club: DueClub; platform: string; link: string; result: ScrapeResult; todayOnly: boolean };
 
 /**
  * Is a read of today alone enough for this club? Only when its last read covered all three days, read
@@ -479,6 +487,19 @@ export function planReads(prevs: readonly DueClub["prev"][], platform: string, n
     full++;
     return false;
   });
+}
+
+/**
+ * The club's last read when it came from this link, else nothing. The platform's id for the club (`ref`)
+ * and the kept later days belong to the link they were read from, and the manage page and the
+ * directory's import change a link and keep the cache. Until 11 October 2026 a club that moved to another
+ * Playtomic club had the old tenant id sent for today, and the old club's courts kept under its name, for
+ * up to 88 minutes (`fullLateMs`). So a read from another link is read in full: no `ref`, nothing kept,
+ * and a timeout keeps no old read (`keepsGoodRead`). A read with no `linkKey` was written before that
+ * day, so the first visit after that deploy reads each club in full once. Pure.
+ */
+export function prevForLink(prev: DueClub["prev"], link: string): DueClub["prev"] {
+  return prev && prev.linkKey === linkKey(link) ? prev : null;
 }
 
 /** A platform's id for a club as the cache keeps it, or nothing: a short plain token, never a link or a sentence. */
@@ -519,17 +540,18 @@ async function runLane(lane: Lane, queue: readonly Picked[], o: { fetchImpl: typ
     // Cut short by the deadline, and counted (`scrape_cut_<platform>`). A cut club is not written and
     // stays due, so the next run starts with it and its last good read keeps showing. One exception: the
     // lane's first club in a fair run (30 s or more, `fairRunMs`) did not fit even then, and a later run
-    // would do the same, so no club behind it would ever be read. Only then is it written as a timeout,
-    // which sends it to the back. A very busy push tick leaves less than that, and a first club cut in
-    // such a run keeps its cache: the next fair run reads it.
+    // would do the same, so no club behind it would ever be read. Only then is it written, which sends it
+    // to the back: a good read of its link on this platform stays (`keepsGoodRead`), else it is written as
+    // a timeout. A very busy push tick leaves less than that, and a first club cut in such a run is not
+    // written and stays due: the next fair run reads it.
     if (lane.outOfTime && lane.blocked === null) {
       lane.cut++;
       if (out.length > 0 || !o.full) break;
       result = { ok: false, status: null, reason: "timeout", requests: lf.count(), detail: "frame: budget" };
-      out.push({ club, platform: lane.platform, result, todayOnly });
+      out.push({ club, platform: lane.platform, link, result, todayOnly });
       break;
     }
-    out.push({ club, platform: lane.platform, result, todayOnly });
+    out.push({ club, platform: lane.platform, link, result, todayOnly });
     if (!result.ok && result.reason === "blocked") lane.blocked ??= result.status ?? 0;
     if (!result.ok && result.reason === "changed") {
       // One stale or mistyped link is that club's error. The platform stops when a second club in the
@@ -565,13 +587,14 @@ function failedCache(platform: string, now: Date, error: string, tz: string | nu
 /**
  * A clean read of today alone, as the part of the cache it replaces: today's pieces, the three days the
  * cache still covers, and the time of the last full read. `keepFrom` is the club's next midnight: the
- * row keeps its own pieces from there on (`writeToday` in `runScrape`). Pure.
+ * row keeps its own pieces from there on (`writeToday` in `runScrape`). `link` is the link read, which
+ * the cache keeps as its `linkKey`. Pure.
  */
-export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string }): { availability: ClubAvailability; keepFrom: string } {
+export function todayCache(result: Extract<ScrapeResult, { ok: true }>, o: { platform: string; tz: string; now: Date; fullAt: string; link?: string }): { availability: ClubAvailability; keepFrom: string } {
   const days = scrapeDays(o.now, o.tz);
   const slots = freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days: days.slice(0, 1) });
   const ref = cleanRef(result.ref);
-  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt, ...(ref ? { ref } : {}) };
+  const availability: ClubAvailability = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, slots, error: null, fullAt: o.fullAt, ...(ref ? { ref } : {}), ...(o.link ? { linkKey: linkKey(o.link) } : {}) };
   return { availability, keepFrom: zonedTimeToUtc(days[1], "00:00", o.tz).toISOString() };
 }
 
@@ -608,10 +631,10 @@ export function failureWhy(detail: string | null | undefined): string | null {
   return second !== undefined && WHY_CODE.test(second) ? `${step}: ${first} ${second}` : `${step}: ${first}`;
 }
 
-/** What a reader's answer becomes on the club row. `tz` is a zone we know. Pure. */
-export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date }): ClubAvailability {
+/** What a reader's answer becomes on the club row. `tz` is a zone we know; `link` is the link read, kept as `linkKey`. Pure. */
+export function availabilityFrom(result: ScrapeResult, o: { platform: string; tz: string; now: Date; link?: string }): ClubAvailability {
   const days = scrapeDays(o.now, o.tz);
-  const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform };
+  const base = { fetchedAt: o.now.toISOString(), day: days[0], days, tz: o.tz, source: `scrape:${o.platform}`, platform: o.platform, ...(o.link ? { linkKey: linkKey(o.link) } : {}) };
   if (result.ok) {
     const ref = cleanRef(result.ref);
     return { ...base, slots: freeSlotsFromScrape(result.slots, { tz: o.tz, now: o.now, days }), error: null, fullAt: base.fetchedAt, ...(ref ? { ref } : {}) };
@@ -656,7 +679,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       const link = readLink(club);
       // The platform the row names goes with its booking link; a website is read by whichever reader takes it.
       const adapter = adapterFor(link, club.bookingUrl ? club.bookingPlatform : null, mine);
-      if (link && adapter) readable.push({ club, adapter, link });
+      if (link && adapter) readable.push({ club: { ...club, prev: prevForLink(club.prev, link) }, adapter, link });
       else unreadable.push({ club, platform: s.platform });
     }
     const plan = planReads(readable.map((r) => r.club.prev), s.platform, now);
@@ -726,11 +749,11 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       slug,
       sql`jsonb_set(${JSON.stringify(t.availability)}::jsonb, '{slots}', ${JSON.stringify(t.availability.slots)}::jsonb || coalesce((select jsonb_agg(s order by s->>'start') from jsonb_array_elements(case when jsonb_typeof(${clubs.availability}->'slots') = 'array' then ${clubs.availability}->'slots' else '[]'::jsonb end) s where s->>'start' >= ${t.keepFrom}), '[]'::jsonb))`,
     );
-  for (const { club, platform, result, todayOnly } of outcomes) {
+  for (const { club, platform, link, result, todayOnly } of outcomes) {
     // The zone the reader read the days in, else the club's own; a clean read in no known zone is an error.
     const zone = result.ok && result.tz && isValidTimeZone(result.tz) ? result.tz : zoneOf(club.tz);
     if (result.ok && zone && todayOnly && club.prev?.fullAt) {
-      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt }))) run.fresh++;
+      if (await writeToday(club.slug, todayCache(result, { platform, tz: zone, now, fullAt: club.prev.fullAt, link }))) run.fresh++;
       continue;
     }
     // A timeout over a good read: the good read stays, with its own time, so the pages show it for as
@@ -739,7 +762,7 @@ export async function runScrape(db: Db, now = new Date(), o: ScrapeOptions = {})
       if (await write(club.slug, sql`${clubs.availability}`)) run.failed.push({ slug: club.slug, platform, error: "timeout", why: failureWhy(result.ok ? null : result.detail) });
       continue;
     }
-    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now });
+    const availability = !zone && result.ok ? failedCache(platform, now, "no time zone") : availabilityFrom(result, { platform, tz: zone ?? "UTC", now, link });
     const written = await write(club.slug, availability);
     if (written && result.ok && zone) run.fresh++;
     if (written && availability.error) run.failed.push({ slug: club.slug, platform, error: availability.error, why: availability.why ?? null });

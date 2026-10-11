@@ -275,11 +275,11 @@ export function slotDay(start: string, tz: string): string {
  * which is what keeps a list of clubs small now that a read from a platform holds three days (AGENTS.md
  * rule 12, the Supabase egress in docs/OPERATING.md). Every writer stores instants from `toISOString()`,
  * so comparing the text compares the times. `why` stays behind too: no list reads it, only the row and
- * the run's answer (`failureWhy` in `scrape.ts`). So does `ref`, the platform's id for the club, which
- * only the reader reads. Null where the row has no cache.
+ * the run's answer (`failureWhy` in `scrape.ts`). So do `ref`, the platform's id for the club, and
+ * `linkKey`, which only the run reads. Null where the row has no cache.
  */
 export function cacheBetween(from: Date, until: Date): SQL<ClubAvailability | null> {
   const lo = from.toISOString();
   const hi = until.toISOString();
-  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why' - 'ref') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
+  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why' - 'ref' - 'linkKey') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
 }

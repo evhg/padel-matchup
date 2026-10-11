@@ -287,9 +287,12 @@ about once an hour (`fullDueMs`, 58 minutes). Between full reads, a club has tod
 the later days of its last full read. A lane makes at most three full reads a run (`fullPerLane`). A
 club past them has today alone read, and its full read waits for its next visit, never past 88
 minutes (`fullLateMs`). So the full reads spread over the ticks. Playtomic reads today in one request:
-the cache keeps the club's tenant id (`ref`), and the reader then skips the club page. A full read
-reads the club page again, so the id stays true. The run writes the free courts into
-`clubs.availability` and `availability_at` as pieces that never overlap: for each piece, the courts
+the cache keeps the club's tenant id (`ref`), and the reader then skips the club page. The cache also
+keeps a key of the link that the read came from (`linkKey`, eight hex digits, never the link). The run
+uses the kept id, the kept days and a kept good read only while the club's link gives the same key.
+After a change of link, the club gets a full read at its next visit. A full read reads the club page
+only when the function instance has no copy of that page from the last 24 hours. The run writes the
+free courts into `clubs.availability` and `availability_at` as pieces that never overlap: for each piece, the courts
 free for the whole of it. A link no reader can read is written as an error with no request, so it
 moves to the back. A read that times out keeps the club's last good read: only `availability_at`
 moves, so the club goes to the back and its times show as long as they would have. A feed the club
@@ -314,8 +317,8 @@ read every hour, and three reads of today between them.
 | MATCHi | 2 | 104, about 180 | 2 × (4 + 3 × 2) × 24 = 480 |
 | Book & Go | 4 | 156, about 270 | 4 × (4 + 3 × 2) × 24 = 960 |
 
-A Playtomic full read is the club page and three days, and a read of today is one request (the
-tenant id above). MATCHi and Book & Go read their club page or their list of locations again for
+A Playtomic full read is at most the club page and three days, and a read of today is one request
+(the tenant id above). MATCHi and Book & Go read their club page or their list of locations again for
 today, so a read of today is two requests. The two Prime Padel clubs share one Book & Go app, and the
 lane's cache answers the second club, so Book & Go sends about 720. The pace does not change: one
 request a second for each platform, at most eight a club, and a stop at the first block.
@@ -329,7 +332,12 @@ function has, about 72 of the 360 GB-hours a month (20%). The worst case is ever
 seconds: about 216 GB-hours (60%). That happens only when a platform is slow on every tick, and
 `scrape_cut_<platform>` then shows it. Each run sends at most 45 requests to each platform and writes
 at most eight club rows for each. A tick in steady state sends at most 17 to Playtomic: three full
-reads and five reads of today (`tests/scrape.test.ts`, "21 clubs").
+reads and five reads of today (`tests/scrape.test.ts`, "21 clubs"). The three ticks after midnight
+in the clubs' zone are the exception. Then the kept days of each club miss the new third day, so each
+club gets a full read past the cap of three. That is eight, eight and five clubs, so 32, 32 and 20
+requests (`tests/scrape.test.ts`, "after the clubs' midnight"). The first three ticks of the code that
+adds `linkKey` do the same once, because no older read has a key. A club whose link changed also
+gets one full read past the cap.
 
 **The egress** (Supabase, 5 GB a month). A read from a platform keeps three days on the club row.
 Measured on the fixtures (10 October 2026): one day of The Cage Padel Tribe is 9 pieces and 0.7 KB,

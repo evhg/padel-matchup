@@ -32,8 +32,13 @@ export type ClubFreeSlot = { start: string; end: string; free: number };
  * components pick their fields. Never pass a whole club row, or its `availability`, to a client
  * component. It is how we find the cause.
  */
-/** `ref`: a platform's own id for the club (Playtomic's tenant id), kept by the reader of free court times so a read of today alone skips the club page (src/lib/booking/scrape.ts). No list reads it (`cacheBetween`). */
-export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string; ref?: string };
+/**
+ * `ref`: a platform's own id for the club (Playtomic's tenant id), kept by the reader of free court times
+ * so a read of today alone skips the club page (src/lib/booking/scrape.ts). `linkKey`: eight hex digits
+ * made from the link the read came from (`linkKey` in scrape.ts), never the link itself. The run uses
+ * `ref` and the kept days only while the club's link gives the same key. No list reads either (`cacheBetween`).
+ */
+export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string; ref?: string; linkKey?: string };
 
 export const clubs = pgTable(
   "clubs",

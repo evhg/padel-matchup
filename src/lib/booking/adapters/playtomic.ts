@@ -23,8 +23,10 @@ import { errorClass } from "./errorClass";
  *      it may open this checkout instead is the owner's decision, not yet taken (DECIDING rule 36).
  *
  * A read of today alone takes one request: the tenant id from the club's last clean read comes back as
- * `target.ref`, so the club page is not read again. A full read (all three days, about hourly) reads the
- * club page every time, which keeps the tenant id, the zone and the courts true.
+ * `target.ref`, so the club page is not read again. The frame hands it back only while the club's link is
+ * the one that read gave it (`prevForLink` in scrape.ts). A full read (all three days, about hourly)
+ * takes the tenant id from the club page. It reads the page only when this process has no copy of that
+ * page from the last 24 hours (`clubCache`, keyed by the page), so a full read is three or four requests.
  *
  * Limits: an honest User-Agent, one request a second to Playtomic, at most 8 requests a call,
  * 10 seconds per request, the club page cached for a day. 401, 403 and 429 mean stop ("blocked").
