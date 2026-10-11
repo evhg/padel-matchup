@@ -629,7 +629,7 @@ Everything in this list is live. The README describes each in detail.
   and a crew with fewer than two matches behind it never makes it. Production's one crew has one
   scored match, so nobody sees the table yet.
 - **A group page shows names, not levels, and a crew can ask to join (9 October 2026, decision E,
-  migration 0085).** The owner: "names visible, levels hidden, optional Ask to join", for social
+  migration 0087).** The owner: "names visible, levels hidden, optional Ask to join", for social
   proof and privacy. On the group page's member list a visitor sees the members' first names and
   the count, and members see each other's levels; `GET /api/v1/groups/{code}` and the MCP tool
   `get_group` carry the names and the count, never a level. A match's own roster still shows the
@@ -770,7 +770,7 @@ Everything in this list is live. The README describes each in detail.
   the tag of the one before. The rule is `src/lib/domain/eventTags.ts`. The API and the MCP take
   `category` and `ageMin` on create (anything else is refused with a 422) and every match object and
   board row carries them. Filters on a listing come later.
-- **A crew's own Telegram group (9 October 2026, migrations 0085 and 0086).** The owner's decision:
+- **A crew's own Telegram group (9 October 2026, migrations 0089 and 0090).** The owner's decision:
   a crew can run its own Telegram group with the bot as an admin, opted in group by group (DECIDING
   rule 31). A crew's admin finds "Run a Telegram group for this crew" on its page: one link picks
   or makes a group and adds the bot as an admin with two rights (pin, invite links).
@@ -924,6 +924,7 @@ Everything in this list is live. The README describes each in detail.
   words gave the club, the day and the time. The answer then becomes the match's link, ready for the
   WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
   Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
+  A session wrote that limit into DECIDING rule 35 on 11 October 2026; the owner has not decided it.
   Its preview gives the match id only, so the words that the person pastes carry the rest. Since the
   audit of 11 October 2026: the WhatsApp thread answers a pasted booking with what it read and the
   filled form (`src/lib/whatsapp/paste.ts`); it does nothing until the owner's WhatsApp number is set.
@@ -935,7 +936,9 @@ Everything in this list is live. The README describes each in detail.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
   37). Production had one group of four or five in Phuket, every full match made by hand with the same
-  people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
+  people. The last one made before this change was EfUa (made on 4 October, played on 9 October). The
+  next, TDsv for 17 October, was made by hand on 11 October, about two hours before this change shipped.
+  "Play again" on the score panel now asks for the day and the
   time in one control above the button, a week on by default; everything else carries over and a
   crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
   game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
@@ -956,6 +959,7 @@ Everything in this list is live. The README describes each in detail.
   match with the organiser, from before its start (a score typed in at the court counts, and so does a
   scored americano), skips that organiser's level range on every door (`admissionAt` in
   `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
+  A session added this waiver; the owner has not decided it, and it stays until the owner does.
   No WhatsApp template carries the message yet.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
@@ -1121,6 +1125,10 @@ the player, and invite them to try it.
    and `book_mail_skipped` are empty on 11 October 2026): one test mail from the owner shows whether
    Resend routes it. The screenshot read and the other AI features wait on a working
    `ANTHROPIC_API_KEY`.
+7. **Decision B: a second organiser in Phuket.** The owner chose "A now + B this week" on 11 October
+   2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
+   October 2026 one organiser had made matches since 10 October. The next session counts the
+   organisers with a match since 11 October and reports it to the owner (DECIDING rule 37).
 
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
