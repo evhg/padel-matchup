@@ -12,7 +12,7 @@ import { baseUrl } from "@/lib/config";
 import { addMs, formatEventDay, formatEventTime, isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { BookingButton, ClubBadges, FreeCourts } from "@/components/ClubBits";
-import { getClub, isClubListed, isClubLive } from "@/lib/domain/clubs";
+import { getClub, getClubWithCache, isClubListed, isClubLive } from "@/lib/domain/clubs";
 import { getSessionPlayerId } from "@/lib/session";
 import { freeCourtsCardShown } from "@/lib/booking/availability";
 import { clubBusy, courtDay, courtsInUse, listCourts } from "@/lib/domain/courts";
@@ -45,7 +45,7 @@ export default async function VenueBoardPage({ params }: Props) {
   const { slug } = await params;
   if (!isValidVenueSlug(slug)) notFound();
   const db = await getDb();
-  const [boardRow, clubRow] = await Promise.all([getVenueBoard(db, slug), getClub(db, slug)]);
+  const [boardRow, clubRow] = await Promise.all([getVenueBoard(db, slug), getClubWithCache(db, slug)]);
   // A live club page stands even before its first match; an unclaimed venue needs one.
   const club = isClubLive(clubRow) ? clubRow : null;
   // What we may show about this club, theirs or ours. A club Kicksmash listed from public sources

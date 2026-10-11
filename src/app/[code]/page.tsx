@@ -4,7 +4,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer } from "@/actions/shared";
-import { cleanSource, taggedUrl } from "@/lib/source";
+import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/source";
+import { headers } from "next/headers";
+import { later } from "@/lib/alerts";
+import { bumpMetric } from "@/lib/domain/metrics";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
 import { AutoRefresh } from "@/components/tournament/AutoRefresh";
@@ -57,7 +60,7 @@ import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
-import { getShownClub, venuesForPicking } from "@/lib/domain/clubs";
+import { getShownClubLean, venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
@@ -143,6 +146,12 @@ export default async function EventPage({ params, searchParams }: Props) {
   const isMember = Boolean(mySlot && mySlot.position <= ev.capacity);
   const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
+  // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
+  // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
+  // a full page load only: never the 20-second refresh of a live night, a server action or a prefetch.
+  const h = await headers();
+  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", fullLoad: isFullPageLoad(h) });
+  if (viewKey) await later(() => bumpMetric(db, viewKey));
 
   // Level range: players outside it ask to join; the organizer decides.
   const levelRange = { min: ev.levelMin, max: ev.levelMax };
@@ -296,7 +305,7 @@ export default async function EventPage({ params, searchParams }: Props) {
   // pages allow (src/lib/booking/prepare.ts), for the organiser and the players; the match's own
   // booking link, when the organiser gave one, stays where it was. One read, only for them.
   const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
-  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClub(db, ev.venueSlug) : null;
+  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClubLean(db, ev.venueSlug) : null;
   // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
   const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
   // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.

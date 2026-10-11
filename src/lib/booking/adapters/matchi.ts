@@ -1,6 +1,7 @@
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { detectPlatform } from "../platforms";
 import type { AvailabilityAdapter, ScrapedSlot, ScrapeResult, ScrapeTarget } from "./types";
+import { errorClass } from "./errorClass";
 
 /**
  * MATCHi: the free courts an anonymous visitor sees on a club's public page.
@@ -182,6 +183,8 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
       let requests = 0;
       const fail = (reason: "changed" | "error", detail: string, status: number | null = null): ScrapeResult => ({ ok: false, status, reason, requests, detail });
 
+      // The step a failure names before its colon ("club page: HTTP 500"), the shape `failureWhy` keeps.
+      let step = "club page";
       const get = async (path: string, accept: string): Promise<string> => {
         if (requests >= MATCHI_MAX_REQUESTS) throw new Stop("error", null, "request budget spent");
         if (MATCHI_DISALLOWED.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`))) throw new Stop("error", null, `robots.txt disallows ${path}`);
@@ -192,7 +195,7 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
         const timeout = new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
             ctrl.abort();
-            reject(new Stop("timeout", null, `no answer in ${timeoutMs} ms from ${path}`));
+            reject(new Stop("timeout", null, `${step}: TimeoutError`));
           }, timeoutMs);
         });
         const call = (async () => {
@@ -201,23 +204,23 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
             redirect: "follow",
             signal: ctrl.signal,
           });
-          if (res.status === 401 || res.status === 403 || res.status === 429) throw new Stop("blocked", res.status, `${res.status} on ${path}`);
-          if (res.status === 404) throw new Stop("not_found", 404, `404 on ${path}`);
-          if (!res.ok) throw new Stop("error", res.status, `${res.status} on ${path}`);
+          if (res.status === 401 || res.status === 403 || res.status === 429) throw new Stop("blocked", res.status, `${step}: HTTP ${res.status}`);
+          if (res.status === 404) throw new Stop("not_found", 404, `${step}: HTTP 404`);
+          if (!res.ok) throw new Stop("error", res.status, `${step}: HTTP ${res.status}`);
           // Where a redirect ended (the frame keeps it on `url`).
           const final = res.url ? new URL(res.url, MATCHI_ORIGIN).pathname : null;
           // A redirect to the sign-in page is a login wall: stop, never sign in.
-          if (final && /^\/login(\/|$)/.test(final)) throw new Stop("blocked", res.status, `sent to sign in from ${path}`);
+          if (final && /^\/login(\/|$)/.test(final)) throw new Stop("blocked", res.status, `${step}: sent to sign in`);
           // A club MATCHi no longer has: its page redirects to the list of facilities, with a 200.
-          if (final && /^\/facilities\/index\/?$/.test(final) && final !== path.split("?")[0]) throw new Stop("not_found", res.status, `${path} went to the list of facilities`);
+          if (final && /^\/facilities\/index\/?$/.test(final) && final !== path.split("?")[0]) throw new Stop("not_found", res.status, `${step}: sent to the list of facilities`);
           return res.text();
         })();
         try {
           return await Promise.race([call, timeout]);
         } catch (e) {
           if (e instanceof Stop) throw e;
-          if (ctrl.signal.aborted) throw new Stop("timeout", null, `no answer in ${timeoutMs} ms from ${path}`);
-          throw new Stop("error", null, e instanceof Error ? e.message : String(e));
+          if (ctrl.signal.aborted) throw new Stop("timeout", null, `${step}: TimeoutError`);
+          throw new Stop("error", null, `${step}: ${errorClass(e)}`);
         } finally {
           clearTimeout(timer);
           call.catch(() => undefined);
@@ -233,15 +236,16 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
 
       try {
         const facility = parseMatchiFacility(await get(`/facilities/${encodeURIComponent(slug)}`, "text/html"));
-        if (!facility) return fail("changed", "the club page no longer names its facility id");
+        if (!facility) return fail("changed", `${step}: the page no longer names its facility id`);
         if (!facility.sportId) return { ok: true, slots: [], requests, tz };
 
         const slots: ScrapedSlot[] = [];
         for (let i = 0; i < days; i++) {
           const date = localDay(now, tz, i);
+          step = `availability ${date}`;
           const q = new URLSearchParams({ wl: "", facility: facility.facilityId, date, sport: facility.sportId, week: "", year: "" });
           const parsed = parseMatchiSlots(await get(`/book/listSlots?${q}`, "text/html"), date, tz);
-          if (!parsed.ok) return fail("changed", `${date}: ${parsed.detail}`);
+          if (!parsed.ok) return fail("changed", `${step}: ${parsed.detail}`);
           // Today's list still shows an hour that has begun; nobody can play it any more.
           slots.push(...parsed.slots.filter((s) => Date.parse(s.start) >= now.getTime()));
         }
@@ -249,7 +253,7 @@ export function createMatchiAdapter(opts: MatchiOptions = {}): AvailabilityAdapt
         return { ok: true, slots, requests, tz };
       } catch (e) {
         if (e instanceof Stop) return { ok: false, status: e.status, reason: e.reason, requests, detail: e.message };
-        return fail("error", e instanceof Error ? e.message : String(e));
+        return fail("error", `${step}: ${errorClass(e)}`);
       }
     },
   };

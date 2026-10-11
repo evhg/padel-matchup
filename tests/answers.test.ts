@@ -100,6 +100,34 @@ describe("answers: pages from approvals, digest once a week (db, stubbed network
     expect(await db.select().from(answers).where(eq(answers.sourceItemId, item2.id))).toHaveLength(0);
   });
 
+  // A failed call is a failed model call, and a database error after an accepted call is not: it
+  // would count one call twice (a draft and a failure) and spend a second unit of the day's budget.
+  it("counts a database error after an accepted call as no failed call, and a call that never answers as one", async () => {
+    const day = new Date("2026-09-05T09:00:00Z");
+    const metric = async (key: string) => Number((await db.select().from(metricsDaily).where(and(eq(metricsDaily.key, key), eq(metricsDaily.day, "2026-09-05"))))[0]?.value ?? 0);
+    modelText = () => JSON.stringify({ skip: false, title: "Mexicano with 12 players", slug: "mexicano-12-players", question: "How do we run a mexicano with twelve?", answer: "Three courts, and pair the table after every round.", language: "en" });
+    const item = await draftedItem("t3_ans5", "Mexicano with 12 players?");
+    // The answers table refuses the write; every other read and write goes through.
+    const broken = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "insert") return (table: unknown) => (table === answers ? { values: () => { throw new Error("connection reset"); } } : target.insert(table as never));
+        const v = Reflect.get(target, prop, target);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    }) as Db;
+    expect(await generateAnswer(broken, item, day)).toBeNull();
+    expect(await metric("listen_drafts")).toBe(1);
+    expect(await metric("anthropic_failed")).toBe(0);
+    // A call that never answers is a failed call.
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(await generateAnswer(db, item, day)).toBeNull();
+    expect(await metric("anthropic_failed")).toBe(1);
+    expect(await metric("listen_drafts")).toBe(1);
+    stubNetwork();
+  });
+
   it("the Sunday digest goes out once, lists new pages with Unpublish buttons, and stays quiet on other days", async () => {
     const monday = new Date("2026-09-07T09:00:00Z");
     expect(await sendWeeklyDigest(db, monday)).toBe(false);

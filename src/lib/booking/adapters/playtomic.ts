@@ -1,5 +1,6 @@
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, ScrapeTarget } from "./types";
+import { errorClass } from "./errorClass";
 
 /**
  * Free courts on Playtomic, read the way an anonymous visitor's browser reads them.
@@ -222,17 +223,6 @@ async function pace(): Promise<void> {
 
 type Got = { kind: "response"; status: number; text: string } | { kind: "timeout" } | { kind: "error"; detail: string };
 
-/**
- * What failed, as the error's class and the network's code ("TypeError ECONNRESET"), never its message:
- * a message may carry the address it failed on. The shapes are `failureWhy`'s in `scrape.ts`, which
- * keeps nothing else when this lands in the club's cache.
- */
-function errorClass(e: unknown): string {
-  if (!(e instanceof Error)) return "Error";
-  const name = /^[A-Z][A-Za-z]{0,39}$/.test(e.name) ? e.name : "Error";
-  const code = (e as { cause?: { code?: unknown } }).cause?.code ?? (e as { code?: unknown }).code;
-  return `${name}${typeof code === "string" && /^[A-Z_]{1,30}$/.test(code) ? ` ${code}` : ""}`;
-}
 
 async function get(url: string, fetchImpl: typeof fetch, accept: string): Promise<Got> {
   await pace();

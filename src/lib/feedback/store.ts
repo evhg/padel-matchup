@@ -270,8 +270,9 @@ export async function deliverToPerson(item: Feedback, text: string, fetchImpl: t
     return res.ok ? { status: "sent" } : { status: "failed", error: res.description };
   }
   // A note from the in-app form carries only a player, and until now that was "no channel": Erik's
-  // two notes were fixed and he never heard. The app already knows how to reach a player — the same
-  // order every lesson notice takes: Telegram, then email, then this device.
+  // two notes were fixed and he never heard. The app already knows how to reach a player: Telegram,
+  // then email, then this device. That is `channelFor` without WhatsApp, and the email goes whatever
+  // `email_notifications` says, because it answers the player's own note.
   if (db && item.playerId) {
     const [p] = await db.select().from(players).where(eq(players.id, item.playerId)).limit(1);
     if (p?.telegramId && telegramEnabled()) {

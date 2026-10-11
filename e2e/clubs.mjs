@@ -12,6 +12,26 @@ const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret";
 const OWNER = Number(process.env.TELEGRAM_OWNER_ID || 777001);
 const hook = (update) => fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": SECRET }, body: JSON.stringify(update) }).then((r) => r.json());
 const CLUB = "Kata Padel Center";
+/**
+ * Counts a locator once it has painted. count() reads the page at one instant, and under the gate's full
+ * browser run a server page can still be painting after a goto or an action: the core suite met it on
+ * 10 October 2026 ("Link not found"), and this suite the same day. It waits up to 15 s for the first
+ * match and then counts, so every check stays exactly as strict as it was.
+ */
+const painted = async (loc, timeout = 15000) => {
+  await loc.first().waitFor({ timeout }).catch(() => undefined);
+  return loc.count();
+};
+/** Reads again until the read gives what the check wants, up to 15 s, and returns the last read: for a value a tap changes (an input, a button's state). */
+const settles = async (read, ok, timeout = 15000) => {
+  const end = Date.now() + timeout;
+  let v = await read();
+  while (!ok(v) && Date.now() < end) {
+    await new Promise((r) => setTimeout(r, 200));
+    v = await read();
+  }
+  return v;
+};
 const SLUG = "kata-padel-center";
 
 try {
@@ -22,17 +42,17 @@ try {
   const ctx = await browser.newContext(iphone);
   const page = await ctx.newPage();
   await page.goto(`${BASE}/${created.match.code}`);
-  check("the match page names the booking platform", (await page.getByRole("link", { name: /Book on Playtomic/ }).count()) === 1);
+  check("the match page names the booking platform", (await painted(page.getByRole("link", { name: /Book on Playtomic/ }))) === 1);
 
   await page.goto(`${BASE}/clubs`);
-  check("/clubs explains the founding offer", (await page.getByText("Founding clubs").count()) >= 1 && (await page.getByRole("link", { name: "Claim your club" }).count()) >= 1);
+  check("/clubs explains the founding offer", (await painted(page.getByText("Founding clubs"))) >= 1 && (await painted(page.getByRole("link", { name: "Claim your club" }))) >= 1);
   await page.goto(`${BASE}/v/${SLUG}`);
-  check("an unclaimed venue page offers the claim", (await page.getByText("Is this your club?").count()) === 1);
+  check("an unclaimed venue page offers the claim", (await painted(page.getByText("Is this your club?"))) === 1);
   await page.getByText("Is this your club?").click();
   await page.waitForURL(/\/clubs\/claim\?name=/);
   check("the claim form is prefilled with the club name", (await page.getByLabel("Club name").inputValue()) === CLUB);
   // The claim is a walk: the club, the courts and hours, the links; the claim itself is the last button.
-  check("the walk starts on the club", (await page.getByTestId("claim-club").count()) === 1 && (await page.getByText("Step 1 of 4").count()) === 1);
+  check("the walk starts on the club", (await painted(page.getByTestId("claim-club"))) === 1 && (await painted(page.getByText("Step 1 of 4"))) === 1);
   await page.getByLabel("Your name").fill("Nok");
   await page.getByLabel("City").fill("Phuket");
   await page.getByLabel("Country").selectOption("TH");
@@ -50,20 +70,20 @@ try {
   await page.getByTestId("claim-you").waitFor();
   // The claim's check: who they are and how the club can confirm it. A work email at the club's own
   // domain gets a code; the code goes back; the claim is confirmed by itself before the owner's tap.
-  check("the last step asks who they are and how to confirm it, with a way back and the claim button", (await page.getByRole("button", { name: "Back" }).count()) === 1 && (await page.getByRole("button", { name: "Claim this page" }).count()) === 1 && (await page.getByRole("button", { name: "Manager" }).count()) === 1);
+  check("the last step asks who they are and how to confirm it, with a way back and the claim button", (await painted(page.getByRole("button", { name: "Back" }))) === 1 && (await painted(page.getByRole("button", { name: "Claim this page" }))) === 1 && (await painted(page.getByRole("button", { name: "Manager" }))) === 1);
   check("the claim button waits for a role", await page.getByRole("button", { name: "Claim this page" }).isDisabled());
   await page.getByRole("button", { name: "Manager" }).click();
   await page.getByLabel("How can we confirm it?").fill("nok@kata-padel.com");
   await page.getByRole("button", { name: "Claim this page" }).click();
   await page.getByText("Claim received").waitFor({ timeout: 20000 });
-  check("the done screen asks for the code sent to the work email", (await page.getByTestId("claim-code").count()) === 1 && (await page.getByText("Code sent to nok@kata-padel.com").count()) === 1);
+  check("the done screen asks for the code sent to the work email", (await painted(page.getByTestId("claim-code"))) === 1 && (await painted(page.getByText("Code sent to nok@kata-padel.com"))) === 1);
   const claimMail = mails().reverse().find((m) => JSON.stringify(m).includes("nok@kata-padel.com"));
   const claimCode = claimMail?.subject?.match(/\d{6}/)?.[0] ?? "";
   check("the code email went to the work email and names the club", /^\d{6}$/.test(claimCode) && /Kata Padel Center/.test(claimMail?.subject ?? ""), JSON.stringify(claimMail?.subject));
   await page.getByLabel("6-digit code").fill(claimCode);
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await page.getByTestId("claim-verified").waitFor({ timeout: 20000 });
-  check("the work email is confirmed on the screen", (await page.getByText(/Work email confirmed/).count()) === 1);
+  check("the work email is confirmed on the screen", (await painted(page.getByText(/Work email confirmed/))) === 1);
   check("done: the poster and the week are the next two taps", (await page.getByTestId("claim-poster").getAttribute("href")) === `/v/${SLUG}/poster` && /\/manage\/[A-Za-z0-9_-]{24}#week$/.test((await page.getByTestId("claim-week").getAttribute("href")) ?? ""));
   const manage = (await page.locator("text=/\\/v\\/kata-padel-center\\/manage\\//").first().textContent())?.trim() ?? "";
   const token = manage.split("/manage/")[1];
@@ -72,11 +92,11 @@ try {
 
   // The work email made the page live by itself (the owner's decision): no waiting, no claim row.
   await page.goto(`${BASE}/v/${SLUG}`);
-  check("live at once by the work email: the managed badge is up and the claim row is gone", (await page.getByText("Is this your club?").count()) === 0 && (await page.getByText("Managed by the club").count()) === 1);
+  check("live at once by the work email: the managed badge is up and the claim row is gone", (await painted(page.getByText("Managed by the club"))) === 1 && (await page.getByText("Is this your club?").count()) === 0);
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
-  check("the manage page shows the live status", (await page.getByText("✓ Live").count()) === 1 && (await page.getByText("Waiting for our check").count()) === 0);
+  check("the manage page shows the live status", (await painted(page.getByText("✓ Live"))) === 1 && (await page.getByText("Waiting for our check").count()) === 0);
   await page.goto(`${BASE}/me`);
-  check("My matches lists the club", (await page.getByText("Your clubs").count()) === 1 && (await page.getByText(CLUB).count()) >= 1);
+  check("My matches lists the club", (await painted(page.getByText("Your clubs"))) === 1 && (await painted(page.getByText(CLUB))) >= 1);
 
   const stranger = await hook({ update_id: 91, callback_query: { id: "x1", from: { id: 1, first_name: "Eve" }, data: `ca:${token}` } });
   check("a stranger's tap does nothing", stranger.outcome === "club:not_owner");
@@ -84,20 +104,21 @@ try {
   check("the owner's tap on a page already live changes nothing and says approved", approved.outcome === "club:approved", JSON.stringify(approved));
 
   await page.goto(`${BASE}/v/${SLUG}`);
-  check("live: booking button, managed badge, founding badge, about text", (await page.getByRole("link", { name: "Book on MATCHi" }).count()) === 1 && (await page.getByText("Managed by the club").count()) === 1 && (await page.getByText("Founding club").count()) === 1 && (await page.getByText(/ten minutes from Kata beach/).count()) === 1);
-  check("the courts badge carries the indoor and outdoor split", (await page.getByText("4 courts · 3 indoor · 1 outdoor").count()) === 1);
+  check("live: booking button, managed badge, founding badge, about text", (await painted(page.getByRole("link", { name: "Book on MATCHi" }))) === 1 && (await painted(page.getByText("Managed by the club"))) === 1 && (await painted(page.getByText("Founding club"))) === 1 && (await painted(page.getByText(/ten minutes from Kata beach/))) === 1);
+  check("the courts badge carries the indoor and outdoor split", (await painted(page.getByText("4 courts · 3 indoor · 1 outdoor"))) === 1);
   await shot(page, "c2-club-page");
   await page.goto(`${BASE}/phuket`);
-  check("the city page lists the club with its booking button", (await page.getByRole("link", { name: CLUB }).count()) >= 1 && (await page.getByRole("link", { name: "Book on MATCHi" }).count()) >= 1);
+  check("the city page lists the club with its booking button", (await painted(page.getByRole("link", { name: CLUB }))) >= 1 && (await painted(page.getByRole("link", { name: "Book on MATCHi" }))) >= 1);
   await page.goto(`${BASE}/clubs`);
-  check("/clubs lists it under Phuket with nine founding places left", (await page.getByRole("link", { name: CLUB }).count()) === 1 && (await page.getByText("9 founding places left in Phuket").count()) === 1);
+  check("/clubs lists it under Phuket with nine founding places left", (await painted(page.getByRole("link", { name: CLUB }))) === 1 && (await painted(page.getByText("9 founding places left in Phuket"))) === 1);
   // A club owner's first move is to look for their own club, and there was no box to type it into
   // on any page of the site. One of them spent seven of his ten minutes proving an absence.
   await page.getByTestId("club-search").fill(CLUB.slice(0, 6));
   await page.getByRole("button", { name: "Find a club" }).click();
-  check("the search finds a club by a piece of its name", (await page.getByRole("link", { name: CLUB }).count()) === 1);
+  await page.waitForURL(/\/clubs\?q=/, { timeout: 20000 });
+  check("the search finds a club by a piece of its name", (await painted(page.getByRole("link", { name: CLUB }))) === 1);
   await page.goto(`${BASE}/clubs?q=zzzznotaclub`);
-  check("and says so plainly when nothing matches", (await page.getByTestId("club-search-none").count()) === 1 && (await page.getByRole("link", { name: CLUB }).count()) === 0);
+  check("and says so plainly when nothing matches", (await painted(page.getByTestId("club-search-none"))) === 1 && (await page.getByRole("link", { name: CLUB }).count()) === 0);
   // The URL an owner guesses. It was a 404; a club's page is its board.
   await page.goto(`${BASE}/clubs/${SLUG}`);
   check("the URL a club owner guesses lands on the club's page", page.url().endsWith(`/v/${SLUG}`));
@@ -106,9 +127,9 @@ try {
   await page.getByLabel(/Venue/).click();
   // The list is the point of the directory: a club is picked under the place it is in, not typed.
   // The heading names the country now that a claim carries one: "Thailand · Phuket".
-  check("the create form offers the club under its country and province", (await page.getByText(/(^|· )Phuket$/).count()) >= 1 && (await page.getByRole("button", { name: CLUB }).count()) === 1);
+  check("the create form offers the club under its country and province", (await painted(page.getByText(/(^|· )Phuket$/))) >= 1 && (await painted(page.getByRole("button", { name: CLUB }))) === 1);
   await page.getByRole("button", { name: CLUB }).click();
-  check("picking it fills the venue", (await page.getByLabel(/Venue/).inputValue()) === CLUB);
+  check("picking it fills the venue", (await settles(() => page.getByLabel(/Venue/).inputValue(), (v) => v === CLUB)) === CLUB);
 
   const api = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
   check("the API shows the club without anything private", api.booking?.platform === "matchi" && api.founding === true && api.courts === 4 && api.courtsIndoor === 3 && api.courtsOutdoor === 1 && api.country === "TH" && api.province === "Phuket" && !JSON.stringify(api).includes(token));
@@ -128,19 +149,20 @@ try {
 
   // ---- The club watches: one slot on the week, the hourly job makes the match, players see it ----
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
-  check("the manage page shows today's view and the week editor", (await page.getByTestId("club-day").count()) === 1 && (await page.getByTestId("club-week-editor").count()) === 1);
+  check("the manage page shows today's view and the week editor", (await painted(page.getByTestId("club-day"))) === 1 && (await painted(page.getByTestId("club-week-editor"))) === 1);
   // The courts one by one: numbered in one tap from the count, with the split the claim typed (three indoor, one outdoor)
   // already on the rows; the first one renamed, saved as a set.
-  check("the courts editor starts empty with the one-tap numbering", (await page.getByTestId("club-courts-editor").count()) === 1 && (await page.getByTestId("number-courts").count()) === 1);
+  check("the courts editor starts empty with the one-tap numbering", (await painted(page.getByTestId("club-courts-editor"))) === 1 && (await painted(page.getByTestId("number-courts"))) === 1);
   await page.getByTestId("number-courts").click();
-  check("numbering keeps the split the claim typed: three indoor, one outdoor", (await page.getByLabel("Indoor or outdoor").nth(2).inputValue()) === "indoor" && (await page.getByLabel("Indoor or outdoor").nth(3).inputValue()) === "outdoor");
+  const split = () => Promise.all([2, 3].map((n) => page.getByLabel("Indoor or outdoor").nth(n).inputValue({ timeout: 15000 })));
+  check("numbering keeps the split the claim typed: three indoor, one outdoor", JSON.stringify(await settles(split, (v) => v[0] === "indoor" && v[1] === "outdoor")) === JSON.stringify(["indoor", "outdoor"]));
   const firstCourt = page.getByLabel("Court name").first();
   await firstCourt.fill("Centre");
   await page.getByLabel("Indoor or outdoor").first().selectOption("indoor");
   await page.getByTestId("save-courts").click();
   await page.getByText("4 courts saved").waitFor({ timeout: 20000 });
   await page.goto(`${BASE}/v/${SLUG}`);
-  check("the club page lists the courts by name, the badge follows the rows", (await page.getByTestId("club-courts").getByText("Centre").count()) === 1 && (await page.getByTestId("club-courts").locator("li").count()) === 4 && (await page.getByText("4 courts · 3 indoor · 1 outdoor").count()) === 1);
+  check("the club page lists the courts by name, the badge follows the rows", (await painted(page.getByTestId("club-courts").getByText("Centre"))) === 1 && (await painted(page.getByTestId("club-courts").locator("li"))) === 4 && (await painted(page.getByText("4 courts · 3 indoor · 1 outdoor"))) === 1);
   const withCourts = await (await fetch(`${BASE}/api/v1/clubs/${SLUG}`)).json();
   check("the API carries the court names", JSON.stringify(withCourts.courtNames) === JSON.stringify(["Centre", "Court 2", "Court 3", "Court 4"]), JSON.stringify(withCourts.courtNames));
   // The day grid is quiet when there is nothing on: a club with courts and an empty day reads no
@@ -148,7 +170,7 @@ try {
   // tests/court-day.test.ts, where a fixed clock costs nothing.
   // The match form at this club offers those names instead of 1…n.
   await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
-  check("the match form offers the club's courts by name", (await page.locator("select option", { hasText: "Centre" }).count()) === 1);
+  check("the match form offers the club's courts by name", (await painted(page.locator("select option", { hasText: "Centre" }))) === 1);
   // Back on the manage page, where the rest of the suite stands.
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
 
@@ -157,7 +179,7 @@ try {
   // typed "warehaus" and "Warehaus" and neither could be matched to a club. This coach types the
   // club's name in lower case and must still be this club's coach.
   const coaching = page.getByTestId("club-coaching");
-  check("a club with no coaches says so, rather than showing an empty box", (await coaching.count()) === 1 && (await coaching.getByText("No coach has named your club yet.").count()) === 1);
+  check("a club with no coaches says so, rather than showing an empty box", (await painted(coaching)) === 1 && (await painted(coaching.getByText("No coach has named your club yet."))) === 1);
 
   const coachCtx = await browser.newContext(iphone);
   const nok = await coachCtx.newPage();
@@ -181,7 +203,7 @@ try {
   // past on a button reading "Email me instead" that collected no address; now it does not.
   await nok.getByTestId("notify-done").click();
   await nok.getByTestId("notify-none").waitFor({ timeout: 10000 });
-  check("the walk refuses to finish while the assistant has no way to reach the coach", (await nok.getByTestId("notify-none").count()) === 1);
+  check("the walk refuses to finish while the assistant has no way to reach the coach", (await painted(nok.getByTestId("notify-none"))) === 1);
   const nokEmail = nok.getByTestId("notify-email");
   await nokEmail.locator('input[type="email"]').fill("nok@example.test");
   await nokEmail.getByRole("button", { name: "Save", exact: true }).click();
@@ -193,8 +215,8 @@ try {
 
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   const listed = page.getByTestId("club-coaching");
-  check("a coach who typed the club's name in lower case is still this club's coach", (await listed.getByText("Tida").count()) === 1, (await listed.innerText()).slice(0, 160));
-  check("a coach who has taught nothing here yet says so, and shows no invented number", (await listed.getByText("No lessons in the last seven days").count()) === 1, (await listed.innerText()).slice(0, 160));
+  check("a coach who typed the club's name in lower case is still this club's coach", (await painted(listed.getByText("Tida"))) === 1, (await listed.innerText()).slice(0, 160));
+  check("a coach who has taught nothing here yet says so, and shows no invented number", (await painted(listed.getByText("No lessons in the last seven days"))) === 1, (await listed.innerText()).slice(0, 160));
   await shot(page, "c2-coaching");
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).getUTCDay();
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -215,8 +237,8 @@ try {
   check("the hourly job turns the slot into a match", hourly.clubMatches >= 1, JSON.stringify(hourly).slice(0, 200));
   await page.goto(`${BASE}/v/${SLUG}`);
   const weekCard = page.getByTestId("club-week");
-  check("the club page shows this week with the gold night and eight open seats", (await weekCard.count()) === 1 && (await weekCard.getByText("Gold night").count()) >= 1 && (await weekCard.getByText("0/8").count()) >= 1);
-  check("the gold night on the club's week carries the slot's tag", (await weekCard.getByText("Women", { exact: true }).count()) >= 1);
+  check("the club page shows this week with the gold night and eight open seats", (await painted(weekCard)) === 1 && (await painted(weekCard.getByText("Gold night"))) >= 1 && (await painted(weekCard.getByText("0/8"))) >= 1);
+  check("the gold night on the club's week carries the slot's tag", (await painted(weekCard.getByText("Women", { exact: true }))) >= 1);
   // On a phone each row's chips wrap on a line of their own: the box of every tag chip sits inside its row.
   const taggedRows = weekCard.getByTestId("club-week-row").filter({ has: page.getByTestId("tag-chip") });
   const boxes = [];
@@ -224,7 +246,7 @@ try {
   check("both tagged nights on the club's week keep their chips inside the row at 390px", boxes.length >= 2 && boxes.every((b) => b.ok), boxes.map((b) => b.detail).join(" "));
   await shot(page, "c4-board-tagged");
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
-  check("the editor names the next match of the slot", (await page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/).count()) === 1);
+  check("the editor names the next match of the slot", (await painted(page.getByTestId("club-slots").getByText(/next: [A-Za-z0-9]{4}/))) === 1);
   // Retagged in place: no remove-and-add, so the night already made is not made twice, and it follows the tag.
   const rowCategory = page.getByTestId("slot-row-category").first();
   await rowCategory.getByRole("radio", { name: "Mixed", exact: true }).click();
@@ -246,14 +268,14 @@ try {
   const mia = await (await browser.newContext(iphone)).newPage();
   await mia.goto(`${BASE}/p/${asked.player.personalToken}/${goldCode}`);
   await mia.getByText("Request sent").waitFor({ timeout: 20000 });
-  check("the match page carries the confirmed-levels chip", (await mia.getByText(/confirmed levels/).count()) >= 1);
+  check("the match page carries the confirmed-levels chip", (await painted(mia.getByText(/confirmed levels/))) >= 1);
   const askClub = mia.getByRole("button", { name: `Ask ${CLUB} to confirm my level` });
-  check("Mia can ask the club to confirm her level in one tap", (await askClub.count()) === 1);
+  check("Mia can ask the club to confirm her level in one tap", (await painted(askClub)) === 1);
   await askClub.click();
   await mia.getByText(`Asked ${CLUB} ✓`).waitFor({ timeout: 20000 });
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   const checks = page.getByTestId("level-checks");
-  check("the manage page lists Mia's level to confirm", (await checks.count()) === 1 && (await checks.getByText("Mia").count()) === 1 && (await checks.getByText("says 3.5").count()) === 1);
+  check("the manage page lists Mia's level to confirm", (await painted(checks)) === 1 && (await painted(checks.getByText("Mia"))) === 1 && (await painted(checks.getByText("says 3.5"))) === 1);
   await page.getByTestId("level-check-confirm").click();
   // The confirmation line is the action's own reply; on a slow runner the refresh can lag behind the write.
   // The state that matters is checked on Mia's page and in the API below, so a late line is not a failure.
@@ -264,12 +286,11 @@ try {
     .catch(() => false);
   if (!confirmedLine) console.log("    (confirmation line not painted within 20s; checking the outcome directly)");
   await mia.reload();
-  if ((await mia.getByText(/You.re in/).count()) === 0) {
-    await mia.waitForTimeout(3000);
-    await mia.reload();
-  }
-  check("Mia is in the gold night once the club confirmed, nobody else tapped", (await mia.getByText(/You.re in/).count()) === 1);
+  // The seat is the server's: a page loaded before the write lands shows the request, so one more load.
+  if (!(await mia.getByText(/You.re in/).waitFor({ timeout: 10000 }).then(() => true, () => false))) await mia.reload();
+  check("Mia is in the gold night once the club confirmed, nobody else tapped", (await painted(mia.getByText(/You.re in/))) === 1);
   await page.reload();
+  await page.getByTestId("club-week-editor").waitFor({ timeout: 15000 });
   check("the club's list no longer waits on Mia", (await page.getByTestId("level-checks").getByText("says 3.5").count()) === 0);
   const seated = await fetch(`${BASE}/api/v1/matches/${goldCode}`).then((r) => r.json());
   check("the API shows Mia seated with her level", ((seated.match ?? seated).players ?? []).some((p) => p.name === "Mia" && p.level === 3.5), JSON.stringify((seated.match ?? seated).players));
@@ -281,16 +302,17 @@ try {
   const de = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "DE", "x-vercel-ip-city": "Berlin", "x-vercel-ip-timezone": "Europe/Berlin" } });
   const lars = await de.newPage();
   await lars.goto(`${BASE}/clubs`);
-  check("a reader in Germany is told no club there has a page yet", (await lars.getByTestId("clubs-none-here").getByText("No club in Germany has a page here yet.").count()) === 1);
-  check("and is offered the ten founding places in their own city", (await lars.getByTestId("founding-here").getByText(/Berlin/).count()) === 1);
+  check("a reader in Germany is told no club there has a page yet", (await painted(lars.getByTestId("clubs-none-here").getByText("No club in Germany has a page here yet."))) === 1);
+  check("and is offered the ten founding places in their own city", (await painted(lars.getByTestId("founding-here").getByText(/Berlin/))) === 1);
 
   const th = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "TH", "x-vercel-ip-city": "Phuket", "x-vercel-ip-timezone": "Asia/Bangkok" } });
   const nok2 = await th.newPage();
   await nok2.goto(`${BASE}/clubs`);
+  await nok2.getByRole("link", { name: CLUB }).first().waitFor({ timeout: 15000 });
   check("a reader in Thailand, where clubs exist, is told nothing of the kind", (await nok2.getByTestId("clubs-none-here").count()) === 0);
 
   // Anybody lists a club nobody had listed. Not a claim: no role, no work address, no owner's tap.
-  check("the country with nothing in it offers the listing door first", (await lars.getByTestId("clubs-add-door").count()) === 1);
+  check("the country with nothing in it offers the listing door first", (await painted(lars.getByTestId("clubs-add-door"))) === 1);
   await lars.getByTestId("clubs-add-door").click();
   await lars.waitForURL(/\/clubs\/add/);
   await lars.getByLabel("Your name").fill("Lars");
@@ -299,16 +321,16 @@ try {
   await lars.getByLabel("Country").selectOption("DE");
   await lars.getByTestId("add-indoor").fill("4");
   await lars.getByTestId("add-outdoor").fill("2");
-  check("the button waits until the courts are counted", (await lars.getByTestId("add-submit").isEnabled()) === true);
+  check("the button waits until the courts are counted", (await settles(() => lars.getByTestId("add-submit").isEnabled(), (v) => v === true)) === true);
   await lars.getByTestId("add-submit").click();
   await lars.waitForURL(/\/v\/padel-kreuzberg/, { timeout: 20000 });
-  check("the club has a page at once", (await lars.getByRole("heading", { name: "Padel Kreuzberg" }).count()) >= 1);
-  check("the page says no club runs it", (await lars.getByTestId("club-unclaimed").count()) === 1);
-  check("and names the person who put it on the map", (await lars.getByTestId("club-added-by").getByText("Listed by Lars").count()) === 1);
-  check("the page shows the court split they gave", (await lars.getByText("6 courts").count()) >= 1);
+  check("the club has a page at once", (await painted(lars.getByRole("heading", { name: "Padel Kreuzberg" }))) >= 1);
+  check("the page says no club runs it", (await painted(lars.getByTestId("club-unclaimed"))) === 1);
+  check("and names the person who put it on the map", (await painted(lars.getByTestId("club-added-by").getByText("Listed by Lars"))) === 1);
+  check("the page shows the court split they gave", (await painted(lars.getByText("6 courts"))) >= 1);
   await lars.goto(`${BASE}/clubs`);
-  check("Germany is no longer empty, so the line is gone", (await lars.getByTestId("clubs-none-here").count()) === 0);
-  check("and the club is in the German section", (await lars.getByTestId("clubs-country").getByRole("link", { name: "Padel Kreuzberg" }).count()) >= 1);
+  check("the club is in the German section", (await painted(lars.getByTestId("clubs-country").getByRole("link", { name: "Padel Kreuzberg" }))) >= 1);
+  check("and Germany is no longer empty, so the line is gone", (await lars.getByTestId("clubs-none-here").count()) === 0);
 
   // The same club cannot be listed twice; its real manager claims the page instead, keeping one page.
   const twice = await browser.newContext({ ...iphone, extraHTTPHeaders: { ...iphone.extraHTTPHeaders, "x-vercel-ip-country": "DE" } });
@@ -352,7 +374,7 @@ try {
   await courtPage.goto(`${BASE}/about`);
   const bot = courtPage.locator("#bot");
   const botText = ((await bot.textContent({ timeout: 5000 }).catch(() => "")) ?? "").replace(/\s+/g, " ");
-  check("/about says what KicksmashBot reads, how often, and where to write", /KicksmashBot/.test(botText) && /Playtomic/.test(botText) && /15/.test(botText) && (await bot.locator('a[href^="mailto:"]').count()) === 1, botText.slice(0, 160));
+  check("/about says what KicksmashBot reads, how often, and where to write", /KicksmashBot/.test(botText) && /Playtomic/.test(botText) && /15/.test(botText) && (await painted(bot.locator('a[href^="mailto:"]'))) === 1, botText.slice(0, 160));
   // ---- The best times, and a court a player books (DECIDING rule 36) ----
   // Last in the suite, because it adds a feed and a match at the club that nothing above expects.
   // The club shares a feed of its bookings: its own match calendar, which this build serves and the
@@ -376,7 +398,9 @@ try {
     await chip.click();
     // The club's own zone, as its feed was read: the claim took it from the claimant's phone, so it is not Bangkok here.
     const clubTz = String(feedNow.freeCourts?.tz ?? "").replace(/_/g, " ");
-    const filled = [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: clubTz, exact: true }).count(), (await page.getByTestId("free-then").innerText()).trim()];
+    // The time, the zone button and the free-then line paint a moment after the tap: read until they agree.
+    const read = async () => [await page.locator('input[type="time"]').inputValue(), await page.getByRole("button", { name: clubTz, exact: true }).count(), (await page.getByTestId("free-then").innerText({ timeout: 1000 }).catch(() => "")).trim()];
+    const filled = await settles(read, (v) => label.endsWith(v[0]) && v[1] === 1 && v[2] === "✓ The club shows a free court then.");
     check("the create form offers the club's free time as a chip, and a tap fills the time and the club's zone", clubTz !== "" && label.endsWith(filled[0]) && filled[1] === 1 && filled[2] === "✓ The club shows a free court then.", JSON.stringify({ label, clubTz, filled }));
   } else {
     check("past the club's last free hour, the form offers no free time rather than a guess", (await page.getByTestId("free-times").count()) === 0);

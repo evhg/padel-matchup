@@ -9,6 +9,7 @@ import { postRedditComment, redditEnabled } from "./reddit";
 import { fetchAll, type FeedSpec } from "./sources";
 import { listenModel } from "@/lib/ops/anthropic";
 import { reportError } from "@/lib/alerts";
+import { WINDOW_MS } from "./window";
 
 /**
  * The listening loop, hourly:
@@ -17,8 +18,7 @@ import { reportError } from "@/lib/alerts";
  *   3. ask the owner on Telegram, at most a few per day, one tap to post
  * Nothing is ever posted without that tap.
  */
-/** How long a thread stays fresh enough to answer; the research desk dates its web hits by the same window. */
-export const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+export { WINDOW_MS };
 /** Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. */
 export const LIMITS = { draftsPerRun: 3, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
 
@@ -36,15 +36,21 @@ export async function rememberCandidates(db: Db, items: Candidate[], now = new D
 }
 
 /** Drafts for the newest gated items, inside the budget. */
-export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ drafted: number; relevant: number; errors: number }> {
-  const out = { drafted: 0, relevant: 0, errors: 0 };
+export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ drafted: number; relevant: number; errors: number; refused: boolean }> {
+  const out = { drafted: 0, relevant: 0, errors: 0, refused: false };
   if (!draftingEnabled()) return out;
   const pending = await db.select().from(listenItems).where(eq(listenItems.status, "new")).orderBy(desc(listenItems.postedAt)).limit(LIMITS.draftsPerRun);
   const started = Date.now();
   for (const item of pending) {
     if (Date.now() - started > LIMITS.draftBudgetMs) break;
     if (!(await withinBudget(db, now))) break;
-    const { draft, error } = await draftReply(db, { source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt }, fetchImpl, now);
+    const { draft, error, refused } = await draftReply(db, { source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt }, fetchImpl, now);
+    if (refused) {
+      // The key was refused, not the item: it stays new for the next key, and no further call is made this run.
+      out.errors++;
+      out.refused = true;
+      break;
+    }
     if (!draft) {
       out.errors++;
       await db.update(listenItems).set({ status: "failed", lastError: error, draftedAt: now }).where(eq(listenItems.id, item.id));
@@ -183,7 +189,7 @@ export async function listItems(db: Db, statuses: string[] = ["drafted", "approv
 }
 
 /** The hourly step. Safe to run often; every part is idempotent. */
-export type ListenSummary = { feeds: number; feedErrors: number; fetched: number; remembered: number; expired: number; drafted: number; relevant: number; draftErrors: number; asked: number; feedErrorDetails?: string[]; discord?: { guilds: number; channels: number; read: number; candidates: number; replied: number; errors: string[] } };
+export type ListenSummary = { feeds: number; feedErrors: number; fetched: number; remembered: number; expired: number; drafted: number; relevant: number; draftErrors: number; asked: number; feedErrorDetails?: string[]; discord?: { guilds: number; channels: number; read: number; candidates: number; replied: number; errors: string[]; refused?: boolean } };
 
 export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly FeedSpec[]; fetchImpl?: typeof fetch; discord?: boolean } = {}): Promise<ListenSummary> {
   // The Sunday digest before anything slow. It used to come last, behind the Discord read (15 s),
@@ -211,7 +217,8 @@ export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly
   const items = fetched.flatMap((f) => f.items);
   const remembered = await rememberCandidates(db, items, now);
   const expired = await expireOld(db, now);
-  const drafted = await draftPending(db, now, o.fetchImpl);
+  // A key the Discord replies found refused is refused here too: no call is made after the first 401 or 403.
+  const drafted = discord?.refused ? { drafted: 0, relevant: 0, errors: 0, refused: true } : await draftPending(db, now, o.fetchImpl);
   const asked = await askOwner(db, now);
   const failed = fetched.filter((f) => f.error);
   return { feeds: fetched.length, feedErrors: failed.length, fetched: items.length, remembered, expired, drafted: drafted.drafted, relevant: drafted.relevant, draftErrors: drafted.errors, asked, ...(failed.length ? { feedErrorDetails: failed.map((f) => `${f.feed.id}: ${f.error}`) } : {}), ...(discord ? { discord } : {}) };

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { locales } from "@/i18n/config";
 import { pingIndexNow } from "@/lib/indexnow";
 import { localePath } from "@/lib/seo";
@@ -13,6 +13,7 @@ import { countryOfTz, isCountryCode } from "./countries";
 import { normalizeEmail } from "./players";
 import { isValidTimeZone } from "@/lib/dates";
 import { DomainError } from "./errors";
+import { columnsButCache, type PickableClub } from "./clubColumns";
 import type { FreeFeed } from "./bestTimes";
 import { clubFeeds } from "./freeCourts";
 import { courtNamesBySlug } from "./courts";
@@ -112,39 +113,57 @@ export const isClubListed = (c: Pick<Club, "approvedAt" | "rejectedAt" | "source
 const listedSource = () => inArray(clubs.source, LISTED_SOURCES as unknown as string[]);
 export const clubStatus = (c: Pick<Club, "approvedAt" | "rejectedAt">): "live" | "pending" | "rejected" => (c.rejectedAt ? "rejected" : c.approvedAt ? "live" : "pending");
 
-export async function getClub(db: Db, slug: string): Promise<Club | null> {
+export { columnsButCache, type PickableClub };
+
+/**
+ * The club behind a slug, without the cache of free courts (up to three days of slots from a platform,
+ * the one large column): the claim, the decision, the poster, a level check. A page that renders free
+ * times reads `getClubWithCache` instead (AGENTS.md rule 12).
+ */
+export async function getClub(db: Db, slug: string): Promise<PickableClub | null> {
+  if (!isValidVenueSlug(slug)) return null;
+  const [c] = await db.select(columnsButCache).from(clubs).where(eq(clubs.slug, slug)).limit(1);
+  return c ?? null;
+}
+
+/** The whole row, the cache of free courts included: only for a page or an answer that shows them (the club page, the API's club). */
+export async function getClubWithCache(db: Db, slug: string): Promise<Club | null> {
   if (!isValidVenueSlug(slug)) return null;
   const [c] = await db.select().from(clubs).where(eq(clubs.slug, slug)).limit(1);
   return c ?? null;
 }
 
-/** The live club behind a slug, or null: what public pages and the API show. */
+/** The live club behind a slug, or null: what public pages and the API show, its free courts included. */
 export async function getLiveClub(db: Db, slug: string): Promise<Club | null> {
-  const c = await getClub(db, slug);
+  const c = await getClubWithCache(db, slug);
   return isClubLive(c) ? c : null;
 }
 
-/** One club a reader may see: theirs or ours. The API's `include=listed` lookup by slug. */
+/** One club a reader may see: theirs or ours. The API's `include=listed` lookup by slug, its free courts included. */
 export async function getShownClub(db: Db, slug: string): Promise<Club | null> {
+  const row = await getClubWithCache(db, slug);
+  return row && isClubListed(row) ? row : null;
+}
+
+/** The same without the cache: a reader that needs the club, never its free courts. */
+export async function getShownClubLean(db: Db, slug: string): Promise<PickableClub | null> {
   const row = await getClub(db, slug);
   return row && isClubListed(row) ? row : null;
 }
 
-export async function getClubByToken(db: Db, token: string): Promise<Club | null> {
+/** The club behind a manage link, without the cache of free courts: what the manage link's actions need. */
+export async function getClubByToken(db: Db, token: string): Promise<PickableClub | null> {
+  if (!/^[A-Za-z0-9_-]{16,40}$/.test(token)) return null;
+  const [c] = await db.select(columnsButCache).from(clubs).where(eq(clubs.manageToken, token)).limit(1);
+  return c ?? null;
+}
+
+/** The same with the cache: the manage page, which shows the club its free courts as players see them. */
+export async function getClubByTokenWithCache(db: Db, token: string): Promise<Club | null> {
   if (!/^[A-Za-z0-9_-]{16,40}$/.test(token)) return null;
   const [c] = await db.select().from(clubs).where(eq(clubs.manageToken, token)).limit(1);
   return c ?? null;
 }
-
-/** Every column of `clubs` but the cache of free courts, which is the one large column (AGENTS.md rule 12). */
-const columnsButCache = (() => {
-  const { availability, ...rest } = getTableColumns(clubs);
-  void availability;
-  return rest;
-})();
-
-/** A club in a list: no cache of free courts at all. */
-export type PickableClub = Omit<Club, "availability">;
 
 /**
  * A club in a list that shows today's free courts: every column, with `availability` cut to the slots
@@ -322,8 +341,8 @@ export async function venuesForPicking(db: Db, playerId: string | null, at: Wher
   return all;
 }
 
-export async function listClubsClaimedBy(db: Db, playerId: string): Promise<Club[]> {
-  return db.select().from(clubs).where(eq(clubs.claimedBy, playerId)).orderBy(asc(clubs.name));
+export async function listClubsClaimedBy(db: Db, playerId: string): Promise<PickableClub[]> {
+  return db.select(columnsButCache).from(clubs).where(eq(clubs.claimedBy, playerId)).orderBy(asc(clubs.name));
 }
 
 /**
@@ -354,8 +373,8 @@ export async function unlistedVenues(db: Db, since: Date, limit = 5): Promise<{ 
 }
 
 /** Claims waiting on the owner's yes. A directory row is nobody's claim and never queues here. */
-export async function listPendingClubs(db: Db): Promise<Club[]> {
-  return db.select().from(clubs).where(and(eq(clubs.source, "claim"), isNull(clubs.approvedAt), isNull(clubs.rejectedAt))).orderBy(asc(clubs.claimedAt));
+export async function listPendingClubs(db: Db): Promise<PickableClub[]> {
+  return db.select(columnsButCache).from(clubs).where(and(eq(clubs.source, "claim"), isNull(clubs.approvedAt), isNull(clubs.rejectedAt))).orderBy(asc(clubs.claimedAt));
 }
 
 const newToken = () => randomBytes(18).toString("base64url");
@@ -372,9 +391,9 @@ export { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
 const cleanRole = (v: unknown): ClaimRole | null => (typeof v === "string" && (CLAIM_ROLES as readonly string[]).includes(v) ? (v as ClaimRole) : null);
 
 /** The unclaimed listing for a name, whatever slug it was listed under. */
-async function listedClubByName(db: Db, name: string): Promise<Club | null> {
+async function listedClubByName(db: Db, name: string): Promise<PickableClub | null> {
   const [c] = await db
-    .select()
+    .select(columnsButCache)
     .from(clubs)
     .where(and(listedSource(), isNull(clubs.claimedBy), sql`lower(${clubs.name}) = ${name.toLowerCase()}`))
     .limit(1);
@@ -385,7 +404,7 @@ async function listedClubByName(db: Db, name: string): Promise<Club | null> {
  * Claims a club page. A live or pending claim by someone else blocks; a
  * rejected one can be claimed again (the owner sees it again).
  */
-export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
+export async function claimClub(db: Db, input: ClaimInput): Promise<PickableClub> {
   const name = input.name.trim().slice(0, 80);
   const typed = venueSlug(name);
   if (!typed || name.length < 2) throw new DomainError("invalid", "club_name");
@@ -424,13 +443,13 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
   // manage link like everything else.
   const values = { ...fields, city, country, province, name, tz, source: "claim", claimedBy: input.playerId, claimedAt: new Date(), claimRole, claimContact, claimVerifiedAt, rejectedAt: null, approvedAt: same ? existing.approvedAt : null, updatedAt: new Date() };
   if (existing) {
-    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning();
+    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, slug)).returning(columnsButCache);
     return row;
   }
   const [row] = await db
     .insert(clubs)
     .values({ slug, manageToken: newToken(), ...values })
-    .returning();
+    .returning(columnsButCache);
   return row;
 }
 
@@ -448,7 +467,7 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<Club> {
  */
 export type AddClubInput = ClubInput & { name: string; playerId: string; tz?: string | null };
 
-export async function addClub(db: Db, input: AddClubInput): Promise<Club> {
+export async function addClub(db: Db, input: AddClubInput): Promise<PickableClub> {
   const name = input.name.trim().slice(0, 80);
   const slug = venueSlug(name);
   if (!slug || name.length < 2) throw new DomainError("invalid", "club_name");
@@ -463,13 +482,13 @@ export async function addClub(db: Db, input: AddClubInput): Promise<Club> {
   const tz = input.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
   const values = { ...fields, city, country, province, name, tz, source: "player", addedBy: input.playerId, claimedBy: null, approvedAt: null, rejectedAt: null, claimDecision: null, founding: false, updatedAt: new Date() };
   if (existing) {
-    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, existing.slug)).returning();
+    const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, existing.slug)).returning(columnsButCache);
     return row;
   }
   const [row] = await db
     .insert(clubs)
     .values({ slug, manageToken: newToken(), ...values })
-    .returning();
+    .returning(columnsButCache);
   return row;
 }
 
@@ -482,7 +501,7 @@ export async function clubsAddedSince(db: Db, playerId: string, since: Date): Pr
 export const CLUB_ADD_LIMITS = { perPlayerPerDay: 5 } as const;
 
 /** Edits through the manage link. Name and slug never change (they are the venue's). */
-export async function updateClub(db: Db, token: string, input: ClubInput): Promise<Club | null> {
+export async function updateClub(db: Db, token: string, input: ClubInput): Promise<PickableClub | null> {
   const club = await getClubByToken(db, token);
   if (!club) return null;
   const fields = cleanClubInput(input);
@@ -495,7 +514,7 @@ export async function updateClub(db: Db, token: string, input: ClubInput): Promi
     .update(clubs)
     .set({ ...fields, ...(feedChanged ? { availability: null, availabilityAt: null } : {}), ...(tzFill ? { tz: tzFill } : {}), updatedAt: new Date() })
     .where(eq(clubs.slug, club.slug))
-    .returning();
+    .returning(columnsButCache);
   return row;
 }
 
@@ -520,7 +539,7 @@ export const UNLISTING_REASONS: readonly ClaimReason[] = ["not_a_club", "duplica
  * directory never listed this club. `created_at` before `claimed_at` is what says the row was there
  * first; a claim that makes its row writes both in the same moment.
  */
-async function listingUnderClaim(club: Club): Promise<DirectoryListing | null> {
+async function listingUnderClaim(club: PickableClub): Promise<DirectoryListing | null> {
   if (club.source !== "claim" || club.createdAt.getTime() >= club.claimedAt.getTime()) return null;
   // Loaded here and nowhere else: the directory file is 23 kB that no page needs to read.
   const { directoryListing } = await import("./directory");
@@ -561,7 +580,7 @@ const UNCLAIMED = {
  * owner's tap guards against), the courts and the week the claim set go with it, and the manage link
  * is new, because the old one belongs to the claim.
  */
-async function relist(db: Db, club: Club, listing: DirectoryListing, now: Date): Promise<Club> {
+async function relist(db: Db, club: PickableClub, listing: DirectoryListing, now: Date): Promise<PickableClub> {
   return db.transaction(async (tx) => {
     await tx.delete(clubCourts).where(eq(clubCourts.clubSlug, club.slug));
     await tx.delete(clubSlots).where(eq(clubSlots.clubSlug, club.slug));
@@ -569,13 +588,13 @@ async function relist(db: Db, club: Club, listing: DirectoryListing, now: Date):
       .update(clubs)
       .set({ ...listing, ...UNCLAIMED, claimedAt: club.createdAt, manageToken: newToken(), updatedAt: now })
       .where(eq(clubs.slug, club.slug))
-      .returning();
+      .returning(columnsButCache);
     return row;
   });
 }
 
 /** The owner's tap. Approval makes the page live and hands out the founding badge while the city has room. */
-export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date(), reason?: ClaimReason | null): Promise<Club | null> {
+export async function decideClub(db: Db, slug: string, approve: boolean, now = new Date(), reason?: ClaimReason | null): Promise<PickableClub | null> {
   const club = await getClub(db, slug);
   if (!club) return null;
   if (!approve) {
@@ -586,7 +605,7 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
       .update(clubs)
       .set({ rejectedAt: now, approvedAt: null, founding: false, claimDecision: why, updatedAt: now })
       .where(eq(clubs.slug, slug))
-      .returning();
+      .returning(columnsButCache);
     return row;
   }
   let founding = club.founding;
@@ -598,7 +617,7 @@ export async function decideClub(db: Db, slug: string, approve: boolean, now = n
     const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(clubs).where(and(key, eq(clubs.founding, true), isNotNull(clubs.approvedAt), isNull(clubs.rejectedAt)));
     founding = Number(n) < CLUB_LIMITS.foundingPerCity;
   }
-  const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, claimDecision: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning();
+  const [row] = await db.update(clubs).set({ approvedAt: club.approvedAt ?? now, rejectedAt: null, claimDecision: null, founding, updatedAt: now }).where(eq(clubs.slug, slug)).returning(columnsButCache);
   // A live club page is news for the search engines that speak IndexNow.
   await pingIndexNow([`/v/${slug}`, ...locales.map((l) => localePath("/clubs", l))], { db });
   return row;
@@ -631,8 +650,8 @@ export function claimEmailForCode(c: Pick<Club, "claimContact" | "website" | "bo
 }
 
 /** The code came back right: the claim is confirmed by the club's own mail. Once; a second code changes nothing. */
-export async function markClaimVerified(db: Db, slug: string, now = new Date()): Promise<Club | null> {
-  const [row] = await db.update(clubs).set({ claimVerifiedAt: now, updatedAt: now }).where(and(eq(clubs.slug, slug), isNull(clubs.claimVerifiedAt))).returning();
+export async function markClaimVerified(db: Db, slug: string, now = new Date()): Promise<PickableClub | null> {
+  const [row] = await db.update(clubs).set({ claimVerifiedAt: now, updatedAt: now }).where(and(eq(clubs.slug, slug), isNull(clubs.claimVerifiedAt))).returning(columnsButCache);
   return row ?? null;
 }
 
@@ -673,8 +692,8 @@ export function freeCourtHours(c: Pick<Club, "availability"> | null | undefined,
 }
 
 /** The club's time zone, set from the manage page when the claim came without one (the week cannot make matches without it). */
-export async function setClubTimezone(db: Db, slug: string, tz: string): Promise<Club | null> {
+export async function setClubTimezone(db: Db, slug: string, tz: string): Promise<PickableClub | null> {
   if (!isValidTimeZone(tz)) throw new DomainError("invalid", "tz");
-  const [row] = await db.update(clubs).set({ tz, updatedAt: new Date() }).where(eq(clubs.slug, slug)).returning();
+  const [row] = await db.update(clubs).set({ tz, updatedAt: new Date() }).where(eq(clubs.slug, slug)).returning(columnsButCache);
   return row ?? null;
 }

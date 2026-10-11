@@ -128,6 +128,60 @@ try {
   check("share page renders QR", (await a.locator("svg path").count()) > 0, code);
   check("share page says match is live + Go to match", (await a.getByText("Your match is live").count()) > 0 && (await a.getByRole("link", { name: /Go to match/ }).count()) > 0);
   check("share text includes court", (await a.locator('a[href^="https://wa.me"]').first().getAttribute("href")).includes(encodeURIComponent("Court 3")));
+  // Each share button tags the match link it sends, so the step from a shared link to a seat is counted (docs/OPERATING.md).
+  check("the Telegram share tags its link ?s=tg", new URL(await a.locator('a[href^="https://t.me/share"]').first().getAttribute("href")).searchParams.get("url").endsWith(`/${code}?s=tg`), code);
+  // "Copy link" puts the link on the clipboard and nowhere in the page, so the clipboard is caught here.
+  await a.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (v) => void (window.__copied = v) } }));
+  await a.getByRole("button", { name: "Copy link" }).first().click();
+  await a.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
+  check("the copied link is tagged ?s=link", String(await a.evaluate(() => window.__copied)).endsWith(`/${code}?s=link`), code);
+  // The phone's own share sheet ("Share…") renders only where navigator.share exists, and headless
+  // Chromium on Linux has none, so a stand-in catches what the button hands it. Only on the share page,
+  // so no later page of this browser grows a share button.
+  await a.addInitScript(() => {
+    if (location.pathname.endsWith("/share")) navigator.share = async (d) => void (window.__shared = d);
+  });
+  await a.reload();
+  await a.getByTestId("native-share").click({ timeout: 10000 }).catch(() => undefined);
+  await a.waitForFunction(() => typeof window.__shared === "object", null, { timeout: 5000 }).catch(() => undefined);
+  check("the phone's share sheet sends the link tagged ?s=share", String(await a.evaluate(() => window.__shared?.url)).endsWith(`/${code}?s=share`), code);
+  await a.evaluate(() => void delete navigator.share);
+  // A stranger who opens the WhatsApp link is the funnel's second step: one view_src_wa, written after
+  // the response (`later`), so it is read back until it lands.
+  const viewsWa = async () => {
+    const r = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select coalesce(sum(value), 0)::int as n from metrics_daily where key = 'view_src_wa'")}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+    return Number(r.rows?.[0]?.n ?? -1);
+  };
+  const wasViews = await viewsWa();
+  const viewer = await newPage();
+  await viewer.goto(`${BASE}/${code}?s=wa`);
+  let views = wasViews;
+  for (let i = 0; i < 20 && views <= wasViews; i++) {
+    await viewer.waitForTimeout(500);
+    views = await viewsWa();
+  }
+  check("a stranger's view of a ?s=wa link counts once under view_src_wa", wasViews >= 0 && views === wasViews + 1, `${wasViews} -> ${views}`);
+  // A refresh of the open page is no view: router.refresh() is what the live night's AutoRefresh calls
+  // every 20 seconds. Next.js removes the RSC header before the page reads it, so the page reads the
+  // browser's Sec-Fetch-Dest instead (isFullPageLoad in src/lib/source.ts). A reload by hand is a view.
+  // (A refresh's response never reports finished() to Playwright, so the wait is for its answer, then time
+  // for the write after it, which a counted refresh would make.)
+  for (let i = 0; i < 2; i++) {
+    const refreshed = viewer.waitForResponse((r) => r.request().headers()["rsc"] === "1" && new URL(r.url()).pathname === `/${code}`, { timeout: 15000 });
+    await viewer.evaluate(() => window.next.router.refresh());
+    await refreshed;
+  }
+  await viewer.waitForTimeout(3000);
+  const afterRefresh = await viewsWa();
+  check("a refresh of the open match page adds no view", afterRefresh === wasViews + 1, `${wasViews + 1} -> ${afterRefresh}`);
+  await viewer.reload();
+  let reloaded = afterRefresh;
+  for (let i = 0; i < 20 && reloaded <= afterRefresh; i++) {
+    await viewer.waitForTimeout(500);
+    reloaded = await viewsWa();
+  }
+  check("a full load of the match page adds one view", reloaded === afterRefresh + 1, `${afterRefresh} -> ${reloaded}`);
+  await viewer.context().close();
 
   await a.goto(`${BASE}/${code}`);
   await shot(a, "07-event-creator");

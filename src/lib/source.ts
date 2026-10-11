@@ -18,10 +18,11 @@ export function cleanSource(v: string | string[] | null | undefined): string | n
 
 /**
  * The tags the app itself puts on a link to a match: WhatsApp's share (`wa`), an Instagram story
- * (`ig`), the printed poster, the result card, a moment, the series page, the americano generator, a
- * Telegram card and the story picture.
+ * (`ig`), the printed poster, the result card, a moment, the series page, the americano generator, the
+ * Telegram share (`tg`), the story picture, the copied link (`link`) and the phone's own share sheet
+ * (`share`).
  */
-export const MATCH_SOURCES = ["wa", "ig", "poster", "card", "moment", "series", "gen", "tg", "story"] as const;
+export const MATCH_SOURCES = ["wa", "ig", "poster", "card", "moment", "series", "gen", "tg", "story", "link", "share"] as const;
 
 /**
  * The tag as a counter may carry it (`join_src_<tag>`, `newid_src_<tag>`): one the app writes, else
@@ -32,6 +33,41 @@ export function countedSource(v: string | string[] | null | undefined): string |
   const s = cleanSource(v);
   if (!s) return null;
   return (MATCH_SOURCES as readonly string[]).includes(s) ? s : "other";
+}
+
+/**
+ * A link preview, a crawler or a monitor: not a person, so no page view of theirs is counted. WhatsApp
+ * builds its preview on the sender's own phone, as `WhatsApp/2.x.y A` (or `i`), with no cookie; its
+ * in-app browser starts with `Mozilla/5.0` and is a person.
+ */
+export const isCrawler = (ua: string) => /bot|crawl|spider|slurp|facebookexternalhit|preview|uptime|monitor|curl|python-requests|Go-http-client/i.test(ua) || /^WhatsApp\//.test(ua);
+
+/**
+ * The counter for a view of a match page, the step between a shared link and a seat: a person with no
+ * seat on it, under the link's tag (`view_src_<tag>`, `view_src_none` with no tag). Read beside
+ * `join_src_<tag>` and `newid_src_<tag>` (docs/OPERATING.md, "From a shared link to a seat").
+ * Only a full page load, which is what a tapped link makes, is a view (`isFullPageLoad`).
+ */
+export function viewCounter(o: { source: string | null; seated: boolean; ua: string; fullLoad: boolean }): string | null {
+  if (!o.fullLoad || o.seated || isCrawler(o.ua)) return null;
+  return `view_src_${countedSource(o.source) ?? "none"}`;
+}
+
+/**
+ * A full page load, from the headers a page can read. Next.js deletes the `RSC` header and the other
+ * router headers before `headers()` returns them, so they cannot tell a refresh from a load. The
+ * browser's own `Sec-Fetch-Dest` can: a tapped link, a typed address and a reload say `document`;
+ * `router.refresh()` (the live night's AutoRefresh, every 20 seconds), a prefetch and a client
+ * navigation are a `fetch()` and say `empty`. A server action that re-renders the page carries
+ * `Next-Action`. A browser too old to send `Sec-Fetch-Dest` (Safari before 16.4, so iOS 15) is read by its
+ * `Accept`: a page load asks for `text/html`, and the router's fetch sets no `Accept`, so it sends `*\/*`.
+ * A speculative load (`Sec-Purpose: prefetch;prerender`) counts: when the person opens it, the browser
+ * sends no second request, so it is the only one there is.
+ */
+export function isFullPageLoad(h: { get(name: string): string | null }): boolean {
+  if (h.get("next-action") !== null) return false;
+  const dest = h.get("sec-fetch-dest");
+  return dest === "document" || (dest === null && (h.get("accept") ?? "").includes("text/html"));
 }
 
 /** The link an organiser pastes into an Instagram link sticker. */
