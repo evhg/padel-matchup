@@ -130,6 +130,27 @@ try {
   check("share text includes court", (await a.locator('a[href^="https://wa.me"]').first().getAttribute("href")).includes(encodeURIComponent("Court 3")));
   // Each share button tags the match link it sends, so the step from a shared link to a seat is counted (docs/OPERATING.md).
   check("the Telegram share tags its link ?s=tg", new URL(await a.locator('a[href^="https://t.me/share"]').first().getAttribute("href")).searchParams.get("url").endsWith(`/${code}?s=tg`), code);
+  // "Copy link" puts the link on the clipboard and nowhere in the page, so the clipboard is caught here.
+  await a.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (v) => void (window.__copied = v) } }));
+  await a.getByRole("button", { name: "Copy link" }).first().click();
+  await a.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
+  check("the copied link is tagged ?s=link", String(await a.evaluate(() => window.__copied)).endsWith(`/${code}?s=link`), code);
+  // A stranger who opens the WhatsApp link is the funnel's second step: one view_src_wa, written after
+  // the response (`later`), so it is read back until it lands.
+  const viewsWa = async () => {
+    const r = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select coalesce(sum(value), 0)::int as n from metrics_daily where key = 'view_src_wa'")}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+    return Number(r.rows?.[0]?.n ?? -1);
+  };
+  const wasViews = await viewsWa();
+  const viewer = await newPage();
+  await viewer.goto(`${BASE}/${code}?s=wa`);
+  let views = wasViews;
+  for (let i = 0; i < 20 && views <= wasViews; i++) {
+    await viewer.waitForTimeout(500);
+    views = await viewsWa();
+  }
+  check("a stranger's view of a ?s=wa link counts once under view_src_wa", wasViews >= 0 && views === wasViews + 1, `${wasViews} -> ${views}`);
+  await viewer.context().close();
 
   await a.goto(`${BASE}/${code}`);
   await shot(a, "07-event-creator");
