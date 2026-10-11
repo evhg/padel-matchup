@@ -304,13 +304,13 @@ line there, and its club row needs `booking_platform = 'bookandgo'`, because no 
 migration and no table. A run with nothing to read costs one write and one read of `metrics_daily`,
 and one small query for each platform.
 
-The requests a day, for production's clubs on 11 October 2026. "Before" is from `metrics_daily`: the
+The requests a day, for production's clubs on 11 October 2026, and Mandala Racquet Club. Its Playtomic link (`the-mandala-club`) is not in production yet: a change to `data/clubs.json` reaches production only through a migration. "Before" is from `metrics_daily`: the
 count by 14:05 UTC, and that rate over a whole day. "Now" is the most the code sends: a club's full
 read every hour, and three reads of today between them.
 
 | Platform | Clubs read | Before (by 14:05 UTC, a whole day) | Now, at most |
 |---|---|---|---|
-| Playtomic | 21 | 1,016, about 1,730 | 21 × (4 + 3 × 1) × 24 = 3,528 |
+| Playtomic | 20, and 21 with Mandala | 1,016, about 1,730 | 21 × (4 + 3 × 1) × 24 = 3,528 |
 | MATCHi | 2 | 104, about 180 | 2 × (4 + 3 × 2) × 24 = 480 |
 | Book & Go | 4 | 156, about 270 | 4 × (4 + 3 × 2) × 24 = 960 |
 
