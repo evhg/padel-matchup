@@ -46,6 +46,8 @@ type ChatMatchExtras = {
   names?: readonly string[] | null;
   /** The organiser booked the court before the match existed: it is marked booked by them. */
   booked?: boolean;
+  /** The booking's invitation for strangers, kept only when `madeToShare` takes it (`createEvent`). */
+  invite?: string | null;
 };
 
 /**
@@ -78,6 +80,7 @@ export async function createMatchInChat(db: Db, chat: TelegramChat, from: TgUser
       cost: input.cost,
       publicListing: input.publicListing,
       groupId: chat.groupId,
+      invite: input.invite,
     });
   } catch {
     return { ok: false, reason: "invalid" };

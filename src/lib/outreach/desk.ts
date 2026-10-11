@@ -161,16 +161,23 @@ export function renderDeskEmail(body: string): { text: string; html: string } {
 
 export type SendOutcome = { status: "sent" | "failed" | "already" | "not_found" | "disabled"; error?: string; id?: string };
 
-/** One email from claude@<apex> through Resend: plain text with a light HTML twin, reply-to us, thread headers when answering. */
-export async function sendPlainEmail(m: { to: string; subject: string; text: string; inReplyTo?: string | null }, fetchImpl: typeof fetch = fetch): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+/**
+ * One email through Resend: plain text with a light HTML twin, thread headers when answering. From
+ * claude@<apex> and reply-to it by default; book@<apex> passes its own `from` and `replyTo`, and
+ * `headers` (its `Auto-Submitted: auto-replied`, so another robot does not answer the answer).
+ */
+export async function sendPlainEmail(
+  m: { to: string; subject: string; text: string; inReplyTo?: string | null; from?: string; replyTo?: string; headers?: Record<string, string> },
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!deskEnabled()) return { ok: false, error: "email_disabled" };
   const { text, html } = renderDeskEmail(m.text);
-  const headers: Record<string, string> = m.inReplyTo ? { "In-Reply-To": m.inReplyTo, References: m.inReplyTo } : {};
+  const headers: Record<string, string> = { ...(m.inReplyTo ? { "In-Reply-To": m.inReplyTo, References: m.inReplyTo } : {}), ...(m.headers ?? {}) };
   try {
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: deskFrom(), to: [m.to], reply_to: deskAddress(), subject: m.subject, text, html, ...(Object.keys(headers).length ? { headers } : {}) }),
+      body: JSON.stringify({ from: m.from ?? deskFrom(), to: [m.to], reply_to: m.replyTo ?? deskAddress(), subject: m.subject, text, html, ...(Object.keys(headers).length ? { headers } : {}) }),
       signal: AbortSignal.timeout(15_000),
     });
     const json = (await res.json().catch(() => null)) as { id?: string; message?: string } | null;
@@ -199,7 +206,19 @@ export async function approveOutreach(db: Db, id: string, now = new Date(), fetc
   return { status: "sent", id: res.id };
 }
 
-export type InboundMail = { emailId: string; from: string; to: string[]; subject: string | null; text: string | null; html: string | null; messageId: string | null; inReplyTo: string | null; receivedAt?: Date };
+export type InboundMail = {
+  emailId: string;
+  from: string;
+  to: string[];
+  subject: string | null;
+  text: string | null;
+  html: string | null;
+  messageId: string | null;
+  inReplyTo: string | null;
+  receivedAt?: Date;
+  /** A robot wrote it, by its headers (`machineMail`: Auto-Submitted, Precedence, List-Id, a delivery report). Only book@ reads it today. */
+  auto?: boolean;
+};
 
 /** "Name <addr>" or "addr" → both parts. */
 export function parseAddress(raw: string): { email: string; name: string | null } {

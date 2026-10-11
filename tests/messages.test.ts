@@ -64,6 +64,9 @@ describe("what a notification may say", () => {
     title: "Padel Monday",
     app: "Kicksmash",
     code: "1234",
+    // book@'s answer (`bookAnswer` in src/lib/domain/bookMail.ts): the length it read, and the fields the booking did not give.
+    minutes: 90,
+    fields: "court, price",
   };
   const PLACEHOLDER = /\{\s*([A-Za-z0-9_]+)\s*(?=[},])/g;
   const notifyKeys = (l: (typeof LOCALES)[number]) => [...messages[l].keys()].filter((k) => k.startsWith("push.") || k.startsWith("email."));

@@ -4,6 +4,7 @@ import { venues } from "@/db/schema";
 import { later } from "@/lib/alerts";
 import { isValidTimeZone } from "@/lib/dates";
 import { bookingHref, clubNamed, linksIn, PASTE_TEXT_MAX, readBooking, type BookingPreview, type BookingRead, type PickClub } from "@/lib/domain/bookingPaste";
+import type { BookingShot } from "@/lib/domain/bookingShot";
 import { listClubsForPaste } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
@@ -60,6 +61,9 @@ async function mayRead(db: Db, platform: Platform, now: Date): Promise<boolean> 
  * time is no booking (`nothing`): the form does not open on it, and the last venue is not read.
  *
  * `rateKey` is the caller's key: a hash of the address on the web (`clientKeyFrom`), the account on a bot.
+ * `shot` is what the AI model read from a booking screenshot (`readScreenshot` in `./screenshot.ts`,
+ * which took the paste limit itself before the call, so it passes `rated`): the person's words win
+ * over it field by field, and a link is read only for what both left out.
  */
 export async function pasteBooking(
   db: Db,
@@ -73,19 +77,20 @@ export async function pasteBooking(
     now?: Date;
     /** The clubs, when the caller has read them already (the bot reads them to know a paste from a plain line): no second read. */
     clubs?: readonly PickClub[];
+    shot?: BookingShot | null;
   },
   /** `preview: false` never opens the link: the bot's "Create match" tap, which reads the person's words alone. */
-  o: { fetchImpl?: typeof fetch; preview?: boolean } = {},
+  o: { fetchImpl?: typeof fetch; preview?: boolean; rated?: boolean } = {},
 ): Promise<PasteResult> {
   const now = input.now ?? new Date();
   const text = (input.text ?? "").slice(0, PASTE_TEXT_MAX);
   const links = linksIn(text, input.links ?? []);
-  if (!text.trim() && links.length === 0) return { ok: false, reason: "empty" };
-  if (!(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
+  if (!text.trim() && links.length === 0 && !input.shot) return { ok: false, reason: "empty" };
+  if (!o.rated && !(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
 
   const tz = isValidTimeZone(input.tz) ? input.tz : "UTC";
   const clubs = input.clubs ?? (await listClubsForPaste(db)).map(pickClubOf);
-  const base = { text, links, clubs, now, tz, selfName: input.selfName ?? null };
+  const base = { text, links, clubs, now, tz, selfName: input.selfName ?? null, shot: input.shot ?? null };
   let preview: BookingPreview | null = null;
   let read = readBooking(base);
   const fromWords = read;

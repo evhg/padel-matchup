@@ -1,9 +1,10 @@
 import { bookandgoApp } from "@/lib/booking/adapters/bookandgo";
 import { matchiFacilitySlug } from "@/lib/booking/adapters/matchi";
 import { playtomicClubPage } from "@/lib/booking/adapters/playtomic";
-import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
+import { cleanUrl, detectPlatform, madeToShare } from "@/lib/booking/platforms";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { distinctWords, matchVenue, WEEKDAYS, ZONE_ALIASES } from "@/lib/telegram/parse";
+import type { BookingShot } from "./bookingShot";
 import { CITIES } from "./cities";
 import { normalName } from "./dupes";
 import { parseMatchLength } from "./matchLength";
@@ -37,9 +38,15 @@ export type BookingRead = {
   platform: { id: string; name: string } | null;
   /** The platform's own id for the booking (The Padel Society's match invitation), from the preview; never sent anywhere. */
   ref: BookingRef | null;
+  /**
+   * The first pasted link a platform made for strangers to join the booking (`madeToShare`: a Padel
+   * Society invitation, a Playtomic match, a MATCHi share), with no query string; null for any other.
+   * The match page shows it as "Join this booking on <platform>" (the owner, 11 October 2026).
+   */
+  invite?: string | null;
   club: PickClub | null;
-  /** Where the club came from: a pasted link, the person's text, the preview, or the organiser's last venue. */
-  clubFrom?: "link" | "text" | "preview" | "history" | null;
+  /** Where the club came from: a pasted link, the person's text, a screenshot, the preview, or the organiser's last venue. */
+  clubFrom?: "link" | "text" | "shot" | "preview" | "history" | null;
   /** YYYY-MM-DD in `tz`. */
   date: string | null;
   /** HH:MM in `tz`. */
@@ -732,12 +739,46 @@ function dayIn(s: Pick<Scan, "day" | "rel" | "weekday" | "time">, today: { date:
   return null;
 }
 
+const COURT_WORD = /^(?:court|корт|pista|cancha)(?![\p{L}])/iu;
+
+/**
+ * A screenshot's fields (`parseShotReply`, the model's reply already held to plain short strings), read
+ * with this reader's own validators one field at a time, so that one field is never read as another:
+ * the day from the date as the picture shows it (`dayIn`'s rules on the year follow), the time and the
+ * length from the start and the end as one range ("18:00 - 19:30"), else the start alone and the
+ * length in minutes, the court after its own word, the price beside its currency, the players as one
+ * team line through the same name filter as typed names, and the club as words that must name one of
+ * the clubs (`rest`). A field in no shape the reader knows is dropped. Pure.
+ */
+function scanShot(shot: BookingShot, o: { clubWords: ReadonlySet<string>; selfName: string | null }): Scan {
+  const one = (text: string | null, names = false) => (text ? scan(text, { ...o, names }) : null);
+  const day = one(shot.date);
+  const range = shot.start && shot.end ? one(`${shot.start} - ${shot.end}`) : null;
+  const ranged = range?.time ? range : null;
+  const start = ranged ?? one(shot.start);
+  const court = shot.court ? one(COURT_WORD.test(shot.court) ? shot.court : `Court ${shot.court}`) : null;
+  const team = shot.players.length ? one(`Players: ${shot.players.join(", ")}`, true) : null;
+  return {
+    day: day?.day ?? null,
+    rel: day?.rel ?? null,
+    weekday: day?.weekday ?? null,
+    time: start?.time ?? null,
+    minutes: ranged?.minutes ?? (shot.minutes !== null ? okLength(shot.minutes) : null),
+    court: court?.court ?? null,
+    cost: one(shot.price)?.cost ?? null,
+    names: team?.names ?? [],
+    rest: shot.club ?? "",
+  };
+}
+
 /**
  * Reads a pasted booking: the club, the day, the time, the length, the court, the price and the
  * players. The club comes from a pasted link first (a Setpoint checkout, a Playtomic club, a PodPlay
  * subdomain, a Book & Go app, matched against the clubs' booking links and websites), else from its
- * name in the person's text, else from the preview, else `fallbackClub` (the organiser's last venue,
- * which the caller reads). The day and the time are in the club's zone, else in `tz`.
+ * name in the person's text, else from a screenshot's read (`shot`), else from the preview, else
+ * `fallbackClub` (the organiser's last venue, which the caller reads). The day and the time are in the
+ * club's zone, else in `tz`. Every other field goes the same way: the person's words, then the
+ * screenshot, then the preview. A screenshot gives no link: only typed words and links carry one.
  */
 export function readBooking(input: {
   text: string;
@@ -746,6 +787,8 @@ export function readBooking(input: {
   now: Date;
   tz: string;
   selfName?: string | null;
+  /** What the AI model read from a booking screenshot (DECIDING rule 9), as `parseShotReply` kept it. */
+  shot?: BookingShot | null;
   preview?: BookingPreview | null;
   fallbackClub?: PickClub | null;
 }): BookingRead {
@@ -756,6 +799,7 @@ export function readBooking(input: {
   const mine = scan(text, { clubWords, selfName: input.selfName ?? null, names: true });
   const previewText = [input.preview?.title, input.preview?.description].filter((s): s is string => typeof s === "string" && s.trim() !== "").join("\n");
   const theirs = previewText ? scan(previewText, { clubWords, selfName: null, names: false }) : null;
+  const seen = input.shot ? scanShot(input.shot, { clubWords, selfName: input.selfName ?? null }) : null;
 
   const platformOf = links.map((l) => detectPlatform(l)).find(Boolean) ?? null;
   const callerTz = isValidTimeZone(input.tz) ? input.tz : "UTC";
@@ -765,6 +809,7 @@ export function readBooking(input: {
   const found: [PickClub | null, NonNullable<BookingRead["clubFrom"]>][] = [
     [clubFromLinks(links, input.clubs), "link"],
     [clubInText(mine.rest, input.clubs, callerTz), "text"],
+    [seen ? clubInText(seen.rest, input.clubs, callerTz) : null, "shot"],
     [theirs ? clubInText(theirs.rest, input.clubs, callerTz) : null, "preview"],
     [input.fallbackClub ?? null, "history"],
   ];
@@ -778,24 +823,26 @@ export function readBooking(input: {
   const tz = club?.tz && isValidTimeZone(club.tz) ? club.tz : callerTz;
   const today = utcToZonedParts(input.now, tz);
 
-  // The person's text wins, field by field; the preview fills only what it left out.
-  const dayFromText = mine.day !== null || mine.rel !== null || mine.weekday !== null;
-  const time = mine.time ?? theirs?.time ?? null;
-  const daySource = dayFromText ? mine : theirs && (theirs.day !== null || theirs.rel !== null || theirs.weekday !== null) ? theirs : null;
+  // The person's text wins, field by field; a screenshot fills what it left out, and the preview what both left out.
+  const hasDay = (s: Scan | null): s is Scan => Boolean(s && (s.day !== null || s.rel !== null || s.weekday !== null));
+  const time = mine.time ?? seen?.time ?? theirs?.time ?? null;
+  const daySource = [mine, seen, theirs].find(hasDay) ?? null;
   const date = daySource ? dayIn({ ...daySource, time }, today) : null;
 
   const read: BookingRead = {
     platform: platformOf ? { id: platformOf.id, name: platformOf.name } : null,
     ref: input.preview?.ref ?? null,
+    invite: links.map((l) => madeToShare(l)?.url).find(Boolean) ?? null,
     club,
     clubFrom,
     date,
     time,
     tz,
-    minutes: mine.minutes ?? theirs?.minutes ?? null,
-    court: mine.court ?? theirs?.court ?? null,
-    cost: mine.cost ?? theirs?.cost ?? null,
-    names: mine.names,
+    minutes: mine.minutes ?? seen?.minutes ?? theirs?.minutes ?? null,
+    court: mine.court ?? seen?.court ?? theirs?.court ?? null,
+    cost: mine.cost ?? seen?.cost ?? theirs?.cost ?? null,
+    // The names as a whole list: the person's own, else the picture's, never a mix of the two.
+    names: mine.names.length ? mine.names : (seen?.names ?? []),
     missing: [],
     dayClash: Boolean(date && daySource?.day && daySource.weekday !== null && dowOf(date) !== daySource.weekday),
   };
@@ -814,9 +861,10 @@ export const showsBooking = (read: BookingRead): boolean =>
 /**
  * The create form, filled: `/?src=paste` and every field read, in the names the form already takes
  * (`venue`, `date`, `time`, `tz`, `names`) and the new ones (`len`, `court`, `cost`, `booked`,
- * `check`). The length goes only when it is one the form offers (60, 90 or 120); `booked=1` only when
- * the paste shows a booking (`showsBooking`); `check` names the fields the organiser must look at: the
- * venue when it is their last one, the date when the weekday disagrees with it. Pure.
+ * `check`, `invite`). The length goes only when it is one the form offers (60, 90 or 120); `booked=1`
+ * only when the paste shows a booking (`showsBooking`); `check` names the fields the organiser must look
+ * at: the venue when it is their last one, the date when the weekday disagrees with it; `invite` is a
+ * made-to-share link (`madeToShare`), never any other. Pure.
  */
 export function bookingHref(read: BookingRead): string {
   const q = new URLSearchParams({ src: "paste" });
@@ -832,5 +880,8 @@ export function bookingHref(read: BookingRead): string {
   if (showsBooking(read)) q.set("booked", "1");
   const check = [...(read.club && read.clubFrom === "history" ? ["venue"] : []), ...(read.dayClash ? ["date"] : [])];
   if (check.length) q.set("check", check.join(","));
+  // Checked again by the form's reader and by the create on the server: a link anybody types into the address proves nothing.
+  const invite = madeToShare(read.invite)?.url;
+  if (invite) q.set("invite", invite);
   return `/?${q.toString()}`;
 }

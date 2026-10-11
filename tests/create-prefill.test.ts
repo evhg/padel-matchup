@@ -27,6 +27,7 @@ describe("the create form's address", () => {
       names: ["Danny", "Alberto"],
       missing: [],
       check: [],
+      invite: null,
     });
   });
 

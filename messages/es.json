@@ -131,7 +131,11 @@
     "pasteLimit": "Hoy ya leíste muchas reservas aquí. Rellena el formulario de abajo o pégala mañana.",
     "pasteFailed": "Ahora no pudimos leerla. Rellena el formulario de abajo o vuelve a intentarlo.",
     "carriedFromBooking": "{count, plural, one {# jugador de tu reserva} other {# jugadores de tu reserva}}",
-    "pasteNothing": "No encontramos ninguna reserva ahí. Pega el enlace o el texto de tu app de reservas."
+    "pasteNothing": "No encontramos ninguna reserva ahí. Pega el enlace o el texto de tu app de reservas.",
+    "pasteShot": "Añadir captura",
+    "pasteShotOff": "Ahora no podemos leer una captura. Pega el enlace o el texto de tu reserva.",
+    "pasteShotBad": "No pudimos abrir esa imagen. Añade una captura de tu reserva.",
+    "pasteShotNote": "Un modelo de IA lee tu captura una vez. No la guardamos."
   },
   "create": {
     "title": "Nuevo partido",
@@ -232,7 +236,9 @@
     "pasteNoTime": "Tu reserva no dice la hora. Elígela aquí.",
     "pasteNoClub": "Tu reserva no nombra el club. Elígelo aquí.",
     "pasteCheckClub": "Tomamos el club de tu último partido. Compruébalo aquí.",
-    "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día."
+    "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día.",
+    "inviteShown": "La página del partido muestra tu enlace de invitación. Así otros jugadores también se unen a la reserva en {platform}.",
+    "inviteRemove": "No mostrar este enlace"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -351,7 +357,8 @@
     "playAgainSent": "Un partido más, con la misma configuración. Los jugadores de este partido ya recibieron su único mensaje «¿Te apuntas?».",
     "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días.",
     "playAgainPlain": "Un partido más, con la misma configuración.",
-    "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio."
+    "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
+    "joinBooking": "Únete a esta reserva en {platform}"
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -677,7 +684,18 @@
       "heading": "Tu código para {club}",
       "body": "Introduce este código en la pantalla de la solicitud o en tu página de gestión. Confirma tu correo de trabajo en {club}. Caduca en 10 minutos.",
       "footer": "Si no reclamaste una página de club, ignora este mensaje."
-    }
+    },
+    "bookSubject": "Tu formulario de partido está listo",
+    "bookIntro": "Kicksmash leyó esto en tu reserva:",
+    "bookClub": "Club",
+    "bookDay": "Día",
+    "bookTime": "Hora",
+    "bookLength": "Duración",
+    "bookMinutes": "{minutes} minutos",
+    "bookMissing": "No está en tu reserva: {fields}.",
+    "bookOpen": "Abre el formulario relleno. Revísalo y toca el botón para crear el partido:",
+    "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo. Si marcas esta respuesta como spam, guarda tu dirección solo para no volver a escribirte.",
+    "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario."
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",
@@ -1041,7 +1059,7 @@
     "ipTitle": "Tu dirección IP",
     "ipBody": "Nunca la escribimos en nuestra base de datos. Para frenar los scripts que saturan la app, guardamos una clave hecha a partir de ella con un secreto (un hash con clave), así que la dirección en sí no se guarda. Esas filas se borran a los {rateDays, plural, one {# día} other {# días}}. Nuestro hosting ve tu dirección para entregar cada página, como cualquier hosting.",
     "helpersTitle": "Quién nos ayuda",
-    "helpersBody": "• Vercel aloja la app en Singapur y cuenta las visitas sin cookies.\n• Supabase guarda la base de datos en Singapur.\n• Resend envía nuestros emails.\n• Telegram, Discord, LINE y WhatsApp (Meta) llevan nuestros mensajes, solo si los usas con nosotros.\n• Telegram también nos trae cada mensaje del formulario de opiniones, con el nombre de quien lo envía.\n• El servicio push de tu navegador (Apple, Google o Mozilla) lleva las notificaciones que activaste.\n• Google, solo si un entrenador conecta un Google Calendar: sus clases, con el nombre del alumno, van allí.\n• Anthropic lee los mensajes del formulario de opiniones y de nuestro servidor de Discord, para ayudarnos a ordenarlos y preparar respuestas.\n• GitHub guarda nuestra copia de seguridad nocturna y privada de la base de datos.\nTavily busca para nosotros clubes de pádel y conversaciones sobre pádel en la web pública. Nunca recibe tus datos.",
+    "helpersBody": "• Vercel aloja la app en Singapur y cuenta las visitas sin cookies.\n• Supabase guarda la base de datos en Singapur.\n• Resend envía nuestros emails.\n• Telegram, Discord, LINE y WhatsApp (Meta) llevan nuestros mensajes, solo si los usas con nosotros.\n• Telegram también nos trae cada mensaje del formulario de opiniones, con el nombre de quien lo envía.\n• El servicio push de tu navegador (Apple, Google o Mozilla) lleva las notificaciones que activaste.\n• Google, solo si un entrenador conecta un Google Calendar: sus clases, con el nombre del alumno, van allí.\n• Anthropic lee los mensajes del formulario de opiniones y de nuestro servidor de Discord, para ayudarnos a ordenarlos y preparar respuestas. También lee una vez la captura de una reserva que añades en la primera página, para rellenar el formulario del partido. No guardamos ni la imagen ni la respuesta.\n• GitHub guarda nuestra copia de seguridad nocturna y privada de la base de datos.\nTavily busca para nosotros clubes de pádel y conversaciones sobre pádel en la web pública. Nunca recibe tus datos.",
     "keepTitle": "Cuánto tiempo lo guardamos",
     "keepBody": "• Tus datos: mientras uses Kicksmash, hasta que borres tu cuenta.\n• Un nombre sin partidos, sin forma de contacto y sin nada más detrás: una limpieza diaria lo borra a los {disposableDays, plural, one {# día} other {# días}}.\n• Las claves de límite de peticiones hechas con direcciones IP: {rateDays, plural, one {# día} other {# días}}.\n• Copias de seguridad: cada noche una copia de la base de datos va a un repositorio privado de GitHub, y solo nosotros podemos abrirlo. Cada noche también rehacemos el historial del repositorio, para que solo guarde {backupDays, plural, one {el último día} other {los últimos # días}}.\n• Tu bandeja: cada aviso {inboxDays, plural, one {# día} other {# días}}.",
     "deleteTitle": "Cuando borras tu cuenta",

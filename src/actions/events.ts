@@ -10,6 +10,8 @@ import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { pasteBooking, type PasteResult } from "@/lib/booking/paste";
+import { readScreenshot, type ShotResult } from "@/lib/booking/screenshot";
+import { SHOT_MAX_BYTES } from "@/lib/domain/bookingShot";
 import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { clientKeyFrom } from "@/lib/ipKey";
 import { getSessionPlayer } from "@/lib/session";
@@ -67,6 +69,8 @@ const createSchema = z.object({
   payNote: z.string().max(120).optional(),
   /** "Court booked by me": the organiser booked the court before making the match (a pasted booking). */
   booked: z.boolean().optional(),
+  /** A pasted booking's invitation for strangers: kept only when `madeToShare` takes it (`createEvent`), never as sent. */
+  invite: z.string().max(500).optional(),
   /** Signed chat ticket from the Telegram bot's /new. */
   telegramTicket: z.string().max(80).optional(),
   /** Signed channel ticket from the Discord bot's /new. */
@@ -112,6 +116,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       groupId: group?.id ?? null,
       publicListing: input.publicListing ?? false,
       bookingUrl: input.bookingUrl,
+      invite: input.invite,
       cost: input.cost,
       payNote: input.payNote,
     });
@@ -194,6 +199,28 @@ export async function readBookingAction(raw: { text: string; links?: string[]; t
   const me = await getSessionPlayer(db);
   const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? "UTC";
   return pasteBooking(db, { text: input.data.text, links: input.data.links, tz, rateKey: clientKeyFrom(h), playerId: me?.id ?? null, selfName: me?.displayName ?? null });
+}
+
+/**
+ * "Add screenshot" (the owner, 11 October 2026, DECIDING rule 9): one booking screenshot, shrunk by
+ * the browser to a JPEG of 1568 pixels at most on its longest side, read once by the AI model, with the
+ * paste box's text read beside it by our own reader. The form carries `image` (the file), `text` and
+ * `tz`. Five reads a day from one address, twenty a day for everybody, and nothing kept
+ * (`readScreenshot` in src/lib/booking/screenshot.ts says what each step costs). The file is checked
+ * here by its size before it is read into memory, and there by its own first bytes. Every refusal of
+ * the picture answers `reason: "shot"`, and the box says one plain line.
+ */
+export async function readScreenshotAction(form: FormData): Promise<ShotResult> {
+  const image = form instanceof FormData ? form.get("image") : null;
+  if (!(image instanceof Blob) || image.size > SHOT_MAX_BYTES) return { ok: false, reason: "shot", why: "type" };
+  const input = pasteSchema.safeParse({ text: String(form.get("text") ?? ""), tz: typeof form.get("tz") === "string" ? form.get("tz") : undefined });
+  if (!input.success) return { ok: false, reason: "empty" };
+  const bytes = new Uint8Array(await image.arrayBuffer());
+  const db = await getDb();
+  const h = await headers();
+  const me = await getSessionPlayer(db);
+  const tz = [input.data.tz, h.get("x-vercel-ip-timezone")].find((z): z is string => typeof z === "string" && isValidTimeZone(z)) ?? "UTC";
+  return readScreenshot(db, { bytes, type: image.type, text: input.data.text, tz, rateKey: clientKeyFrom(h), playerId: me?.id ?? null, selfName: me?.displayName ?? null });
 }
 
 const playAgainSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) }).nullable().optional();

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, metricsDaily } from "@/db/schema";
 import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
@@ -94,6 +94,38 @@ export async function recordModelCall(db: Db, o: { status: number; ok: boolean; 
     o.ok ? setMetric(db, "anthropic_ok_at", at, day) : bumpMetric(db, "anthropic_failed", 1, day),
     !o.ok && keyRefused(o.status) ? setMetric(db, "anthropic_refused_at", at, day) : null,
   ]);
+}
+
+/**
+ * May a call go now that a person waits for? Not while the newest answer to our key is a refusal
+ * (`anthropic_refused_at` newer than `anthropic_ok_at`, what the service board turns red on), and not
+ * once the month's spend reaches the owner's cap (`anthropicCapUsd`): the billed month-to-date figure
+ * when the hourly cost report wrote one (`anthropic_cost_cents`), else our own token counters at list
+ * price. One read of `metrics_daily`, five keys, down its primary key (day, key) from the first of the
+ * month, or from eight days back early in a month, so that a refusal near the turn of the month still
+ * counts. Days go in as text (rule 1).
+ */
+export async function modelGate(db: Db, now = new Date()): Promise<{ refused: boolean; usd: number; cap: number }> {
+  const today = dayKey(now);
+  const month = `${today.slice(0, 8)}01`;
+  const back = dayKey(new Date(now.getTime() - 8 * 86_400_000));
+  const since = back < month ? back : month;
+  const inMonth = sql`${metricsDaily.day} >= ${month}`;
+  const rows = await db
+    .select({
+      key: metricsDaily.key,
+      sum: sql<string>`coalesce(sum(${metricsDaily.value}) filter (where ${inMonth}), 0)`,
+      monthTop: sql<string>`coalesce(max(${metricsDaily.value}) filter (where ${inMonth}), 0)`,
+      top: sql<string>`max(${metricsDaily.value})`,
+    })
+    .from(metricsDaily)
+    .where(and(gte(metricsDaily.day, since), inArray(metricsDaily.key, ["anthropic_in", "anthropic_out", "anthropic_cost_cents", "anthropic_refused_at", "anthropic_ok_at"])))
+    .groupBy(metricsDaily.key);
+  const of = (key: string) => rows.find((r) => r.key === key);
+  const n = (v: string | number | null | undefined) => Number(v ?? 0) || 0;
+  const billed = n(of("anthropic_cost_cents")?.monthTop) / 100;
+  const usd = billed > 0 ? billed : estimateCostUsd(n(of("anthropic_in")?.sum), n(of("anthropic_out")?.sum));
+  return { refused: n(of("anthropic_refused_at")?.top) > n(of("anthropic_ok_at")?.top), usd, cap: anthropicCapUsd() };
 }
 
 /**

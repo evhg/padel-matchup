@@ -131,7 +131,11 @@
     "pasteLimit": "You read many bookings here today. Fill in the form below, or paste again tomorrow.",
     "pasteFailed": "We could not read it just now. Fill in the form below, or try again.",
     "carriedFromBooking": "{count, plural, one {# player from your booking} other {# players from your booking}}",
-    "pasteNothing": "We found no booking in it. Paste the link or the text from your booking app."
+    "pasteNothing": "We found no booking in it. Paste the link or the text from your booking app.",
+    "pasteShot": "Add screenshot",
+    "pasteShotOff": "Reading a screenshot is not available now. Paste the link or the text instead.",
+    "pasteShotBad": "We could not open that picture. Add a screenshot of your booking.",
+    "pasteShotNote": "An AI model reads your screenshot once. We do not keep it."
   },
   "create": {
     "title": "New match",
@@ -232,7 +236,9 @@
     "pasteNoTime": "Your booking did not give the time. Pick it here.",
     "pasteNoClub": "Your booking did not name the club. Pick it here.",
     "pasteCheckClub": "We took the club of your last match. Check it here.",
-    "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day."
+    "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day.",
+    "inviteShown": "The match page shows your invite link. Other players can then join the booking on {platform} too.",
+    "inviteRemove": "Don't show this link"
   },
   "share": {
     "title": "Your match is live",
@@ -351,7 +357,8 @@
     "playAgainSent": "One next game, same settings. This match's players already had their one “Are you in?” message.",
     "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
     "playAgainPlain": "One next game, same settings.",
-    "startLocked": "Only the organiser moves the start once the match has started."
+    "startLocked": "Only the organiser moves the start once the match has started.",
+    "joinBooking": "Join this booking on {platform}"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -677,7 +684,18 @@
       "heading": "Your code for {club}",
       "body": "Enter this code on the claim screen or on your manage page. It confirms your work email at {club}. It expires in 10 minutes.",
       "footer": "If you did not claim a club page, ignore this."
-    }
+    },
+    "bookSubject": "Your match form is ready",
+    "bookIntro": "Kicksmash read this in your booking:",
+    "bookClub": "Club",
+    "bookDay": "Day",
+    "bookTime": "Time",
+    "bookLength": "Length",
+    "bookMinutes": "{minutes} minutes",
+    "bookMissing": "Not in your booking: {fields}.",
+    "bookOpen": "Open the filled form. Check it, then tap the button to make the match:",
+    "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email. If you mark this answer as spam, it keeps your address only so that it never writes to you again.",
+    "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form."
   },
   "errors": {
     "not_found": "We couldn't find that.",
@@ -1041,7 +1059,7 @@
     "ipTitle": "Your IP address",
     "ipBody": "We never write it into our database. To slow down scripts that hammer the app, we keep a key made from it with a secret (a keyed hash), so the address itself is not stored. Those rows go after {rateDays, plural, one {# day} other {# days}}. Our host sees your address to deliver each page, as every host does.",
     "helpersTitle": "Who helps us run it",
-    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
+    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies. It also reads a booking screenshot that you add on the first page, once, to fill in the match form. We keep neither the picture nor the answer.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
     "keepTitle": "How long we keep it",
     "keepBody": "• Your data: while you use Kicksmash, until you delete your account.\n• A name with no match, no way to reach it and nothing else behind it: a daily clean-up removes it after {disposableDays, plural, one {# day} other {# days}}.\n• The rate-limit keys made from IP addresses: {rateDays, plural, one {# day} other {# days}}.\n• Backups: every night a copy of the database goes to a private GitHub repository, and only we can open it. Each night we also rebuild the repository's history, so it holds only the last {backupDays, plural, one {# day} other {# days}}.\n• Your inbox: each notice for {inboxDays, plural, one {# day} other {# days}}.",
     "deleteTitle": "When you delete your account",

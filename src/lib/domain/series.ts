@@ -6,7 +6,7 @@ import { slugFrom } from "@/lib/translit";
 import { bumpMetric } from "./metrics";
 import { placesOf } from "./fixedPairs";
 import { venueInCity, type City } from "./cities";
-import { createEvent, cleanText, fieldInFours, resolveCapacity } from "./events";
+import { cleanText, copiedBookingLink, createEvent, fieldInFours, resolveCapacity } from "./events";
 import { DomainError } from "./errors";
 import { isOver, LONGEST_LENGTH } from "./matchLength";
 import { venueSlug, withCounts } from "./venueBoard";
@@ -153,7 +153,7 @@ export async function createEdition(db: Db, s: Series, startsAt: Date, durationM
     category: s.category,
     ageMin: s.ageMin,
     publicListing: true,
-    bookingUrl: s.bookingUrl,
+    bookingUrl: copiedBookingLink(s.bookingUrl),
     cost: s.cost,
   });
   await db.update(events).set({ seriesId: s.id, courtNames: s.courtNames }).where(eq(events.id, event.id));
@@ -220,7 +220,7 @@ export async function createSeriesFromEvent(db: Db, input: CreateSeriesInput): P
         ageMin: ev.ageMin,
         whenFull: ev.whenFull,
         cost: ev.cost,
-        bookingUrl: ev.bookingUrl,
+        bookingUrl: copiedBookingLink(ev.bookingUrl),
         ...rhythm,
         leadDays: SERIES.leadDays[input.every],
         lastCreatedFor: nextAt,

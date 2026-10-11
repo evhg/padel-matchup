@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { detectPlatform } from "@/lib/booking/platforms";
+import { detectPlatform, madeToShare } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -335,6 +335,8 @@ async function EventPage({ params, searchParams }: Props) {
   // pages allow (src/lib/booking/prepare.ts), for the organiser and the players; the match's own
   // booking link, when the organiser gave one, stays where it was. One read, only for them.
   const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
+  // The booking link is a platform's invitation for strangers when `madeToShare` takes it: "Join this booking on …", never "Book on …".
+  const invite = madeToShare(ev.bookingUrl);
   const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClubLean(db, ev.venueSlug) : null;
   // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
   const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
@@ -642,7 +644,7 @@ async function EventPage({ params, searchParams }: Props) {
               <div className="text-xs text-muted">{t("event.organizedBy", { name: creator.displayName })}</div>
             </div>
             <div className="flex shrink-0 gap-1.5">
-              {ev.bookingUrl && (
+              {ev.bookingUrl && !invite && (
                 <a href={ev.bookingUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
                   🎟 {detectPlatform(ev.bookingUrl) ? t("club.bookOn", { platform: detectPlatform(ev.bookingUrl)!.name }) : t("event.openBooking")}
                 </a>
@@ -654,6 +656,15 @@ async function EventPage({ params, searchParams }: Props) {
               )}
             </div>
           </div>
+          {/* A pasted booking's invitation (the owner, 11 October 2026: "Only made-to-share links"): a
+              plain link the player's browser opens, apart from the court's booking page (rule 36). */}
+          {invite && !cancelled && !over && (
+            <p className="mt-3 text-sm">
+              <a href={invite.url} target="_blank" rel="noopener noreferrer" className="link font-semibold" data-testid="join-booking">
+                🤝 {t("event.joinBooking", { platform: invite.platform.name })}
+              </a>
+            </p>
+          )}
           {ev.cost && (
             <p className="mt-3 text-sm">
               <span className="font-bold">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>

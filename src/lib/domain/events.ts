@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, series, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
+import { madeToShare } from "@/lib/booking/platforms";
 import { newManageCode, newShareCode } from "@/lib/codes";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
@@ -49,10 +50,28 @@ export type CreateEventInput = {
   publicListing?: boolean;
   /** Link to the club's booking page or confirmation. */
   bookingUrl?: string | null;
+  /**
+   * A pasted booking's invitation for strangers (the owner, 11 October 2026: "Only made-to-share
+   * links"). Stored as the booking link only when `madeToShare` takes it, and only when no booking
+   * link was typed; anything else is dropped here, whatever the form or the address carried.
+   */
+  invite?: string | null;
   /** What each player pays and how to pay the organizer; free text. */
   cost?: string | null;
   payNote?: string | null;
 };
+
+/**
+ * The booking link a new match keeps: the one the organiser typed, else the pasted booking's
+ * invitation when it is made to share (`madeToShare`, query string removed), else none. Pure.
+ */
+export const bookingLinkFor = (input: Pick<CreateEventInput, "bookingUrl" | "invite">): string | null => cleanUrl(input.bookingUrl) ?? madeToShare(input.invite)?.url ?? null;
+
+/**
+ * What a copy of a match keeps of its booking link: an invitation to one booking is that booking's,
+ * so "Play again", a series' next edition and the series itself drop it; any other link travels on.
+ */
+export const copiedBookingLink = (url: string | null | undefined): string | null => (url && !madeToShare(url) ? url : null);
 
 export function cleanText(v: string | null | undefined, max: number): string | null {
   const s = (v ?? "").replace(/\s+/g, " ").trim();
@@ -156,7 +175,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           groupId: input.groupId ?? null,
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
           venueSlug: slug,
-          bookingUrl: cleanUrl(input.bookingUrl),
+          bookingUrl: bookingLinkFor(input),
           cost: cleanText(input.cost, 40),
           payNote: cleanText(input.payNote, 120),
         })
@@ -222,7 +241,8 @@ export async function duplicateEvent(db: Db, input: { sourceEventId: string; cre
     ageMin: src.ageMin,
     groupId: src.groupId,
     publicListing: src.publicListing,
-    bookingUrl: src.bookingUrl,
+    // An invitation to last week's booking is not one to this week's.
+    bookingUrl: copiedBookingLink(src.bookingUrl),
     cost: src.cost,
     payNote: src.payNote,
   });

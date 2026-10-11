@@ -253,6 +253,8 @@ export async function handlePasteCallback(db: Db, cb: NonNullable<TgUpdate["call
       durationMinutes: parseMatchLength(read.minutes),
       names: read.names,
       booked: true,
+      // The platform's invitation, when the person's own message carries one: the match page shows it.
+      invite: read.invite,
     },
     read.tz,
     ctx,

@@ -63,6 +63,24 @@ export const LIMITS = {
    * platform gave the person (DECIDING rule 35), so a script cannot make Kicksmash read links for it.
    */
   bookingPastesPerIpPerDay: 30,
+  /**
+   * Booking screenshots the AI model reads in a day, for everybody together: the owner's number (11
+   * October 2026, DECIDING rule 9). Each is one Messages API call, about one US cent.
+   */
+  bookingShotsPerDay: 20,
+  /** Booking screenshots read for one address in a day, so that one person cannot spend the day's twenty. */
+  bookingShotsPerIpPerDay: 5,
+  /**
+   * book@<apex>: answers sent in a day, for every sender together, because a sender's address can be
+   * faked. Thirty, because Resend's free plan sends a hundred emails a day for the whole app, and the
+   * match notices and the codes need the other seventy (docs/OPERATING.md).
+   */
+  bookMailAnswersPerDay: 30,
+  /**
+   * book@<apex>: answers to one address in a day. The answer goes to the From address, which anybody
+   * can fake, so a stranger gets three answers a day at most, and one address cannot spend the thirty.
+   */
+  bookMailAnswersPerAddressPerDay: 3,
   feedbackPerIpPerDay: 5,
   // Public API and MCP: open without a key, roomier with one.
   apiKeysPerIpPerDay: 10,

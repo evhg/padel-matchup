@@ -1,3 +1,4 @@
+import { madeToShare } from "@/lib/booking/platforms";
 import { isValidTimeZone } from "@/lib/dates";
 import { parseMatchLength, type MatchLength } from "./matchLength";
 import { SEAT_NAMES_MAX } from "./slots";
@@ -10,7 +11,7 @@ import { SEAT_NAMES_MAX } from "./slots";
  * Three doors write these links. A venue board or a free court offered to a player
  * (`?venue=&date=&time=&tz=`) lists the match on the club's board, as it always did. The americano
  * generator carries `names`. A pasted booking (`bookingHref` in `bookingPaste.ts`: `src=paste` with
- * `len`, `court`, `cost`, `names` and `booked=1`) fills what the booking said, leaves the rest empty
+ * `len`, `court`, `cost`, `names`, `booked=1` and `invite`) fills what the booking said, leaves the rest empty
  * and says which fields those are, and never lists the match on the board: the organiser booked a
  * court for their own four, and the board is theirs to choose (the switch under More options).
  * Pure.
@@ -27,6 +28,7 @@ export type CreateLink = {
   cost?: string;
   booked?: string;
   check?: string;
+  invite?: string;
 };
 
 export type LinkPrefill = {
@@ -48,6 +50,11 @@ export type LinkPrefill = {
   missing: ("venue" | "date" | "time")[];
   /** A pasted booking only: what the organiser must look at (`check=venue,date`): a venue that is their last one, a date its weekday disagrees with. */
   check: ("venue" | "date")[];
+  /**
+   * A pasted booking only: the link its platform made for strangers to join it (`madeToShare`), with
+   * the platform's name for the form's line. The create action checks it again on the server.
+   */
+  invite: { url: string; platform: string } | null;
 };
 
 /** The form's bounds: a court and a price are 40 characters at most, a venue 80 (as the create action takes them). */
@@ -72,6 +79,11 @@ const isDate = (v: string | undefined): v is string => {
   return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === v;
 };
 const isTime = (v: string | undefined): v is string => typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+
+const inviteOf = (v: string | undefined): LinkPrefill["invite"] => {
+  const ok = madeToShare(v);
+  return ok ? { url: ok.url, platform: ok.platform.name } : null;
+};
 
 export function readCreateLink(sp: CreateLink): LinkPrefill {
   const fromPaste = sp.src === "paste";
@@ -103,5 +115,6 @@ export function readCreateLink(sp: CreateLink): LinkPrefill {
     names,
     missing: fromPaste ? [...(venue ? [] : ["venue" as const]), ...(date ? [] : ["date" as const]), ...(time ? [] : ["time" as const])] : [],
     check: fromPaste ? (["venue", "date"] as const).filter((f) => (sp.check ?? "").split(",").includes(f) && (f === "venue" ? venue : date)) : [],
+    invite: fromPaste ? inviteOf(sp.invite) : null,
   };
 }
