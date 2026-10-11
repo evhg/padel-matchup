@@ -332,6 +332,9 @@ const placeWords = (s: string) =>
 /** The words of a name that tell one court from another: no generic word, no city, nothing under three letters. */
 const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENERIC.has(w) && !CITY_NAMES.has(w));
 
+/** The words of a name that tell one court from another, as `matchVenue` reads them ("WAREHAUS.club" → ["warehaus"]). */
+export const distinctWords = (text: string): string[] => distinct(placeWords(text));
+
 /** True when the words name a place at all ("Bangtao", "Phuket", "the beers"); false for nothing but small or generic words ("the", "padel"). */
 export const namesAPlace = (text: string | null | undefined): boolean => Boolean(text) && placeWords(text!).some((w) => w.length >= 3 && !GENERIC.has(w));
 

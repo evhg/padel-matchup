@@ -203,6 +203,11 @@ describe("the club", () => {
     expect(read("Phuket tomorrow 18:00").club).toBeNull();
     expect(read("Rawai tomorrow 18:00").club).toBeNull();
     expect(read("Rawai Padel tomorrow 18:00").club?.slug).toBe("rawai-padel");
+    // One short word of a longer name is not the club; a long one is.
+    const more = [...CLUBS, { slug: "love-all-sports", name: "Love All Sports", tz: "Asia/Singapore" }, { slug: "sterling", name: "Sterling Sport & Wellness", tz: "Asia/Bangkok" }];
+    expect(read("Love this! See you tomorrow 18:00", { clubs: more }).club).toBeNull();
+    expect(read("Booked at Sterling tomorrow 18:00", { clubs: more }).club?.slug).toBe("sterling");
+    expect(read("Love All Sports tomorrow 18:00", { clubs: more }).club?.slug).toBe("love-all-sports");
     // The words around a club's name in a platform's share text, and a lower-case "with" phrase, name no club.
     expect(read("Join my match at Bangkok Padel on Monday 12 October at 18:00!")).toMatchObject({ club: { slug: "bangkok-padel" }, date: "2026-10-12", time: "18:00" });
     expect(read("warehaus tmrw 7pm 90min with danny")).toMatchObject({ club: { slug: "warehaus" }, time: "19:00", minutes: 90, names: [] });

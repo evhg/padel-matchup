@@ -3,7 +3,7 @@ import { matchiFacilitySlug } from "@/lib/booking/adapters/matchi";
 import { playtomicClubPage } from "@/lib/booking/adapters/playtomic";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
-import { matchVenue, WEEKDAYS, ZONE_ALIASES } from "@/lib/telegram/parse";
+import { distinctWords, matchVenue, WEEKDAYS, ZONE_ALIASES } from "@/lib/telegram/parse";
 import { CITIES } from "./cities";
 import { normalName } from "./dupes";
 import { parseMatchLength } from "./matchLength";
@@ -558,14 +558,33 @@ function clubPieces(rest: string): string[] {
     .filter((p) => /\p{L}{3}/u.test(p));
 }
 
+/**
+ * `matchVenue` takes the one club that owns every word typed, which suits a place typed into a chat
+ * command. A booking's text is longer, so one short word of a longer name is not enough: "Love this!"
+ * is not Love All Sports. The words must be the club's every distinct word, or carry one of five
+ * letters or more ("Sterling" is Sterling Sport & Wellness).
+ */
+function namedEnough(piece: string, name: string): boolean {
+  const own = distinctWords(name);
+  // A name of a city and generic words only ("Bangkok Padel") is found whole or not at all.
+  if (own.length === 0) return true;
+  const said = new Set(distinctWords(piece));
+  const covered = own.filter((w) => said.has(w));
+  return covered.length > 0 && (covered.length === own.length || covered.some((w) => w.length >= 5));
+}
+
 /** The one club the words name (`matchVenue`: a city or an area alone never picks one), or null for none or for two. */
 function clubInText(rest: string, clubs: readonly PickClub[], tz: string): PickClub | null {
   if (clubs.length === 0) return null;
   const names = clubs.map((c) => c.name);
   const pieces = clubPieces(rest);
-  let named = [...new Set(pieces.map((p) => matchVenue(p, [], names)).filter((n): n is string => Boolean(n)))];
+  const pick = (p: string) => {
+    const n = matchVenue(p, [], names);
+    return n && namedEnough(p, n) ? n : null;
+  };
+  let named = [...new Set(pieces.map(pick).filter((n): n is string => Boolean(n)))];
   if (named.length === 0 && pieces.length > 1) {
-    const whole = matchVenue(pieces.join(" "), [], names);
+    const whole = pick(pieces.join(" "));
     if (whole) named = [whole];
   }
   if (named.length !== 1) return null;
