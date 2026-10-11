@@ -191,7 +191,8 @@ export async function refillAudience(db: Db, ev: Event, now: Date, reach: Refill
       .select({ playerId: slots.playerId })
       .from(slots)
       .innerJoin(events, eq(events.id, slots.eventId))
-      .where(and(eq(events.venueSlug, ev.venueSlug), gte(events.startsAt, since), isNotNull(slots.playerId)))
+      // A regular played there: a place taken, never one only held for them.
+      .where(and(eq(events.venueSlug, ev.venueSlug), gte(events.startsAt, since), isNotNull(slots.playerId), inArray(slots.status, ["joined", "confirmed"])))
       .limit(400);
     for (const r of regulars) add(r.playerId);
   }

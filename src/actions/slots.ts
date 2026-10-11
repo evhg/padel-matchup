@@ -37,7 +37,11 @@ import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
-import { getSessionPlayer } from "@/lib/session";
+import { getSessionPlayer, markSignedInByName, setSessionPlayer } from "@/lib/session";
+import { attachHeldRecord, decideHeldLink, pastPlayerNamed, pastPlayerRows, takeHeldLink } from "@/lib/domain/heldRecord";
+import { countSignIn } from "@/lib/domain/signins";
+import { getPlayer } from "@/lib/domain/players";
+import { DomainError } from "@/lib/domain/errors";
 import { ActionFailure, assertRate, clientKey, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -210,14 +214,21 @@ export async function removeAction(code: string, slotId: string): Promise<Action
   });
 }
 
+/**
+ * The organiser holds a spot for a name. `pick`: the name came from "Played with you", and the place
+ * keeps that past player's record (the owner, 11 October 2026: "Yes, keep the record"). The browser
+ * sends the name, never a player id: the record is found again here, from the organiser's own past
+ * players (`pastPlayerNamed`), and with none or two of that name the place is held by name only.
+ */
 export async function reserveAction(
   code: string,
-  input: { name: string; email?: string; phone?: string; slotId?: string },
+  input: { name: string; email?: string; phone?: string; slotId?: string; pick?: boolean },
 ): Promise<ActionResult<{ inviteUrl: string; inviteCode: string; name: string; emailed: boolean }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
     const before = wasComplete(detail);
+    const record = input.pick === true && typeof input.name === "string" ? pastPlayerNamed(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), input.name) : null;
     const { slot, event } = await reserveSlot(db, {
       eventId: detail.event.id,
       actorPlayerId: viewer.player?.id ?? null,
@@ -225,6 +236,7 @@ export async function reserveAction(
       email: input.email,
       phone: input.phone,
       slotId: input.slotId,
+      playerId: record?.id ?? null,
     });
     const emailed = Boolean(slot.invitedEmail) && emailEnabled();
     after(async () => {
@@ -263,6 +275,20 @@ export async function reserveManyAction(code: string, pasted: string): Promise<A
   });
 }
 
+/**
+ * "Keep Danny's matches": a place already held by name takes the record of the one past player of that
+ * name (`attachHeldRecord`), so the personal link signs Danny in as the record he played under.
+ */
+export async function attachHeldRecordAction(code: string, slotId: string): Promise<ActionResult<{ name: string }>> {
+  return runA(async () => {
+    if (typeof slotId !== "string" || !/^[0-9a-f-]{36}$/i.test(slotId)) throw new ActionFailure("invalid");
+    const { db, detail } = await requireCreator(code);
+    const done = await attachHeldRecord(db, { eventId: detail.event.id, slotId, organiserId: detail.event.creatorPlayerId });
+    revalidatePath(`/${code}`);
+    return done;
+  });
+}
+
 export async function confirmInviteAction(
   code: string,
   inviteCode: string,
@@ -272,7 +298,31 @@ export async function confirmInviteAction(
     const db = await getDb();
     const found = await getSlotByInviteCode(db, inviteCode);
     const before = found ? wasComplete(await getEventDetail(db, found.event)) : false;
-    const me = await requirePlayer(db, input.name);
+    // A place that keeps a past player's record, opened in a browser that knows nobody (the owner, 11
+    // October 2026): the link signs that browser in as the record, inside the "That's me" limits, and
+    // makes no new record. A record outside them (an email, a Telegram and so on) proves who it is
+    // first; the page says how. The session is marked by name: the link travels in group chats, so it
+    // proves nothing. The email field is not offered here, and an email sent anyway is not kept.
+    const viewer = await getSessionPlayer(db);
+    if (!viewer && found) {
+      const d = await decideHeldLink(db, { inviteCode, rateKey: await clientKey() });
+      if (d) {
+        if (!d.ok) throw d.reason === "too_many" ? new ActionFailure("too_many") : new DomainError("forbidden", "held_record");
+        const res = await takeHeldLink(db, d);
+        if (res.outcome === "confirmed") {
+          await setSessionPlayer(d.playerId);
+          await markSignedInByName(d.playerId);
+          await later(() => countSignIn(db, "held_link"));
+          if (res.event.groupId) await joinGroup(db, res.event.groupId, d.playerId, "match").catch(() => undefined);
+          const record = await getPlayer(db, d.playerId);
+          if (record) after(async () => void (await afterConfirm(db, res, record, { wasComplete: before })));
+        }
+        revalidatePath(`/${code}`);
+        revalidatePath(`/${code}/i/${inviteCode}`);
+        return { outcome: res.outcome };
+      }
+    }
+    const me = viewer ?? (await requirePlayer(db, input.name));
     const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email });
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);

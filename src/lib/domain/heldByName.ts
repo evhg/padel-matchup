@@ -206,7 +206,7 @@ export async function takeHeldByName(db: Db, d: HeldDecision, taker: { id: strin
 export type InviteState = "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled";
 
 /** What a personal link's page shows. */
-export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled";
+export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled" | "sign_in_first";
 
 /**
  * What a personal link's page shows. `inMatch`: the viewer's record holds a place in this match

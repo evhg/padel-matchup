@@ -414,7 +414,10 @@
     "pasteNoSpot": "No quedan plazas para: {names}",
     "pasteNone": "No hay nombres. Funciona mejor un nombre por línea.",
     "pasteHold": "{count, plural, one {Reservar # plaza} other {Reservar # plazas}}",
-    "pasteDone": "Reservado: {names}"
+    "pasteDone": "Reservado: {names}",
+    "playedWithYou": "Jugaron contigo",
+    "keepRecord": "Mantener los partidos de {name}",
+    "keepsRecord": "Mantiene los partidos de {name}"
   },
   "score": {
     "title": "Resultado",
@@ -510,7 +513,10 @@
     "playedBefore": "¿Ya jugaste con {email}?",
     "playedBeforeHelp": "Conocemos ese email de un partido anterior. Recupera primero tu historial con un código y confirma esta plaza como tú.",
     "heldFor": "Esta plaza está guardada para {name}.",
-    "heldForHelp": "Envía este enlace a {name}."
+    "heldForHelp": "Envía este enlace a {name}.",
+    "asRecord": "Entras como {name}, con los partidos que ya jugaste.",
+    "signInFirst": "¿Eres {name}? Primero entra con tu cuenta.",
+    "signInFirstHelp": "Esta plaza guarda los partidos de {name}. Vuelve a entrar con el email o el Telegram que usaste antes y pulsa Me apunto."
   },
   "shareText": {
     "event": "🎾 Pádel {day} a las {time} — {venue}. {spots}. Toca para apuntarte: {url}",
@@ -735,7 +741,8 @@
     "already_paired": "Ya tienes pareja.",
     "not_fixed_pairs": "Este torneo no usa parejas fijas.",
     "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas.",
-    "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona."
+    "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona.",
+    "held_record": "Esta plaza está guardada para otra persona. Abre el partido para apuntarte."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",

@@ -205,6 +205,9 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   browser that does not know them.
 - **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 34), with
   `signin_thats_me_fold` when it folded the browser's own new record into the old one;
+  `signin_held_link` (the personal link of a held place that keeps a past player's record, in a
+  browser that knew nobody, marked by name; `held_link_refused` counts such a tap the limits turned
+  down, the owner's decision of 11 October 2026);
   `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
   11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each

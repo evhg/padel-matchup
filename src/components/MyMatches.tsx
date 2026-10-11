@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { calendarTitle } from "@/lib/calendar";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { getPlayerGroups } from "@/lib/domain/groups";
-import { getPlayerEvents, mergeTimeline, type MyEvent } from "@/lib/domain/queries";
+import { getPlayerEvents, mergeTimeline, playedIn, type MyEvent } from "@/lib/domain/queries";
 import { placesOf } from "@/lib/domain/fixedPairs";
 import { listStudentCoaches, listStudentLessons, packageLine, type StudentLesson } from "@/lib/domain/coaching";
 import { venueWithCourt } from "@/lib/labels";
@@ -21,8 +21,9 @@ export async function MyMatches({ player }: { player: Player }) {
   const myCoaches = coaches.filter((c) => c.status === "accepted" || c.status === "requested");
   // A lesson counts for the list: somebody with a lesson booked and no match has a screen with something on it.
   const hasHistory = upcoming.length > 0 || past.length > 0 || booked.length > 0;
-  // Stats strip: only matches the player was actually in (not organized-from-the-sidelines).
-  const playedList = past.filter((m) => m.event.status !== "cancelled" && m.slot.position > 0 && m.slot.position <= m.event.capacity);
+  // Stats strip: only matches the player was actually in (not organized-from-the-sidelines), never a
+  // place only held for them (a past player the organiser picked, who never took it: `playedIn`).
+  const playedList = past.filter((m) => playedIn(m));
   const won = playedList.filter((m) => m.outcome === "won").length;
   const decided = won + playedList.filter((m) => m.outcome === "lost").length;
   const podiums = playedList.filter((m) => m.placement != null && m.placement <= 3).length;

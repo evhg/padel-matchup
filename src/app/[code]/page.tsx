@@ -69,7 +69,8 @@ import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
-import { partnerGoesWith } from "@/lib/domain/slots";
+import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
+import { keepRecordFor, pastPlayerRows, pickable } from "@/lib/domain/heldRecord";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
@@ -152,8 +153,12 @@ async function EventPage({ params, searchParams }: Props) {
   const bounced = viewer.isCreator && emailEnabled() ? await markedAmong(db, [...roster, ...waitlist].flatMap((s) => [s.player?.email, s.invitedEmail])) : new Set<string>();
   const didBounce = (a: string | null | undefined) => Boolean(a) && bounced.has(normalAddress(a));
   const mySlot = me ? [...roster, ...waitlist].find((s) => s.playerId === me.id) : undefined;
-  const isMember = Boolean(mySlot && mySlot.position <= ev.capacity);
-  const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
+  // A place the organiser holds for this very record (a past player picked for it, the owner's decision
+  // of 11 October 2026) is not a seat: the viewer is not in until they take it, and Join takes it
+  // (`joinEvent`), on a full match too. It used to read as "in", with Leave.
+  const myHeld = Boolean(mySlot && isHeldPlace(mySlot, ev.capacity));
+  const isMember = Boolean(mySlot && isOccupied(mySlot) && mySlot.position <= ev.capacity);
+  const isWaitlisted = Boolean(mySlot && isOccupied(mySlot) && mySlot.position > ev.capacity);
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
   // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
   // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
@@ -184,6 +189,7 @@ async function EventPage({ params, searchParams }: Props) {
   else if (over) joinState = "past";
   else if (isMember) joinState = started ? "member_live" : "leave";
   else if (isWaitlisted) joinState = "leave_waitlist";
+  else if (myHeld) joinState = "join";
   else if (myRequest?.status === "pending") joinState = "requested";
   else if (myRequest?.status === "declined") joinState = "request_declined";
   else if (spotsLeft > 0) joinState = "join";
@@ -384,7 +390,19 @@ async function EventPage({ params, searchParams }: Props) {
   // typing one of these names is offered the way back in rather than a second row of their own.
   const namesHere = [...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
   const inEventNames = new Set(namesHere.map((n) => n.trim().toLowerCase()));
-  const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
+  // "Played with you" (the owner, 11 October 2026: "Yes, keep the record"): the records that sat in a
+  // taken seat beside the organiser, or in the organiser's matches, names only. A pick keeps the record
+  // on the held place, found again on the server from the name. Three bounded reads, for the organiser
+  // only and only while a spot can still be reserved (`pastPlayerRows`).
+  const pastPlayers = reserving ? await pastPlayerRows(db, ev.creatorPlayerId, now) : [];
+  // Every record with a row here, a declined place included: one record holds one place per match.
+  const idsHere = new Set([...roster, ...waitlist].flatMap((s) => (s.playerId ? [s.playerId] : [])));
+  const playedWithYou = pickable(pastPlayers, { ids: idsHere, names: namesHere });
+  const playedKeys = new Set(playedWithYou.map((n) => n.trim().toLowerCase()));
+  // The same person twice would be two chips of one name: a past player's chip stands for them.
+  const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()) && !playedKeys.has(r.name.trim().toLowerCase()));
+  // A held row whose record is one of those past players: it keeps their matches (the line under it).
+  const pastIds = new Set(pastPlayers.map((p) => p.id));
   // "That's me" (DECIDING rule 34): a browser that knows nobody signs in as a record of this match or
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
@@ -483,6 +501,11 @@ async function EventPage({ params, searchParams }: Props) {
             ) : s.status === "invited" ? (
               <div>
                 <div className="font-bold">{t("event.reservedFor", { name })}</div>
+                {viewer.isCreator && s.playerId && pastIds.has(s.playerId) && (
+                  <div className="text-xs font-semibold text-ok" data-testid="keeps-record">
+                    ✓ {t("creator.keepsRecord", { name })}
+                  </div>
+                )}
                 <div className="text-xs font-semibold text-warn">
                   {viewer.isCreator && didBounce(s.invitedEmail)
                     ? t("creator.inviteBounced")
@@ -504,6 +527,7 @@ async function EventPage({ params, searchParams }: Props) {
                 slotId={s.id}
                 hasIdentity={Boolean(me)}
                 rolodex={viewer.isCreator ? rolodexForBrowser(rolodex, { namesAlone }) : []}
+                played={viewer.isCreator ? playedWithYou : []}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
@@ -533,6 +557,7 @@ async function EventPage({ params, searchParams }: Props) {
             stale={stale}
             defaultOpen={justInvited}
             emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
+            keepRecord={keepRecordFor(pastPlayers, s, idsHere)}
           />
         )}
       </li>

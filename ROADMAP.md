@@ -1005,6 +1005,16 @@ Everything in this list is live. The README describes each in detail.
   (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
   offer, a different person of the same name reads how to get in: a last name on My matches. The
   Telegram, Discord and LINE joins and `join_match` in the API and MCP do not refuse it yet.
+- **The held place keeps a past player's record (11 October 2026, no migration).** The owner asked
+  whether a held place may keep the record of a player who played with the organiser before, after
+  Danny got a second record; the answer was "Yes, keep the record" (DECIDING rule 34). The open spot
+  offers "Played with you", and a held name with one past player of that name offers "Keep Danny's
+  matches" (`src/lib/domain/heldRecord.ts`). The personal link signs a browser that knows nobody in as
+  that record, by name, inside the "That's me" limits; a record with an email or Telegram proves
+  itself first, and any other record is refused. A join by the record takes its own place. The same
+  day: "That's me" signs in a record that organised only past matches, and "Are these yours?" moves
+  no crew's admin role without a shared match. Danny's two production records are not merged: that
+  is a production action the owner confirms.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and

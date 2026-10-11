@@ -7,7 +7,7 @@ import { hasRange } from "./levels";
 import { joinPair, type PairJoinOutcome } from "./pairSeats";
 import { admissionAt } from "./playAgain";
 import { createJoinRequest } from "./requests";
-import { joinEvent } from "./slots";
+import { isHeldPlace, joinEvent } from "./slots";
 
 /**
  * Taking a spot, with all the rules that go with it, in one place.
@@ -36,9 +36,13 @@ export const wasComplete = (detail: { roster: { status: string; position: number
 /** `partnerName`: a fixed-pairs night only, the partner who signs up with the player (`joinPair`). */
 export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player, level: number | null, partnerName?: string | null): Promise<JoinDecision> {
   const ev = detail.event;
+  // A place the organiser holds for this very record (a past player picked for it): the organiser chose
+  // the player, so the range does not ask again, and the join takes that place (`joinEvent`).
+  const mine = [...detail.roster, ...detail.waitlist].find((s) => s.playerId === player.id);
+  const heldForMe = Boolean(mine && isHeldPlace(mine, ev.capacity));
   // The organiser is never held to their own range: they set it, and they are already in the match.
   // Nor is a player who already played a finished, scored match with them (DECIDING rule 37).
-  if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && player.id !== ev.creatorPlayerId) {
+  if (hasRange({ min: ev.levelMin, max: ev.levelMax }) && player.id !== ev.creatorPlayerId && !heldForMe) {
     const fit = await admissionAt(db, ev, { id: player.id, level, levelVerifiedLevel: player.levelVerifiedLevel });
     if (fit === "unknown") return { kind: "level_required" };
     if (fit !== "ok") {

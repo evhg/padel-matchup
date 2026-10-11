@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
-import { removeAction } from "@/actions/slots";
+import { attachHeldRecordAction, removeAction } from "@/actions/slots";
 import { ShareButtons } from "./ShareSheet";
 
 export function SlotActions({
@@ -17,6 +17,7 @@ export function SlotActions({
   stale,
   defaultOpen = false,
   emailedTo = null,
+  keepRecord = null,
 }: {
   code: string;
   slotId: string;
@@ -31,6 +32,12 @@ export function SlotActions({
   defaultOpen?: boolean;
   /** The invite went out by email to this address. */
   emailedTo?: string | null;
+  /**
+   * A place held by name, and the organiser played with one record of that name: "Keep Danny's
+   * matches" hands the place that record, so the personal link signs Danny in as it (the owner, 11
+   * October 2026: "Yes, keep the record"). The name, never an id: the server finds the record again.
+   */
+  keepRecord?: string | null;
 }) {
   const t = useTranslations();
   const [open, setOpen] = useState(defaultOpen);
@@ -44,6 +51,11 @@ export function SlotActions({
     });
   };
 
+  const keep = () =>
+    start(async () => {
+      await attachHeldRecordAction(code, slotId);
+    });
+
   return (
     <div className="mt-2 flex flex-col gap-2">
       {emailedTo && <div className="text-sm font-semibold text-ok">✓ {t("creator.inviteEmailed", { email: emailedTo })}</div>}
@@ -51,6 +63,11 @@ export function SlotActions({
         {kind === "invited" && inviteUrl && (
           <button type="button" className={`btn-xs ${stale ? "btn-primary" : "btn-secondary"}`} onClick={() => setOpen((o) => !o)}>
             {stale ? t("creator.nudge") : t("creator.forward")}
+          </button>
+        )}
+        {kind === "invited" && keepRecord && (
+          <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={keep} data-testid="keep-record">
+            {t("creator.keepRecord", { name: keepRecord })}
           </button>
         )}
         <button type="button" className="btn-danger btn-xs" disabled={pending} onClick={remove}>

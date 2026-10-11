@@ -35,7 +35,9 @@ export async function anonymizePlayer(
     .select({ eventId: slots.eventId })
     .from(slots)
     .innerJoin(events, eq(events.id, slots.eventId))
-    .where(and(eq(slots.playerId, playerId), gt(events.startsAt, now), inArray(events.status, ["open", "full"]), inArray(slots.status, ["joined", "confirmed"])));
+    // A place held for this record (a past player the organiser picked) goes too, the way a leave goes:
+    // nobody is left to take it, and the first player waiting moves up.
+    .where(and(eq(slots.playerId, playerId), gt(events.startsAt, now), inArray(events.status, ["open", "full"]), inArray(slots.status, ["joined", "confirmed", "invited"])));
   const leftEvents: { event: Event; promotion: Promotion | null }[] = [];
   for (const s of mySlots) {
     try {

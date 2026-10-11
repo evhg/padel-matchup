@@ -97,6 +97,16 @@ export type MyEvent = {
   isCreator: boolean;
 };
 
+/**
+ * Did the player play this match? A place on the line-up, of a match not called off, that they took
+ * (joined or confirmed). A tournament's held name played round 1 as a placeholder record, so a held
+ * place counts there; a match's held place that nobody took was never played. Pure.
+ */
+export function playedIn(m: Pick<MyEvent, "event" | "slot">): boolean {
+  if (m.event.status === "cancelled" || m.slot.position <= 0 || m.slot.position > m.event.capacity) return false;
+  return m.slot.status === "joined" || m.slot.status === "confirmed" || (m.event.type === "tournament" && m.slot.status === "invited");
+}
+
 /** One entry of the /me list: a match or a lesson, with the moment it starts. */
 export type TimelineEntry<M, L> = { kind: "match"; at: number; match: M } | { kind: "lesson"; at: number; lesson: L };
 

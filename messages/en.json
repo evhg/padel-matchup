@@ -414,7 +414,10 @@
     "pasteNoSpot": "No spot left for: {names}",
     "pasteNone": "No names found. One name per line works best.",
     "pasteHold": "{count, plural, one {Reserve # spot} other {Reserve # spots}}",
-    "pasteDone": "Reserved: {names}"
+    "pasteDone": "Reserved: {names}",
+    "playedWithYou": "Played with you",
+    "keepRecord": "Keep {name}'s matches",
+    "keepsRecord": "Keeps {name}'s matches"
   },
   "score": {
     "title": "Score",
@@ -510,7 +513,10 @@
     "playedBefore": "Played before with {email}?",
     "playedBeforeHelp": "We know that email from an earlier match. Restore your history with a code first, then confirm this spot as you.",
     "heldFor": "This place is held for {name}.",
-    "heldForHelp": "Send this link to {name}."
+    "heldForHelp": "Send this link to {name}.",
+    "asRecord": "You join as {name}, with the matches you played before.",
+    "signInFirst": "Is this you, {name}? Sign in first.",
+    "signInFirstHelp": "This place keeps the matches of {name}. Get back in with the email or Telegram you used before, then tap I'm in."
   },
   "shareText": {
     "event": "🎾 Padel {day} at {time} — {venue}. {spots}. Tap to join: {url}",
@@ -735,7 +741,8 @@
     "already_paired": "You already have a partner.",
     "not_fixed_pairs": "This tournament doesn't use fixed pairs.",
     "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off.",
-    "name_held": "This name has a held place. Take it above, or add your last name to join as somebody else."
+    "name_held": "This name has a held place. Take it above, or add your last name to join as somebody else.",
+    "held_record": "This place is held for somebody else. Open the match to join it."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
