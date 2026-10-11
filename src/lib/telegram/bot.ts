@@ -19,7 +19,7 @@ import { continuePartnerReply, PARTNER_TRAILER, tournamentsInChat } from "./comp
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
 import { FEEDBACK_TRAILER, feedbackFromChat, feedbackReply } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
-import { continueGuidedNew, createFromChat, handleGuidedNew, startGuidedNew } from "./handlers/new";
+import { BOARD_CALLBACK, continueGuidedNew, createFromChat, handleBoardCallback, handleGuidedNew, startGuidedNew } from "./handlers/new";
 import { handleWantCallback, wantCommand } from "./handlers/want";
 import { handleOwnerCallback } from "./handlers/owner";
 import { handleConfirm, handleResultPrompt, handleSameTime, handleWinner, plainScore, scoreFromChat } from "./handlers/result";
@@ -233,6 +233,8 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (TIMES_CALLBACK.test(data)) return handleTimesCallback(db, cb, data, ctx);
   // "Create match" under a pasted booking: the booking is read again from the message it answers.
   if (PASTE_CALLBACK.test(data)) return handlePasteCallback(db, cb, ctx);
+  // A /new match on its club's board: off the board, or back on it.
+  if (BOARD_CALLBACK.test(data)) return handleBoardCallback(db, cb, ctx);
   const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
