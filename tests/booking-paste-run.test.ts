@@ -42,8 +42,8 @@ describe("a pasted booking, read on the server", () => {
   });
   afterAll(async () => close());
 
-  const paste = (text: string, o: Partial<Parameters<typeof pasteBooking>[1]> = {}, fetchImpl?: typeof fetch) =>
-    pasteBooking(db, { text, tz: "Asia/Bangkok", rateKey: "k-default", now: NOW, ...o }, { fetchImpl: fetchImpl ?? stub().fetchImpl });
+  const paste = (text: string, o: Partial<Parameters<typeof pasteBooking>[1]> = {}, fetchImpl?: typeof fetch, preview = true) =>
+    pasteBooking(db, { text, tz: "Asia/Bangkok", rateKey: "k-default", now: NOW, ...o }, { fetchImpl: fetchImpl ?? stub().fetchImpl, preview });
 
   it("reads the owner's case and gives the form's address", async () => {
     const s = stub();
@@ -52,6 +52,7 @@ describe("a pasted booking, read on the server", () => {
       ok: true,
       read: expect.objectContaining({ club: expect.objectContaining({ slug: "warehaus" }), date: "2026-10-12", time: "18:00", names: ["Danny", "Alberto"], missing: [] }),
       href: "/?src=paste&venue=WAREHAUS.club&date=2026-10-12&time=18%3A00&tz=Asia%2FBangkok&len=90&court=3&names=Danny%2CAlberto&booked=1",
+      previewed: false,
     });
     // The words said everything, so the link was never opened.
     expect(s.calls).toHaveLength(0);
@@ -63,6 +64,13 @@ describe("a pasted booking, read on the server", () => {
     const r = await paste("my booking", { rateKey: "k-preview", links }, s.fetchImpl);
     expect(s.calls).toEqual(["https://thepadelsociety.app.link/AbCdEf12345"]);
     expect(r.ok && r.read).toMatchObject({ club: { slug: "rawai-padel" }, clubFrom: "preview", date: "2026-10-19", time: "20:00", minutes: 90 });
+    // The preview filled the club, the day and the time: the organiser checks them before a match is made.
+    expect(r.ok && r.previewed).toBe(true);
+    // With the preview switched off (the bot's tap), the link is never opened.
+    const none = stub();
+    const words = await paste("my booking", { rateKey: "k-preview", links }, none.fetchImpl, false);
+    expect(none.calls).toEqual([]);
+    expect(words.ok && words.previewed).toBe(false);
     const fail = stub("<html></html>");
     await paste("my booking", { rateKey: "k-preview", links }, fail.fetchImpl);
     const rows = await db.select({ key: metricsDaily.key, value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.day, dayKey(NOW)), like(metricsDaily.key, "paste_preview_%")));

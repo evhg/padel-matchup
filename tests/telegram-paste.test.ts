@@ -3,11 +3,14 @@ import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { clubs, events, players, slots, telegramCards, telegramChats, venues } from "@/db/schema";
+import { clubs, events, metricsDaily, players, slots, telegramCards, telegramChats, venues } from "@/db/schema";
+import { dayKey } from "@/lib/domain/metrics";
+import { LIMITS } from "@/lib/domain/ratelimit";
 import type { OpContext } from "@/lib/api/operations";
 import { zonedTimeToUtc } from "@/lib/dates";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { strings } from "@/lib/telegram/card";
+import { pasteSummary } from "@/lib/telegram/handlers/paste";
 import type { TgMessage, TgUpdate } from "@/lib/telegram/api";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb } from "./helpers/db";
@@ -36,6 +39,8 @@ type Call = { method: string; body: Record<string, unknown> };
 let calls: Call[] = [];
 /** Every request that was not the Bot API: the one read of a pasted link, at most. */
 let outside: string[] = [];
+/** What a platform's link answers: the synthetic Branch page unless a test says otherwise. */
+let platformPage = BRANCH_PAGE;
 let nextMessageId = 5000;
 
 function stubFetch() {
@@ -47,7 +52,7 @@ function stubFetch() {
       const u = String(url);
       if (!u.startsWith("https://api.telegram.org/")) {
         outside.push(u);
-        return new Response(BRANCH_PAGE, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+        return new Response(platformPage, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
       }
       const method = u.split("/").pop()!;
       const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
@@ -81,6 +86,7 @@ describe("a booking pasted in the private chat", () => {
     process.env.TELEGRAM_BOT_USERNAME = "kicksmash_bot";
     process.env.APP_BASE_URL = "https://kicksma.sh";
     stubFetch();
+    platformPage = BRANCH_PAGE;
     emitted = [];
     await db.delete(telegramCards);
     await db.delete(telegramChats);
@@ -98,13 +104,26 @@ describe("a booking pasted in the private chat", () => {
     const message: TgMessage = { message_id: messageId++, date: 0, chat, from, text, ...extra };
     return { message, outcome: await update({ message }) };
   };
-  /** "Create match" on the bot's answer `answerId`, which replies to `pasted`; tapped by `from`. */
-  const tap = (from: ReturnType<typeof user>, answerId: number, pasted: TgMessage) =>
-    update({ callback_query: { id: `cb${updateId}`, from, data: "pb:c", message: { message_id: answerId, date: 0, chat: pasted.chat, from: BOT, reply_to_message: pasted } } });
+  /**
+   * "Create match" on the bot's answer `answerId`, which replies to `pasted`; tapped by `from`. The data is
+   * the button's own when the answer had one (`createData`), else what the test gives; `sentAt` is the answer's date.
+   */
+  const tap = (from: ReturnType<typeof user>, answerId: number, pasted: TgMessage, data = createData ?? "pb:c:0", sentAt = 0) =>
+    update({ callback_query: { id: `cb${updateId}`, from, data, message: { message_id: answerId, date: sentAt, chat: pasted.chat, from: BOT, reply_to_message: pasted } } });
+  /** The callback data of the last answer's "Create match", when it had one. */
+  let createData: string | undefined;
   /** The bot's answer to a paste: the last message it sent, and the id the stub gave it. */
   const lastAnswer = () => {
     const all = sent("sendMessage");
-    return { call: all[all.length - 1], id: nextMessageId - 1 };
+    const call = all[all.length - 1];
+    createData = buttonsOf(call).find((b) => b.callback_data)?.callback_data;
+    return { call, id: nextMessageId - 1 };
+  };
+  const minutes36 = (d: Date) => Math.round(d.getTime() / 60_000).toString(36);
+  /** Cath's player row: the one a tap made, or a new one. */
+  const cathRow = async () => {
+    const [found] = await db.select().from(players).where(eq(players.telegramId, cath.id));
+    return found ?? (await db.insert(players).values({ displayName: "Cath", telegramId: cath.id }).returning())[0];
   };
   const cathsMatches = async () => {
     const [me] = await db.select().from(players).where(eq(players.telegramId, cath.id));
@@ -122,7 +141,8 @@ describe("a booking pasted in the private chat", () => {
     expect(answer.call.body.link_preview_options).toEqual({ is_disabled: true });
     expect(outside).toEqual([]);
     const [create, edit] = buttonsOf(answer.call);
-    expect(create).toEqual({ text: en.pasteCreate, callback_data: "pb:c" });
+    // The button carries the start it shows, in epoch minutes in base 36: 64 bytes hold it.
+    expect(create).toEqual({ text: en.pasteCreate, callback_data: `pb:c:${minutes36(zonedTimeToUtc("2026-10-12", "18:00", TZ))}` });
     expect(edit.text).toBe(en.pasteEdit);
     const form = new URL(edit.url!);
     expect(form.origin).toBe("https://kicksma.sh");
@@ -216,8 +236,84 @@ describe("a booking pasted in the private chat", () => {
     const hidden = await say(dm(cath), cath, "my booking", { entities: [{ type: "text_link", offset: 0, length: 10, url: LINK }] });
     expect(hidden.outcome).toBe("paste_missing:club,date,time");
     expect(outside).toEqual([LINK]);
-    // A tap that comes anyway (an old client) makes nothing.
-    expect(await tap(cath, lastAnswer().id, hidden.message)).toBe("paste_incomplete");
+    // A tap that comes anyway (an old client) makes nothing, and reads the link no second time.
+    expect(await tap(cath, lastAnswer().id, hidden.message, "pb:c:abc")).toBe("paste_incomplete");
+    expect(outside).toEqual([LINK]);
     expect(await db.select().from(events)).toEqual([]);
+  });
+
+  it("reads the link once: when its preview filled the day and the time, the answer offers Edit first alone, and a tap never opens the link", async () => {
+    platformPage = '<html><head><meta property="og:title" content="Padel at WAREHAUS.club" /><meta property="og:description" content="Mon 12 Oct, 18:00 - 19:30" /></head></html>';
+    const pasted = await say(dm(cath), cath, `Warehaus court 3 with Danny ${LINK}`);
+    expect(pasted.outcome).toBe("paste_check:link");
+    expect(outside).toEqual([LINK]);
+    const answer = lastAnswer();
+    expect(answer.call.body.text).toBe(`📋 WAREHAUS.club, Mon, Oct 12, 18:00–19:30, court 3, with Danny\n${en.pasteCheckLink}`);
+    expect(buttonsOf(answer.call).map((b) => b.text)).toEqual([en.pasteEdit]);
+    // The form carries what the preview filled; the organiser checks it there.
+    expect(new URL(buttonsOf(answer.call)[0].url!).searchParams.get("date")).toBe("2026-10-12");
+    // A tap that comes anyway reads the words alone, which lack the day: nothing is made, and the link is not read again.
+    expect(await tap(cath, answer.id, pasted.message, `pb:c:${minutes36(zonedTimeToUtc("2026-10-12", "18:00", TZ))}`)).toBe("paste_incomplete");
+    expect(outside).toEqual([LINK]);
+    expect(await cathsMatches()).toEqual([]);
+  });
+
+  it("makes the match on the day the answer showed, not on the day of the tap", async () => {
+    // Sunday 11 October, 17:50 in Phuket: "Sunday 18:00" is today. The tap comes at 18:01, when the same words mean next Sunday.
+    const answeredAt = new Date("2026-10-11T10:50:00Z");
+    vi.setSystemTime(answeredAt);
+    try {
+      const pasted = await say(dm(cath), cath, "Warehaus Sunday 18:00 with Danny");
+      expect(pasted.outcome).toBe("paste_read");
+      const answer = lastAnswer();
+      expect(String(answer.call.body.text)).toContain("Sun, Oct 11, 18:00");
+      vi.setSystemTime(new Date("2026-10-11T11:01:00Z"));
+      // A button that names another start than the words give at the answer's time makes nothing.
+      expect(await tap(cath, answer.id, pasted.message, `pb:c:${minutes36(zonedTimeToUtc("2026-10-18", "18:00", TZ))}`, answeredAt.getTime() / 1000)).toBe("paste_moved");
+      expect(await cathsMatches()).toEqual([]);
+      const made = await tap(cath, answer.id, pasted.message, createData, answeredAt.getTime() / 1000);
+      expect(made).toMatch(/^paste_created:/);
+      const [ev] = await cathsMatches();
+      expect(ev.startsAt.toISOString()).toBe(zonedTimeToUtc("2026-10-11", "18:00", TZ).toISOString());
+    } finally {
+      vi.setSystemTime(NOW);
+    }
+  });
+
+  it("offers Edit first alone for the organiser's last club and for a weekday that disagrees with the date", async () => {
+    const me = await cathRow();
+    await db.insert(venues).values({ creatorPlayerId: me.id, name: "WAREHAUS.club", lastUsedAt: new Date(NOW.getTime() - 86_400_000) });
+    const guessed = await say(dm(cath), cath, `tomorrow 18:00 with Danny ${LINK}`);
+    expect(guessed.outcome).toBe("paste_check:club");
+    let answer = lastAnswer();
+    expect(answer.call.body.text).toBe(`📋 ${en.pasteLastClub("WAREHAUS.club")}, Mon, Oct 12, 18:00, with Danny\n${en.pasteCheckClub}`);
+    expect(buttonsOf(answer.call).map((b) => b.text)).toEqual([en.pasteEdit]);
+    expect(new URL(buttonsOf(answer.call)[0].url!).searchParams.get("check")).toBe("venue");
+    // 12 October 2026 is a Monday.
+    const clash = await say(dm(cath), cath, "Warehaus Sun 12 Oct 18:00 with Danny");
+    expect(clash.outcome).toBe("paste_check:day");
+    answer = lastAnswer();
+    expect(answer.call.body.text).toBe(`📋 WAREHAUS.club, Mon, Oct 12, 18:00, with Danny\n${en.pasteCheckDay}`);
+    expect(buttonsOf(answer.call).map((b) => b.text)).toEqual([en.pasteEdit]);
+  });
+
+  it("gives the claim back when the create fails, so the next tap tries again", async () => {
+    // Cath made twenty matches today: the create refuses a twenty-first, every time, and never as "already on".
+    const me = await cathRow();
+    await db.insert(metricsDaily).values({ day: dayKey(NOW), key: `rl:create:${me.id}`, value: LIMITS.eventsPerPlayerPerDay }).onConflictDoUpdate({ target: [metricsDaily.day, metricsDaily.key], set: { value: LIMITS.eventsPerPlayerPerDay } });
+    const pasted = await say(dm(cath), cath, "Warehaus Wed 14 Oct 18:00 with Danny");
+    expect(pasted.outcome).toBe("paste_read");
+    const answer = lastAnswer();
+    expect(await tap(cath, answer.id, pasted.message)).toBe("paste_too_many");
+    expect(await tap(cath, answer.id, pasted.message)).toBe("paste_too_many");
+    expect(await cathsMatches()).toEqual([]);
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, `rl:create:${me.id}`));
+  });
+
+  it("shows the year of a day in another year", () => {
+    const read = { platform: null, ref: null, club: null, clubFrom: null, date: "2027-01-03", time: "18:00", tz: TZ, minutes: null, court: null, cost: null, names: [], missing: ["club" as const], dayClash: false };
+    expect(pasteSummary(read, "en", { now: NOW })).toContain("Sun, Jan 3, 2027");
+    expect(pasteSummary({ ...read, date: "2026-12-03" }, "en", { now: NOW })).toContain("Thu, Dec 3,");
+    expect(pasteSummary({ ...read, date: "2026-12-03" }, "en", { now: NOW })).not.toContain("2026");
   });
 });

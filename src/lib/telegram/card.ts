@@ -230,6 +230,11 @@ const STRINGS = {
     pasteLost: "I cannot see your booking now. Paste it again.",
     pasteIncomplete: "This time I could not read the club, the day and the time. Tap Edit first.",
     pasteLimit: "You pasted thirty bookings today. That is the limit. Try again tomorrow.",
+    // The answer offers Edit first alone when the organiser must look at something before the match is made.
+    pasteLastClub: (name: string) => `${name} (your last club?)`,
+    pasteCheckClub: "I took the club of your last match. Tap Edit first and check it.",
+    pasteCheckDay: "The weekday and the date in your booking do not match. Tap Edit first and check the day.",
+    pasteCheckLink: "Part of it came from the link. Tap Edit first, check it and create the match.",
   },
   ru: {
     match: "Падел-матч",
@@ -427,6 +432,10 @@ const STRINGS = {
     pasteLost: "Я не вижу вашу бронь. Вставьте её ещё раз.",
     pasteIncomplete: "В этот раз я не прочитал клуб, день и время. Нажмите «Сначала изменить».",
     pasteLimit: "Сегодня вы вставили тридцать броней. Это предел. Попробуйте завтра.",
+    pasteLastClub: (name: string) => `${name} (ваш последний клуб?)`,
+    pasteCheckClub: "Я взял клуб вашего прошлого матча. Нажмите «Сначала изменить» и проверьте его.",
+    pasteCheckDay: "День недели и дата в вашей брони не совпадают. Нажмите «Сначала изменить» и проверьте день.",
+    pasteCheckLink: "Часть данных взята из ссылки. Нажмите «Сначала изменить», проверьте их и создайте матч.",
   },
   es: {
     match: "Partido de pádel",
@@ -623,6 +632,10 @@ const STRINGS = {
     pasteLost: "Ahora no veo tu reserva. Pégala otra vez.",
     pasteIncomplete: "Esta vez no pude leer el club, el día y la hora. Toca Editar antes.",
     pasteLimit: "Hoy pegaste treinta reservas. Es el límite. Prueba mañana.",
+    pasteLastClub: (name: string) => `${name} (¿tu último club?)`,
+    pasteCheckClub: "Tomé el club de tu último partido. Toca Editar antes y compruébalo.",
+    pasteCheckDay: "El día de la semana y la fecha de tu reserva no coinciden. Toca Editar antes y comprueba el día.",
+    pasteCheckLink: "Una parte salió del enlace. Toca Editar antes, compruébala y crea el partido.",
   },
 } as const;
 

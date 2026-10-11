@@ -11,7 +11,8 @@ import { detectPlatform, type Platform } from "./platforms";
 import { disabledPlatforms, readPlatformStates } from "./scrape";
 import { readLinkPreview } from "./unfurl";
 
-export type PasteResult = { ok: true; read: BookingRead; href: string } | { ok: false; reason: "empty" | "limit" };
+/** `previewed`: the platform's preview filled part of the read, so the organiser checks it on the form before a match is made. */
+export type PasteResult = { ok: true; read: BookingRead; href: string; previewed: boolean } | { ok: false; reason: "empty" | "limit" };
 
 /** A club row as the reader takes it. */
 export const pickClubOf = (c: { slug: string; name: string; tz: string | null; bookingUrl?: string | null; website?: string | null }): PickClub => ({
@@ -72,7 +73,8 @@ export async function pasteBooking(
     /** The clubs, when the caller has read them already (the bot reads them to know a paste from a plain line): no second read. */
     clubs?: readonly PickClub[];
   },
-  o: { fetchImpl?: typeof fetch } = {},
+  /** `preview: false` never opens the link: the bot's "Create match" tap, which reads the person's words alone. */
+  o: { fetchImpl?: typeof fetch; preview?: boolean } = {},
 ): Promise<PasteResult> {
   const now = input.now ?? new Date();
   const text = (input.text ?? "").slice(0, PASTE_TEXT_MAX);
@@ -85,11 +87,12 @@ export async function pasteBooking(
   const base = { text, links, clubs, now, tz, selfName: input.selfName ?? null };
   let preview: BookingPreview | null = null;
   let read = readBooking(base);
+  const fromWords = read;
 
   // One link at most, the first a platform gave, and only for what the person's words left out.
   const link = links.find((l) => detectPlatform(l));
   const platform = link ? detectPlatform(link) : null;
-  if (link && platform && read.missing.length > 0) {
+  if (link && platform && read.missing.length > 0 && o.preview !== false) {
     const allowed = await mayRead(db, platform, now);
     const got = allowed ? await readLinkPreview(link, { fetchImpl: o.fetchImpl }) : null;
     await later(() => bumpMetric(db, !allowed ? "paste_preview_off" : got ? "paste_preview_ok" : "paste_preview_fail", 1, dayKey(now)));
@@ -103,5 +106,7 @@ export async function pasteBooking(
     const club = name ? clubNamed(name, clubs, tz) : null;
     if (club) read = readBooking({ ...base, preview, fallbackClub: club });
   }
-  return { ok: true, read, href: bookingHref(read) };
+  // Did the preview change any field? Then the organiser checks the form before a match is made.
+  const fields = (r: BookingRead) => JSON.stringify([r.club?.slug ?? null, r.date, r.time, r.minutes, r.court, r.cost]);
+  return { ok: true, read, href: bookingHref(read), previewed: preview !== null && fields(fromWords) !== fields(readBooking({ ...base, preview })) };
 }
