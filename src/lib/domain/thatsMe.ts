@@ -49,7 +49,9 @@ import { lockEvent, vacateAndPromote, type Promotion } from "./slots";
  * link and no home-screen card, and the link cannot be rotated (`nameOnlySession`).
  *
  * The owner decided on 9 October 2026 that the restore without proof stays ("a friendly app, hacking
- * is encouraged"): this is the same spirit, with tighter limits.
+ * is encouraged"): this is the same spirit, with tighter limits. The restore asks the person for no
+ * proof, and since 11 October 2026 it takes only the seal the server gave that browser, never a bare
+ * player id (`restoreSeal` in src/lib/session.ts).
  */
 
 /** One record that could be meant, with every fact the limits read. `key` is the name in lower case with single spaces, as the database makes it. */
