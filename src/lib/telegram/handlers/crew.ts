@@ -122,10 +122,15 @@ export async function crewStart(db: Db, msg: TgMessage, chat: TelegramChat, from
     return "crew_other";
   }
   // The first group tied stays the crew's group (rule 31): while another group opted in for this crew,
-  // a second one is not tied. /quiet there, or the bot's removal, frees the crew for a new group.
-  if (await otherCrewGroup(db, crew.id, chat.chatId)) {
-    await say(s.crewTaken);
-    return "crew_taken";
+  // a second one is not tied. /quiet there, or the bot's removal, frees the crew for a new group. A group
+  // that is gone with no update from Telegram (deleted, or the update lost) frees it too: Telegram is
+  // asked once about the bot there, only now, when a crew link is tapped.
+  for (let other = await otherCrewGroup(db, crew.id, chat.chatId); other != null; other = await otherCrewGroup(db, crew.id, chat.chatId)) {
+    if (!(await botGoneFrom(other))) {
+      await say(s.crewTaken);
+      return "crew_taken";
+    }
+    await db.update(telegramChats).set({ leftAt: new Date(), ...crewLeft }).where(eq(telegramChats.chatId, other));
   }
   const set = { groupId: crew.id, noticeVersion: CREW_NOTICE_VERSION, tz: chat.tz ?? crew.tz, venueName: chat.venueName ?? crew.venueName };
   await db.update(telegramChats).set(set).where(eq(telegramChats.chatId, chat.chatId));
@@ -152,6 +157,20 @@ async function otherCrewGroup(db: Db, groupId: string, chatId: number): Promise<
     .where(and(eq(telegramChats.groupId, groupId), ne(telegramChats.chatId, chatId), isNotNull(telegramChats.noticeVersion), isNull(telegramChats.leftAt)))
     .limit(1);
   return row?.chatId ?? null;
+}
+
+/**
+ * Is the bot gone from this chat? Telegram sends no update when a group is deleted, and an update can be
+ * lost. Gone: Telegram says the bot left or was removed, refuses the question (403: not a member, kicked,
+ * the group deleted), or no longer knows the chat (not found, or upgraded to a supergroup under a new
+ * id). Any other failure (the network, a rate limit) says nothing, so the group stays the crew's.
+ */
+async function botGoneFrom(chatId: number): Promise<boolean> {
+  const botId = telegramBotId();
+  if (!botId) return false;
+  const r = await getChatMember(chatId, Number(botId));
+  if (r.ok) return r.result.status === "left" || r.result.status === "kicked";
+  return r.error_code === 403 || /chat not found|upgraded|deactivated/i.test(r.description);
 }
 
 /**

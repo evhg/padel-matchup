@@ -60,7 +60,12 @@ function stubTelegram() {
       if (method === "sendMessage" && body.ephemeral_message_parameters && ephemeralFails) return reply("Bad Request: ephemeral message can't be sent", false);
       if (method === "pinChatMessage" && pinFails) return reply("Bad Request: not enough rights to pin a message", false);
       if (method === "sendMessage" || method === "sendPhoto") return reply({ message_id: nextMessageId++, chat: { id: body.chat_id } });
-      if (method === "getChatMember") return reply(members.get(`${body.chat_id}:${body.user_id}`) ?? { status: "member" });
+      if (method === "getChatMember") {
+        // A member written as { error, code } is Telegram refusing the question ("bot was kicked", "chat not found").
+        const m = members.get(`${body.chat_id}:${body.user_id}`);
+        if (m && typeof m.error === "string") return new Response(JSON.stringify({ ok: false, error_code: m.code, description: m.error }), { status: Number(m.code), headers: { "content-type": "application/json" } });
+        return reply(m ?? { status: "member" });
+      }
       if (method === "createChatInviteLink") return reply({ invite_link: inviteOf(Number(body.chat_id)) });
       return reply(true);
     }),
@@ -469,6 +474,37 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     expect(await say(fresh, user(1, "Ana"), "/quiet").outcome).toBe("quiet");
     expect(await say(older, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_listening");
     expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(older.id), listening: true });
+  });
+
+  it("a first group the bot is gone from, with no word from Telegram, frees the crew; a failed question does not", async () => {
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Sunday crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok", venueName: "Rawai Padel" });
+    const [first, second, third] = [-202500, -202501, -202502].map((id) => ({ id, type: "supergroup" as const, title: "Sunday padel" }));
+    for (const c of [first, second, third]) {
+      members.set(`${c.id}:1`, { status: "creator" });
+      members.set(`${c.id}:${BOT.id}`, ADMIN_RIGHTS);
+    }
+    const tie = (c: typeof first) => say(c, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome;
+    expect(await tie(first)).toBe("crew_listening");
+    // The bot is still in the first group: the second is refused after one question about the bot there.
+    calls = [];
+    expect(await tie(second)).toBe("crew_taken");
+    expect(sent("getChatMember").filter((c) => c.body.chat_id === first.id).map((c) => c.body.user_id)).toEqual([BOT.id]);
+    expect(String(groupMessages().at(-1)!.body.text)).toContain("removes the bot");
+    // The first group was deleted, and no update came: Telegram refuses the question, the row is left, the second group ties.
+    members.set(`${first.id}:${BOT.id}`, { error: "Forbidden: bot was kicked from the supergroup chat", code: 403 });
+    expect(await tie(second)).toBe("crew_listening");
+    const gone = await chatRow(first.id);
+    expect([gone.leftAt != null, gone.noticeVersion, gone.listeningSince, gone.inviteLink]).toEqual([true, null, null, null]);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(second.id), listening: true });
+    // A question that fails for another reason (a rate limit, the network) frees nothing.
+    members.set(`${second.id}:${BOT.id}`, { error: "Too Many Requests: retry after 5", code: 429 });
+    expect(await tie(third)).toBe("crew_taken");
+    expect((await chatRow(second.id)).leftAt).toBeNull();
+    // A chat Telegram no longer knows is gone too.
+    members.set(`${second.id}:${BOT.id}`, { error: "Bad Request: chat not found", code: 400 });
+    expect(await tie(third)).toBe("crew_listening");
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(third.id), listening: true });
   });
 
   it("the invite link follows the bot's right to invite, and the reading stops with the right to pin", async () => {

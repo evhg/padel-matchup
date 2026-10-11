@@ -207,7 +207,7 @@ const STRINGS = {
     crewAdminOnly: "Only an admin of this group can tie it to a crew.",
     crewNeedsAdmin: "Tied to the crew. Make me an admin who may pin messages, and I start.",
     crewOther: "This group already runs matches for another crew. A group admin can type /quiet first.",
-    crewTaken: "This crew already has its Telegram group. To move it here, a group admin there types /quiet first.",
+    crewTaken: "This crew already has its Telegram group. To move it here, a group admin there first types /quiet or removes the bot.",
     whichMatch: "Which match?",
     // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. "From" names whose
     // times they are: a platform's, or the clubs' own (DECIDING rule 35); never "this week", because a
@@ -423,7 +423,7 @@ const STRINGS = {
     crewAdminOnly: "Привязать этот чат к группе может только его админ.",
     crewNeedsAdmin: "Чат привязан к группе. Сделайте меня админом с правом закреплять сообщения, и я начну.",
     crewOther: "Этот чат уже ведёт матчи другой группы. Сначала админ чата может написать /quiet.",
-    crewTaken: "У этой группы уже есть свой Telegram-чат. Чтобы перенести его сюда, админ того чата сначала пишет там /quiet.",
+    crewTaken: "У этой группы уже есть свой Telegram-чат. Чтобы перенести его сюда, админ того чата сначала пишет там /quiet или удаляет бота.",
     whichMatch: "Какой матч?",
     timesFree: (from: string) => `Свободные корты в ваших клубах, по данным ${from}. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.`,
     timesTheClubs: "клубов",
@@ -633,7 +633,7 @@ const STRINGS = {
     crewAdminOnly: "Solo un administrador de este chat puede vincularlo a un grupo.",
     crewNeedsAdmin: "Vinculado al grupo. Hazme administrador con permiso para fijar mensajes y empiezo.",
     crewOther: "Este chat ya organiza partidos de otro grupo. Antes, un administrador del chat puede escribir /quiet.",
-    crewTaken: "Este grupo ya tiene su chat de Telegram. Para traerlo aquí, un administrador de ese chat escribe antes /quiet allí.",
+    crewTaken: "Este grupo ya tiene su chat de Telegram. Para traerlo aquí, un administrador de ese chat escribe antes /quiet allí o quita el bot.",
     whichMatch: "¿Qué partido?",
     timesFree: (from: string) => `Pistas libres en tus clubs, según ${from}. Toca una y creo el partido; reservas y pagas tú, en la app del club.`,
     timesTheClubs: "los clubs",
