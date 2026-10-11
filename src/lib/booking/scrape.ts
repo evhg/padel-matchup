@@ -341,7 +341,6 @@ export type DueClub = Pick<Club, "slug" | "bookingUrl" | "bookingPlatform" | "we
   prev: Omit<ClubAvailability, "slots" | "why"> | null;
 };
 
-
 /** A link on one of the platform's hosts, as a Postgres regular expression. Null for a platform we cannot name. */
 function hostPattern(platform: string): string | null {
   const hosts = platformById(platform)?.hosts;
