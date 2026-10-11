@@ -97,7 +97,8 @@ counted on the server, crawlers left out, while Vercel counts page views in the 
 Vercel Hobby functions also count time: 4 hours of active CPU and 360 GB-hours of provisioned memory a
 month (Vercel's Hobby figures as read on 10 October 2026; the usage page has the live numbers). A
 function that waits on the network counts against the memory, not the CPU, for every second it waits.
-Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day.
+Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day (book@ may
+spend thirty of them: "book@kicksma.sh", below).
 Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. A crew's own Telegram group (DECIDING rule 31) sends every message to the
 webhook, because an admin bot receives them all: one invocation each, dropped before any database
@@ -397,6 +398,27 @@ show whether platforms still answer: `paste_preview_ok` and `paste_preview_fail`
 `paste_preview_fail` climbs and `paste_preview_ok` stays at zero, a platform changed its preview or
 stopped it. The form still fills from the person's words, so nothing breaks; tell the owner in one
 line.
+
+**book@kicksma.sh.** A mail to book@ is a paste by email (DECIDING rule 36, the owner, 11 October
+2026). It arrives through the same Resend webhook as claude@ and feedback@ (`/api/inbound/resend`).
+The answer goes from `Kicksmash <book@kicksma.sh>` through Resend, once, with the filled form's link.
+Kicksmash keeps nothing of the mail: no desk row, no body, no address in a log line or a counter.
+Two limits hold it, both in `metrics_daily` with no address in the key:
+
+| Limit | Number | Row |
+| --- | --- | --- |
+| Reads for one sender a day (the paste limit) | 30 | `rl:paste:mail:<hash of the address>` |
+| Answers from book@ a day, all senders together | 30 (`LIMITS.bookMailAnswersPerDay`) | `rl:bookmail:day` |
+
+The cap is thirty, not a hundred, because Resend's free plan sends 100 emails a day for the whole
+app. Thirty answers leave seventy for the match notices and the codes. A sender's address can be
+faked, so the cap counts every sender together. A refused mail gives its place back. A mail delivered
+twice is answered once (`rl:bookmail_id:<Resend id>`). Two day counters show the door:
+`book_mail_answered` and `book_mail_skipped`. The webhook's own answer names the reason for a skip
+(`machine`, `own`, `nothing`, `again`, `cap`, `marked`, `limit`, `send`). When `book_mail_skipped`
+climbs and `book_mail_answered` stays at zero, read the reasons in Vercel's function log of the
+webhook. If book@ gets no mail at all, Resend's receiving domain may not route that address: send
+one test mail and look for `email.received` in Resend.
 
 ## The Sunday digest, one line to watch
 

@@ -232,7 +232,8 @@
     "pasteNoTime": "Your booking did not give the time. Pick it here.",
     "pasteNoClub": "Your booking did not name the club. Pick it here.",
     "pasteCheckClub": "We took the club of your last match. Check it here.",
-    "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day."
+    "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day.",
+    "inviteShown": "The match page shows your invite link. Other players can then join the booking on {platform} too."
   },
   "share": {
     "title": "Your match is live",
@@ -351,7 +352,8 @@
     "playAgainSent": "One next game, same settings. This match's players already had their one “Are you in?” message.",
     "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
     "playAgainPlain": "One next game, same settings.",
-    "startLocked": "Only the organiser moves the start once the match has started."
+    "startLocked": "Only the organiser moves the start once the match has started.",
+    "joinBooking": "Join this booking on {platform}"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -677,7 +679,20 @@
       "heading": "Your code for {club}",
       "body": "Enter this code on the claim screen or on your manage page. It confirms your work email at {club}. It expires in 10 minutes.",
       "footer": "If you did not claim a club page, ignore this."
-    }
+    },
+    "bookSubject": "Your match form is ready",
+    "bookIntro": "Kicksmash read this in your booking:",
+    "bookClub": "Club",
+    "bookDay": "Day",
+    "bookTime": "Time",
+    "bookLength": "Length",
+    "bookCourt": "Court",
+    "bookPrice": "Price",
+    "bookNames": "Players",
+    "bookMinutes": "{minutes} minutes",
+    "bookMissing": "Not in your booking: {fields}.",
+    "bookOpen": "Open the filled form. Check it, then tap the button to make the match:",
+    "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email."
   },
   "errors": {
     "not_found": "We couldn't find that.",

@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * generator); `?venue=…&date=…&time=…&tz=…` is a club's free court; `?src=paste&…&len=&court=&cost=&booked=1`
  * is a pasted booking (`bookingHref`), which "Booked already? Paste it" under the headline opens.
  */
-export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string; src?: string; len?: string; court?: string; cost?: string; booked?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string; src?: string; len?: string; court?: string; cost?: string; booked?: string; check?: string; invite?: string }> }) {
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
   return (
     <>
@@ -39,7 +39,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ t
               <PasteBooking max={PASTE_TEXT_MAX} />
             </div>
           }
-          prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, date: sp.date, time: sp.time, tz: sp.tz, tg: sp.tg, dc: sp.dc, names: sp.names, src: sp.src, len: sp.len, court: sp.court, cost: sp.cost, booked: sp.booked }} />
+          prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, date: sp.date, time: sp.time, tz: sp.tz, tg: sp.tg, dc: sp.dc, names: sp.names, src: sp.src, len: sp.len, court: sp.court, cost: sp.cost, booked: sp.booked, check: sp.check, invite: sp.invite }} />
         <section className="mt-6 grid gap-2">
           {[t("landing.step1"), t("landing.step2"), t("landing.step3")].map((s, i) => (
             <div key={i} className="flex items-center gap-3 px-1 text-sm text-muted">

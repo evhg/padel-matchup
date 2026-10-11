@@ -9,6 +9,8 @@ import { guessLanguage } from "@/lib/listen/parse";
 import { draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
 import { verifySvix } from "@/lib/outreach/svix";
 import { markFromEvent, recordMark } from "@/lib/domain/emailMarks";
+import { answerBookMail, isBookMail } from "@/lib/booking/bookMail";
+import { machineMail } from "@/lib/domain/bookMail";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,9 +19,10 @@ type ReceivedEvent = { type?: string; data?: { email_id?: string; from?: string;
 type ReceivedEmail = { id: string; from: string; to: string[]; subject: string | null; text: string | null; html: string | null; message_id?: string | null; headers?: Record<string, string> | { name: string; value: string }[]; created_at?: string };
 
 /**
- * Resend's email.received webhook for claude@<apex>. Signed the Svix way with
- * RESEND_WEBHOOK_SECRET. The event carries metadata only; the body is fetched
- * from the Received Emails API. Everything in it is data from a stranger.
+ * Resend's email.received webhook for claude@<apex>, feedback@<apex> and book@<apex>. Signed the Svix
+ * way with RESEND_WEBHOOK_SECRET. The event carries metadata only; the body is fetched from the
+ * Received Emails API. Everything in it is data from a stranger. book@ answers with the filled match
+ * form and keeps nothing of the mail (`src/lib/booking/bookMail.ts`): no desk row, no body.
  */
 export async function POST(req: Request) {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
@@ -47,6 +50,7 @@ export async function POST(req: Request) {
   if (!mail) return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
   const db = await getDb();
   if (mail.to.some((t) => /^feedback@/i.test(parseAddress(t).email))) return feedbackByEmail(db, mail);
+  if (isBookMail(mail.to)) return NextResponse.json({ ok: true, book: await answerBookMail(db, mail) });
   const { row, fresh } = await recordInbound(db, mail);
   if (fresh) {
     const followUp = async () => {
@@ -127,6 +131,7 @@ async function fetchReceived(emailId: string, event: ReceivedEvent): Promise<Inb
       messageId: m.message_id ?? event.data?.message_id ?? headers["message-id"] ?? null,
       inReplyTo: headers["in-reply-to"] ?? null,
       receivedAt: m.created_at ? new Date(m.created_at) : undefined,
+      auto: machineMail(headers),
     };
   } catch {
     return null;

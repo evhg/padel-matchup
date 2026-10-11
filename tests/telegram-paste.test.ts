@@ -146,7 +146,7 @@ describe("a booking pasted in the private chat", () => {
     expect(edit.text).toBe(en.pasteEdit);
     const form = new URL(edit.url!);
     expect(form.origin).toBe("https://kicksma.sh");
-    expect(Object.fromEntries([...form.searchParams].filter(([k]) => k !== "tg"))).toEqual({ src: "paste", venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: TZ, len: "90", court: "3", names: "Danny,Alberto", booked: "1" });
+    expect(Object.fromEntries([...form.searchParams].filter(([k]) => k !== "tg"))).toEqual({ src: "paste", venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: TZ, len: "90", court: "3", names: "Danny,Alberto", booked: "1", invite: LINK });
     expect(form.searchParams.get("tg")).toMatch(new RegExp(`^${cath.id}\\.`));
     // Nothing is made, and nobody is created, until the tap.
     expect(await cathsMatches()).toEqual([]);
@@ -157,6 +157,8 @@ describe("a booking pasted in the private chat", () => {
     const code = made.split(":")[1];
     const [ev] = await cathsMatches();
     expect(ev).toMatchObject({ code, venueName: "WAREHAUS.club", court: "3", tz: TZ, durationMinutes: 90, publicListing: false, type: "match", capacity: 4 });
+    // The Padel Society's invitation rides along from the person's own message, for "Join this booking" on the match page.
+    expect(ev.bookingUrl).toBe(LINK);
     expect(ev.startsAt.toISOString()).toBe(zonedTimeToUtc("2026-10-12", "18:00", TZ).toISOString());
     const [me] = await db.select().from(players).where(eq(players.telegramId, cath.id));
     expect(ev.courtBookedBy).toBe(me.id);
@@ -229,7 +231,8 @@ describe("a booking pasted in the private chat", () => {
     expect(answer.call.body.text).toBe(`📋 ${en.pasteLinkOf("The Padel Society")}\n${en.pasteMissing("the club, the day or the time")}`);
     const buttons = buttonsOf(answer.call);
     expect(buttons.map((b) => b.text)).toEqual([en.pasteEdit]);
-    expect(buttons[0].url).toMatch(/^https:\/\/kicksma\.sh\/\?src=paste&tz=UTC&booked=1&tg=/);
+    // The invitation is made to share, so "Edit first" carries it to the form (the owner, 11 October 2026).
+    expect(buttons[0].url).toMatch(/^https:\/\/kicksma\.sh\/\?src=paste&tz=UTC&booked=1&invite=https%3A%2F%2Fthepadelsociety\.app\.link%2FAbCdEf12345&tg=/);
 
     // The same link behind words (a text_link entity) is read the same way.
     outside = [];

@@ -1,7 +1,7 @@
 import { bookandgoApp } from "@/lib/booking/adapters/bookandgo";
 import { matchiFacilitySlug } from "@/lib/booking/adapters/matchi";
 import { playtomicClubPage } from "@/lib/booking/adapters/playtomic";
-import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
+import { cleanUrl, detectPlatform, madeToShare } from "@/lib/booking/platforms";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { distinctWords, matchVenue, WEEKDAYS, ZONE_ALIASES } from "@/lib/telegram/parse";
 import { CITIES } from "./cities";
@@ -37,6 +37,12 @@ export type BookingRead = {
   platform: { id: string; name: string } | null;
   /** The platform's own id for the booking (The Padel Society's match invitation), from the preview; never sent anywhere. */
   ref: BookingRef | null;
+  /**
+   * The first pasted link a platform made for strangers to join the booking (`madeToShare`: a Padel
+   * Society invitation, a Playtomic match, a MATCHi share), with no query string; null for any other.
+   * The match page shows it as "Join this booking on <platform>" (the owner, 11 October 2026).
+   */
+  invite?: string | null;
   club: PickClub | null;
   /** Where the club came from: a pasted link, the person's text, the preview, or the organiser's last venue. */
   clubFrom?: "link" | "text" | "preview" | "history" | null;
@@ -787,6 +793,7 @@ export function readBooking(input: {
   const read: BookingRead = {
     platform: platformOf ? { id: platformOf.id, name: platformOf.name } : null,
     ref: input.preview?.ref ?? null,
+    invite: links.map((l) => madeToShare(l)?.url).find(Boolean) ?? null,
     club,
     clubFrom,
     date,
@@ -814,9 +821,10 @@ export const showsBooking = (read: BookingRead): boolean =>
 /**
  * The create form, filled: `/?src=paste` and every field read, in the names the form already takes
  * (`venue`, `date`, `time`, `tz`, `names`) and the new ones (`len`, `court`, `cost`, `booked`,
- * `check`). The length goes only when it is one the form offers (60, 90 or 120); `booked=1` only when
- * the paste shows a booking (`showsBooking`); `check` names the fields the organiser must look at: the
- * venue when it is their last one, the date when the weekday disagrees with it. Pure.
+ * `check`, `invite`). The length goes only when it is one the form offers (60, 90 or 120); `booked=1`
+ * only when the paste shows a booking (`showsBooking`); `check` names the fields the organiser must look
+ * at: the venue when it is their last one, the date when the weekday disagrees with it; `invite` is a
+ * made-to-share link (`madeToShare`), never any other. Pure.
  */
 export function bookingHref(read: BookingRead): string {
   const q = new URLSearchParams({ src: "paste" });
@@ -832,5 +840,8 @@ export function bookingHref(read: BookingRead): string {
   if (showsBooking(read)) q.set("booked", "1");
   const check = [...(read.club && read.clubFrom === "history" ? ["venue"] : []), ...(read.dayClash ? ["date"] : [])];
   if (check.length) q.set("check", check.join(","));
+  // Checked again by the form's reader and by the create on the server: a link anybody types into the address proves nothing.
+  const invite = madeToShare(read.invite)?.url;
+  if (invite) q.set("invite", invite);
   return `/?${q.toString()}`;
 }

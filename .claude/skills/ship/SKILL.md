@@ -374,6 +374,17 @@ learning can be a test, a gate step or a script, make it one and put the story i
   sends no `Sec-Fetch-*`, so its 20-second refresh still counted a view, and headless Chromium could
   never show it. When code branches on a header, write the case where the header is absent, and give
   it its own fallback (here `Accept`: a page load asks for `text/html`, the router's fetch for `*/*`).
+- **A key the reader takes is not a key the page passes.** `readCreateLink` read `check=venue,date`,
+  and its unit test passed it by hand, but `src/app/page.tsx` copies the address into `prefill` key by
+  key and left `check` out, so the form never marked a guessed club or a clashing weekday (found 11
+  October 2026). When a reader of the address learns a key, grep the page that hands the address over.
+- **The app's own database is not empty.** A route test reaches `getDb()`, the embedded database with
+  the demo matches, not `createTestDb()`'s. "Nothing was made" is a count before and after
+  (`census` in `tests/book-mail.test.ts`), never `toEqual([])` on `events`.
+- **A free tier shared by the whole app is the ceiling of each part of it.** Resend's free plan sends a
+  hundred emails a day for everything, so book@'s daily cap is thirty, not the hundred first pencilled
+  in: an answer robot at a hundred would have silenced every match notice on a busy day. Before a
+  feature sends on its own, find the plan's whole-app ceiling in docs/OPERATING.md.
 
 ### Wall clock
 

@@ -20,6 +20,17 @@ export function ipKey(ip: string): string {
 }
 
 /**
+ * The same kind of key for an email address: book@ counts a sender's pastes by it, so no address is
+ * written into `metrics_daily`. The address is normalised first (lower case, no `+tag`), so
+ * "Cath+padel@Example.com" and "cath@example.com" share one counter.
+ */
+export function addressKey(address: string): string {
+  const secret = process.env.SESSION_SECRET || "kicksmash-local";
+  const [local = "", domain = ""] = address.trim().toLowerCase().split("@");
+  return createHmac("sha256", secret).update(`mail:${local.split("+")[0]}@${domain}`).digest("hex").slice(0, 16);
+}
+
+/**
  * The caller's key from the request headers: the first hop of `x-forwarded-for` (Vercel sets it), else
  * `x-real-ip`, else "unknown", as `ipKey` makes it. Never the address itself.
  */

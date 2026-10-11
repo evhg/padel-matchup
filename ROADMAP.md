@@ -948,6 +948,18 @@ Everything in this list is live. The README describes each in detail.
   scored americano), skips that organiser's level range on every door (`admissionAt` in
   `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
   No WhatsApp template carries the message yet.
+- **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
+  11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
+  writes the booking in a mail. One answer comes back from book@ with what Kicksmash read and the link
+  to the filled match form. Nothing else happens: no match, no held name, no sign-in link, and nothing
+  of the mail is kept. A robot, a bounce, a list, our own domain and a mail with no booking get no
+  answer. One address gets thirty reads a day, and book@ sends thirty answers a day in total
+  (`src/lib/booking/bookMail.ts`). A pasted invitation that a platform makes for strangers (a Padel
+  Society invite, a Playtomic match, a MATCHi share) now goes onto the match. The match page shows
+  "Join this booking on The Padel Society", so the fourth player can join the booking in the
+  platform's app too. The query string goes, and a PodPlay invite or an email's link never shows
+  (`madeToShare` in `src/lib/booking/platforms.ts`). The bot's "Create match" carries it too. "Play
+  again" does not copy it to the next game.
 
 ## The finish line
 

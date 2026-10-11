@@ -46,6 +46,46 @@ export function detectPlatform(url: string | null | undefined): Platform | null 
 
 export const platformById = (id: string | null | undefined): Platform | null => (id ? (PLATFORMS.find((p) => p.id === id) ?? null) : null);
 
+/**
+ * The links a platform makes for strangers to join a booking, as the owner chose them on 11 October
+ * 2026 ("Only made-to-share links"): a Padel Society invitation (`thepadelsociety.app.link/<code>`, one
+ * segment of 6 to 20 letters and figures), a Playtomic match (`/matches/<uuid>` on playtomic.io or
+ * playtomic.com, and on their `app.` hosts, where Playtomic's own share links live) and a MATCHi share
+ * of a booking (`share.matchi.com/bookings/<id>`: the page that says "You've been invited to join a
+ * game", as the share site's own route list and its app links name it, 11 October 2026).
+ * Everything else is never shown: a PodPlay invitation can make the booker pay, an email's link can
+ * carry a token, and any other path or host is not known to be made for strangers.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SHARE_LINKS: readonly { platform: string; hosts: readonly string[]; path: (parts: readonly string[]) => boolean }[] = [
+  { platform: "padelsociety", hosts: ["thepadelsociety.app.link"], path: (p) => p.length === 1 && /^[A-Za-z0-9]{6,20}$/.test(p[0]) },
+  { platform: "playtomic", hosts: ["playtomic.io", "playtomic.com", "app.playtomic.io", "app.playtomic.com"], path: (p) => p.length === 2 && p[0] === "matches" && UUID.test(p[1]) },
+  { platform: "matchi", hosts: ["share.matchi.com"], path: (p) => p.length === 2 && p[0] === "bookings" && /^[A-Za-z0-9-]{6,64}$/.test(p[1]) },
+];
+
+/**
+ * A made-to-share link and its platform, or null. https only, with no user name, no port but 443,
+ * the host exactly as listed and the path in its one shape; the query string and the fragment are
+ * removed, so a tracking tag or a token never travels on. Pure, and safe in a browser.
+ */
+export function madeToShare(raw: unknown): { url: string; platform: Platform } | null {
+  if (typeof raw !== "string" || raw.length > 500) return null;
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" || u.username || u.password || (u.port !== "" && u.port !== "443")) return null;
+  const host = u.hostname.toLowerCase();
+  const kind = SHARE_LINKS.find((k) => k.hosts.includes(host));
+  if (!kind) return null;
+  const parts = u.pathname.replace(/\/$/, "").split("/").slice(1);
+  if (!kind.path(parts)) return null;
+  const platform = platformById(kind.platform);
+  return platform ? { url: `https://${host}/${parts.join("/")}`, platform } : null;
+}
+
 /** http(s) links only, trimmed, bounded; anything else becomes null. ("Book this court" takes https only: `prepareBooking`.) */
 export function cleanUrl(u: unknown, max = 500): string | null {
   if (typeof u !== "string") return null;

@@ -232,7 +232,8 @@
     "pasteNoTime": "Tu reserva no dice la hora. Elígela aquí.",
     "pasteNoClub": "Tu reserva no nombra el club. Elígelo aquí.",
     "pasteCheckClub": "Tomamos el club de tu último partido. Compruébalo aquí.",
-    "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día."
+    "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día.",
+    "inviteShown": "La página del partido muestra tu enlace de invitación. Así otros jugadores también se unen a la reserva en {platform}."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -351,7 +352,8 @@
     "playAgainSent": "Un partido más, con la misma configuración. Los jugadores de este partido ya recibieron su único mensaje «¿Te apuntas?».",
     "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días.",
     "playAgainPlain": "Un partido más, con la misma configuración.",
-    "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio."
+    "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
+    "joinBooking": "Únete a esta reserva en {platform}"
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -677,7 +679,20 @@
       "heading": "Tu código para {club}",
       "body": "Introduce este código en la pantalla de la solicitud o en tu página de gestión. Confirma tu correo de trabajo en {club}. Caduca en 10 minutos.",
       "footer": "Si no reclamaste una página de club, ignora este mensaje."
-    }
+    },
+    "bookSubject": "Tu formulario de partido está listo",
+    "bookIntro": "Kicksmash leyó esto en tu reserva:",
+    "bookClub": "Club",
+    "bookDay": "Día",
+    "bookTime": "Hora",
+    "bookLength": "Duración",
+    "bookCourt": "Pista",
+    "bookPrice": "Precio",
+    "bookNames": "Jugadores",
+    "bookMinutes": "{minutes} minutos",
+    "bookMissing": "No está en tu reserva: {fields}.",
+    "bookOpen": "Abre el formulario relleno. Revísalo y toca el botón para crear el partido:",
+    "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo."
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",

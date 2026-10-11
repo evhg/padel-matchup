@@ -63,6 +63,12 @@ export const LIMITS = {
    * platform gave the person (DECIDING rule 35), so a script cannot make Kicksmash read links for it.
    */
   bookingPastesPerIpPerDay: 30,
+  /**
+   * book@<apex>: answers sent in a day, for every sender together, because a sender's address can be
+   * faked. Thirty, because Resend's free plan sends a hundred emails a day for the whole app, and the
+   * match notices and the codes need the other seventy (docs/OPERATING.md).
+   */
+  bookMailAnswersPerDay: 30,
   feedbackPerIpPerDay: 5,
   // Public API and MCP: open without a key, roomier with one.
   apiKeysPerIpPerDay: 10,

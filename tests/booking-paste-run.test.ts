@@ -52,7 +52,8 @@ describe("a pasted booking, read on the server", () => {
     expect(r).toEqual({
       ok: true,
       read: expect.objectContaining({ club: expect.objectContaining({ slug: "warehaus" }), date: "2026-10-12", time: "18:00", names: ["Danny", "Alberto"], missing: [] }),
-      href: "/?src=paste&venue=WAREHAUS.club&date=2026-10-12&time=18%3A00&tz=Asia%2FBangkok&len=90&court=3&names=Danny%2CAlberto&booked=1",
+      // The Padel Society's invitation is made to share (the owner, 11 October 2026), so the form carries it.
+      href: "/?src=paste&venue=WAREHAUS.club&date=2026-10-12&time=18%3A00&tz=Asia%2FBangkok&len=90&court=3&names=Danny%2CAlberto&booked=1&invite=https%3A%2F%2Fthepadelsociety.app.link%2FAbCdEf12345",
       previewed: false,
     });
     // The words said everything, so the link was never opened.

@@ -67,6 +67,8 @@ const createSchema = z.object({
   payNote: z.string().max(120).optional(),
   /** "Court booked by me": the organiser booked the court before making the match (a pasted booking). */
   booked: z.boolean().optional(),
+  /** A pasted booking's invitation for strangers: kept only when `madeToShare` takes it (`createEvent`), never as sent. */
+  invite: z.string().max(500).optional(),
   /** Signed chat ticket from the Telegram bot's /new. */
   telegramTicket: z.string().max(80).optional(),
   /** Signed channel ticket from the Discord bot's /new. */
@@ -112,6 +114,7 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
       groupId: group?.id ?? null,
       publicListing: input.publicListing ?? false,
       bookingUrl: input.bookingUrl,
+      invite: input.invite,
       cost: input.cost,
       payNote: input.payNote,
     });

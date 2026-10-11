@@ -426,11 +426,15 @@ try {
   // The owner's case (11 October 2026: a court booked in a platform's app with Danny and Alberto), at
   // the club this suite claimed, pasted as words with no link, so the server reads nothing from
   // outside. The day is three days out in the club's zone (the claim took it from the claimant's
-  // phone), written as a booking app writes it, from the moment the suite runs (rule 11).
+  // phone), written as a booking app writes it, from the moment the suite runs (rule 11). The paste
+  // ends with The Padel Society's invitation and a tracking query: the words give the club, the day and
+  // the time, so the link is never opened, and the match page shows it as "Join this booking" without
+  // the query (the owner, 11 October 2026: "Only made-to-share links").
   const clubZone = String(feedNow.freeCourts?.tz || "Europe/Madrid");
   const pasteAt = new Date(Date.now() + 3 * 86400 * 1000);
   const pasteDay = new Intl.DateTimeFormat("en-CA", { timeZone: clubZone }).format(pasteAt);
-  const pasteText = `${CLUB} ${new Intl.DateTimeFormat("en-GB", { timeZone: clubZone, weekday: "short", day: "numeric", month: "short" }).format(pasteAt)} 18:00-19:30 court 3 with Danny, Alberto`;
+  const INVITE = "https://thepadelsociety.app.link/AbCdEf12345";
+  const pasteText = `${CLUB} ${new Intl.DateTimeFormat("en-GB", { timeZone: clubZone, weekday: "short", day: "numeric", month: "short" }).format(pasteAt)} 18:00-19:30 court 3 with Danny, Alberto ${INVITE}?_p=c21`;
   await page.goto(`${BASE}/`);
   await page.getByTestId("paste-door").click();
   await page.getByLabel("Paste the booking link and the text from your booking app.").fill(pasteText);
@@ -453,6 +457,7 @@ try {
   check("a pasted booking fills the form: the club, the day, 18:00 in the club's zone, 90 minutes, court 3", JSON.stringify(pasted) === JSON.stringify({ venue: CLUB, date: pasteDay, time: "18:00", zone: 1, length: "true", court: "3" }), JSON.stringify(pasted));
   check("the players come 'from your booking', and nothing is marked missing", (await page.getByTestId("carried-players").innerText()).includes("2 players from your booking") && (await page.getByTestId("carried-players").innerText()).includes("Danny · Alberto") && (await page.getByTestId("paste-missing-when").count()) === 0 && (await page.getByTestId("paste-missing-club").count()) === 0);
   check("'Court booked by me' stands ticked, and the match stays off the venue board", (await page.getByTestId("booked-by-me").isChecked()) && (await page.getByRole("checkbox", { name: /Show on the venue board/ }).isChecked()) === false);
+  check("the form says the match page will show the booking's invitation", (await page.getByTestId("paste-invite").innerText().catch(() => "")).includes("join the booking on The Padel Society"), await page.getByTestId("paste-invite").innerText().catch(() => "no paste-invite"));
   await page.getByRole("button", { name: "Create & get the link" }).click();
   const madeBy = Date.now() + 30_000;
   while (!/\/[^/]{4}\/share$/.test(page.url()) && Date.now() < madeBy) {
@@ -464,6 +469,9 @@ try {
   const pastedRows = await page.locator("main li").allInnerTexts();
   check("one tap made the match with Danny and Alberto held", ["Danny", "Alberto"].every((x) => pastedRows.some((r) => r.includes(`Reserved for ${x}`))) && (await page.getByText("1 spot left").count()) === 1, JSON.stringify(pastedRows.slice(0, 4)).slice(0, 240));
   check("and the court shows booked by the organiser", (await page.getByTestId("court-booked").innerText().catch(() => "")).includes("Court booked ✓ (by Nok)"), await page.getByTestId("court-booked").innerText().catch(() => "no court-booked"));
+  const join = page.getByTestId("join-booking");
+  const joinLine = { n: await painted(join), text: await join.innerText().catch(() => ""), href: await join.getAttribute("href").catch(() => null), target: await join.getAttribute("target").catch(() => null) };
+  check("the match page shows 'Join this booking on The Padel Society' as a plain link, its query string removed", joinLine.n === 1 && joinLine.text.includes("Join this booking on The Padel Society") && joinLine.href === INVITE && joinLine.target === "_blank", JSON.stringify(joinLine));
   const pm = await fetch(`${BASE}/api/v1/matches/${pastedCode}`).then((r) => r.json()).then((j) => j.match ?? j);
   check("the API agrees: the club, 90 minutes, court 3, not listed, booked by Nok", pm.venue?.slug === SLUG && pm.durationMinutes === 90 && pm.venue?.court === "3" && pm.listed === false && pm.courtBooked?.by === "Nok", JSON.stringify({ v: pm.venue, d: pm.durationMinutes, l: pm.listed, b: pm.courtBooked }));
 } finally {
