@@ -76,6 +76,11 @@ export const LIMITS = {
    * match notices and the codes need the other seventy (docs/OPERATING.md).
    */
   bookMailAnswersPerDay: 30,
+  /**
+   * book@<apex>: answers to one address in a day. The answer goes to the From address, which anybody
+   * can fake, so a stranger gets three answers a day at most, and one address cannot spend the thirty.
+   */
+  bookMailAnswersPerAddressPerDay: 3,
   feedbackPerIpPerDay: 5,
   // Public API and MCP: open without a key, roomier with one.
   apiKeysPerIpPerDay: 10,

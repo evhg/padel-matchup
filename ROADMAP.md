@@ -950,15 +950,18 @@ Everything in this list is live. The README describes each in detail.
   No WhatsApp template carries the message yet.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
-  writes the booking in a mail. One answer comes back from book@ with what Kicksmash read and the link
-  to the filled match form. Nothing else happens: no match, no held name, no sign-in link, and nothing
-  of the mail is kept. A robot, a bounce, a list, our own domain and a mail with no booking get no
-  answer. One address gets thirty reads a day, and book@ sends thirty answers a day in total
-  (`src/lib/booking/bookMail.ts`). A pasted invitation that a platform makes for strangers (a Padel
+  writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and
+  the length that Kicksmash read, and the link to the filled match form. The court, the price and the
+  players go only in the link, so a faked sender cannot make book@ repeat a stranger's words. Nothing
+  else happens: no match, no held name, no sign-in link, no link of the mail opened, and nothing of the
+  mail is kept. A robot, a bounce, a list, our own domain, a reply that quotes the answer and a mail
+  with no booking get no answer. One address gets three answers and thirty reads a day, and book@
+  sends thirty answers a day in total (`src/lib/booking/bookMail.ts`). A pasted invitation that a platform makes for strangers (a Padel
   Society invite, a Playtomic match, a MATCHi share) now goes onto the match. The match page shows
   "Join this booking on The Padel Society", so the fourth player can join the booking in the
   platform's app too. The query string goes, and a PodPlay invite or an email's link never shows
-  (`madeToShare` in `src/lib/booking/platforms.ts`). The bot's "Create match" carries it too. "Play
+  (`madeToShare` in `src/lib/booking/platforms.ts`). The create form shows the whole link, and the
+  organiser can take it off with "Don't show this link". The bot's "Create match" carries it too. "Play
   again" does not copy it to the next game.
 - **A booking screenshot fills the match form (11 October 2026, no migration).** The owner's decision
   of 11 October 2026 (DECIDING rule 9). The paste box on the first page has "Add screenshot". The

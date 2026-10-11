@@ -458,6 +458,7 @@ try {
   check("the players come 'from your booking', and nothing is marked missing", (await page.getByTestId("carried-players").innerText()).includes("2 players from your booking") && (await page.getByTestId("carried-players").innerText()).includes("Danny · Alberto") && (await page.getByTestId("paste-missing-when").count()) === 0 && (await page.getByTestId("paste-missing-club").count()) === 0);
   check("'Court booked by me' stands ticked, and the match stays off the venue board", (await page.getByTestId("booked-by-me").isChecked()) && (await page.getByRole("checkbox", { name: /Show on the venue board/ }).isChecked()) === false);
   check("the form says the match page will show the booking's invitation", (await page.getByTestId("paste-invite").innerText().catch(() => "")).includes("join the booking on The Padel Society"), await page.getByTestId("paste-invite").innerText().catch(() => "no paste-invite"));
+  check("and the form shows that link itself, without its query string, so the organiser sees what the match will show", (await page.getByTestId("paste-invite-link").innerText().catch(() => "")) === "thepadelsociety.app.link/AbCdEf12345", await page.getByTestId("paste-invite-link").innerText().catch(() => "no paste-invite-link"));
   await page.getByRole("button", { name: "Create & get the link" }).click();
   const madeBy = Date.now() + 30_000;
   while (!/\/[^/]{4}\/share$/.test(page.url()) && Date.now() < madeBy) {
@@ -474,6 +475,31 @@ try {
   check("the match page shows 'Join this booking on The Padel Society' as a plain link, its query string removed", joinLine.n === 1 && joinLine.text.includes("Join this booking on The Padel Society") && joinLine.href === INVITE && joinLine.target === "_blank", JSON.stringify(joinLine));
   const pm = await fetch(`${BASE}/api/v1/matches/${pastedCode}`).then((r) => r.json()).then((j) => j.match ?? j);
   check("the API agrees: the club, 90 minutes, court 3, not listed, booked by Nok", pm.venue?.slug === SLUG && pm.durationMinutes === 90 && pm.venue?.court === "3" && pm.listed === false && pm.courtBooked?.by === "Nok", JSON.stringify({ v: pm.venue, d: pm.durationMinutes, l: pm.listed, b: pm.courtBooked }));
+
+  // A create link anybody can write carries a made-to-share link too (another booking's Playtomic match).
+  // The form shows the link itself, not only the platform's name, and one tap keeps it off the match.
+  const CRAFTED = "https://playtomic.io/matches/0b0e3c1a-1234-4abc-9def-0123456789ab";
+  await page.goto(`${BASE}/?src=paste&venue=${encodeURIComponent(CLUB)}&date=${pasteDay}&time=20:00&tz=${encodeURIComponent(clubZone)}&invite=${encodeURIComponent(CRAFTED)}`);
+  await page.getByTestId("paste-invite").waitFor({ timeout: 20000 });
+  const craftedShown = await page.getByTestId("paste-invite-link").innerText().catch(() => "");
+  check("a crafted create link's invitation shows on the form in full", craftedShown === "playtomic.io/matches/0b0e3c1a-1234-4abc-9def-0123456789ab", craftedShown || "no paste-invite-link");
+  // The click lands once React has hydrated the form: tap again until the line goes, for five seconds at most.
+  const dropBy = Date.now() + 5000;
+  while ((await page.getByTestId("paste-invite").count()) > 0 && (await page.getByRole("button", { name: "Don't show this link" }).count()) > 0 && Date.now() < dropBy) {
+    await page.getByRole("button", { name: "Don't show this link" }).click();
+    await page.waitForTimeout(250);
+  }
+  check("one tap on 'Don't show this link' takes it off the form", (await page.getByTestId("paste-invite").count()) === 0);
+  await page.getByRole("button", { name: "Create & get the link" }).click();
+  const craftedBy = Date.now() + 30_000;
+  while (!/\/[^/]{4}\/share$/.test(page.url()) && Date.now() < craftedBy) {
+    if (await page.getByTestId("create-error").count()) throw new Error(`create refused: ${await page.getByTestId("create-error").innerText()}`);
+    await page.waitForTimeout(250);
+  }
+  const craftedCode = page.url().split("/").slice(-2)[0];
+  await page.goto(`${BASE}/${craftedCode}`);
+  await page.locator("main h1").first().waitFor({ timeout: 15000 });
+  check("and the match it makes shows no invitation", (await page.getByTestId("join-booking").count()) === 0 && craftedCode !== pastedCode, craftedCode);
 } finally {
   await browser.close();
 }

@@ -104,6 +104,8 @@ export function CreateEventForm({
   // A pasted booking's day and hour are the club's, and an empty one is left empty for the organiser: the browser's zone moves neither.
   const touched = useRef(Boolean(initialValues?.date) || Boolean(booking));
   const [bookedByMe, setBookedByMe] = useState(Boolean(booking?.booked));
+  // A create link anybody can write may carry an invitation (another booking's): the form shows the link itself, and one tap takes it off.
+  const [invite, setInvite] = useState(booking?.invite ?? null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -170,7 +172,7 @@ export function CreateEventForm({
         cost: values.cost || undefined,
         payNote: values.payNote || undefined,
         booked: booking ? bookedByMe : undefined,
-        invite: booking?.invite?.url,
+        invite: invite?.url,
       });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
@@ -199,10 +201,18 @@ export function CreateEventForm({
           </span>
         </label>
       )}
-      {booking?.invite && (
-        <p className="-mt-2 px-1 text-xs text-muted" data-testid="paste-invite">
-          🔗 {t("create.inviteShown", { platform: booking.invite.platform })}
-        </p>
+      {invite && (
+        <div className="-mt-2 px-1 text-xs text-muted" data-testid="paste-invite">
+          <p>🔗 {t("create.inviteShown", { platform: invite.platform })}</p>
+          <p className="mt-1 flex items-start gap-3">
+            <span className="min-w-0 flex-1 break-all font-semibold text-ink" data-testid="paste-invite-link">
+              {invite.url.replace(/^https:\/\//, "")}
+            </span>
+            <button type="button" className="shrink-0 font-semibold underline" onClick={() => setInvite(null)}>
+              {t("create.inviteRemove")}
+            </button>
+          </p>
+        </div>
       )}
       {error && <p className="text-sm font-semibold text-danger" data-testid="create-error">{error}</p>}
       <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>

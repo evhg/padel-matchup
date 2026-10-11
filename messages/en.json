@@ -237,7 +237,8 @@
     "pasteNoClub": "Your booking did not name the club. Pick it here.",
     "pasteCheckClub": "We took the club of your last match. Check it here.",
     "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day.",
-    "inviteShown": "The match page shows your invite link. Other players can then join the booking on {platform} too."
+    "inviteShown": "The match page shows your invite link. Other players can then join the booking on {platform} too.",
+    "inviteRemove": "Don't show this link"
   },
   "share": {
     "title": "Your match is live",
@@ -690,13 +691,11 @@
     "bookDay": "Day",
     "bookTime": "Time",
     "bookLength": "Length",
-    "bookCourt": "Court",
-    "bookPrice": "Price",
-    "bookNames": "Players",
     "bookMinutes": "{minutes} minutes",
     "bookMissing": "Not in your booking: {fields}.",
     "bookOpen": "Open the filled form. Check it, then tap the button to make the match:",
-    "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email."
+    "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email. If you mark this answer as spam, it keeps your address only so that it never writes to you again.",
+    "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form."
   },
   "errors": {
     "not_found": "We couldn't find that.",

@@ -385,6 +385,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
   hundred emails a day for everything, so book@'s daily cap is thirty, not the hundred first pencilled
   in: an answer robot at a hundred would have silenced every match notice on a busy day. Before a
   feature sends on its own, find the plan's whole-app ceiling in docs/OPERATING.md.
+- **An automatic answer to a From address is a mail to whoever the sender typed there.** book@'s
+  first build passed every test and a review still found four ways to send a stranger mail from our
+  domain (11 October 2026): the answer repeated the names it read ("Players: Visit claimprize.example"),
+  so a forged From made us carry the forger's words; it opened a forwarded button's link, which can
+  confirm or cancel on the platform; it had no limit for one recipient, so thirty forged mails were
+  thirty answers to one victim; and an Outlook reply quoted the answer, which read as a booking again.
+  An auto-answer says only what it read in fixed shapes, opens nothing, counts per recipient, and
+  never answers its own words (`tests/book-mail.test.ts`).
 - **A server action takes 1 MB, and so does every upload through one.** `serverActions.bodySizeLimit`
   in `next.config.ts` holds every action's body to 1 MB, and a body past it never reaches the action:
   the browser gets an error, and the page says "We could not read it". The screenshot door was briefed

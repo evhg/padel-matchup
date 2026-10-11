@@ -3,6 +3,7 @@ import { eq, like } from "drizzle-orm";
 import type { Db } from "@/db";
 import { clubs, emailMarks, events, feedback, metricsDaily, outreach, players, slots } from "@/db/schema";
 import { POST as inboundWebhook } from "@/app/api/inbound/resend/route";
+import { readBooking } from "@/lib/domain/bookingPaste";
 import { machineMail, mailText, ownDomain } from "@/lib/domain/bookMail";
 import { dayKey } from "@/lib/domain/metrics";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
@@ -28,11 +29,14 @@ let sent: Sent[] = [];
 let outside: string[] = [];
 let mailbox: Record<string, Record<string, unknown>> = {};
 let n = 0;
+/** Resend refuses the next sends (a 500), as during an outage. */
+let failSend = false;
 
 function stubResend() {
   vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const u = String(input);
     if (u === "https://api.resend.com/emails") {
+      if (failSend) return new Response(JSON.stringify({ message: "internal error" }), { status: 500, headers: { "Content-Type": "application/json" } });
       sent.push({ url: u, body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown> });
       return new Response(JSON.stringify({ id: `re_${sent.length}` }), { headers: { "Content-Type": "application/json" } });
     }
@@ -93,10 +97,10 @@ describe("book@: a booking by email gets the filled form, and nothing else", () 
     expect(mail).toMatchObject({ from: "Kicksmash <book@kicksma.sh>", to: ["cath@gmail.example"], reply_to: "book@kicksma.sh", subject: "Your match form is ready" });
     expect(mail.headers).toMatchObject({ "In-Reply-To": "<bm_1@mail.example>", "Auto-Submitted": "auto-replied" });
     const text = String(mail.text);
-    for (const line of ["Club: WAREHAUS.club", "Day: Mon, Oct 12", "Time: 18:00–19:30", "Length: 90 minutes", "Court: 3", "Players: Danny, Alberto"]) expect(text).toContain(line);
-    // The one field the words did not give is named.
-    expect(text).toContain("Not in your booking: price.");
+    for (const line of ["Club: WAREHAUS.club", "Day: Mon, Oct 12", "Time: 18:00–19:30", "Length: 90 minutes"]) expect(text).toContain(line);
     const url = text.split("\n").find((l) => l.startsWith("https://"))!;
+    // The free-text fields (the court, the price, the players) ride in the form's link only, never in the words of the mail.
+    expect(text.replace(url, "")).not.toMatch(/Court:|Price:|Players:|Danny|Not in your booking/);
     const form = new URL(url);
     expect(form.origin).toBe("https://kicksma.sh");
     expect(Object.fromEntries(form.searchParams)).toEqual({ src: "paste", venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: "Asia/Bangkok", len: "90", court: "3", names: "Danny,Alberto", booked: "1", invite: LINK });
@@ -131,12 +135,105 @@ describe("book@: a booking by email gets the filled form, and nothing else", () 
     expect(String(sent[0].body.text)).not.toMatch(/\/p\/|token|tg=/);
   });
 
+  it("a forged From cannot make book@ say the sender's words: names, a court and a price stay out of the mail", async () => {
+    const r = await deliver({ from: "Victim <victim@stranger.example>", text: "Warehaus Mon 12 Oct 18:00-19:30 court 3 ฿1,600\nPlayers: Ana, Visit claimprize.example now, Kicksmash-refund.example, Danny" });
+    expect(r.book).toBe("answered");
+    const text = String(sent[0].body.text);
+    const url = text.split("\n").find((l) => l.startsWith("https://"))!;
+    // The words of the mail: the fixed shapes only (the club from the clubs table, the day, the time, the length).
+    const words = text.replace(url, "");
+    expect(words).not.toMatch(/claimprize|refund\.example|Danny|Ana\b|฿|1,600|Court|Players/);
+    expect(words).toContain("Club: WAREHAUS.club");
+    // The form still carries what was read, for whoever opens it to check.
+    expect(new URL(url).searchParams.get("court")).toBe("3");
+  });
+
+  it("opens no link of a mail: a forwarded button that carries a token is never fetched", async () => {
+    const html = `<p>Mon 12 Oct 18:00 - 19:30</p><a href="https://app.playtomic.io/bookings/confirm-attendance?token=SECRET123">Confirm attendance</a>`;
+    const r = await deliver({ from: "Cath <cath.html@gmail.example>", subject: "Fwd: Your booking", html });
+    expect(r.book).toBe("answered");
+    expect(outside).toEqual([]);
+    expect(String(sent[0].body.text)).not.toMatch(/SECRET123|token|confirm-attendance/);
+  });
+
+  it("answers a mail with only a platform's link with the form, and says it found the link", async () => {
+    expect((await deliver({ from: "pl@mail.example", subject: "Our game", text: LINK })).book).toBe("answered");
+    const text = String(sent[0].body.text);
+    expect(text.startsWith("Kicksmash found the link of your booking")).toBe(true);
+    expect(text).not.toMatch(/read this in your booking|Not in your booking/);
+  });
+
+  it("never answers its own answer when a reply quotes it (Outlook), so a robot that quotes cannot loop", async () => {
+    expect((await deliver({ from: "ol@mail.example", text: OWNER_TEXT })).book).toBe("answered");
+    const ours = String(sent[0].body.text);
+    const reply = `Thanks a lot!\n\n________________________________\nFrom: Kicksmash <book@kicksma.sh>\nSent: Sunday, October 11, 2026 1:00 PM\nTo: ol@mail.example\nSubject: Your match form is ready\n\n${ours}`;
+    expect((await deliver({ from: "ol@mail.example", subject: "RE: Your match form is ready", text: reply })).book).toBe("skipped:quote");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("reads a forwarded confirmation whose first lines start with a header word (Date, Fecha)", async () => {
+    const gmail = "Can you make the match?\n\n---------- Forwarded message ---------\nFrom: Playtomic <no-reply@playtomic.io>\nDate: Sat, 10 Oct 2026 at 14:02\nSubject: Booking confirmed\nTo: <gm@mail.example>\n\n\nDate: Monday 12 October 2026\nTime: 18:00 - 19:30\nCourt: 3\nClub: WAREHAUS.club";
+    const outlook = "¿Me haces el partido?\n\n________________________________\nDe: Playtomic <no-reply@playtomic.io>\nEnviado: sábado, 10 de octubre de 2026 14:02\nPara: es@mail.example\nAsunto: Reserva confirmada\n\nFecha: lunes 12 de octubre\nHora: 18:00 - 19:30\nClub: WAREHAUS.club";
+    expect((await deliver({ from: "gm@mail.example", subject: "Fwd: Booking confirmed", text: gmail })).book).toBe("answered");
+    expect((await deliver({ from: "es@mail.example", subject: "RV: Reserva confirmada", text: outlook })).book).toBe("answered");
+    const dates = sent.map((s) => new URL(String(s.body.text).split("\n").find((l) => l.startsWith("https://"))!).searchParams.get("date"));
+    expect(dates).toEqual(["2026-10-12", "2026-10-12"]);
+  });
+
+  it("answers one address three times a day at most, whatever the sender claims", async () => {
+    const capRow = async () => (await db.select().from(metricsDaily).where(eq(metricsDaily.key, "rl:bookmail:day"))).find((r) => r.day === dayKey(NOW))?.value ?? 0;
+    const used = await capRow();
+    const got = [];
+    for (let i = 0; i < 4; i++) got.push((await deliver({ from: `Anyone ${i} <target@victim.example>`, text: OWNER_TEXT })).book);
+    expect(got).toEqual(["answered", "answered", "answered", "skipped:limit"]);
+    expect(sent).toHaveLength(3);
+    // The refused fourth takes no place under the day's cap, and no address is in the limit's key.
+    expect(await capRow()).toBe(used + 3);
+    const keys = (await db.select({ key: metricsDaily.key }).from(metricsDaily)).map((r) => r.key);
+    expect(keys).toContain(`rl:bookmail_to:${addressKey("target@victim.example")}`);
+    expect(keys.some((k) => /victim/i.test(k))).toBe(false);
+  });
+
+  it("counts each answer as a sent email, so the service board's Resend lines see book@", async () => {
+    const before = await counter(db, "emails_sent");
+    expect((await deliver({ from: "count@mail.example", text: OWNER_TEXT })).book).toBe("answered");
+    expect(await counter(db, "emails_sent")).toBe(before + 1);
+    expect((await deliver({ from: "count2@mail.example", subject: "Hi", text: "No booking here." })).book).toBe("skipped:nothing");
+    expect(await counter(db, "emails_sent")).toBe(before + 1);
+  });
+
+  it("gives its place under the day's cap back when Resend refuses the send", async () => {
+    const capRow = async () => (await db.select().from(metricsDaily).where(eq(metricsDaily.key, "rl:bookmail:day"))).find((r) => r.day === dayKey(NOW))?.value ?? 0;
+    const used = await capRow();
+    failSend = true;
+    try {
+      expect((await deliver({ from: "outage@mail.example", text: OWNER_TEXT })).book).toBe("skipped:send");
+    } finally {
+      failSend = false;
+    }
+    expect(await capRow()).toBe(used);
+  });
+
+  it("writes the outcome to the function log, with no address in it", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    try {
+      await deliver({ from: "Log <log@mail.example>", subject: "Hi", text: "Nothing to read here." });
+      expect(info).toHaveBeenCalledWith("book_mail", "skipped:nothing");
+      expect(JSON.stringify(info.mock.calls)).not.toMatch(/@/);
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it("answers in Russian or Spanish when the mail is written in it, else in English", async () => {
     await deliver({ from: "oleg@mail.example", text: `Бронь: Warehaus 12 октября 18:00-19:30 корт 3 ${LINK}` });
     await deliver({ from: "marta@mail.example", text: `Reserva para jugar el partido de pádel: Warehaus 12 de octubre 18:00-19:30 pista 3 ${LINK}` });
-    expect(sent.map((s) => s.body.subject)).toEqual(["Форма матча готова", "Tu formulario de partido está listo"]);
+    // The sender's own words decide, not the forwarded confirmation's club ("Las" and "á" read as Spanish).
+    const rozas = `Can you set this up?\n\n---------- Forwarded message ---------\nFrom: Playtomic <no-reply@playtomic.io>\nDate: Sat, 10 Oct 2026 at 14:02\nSubject: Your booking at Club de Pádel Las Rozas\nTo: <ann@mail.example>\n\nClub de Pádel Las Rozas\nMon 12 Oct, 18:00 - 19:30\nCourt 3\n${LINK}`;
+    await deliver({ from: "ann@mail.example", subject: "Fwd: Your booking at Club de Pádel Las Rozas", text: rozas });
+    expect(sent.map((s) => s.body.subject)).toEqual(["Форма матча готова", "Tu formulario de partido está listo", "Your match form is ready"]);
     expect(String(sent[0].body.text)).toContain("Клуб: WAREHAUS.club");
-    expect(String(sent[1].body.text)).toContain("Pista: 3");
+    expect(String(sent[1].body.text)).toContain("Hora: 18:00–19:30");
   });
 
   it("never answers an auto-reply, a bounce, a list, our own domain, or a mail with no booking in it", async () => {
@@ -201,6 +298,23 @@ describe("book@: a booking by email gets the filled form, and nothing else", () 
     // Neither got an answer from book@.
     expect(sent.some((s) => String(s.body.from).includes("book@"))).toBe(false);
   });
+
+  it("only book@ and feedback@ at our own domain leave the desk, and a mail that also goes to claude@ stays on the desk", async () => {
+    const press = "Hello, I write for a padel magazine. Could we talk about Kicksmash this week?";
+    const cases: { from: string; to: string[]; text: string }[] = [
+      // Another domain's book@ and feedback@ are not ours.
+      { from: "Ines <ines@hotel.example>", to: ["Hotel desk <book@hotel.example>", "claude@kicksma.sh"], text: press },
+      { from: "Jon <jon@hotel.example>", to: ["Hotel <feedback@hotel.example>", "claude@kicksma.sh"], text: press },
+      // Our own book@ copied on a mail to claude@: the desk keeps it, and book@ does not answer it.
+      { from: "Kai <kai@padelmag.example>", to: ["claude@kicksma.sh", "book@kicksma.sh"], text: OWNER_TEXT },
+    ];
+    for (const mail of cases) {
+      const r = await deliver({ ...mail, subject: "Press question" });
+      expect([mail.from, r.book, r.feedback, r.fresh]).toEqual([mail.from, undefined, undefined, true]);
+      expect((await db.select().from(outreach).where(eq(outreach.counterpartEmail, mail.from.match(/<(.+)>/)![1]))).length).toBe(1);
+    }
+    expect(sent.some((s) => String(s.body.from).includes("book@"))).toBe(false);
+  });
 });
 
 describe("book@'s rules, pure", () => {
@@ -261,6 +375,23 @@ describe("book@'s rules, pure", () => {
     expect(r.text).not.toContain("color:red");
     expect(r.links).toEqual(["https://thepadelsociety.app.link/AbCdEf12345?_p=1&x=2"]);
     expect(mailText("x", "a".repeat(50_000), null).text.length).toBeLessThanOrEqual(4000);
+  });
+
+  it("reads the entities an HTML-only mail writes: figures, dashes and accented letters", () => {
+    const read = (html: string) => readBooking({ text: mailText(null, null, html).text, clubs: [], now: NOW, tz: "UTC" });
+    const figures = read("<p>Mon 12 Oct</p><p>18:00&#160;-&#160;19:30</p><p>Court&#160;3</p>");
+    expect([figures.minutes, figures.court]).toEqual([90, "3"]);
+    expect(read("<p>Mon 12 Oct 18:00&nbsp;&ndash;&nbsp;19:30</p>").minutes).toBe(90);
+    expect(read("<p>Mon 12 Oct 18:00&#x2013;19:30</p>").minutes).toBe(90);
+    expect(mailText(null, null, "<p>S&aacute;bado &amp; Espa&ntilde;a &mdash; &#1044;&#1072;</p>").text).toBe("Sábado & España — Да");
+    // An entity out of bounds reads as nothing, and an escaped one stays escaped.
+    expect(mailText(null, null, "<p>a&#0;b&#x110000;c &amp;#160;</p>").text).toBe("a b c &#160;");
+  });
+
+  it("keeps the sender's own words apart from what they forwarded, for the answer's language", () => {
+    expect(mailText("Fwd: Reserva en Club de Pádel Las Rozas", "Can you set this up?\n\n---------- Forwarded message ---------\nFrom: x@y.example\n\nClub de Pádel Las Rozas", null).own).toBe("Can you set this up?");
+    expect(mailText("Reserva para el partido", "https://thepadelsociety.app.link/AbCdEf12345", null).own).toBe("Reserva para el partido\nhttps://thepadelsociety.app.link/AbCdEf12345");
+    expect(mailText("Fwd: Reserva", "---------- Forwarded message ---------\nFrom: x@y.example\n\nPista 3", null).own).toBe("");
   });
 
   it("never stalls on a mail built to stall a pattern", () => {

@@ -237,7 +237,8 @@
     "pasteNoClub": "Tu reserva no nombra el club. Elígelo aquí.",
     "pasteCheckClub": "Tomamos el club de tu último partido. Compruébalo aquí.",
     "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día.",
-    "inviteShown": "La página del partido muestra tu enlace de invitación. Así otros jugadores también se unen a la reserva en {platform}."
+    "inviteShown": "La página del partido muestra tu enlace de invitación. Así otros jugadores también se unen a la reserva en {platform}.",
+    "inviteRemove": "No mostrar este enlace"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -690,13 +691,11 @@
     "bookDay": "Día",
     "bookTime": "Hora",
     "bookLength": "Duración",
-    "bookCourt": "Pista",
-    "bookPrice": "Precio",
-    "bookNames": "Jugadores",
     "bookMinutes": "{minutes} minutos",
     "bookMissing": "No está en tu reserva: {fields}.",
     "bookOpen": "Abre el formulario relleno. Revísalo y toca el botón para crear el partido:",
-    "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo."
+    "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo. Si marcas esta respuesta como spam, guarda tu dirección solo para no volver a escribirte.",
+    "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario."
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",
