@@ -64,6 +64,13 @@ export const LIMITS = {
    */
   bookingPastesPerIpPerDay: 30,
   /**
+   * Booking screenshots the AI model reads in a day, for everybody together: the owner's number (11
+   * October 2026, DECIDING rule 9). Each is one Messages API call, about one US cent.
+   */
+  bookingShotsPerDay: 20,
+  /** Booking screenshots read for one address in a day, so that one person cannot spend the day's twenty. */
+  bookingShotsPerIpPerDay: 5,
+  /**
    * book@<apex>: answers sent in a day, for every sender together, because a sender's address can be
    * faked. Thirty, because Resend's free plan sends a hundred emails a day for the whole app, and the
    * match notices and the codes need the other seventy (docs/OPERATING.md).

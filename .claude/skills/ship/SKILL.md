@@ -385,6 +385,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   hundred emails a day for everything, so book@'s daily cap is thirty, not the hundred first pencilled
   in: an answer robot at a hundred would have silenced every match notice on a busy day. Before a
   feature sends on its own, find the plan's whole-app ceiling in docs/OPERATING.md.
+- **A server action takes 1 MB, and so does every upload through one.** `serverActions.bodySizeLimit`
+  in `next.config.ts` holds every action's body to 1 MB, and a body past it never reaches the action:
+  the browser gets an error, and the page says "We could not read it". The screenshot door was briefed
+  at "about 1.5 MB" (11 October 2026); the browser now shrinks the picture to 900 KB, and
+  `tests/booking-shot.test.ts` fails when the picture and the text together could pass the limit.
+  Raising the limit raises it for every action, so a bigger upload gets a route of its own.
 
 ### Wall clock
 

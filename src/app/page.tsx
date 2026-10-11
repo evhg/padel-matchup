@@ -8,6 +8,13 @@ import { PasteBooking } from "@/components/PasteBooking";
 import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { Footer, Header } from "@/components/Header";
 
+/**
+ * The paste box's "Add screenshot" waits on one model call (`readScreenshotAction`, 20 seconds at most),
+ * and a server action runs in this page's function. Every other request here ends in well under a second,
+ * so the longer ceiling costs nothing for them.
+ */
+export const maxDuration = 30;
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
   const locale = await getLocale();

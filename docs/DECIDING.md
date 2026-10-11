@@ -22,6 +22,12 @@ The first global padel match-up layer: one link that works in any chat, a card t
 
    So the paste box on the landing page is the first door for a screenshot. Kicksmash sends each image to Anthropic for one read. It keeps neither the image nor the reply. Twenty reads a day is the limit for all screenshots together.
 
+   Only the image goes to Anthropic. The person's typed words do not go there: Kicksmash's own reader reads them. Kicksmash keeps no image, no reply and no log line of either. It counts the reads in `metrics_daily` (`paste_shot_ok`, `paste_shot_fail`, `paste_shot_off`).
+
+   Kicksmash checks three limits before each call. One address gets five reads a day, so one person cannot use all twenty. All addresses together get twenty reads a day. No call goes when the month's cost reaches the owner's cap (`ANTHROPIC_MONTHLY_CAP_USD`). No call goes when Anthropic's last answer to our key was a refusal. Then the box says in one line that it cannot read a screenshot now, and the text box still works (`src/lib/booking/screenshot.ts`).
+
+   Kicksmash does not trust the reply. It reads each field again with the rules of a typed paste, and a field in a wrong shape goes. The typed words win over the image, field by field. We decline a request to keep a screenshot or its reply, or to read a screenshot past these limits.
+
 10. **Honest answers.** We tell people what we did, what we did not do, and why, in their language, in one message. We never promise a date. We say thank you when their note changed the product, and we name the change. We owe nobody an answer: the thank-you says the note was read and that the person hears if something gets built, never "within a day". A shipped message is one plain sentence in the first person, what changed and nothing else: no desk, no dates, no process.
 
 ## Verdicts

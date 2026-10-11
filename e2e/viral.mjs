@@ -96,6 +96,15 @@ try {
   check("it opens one box with the hint", await pasteBox.isVisible());
   await kim.getByRole("button", { name: "Read my booking" }).click();
   check("an empty box answers with a sentence, and stays", (await kim.getByTestId("paste-note").innerText()) === "Paste the link or the text of your booking first." && new URL(kim.url()).search === "");
+  // "Add screenshot" (the owner, 11 October 2026, DECIDING rule 9). This server holds no model key
+  // (e2e/run.mjs pins it empty), so the picture goes all the way through: the browser draws it again as
+  // a JPEG, the server action takes it and answers with one plain line, and the words below still read
+  // after it. A one-pixel PNG is enough for the browser to open.
+  const PNG_1PX = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  check("the box offers 'Add screenshot', and says the picture is read once and not kept", (await kim.getByRole("button", { name: "Add screenshot" }).isVisible()) && (await kim.getByText("An AI model reads your screenshot once. We do not keep it.").isVisible()));
+  await kim.getByTestId("paste-shot-file").setInputFiles({ name: "booking.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+  await kim.getByTestId("paste-note").filter({ hasText: "screenshot" }).waitFor({ timeout: 20000 });
+  check("with no key on this server, a screenshot gets one plain line, and the page stays", (await kim.getByTestId("paste-note").innerText()) === "Reading a screenshot is not available now. Paste the link or the text instead." && new URL(kim.url()).search === "", await kim.getByTestId("paste-note").innerText());
   await pasteBox.fill(bkText);
   check("the sentence goes once the box changes", (await kim.getByTestId("paste-note").count()) === 0);
   await shot(kim, "v6-paste-door");

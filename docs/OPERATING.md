@@ -99,7 +99,8 @@ month (Vercel's Hobby figures as read on 10 October 2026; the usage page has the
 function that waits on the network counts against the memory, not the CPU, for every second it waits.
 Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day (book@ may
 spend thirty of them: "book@kicksma.sh", below).
-Anthropic: the owner's cap. Tavily: 1,000 credits a month. Telegram: 30 messages a second,
+Anthropic: the owner's cap (booking screenshots may use twenty calls a day of it: "A booking
+screenshot", below). Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. A crew's own Telegram group (DECIDING rule 31) sends every message to the
 webhook, because an admin bot receives them all: one invocation each, dropped before any database
 read unless it is a command, a reply, a link or a word the bot acts on. A busy group of 200 messages
@@ -419,6 +420,27 @@ twice is answered once (`rl:bookmail_id:<Resend id>`). Two day counters show the
 climbs and `book_mail_answered` stays at zero, read the reasons in Vercel's function log of the
 webhook. If book@ gets no mail at all, Resend's receiving domain may not route that address: send
 one test mail and look for `email.received` in Resend.
+
+**A booking screenshot.** "Add screenshot" in the landing page's paste box sends one picture to the
+AI model for one read (DECIDING rule 9, the owner, 11 October 2026). The call uses `ANTHROPIC_API_KEY`
+and the model that `LISTEN_MODEL` names, and `recordModelCall` counts its tokens with every other
+call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
+Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call:
+
+| Limit | Number | Row |
+| --- | --- | --- |
+| Reads for one address a day | 5 (`LIMITS.bookingShotsPerIpPerDay`) | `rl:shot:<hash of the address>` |
+| Reads a day, all addresses together | 20 (`LIMITS.bookingShotsPerDay`, the owner's number) | `rl:shot:day` |
+| The month's spend | the owner's cap, `ANTHROPIC_MONTHLY_CAP_USD` | `anthropic_cost_cents`, else `anthropic_in` and `anthropic_out` |
+| The key | no call while the last answer was a refusal | `anthropic_refused_at` against `anthropic_ok_at` |
+
+Each screenshot also counts as one paste (`rl:paste:*`, thirty a day). A call that Anthropic does not
+accept gives its place under the twenty back. At one cent a read, twenty reads a day cost about six
+US dollars a month. Three day counters show the door: `paste_shot_ok` (a read with a booking in it),
+`paste_shot_fail` (a read with none) and `paste_shot_off` (no call: no key, a limit, the cap or a
+refused key). When `paste_shot_off` climbs while the key works, the twenty are spent early: tell the
+owner the number, because the cap is the owner's. The landing page's function may run 30 seconds
+(`maxDuration` in `src/app/page.tsx`), because the call may take 20.
 
 ## The Sunday digest, one line to watch
 

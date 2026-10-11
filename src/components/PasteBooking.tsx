@@ -2,8 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useId, useState, useTransition } from "react";
-import { readBookingAction } from "@/actions/events";
+import { useId, useRef, useState, useTransition } from "react";
+import { readBookingAction, readScreenshotAction } from "@/actions/events";
+import { shrinkShot } from "@/lib/shrinkShot";
 
 /**
  * "Booked already? Paste it": the landing page's door for a court already booked in a platform's app
@@ -14,6 +15,13 @@ import { readBookingAction } from "@/actions/events";
  * the box open and says so (`pasteNothing`). Nothing is created until the organiser taps
  * the form's own button. A paste is one request: thirty a day from one address, and at most one read
  * of the pasted link (DECIDING rule 35).
+ *
+ * "Add screenshot" (the owner, 11 October 2026, DECIDING rule 9) picks a picture of the booking, which
+ * the browser shrinks (`shrinkShot`: a JPEG, 1568 pixels at most on its longest side) and sends at once
+ * with whatever the box holds to `readScreenshotAction`: one read by the AI model, five a day from one
+ * address and twenty a day for everybody, and nothing kept. The typed words win over the picture.
+ * When the picture cannot be read now (no key, a refused key, a cap, the month's cost), the box says
+ * one plain line and the words still work.
  *
  * No `<form>`: this sits beside the create form, and a form inside a form is the bug that once left
  * the landing page's way back in dead (e2e/core.mjs counts nested forms).
@@ -26,24 +34,41 @@ export function PasteBooking({ max }: { max: number }) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const picker = useRef<HTMLInputElement>(null);
+
+  const zoneHere = () => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const answer = (r: Awaited<ReturnType<typeof readScreenshotAction>> | null) => {
+    if (!r) return setNote(t("pasteFailed"));
+    if (!r.ok) return setNote(r.reason === "shot" ? t("pasteShotOff") : r.reason === "limit" ? t("pasteLimit") : r.reason === "nothing" ? t("pasteNothing") : t("pasteEmpty"));
+    setOpen(false);
+    setText("");
+    router.push(r.href);
+  };
 
   const read = () => {
     setNote(null);
     if (!text.trim()) return setNote(t("pasteEmpty"));
+    start(async () => answer(await readBookingAction({ text, tz: zoneHere() }).catch(() => null)));
+  };
+
+  const readShot = (file: File | undefined) => {
+    setNote(null);
+    if (!file) return;
     start(async () => {
-      const zone = (() => {
-        try {
-          return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-        } catch {
-          return undefined;
-        }
-      })();
-      const r = await readBookingAction({ text, tz: zone }).catch(() => null);
-      if (!r) return setNote(t("pasteFailed"));
-      if (!r.ok) return setNote(r.reason === "limit" ? t("pasteLimit") : r.reason === "nothing" ? t("pasteNothing") : t("pasteEmpty"));
-      setOpen(false);
-      setText("");
-      router.push(r.href);
+      const shot = await shrinkShot(file).catch(() => null);
+      if (!shot) return setNote(t("pasteShotBad"));
+      const form = new FormData();
+      form.set("image", shot, "booking.jpg");
+      form.set("text", text);
+      const zone = zoneHere();
+      if (zone) form.set("tz", zone);
+      answer(await readScreenshotAction(form).catch(() => null));
     });
   };
 
@@ -80,6 +105,23 @@ export function PasteBooking({ max }: { max: number }) {
           <button type="button" className="btn-primary mt-3 w-full" disabled={pending} onClick={read} data-testid="paste-read">
             {pending ? t("pasteReading") : t("pasteRead")}
           </button>
+          {/* The picker opens on the button's tap; a new pick of the same file reads again, so the value is cleared each time. */}
+          <input
+            ref={picker}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              readShot(file);
+            }}
+            data-testid="paste-shot-file"
+          />
+          <button type="button" className="btn-ghost mt-2 w-full" disabled={pending} onClick={() => picker.current?.click()} data-testid="paste-shot">
+            📷 {t("pasteShot")}
+          </button>
+          <p className="mt-1 text-center text-xs text-muted">{t("pasteShotNote")}</p>
         </div>
       )}
     </>

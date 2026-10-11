@@ -55,6 +55,9 @@ const env = {
   // token points at nothing: every outbound call fails, which is exactly what the suites assert on.
   LINE_CHANNEL_TOKEN: "e2e-line-token",
   LINE_CHANNEL_SECRET: "e2e-line-secret",
+  // No model key, ever: a machine that holds a real one must not spend it on a suite, and viral.mjs
+  // proves the paste box's "Add screenshot" says its plain line when reading a screenshot is off.
+  ANTHROPIC_API_KEY: "",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {

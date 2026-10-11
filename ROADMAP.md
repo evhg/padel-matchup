@@ -960,6 +960,14 @@ Everything in this list is live. The README describes each in detail.
   platform's app too. The query string goes, and a PodPlay invite or an email's link never shows
   (`madeToShare` in `src/lib/booking/platforms.ts`). The bot's "Create match" carries it too. "Play
   again" does not copy it to the next game.
+- **A booking screenshot fills the match form (11 October 2026, no migration).** The owner's decision
+  of 11 October 2026 (DECIDING rule 9). The paste box on the first page has "Add screenshot". The
+  browser makes the picture smaller and sends it. The AI model reads it once, and the match form opens
+  with what it read. The typed words win over the picture. Kicksmash keeps neither the picture nor the
+  reply. One address gets five reads a day, and all people together get twenty. No read goes past the
+  owner's monthly cost cap, or while Anthropic refuses the key. Then the box says so in one line, and
+  the text still works (`src/lib/booking/screenshot.ts`). The privacy page names the screenshot under
+  Anthropic.
 
 ## The finish line
 
