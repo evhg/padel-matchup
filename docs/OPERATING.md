@@ -322,7 +322,7 @@ and `select slug, availability_at from clubs where availability->>'why' = 'frame
 **When a platform blocks us.** Do nothing that gets around it: no other address, no browser
 disguise, no captcha service, no sign-in. (The one read of a pasted link, below, poses as a chat
 app's preview robot by the owner's word. It is no way around a block: it stops at the first 401, 403
-or 429.) Let the rest run out. If it blocks again after a week,
+or 429, and it does not read a platform that rests or that a switch holds.) Let the rest run out. If it blocks again after a week,
 put the platform in `SCRAPE_DISABLED` and tell the owner in one line. A club on that platform can
 still share its own feed. **When a platform's page changes**, fix the reader in
 `src/lib/booking/adapters/<platform>.ts` with a test from the new page, and merge: the deploy of the
@@ -339,9 +339,12 @@ pastes, once, as WhatsApp's link-preview robot reads it (DECIDING rule 35). The 
 KicksmashBot and `/about#bot`. The read goes only to a host in `PLATFORMS`, over https. It follows
 three redirects at most, stops after four seconds, and reads 256 KB of the page at most. It keeps the
 title, the description, and the kind of link and the match id from a Branch link. It never logs the
-link, because a pasted link can carry a token. Each caller gets thirty pastes a day (`rl:paste:*` rows;
-in the bot the key is the Telegram account, and the "Create match" tap reads the booking again, so it
-counts as a paste too). A paste opens a link only when its words leave out the club, the day or the time.
+link, because a pasted link can carry a token. It does not read a platform while `SCRAPE_DISABLED`,
+`scrape_off_<platform>`, `scrape_off_all` or `scrape_rest_until_<platform>` holds it: the switches of
+the reader of free court times hold this read too, and `paste_preview_off` counts each skip. Each
+caller gets thirty pastes a day (`rl:paste:*` rows; in the bot the key is the Telegram account). The
+bot's "Create match" tap reads the person's words again, never the link, and counts as a paste too.
+A paste opens a link only when its words leave out the club, the day or the time.
 In the bot, a private message that is no booking costs no read; one with a day and a time but no
 platform's link costs one read of the listed clubs. `tg_match_by_paste` counts the matches the bot made
 from a paste. Two day counters

@@ -909,6 +909,20 @@ Everything in this list is live. The README describes each in detail.
   booking links and platforms (Book & Go, PodPlay and The Padel Society are recognised now), which
   migration 0097 writes to the directory's own rows. Nothing books or pays: a player does, in the
   club's own app.
+- **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
+  app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
+  link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
+  fills the club, the day, the time, the length, the court, the price and the players.
+  `src/lib/domain/bookingPaste.ts` is the reader. `src/lib/booking/unfurl.ts` reads a pasted link once,
+  as a chat app's preview robot reads it (DECIDING rule 35). It skips a platform that rests after a
+  block or that a switch holds. On the first page, "Booked already? Paste it" opens the form filled. The
+  form marks what the booking left out and what to check, and keeps the match off the venue board. The
+  create button holds the players and marks the court booked by the organiser ("Court booked by me").
+  In a private chat, the bot says what it read. "Create match" makes the match when the person's own
+  words gave the club, the day and the time. The answer then becomes the match's link, ready for the
+  WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
+  Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
+  Its preview gives the match id only, so the words that the person pastes carry the rest.
 
 ## The finish line
 
@@ -928,25 +942,6 @@ coach whose students book themselves, a club, crews that enter scores); reach (6
 can get a message, and WhatsApp one-to-one waits on the owner's Meta account and number); the
 security steps at 100 real players (`docs/OPERATING.md`). Recommended with it: no new large feature
 until real use asks for one.
-
-## Being built
-
-- **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
-  app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
-  link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
-  then fills the club, the day, the time, the length, the court, the price and the players, and the
-  person checks the form. Built so far: the reader (`src/lib/domain/bookingPaste.ts`), the one read of a
-  pasted link as a chat app's preview robot reads it (`src/lib/booking/unfurl.ts`, DECIDING rule 35 as
-  changed that day), the server's side with its limit (`src/lib/booking/paste.ts`, `readBookingAction`)
-  and Setpoint in the list of platforms; "Booked already? Paste it" on the first page, which opens the
-  form filled, says which fields the booking left out, and keeps the match off the venue board; and the
-  create button, which then holds the players and marks the court booked by the organiser in the same
-  tap ("Court booked by me"). The same paste works in a private chat with the bot
-  (`src/lib/telegram/handlers/paste.ts`): the bot says what it read, "Create match" makes the match with
-  the players held and the court booked, and the answer becomes the match's link, ready for the WhatsApp
-  group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel Society
-  keeps a match's club, day and players in its app's private API, which Kicksmash never calls. Its
-  preview gives the match id only, so the words the person pastes carry the rest.
 
 ## Next, in order
 

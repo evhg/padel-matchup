@@ -926,7 +926,7 @@
     "termsLink": "The full terms →",
     "botTitle": "KicksmashBot",
     "botBody": "KicksmashBot reads the free court times that booking platforms such as Playtomic and MATCHi show on a club's public page, so players can see when a court is free. It reads today's times every 15 minutes at most and the next two days once an hour at most, one request a second, with its name on each request. It never signs in, books or pays, and it stops when a platform blocks it. To ask it to read less, or to stop, write to us:",
-    "botPaste": "When you paste a booking link into Kicksmash, it reads that one link once, the way a chat app reads a link to show its preview. It keeps only what you confirm on the form."
+    "botPaste": "When you paste a booking link into Kicksmash, it reads that one link once, the way a chat app reads a link to show its preview. It does not read a platform that blocked it or asked it to stop. It keeps only the match that you make from it."
   },
   "notices": {
     "title": "Notices",

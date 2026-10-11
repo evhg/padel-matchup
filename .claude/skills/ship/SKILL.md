@@ -292,6 +292,20 @@ learning can be a test, a gate step or a script, make it one and put the story i
 - **A rebuilt Response forgets where it came from.** `new Response(body)` has an empty `url`, so the
   MATCHi reader's check for a redirect to sign in never fired behind the frame, while its own test,
   a stub that set `url`, passed. Test a reader through the frame that production calls it through.
+- **A timeout bounds the wait, not the work.** The read of a pasted link stopped its network at four
+  seconds, and then parsed the 256 KB it had: one long `<meta` tag took 41 s of CPU, because
+  `<meta\b[^>]*>` and an unbounded attribute name backtrack (11 October 2026). A parser of a
+  stranger's page finds each end once (`indexOf`) and bounds every repeat; `tests/booking-unfurl.test.ts`
+  times four pages built to stall it.
+- **A host on an allowlist lends us to whoever holds its zone.** `thepadelsociety.app` went into
+  `PLATFORMS`, and the only place the name appeared was the app's Android package id
+  (`com.thepadelsociety.app`). A package id is not a domain, and that domain's name servers did not answer. The check reads the host's name, never its
+  address, so the zone's holder picks where the server connects. A host joins the list only when the
+  platform is shown to hold it.
+- **A second read at a later clock is another read.** The bot's "Create match" read the pasted words
+  again at the tap, so "Sunday 18:00" pasted at 17:50 and tapped at 18:01 made next Sunday's match, and
+  a link its words left incomplete was fetched twice. A button carries what its answer showed
+  (`pb:c:<start>`), and the second read uses the answer's clock and refuses another start.
 
 ### Wall clock
 
