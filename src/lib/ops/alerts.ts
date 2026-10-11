@@ -5,7 +5,7 @@ import { baseUrl } from "@/lib/config";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
-import { fetchCostReport } from "./anthropic";
+import { AI_FEATURES, fetchCostReport, KEY_REFUSED_LINE } from "./anthropic";
 import { serviceBoard, type ServiceBoard } from "./services";
 
 /**
@@ -28,6 +28,8 @@ const whatNext: Record<string, string> = {
   resend_month: "Past the ceiling Resend refuses to send; the rule is to move up only past fifty emails a day, so I will slow the non-essential mail first.",
   resend_day: "Today's remaining mail waits for tomorrow; reminders go by push and Telegram meanwhile.",
   anthropic: "At the cap the feedback replies and drafts stop until the month turns. Raising the cap is your call in the console.",
+  // A refused key is not the cap: every model call stops, whatever the month's spend.
+  anthropic_key: `Every AI feature is off until a new ANTHROPIC_API_KEY is in Vercel and the app is deployed again: ${AI_FEATURES.join(", ")}.`,
   supabase_db: "I will prune old activity rows and error events before it matters.",
   tavily: "The desk stops searching before the meter does.",
   pg_cron: "The scheduled jobs have not run on time; I am looking at Supabase pg_cron.",
@@ -45,13 +47,17 @@ export async function alertOnServices(db: Db, now = new Date(), board?: ServiceB
   for (const row of b.rows) {
     const crossed = row.state === "alert";
     if (!crossed) continue;
-    const key = `svc_alert_${row.key}_${month}`;
+    // The Anthropic row is red for one of two reasons, and each has its own alert and its own month:
+    // a refused key (`KEY_REFUSED_LINE` leads its usage), or the spend at the cap.
+    const refusedKey = row.key === "anthropic" && row.usage.startsWith(KEY_REFUSED_LINE);
+    const kind = refusedKey ? "anthropic_key" : row.key;
+    const key = `svc_alert_${kind}_${month}`;
     const [seen] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.key, key), eq(metricsDaily.day, dayKey(now)))).limit(1);
     const [seenMonth] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(eq(metricsDaily.key, key)).limit(1);
     if (seen || seenMonth) continue;
-    const pct = row.pct !== null ? ` (${row.pct.toFixed(0)}% of ${row.ceiling})` : "";
-    const next = whatNext[row.key] ?? (row.key.startsWith("scrape_") ? "The platform's page changed at two clubs, so its reader stopped until a deploy of new code. Other platforms and the clubs' own feeds go on; the reader needs a fix." : "I am looking at it.");
-    const text = `⚠️ ${row.name}: ${row.usage}${pct}.\n${next}`;
+    const pct = row.pct !== null && !refusedKey ? ` (${row.pct.toFixed(0)}% of ${row.ceiling})` : "";
+    const next = whatNext[kind] ?? (row.key.startsWith("scrape_") ? "The platform's page changed at two clubs, so its reader stopped until a deploy of new code. Other platforms and the clubs' own feeds go on; the reader needs a fix." : "I am looking at it.");
+    const text = refusedKey ? `⚠️ ${row.name}: ${KEY_REFUSED_LINE}.\n${next}` : `⚠️ ${row.name}: ${row.usage}${pct}.\n${next}`;
     const res = await sendMessage(owner, esc(text), { keyboard: { inline_keyboard: [[{ text: "Service board", url: `${baseUrl()}/admin` }]] } });
     if (res.ok) {
       await setMetric(db, key, 1, dayKey(now));

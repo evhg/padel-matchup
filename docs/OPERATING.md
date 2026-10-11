@@ -55,11 +55,19 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
 - `ANTHROPIC_ADMIN_KEY` (an Admin API key from the console) turns the Anthropic row from
   "estimated" into "billed". `ANTHROPIC_MONTHLY_CAP_USD` mirrors the cap set in the console
   (default 20). Both live in Vercel's environment, never in the repository.
-- A refused `ANTHROPIC_API_KEY` (a 401 or a 403) turns the Anthropic row red. Set a new key in
-  Vercel's environment and redeploy. The first call the new key gets accepted puts back to `new`
-  the listening items that the refused key failed and that are still inside the 7-day window
-  (`restoreRefusedItems` in `src/lib/ops/anthropic.ts`). The hourly step then drafts them, three a
-  run. No hand correction in the database is needed.
+- A refused `ANTHROPIC_API_KEY` (a 401 or a 403) turns the Anthropic row red. The owner gets one
+  alert for it each month, with its own line and no spending-cap text (`svc_alert_anthropic_key_<month>`).
+  Set a new key in Vercel's environment and redeploy. The first call the new key gets accepted puts
+  back to `new` the listening items that the refused key failed and that are still inside the 7-day
+  window (`restoreRefusedItems` in `src/lib/ops/anthropic.ts`). The hourly step then drafts them
+  oldest first, ten a run, outside the day's forty drafts (`draftRequeued` in
+  `src/lib/listen/tick.ts`). It drafts an item only while the item has more than one hour left. So
+  the sooner the key works, the more items get a draft. The 176 items of October 2026 expire from
+  12 October 09:00 UTC to 18 October 01:00 UTC. The catch-up counts its calls and tokens apart
+  (`listen_requeued_calls`, `listen_requeued_in`, `listen_requeued_out`), and the owner's monthly cap
+  still holds it. No hand correction in the database is needed. "Add screenshot" comes back with the
+  first accepted call of any feature, at the latest with the next hourly run. To make that call at
+  once, run the hourly job one time by hand.
 - Anything else the owner pastes in chat goes to Vercel's environment through the API, then
   the session redeploys by merging or, when nothing changed in code, leaves it for the next deploy.
 
@@ -434,7 +442,10 @@ domain may not route that address: send one test mail and look for `email.receiv
 AI model for one read (DECIDING rule 9, the owner, 11 October 2026). The call uses `ANTHROPIC_API_KEY`
 and the model that `LISTEN_MODEL` names, and `recordModelCall` counts its tokens with every other
 call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
-Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call:
+Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call.
+The key and the month's spend come first, so a refused key or a spent month takes nothing from the
+other limits. While the key is refused or the spend is at the cap, the paste box does not show "Add
+screenshot" (`screenshotOffered`: one read for each server instance every five minutes).
 
 | Limit | Number | Row |
 | --- | --- | --- |

@@ -47,30 +47,52 @@ Respond with JSON only: {"relevant": boolean, "kind": "asks_for_tool"|"asks_how_
 
 export type Usage = { input: number; output: number };
 
-/** Tokens, drafts and failed calls spent today, from the metrics table. */
-export async function spentToday(db: Db, day = dayKey()): Promise<{ drafts: number; failed: number; input: number; output: number }> {
+/**
+ * What the drafts of the items a refused key failed spend (`draftRequeued` in tick.ts), counted apart:
+ * every such call, accepted or not, and its tokens. The day's budget leaves them out, so the catch-up
+ * never takes the day's forty from the new posts.
+ */
+export const REQUEUED_METRICS = { calls: "listen_requeued_calls", input: "listen_requeued_in", output: "listen_requeued_out" } as const;
+
+/** Tokens, drafts and failed calls spent today, from the metrics table, and the catch-up's share of them (`apart`). */
+export async function spentToday(db: Db, day = dayKey()): Promise<{ drafts: number; failed: number; input: number; output: number; apart: { calls: number; input: number; output: number } }> {
   const rows = await db
     .select({ key: metricsDaily.key, value: metricsDaily.value })
     .from(metricsDaily)
-    .where(sql`${metricsDaily.day} = ${day} and ${metricsDaily.key} in ('listen_drafts', 'anthropic_failed', 'anthropic_in', 'anthropic_out')`);
+    .where(sql`${metricsDaily.day} = ${day} and ${metricsDaily.key} in ('listen_drafts', 'anthropic_failed', 'anthropic_in', 'anthropic_out', ${REQUEUED_METRICS.calls}, ${REQUEUED_METRICS.input}, ${REQUEUED_METRICS.output})`);
   const get = (k: string) => Number(rows.find((r) => r.key === k)?.value ?? 0);
-  return { drafts: get("listen_drafts"), failed: get("anthropic_failed"), input: get("anthropic_in"), output: get("anthropic_out") };
+  return {
+    drafts: get("listen_drafts"),
+    failed: get("anthropic_failed"),
+    input: get("anthropic_in"),
+    output: get("anthropic_out"),
+    apart: { calls: get(REQUEUED_METRICS.calls), input: get(REQUEUED_METRICS.input), output: get(REQUEUED_METRICS.output) },
+  };
 }
 
 export async function withinBudget(db: Db, now = new Date()): Promise<boolean> {
   const s = await spentToday(db, dayKey(now));
   // A failed call is a call: it counts against the day's ceiling as it did when it was counted as a draft.
-  return s.drafts + s.failed < BUDGET.draftsPerDay && s.input < BUDGET.inputTokensPerDay && s.output < BUDGET.outputTokensPerDay;
+  // The catch-up's calls and tokens are its own (`REQUEUED_METRICS`), never the day's.
+  return s.drafts + s.failed - s.apart.calls < BUDGET.draftsPerDay && s.input - s.apart.input < BUDGET.inputTokensPerDay && s.output - s.apart.output < BUDGET.outputTokensPerDay;
 }
 
 /**
  * One Messages API call with the JSON contract; usage is recorded even when the answer is unusable.
  * A call counts as a draft only when the API accepted it; any other answer counts under
  * `anthropic_failed`, and `refused` says the key itself was refused (401, 403), so the caller stops.
+ * `requeued`: the call drafts an item a refused key failed, so it is counted apart as well
+ * (`REQUEUED_METRICS`), and the day's budget leaves it out. `timeoutMs` bounds the wait (45 s by default).
  */
-export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null; refused: boolean }> {
+export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string; requeued?: boolean; timeoutMs?: number } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null; refused: boolean }> {
   if (!draftingEnabled()) return { draft: null, usage: { input: 0, output: 0 }, error: "drafting disabled", refused: false };
   const user = `Source: ${c.source}\nURL: ${c.url}\nPosted: ${c.postedAt.toISOString()}\nAuthor: ${c.author ?? "unknown"}\nTitle: ${c.title}\n\n${c.body || "(no body)"}`;
+  const day = dayKey(now);
+  // Every call the catch-up makes, and its tokens, beside the counters every call bumps.
+  const apart = (usage: Usage) =>
+    o.requeued
+      ? [bumpMetric(db, REQUEUED_METRICS.calls, 1, day), usage.input ? bumpMetric(db, REQUEUED_METRICS.input, usage.input, day) : null, usage.output ? bumpMetric(db, REQUEUED_METRICS.output, usage.output, day) : null]
+      : [];
   // True while the Messages API call is in flight: only then is an error a failed call.
   let calling = false;
   try {
@@ -79,20 +101,20 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: listenModel(), max_tokens: 700, system: o.system ?? SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(Math.floor(o.timeoutMs ?? 45_000)),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message: string } } | null;
     calling = false;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
     const ok = res.ok && json !== null;
     // A metrics write that fails must not turn a refused key into an ordinary failure: the caller stops on `refused`.
-    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]).catch(() => undefined);
+    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, day) : null, ...apart(usage)]).catch(() => undefined);
     if (!ok) return { draft: null, usage, error: json?.error?.message ?? `HTTP ${res.status}`, refused: keyRefused(res.status) };
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
     const draft = parseDraft(text);
     return { draft, usage, error: draft ? null : "unparseable answer", refused: false };
   } catch (e) {
-    if (calling) await recordModelCall(db, { status: 0, ok: false, now }).catch(() => undefined);
+    if (calling) await Promise.all([recordModelCall(db, { status: 0, ok: false, now }), ...apart({ input: 0, output: 0 })]).catch(() => undefined);
     return { draft: null, usage: { input: 0, output: 0 }, error: e instanceof Error ? e.message : String(e), refused: false };
   }
 }

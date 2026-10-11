@@ -21,12 +21,13 @@ import { shrinkShot } from "@/lib/shrinkShot";
  * with whatever the box holds to `readScreenshotAction`: one read by the AI model, five a day from one
  * address and twenty a day for everybody, and nothing kept. The typed words win over the picture.
  * When the picture cannot be read now (no key, a refused key, a cap, the month's cost), the box says
- * one plain line and the words still work.
+ * one plain line and the words still work. While the key is refused or the month's spend is at the
+ * cap, the box does not offer the screenshot at all (`shot`, from `screenshotOffered`).
  *
  * No `<form>`: this sits beside the create form, and a form inside a form is the bug that once left
  * the landing page's way back in dead (e2e/core.mjs counts nested forms).
  */
-export function PasteBooking({ max }: { max: number }) {
+export function PasteBooking({ max, shot = true }: { max: number; shot?: boolean }) {
   const t = useTranslations("landing");
   const router = useRouter();
   const box = useId();
@@ -105,23 +106,27 @@ export function PasteBooking({ max }: { max: number }) {
           <button type="button" className="btn-primary mt-3 w-full" disabled={pending} onClick={read} data-testid="paste-read">
             {pending ? t("pasteReading") : t("pasteRead")}
           </button>
-          {/* The picker opens on the button's tap; a new pick of the same file reads again, so the value is cleared each time. */}
-          <input
-            ref={picker}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              readShot(file);
-            }}
-            data-testid="paste-shot-file"
-          />
-          <button type="button" className="btn-ghost mt-2 w-full" disabled={pending} onClick={() => picker.current?.click()} data-testid="paste-shot">
-            📷 {t("pasteShot")}
-          </button>
-          <p className="mt-1 text-center text-xs text-muted">{t("pasteShotNote")}</p>
+          {shot && (
+            <>
+              {/* The picker opens on the button's tap; a new pick of the same file reads again, so the value is cleared each time. */}
+              <input
+                ref={picker}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  readShot(file);
+                }}
+                data-testid="paste-shot-file"
+              />
+              <button type="button" className="btn-ghost mt-2 w-full" disabled={pending} onClick={() => picker.current?.click()} data-testid="paste-shot">
+                📷 {t("pasteShot")}
+              </button>
+              <p className="mt-1 text-center text-xs text-muted">{t("pasteShotNote")}</p>
+            </>
+          )}
         </div>
       )}
     </>

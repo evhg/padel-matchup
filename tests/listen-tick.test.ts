@@ -4,9 +4,10 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, metricsDaily } from "@/db/schema";
 import { serviceBoard } from "@/lib/ops/services";
-import { recordModelCall } from "@/lib/ops/anthropic";
-import { BUDGET, draftReply, parseDraft, spentToday } from "@/lib/listen/draft";
-import { approveItem, askOwner, draftPending, expireOld, listenTick, rememberCandidates, skipItem } from "@/lib/listen/tick";
+import { recordModelCall, REQUEUED_ERROR } from "@/lib/ops/anthropic";
+import { BUDGET, draftReply, parseDraft, spentToday, withinBudget } from "@/lib/listen/draft";
+import { approveItem, askOwner, draftPending, expireOld, LIMITS, listenTick, rememberCandidates, skipItem } from "@/lib/listen/tick";
+import { dayKey, setMetric } from "@/lib/domain/metrics";
 import type { FeedSpec } from "@/lib/listen/sources";
 import { createTestDb } from "./helpers/db";
 
@@ -124,7 +125,7 @@ describe("listen: the hourly tick (db, stubbed network)", () => {
     expect(JSON.stringify(dms[0].body?.reply_markup)).toContain(`la:${byId.t3_aaa111.id}`);
     expect(calls.some((c) => c.url.includes("oauth.reddit.com"))).toBe(false);
     const spent = await spentToday(db, "2026-09-07");
-    expect(spent).toEqual({ drafts: 2, failed: 0, input: 1800, output: 240 });
+    expect(spent).toEqual({ drafts: 2, failed: 0, input: 1800, output: 240, apart: { calls: 0, input: 0, output: 0 } });
 
     // The second run is idempotent: nothing new, nothing re-asked.
     const again = await listenTick(db, NOW, { feeds: FEEDS });
@@ -303,7 +304,7 @@ describe("listen: a new key drafts the questions the dead key failed", () => {
 
     await recordModelCall(db, { status: 200, ok: true, usage: { input: 10, output: 5 }, now: NOW });
     const after = await statusOf();
-    for (const id of ["t3_dead1", "t3_dead2", "t3_dead3"]) expect(after[id], id).toEqual({ status: "new", lastError: null, draftedAt: null });
+    for (const id of ["t3_dead1", "t3_dead2", "t3_dead3"]) expect(after[id], id).toEqual({ status: "new", lastError: REQUEUED_ERROR, draftedAt: null });
     for (const id of ["t3_dead4", "t3_dead5", "t3_dead6"]) expect(after[id].status, id).toBe("failed");
 
     // Once: the next accepted call does not put back an item that failed after the new key worked.
@@ -324,5 +325,114 @@ describe("listen: a new key drafts the questions the dead key failed", () => {
     await db.insert(listenItems).values({ source: "reddit", externalId: "t3_old1", url: "https://www.reddit.com/r/padel/comments/old1/x/", title: "Padel app", body: "which app", postedAt: hoursAgo(3), status: "failed", lastError: "API key is invalid.", draftedAt: hoursAgo(2) });
     await recordModelCall(db, { status: 200, ok: true, now: NOW });
     expect((await statusOf()).t3_old1.status).toBe("new");
+  });
+});
+
+// The 176 items the dead key failed went back to new, and a run took three, the newest first, inside the
+// day's forty, while new posts alone came close to forty a day (35 on 10 October 2026). So almost none
+// of them would have had a draft before they expired, seven days after the post: the first on 12
+// October 2026 at 09:00 UTC. Now they go first, oldest first, ten a run, outside the forty.
+describe("listen: the put-back items are drafted oldest first, outside the day's forty", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  let titles: string[] = [];
+  let status = 200;
+  beforeAll(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterAll(async () => close());
+  beforeEach(async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    titles = [];
+    status = 200;
+    await db.delete(listenItems);
+    await db.delete(metricsDaily);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        if (!String(input).includes("api.anthropic.com")) return new Response("not found", { status: 404 });
+        const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+        titles.push(body.messages[0].content.match(/Title: (.*)/)?.[1] ?? "");
+        if (status !== 200) return new Response(JSON.stringify({ type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }), { status });
+        const draft = { relevant: true, kind: "asks_for_tool", language: "en", reply: "A reply", reason: "x", mentionsKicksmash: false };
+        return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(draft) }], usage: { input_tokens: 900, output_tokens: 120 } }), { status: 200 });
+      }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Hours before NOW, set apart by hand so that "oldest first" is the only order that fits.
+  const at = (h: number) => new Date(NOW.getTime() - h * 3600_000);
+  const DAY = dayKey(NOW);
+  const statusOf = async () => Object.fromEntries((await db.select().from(listenItems)).map((r) => [r.title, { status: r.status, lastError: r.lastError }]));
+  const metric = async (key: string) => Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, key)))[0]?.value ?? 0);
+  /** Twelve items the dead key failed, 6 days 23.5 hours old down to 1 hour, then the new key's first accepted call puts them back. */
+  async function deadKeyItems(): Promise<number[]> {
+    const hours = [7 * 24 - 0.5, 160, 150, 140, 130, 120, 100, 80, 60, 40, 20, 1];
+    await db.insert(listenItems).values(hours.map((h) => ({ source: "reddit", externalId: `t3_back${h}`, url: `https://www.reddit.com/r/padel/comments/back${h}/x/`, title: `back ${h}`, body: "which app", postedAt: at(h), status: "failed", lastError: "invalid x-api-key", draftedAt: at(h - 0.5) })));
+    await recordModelCall(db, { status: 401, ok: false, now: at(2) });
+    await recordModelCall(db, { status: 200, ok: true, now: at(1.5) });
+    return hours;
+  }
+  /** Three of today's new posts. */
+  const newPosts = () => db.insert(listenItems).values([0.2, 0.4, 0.6].map((h) => ({ source: "reddit", externalId: `t3_fresh${h}`, url: `https://www.reddit.com/r/padel/comments/fresh${h}/x/`, title: `fresh ${h}`, body: "which app", postedAt: at(h), status: "new" })));
+
+  it("drafts ten a run, the oldest first, skips one that expires before the next run, and the rest next time", async () => {
+    await deadKeyItems();
+    expect(Object.values(await statusOf()).every((r) => r.status === "new" && r.lastError === REQUEUED_ERROR)).toBe(true);
+    const run = await draftPending(db, NOW);
+    // The ten oldest that live past the next run, in the order of their posts; then today's three (none here).
+    expect(titles).toEqual(["back 160", "back 150", "back 140", "back 130", "back 120", "back 100", "back 80", "back 60", "back 40", "back 20"]);
+    expect(run).toMatchObject({ drafted: 10, refused: false });
+    const after = await statusOf();
+    expect(after["back 160"]).toEqual({ status: "drafted", lastError: null });
+    // Half an hour from expiry: a draft would expire unread, so no call is spent on it.
+    expect(after["back 167.5"]).toEqual({ status: "new", lastError: REQUEUED_ERROR });
+    expect(after["back 1"]).toEqual({ status: "new", lastError: REQUEUED_ERROR });
+    titles = [];
+    await draftPending(db, new Date(NOW.getTime() + 3600_000));
+    expect(titles).toEqual(["back 1"]);
+  });
+
+  it("leaves the day's forty to the new posts, even on a day whose forty are spent", async () => {
+    await deadKeyItems();
+    await newPosts();
+    // Today's forty are spent: the new posts wait for tomorrow, and the put-back items do not.
+    await setMetric(db, "listen_drafts", BUDGET.draftsPerDay, DAY);
+    await draftPending(db, NOW);
+    expect(titles).toHaveLength(LIMITS.requeuedPerRun);
+    expect(titles.every((t) => t.startsWith("back "))).toBe(true);
+    // A day with room: the catch-up's ten never count against it, and the new posts get their three.
+    await setMetric(db, "listen_drafts", 0, DAY);
+    await db.delete(metricsDaily).where(eq(metricsDaily.key, "listen_requeued_calls"));
+    titles = [];
+    await draftPending(db, NOW);
+    expect(titles.filter((t) => t.startsWith("back "))).toEqual(["back 1"]);
+    expect(titles.filter((t) => t.startsWith("fresh "))).toEqual(["fresh 0.2", "fresh 0.4", "fresh 0.6"]);
+    expect(await metric("listen_requeued_calls")).toBe(1);
+    // listen_drafts counts every accepted draft (the digest's number); the budget leaves the catch-up's out.
+    expect(await metric("listen_drafts")).toBe(4);
+    const spent = await spentToday(db, DAY);
+    expect(spent.drafts - spent.apart.calls).toBe(3);
+    // The dead key's one refusal this morning is the day's one failed call.
+    expect(spent.failed).toBe(1);
+    expect(await withinBudget(db, NOW)).toBe(true);
+  });
+
+  it("stops at a key refused again: the put-back items stay put back, and the new posts get no call", async () => {
+    await deadKeyItems();
+    await newPosts();
+    status = 401;
+    const run = await draftPending(db, NOW);
+    expect(run.refused).toBe(true);
+    expect(titles.every((t) => t.startsWith("back "))).toBe(true);
+    const after = await statusOf();
+    expect(Object.entries(after).filter(([t]) => t.startsWith("back ")).every(([, r]) => r.status === "new" && r.lastError === REQUEUED_ERROR)).toBe(true);
+    expect(Object.entries(after).filter(([t]) => t.startsWith("fresh ")).every(([, r]) => r.status === "new" && r.lastError === null)).toBe(true);
+    // The next run makes no call while the newest answer is a refusal.
+    titles = [];
+    status = 200;
+    await draftPending(db, new Date(NOW.getTime() + 3600_000));
+    expect(titles.filter((t) => t.startsWith("back "))).toEqual([]);
   });
 });

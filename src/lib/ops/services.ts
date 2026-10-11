@@ -7,7 +7,7 @@ import { emailEnabled } from "@/lib/config";
 import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
 import { searchConsoleEnabled } from "@/lib/search/console";
-import { KEY_REFUSED_LINE, anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
+import { AI_FEATURES, KEY_REFUSED_LINE, anthropicAdminKey, anthropicCapUsd, estimateCostUsd, listenModel } from "./anthropic";
 import { PLAN, pacedTarget } from "@/lib/research/budget";
 import { platformById } from "@/lib/booking/platforms";
 import { scrapeBoard } from "@/lib/booking/scrape";
@@ -186,7 +186,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   push({
     key: "anthropic",
     name: "Anthropic API",
-    role: "feedback replies, listening drafts, answer pages",
+    role: AI_FEATURES.join(", "),
     used: Math.round(anthropicUsd * 100) / 100,
     limit: cap,
     usage: `${keyRefused ? `${KEY_REFUSED_LINE} · ` : ""}$${anthropicUsd.toFixed(2)} ${reportedUsd !== null ? "billed" : "estimated"} this month · ${fmt((month.anthropic_in ?? 0) / 1000)}k in, ${fmt((month.anthropic_out ?? 0) / 1000)}k out${day.anthropic_failed ? ` · ${fmt(day.anthropic_failed)} failed today` : ""}`,
