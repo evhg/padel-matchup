@@ -61,13 +61,18 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
   back to `new` the listening items that the refused key failed and that are still inside the 7-day
   window (`restoreRefusedItems` in `src/lib/ops/anthropic.ts`). The hourly step then drafts them
   oldest first, ten a run, outside the day's forty drafts (`draftRequeued` in
-  `src/lib/listen/tick.ts`). It drafts an item only while the item has more than one hour left. So
-  the sooner the key works, the more items get a draft. The 176 items of October 2026 expire from
-  12 October 09:00 UTC to 18 October 01:00 UTC. The catch-up counts its calls and tokens apart
-  (`listen_requeued_calls`, `listen_requeued_in`, `listen_requeued_out`), and the owner's monthly cap
-  still holds it. No hand correction in the database is needed. "Add screenshot" comes back with the
-  first accepted call of any feature, at the latest with the next hourly run. To make that call at
-  once, run the hourly job one time by hand.
+  `src/lib/listen/tick.ts`). The same catch-up takes every new item posted before the newest refusal
+  in the window. So the posts that came in while the key was refused get a draft too. It drafts an
+  item only while the item has more than one hour left. So the sooner the key works, the more items
+  get a draft. The 176 items of October 2026 expire from 12 October 09:00 UTC to 18 October 01:00
+  UTC. The catch-up counts its calls and tokens apart (`listen_requeued_calls`, `listen_requeued_in`,
+  `listen_requeued_out`), and the owner's monthly cap still holds it. No hand correction in the
+  database is needed. "Add screenshot" comes back within five minutes after the first accepted call
+  of any feature. The hourly run makes such a call only when a new listening item or a Discord
+  question waits and the day's forty drafts have room. The forty counts the failed calls of every
+  feature, so a long refusal can use them all. Then the button waits for an accepted call of another
+  feature, or for a new UTC day and a new item. When an item waits and the forty has room, a run of
+  the hourly job by hand makes the call at once.
 - Anything else the owner pastes in chat goes to Vercel's environment through the API, then
   the session redeploys by merging or, when nothing changed in code, leaves it for the next deploy.
 

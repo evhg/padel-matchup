@@ -243,9 +243,10 @@ export function admission(ev: { levelMin: number | null; levelMax: number | null
 export const rangeHolds = (fit: Admission): boolean => fit === "below" || fit === "above";
 
 /**
- * The owner's decision of 11 October 2026: "A player who already sat in a finished, scored match with
- * the organiser skips that organiser's level-range approval." The organiser saw them play, so the range
- * (below, above) lets them in. Only the range: a confirmed-levels-only match still takes a confirmed
+ * A player who already sat in a finished, scored match with the organiser skips that organiser's
+ * level-range approval. A session added this on 11 October 2026; the owner has not decided it (DECIDING
+ * rule 21). The reason the session gave: the organiser saw them play, so the range (below, above) lets
+ * them in. Only the range: a confirmed-levels-only match still takes a confirmed
  * level (the tick still holds), and a missing level is still asked for. The read of who played with
  * whom is `playedWithOrganiser` in `playAgain.ts`; this is the rule.
  */

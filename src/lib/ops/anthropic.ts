@@ -112,9 +112,10 @@ export async function recordModelCall(db: Db, o: { status: number; ok: boolean; 
  * when the hourly cost report wrote one (`anthropic_cost_cents`), else our own token counters at list
  * price. One read of `metrics_daily`, five keys, down its primary key (day, key) from the first of the
  * month, or from eight days back early in a month, so that a refusal near the turn of the month still
- * counts. Days go in as text (rule 1).
+ * counts. Days go in as text (rule 1). `refusedAt` is the newest refusal in that read (epoch seconds, 0
+ * for none): the listening tick's catch-up drafts what was waiting then (`draftRequeued`).
  */
-export async function modelGate(db: Db, now = new Date()): Promise<{ refused: boolean; usd: number; cap: number }> {
+export async function modelGate(db: Db, now = new Date()): Promise<{ refused: boolean; refusedAt: number; usd: number; cap: number }> {
   const today = dayKey(now);
   const month = `${today.slice(0, 8)}01`;
   const back = dayKey(new Date(now.getTime() - 8 * 86_400_000));
@@ -134,7 +135,8 @@ export async function modelGate(db: Db, now = new Date()): Promise<{ refused: bo
   const n = (v: string | number | null | undefined) => Number(v ?? 0) || 0;
   const billed = n(of("anthropic_cost_cents")?.monthTop) / 100;
   const usd = billed > 0 ? billed : estimateCostUsd(n(of("anthropic_in")?.sum), n(of("anthropic_out")?.sum));
-  return { refused: n(of("anthropic_refused_at")?.top) > n(of("anthropic_ok_at")?.top), usd, cap: anthropicCapUsd() };
+  const refusedAt = n(of("anthropic_refused_at")?.top);
+  return { refused: refusedAt > n(of("anthropic_ok_at")?.top), refusedAt, usd, cap: anthropicCapUsd() };
 }
 
 /**
@@ -146,7 +148,7 @@ export const KEY_REFUSAL_ERRORS = ["API key is invalid.", "invalid x-api-key", "
 /**
  * The `last_error` of an item that a working key put back in the queue (`restoreRefusedItems`): the
  * mark that tells the listening tick to draft it apart from the day's new items (`draftRequeued` in
- * src/lib/listen/tick.ts). A drafted item loses the mark.
+ * src/lib/listen/tick.ts), whenever it was posted. A drafted item loses the mark.
  */
 export const REQUEUED_ERROR = "put back after a refused key";
 
@@ -156,7 +158,8 @@ export const REQUEUED_ERROR = "put back after a refused key";
  * the items the key failed that are still inside the listening window go back to new, marked
  * `REQUEUED_ERROR`. The listening tick then drafts them oldest first, ten a run, outside the day's
  * forty drafts, so the day's new posts do not push them out before they expire (seven days after the
- * post; the first of the 176 expires on 12 October 2026 at 09:00 UTC). That is also the first accepted
+ * post; the first of the 176 expires on 12 October 2026 at 09:00 UTC). The same catch-up takes every
+ * new item posted before the newest refusal, mark or none (`draftRequeued`). That is also the first accepted
  * call the window records at all, which covers a key replaced before this code ran. One update, and
  * once: the accepted call then writes `anthropic_ok_at`, and the condition stays false until the next
  * refusal. When it is false Postgres checks it once and reads no item.

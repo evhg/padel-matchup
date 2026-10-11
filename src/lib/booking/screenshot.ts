@@ -62,8 +62,10 @@ let offer: { until: number; open: boolean } | null = null;
  * rule 12): one read of `metrics_daily` for each server instance every `OFFER_TTL_MS`, whatever the
  * number of views. A failed read offers the button: the read itself checks again.
  *
- * After a new key, the button comes back with the first accepted call of any feature (`anthropic_ok_at`),
- * at the latest with the next hourly run, and then within `OFFER_TTL_MS`.
+ * After a new key, the button comes back within `OFFER_TTL_MS` after the first accepted call of any
+ * feature (`anthropic_ok_at`). The hourly listening run makes such a call only when a new item or a
+ * Discord question waits and the day's forty drafts have room (`withinBudget`, which counts the failed
+ * calls of every feature).
  */
 export async function screenshotOffered(db: Db, now = new Date()): Promise<boolean> {
   if (offer && now.getTime() < offer.until) return offer.open;

@@ -334,6 +334,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   the step and the error's class or status, and never the message: a message can carry a link. A
   class has a class's shape (a capital, then letters): a rule of "any word" kept "no" out of
   Playtomic's "club page: no answer in 10 s".
+- **A mark that only the new code writes misses every row the old code left.** The catch-up for the
+  176 items a dead key failed took only rows marked `REQUEUED_ERROR`, and only its own restore wrote
+  the mark. The code in production put the same rows back with no mark, and a refusal left new posts
+  unmarked too. So a key set before the merge would have left all of them to the newest-first queue
+  (review, 11 October 2026). Select by what happened, here a post older than the newest refusal
+  (`draftRequeued`), and keep the mark as one more way in, never the only one.
 - **What a run leaves for the next run goes first in the next run.** The court-time frame left a club
   that its deadline cut short unwritten and due, and the oldest cache goes first, so a club too slow
   for the budget was cut on every run and no club behind it was read. A deferral needs a next visit

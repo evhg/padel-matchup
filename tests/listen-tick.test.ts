@@ -4,10 +4,10 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, metricsDaily } from "@/db/schema";
 import { serviceBoard } from "@/lib/ops/services";
-import { recordModelCall, REQUEUED_ERROR } from "@/lib/ops/anthropic";
+import { anthropicCapUsd, recordModelCall, REQUEUED_ERROR } from "@/lib/ops/anthropic";
 import { BUDGET, draftReply, parseDraft, spentToday, withinBudget } from "@/lib/listen/draft";
 import { approveItem, askOwner, draftPending, expireOld, LIMITS, listenTick, rememberCandidates, skipItem } from "@/lib/listen/tick";
-import { dayKey, setMetric } from "@/lib/domain/metrics";
+import { bumpMetric, dayKey, setMetric } from "@/lib/domain/metrics";
 import type { FeedSpec } from "@/lib/listen/sources";
 import { createTestDb } from "./helpers/db";
 
@@ -417,6 +417,98 @@ describe("listen: the put-back items are drafted oldest first, outside the day's
     // The dead key's one refusal this morning is the day's one failed call.
     expect(spent.failed).toBe(1);
     expect(await withinBudget(db, NOW)).toBe(true);
+  });
+
+  // The day's forty is the regular calls' alone. Ten catch-up calls bump listen_drafts and the token
+  // counters as every call does; were they counted, 32 regular calls would read as 42 and the new
+  // posts would get nothing. Each counter is set so that it alone would close the day without its own
+  // subtraction: calls 42 + 1 failed - 10, input 401,000 - 9,000, output 60,200 - 1,200.
+  it("leaves the day's forty to the new posts after ten catch-up calls: calls and tokens", async () => {
+    await deadKeyItems();
+    await draftPending(db, NOW);
+    expect(titles).toHaveLength(LIMITS.requeuedPerRun);
+    expect((await spentToday(db, DAY)).apart).toEqual({ calls: 10, input: 9_000, output: 1_200 });
+    // The regular share of the day so far: 32 calls, 392,000 tokens in and 59,000 out.
+    await bumpMetric(db, "listen_drafts", 32, DAY);
+    await bumpMetric(db, "anthropic_in", 392_000, DAY);
+    await bumpMetric(db, "anthropic_out", 59_000, DAY);
+    const s = await spentToday(db, DAY);
+    expect(s.drafts + s.failed).toBeGreaterThanOrEqual(BUDGET.draftsPerDay);
+    expect(s.input).toBeGreaterThanOrEqual(BUDGET.inputTokensPerDay);
+    expect(s.output).toBeGreaterThanOrEqual(BUDGET.outputTokensPerDay);
+    expect(await withinBudget(db, NOW)).toBe(true);
+    await newPosts();
+    titles = [];
+    await draftPending(db, NOW);
+    expect(titles.filter((t) => t.startsWith("fresh "))).toEqual(["fresh 0.2", "fresh 0.4", "fresh 0.6"]);
+  });
+
+  // The owner's monthly cap is the one limit on the catch-up's calls, which sit outside the forty.
+  it("makes no catch-up call once the month's spend is at the owner's cap", async () => {
+    await deadKeyItems();
+    await setMetric(db, "anthropic_cost_cents", anthropicCapUsd() * 100, DAY);
+    await draftPending(db, NOW);
+    expect(titles).toEqual([]);
+    expect(Object.values(await statusOf()).every((r) => r.status === "new" && r.lastError === REQUEUED_ERROR)).toBe(true);
+    // A cent under the cap, the catch-up goes on.
+    await setMetric(db, "anthropic_cost_cents", anthropicCapUsd() * 100 - 1, DAY);
+    await draftPending(db, NOW);
+    expect(titles).toHaveLength(LIMITS.requeuedPerRun);
+  });
+
+  /** New items with no mark, posted the given hours before NOW, titled `<label> <hours>`. */
+  const unmarked = (label: string, hours: number[]) => db.insert(listenItems).values(hours.map((h) => ({ source: "reddit", externalId: `t3_${label}${h}`, url: `https://www.reddit.com/r/padel/comments/${label}${h}/x/`, title: `${label} ${h}`, body: "which app", postedAt: at(h), status: "new" })));
+
+  // The code before the mark (main at ab2acc6) put the failed items back with no mark. A key set before
+  // this code ran leaves them new and unmarked, and `anthropic_ok_at` newer than the refusal, so the
+  // restore never runs again. They are still the catch-up's: posted before the newest refusal.
+  it("takes the items put back with no mark, oldest first, beside the day's new posts", async () => {
+    await unmarked("held", [160, 150, 140, 130, 120, 100, 80, 60, 40, 20, 10, 5]);
+    await recordModelCall(db, { status: 401, ok: false, now: at(2) });
+    await recordModelCall(db, { status: 200, ok: true, now: at(1.5) });
+    await newPosts();
+    await draftPending(db, NOW);
+    expect(titles.filter((t) => t.startsWith("held "))).toEqual(["held 160", "held 150", "held 140", "held 130", "held 120", "held 100", "held 80", "held 60", "held 40", "held 20"]);
+    expect(titles.filter((t) => t.startsWith("fresh "))).toEqual(["fresh 0.2", "fresh 0.4", "fresh 0.6"]);
+    expect(await metric("listen_requeued_calls")).toBe(10);
+  });
+
+  // Since 11 October 2026 a refusal leaves an item new with no mark, and the run stops at the first
+  // refusal, so every post that comes in while the key is refused waits, unmarked. When the key works
+  // again they are the catch-up's too, oldest first, even on a day whose forty is spent.
+  it("takes the posts a refused key kept new, oldest first, outside the day's forty", async () => {
+    await unmarked("kept", [100, 80, 60, 40, 20, 3]);
+    status = 401;
+    expect(await draftPending(db, at(2.5))).toMatchObject({ refused: true });
+    expect(titles).toEqual(["kept 3"]);
+    expect((await statusOf())["kept 3"]).toEqual({ status: "new", lastError: null });
+    // The key works again. While the newest answer is the refusal, the catch-up waits, and the day's
+    // own queue makes the first call: the newest first, as ever.
+    status = 200;
+    titles = [];
+    await draftPending(db, at(1.5));
+    expect(titles).toEqual(["kept 3", "kept 20", "kept 40"]);
+    // The next run: the day's forty is spent, and the rest still get their drafts, the oldest first.
+    await setMetric(db, "listen_drafts", BUDGET.draftsPerDay, DAY);
+    titles = [];
+    await draftPending(db, NOW);
+    expect(titles).toEqual(["kept 100", "kept 80", "kept 60"]);
+    expect(Object.values(await statusOf()).every((r) => r.status === "drafted")).toBe(true);
+  });
+
+  // With no refusal in the window the catch-up is no second lane: an unmarked item waits for the forty.
+  it("leaves an unmarked item to the day's forty when no refusal is in the window", async () => {
+    await unmarked("plain", [100, 50]);
+    await recordModelCall(db, { status: 200, ok: true, now: at(3) });
+    // A refusal eight days ago is older than every item in the window.
+    await recordModelCall(db, { status: 401, ok: false, now: at(24 * 8) });
+    await setMetric(db, "listen_drafts", BUDGET.draftsPerDay, DAY);
+    await draftPending(db, NOW);
+    expect(titles).toEqual([]);
+    await setMetric(db, "listen_drafts", 0, DAY);
+    await draftPending(db, NOW);
+    expect(titles).toEqual(["plain 50", "plain 100"]);
+    expect(await metric("listen_requeued_calls")).toBe(0);
   });
 
   it("stops at a key refused again: the put-back items stay put back, and the new posts get no call", async () => {

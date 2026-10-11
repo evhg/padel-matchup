@@ -30,7 +30,7 @@ import { shrinkShot } from "@/lib/shrinkShot";
  * No `<form>`: this sits beside the create form, and a form inside a form is the bug that once left
  * the landing page's way back in dead (e2e/core.mjs counts nested forms).
  */
-export function PasteBooking({ max, shot = true, mail = null }: { max: number; shot?: boolean; mail?: string | null }) {
+export function PasteBooking({ max, shot, mail = null }: { max: number; /** No default: a page that leaves it out fails the typecheck, never offers a refused key's screenshot. */ shot: boolean; mail?: string | null }) {
   const t = useTranslations("landing");
   const router = useRouter();
   const box = useId();

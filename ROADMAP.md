@@ -931,8 +931,8 @@ Everything in this list is live. The README describes each in detail.
   The paste box names book@ ("Or forward the confirmation to book@kicksma.sh"). No door puts UTC in the
   form's link any more: the zone is the club's, else the browser's or the chat's, else the form takes
   the person's own. A day or a time the booking did not give keeps the form's own and is marked as not
-  the booking's. The bot's "Create match" is offered only when the words name a club, a day and a time,
-  so the paste always shows a booking (`showsBooking`) when it marks the court booked.
+  the booking's. The bot shows "Create match" only when the paste gives a club, a day and a time. Such a
+  paste always shows a booking (`showsBooking`), so the mark "court booked" is true.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
   37). Production had one group of four or five in Phuket, every full match made by hand with the same

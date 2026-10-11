@@ -48,7 +48,7 @@ Respond with JSON only: {"relevant": boolean, "kind": "asks_for_tool"|"asks_how_
 export type Usage = { input: number; output: number };
 
 /**
- * What the drafts of the items a refused key failed spend (`draftRequeued` in tick.ts), counted apart:
+ * What the drafts of the items a refused key held spend (`draftRequeued` in tick.ts), counted apart:
  * every such call, accepted or not, and its tokens. The day's budget leaves them out, so the catch-up
  * never takes the day's forty from the new posts.
  */
@@ -81,7 +81,7 @@ export async function withinBudget(db: Db, now = new Date()): Promise<boolean> {
  * One Messages API call with the JSON contract; usage is recorded even when the answer is unusable.
  * A call counts as a draft only when the API accepted it; any other answer counts under
  * `anthropic_failed`, and `refused` says the key itself was refused (401, 403), so the caller stops.
- * `requeued`: the call drafts an item a refused key failed, so it is counted apart as well
+ * `requeued`: the call drafts an item a refused key held, so it is counted apart as well
  * (`REQUEUED_METRICS`), and the day's budget leaves it out. `timeoutMs` bounds the wait (45 s by default).
  */
 export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "title" | "body" | "author" | "postedAt">, fetchImpl: typeof fetch = fetch, now = new Date(), o: { system?: string; requeued?: boolean; timeoutMs?: number } = {}): Promise<{ draft: Draft | null; usage: Usage; error: string | null; refused: boolean }> {

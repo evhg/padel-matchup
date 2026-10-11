@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { listenItems, type ListenItem } from "@/db/schema";
 import { baseUrl, ownerTelegramId } from "@/lib/config";
@@ -21,8 +21,8 @@ import { WINDOW_MS } from "./window";
 export { WINDOW_MS };
 /**
  * Per run: a few drafts and a wall-clock budget, so the hourly function stays inside its 60 s. The
- * items a refused key failed and a working key put back (`REQUEUED_ERROR`) go first, ten a run at
- * once, each call cut at `requeuedTimeoutMs`, inside the same budget (`draftRequeued`).
+ * items a refused key held go first, ten a run at once, each call cut at `requeuedTimeoutMs`, inside
+ * the same budget (`draftRequeued`).
  */
 export const LIMITS = { draftsPerRun: 3, requeuedPerRun: 10, requeuedTimeoutMs: 20_000, asksPerDay: 6, draftBudgetMs: 25_000 } as const;
 
@@ -75,37 +75,45 @@ async function settleDraft(db: Db, item: ListenItem, got: Awaited<ReturnType<typ
 const candidateOf = (item: ListenItem) => ({ source: item.source as Candidate["source"], url: item.url, title: item.title, body: item.body, author: item.author, postedAt: item.postedAt });
 
 /**
- * The items a refused key failed, put back by a working key (`restoreRefusedItems`): the oldest first,
- * because they expire first, and `requeuedPerRun` of them at once, so ten calls take the time of one.
- * An item that expires before the next run (`expireOld`, an hour from now) is left: its draft would
- * expire unread. These calls sit outside the day's forty (`REQUEUED_METRICS` in draft.ts); the owner's
- * monthly cap still holds them (`modelGate`), and so does a key refused again. What it costs
- * (AGENTS.md rule 12): one read down `listen_items_status_idx` (new items, by their post time), and
- * one read of `metrics_daily` only when an item is there; nothing else on a run that has none.
+ * The catch-up: the items a refused key held. Two kinds: the items it failed, which a working key put
+ * back (`restoreRefusedItems`, marked `REQUEUED_ERROR`), and every new item posted before the newest
+ * refusal in the window, with or without the mark. The second kind covers the items that a refusal
+ * left new (it writes nothing since 11 October 2026), and the 176 that the code before the mark put
+ * back with none. With no refusal in the window, only marked items. The oldest first, because they
+ * expire first, and `requeuedPerRun` of them at once, so ten calls take the time of one. An item that
+ * expires before the next run (`expireOld`, an hour from now) is left: its draft would expire unread.
+ * These calls sit outside the day's forty (`REQUEUED_METRICS` in draft.ts); the owner's monthly cap
+ * still holds them (`modelGate`), and so does a key refused again. What it costs (AGENTS.md rule 12):
+ * one read of `metrics_daily` (`modelGate`) each run, then one read down `listen_items_status_idx`
+ * (new items, by their post time) while the key is not refused and the month is under the cap.
  */
 async function draftRequeued(db: Db, now: Date, fetchImpl: typeof fetch, out: DraftRun): Promise<void> {
+  const gate = await modelGate(db, now);
+  if (gate.refused || gate.usd >= gate.cap) return;
   const last = new Date(now.getTime() - WINDOW_MS + 60 * 60_000);
+  const marked = eq(listenItems.lastError, REQUEUED_ERROR);
+  const held = gate.refusedAt > 0 ? or(marked, lte(listenItems.postedAt, new Date(gate.refusedAt * 1000))) : marked;
   const items = await db
     .select()
     .from(listenItems)
-    .where(and(eq(listenItems.status, "new"), eq(listenItems.lastError, REQUEUED_ERROR), gt(listenItems.postedAt, last)))
+    .where(and(eq(listenItems.status, "new"), gt(listenItems.postedAt, last), held))
     .orderBy(asc(listenItems.postedAt))
     .limit(LIMITS.requeuedPerRun);
   if (items.length === 0) return;
-  const gate = await modelGate(db, now);
-  if (gate.refused || gate.usd >= gate.cap) return;
   const answers = await Promise.all(items.map((item) => draftReply(db, candidateOf(item), fetchImpl, now, { requeued: true, timeoutMs: LIMITS.requeuedTimeoutMs })));
   for (const [i, item] of items.entries()) await settleDraft(db, item, answers[i], now, out);
 }
 
-/** Drafts for the items a working key put back (`draftRequeued`), then for the newest gated items, inside the budget. */
+/** Drafts for the items a refused key held (`draftRequeued`), then for the newest gated items, inside the budget. */
 export async function draftPending(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<DraftRun> {
   const out: DraftRun = { drafted: 0, relevant: 0, errors: 0, refused: false };
   if (!draftingEnabled()) return out;
   const started = Date.now();
   await draftRequeued(db, now, fetchImpl, out);
   if (out.refused) return out;
-  // The day's new posts; a put-back item is the catch-up's, never one of these.
+  // The newest items, inside the day's forty. A marked item is the catch-up's alone. An unmarked item
+  // that a refused key held may come here too: while the key is refused, the first accepted call can
+  // only come from here, because the catch-up waits for it.
   const pending = await db
     .select()
     .from(listenItems)
