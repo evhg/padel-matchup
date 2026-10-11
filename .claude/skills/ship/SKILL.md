@@ -695,6 +695,16 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### A new kind of row in an old table
 
+- **"Another row of this player" must leave out the row in hand.** `confirmInvite` asked for the
+  player's place "elsewhere" in the match before it filled a held place, with no `id <> this row`.
+  While a held place never carried a record, that row could not match. Once a place kept a past
+  player's record (11 October 2026), the record opening its own link found its own place as
+  "elsewhere", and the tap freed it for the waiting list. When a row gains a player it never had, grep
+  every lookup by that player in the same table and exclude the row in hand (`ne(slots.id, slot.id)`).
+- **A row that names a player is not a seat.** A held place with `player_id` set read as "in" on the
+  match page (Leave instead of Join), as a payer, as "played" on My matches, and as a "you were
+  removed" notice for a place never taken. Every reader that means "took a seat" asks for `joined` or
+  `confirmed`, never for a `player_id` that is not null (`tests/held-record.test.ts` breaks each one).
 - **The key is whatever production already types, not what the name makes.** The club directory was
   written with `venueSlug(name)` slugs — "warehaus-club" for WAREHAUS.club. Production's eight matches
   and both coaches key on `warehaus`, so every one of those clubs would have got a second page with
