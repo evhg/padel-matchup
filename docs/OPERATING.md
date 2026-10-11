@@ -164,7 +164,7 @@ Which of these makes the second record is a question for the numbers, so these d
 `metrics_daily` answer it. None holds a name, an address or a token. Read them through
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
 current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'join_src_%' or key =
-'thats_me_refused') group by 1 order by 1`.
+'thats_me_refused' or key like 'held_by_name%') group by 1 order by 1`.
 
 - **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
@@ -194,6 +194,11 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   at most 20 taps a day from one address (`thatsMePerIpPerDay`, raised from 10 for a club's Wi-Fi)
   and 3 sign-ins a day into one record from anywhere (`thatsMePerRecordPerDay`). Every counter
   here is written after the answer (`later`), never in the path a person waits on.
+- **A held place taken by name.** `held_by_name`: somebody took the place the organiser held for
+  their name from the plain match link, in two taps (DECIDING rule 34, 11 October 2026).
+  `held_by_name_refused`: a tap the rule turned down. Both taps share the address's 20 a day with
+  "That's me". A browser that knew nobody also counts its new record under `newid_ua_*`; it is not a
+  sign-in, so no `signin_*` counter moves.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.

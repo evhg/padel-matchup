@@ -400,6 +400,50 @@ try {
   const heldCounts = await Promise.all(["Ana", "Bo", "Cy"].map((n) => a.getByText(`Reserved for ${n}`, { exact: true }).count()));
   check("three names pasted are three reserved spots", heldCounts.every((c) => c === 1), heldCounts.join(","));
   await shot(a, "12c-paste-names");
+
+  // ---- A held name takes its place on the plain link (DECIDING rule 34; the owner, 11 October 2026: "Yes, two taps") ----
+  // Cy is a pasted name: a held place with no email and no phone. Cy opens the match link from the
+  // group in a browser that has never seen anybody and types "cy". Before this, "Join" made a second
+  // Cy on the open seat and left the held place empty. The organiser removes Bo first, so the name
+  // field has an open seat to sit in, and that seat must still be open at the end.
+  await a.locator("main li", { hasText: "Reserved for Bo" }).getByRole("button", { name: "Remove player" }).click();
+  await a.getByText("Reserved for Bo", { exact: true }).waitFor({ state: "detached", timeout: 20000 });
+  const cyp = await newPage();
+  let heldSends = 0;
+  cyp.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) heldSends += 1;
+  });
+  await cyp.goto(`${BASE}/${code2}`);
+  await cyp.getByRole("button", { name: "Join this match" }).click();
+  await cyp.getByTestId("open-spot-name").first().fill("cy");
+  const alreadyCy = cyp.getByTestId("already-here");
+  const takeCy = alreadyCy.getByRole("button", { name: "Take Cy's held place", exact: true });
+  const sureCy = alreadyCy.getByRole("button", { name: "Take Cy's held place?", exact: true });
+  await takeCy.waitFor({ timeout: 10000 });
+  await shot(cyp, "12d0-held-offer");
+  check("a typed held name reads \"cy is already in this match.\" and offers \"Take Cy's held place\"", ((await alreadyCy.textContent()) ?? "").startsWith("cy is already in this match.") && (await takeCy.count()) === 1, (await alreadyCy.textContent()) ?? "(none)");
+  heldSends = 0;
+  await takeCy.click();
+  await sureCy.waitFor({ timeout: 10000 });
+  await cyp.waitForTimeout(1000);
+  check("the first tap takes nothing: it asks \"Take Cy's held place?\" and sends nothing", heldSends === 0 && (await cyp.getByText("Reserved for Cy", { exact: true }).count()) === 1, `sends=${heldSends}`);
+  await cyp.locator("main h1").first().click();
+  await takeCy.waitFor({ timeout: 10000 });
+  check("a tap anywhere else takes the question back, and still nothing is sent", heldSends === 0 && (await sureCy.count()) === 0, `sends=${heldSends}`);
+  await takeCy.click();
+  await sureCy.click();
+  await cyp.locator("main li", { hasText: "Cy" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const afterTake = await cyp.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
+  const cys = (afterTake.players ?? []).filter((p) => /^cy$/i.test(p.name));
+  check(
+    "the second tap fills Cy's held place: one Cy, confirmed, no held row left, and the open seat still open",
+    cys.length === 1 && cys[0].status === "confirmed" && (await cyp.getByText("Reserved for Cy", { exact: true }).count()) === 0 && afterTake.spotsLeft === 1,
+    JSON.stringify({ players: (afterTake.players ?? []).map((p) => `${p.name}:${p.status}`), spotsLeft: afterTake.spotsLeft }),
+  );
+  const cyNote = await waitUntil(() => mails().find((m) => m.to === "dana@example.com" && /^Cy confirmed/.test(m.subject ?? "")));
+  check("the organiser hears \"Cy confirmed\", as from the personal link", Boolean(cyNote), cyNote ? cyNote.subject : "no mail to the organiser");
+  await shot(cyp, "12d-held-by-name");
+  await cyp.close();
   await a.goto(`${BASE}/${code}`);
 
   await a.reload();

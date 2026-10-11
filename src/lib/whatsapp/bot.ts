@@ -7,7 +7,7 @@ import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
 import { confirmInvite, leaveEvent } from "@/lib/domain/slots";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
-import { afterJoin, afterLeave } from "@/lib/aftermath";
+import { afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
 import { isValidShareCode } from "@/lib/codes";
 import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
 import { rangeChoices } from "@/lib/domain/levelAsk";
@@ -298,6 +298,9 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
       await sendCalendarInvite(db, ev ?? res.event, player).catch(() => undefined);
       return "wa:confirmed";
     }
+    // In already by another door: the held place went the way a leave goes, and the match hears it as
+    // it hears a leave (the first player waiting is told they moved up). The JOIN below answers.
+    if (res?.outcome === "already_in") await afterRelease(db, res, { wasComplete: before }).catch(() => undefined);
   }
 
   // A new number whose profile name is already in the match: counted as the web counts it (`newid_name_here`).
