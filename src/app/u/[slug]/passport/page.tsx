@@ -10,6 +10,7 @@ import { baseUrl } from "@/lib/config";
 import { bandOf, formatLevel } from "@/lib/domain/levels";
 import { verifyPassport } from "@/lib/domain/passport";
 import { getPublicPlayer, issuePassport, passportKeys, profileStats } from "@/lib/domain/profile";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * The signed level as a person sees it: what it says, who signed it, until when,
  * and that the signature checks out. The JSON that apps read is one tap away.
  */
-export default async function PassportDocumentPage({ params }: Props) {
+async function PassportDocumentPage({ params }: Props) {
   const { slug } = await params;
   const db = await getDb();
   const p = await getPublicPlayer(db, slug);
@@ -93,3 +94,5 @@ export default async function PassportDocumentPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "share"], PassportDocumentPage);

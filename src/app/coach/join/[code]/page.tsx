@@ -8,6 +8,7 @@ import { coaches } from "@/db/schema";
 import { claimManager } from "@/lib/coach/chains";
 import { getSessionPlayer } from "@/lib/session";
 import { and, eq, isNull } from "drizzle-orm";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 type Props = { params: Promise<{ code: string }> };
 
 /** The manager link: a signed-in player joins at once; a newcomer gives a name first. */
-export default async function JoinManagerPage({ params }: Props) {
+async function JoinManagerPage({ params }: Props) {
   const { code } = await params;
   const db = await getDb();
   const clean = code.toLowerCase();
@@ -40,3 +41,5 @@ export default async function JoinManagerPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["coach.managers", "identity"], JoinManagerPage);

@@ -21,6 +21,7 @@ import { isOccupied, isSeated } from "@/lib/domain/events";
 import { getEventByCode } from "@/lib/domain/queries";
 import { getTournamentState } from "@/lib/domain/tournament";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -39,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** A page whose link unfurls with the result picture, plus the picture itself to save. The viral loop ends in "organize your own". */
-export default async function CardPage({ params }: Props) {
+async function CardPage({ params }: Props) {
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
   const db = await getDb();
@@ -111,3 +112,5 @@ export default async function CardPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["card", "common", "share"], CardPage);

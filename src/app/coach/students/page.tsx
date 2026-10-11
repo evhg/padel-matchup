@@ -12,6 +12,7 @@ import { getCoachForActor, inviteCode, listStudents, owedPerStudent, owedToCoach
 import { studentDeepLink } from "@/lib/telegram/deepLinks";
 import { baseUrl } from "@/lib/config";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("students.title"), robots: { index: false, follow: false } };
 }
 
-export default async function CoachStudentsPage() {
+async function CoachStudentsPage() {
   const db = await getDb();
   const me = await getSessionPlayer(db);
   const found = me ? await getCoachForActor(db, me.id) : null;
@@ -80,3 +81,5 @@ export default async function CoachStudentsPage() {
     </>
   );
 }
+
+export default withClientMessages(["coach.book", "coach.done", "coach.home", "coach.how", "coach.import", "coach.noPackage", "coach.packageLine", "coach.packageLineNoExpiry", "coach.students", "common", "share"], CoachStudentsPage);

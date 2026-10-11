@@ -7,6 +7,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * page. It exists because every club here came from Thailand or Singapore, and a player anywhere
  * else had no way in.
  */
-export default async function AddClubPage({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
+async function AddClubPage({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
   const [t, db, sp] = await Promise.all([getTranslations(), getDb(), searchParams]);
   const me = await getSessionPlayer(db);
   return (
@@ -49,3 +50,5 @@ export default async function AddClubPage({ searchParams }: { searchParams: Prom
     </>
   );
 }
+
+export default withClientMessages(["club", "common", "identity"], AddClubPage);

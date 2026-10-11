@@ -5,6 +5,7 @@ import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { listBuilt } from "@/lib/feedback/store";
 import { localeAlternates } from "@/lib/seo";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 // New lines arrive whenever a note ships, and the page is served under /ru and /es too.
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * malicious, and it was written to us, not for a public page. A shipped note without a summary is
  * simply not here yet.
  */
-export default async function BuiltPage() {
+async function BuiltPage() {
   const t = await getTranslations("feedback");
   const locale = await getLocale();
   const items = await listBuilt(await getDb()).catch(() => []);
@@ -60,3 +61,5 @@ export default async function BuiltPage() {
     </>
   );
 }
+
+export default withClientMessages(["feedback"], BuiltPage);

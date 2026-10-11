@@ -18,6 +18,7 @@ import { COURTS, orderOfPlay } from "@/lib/domain/competitionSchedule";
 import { competitionPage, getCompetition, isOrganizer } from "@/lib/domain/competitions";
 import { utcToZonedParts } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -29,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** The organiser's desk; anyone else lands on the public page. */
-export default async function ManageTournamentPage({ params }: Props) {
+async function ManageTournamentPage({ params }: Props) {
   const { slug } = await params;
   if (!SLUG.test(slug)) notFound();
   const db = await getDb();
@@ -122,3 +123,5 @@ export default async function ManageTournamentPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "errors", "identity", "tournament"], ManageTournamentPage);

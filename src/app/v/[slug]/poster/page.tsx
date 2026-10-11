@@ -10,6 +10,7 @@ import { getVenueBoard, isValidVenueSlug } from "@/lib/domain/venueBoard";
 import { getClub } from "@/lib/domain/clubs";
 import { getSessionPlayerId } from "@/lib/session";
 import { KEEP_LIGHT_VIEWPORT } from "@/lib/keepLight";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 /** The board of a claimed club that has no match yet: its name, nothing on it. Before the check, only for the person who claimed it. */
 async function claimedBoard(db: Awaited<ReturnType<typeof getDb>>, slug: string) {
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** One printable page: venue name, a big QR to the venue board, one line of instructions. */
-export default async function PosterPage({ params }: Props) {
+async function PosterPage({ params }: Props) {
   const { slug } = await params;
   if (!isValidVenueSlug(slug)) notFound();
   const db = await getDb();
@@ -67,3 +68,5 @@ export default async function PosterPage({ params }: Props) {
     </main>
   );
 }
+
+export default withClientMessages(["common", "share"], PosterPage);

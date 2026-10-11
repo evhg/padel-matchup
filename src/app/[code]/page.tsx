@@ -79,6 +79,7 @@ import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
 import { heldOffers } from "@/lib/domain/heldByName";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string }> };
 
@@ -119,7 +120,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function EventPage({ params, searchParams }: Props) {
+async function EventPage({ params, searchParams }: Props) {
   const source = cleanSource((await searchParams)?.s);
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
@@ -900,3 +901,5 @@ export default async function EventPage({ params, searchParams }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["americano", "calendar", "card", "common", "create", "creator", "errors", "event", "feedback", "group", "identity", "level", "levelCheck", "pairs", "passport", "push", "score", "series", "share", "telegram", "venue"], EventPage);

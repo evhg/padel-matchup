@@ -7,6 +7,7 @@ import { PROOFS, VALUE_PROP } from "@/lib/api/docs";
 import { WEBHOOK_EVENTS } from "@/lib/api/webhooks";
 import { baseUrl } from "@/lib/config";
 import { LIMITS } from "@/lib/domain/ratelimit";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const metadata: Metadata = {
   title: "Developers and assistants",
@@ -27,7 +28,7 @@ const Code = ({ children }: { children: string }) => (
 );
 
 /** English only on purpose: the audience is developers and the assistants they use. */
-export default function DevelopersPage() {
+function DevelopersPage() {
   const base = baseUrl();
   return (
     <>
@@ -174,3 +175,5 @@ const ok = key && (await verifyPassport(doc, key.hex)) && new Date(doc.expiresAt
     </>
   );
 }
+
+export default withClientMessages(["common", "share"], DevelopersPage);

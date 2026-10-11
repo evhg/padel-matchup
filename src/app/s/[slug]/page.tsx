@@ -13,6 +13,7 @@ import { rangeChip, tagChip } from "@/lib/levelText";
 import { localeAlternates } from "@/lib/seo";
 import { rhythmLabel } from "@/lib/seriesText";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -33,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** An Open that repeats: the next edition to sign up for, the past ones with their podiums, one link for all of them. */
-export default async function SeriesPage({ params }: Props) {
+async function SeriesPage({ params }: Props) {
   const { slug } = await params;
   if (!SLUG.test(slug)) notFound();
   const db = await getDb();
@@ -166,3 +167,5 @@ export default async function SeriesPage({ params }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "series", "share"], SeriesPage);

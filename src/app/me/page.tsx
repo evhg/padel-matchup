@@ -24,6 +24,7 @@ import { listWants } from "@/lib/domain/demand";
 import { getVenues, playerHasEvents } from "@/lib/domain/queries";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations();
@@ -32,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 type Props = { searchParams: Promise<{ telegram?: string }> };
 
-export default async function MePage({ searchParams }: Props) {
+async function MePage({ searchParams }: Props) {
   const db = await getDb();
   const [me, { telegram }] = await Promise.all([getSessionPlayer(db), searchParams]);
   // Back from Telegram: one line about how it went, nothing else changes.
@@ -118,3 +119,5 @@ export default async function MePage({ searchParams }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["common", "creator", "errors", "event", "feedback", "homescreen", "identity", "level", "me", "notices", "passport", "push", "ranking", "share", "telegram", "want"], MePage);

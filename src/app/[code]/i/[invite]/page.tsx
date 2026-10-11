@@ -18,6 +18,7 @@ import { namedByOf } from "@/lib/domain/pairSeats";
 import { mayUseHeldLink } from "@/lib/domain/slots";
 import { venueWithCourt } from "@/lib/labels";
 import { getSessionPlayer } from "@/lib/session";
+import { withClientMessages } from "@/i18n/withClientMessages";
 
 type Props = { params: Promise<{ code: string; invite: string }>; searchParams: Promise<{ decline?: string }> };
 
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: found?.slot.invitedName ? t("invitePage.title", { name: found.slot.invitedName }) : t("event.match"), robots: { index: false } };
 }
 
-export default async function InvitePage({ params, searchParams }: Props) {
+async function InvitePage({ params, searchParams }: Props) {
   const { code, invite } = await params;
   const { decline } = await searchParams;
   if (!isValidShareCode(code) || !isValidInviteCode(invite)) notFound();
@@ -179,3 +180,5 @@ export default async function InvitePage({ params, searchParams }: Props) {
     </>
   );
 }
+
+export default withClientMessages(["calendar", "common", "creator", "errors", "event", "identity", "invitePage", "share"], InvitePage);
