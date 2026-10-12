@@ -1,6 +1,6 @@
 import { eq, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, slots, type Event, type Player } from "@/db/schema";
+import { events, passkeys, players, slots, type Event, type Player } from "@/db/schema";
 import { normalName, safeToMerge } from "./dupes";
 import { recomputeStatus } from "./events";
 import { recordFact } from "./facts";
@@ -23,7 +23,8 @@ import { lockEvent, vacateAndPromote, type Promotion } from "./slots";
  *   - never the match's organiser, nor a co-organiser (an admin or the creator of the crew the match
  *     belongs to);
  *   - never a record that can prove itself or be reached: an email, a recovery email, a phone, a
- *     Telegram, Discord or LINE account, a push subscription; nor one with a coach's book (its own or
+ *     Telegram, Discord or LINE account, a push subscription, a passkey (Face ID or a fingerprint, the
+ *     owner's decision of 12 October 2026, DECIDING rule 39); nor one with a coach's book (its own or
  *     one it runs), a claimed club or a public profile;
  *   - never a member of a group that asks to join (a merge carries memberships; DECIDING rule 30);
  *   - never across matches the record has no part in: it holds a seat, a waiting place or an invite
@@ -75,6 +76,8 @@ export type ThatsMeRow = {
   discord: boolean;
   line: boolean;
   push: boolean;
+  /** A passkey saved on a phone (src/lib/domain/passkeys.ts): the record signs itself in with Face ID or a fingerprint. */
+  passkey: boolean;
   coachBook: boolean;
   /** An accepted place on a coach's list, or a lesson package of any coach. */
   coachStudent: boolean;
@@ -102,6 +105,7 @@ export type ThatsMeRefusal =
   | "discord"
   | "line"
   | "push"
+  | "passkey"
   | "coach_book"
   | "coach_student"
   | "claimed_club"
@@ -117,8 +121,10 @@ export type ThatsMeRefusal =
  * What a name must never stand for: a way to reach or prove the record, something it runs for other
  * people, or a door a name must not open. The first one found, or null. Asked of the record named and
  * of the browser's own record in a fold alike, because a merge carries everything either one holds.
+ * The passkey's sign-in asks it too, of the record the browser held before (`passkeyFold` in
+ * src/lib/domain/passkeys.ts): the one list, never a copy of it.
  */
-function heldBack(r: ThatsMeRow): ThatsMeRefusal | null {
+export function heldBack(r: Omit<ThatsMeRow, "id" | "name" | "key" | "named" | "sameName" | "inContext" | "organiser" | "coOrganiser">): ThatsMeRefusal | null {
   if (r.email) return "email";
   if (r.recoveryEmail) return "recovery_email";
   if (r.phone) return "phone";
@@ -126,6 +132,7 @@ function heldBack(r: ThatsMeRow): ThatsMeRefusal | null {
   if (r.discord) return "discord";
   if (r.line) return "line";
   if (r.push) return "push";
+  if (r.passkey) return "passkey";
   if (r.coachBook) return "coach_book";
   if (r.coachStudent) return "coach_student";
   if (r.claimedClub) return "claimed_club";
@@ -229,7 +236,7 @@ const keyOf = (expr: SQL) => sql`lower(regexp_replace(btrim(regexp_replace(norma
  * What it costs: the places in this match down `slots_event_position_idx` (its capacity and waiting
  * list); the crew's members down the members' key, once, for their names only, so a namesake in the
  * crew is counted even when the page shows the match alone; then, for each record returned, one lookup
- * per fact down that table's own index: `push_subscriptions_player_idx`, `coaches_player_idx`,
+ * per fact down that table's own index: `push_subscriptions_player_idx`, `passkeys_player_idx`, `coaches_player_idx`,
  * `coach_managers_player_idx`, `coach_students_player_idx`, `clubs_claimed_by_idx`,
  * `events_creator_idx`, `group_members_player_idx` (an admin anywhere, a group that asks to join),
  * `groups_creator_idx`, `series_organizer_idx`, `competitions_organizer_idx`. A lesson package has no
@@ -285,6 +292,7 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
       p.discord_id is not null as discord,
       p.line_id is not null as line,
       exists (select 1 from push_subscriptions ps where ps.player_id = p.id) as push,
+      exists (select 1 from passkeys pk where pk.player_id = p.id) as passkey,
       (exists (select 1 from coaches c where c.player_id = p.id) or exists (select 1 from coach_managers cm where cm.player_id = p.id)) as coach_book,
       (exists (select 1 from coach_students cs where cs.player_id = p.id and cs.status = 'accepted')
         or exists (select 1 from coaches ck join lesson_packages lp on lp.coach_id = ck.id and lp.student_player_id = p.id)) as coach_student,
@@ -316,6 +324,7 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
     discord: yes(x.discord),
     line: yes(x.line),
     push: yes(x.push),
+    passkey: yes(x.passkey),
     coachBook: yes(x.coach_book),
     coachStudent: yes(x.coach_student),
     claimedClub: yes(x.claimed_club),
@@ -370,6 +379,12 @@ export type ThatsMeResult = { ok: true; player: Player; folded: boolean; seats: 
 /** A record that gained a way to be reached or proved since the rule read it: asked just before a sign-in by name writes (`commitThatsMe`, `takeHeldLink`). */
 export const reachedSince = (p: Player) => Boolean(p.email || p.recoveryEmail || p.phone || p.telegramId || p.discordId || p.lineId || p.publicProfile);
 
+/** A passkey saved since the rule read the record (the save is a tap away on the same page): one lookup down `passkeys_player_idx`. */
+export async function savedPasskey(db: Db, playerId: string): Promise<boolean> {
+  const [row] = await db.select({ id: passkeys.id }).from(passkeys).where(eq(passkeys.playerId, playerId)).limit(1);
+  return Boolean(row);
+}
+
 /** A tap that passed the rule, before anything is changed: the match, the record named, and whether the browser's own record folds into it. */
 export type ThatsMeDecision = { ok: true; event: { id: string; code: string }; id: string; fold: boolean };
 
@@ -403,12 +418,12 @@ export async function decideThatsMe(db: Db, input: { code: string; name: string;
  */
 export async function commitThatsMe(db: Db, d: ThatsMeDecision, input: { viewerId: string | null; now?: Date }): Promise<ThatsMeResult> {
   const [target] = await db.select().from(players).where(eq(players.id, d.id)).limit(1);
-  if (!target || reachedSince(target)) return { ok: false, reason: "nobody" };
+  if (!target || reachedSince(target) || (await savedPasskey(db, target.id))) return { ok: false, reason: "nobody" };
   let seats: SeatChange | null = null;
   if (d.fold && input.viewerId) {
     const [mine] = await db.select().from(players).where(eq(players.id, input.viewerId)).limit(1);
     // The last word on every pair of records, as everywhere else a merge runs (`same_name_one_address`).
-    if (!mine || reachedSince(mine) || !safeToMerge(target, mine).ok) return { ok: false, reason: "not_same_name" };
+    if (!mine || reachedSince(mine) || (await savedPasskey(db, mine.id)) || !safeToMerge(target, mine).ok) return { ok: false, reason: "not_same_name" };
     seats = await settleFoldSeats(db, d.event.id, target.id, mine.id);
     await mergePlayers(db, target.id, [mine.id]);
   }

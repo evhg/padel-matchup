@@ -5,6 +5,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState, use
 import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { answerKey, askFor, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
+import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { registerJoinHandler } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { PastAsk } from "./PastAsk";
@@ -35,6 +36,7 @@ export function OpenSpot({
   heldForMe = null,
   levelRange = null,
   myLevel = null,
+  backIn = null,
 }: {
   code: string;
   slotId: string;
@@ -66,6 +68,8 @@ export function OpenSpot({
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
   myLevel?: number | null;
+  /** For a browser that knows nobody: the ways back in, shown open under the name field ("Played before?", DECIDING rule 39). */
+  backIn?: BackInDoors | null;
 }) {
   const t = useTranslations();
   const errText = (error: string) =>
@@ -344,6 +348,7 @@ export function OpenSpot({
           {cancel}
         </div>
       </form>
+      {mode === "join" && !hasIdentity && backIn && <BackInHelp doors={backIn} />}
     </div>
   );
 }

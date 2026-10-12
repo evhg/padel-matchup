@@ -20,6 +20,11 @@ import { SourceTag } from "@/components/SourceTag";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
+import type { BackInDoors } from "@/components/BackInHelp";
+import { RememberPhone } from "@/components/RememberPhone";
+import { TelegramReturn } from "@/components/TelegramLogin";
+import { hasPasskey, mayRegister } from "@/lib/domain/passkeys";
+import { signedInByName } from "@/lib/session";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { MatchPayments } from "@/components/MatchPayments";
 import { CourtBooking } from "@/components/CourtBooking";
@@ -55,7 +60,7 @@ import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { crewTelegramInvite, getGroupById, getGroupMember } from "@/lib/domain/groups";
 import { matchCrewGroupLink } from "@/lib/domain/groupAccess";
-import { telegramEnabled } from "@/lib/telegram/api";
+import { telegramBotId, telegramEnabled } from "@/lib/telegram/api";
 import { hasRange, isLevelVerified } from "@/lib/domain/levels";
 import { maySendPlayAgainRound, nextGameOf, playAgainActor, playAgainOfferWhen, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
@@ -428,6 +433,23 @@ async function EventPage({ params, searchParams }: Props) {
   // place alone (`heldVerdict`: its own name, one place of it), and Join offers the place, never a second Danny.
   const heldForMe = me && held.length > 0 ? held[0].name : null;
   const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
+  // "Played before?", open under the name field of a join form, for a browser that knows nobody (the
+  // owner, 12 October 2026, with passkeys, DECIDING rule 39): Face ID or a fingerprint, the email code,
+  // Telegram, each where this deployment runs it. No read: what the deployment runs, and nothing else.
+  const botId = me ? null : telegramBotId();
+  const backIn: BackInDoors | null = me ? null : { email: emailEnabled(), telegram: botId ? { botId, lang: locale, authUrl: `${base}/api/telegram/login` } : null };
+  // A join form this viewer can open here: an open spot, or the waiting list's form. With none (a full
+  // match with no waiting list, a past or called-off one, a fixed-pairs night's bar), the closed line
+  // under the line-up stays, so the way back in is never gone from the page.
+  const joinFormHere = !me && ((joinState === "join" && !fixedPairs) || joinState === "join_waitlist");
+  // "Remember me on this phone" (DECIDING rule 39): for a seated player whose session may save a passkey
+  // (never one by name) and whose record has none. A cookie read, then one lookup down
+  // `passkeys_player_idx`, only for such a viewer; an anonymous view reads nothing for it.
+  // The card stays on the page for such a session once the passkey is saved (`offer` false), so its
+  // "This phone remembers you now." survives the render a cookie change in the action brings.
+  const offerable = me && (isMember || isWaitlisted) && !cancelled && !over ? me : null;
+  const rememberSession = offerable ? mayRegister({ playerId: offerable.id, byName: await signedInByName(offerable.id) }, offerable) : false;
+  const rememberOffer = rememberSession && offerable ? !(await hasPasskey(db, offerable.id)) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
   // Right under it, while they have no level: "Your level?" in one tap. A ranged match asked at the join already.
@@ -546,6 +568,7 @@ async function EventPage({ params, searchParams }: Props) {
                 heldForMe={heldForMe}
                 levelRange={ranged ? levelRange : null}
                 myLevel={me?.level ?? null}
+                backIn={backIn}
               />
             )}
           </div>
@@ -776,6 +799,7 @@ async function EventPage({ params, searchParams }: Props) {
             />
           )}
           {me && askLevel && <LevelAfterJoin playerId={me.id} />}
+          {rememberSession && <RememberPhone offer={rememberOffer} />}
         </section>
 
         {creatorBanner && (
@@ -867,7 +891,7 @@ async function EventPage({ params, searchParams }: Props) {
             <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now) }))} />
           )}
           {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && (
-            <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} namesHere={namesHere} claimable={offer.names} held={heldNames} />
+            <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} namesHere={namesHere} claimable={offer.names} held={heldNames} backIn={backIn} />
           )}
           {waitlist.length > 0 && (
             <>
@@ -887,12 +911,17 @@ async function EventPage({ params, searchParams }: Props) {
             that already existed. "That's me" on the roster is the way back for a record with nothing
             to prove it (DECIDING rule 34); this fold is the way for one that can prove itself. Closed
             by default, so a real first-timer reads one line and the name field above is untouched.
+            Since 12 October 2026 (passkeys, DECIDING rule 39) the same doors stand open under the name
+            field of the join form itself (`BackInHelp`), so this line stays only where the page has no
+            join form for this viewer.
           */}
-          {!me && (
+          {!me && !joinFormHere && (
             <div data-testid="event-back-in">
               <ReturningPlayer collapsed />
             </div>
           )}
+          {/* Back from Telegram: the button lives in the join form, which is closed on load, so the return is read here. */}
+          {joinFormHere && backIn?.telegram && <TelegramReturn authUrl={backIn.telegram.authUrl} />}
           {me && me.email && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
             <div className="mt-5 border-t border-line pt-4">
               <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} notifyOn={me.emailNotifications} />

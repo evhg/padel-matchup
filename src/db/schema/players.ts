@@ -177,6 +177,40 @@ export const pushSubscriptions = pgTable(
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 
+/**
+ * A passkey: Face ID or a fingerprint signs the player in from any browser on their phone (the owner's
+ * decision of 12 October 2026, DECIDING rule 39; src/lib/domain/passkeys.ts). The private key never
+ * leaves the phone's password manager; we keep the public key that checks its signature, a label and
+ * two dates. No user handle is stored: the one the phone keeps is an HMAC of the player id
+ * (`passkeyUserId` in src/lib/passkeys/webauthn.ts), so a second save on the same phone account
+ * replaces the first. Never in public data or a log (rule 6).
+ */
+export const passkeys = pgTable(
+  "passkeys",
+  {
+    /** The credential id the phone made, base64url. */
+    id: text("id").primaryKey(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** The COSE public key, base64url. It checks a signature and signs nothing in. */
+    publicKey: text("public_key").notNull(),
+    /** The phone's signature counter; 0 for a passkey that keeps none (Apple and Google synced ones). */
+    counter: bigint("counter", { mode: "number" }).notNull().default(0),
+    transports: text("transports").array().notNull().default(sql`'{}'::text[]`),
+    /** singleDevice | multiDevice, as the phone said at the save. */
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull().default(false),
+    /** The browser that saved it, in words ("iPhone, Safari"), from `browserClass` at the save. */
+    label: text("label"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [index("passkeys_player_idx").on(t.playerId)],
+);
+
+export type Passkey = typeof passkeys.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

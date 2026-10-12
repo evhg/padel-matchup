@@ -208,6 +208,20 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and the wrong answer, then break the guard and watch that named test go red.
 - **Prove a new guard by breaking the code.** A check you have never watched fail is not a check. Put
   the bug back, watch it catch it, then restore.
+- **`git checkout -- <file>` restores nothing for a file git does not track yet.** A break-and-restore
+  probe on the new `src/lib/domain/passkeys.ts` ran `git checkout` to put the guard back, git said
+  nothing useful, and the guard stayed broken until `git status` showed `??` (12 October 2026). Copy a
+  new file to the scratchpad before breaking it, restore from that copy, and grep the restored line.
+- **A cookie deleted is a challenge used once only for an honest browser.** The passkey ceremony's
+  challenge lives in a signed cookie, and the answer deletes it. A copy of that cookie sent again
+  inside its five minutes still opened, and a synced passkey (Apple, Google) counts nothing, so its
+  counter could not catch a replay either. The answer now spends the challenge on the server, once
+  (`spendChallenge`, a rate row with a limit of one); `tests/passkey-ceremony.test.ts` replays the cookie
+  with the same answer and with a fresh signature.
+- **Chromium's virtual authenticator counts each use, and a copy of its passkey keeps the old count.**
+  `e2e/passkeys.mjs` copies one passkey into three browsers with `WebAuthn.addCredential`, as a phone's
+  password manager does. A real synced passkey reports 0 every time; the virtual one goes up, and the
+  server refuses a count that did not go up. Take each copy from the browser that used it last.
 - **A frozen clock makes every write the same instant, and a fake that reads late hides a race.** Two
   guards of the crew group passed with the code broken (10 October 2026): "the first group stays the
   crew's" ordered by `listening_since`, which `freezeClock` gave both groups to the millisecond, and two
@@ -538,6 +552,12 @@ Wall clock first, credits second. What actually moved it, measured:
   shell, whose text holds the pattern, and killed it (exit 144, 24 September 2026). List with a
   pattern the command cannot match, `ps -eo pid,cmd | grep "[g]ate\.sh"`, and never start a long
   job with `&` inside a command: the harness backgrounds it and reports its end; `&` hides it.
+- **A SIGTERM to `pnpm` is not a SIGTERM to the server it started.** In a Claude Code cloud session
+  `pnpm` is a node shim that starts the real pnpm, which starts `next-server`. `e2e/run.mjs` killed
+  only the shim, so `next-server` kept port 3322 after a run, and the next run refused the port
+  (12 October 2026). The runner now starts the server in a process group of its own and stops the
+  group, also when it is itself stopped from outside. After any run, `ps -eo pid,cmd | grep
+  "[n]ext-server"` should list nothing of yours.
 - **A worktree inside the repository breaks the build.** A workflow run with worktree isolation left
   three checkouts under `.claude/worktrees/`, each with `node_modules` linked in, and `next build`
   died with `Cannot read properties of undefined (reading 'length')` while typecheck, lint and unit
@@ -845,6 +865,20 @@ Wall clock first, credits second. What actually moved it, measured:
   gone before Playwright read it. Three green runs, then a timeout. A confirmation the reader should
   keep is the server's to render: navigate to a state the page can rebuild (`?claimed=<id>`), never
   refresh under a message.
+- **A server action that sets or deletes a cookie re-renders the page that called it, as
+  `revalidatePath` does.** The passkey offer dropped its own `router.refresh()`, then the action's
+  `revalidatePath`, and "This phone remembers you now." still vanished: the action deletes its challenge
+  cookie, so Next.js sent the page back rendered again in the same answer, now without the card, because
+  the record had a passkey (12 October 2026). When a screen must keep a message after a write that
+  changes what the server renders, the server keeps the component mounted and passes the new state as a
+  prop (`RememberPhone` with `offer` false), rather than leaving it out.
+- **A sign-in that leaves the page comes back to a component, and moving the button moves the return.**
+  "Sign in with Telegram" goes to Telegram and comes back with the signed fields in the hash, and the
+  button's own component reads them on load. When the match page's "Played before?" moved into the
+  join form, which opens only on a tap, nothing on the page read the hash, so a player who signed in
+  from there came back signed out (12 October 2026, found by reading `e2e/telegram.mjs` before the
+  gate). The return is a hook (`useTelegramReturn`), and the page mounts `TelegramReturn` while the
+  button is not on screen. Before moving a door, grep how its way back arrives.
 - **A view that echoes its input is not a read.** `competitionDraws` returns the category object it
   was handed, so a test that kept the object from `makeDraw` read `drawn` after the final had set
   `done` in the database. When a function takes a row and returns it inside its result, the caller

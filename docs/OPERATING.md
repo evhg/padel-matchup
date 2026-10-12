@@ -210,8 +210,12 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   down, the owner's decision of 11 October 2026);
   `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
   11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
-  `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
-  counts only when the cookie changes to another record; a link to a browser already signed in
+  `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`;
+  `signin_passkey` (Face ID or a fingerprint, DECIDING rule 39), with `signin_passkey_fold` when it
+  folded the new record the browser had made into the passkey's own. `passkey_saved` counts a phone
+  that saved one ("Remember me on this phone"), and `passkey_refused` any save or sign-in the server
+  turned down (an unknown passkey, a deleted record, a signature or a challenge that did not check
+  out). Each `signin_*` counts only when the cookie changes to another record; a link to a browser already signed in
   counts nothing. `thats_me_refused` counts a "That's me" the rule turned down. "That's me" takes
   at most 20 taps a day from one address (`thatsMePerIpPerDay`, raised from 10 for a club's Wi-Fi)
   and 3 sign-ins a day into one record from anywhere (`thatsMePerRecordPerDay`). Every counter

@@ -304,15 +304,18 @@ try {
   // this person. The name field alone makes them a second row with none of their matches on it: in
   // one week 29 players arrived and 3 joined anything. The way back in existed on the landing page and
   // on My matches, and not on the one screen every shared link opens.
+  // Since 12 October 2026 (passkeys, DECIDING rule 39; the owner accepted the routine change) the way
+  // back stands open beside the name field of the join form, not closed under the line-up.
   const w = await newPage();
   await w.goto(`${BASE}/${code}`);
-  const backInHere = w.getByTestId("event-back-in");
+  check("a stranger's view shows no way back in before Join: no help and no closed line where the join form will open", (await w.getByTestId("back-in-open").count()) === 0 && (await w.getByTestId("event-back-in").count()) === 0);
+  await w.getByRole("button", { name: "Join this match" }).click();
+  const backInHere = w.getByTestId("back-in-open");
+  await backInHere.waitFor({ timeout: 10000 });
   check(
-    "a stranger on a shared match link is offered a way back in, closed",
-    (await backInHere.count()) === 1 && (await w.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false,
+    "Join opens the name field with \"Played before?\" open beside it, the email asked for on the match page",
+    (await backInHere.getByText("Played before? Get your matches back.").count()) === 1 && (await w.getByTestId("open-spot-name").first().isVisible()) && (await backInHere.getByPlaceholder("you@example.com").isVisible()),
   );
-  await backInHere.getByText("Played before? Get your matches back.").click();
-  check("opening it asks for the email, on the match page", await w.getByPlaceholder("you@example.com").isVisible());
 
   await w.close();
 
@@ -378,8 +381,8 @@ try {
 
   // The duplicate is born in the open spot, not in the fold. A stranger on the future match — Dana
   // is its only player — types "Dana", which is what somebody who has played before does on a phone
-  // the page has never seen. A fresh context, so the fold starts closed and the last check means
-  // something.
+  // the page has never seen. Dana has an email, so "That's me" is no door for her: the way back in
+  // with proof stands open beside the field (DECIDING rule 39), and the line under the name points at it.
   const dup = await newPage();
   await dup.goto(`${BASE}/${code2}`);
   await dup.getByRole("button", { name: "Join this match" }).click();
@@ -388,9 +391,9 @@ try {
   check("a name nobody in this match has is left alone", (await dup.getByTestId("already-here").count()) === 0);
   await spot.fill("Dana");
   check("a name already in this match is recognised before it becomes a second row", (await dup.getByTestId("already-here").count()) === 1, (await dup.getByTestId("already-here").textContent().catch(() => "(none)")) ?? "(none)");
-  check("the way back in is still shut until they say it is them", (await dup.getByPlaceholder("you@example.com").isVisible().catch(() => false)) === false);
+  check("the way back in stands open beside the name field already", await dup.getByTestId("back-in-open").getByPlaceholder("you@example.com").isVisible());
   await dup.getByTestId("already-here").getByRole("button").click();
-  check("\"That's me\" opens the way back in, on the spot", await dup.getByPlaceholder("you@example.com").isVisible());
+  check("\"That's me\" on a record that can prove itself keeps the way back in on the spot", await dup.getByTestId("back-in-open").getByPlaceholder("you@example.com").isVisible());
   await shot(dup, "12b-already-here");
   await dup.close();
 

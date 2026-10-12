@@ -22,8 +22,12 @@ import { mergePlayers } from "./merge";
  *     match first"; `mayClaim`), and never a row that runs a crew (its creator, or an admin of it),
  *     as "That's me" refuses one (the owner, 11 October 2026: "No admin role by name alone").
  *     The automatic fold asks the same of such a row: a shared organiser or club is not enough there.
- *   - **Never** a row that can be reached (an address, a phone, a chat account, a push subscription):
- *     that is somebody, and a name does not say it is the same somebody.
+ *   - **Never** a row that can be reached or prove itself (an address, a phone, a chat account, a push
+ *     subscription, a passkey): that is somebody, and a name does not say it is the same somebody.
+ *
+ * A passkey is not proof here (`proved` reads an address and Telegram only): the owner's decision of
+ * 12 October 2026 lets it sign in its own record and fold the new record its browser made, "Nothing
+ * more" (DECIDING rule 39). So a sign-in by passkey never calls `foldSameNameRows`.
  *
  * `safeToMerge` still has the last word on every pair (`same_name_one_address`), so this adds a
  * guard in front of the existing rule and never widens it. Not on a nightly sweep: `dupes.ts` says why.
@@ -89,6 +93,7 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
         and o.email is null and o.recovery_email is null and o.phone is null
         and o.telegram_id is null and o.discord_id is null and o.line_id is null
         and not exists (select 1 from push_subscriptions ps where ps.player_id = o.id)
+        and not exists (select 1 from passkeys pk where pk.player_id = o.id)
       order by o.created_at
       limit 5`),
   );

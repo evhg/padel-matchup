@@ -37,6 +37,7 @@ const bare: ThatsMeRow = {
   discord: false,
   line: false,
   push: false,
+  passkey: false,
   coachBook: false,
   coachStudent: false,
   claimedClub: false,
@@ -59,6 +60,8 @@ const LIMIT_TABLE: [string, Partial<ThatsMeRow>, ThatsMeRefusal | null][] = [
   ["a record with a Discord account", { discord: true }, "discord"],
   ["a record with a LINE account", { line: true }, "line"],
   ["a record with a push subscription", { push: true }, "push"],
+  // The owner, 12 October 2026 (DECIDING rule 39): a record with a passkey signs itself in with Face ID or a fingerprint.
+  ["a record with a passkey", { passkey: true }, "passkey"],
   ["a record with a coach's book, its own or one it runs", { coachBook: true }, "coach_book"],
   ["a record that claimed a club", { claimedClub: true }, "claimed_club"],
   ["a record with a public profile", { publicProfile: true }, "public_profile"],
@@ -99,6 +102,7 @@ describe("who 'That's me' may sign in", () => {
   it("refuses the fold when the browser's own record can be reached, or carries another name", () => {
     expect(thatsMeVerdict([{ ...bare, sameName: 2 }, { ...mine, email: true }], mine.id)).toEqual({ ok: false, reason: "email" });
     expect(thatsMeVerdict([{ ...bare, sameName: 2 }, { ...mine, push: true }], mine.id)).toEqual({ ok: false, reason: "push" });
+    expect(thatsMeVerdict([{ ...bare, sameName: 2 }, { ...mine, passkey: true }], mine.id)).toEqual({ ok: false, reason: "passkey" });
     expect(thatsMeVerdict([bare, { ...mine, key: "anna", named: false, sameName: 1 }], mine.id)).toEqual({ ok: false, reason: "not_same_name" });
   });
 

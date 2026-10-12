@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { joinAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
+import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { registerJoinHandler } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { heldNameOf, NameHereLine } from "./TakeHeld";
@@ -23,6 +24,7 @@ export function JoinInline({
   namesHere = [],
   claimable = [],
   held = [],
+  backIn = null,
 }: {
   code: string;
   label: string;
@@ -35,6 +37,8 @@ export function JoinInline({
   claimable?: readonly string[];
   /** Names of held places a typed name may take (`heldOffers`). */
   held?: readonly string[];
+  /** For a browser that knows nobody: the ways back in, open under the name field (DECIDING rule 39). */
+  backIn?: BackInDoors | null;
 }) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -60,36 +64,39 @@ export function JoinInline({
   if (!open) return null;
   const askLevel = Boolean(levelRange) && level == null;
   return (
-    <form
-      ref={box}
-      className="mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-3 animate-pop"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
-        // The Go key and the button while "Take Danny's held place" is on screen: a second Danny would close the place for good.
-        if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
-        if (levelRange && level == null) return setError(t("errors.level_required"));
-        start(async () => {
-          setError(null);
-          const r = await joinAction(code, hasIdentity ? undefined : name, level ?? undefined);
-          startTransition(() => {
-            if (!r.ok) setError(r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+    <div className="mt-4">
+      <form
+        ref={box}
+        className="rounded-2xl border border-court/30 bg-court-soft/40 p-3 animate-pop"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
+          // The Go key and the button while "Take Danny's held place" is on screen: a second Danny would close the place for good.
+          if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
+          if (levelRange && level == null) return setError(t("errors.level_required"));
+          start(async () => {
+            setError(null);
+            const r = await joinAction(code, hasIdentity ? undefined : name, level ?? undefined);
+            startTransition(() => {
+              if (!r.ok) setError(r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+            });
           });
-        });
-      }}
-    >
-      <div className="text-sm font-bold text-court">{hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</div>
-      <div className="mt-2 flex flex-col gap-2">
-        <div className="flex gap-2">
-          {!hasIdentity && <input ref={input} data-testid="waitlist-name" className="input" placeholder={t("identity.namePlaceholder")} value={name} autoComplete="given-name" maxLength={40} enterKeyHint="go" onChange={(e) => setName(e.target.value)} />}
-          {(askLevel || (levelRange && !hasIdentity)) && <LevelSelect value={level} onChange={setLevel} />}
-          <button type="submit" className="btn-primary shrink-0" disabled={pending}>
-            {pending ? t("common.working") : label}
-          </button>
+        }}
+      >
+        <div className="text-sm font-bold text-court">{hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</div>
+        <div className="mt-2 flex flex-col gap-2">
+          <div className="flex gap-2">
+            {!hasIdentity && <input ref={input} data-testid="waitlist-name" className="input" placeholder={t("identity.namePlaceholder")} value={name} autoComplete="given-name" maxLength={40} enterKeyHint="go" onChange={(e) => setName(e.target.value)} />}
+            {(askLevel || (levelRange && !hasIdentity)) && <LevelSelect value={level} onChange={setLevel} />}
+            <button type="submit" className="btn-primary shrink-0" disabled={pending}>
+              {pending ? t("common.working") : label}
+            </button>
+          </div>
+          {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
         </div>
-        {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
-      </div>
-      {error ? <p className="mt-1 text-sm font-semibold text-danger">{error}</p> : <p className="mt-1 text-xs text-faint">{levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</p>}
-    </form>
+        {error ? <p className="mt-1 text-sm font-semibold text-danger">{error}</p> : <p className="mt-1 text-xs text-faint">{levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</p>}
+      </form>
+      {!hasIdentity && backIn && <BackInHelp doors={backIn} />}
+    </div>
   );
 }

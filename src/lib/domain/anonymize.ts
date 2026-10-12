@@ -8,6 +8,7 @@ import { cancelLesson, getCoachByPlayerId, type CancelOutcome } from "./coaching
 import { withdrawEntriesOf } from "./competitions";
 import { dropGroupRequestsFor } from "./groups";
 import { dropNoticesFor } from "./notices";
+import { dropPasskeysFor } from "./passkeys";
 import { getPlayer } from "./players";
 import { cancelEvent } from "./events";
 import { leaveEvent, type Promotion } from "./slots";
@@ -78,6 +79,9 @@ export async function anonymizePlayer(
   // A pair they were half of leaves the draw; the spot goes to the first pair waiting, if any.
   await withdrawEntriesOf(db, playerId, now);
   await db.delete(pushSubscriptions).where(eq(pushSubscriptions.playerId, playerId));
+  // A passkey is a way in (DECIDING rule 39). The row stays as "Deleted player", so the cascade never
+  // fires: left here, a phone's Face ID would still sign in to the emptied record.
+  await dropPasskeysFor(db, playerId);
   // What they said they wanted goes with them. It is a standing instruction to contact them, and the
   // one thing an account deletion must not leave behind is a reason to send somebody a message.
   await dropWantsFor(db, playerId);
