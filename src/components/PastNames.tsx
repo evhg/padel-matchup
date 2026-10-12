@@ -54,6 +54,7 @@ export function PastNames({
   const typedKeys = new Set(typed.map(answerKey));
   const chips = state.chips.filter((c) => !typedKeys.has(answerKey(c))).slice(0, CHIPS_SHOWN);
   const rows = typed.map((name) => ({ name, options: askFor(state.views, name), answer: answerFor(answers, name) })).filter((r) => r.options.length > 0 || r.answer === true);
+  if (rows.length === 0 && chips.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-col gap-2" data-testid="create-names">

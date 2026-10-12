@@ -907,6 +907,18 @@ try {
   const count4 = (await sofia.getByTestId("count-line").innerText()).trim();
   check("the count line names the held place", count4 === "1 spot left · 1 place held for Jordi", count4);
   await shot(sofia, "12j-held-count-line");
+  // "Paste the names": a pasted Alex asks too, and the button waits for the answer.
+  await sofia.getByTestId("paste-names").locator("summary").click();
+  await sofia.getByTestId("paste-names-box").fill("Alex");
+  const pasteAsk = sofia.getByTestId("paste-names").getByTestId("past-ask");
+  await pasteAsk.waitFor({ timeout: 20000 });
+  const pasteHold = sofia.getByRole("button", { name: "Reserve 1 spot", exact: true });
+  check("a pasted Alex asks \"Is this Alex…?\", and \"Reserve 1 spot\" waits for the answer", ((await pasteAsk.textContent()) ?? "").startsWith(`Is this Alex, who played with you on ${pastDay} at ${pastClub}?`) && (await pasteHold.isDisabled()), ((await pasteAsk.textContent()) ?? "").trim());
+  await shot(sofia, "12j2-paste-asks");
+  await pasteAsk.getByRole("button", { name: "No, someone new", exact: true }).click();
+  await pasteHold.click();
+  await sofia.getByText("Reserved for Alex", { exact: true }).waitFor({ timeout: 20000 });
+  check("\"No, someone new\" holds the pasted Alex by name", (await sofia.locator("main li", { hasText: "Reserved for Alex" }).getByTestId("keeps-record").count()) === 0);
 
   // The create form: "Played with you" under the names, and the question under a typed name.
   await sofia.goto(BASE + "/new");
@@ -915,6 +927,7 @@ try {
   await createChips.waitFor({ timeout: 15000 });
   const chipCounts = await Promise.all(["Alex", "Maria", "Jordi", "Sofia"].map((x) => createChips.getByRole("button", { name: x, exact: true }).count()));
   check("the create form offers \"Played with you\" under the names: Sofia's partners from PAST, never Sofia", JSON.stringify(chipCounts) === "[1,1,1,0]", ((await createChips.textContent()) ?? "").trim());
+  await shot(sofia, "12k0-create-chips");
   await createChips.getByRole("button", { name: "Maria", exact: true }).click();
   check("a chip puts the name on its own line and keeps that player's record", (await sofia.getByTestId("have-already").inputValue()) === "Maria" && ((await sofia.getByTestId("past-answered").first().textContent()) ?? "").includes("Keeps Maria's matches"));
   await sofia.getByTestId("have-already").fill("Maria\nJordi\nAlex");
