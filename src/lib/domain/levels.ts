@@ -243,9 +243,10 @@ export function admission(ev: { levelMin: number | null; levelMax: number | null
 export const rangeHolds = (fit: Admission): boolean => fit === "below" || fit === "above";
 
 /**
- * The owner's decision of 11 October 2026: "A player who already sat in a finished, scored match with
- * the organiser skips that organiser's level-range approval." The organiser saw them play, so the range
- * (below, above) lets them in. Only the range: a confirmed-levels-only match still takes a confirmed
+ * A player who already sat in a finished, scored match with the organiser skips that organiser's
+ * level-range approval. A session added this on 11 October 2026; the owner has not decided it (DECIDING
+ * rule 21). The reason the session gave: the organiser saw them play, so the range (below, above) lets
+ * them in. Only the range: a confirmed-levels-only match still takes a confirmed
  * level (the tick still holds), and a missing level is still asked for. The read of who played with
  * whom is `playedWithOrganiser` in `playAgain.ts`; this is the rule.
  */
@@ -275,4 +276,20 @@ export function joinBarLevel(o: { range: LevelRange | null; level: number | null
     outOfRange: !o.waived && (fit === "below" || fit === "above"),
     unverified: o.waived === "unverified" || (!o.waived && Boolean(o.range) && o.verifiedOnly && fit === "ok" && !o.verified),
   };
+}
+
+/**
+ * What the join bar's Join does for this viewer, and so what "I'm in" from a message (`?join=1`) opens:
+ * `held`, the held place of the browser's own name (`HeldForYou`); `form`, the bar's own form, because a
+ * fixed-pairs night asks for the partner; `tap`, the bar's Join itself, one tap under its own words
+ * ("Ask to join" outside the range), with no level asked and none sent; `spot`, the open spot's form
+ * above, else the bar's form, for a name or a level.
+ */
+export type JoinStep = "held" | "form" | "tap" | "spot";
+
+export function joinStep(o: { heldForMe: boolean; fixedPairs: boolean; hasIdentity: boolean; needsLevel: boolean }): JoinStep {
+  if (o.heldForMe) return "held";
+  if (o.fixedPairs) return "form";
+  if (o.hasIdentity && !o.needsLevel) return "tap";
+  return "spot";
 }

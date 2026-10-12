@@ -42,6 +42,12 @@ export type ParsedNew = {
   place: string | null;
   /** True when `venue` is a court from the known lists rather than the words as typed. */
   venueKnown: boolean;
+  /**
+   * A club of the directory that the line names in full (`matchVenue`'s `inFull`, the owner's decision of
+   * 10 October 2026: "Yes, but only on the club's own words"), or null. `venue` may be the chat's own
+   * spelling of it. `createFromChat` lists the match on the club's board when it sits there.
+   */
+  club: string | null;
 };
 
 // Cyrillic has no \b in JS regexes; these lookarounds are the word boundary for both alphabets.
@@ -115,7 +121,7 @@ const toNum = (s: string) => Number(s.replace(",", "."));
  */
 export function parseNewCommand(args: string, opts: { tz: string; now?: Date; venues?: readonly string[]; clubs?: readonly string[] }): ParsedNew {
   const now = opts.now ?? new Date();
-  const out: ParsedNew = { startsAt: null, date: null, time: null, venue: null, court: null, type: "match", format: null, capacity: null, levelMin: null, levelMax: null, cost: null, tzHint: tzHintFor(args), publicListing: false, timeFrom: null, dayTyped: false, meridiem: false, place: null, venueKnown: false };
+  const out: ParsedNew = { startsAt: null, date: null, time: null, venue: null, court: null, type: "match", format: null, capacity: null, levelMin: null, levelMax: null, cost: null, tzHint: tzHintFor(args), publicListing: false, timeFrom: null, dayTyped: false, meridiem: false, place: null, venueKnown: false, club: null };
   let text = ` ${args.replace(/[\u2018\u2019\u02bc]/g, "'").replace(/\s+/g, " ").trim()} `;
   const take = (re: RegExp, on: (m: RegExpMatchArray) => boolean | void) => {
     text = text.replace(re, (...m) => {
@@ -286,19 +292,23 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
 
   // Whatever is left is the place, unless it is a seat word ("I'm in" in reply to a prompt is not a court).
   // Every preposition goes, not only the first: "в четверг в 19:00 Равай" leaves "Равай", not "в Равай".
+  // `place` keeps the seat word as typed, so a crew's question with one in it ("Thursday 7pm I'm out,
+  // anyone?") names no court it could be held at.
   const words = readWords(text.trim())?.kind;
-  const venue =
-    words === "join" || words === "leave"
-      ? ""
-      : text
-          .replace(/[?!¿¡"«»“”]+/g, " ")
-          .replace(word("at|in|on|в|во|на|у|@|с|from|en|a las|a la", "giu"), " ")
-          .replace(/[,;·]+/g, " ")
-          .replace(/\s+/g, " ")
-          .replace(/^[\s\-–—.]+|[\s\-–—.]+$/g, "")
-          .trim();
-  const known = venue && (opts.venues?.length || opts.clubs?.length) ? matchVenue(venue, opts.venues ?? [], opts.clubs ?? []) : null;
-  out.place = venue || null;
+  const left = text
+    .replace(/[?!¿¡"«»“”]+/g, " ")
+    .replace(word("at|in|on|в|во|на|у|@|с|from|en|a las|a la", "giu"), " ")
+    .replace(/[,;·]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–—.]+|[\s\-–—.]+$/g, "")
+    .trim();
+  const venue = words === "join" || words === "leave" ? "" : left;
+  const known = venue && (opts.venues?.length || opts.clubs?.length) ? matchVenue(venue, opts.venues ?? [], opts.clubs ?? [], { inFull: true }) : null;
+  // A club of the directory named in full by the line itself, not found through the chat's own courts.
+  // The chat may know the same club by its own spelling ("Warehaus" for WAREHAUS.club): whether the match
+  // sits at this club is the venue's slug's question (`createFromChat`), not a question of spelling.
+  out.club = known && opts.clubs?.length ? matchVenue(venue, [], opts.clubs, { inFull: true }) : null;
+  out.place = (words === "join" || words === "leave" ? text.trim() : venue) || null;
   out.venueKnown = Boolean(known);
   out.venue = known ?? (venue ? venue.slice(0, 80) : null);
   if (out.type === "tournament" && out.capacity == null) out.capacity = 8;
@@ -316,9 +326,31 @@ export function parseNewCommand(args: string, opts: { tz: string; now?: Date; ve
 const GENERIC = new Set(["padel", "club", "the", "co", "sports", "sport", "tennis", "indoor", "outdoor", "hotel", "arena", "racquet", "racket", "court", "courts", "center", "centre", "academy", "and", "for", "this", "клуб", "падел", "корт", "de", "del", "la", "el"]);
 // A city or a country ("phuket", "bangkok", "madrid"): it names no court, wherever it is typed.
 const CITY_NAMES = new Set([...CITIES.flatMap((c) => [c.slug, c.name.toLowerCase()]), ...Object.keys(ZONE_ALIASES)]);
-// An area of a city ("rawai", "kata"): a court the chat already knows may go by it ("Rawai" for the crew's Rawai Padel), a club
-// in the directory may not, or "/new tmr 19:00 Rawai" would land on a club's board and reach its regulars.
-const AREA_WORDS = new Set(CITY_WORDS.flatMap((c) => c.needles).filter((n) => /^[\p{L}\d]+$/u.test(n) && !CITY_NAMES.has(n)));
+/**
+ * The cities, islands and districts of Thailand and Singapore where the directory lists clubs, as single
+ * words (a two-word name, "Chiang Mai", is both its words). Only the club matcher reads them: they decide
+ * no time zone, because `tzHintFor` finds its needles inside other words.
+ */
+const PLACES_TH_SG = [
+  // Thailand: the cities and islands, then Bangkok's districts and the streets the clubs are named for.
+  "bangkok", "bkk", "samui", "kohsamui", "chaweng", "lamai", "bophut", "maenam", "phangan", "koh", "tao", "krabi", "aonang", "lanta", "phi", "pattaya", "jomtien", "naklua", "pratumnak", "chonburi", "sriracha", "rayong", "chiang", "mai", "chiangmai", "cnx", "nimman", "hua", "hin", "huahin", "pranburi", "trat", "chang", "khao", "lak", "khaolak", "phangnga", "sukhumvit", "asoke", "asok", "thonglor", "thonglo", "ekkamai", "ekamai", "phrom", "phong", "onnut", "nut", "silom", "sathorn", "sathon", "ari", "ratchada", "ladprao", "lat", "phrao", "bangna", "rama", "ramkhamhaeng", "chatuchak", "siam", "ploenchit", "nonthaburi", "banthatthong", "bangsaen",
+  // Phuket's areas the time zone hints do not already name.
+  "cherngtalay", "thalang", "kathu", "maikhao", "naiyang", "panwa", "layan", "chalong",
+  // Singapore's districts.
+  "orchard", "bedok", "changi", "bugis", "dempsey", "havelock", "holland", "ayer", "rajah", "jalan", "kayu", "sentosa", "chinatown", "tanjong", "pagar", "marina", "novena", "tampines", "jurong", "woodlands", "yishun", "punggol", "sengkang", "serangoon", "toa", "payoh", "bishan", "clementi", "buona", "vista", "kallang", "katong", "tiong", "bahru", "raffles", "newton", "tanglin", "bukit", "timah", "pasir", "ris", "queenstown", "alexandra", "harbourfront", "keppel", "seletar", "thomson", "kranji", "outram", "geylang", "paya", "lebar", "simei", "siglap", "kembangan", "eunos", "dover", "laguna",
+];
+// An area of a city ("rawai", "kata", "samui", "orchard"): a court the chat already knows may go by it ("Rawai" for the crew's
+// Rawai Padel), a club in the directory may not, or "/new tmr 19:00 Samui" would land on a club's board and reach its regulars.
+const AREA_WORDS = new Set([...CITY_WORDS.flatMap((c) => c.needles), ...PLACES_TH_SG].filter((n) => /^[\p{L}\d]+$/u.test(n) && !CITY_NAMES.has(n)));
+/**
+ * Words of a club's name that are everybody's words too ("Padel Asia", "Pad Thai Padel", "Padel Bay
+ * Indoor Club", "No Drama Padel"): a /new line or a crew's question of these alone names no club, so "no
+ * drama" in a chat is not a club in Bangkok. With the club's other words they still do ("Koh Tao Athletic").
+ */
+const COMMON_WORDS = new Set(["asia", "asian", "thai", "bay", "beach", "sky", "top", "pop", "swiss", "soi", "baan", "tropical", "lodge", "city", "park", "island", "east", "west", "north", "south", "central", "river", "valley", "coast", "hill", "garden", "house", "home", "prime", "station", "drama", "athletic", "destination"]);
+/** The words a club's name carries beside its own: "Pattaya Padel" is Pattaya Padel Club, "Padel Bay" is Padel Bay Indoor Club. */
+const FILLER = new Set([...GENERIC].filter((w) => !["padel", "падел", "tennis", "racquet", "racket"].includes(w)));
+const filled = (words: string[]) => [...new Set(words.filter((w) => !FILLER.has(w)))].sort().join(" ");
 // The same areas typed in Cyrillic, read as their Latin names, so "Равай" finds the crew's Rawai Padel.
 const LATIN: Record<string, string> = { пхукет: "phuket", патонг: "patong", равай: "rawai", ката: "kata", карон: "karon", чалонг: "chalong", бангтао: "bangtao", камала: "kamala", найхарн: "naiharn", сурин: "surin", лагуна: "laguna", сингапур: "singapore" };
 const placeWords = (s: string) =>
@@ -335,8 +367,21 @@ const distinct = (words: string[]) => words.filter((w) => w.length >= 3 && !GENE
 /** The words of a name that tell one court from another, as `matchVenue` reads them ("WAREHAUS.club" → ["warehaus"]). */
 export const distinctWords = (text: string): string[] => distinct(placeWords(text));
 
-/** True when the words name a place at all ("Bangtao", "Phuket", "the beers"); false for nothing but small or generic words ("the", "padel"). */
-export const namesAPlace = (text: string | null | undefined): boolean => Boolean(text) && placeWords(text!).some((w) => w.length >= 3 && !GENERIC.has(w));
+/** What a /new line must type to name a club of the directory in full: its distinct words, a district or a city aside ("Kross Padel Asoke" → ["kross"]). */
+export const clubKeyWords = (name: string): string[] => distinctWords(name).filter((w) => !AREA_WORDS.has(w));
+
+/** Words a crew's question may carry beside its day and hour that name no court: the game itself. */
+const ASK_FILLER = new Set(["padel", "падел", "pádel", "game", "games", "match", "court", "корт", "игру", "игра", "матч", "партию", "partido", "pista", "juego", "the", "for", "this", "some", "one", "una", "uno"]);
+/** Words that say no, short ones too: "No padel tomorrow 7pm, anyone?" asks for no match. */
+const ASK_NO = new Set(["no", "not", "nobody", "none", "never", "nope", "не", "нет", "никто", "ни", "nadie", "ni", "nunca"]);
+
+/**
+ * True when what a crew's question leaves over names no court at all: nothing, or only the game itself
+ * and small words ("who's in for a game Thursday 7pm?", "anyone for padel Sat 18:00?"). Then the crew's
+ * usual court answers it. Anything else ("beers", "tennis", "I'm out", "no padel") is a place the chat
+ * does not know, or no place for a match, and the question makes nothing.
+ */
+export const asksNoPlace = (text: string | null | undefined): boolean => !text || placeWords(text).every((w) => !ASK_NO.has(w) && (w.length < 3 || ASK_FILLER.has(w)));
 
 /**
  * The known court the words point at, or null; `venues` are the chat's own courts (its usual court, the
@@ -351,8 +396,13 @@ export const namesAPlace = (text: string | null | undefined): boolean => Boolean
  *    A word several courts own decides nothing, unless those are the chat's court spelled twice
  *    ("Rawai Padel Club" the chat typed and "Rawai Padel" in the directory), where the chat's first
  *    spelling wins; two clubs of the directory are never one court.
+ *
+ * `inFull` (the /new line, the owner's decision of 10 October 2026: "only on the club's own words"): a
+ * club of the directory is named by its whole name, or by its name without the words around it
+ * ("Pattaya Padel"), or by every word that tells it from other clubs, a district or a city aside
+ * ("Kross Asoke", "Capella"); never by a word everybody uses ("Asia", "Thai", "Bay").
  */
-export function matchVenue(text: string, venues: readonly string[], clubs: readonly string[] = []): string | null {
+export function matchVenue(text: string, venues: readonly string[], clubs: readonly string[] = [], o: { inFull?: boolean } = {}): string | null {
   const said = placeWords(text);
   if (said.length === 0) return null;
   const seen = new Set<string>();
@@ -367,6 +417,14 @@ export function matchVenue(text: string, venues: readonly string[], clubs: reado
   const saidSet = [...new Set(said)].sort().join(" ");
   const exact = known.find((k) => [...new Set(k.words)].sort().join(" ") === saidSet);
   if (exact) return exact.name;
+  // In full: the club's name without the words around it ("club", "indoor", "the") is a club's name too,
+  // when two words or more are left, or one that is the club's own ("Swiss" and "Racket" are anybody's).
+  if (o.inFull) {
+    const bare = filled(said);
+    const left = bare.split(" ").filter(Boolean);
+    const named = left.length >= 2 || (left.length === 1 && !GENERIC.has(left[0]) && !AREA_WORDS.has(left[0]) && !COMMON_WORDS.has(left[0])) ? known.filter((k) => k.club && filled(k.words) === bare) : [];
+    if (named.length === 1) return named[0].name;
+  }
   const typed = distinct(said);
   const joined = ` ${said.join(" ")} `;
   const whole = known
@@ -375,12 +433,16 @@ export function matchVenue(text: string, venues: readonly string[], clubs: reado
   if (whole) return whole.name;
   if (typed.length === 0) return null;
   // A club of the directory needs every word typed, like any court, and a line of area words alone picks none.
-  const forClubs = typed.some((w) => !AREA_WORDS.has(w)) ? typed : [];
+  // In full (the /new line): a line of everybody's words picks none either, and the club's own words are
+  // all typed ("Kross Asoke", never "Asoke"; "Pad Thai", never "Thai"), a district or a city aside.
+  const weak = (w: string) => AREA_WORDS.has(w) || (o.inFull === true && COMMON_WORDS.has(w));
+  const forClubs = typed.some((w) => !weak(w)) ? typed : [];
   const owners = known
     .map((k) => ({ ...k, own: distinct(k.words) }))
     .filter((k) => {
       const need = k.club ? forClubs : typed;
-      return need.length > 0 && need.every((w) => k.own.includes(w));
+      if (!(need.length > 0 && need.every((w) => k.own.includes(w)))) return false;
+      return !(k.club && o.inFull) || clubKeyWords(k.name).every((w) => typed.includes(w));
     });
   if (owners.length === 0) return null;
   const one = owners.every((o) => o.own.join(" ") === owners[0].own.join(" ")) && owners.filter((o) => o.club).length <= 1;

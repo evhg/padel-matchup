@@ -163,6 +163,30 @@ describe("book@: a booking by email gets the filled form, and nothing else", () 
     expect(text).not.toMatch(/read this in your booking|Not in your booking/);
   });
 
+  it("opens the form in the person's own zone when the mail names no club, never in UTC", async () => {
+    // A mail says no zone. With no club to give one, the form's link carries none, and the form takes
+    // the zone of the person who opens it. Until 11 October 2026 it carried tz=UTC, and the form kept
+    // it: 11:00 read in Phuket became a match at 18:00 Phuket time.
+    expect((await deliver({ from: "nz@mail.example", subject: "Padel", text: `Mon 12 Oct 11:00-12:30 ${LINK}` })).book).toBe("answered");
+    const url = String(sent[0].body.text).split("\n").find((l) => l.startsWith("https://"))!;
+    expect(Object.fromEntries(new URL(url).searchParams)).toEqual({ src: "paste", date: "2026-10-12", time: "11:00", len: "90", booked: "1", invite: LINK });
+  });
+
+  it("never prints a length the form cannot take: 75 minutes shows the start alone, and the form keeps its own", async () => {
+    expect((await deliver({ from: "len@mail.example", text: "Warehaus Mon 12 Oct 18:00-19:15 court 2" })).book).toBe("answered");
+    const text = String(sent[0].body.text);
+    expect(text).toContain("Time: 18:00\n");
+    expect(text).not.toMatch(/19:15|75 minutes|Length/);
+    // The booking gave a length, so the mail does not call it missing either.
+    expect(text).not.toMatch(/Not in your booking/);
+    const url = text.split("\n").find((l) => l.startsWith("https://"))!;
+    expect(new URL(url).searchParams.get("len")).toBeNull();
+    // A length the form takes is printed, as before.
+    sent = [];
+    expect((await deliver({ from: "len2@mail.example", text: "Warehaus Mon 12 Oct 18:00-20:00" })).book).toBe("answered");
+    expect(String(sent[0].body.text)).toMatch(/Time: 18:00–20:00\nLength: 120 minutes/);
+  });
+
   it("never answers its own answer when a reply quotes it (Outlook), so a robot that quotes cannot loop", async () => {
     expect((await deliver({ from: "ol@mail.example", text: OWNER_TEXT })).book).toBe("answered");
     const ours = String(sent[0].body.text);

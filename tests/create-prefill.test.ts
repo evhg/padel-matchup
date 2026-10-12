@@ -42,8 +42,23 @@ describe("the create form's address", () => {
   it("names what a pasted booking left out, so the form asks for it in place", () => {
     expect(readCreateLink({ src: "paste", tz: "Asia/Bangkok", time: "18:00" })).toMatchObject({ venue: null, date: null, time: "18:00", tz: "Asia/Bangkok", missing: ["venue", "date"] });
     expect(readCreateLink({ src: "paste", tz: "Asia/Bangkok", venue: "WAREHAUS.club", date: "2026-10-12" }).missing).toEqual(["time"]);
-    // Without a zone a day and an hour mean nothing, so both are asked for.
-    expect(readCreateLink({ src: "paste", venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: "Mars/Olympus" })).toMatchObject({ date: null, time: null, tz: null, missing: ["date", "time"] });
+    // A zone that is no zone is dropped, and the day and the hour stay: the form reads them in its own zone.
+    expect(readCreateLink({ src: "paste", venue: "WAREHAUS.club", date: "2026-10-12", time: "18:00", tz: "Mars/Olympus" })).toMatchObject({ date: "2026-10-12", time: "18:00", tz: null, missing: [] });
+  });
+
+  it("keeps a pasted booking's day and hour with no zone, so the form reads them in the person's own zone, never UTC", () => {
+    // book@ and a chat with no zone know none. Until 11 October 2026 their links carried tz=UTC, and
+    // the form kept it: 11:00 read in Phuket made a match at 18:00 there.
+    const read = readBooking({ text: "Mon 12 Oct 11:00-12:30 https://thepadelsociety.app.link/AbCdEf12345", clubs: [], now: new Date("2026-10-11T06:00:00Z"), tz: null });
+    expect(read.tz).toBeNull();
+    const href = bookingHref(read);
+    expect(href).not.toContain("tz=");
+    expect(readCreateLink(params(href))).toMatchObject({ fromPaste: true, date: "2026-10-12", time: "11:00", tz: null, durationMinutes: 90, missing: ["venue"] });
+    // A club gives its own zone, whatever the caller knew.
+    const atClub = readBooking({ text: "Warehaus Mon 12 Oct 11:00", clubs: [{ slug: "warehaus", name: "WAREHAUS.club", tz: "Asia/Bangkok" }], now: new Date("2026-10-11T06:00:00Z"), tz: null });
+    expect(params(bookingHref(atClub)).tz).toBe("Asia/Bangkok");
+    // A club's own link still needs all three.
+    expect(readCreateLink({ venue: "Rawai Padel", date: "2026-10-12", time: "18:00" })).toMatchObject({ date: null, time: null, tz: null });
   });
 
   it("a club's link brings the day, the hour and the zone together or not at all", () => {

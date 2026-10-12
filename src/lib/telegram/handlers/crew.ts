@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { telegramChats, type TelegramChat } from "@/db/schema";
 import { chatLocale } from "@/lib/channels/telegram";
@@ -23,8 +23,8 @@ import { REACTION } from "./words";
  * update first (`claimStart`): only the one that wins posts and pins.
  */
 
-/** Bumped when the notice's words change, so a group's opt-in says which words it saw. */
-export const CREW_NOTICE_VERSION = 1;
+/** Bumped when the notice's words change, so a group's opt-in says which words it saw. 2: the example names the crew's own court (11 October 2026). */
+export const CREW_NOTICE_VERSION = 2;
 
 const ADMINS = new Set(["creator", "administrator"]);
 
@@ -36,6 +36,15 @@ async function isGroupAdmin(chatId: number, userId: number): Promise<boolean> {
 
 /** An admin who may pin: without the pinned notice the bot reads nothing. */
 export const mayPinNotice = (m: TgChatMember | null | undefined): m is TgChatMember => Boolean(m && m.status === "administrator" && m.can_pin_messages);
+
+/** An admin who may make invite links. A link the bot made is a door it holds only while it keeps that right. */
+const mayInvite = (m: TgChatMember | null | undefined): boolean => Boolean(m && m.status === "administrator" && m.can_invite_users);
+
+/** The crew page's way into the group: a link the bot makes now, or null when Telegram refuses one. */
+async function freshInvite(chatId: number, crewName: string): Promise<string | null> {
+  const made = await createChatInviteLink(chatId, `Kicksmash · ${crewName}`);
+  return made.ok ? made.result.invite_link : null;
+}
 
 type Start = "started" | "taken" | "failed";
 
@@ -68,7 +77,7 @@ async function startListening(db: Db, chat: TelegramChat, crewName: string, righ
   let noticeId = chat.noticeMessageId && (await pinChatMessage(chat.chatId, chat.noticeMessageId)).ok ? chat.noticeMessageId : null;
   if (!noticeId) {
     const s = strings(chatLocale(chat));
-    const notice = await sendMessage(chat.chatId, `${esc(s.crewNotice)}\n\n${esc(s.crewHow)}`, { silent: true });
+    const notice = await sendMessage(chat.chatId, `${esc(s.crewNotice)}\n\n${esc(s.crewHow(chat.venueName))}`, { silent: true });
     if (!notice.ok) return giveBack();
     if (!(await pinChatMessage(chat.chatId, notice.result.message_id)).ok) {
       await deleteMessage(chat.chatId, notice.result.message_id);
@@ -76,11 +85,9 @@ async function startListening(db: Db, chat: TelegramChat, crewName: string, righ
     }
     noticeId = notice.result.message_id;
   }
-  let invite = chat.inviteLink;
-  if (!invite && rights.can_invite_users) {
-    const made = await createChatInviteLink(chat.chatId, `Kicksmash · ${crewName}`);
-    invite = made.ok ? made.result.invite_link : null;
-  }
+  // The link goes with the right to invite: kept while the bot holds it (a supergroup carries a basic
+  // group's link along), made when it has none, and dropped when the bot may not invite here.
+  const invite = mayInvite(rights) ? (chat.inviteLink ?? (await freshInvite(chat.chatId, crewName))) : null;
   await db.update(telegramChats).set({ noticeVersion: CREW_NOTICE_VERSION, noticeMessageId: noticeId, inviteLink: invite }).where(eq(telegramChats.chatId, chat.chatId));
   await bumpMetric(db, "tg_groups_started").catch(() => undefined);
   return "started";
@@ -108,6 +115,23 @@ export async function crewStart(db: Db, msg: TgMessage, chat: TelegramChat, from
     await say(s.crewAdminOnly);
     return "crew_not_admin";
   }
+  // A group that runs matches for one crew stays that crew's: another crew's link does not move it. A
+  // group admin there types /quiet first, which ends the opt-in, and then any crew may tie it.
+  if (chat.groupId && chat.groupId !== crew.id && chat.noticeVersion != null) {
+    await say(s.crewOther);
+    return "crew_other";
+  }
+  // The first group tied stays the crew's group (rule 31): while another group opted in for this crew,
+  // a second one is not tied. /quiet there, or the bot's removal, frees the crew for a new group. A group
+  // that is gone with no update from Telegram (deleted, or the update lost) frees it too: Telegram is
+  // asked once about the bot there, only now, when a crew link is tapped.
+  for (let other = await otherCrewGroup(db, crew.id, chat.chatId); other != null; other = await otherCrewGroup(db, crew.id, chat.chatId)) {
+    if (!(await botGoneFrom(other))) {
+      await say(s.crewTaken);
+      return "crew_taken";
+    }
+    await db.update(telegramChats).set({ leftAt: new Date(), ...crewLeft }).where(eq(telegramChats.chatId, other));
+  }
   const set = { groupId: crew.id, noticeVersion: CREW_NOTICE_VERSION, tz: chat.tz ?? crew.tz, venueName: chat.venueName ?? crew.venueName };
   await db.update(telegramChats).set(set).where(eq(telegramChats.chatId, chat.chatId));
   const bound: TelegramChat = { ...chat, ...set };
@@ -123,21 +147,63 @@ export async function crewStart(db: Db, msg: TgMessage, chat: TelegramChat, from
 }
 
 /**
- * The bot's own rights changed in a group it stays in. Promoted with the right to pin, in a group that
- * opted in: it starts. No longer an admin: it stops reading at once and keeps the opt-in and the
- * notice, so a group admin who promotes it again need not find the crew link, and the notice already
- * in the group is pinned again rather than posted again. Null when nothing changed for a crew.
+ * Another group that opted in for this crew and still has the bot in it, or null. One read down
+ * `telegram_chats_group_idx`; a crew has one such group at most, because a second is never tied.
+ */
+async function otherCrewGroup(db: Db, groupId: string, chatId: number): Promise<number | null> {
+  const [row] = await db
+    .select({ chatId: telegramChats.chatId })
+    .from(telegramChats)
+    .where(and(eq(telegramChats.groupId, groupId), ne(telegramChats.chatId, chatId), isNotNull(telegramChats.noticeVersion), isNull(telegramChats.leftAt)))
+    .limit(1);
+  return row?.chatId ?? null;
+}
+
+/**
+ * Is the bot gone from this chat? Telegram sends no update when a group is deleted, and an update can be
+ * lost. Gone: Telegram says the bot left or was removed, refuses the question (403: not a member, kicked,
+ * the group deleted), or no longer knows the chat (not found, or upgraded to a supergroup under a new
+ * id). Any other failure (the network, a rate limit) says nothing, so the group stays the crew's.
+ */
+async function botGoneFrom(chatId: number): Promise<boolean> {
+  const botId = telegramBotId();
+  if (!botId) return false;
+  const r = await getChatMember(chatId, Number(botId));
+  if (r.ok) return r.result.status === "left" || r.result.status === "kicked";
+  return r.error_code === 403 || /chat not found|upgraded|deactivated/i.test(r.description);
+}
+
+/**
+ * The bot's own rights changed in a group it stays in (rule 31: it reads only as an admin that may pin
+ * its notice). Promoted with the right to pin, in a group that opted in: it starts. No longer an
+ * admin, or an admin that may no longer pin: it stops reading at once and keeps the opt-in and the
+ * notice, so a group admin who gives the right back need not find the crew link, and the notice already
+ * in the group is pinned again rather than posted again. The invite link follows the right to invite:
+ * made when the right arrives while the bot reads, dropped when the right goes (the link stops being a
+ * door the bot holds). Null when nothing changed for a crew.
  */
 export async function crewRightsChanged(db: Db, chat: TelegramChat, member: TgChatMember): Promise<string | null> {
-  if (chat.listeningSince && member.status !== "administrator") {
-    await db.update(telegramChats).set({ listeningSince: null }).where(eq(telegramChats.chatId, chat.chatId));
-    return "crew_quiet:demoted";
+  const set: Partial<typeof telegramChats.$inferInsert> = {};
+  if (chat.inviteLink && !mayInvite(member)) set.inviteLink = null;
+  if (chat.listeningSince && !mayPinNotice(member)) set.listeningSince = null;
+  if (Object.keys(set).length) await db.update(telegramChats).set(set).where(eq(telegramChats.chatId, chat.chatId));
+  if ("listeningSince" in set) return member.status === "administrator" ? "crew_quiet:no_pin" : "crew_quiet:demoted";
+  if (chat.listeningSince) {
+    if (!chat.inviteLink && mayInvite(member) && chat.groupId) {
+      const crew = await getGroupById(db, chat.groupId);
+      const invite = crew ? await freshInvite(chat.chatId, crew.name) : null;
+      if (invite) {
+        await db.update(telegramChats).set({ inviteLink: invite }).where(eq(telegramChats.chatId, chat.chatId));
+        return "crew_invite";
+      }
+    }
+    return "inviteLink" in set ? "crew_invite_gone" : null;
   }
-  if (!chat.listeningSince && chat.noticeVersion != null && chat.groupId && mayPinNotice(member)) {
+  if (chat.noticeVersion != null && chat.groupId && mayPinNotice(member)) {
     const crew = await getGroupById(db, chat.groupId);
-    if (crew && (await startListening(db, chat, crew.name, member)) === "started") return "crew_listening";
+    if (crew && (await startListening(db, { ...chat, ...set }, crew.name, member)) === "started") return "crew_listening";
   }
-  return null;
+  return "inviteLink" in set ? "crew_invite_gone" : null;
 }
 
 /** The bot left the group, or was removed: nothing is read, the opt-in is gone, and the crew page stops offering the way in. */
@@ -145,8 +211,10 @@ export const crewLeft = { listeningSince: null, noticeVersion: null, noticeMessa
 
 /**
  * /quiet from an admin of the group: the bot stops acting on words, unpins its notice, and says so with
- * 👌. It stays an admin, so Telegram still sends it the group's messages, which it drops unread; only
- * taking its admin rights away, or removing it, stops that. `asGroup`: an anonymous admin.
+ * 👌. The crew page stops handing out the invite link (the group is no longer the crew's run group),
+ * and the crew may tie another group. The bot stays an admin, so Telegram still sends it the group's
+ * messages, which it does not act on; only taking its admin rights away, or removing it, stops that.
+ * `asGroup`: an anonymous admin.
  */
 export async function quietCommand(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, asGroup = false): Promise<string> {
   if (!GROUP_TYPES.has(chat.type) || (!chat.listeningSince && chat.noticeVersion == null)) return "ignored";
@@ -154,7 +222,7 @@ export async function quietCommand(db: Db, msg: TgMessage, chat: TelegramChat, f
     await setMessageReaction(chat.chatId, msg.message_id, REACTION.none);
     return "quiet_not_admin";
   }
-  await db.update(telegramChats).set({ listeningSince: null, noticeVersion: null, noticeMessageId: null }).where(eq(telegramChats.chatId, chat.chatId));
+  await db.update(telegramChats).set({ listeningSince: null, noticeVersion: null, noticeMessageId: null, inviteLink: null }).where(eq(telegramChats.chatId, chat.chatId));
   if (chat.noticeMessageId) await unpinChatMessage(chat.chatId, chat.noticeMessageId);
   await setMessageReaction(chat.chatId, msg.message_id, REACTION.out);
   return "quiet";

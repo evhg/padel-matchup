@@ -6,6 +6,9 @@ import { CreateScreen } from "@/components/CreateScreen";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { PasteBooking } from "@/components/PasteBooking";
 import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
+import { screenshotOffered } from "@/lib/booking/screenshot";
+import { getDb } from "@/db";
+import { bookAddress, bookMailOpen } from "@/lib/config";
 import { Footer, Header } from "@/components/Header";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
@@ -29,6 +32,8 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 async function Home({ searchParams }: { searchParams: Promise<{ type?: string; capacity?: string; group?: string; venue?: string; date?: string; time?: string; tz?: string; tg?: string; dc?: string; names?: string; src?: string; len?: string; court?: string; cost?: string; booked?: string; check?: string; invite?: string }> }) {
   const [t, sp] = await Promise.all([getTranslations(), searchParams]);
+  // "Add screenshot" only while a read could go: not while the key is refused (one look per instance every five minutes).
+  const shot = await screenshotOffered(await getDb());
   return (
     <>
       <Header />
@@ -44,7 +49,7 @@ async function Home({ searchParams }: { searchParams: Promise<{ type?: string; c
               <Link href="/play" prefetch={false} className="inline-flex h-7 items-center gap-1 rounded-full bg-accent-soft px-3 text-sm font-bold text-ink hover:bg-accent hover:text-night" data-testid="landing-find-game">
                 🔎 {t("common.findGame")} →
               </Link>
-              <PasteBooking max={PASTE_TEXT_MAX} />
+              <PasteBooking max={PASTE_TEXT_MAX} shot={shot} mail={bookMailOpen() ? bookAddress() : null} />
             </div>
           }
           prefill={{ type: sp.type, capacity: sp.capacity, group: sp.group, venue: sp.venue, date: sp.date, time: sp.time, tz: sp.tz, tg: sp.tg, dc: sp.dc, names: sp.names, src: sp.src, len: sp.len, court: sp.court, cost: sp.cost, booked: sp.booked, check: sp.check, invite: sp.invite }} />

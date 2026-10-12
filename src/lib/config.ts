@@ -48,6 +48,12 @@ export function apexHost(): string {
   return shortHost().replace(/^www\./, "");
 }
 
+/** book@<apex>: the address that answers a forwarded booking with the filled match form (src/lib/booking/bookMail.ts). */
+export const bookAddress = () => `book@${apexHost()}`;
+
+/** book@ can answer: inbound mail reaches the webhook (its signing secret) and Resend sends the answer (its key). Only then does a page name it. */
+export const bookMailOpen = () => Boolean(process.env.RESEND_WEBHOOK_SECRET) && emailEnabled();
+
 /**
  * Sender for all email. EMAIL_FROM wins; otherwise "Kicksmash <matches@<apex>>",
  * which works as soon as the domain is verified in Resend. Localhost falls back

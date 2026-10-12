@@ -98,7 +98,9 @@
     "thatsMeSure": "Sign in as {name}?",
     "takeHeld": "Take {name}'s held place",
     "takeHeldSure": "Take {name}'s held place?",
-    "takeHeldNo": "That place is no longer held for {name}."
+    "takeHeldNo": "That place is no longer held for {name}.",
+    "heldForYou": "A place in this match is held for {name}.",
+    "heldNotYou": "Not {name}? Add your last name on My matches, then join."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -135,7 +137,8 @@
     "pasteShot": "Add screenshot",
     "pasteShotOff": "Reading a screenshot is not available now. Paste the link or the text instead.",
     "pasteShotBad": "We could not open that picture. Add a screenshot of your booking.",
-    "pasteShotNote": "An AI model reads your screenshot once. We do not keep it."
+    "pasteShotNote": "An AI model reads your screenshot once. We do not keep it.",
+    "pasteMail": "Or forward the confirmation to {address}."
   },
   "create": {
     "title": "New match",
@@ -358,7 +361,9 @@
     "playAgainWhenRange": "Pick a day and time between now and 90 days ahead.",
     "playAgainPlain": "One next game, same settings.",
     "startLocked": "Only the organiser moves the start once the match has started.",
-    "joinBooking": "Join this booking on {platform}"
+    "joinBooking": "Join this booking on {platform}",
+    "playAgainNext": "Next game: {when} · {code}",
+    "playAgainLands": "At that day and time, a tap opens that game. It makes no second one."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -478,7 +483,8 @@
     "sameFailed": "These could not be added. Reload the page and try again.",
     "biggerTextHelp": "Larger words everywhere in the app, on this device.",
     "sameAskingGroup": "This name is a member of a group that asks to join. First play one match at the same club or with the same organiser. Then you can add these matches.",
-    "identityByName": "You came in by tapping your name, so your personal link stays hidden until you confirm an email with a code or link Telegram."
+    "identityByName": "You came in by tapping your name, so your personal link stays hidden until you confirm an email with a code or link Telegram.",
+    "sameNameOnly": "A name alone cannot add these matches. They belong to a member of a group that asks to join."
   },
   "notFound": {
     "title": "Link not found",
@@ -695,7 +701,9 @@
     "bookMissing": "Not in your booking: {fields}.",
     "bookOpen": "Open the filled form. Check it, then tap the button to make the match:",
     "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email. If you mark this answer as spam, it keeps your address only so that it never writes to you again.",
-    "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form."
+    "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form.",
+    "playAgainIn": "I'm in",
+    "playAgainLine": "{spots}. One tap opens the match page at the join step."
   },
   "errors": {
     "not_found": "We couldn't find that.",
@@ -725,7 +733,8 @@
     "taken": "That player already has a partner.",
     "already_paired": "You already have a partner.",
     "not_fixed_pairs": "This tournament doesn't use fixed pairs.",
-    "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off."
+    "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off.",
+    "name_held": "This name has a held place. Take it above, or add your last name to join as somebody else."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -1061,7 +1070,7 @@
     "helpersTitle": "Who helps us run it",
     "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies. It also reads a booking screenshot that you add on the first page, once, to fill in the match form. We keep neither the picture nor the answer.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
     "keepTitle": "How long we keep it",
-    "keepBody": "• Your data: while you use Kicksmash, until you delete your account.\n• A name with no match, no way to reach it and nothing else behind it: a daily clean-up removes it after {disposableDays, plural, one {# day} other {# days}}.\n• The rate-limit keys made from IP addresses: {rateDays, plural, one {# day} other {# days}}.\n• Backups: every night a copy of the database goes to a private GitHub repository, and only we can open it. Each night we also rebuild the repository's history, so it holds only the last {backupDays, plural, one {# day} other {# days}}.\n• Your inbox: each notice for {inboxDays, plural, one {# day} other {# days}}.",
+    "keepBody": "• Your data: while you use Kicksmash, until you delete your account.\n• A name with no match, no way to reach it and nothing else behind it: a daily clean-up removes it after {disposableDays, plural, one {# day} other {# days}}.\n• The rate-limit keys made from IP addresses: {rateDays, plural, one {# day} other {# days}}.\n• Backups: every night a copy of the database goes to a private GitHub repository, and only we can open it. Each night we also rebuild the repository's history, so it holds about the last {backupDays, plural, one {# day} other {# days}}. Older copies then leave its history. GitHub deletes them later, and it does not say when. Until then, we can still open them, and nobody else can.\n• Your inbox: each notice for {inboxDays, plural, one {# day} other {# days}}.",
     "deleteTitle": "When you delete your account",
     "deleteBody": "Delete it at the bottom of My matches. At once, we remove your name, email and phone (also the copies an organiser typed for your seat), your personal link, linked chat accounts, public page, notification devices, the times you wanted to play, your inbox, and your coach page with its lessons. Your upcoming spots are released, and the matches you organise are cancelled. Your old scores and level stay under “Deleted player”, so your partners' history still adds up. The notes you sent through the feedback form stay, with the name and contact on them, because they are about the app: ask us and we delete them too. Your first name leaves the page of ideas that became the app. Copies made before you deleted leave our private backup repository after about {backupDays, plural, one {# day} other {# days}}. After that, older copies are no longer in its history, and GitHub removes them later. Until then, only we can open them.",
     "rightsTitle": "Your rights",
@@ -1341,7 +1350,7 @@
     "askDeclinedNotice": "No place in {group} for now\nThanks for asking. The admins said no this time. You can ask again in a week.",
     "askToJoinSetting": "Ask to join",
     "telegramRun": "Run a Telegram group for this crew",
-    "telegramRunHelp": "Kicksmash joins it as an admin, keeps one card per match there and reads the chat to take “in” and “out”. It keeps first names, Telegram usernames, who is in or out, the court and the score, never the text. A group admin can type /quiet, or remove the bot, to stop.",
+    "telegramRunHelp": "First make a new Telegram group only for this crew's padel, then tap the button above and pick it. Kicksmash joins it as an admin, keeps one card per match there and reads the chat to take “in” and “out”. It keeps first names, Telegram usernames, who is in or out, the court and the score, never the text. A group admin can type /quiet, or remove the bot, to stop.",
     "telegramJoin": "Join the crew's Telegram group"
   },
   "venue": {

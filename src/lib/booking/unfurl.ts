@@ -38,6 +38,11 @@ export const PREVIEW_MAX_BYTES = 256 * 1024;
 export const PREVIEW_MAX_HOPS = 3;
 const VALUE_MAX = 300;
 
+/**
+ * `ref` is the platform's own id of the booking (a Branch link's match id). Nothing past this file reads
+ * it: the paste reads only the title and the description (11 October 2026). It stays for the owner's
+ * open decision on The Padel Society, whose option A reads a match by this id.
+ */
 export type LinkPreview = { title: string | null; description: string | null; siteName: string | null; ref: { type: string; id: string } | null };
 
 /** A link the read may open: https, a platform's host, no address in figures, no user name, port 443. Null for anything else. */

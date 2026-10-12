@@ -101,6 +101,8 @@ const CONTROLS = {
   bt: "bt:1:90:nowhere-club",
   // "Create match" under a pasted booking: the start it showed (epoch minutes in base 36); the booking is read again from the message it answers.
   pb: "pb:c:1",
+  // A /new match on its club's board: off the board (0) or back on it (1), the organiser's tap.
+  vb: "vb:AAAA:0",
   // The owner's desk.
   la: `la:${ZERO_UUID}`,
   ls: `ls:${ZERO_UUID}`,

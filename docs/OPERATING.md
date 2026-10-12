@@ -55,11 +55,24 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
 - `ANTHROPIC_ADMIN_KEY` (an Admin API key from the console) turns the Anthropic row from
   "estimated" into "billed". `ANTHROPIC_MONTHLY_CAP_USD` mirrors the cap set in the console
   (default 20). Both live in Vercel's environment, never in the repository.
-- A refused `ANTHROPIC_API_KEY` (a 401 or a 403) turns the Anthropic row red. Set a new key in
-  Vercel's environment and redeploy. The first call the new key gets accepted puts back to `new`
-  the listening items that the refused key failed and that are still inside the 7-day window
-  (`restoreRefusedItems` in `src/lib/ops/anthropic.ts`). The hourly step then drafts them, three a
-  run. No hand correction in the database is needed.
+- A refused `ANTHROPIC_API_KEY` (a 401 or a 403) turns the Anthropic row red. The owner gets one
+  alert for it each month, with its own line and no spending-cap text (`svc_alert_anthropic_key_<month>`).
+  Set a new key in Vercel's environment and redeploy. The first call the new key gets accepted puts
+  back to `new` the listening items that the refused key failed and that are still inside the 7-day
+  window (`restoreRefusedItems` in `src/lib/ops/anthropic.ts`). The hourly step then drafts them
+  oldest first, ten a run, outside the day's forty drafts (`draftRequeued` in
+  `src/lib/listen/tick.ts`). The same catch-up takes every new item posted before the newest refusal
+  in the window. So the posts that came in while the key was refused get a draft too. It drafts an
+  item only while the item has more than one hour left. So the sooner the key works, the more items
+  get a draft. The 176 items of October 2026 expire from 12 October 09:00 UTC to 18 October 01:00
+  UTC. The catch-up counts its calls and tokens apart (`listen_requeued_calls`, `listen_requeued_in`,
+  `listen_requeued_out`), and the owner's monthly cap still holds it. No hand correction in the
+  database is needed. "Add screenshot" comes back within five minutes after the first accepted call
+  of any feature. The hourly run makes such a call only when a new listening item or a Discord
+  question waits and the day's forty drafts have room. The forty counts the failed calls of every
+  feature, so a long refusal can use them all. Then the button waits for an accepted call of another
+  feature, or for a new UTC day and a new item. When an item waits and the forty has room, a run of
+  the hourly job by hand makes the call at once.
 - Anything else the owner pastes in chat goes to Vercel's environment through the API, then
   the session redeploys by merging or, when nothing changed in code, leaves it for the next deploy.
 
@@ -102,12 +115,15 @@ spend thirty of them a day, so up to 900 a month: "book@kicksma.sh", below).
 Anthropic: the owner's cap (booking screenshots may use twenty calls a day of it: "A booking
 screenshot", below). Tavily: 1,000 credits a month. Telegram: 30 messages a second,
 20 a minute per group. A crew's own Telegram group (DECIDING rule 31) sends every message to the
-webhook, because an admin bot receives them all: one invocation each, dropped before any database
-read unless it is a command, a reply, a link or a word the bot acts on. A busy group of 200 messages
+webhook, because an admin bot receives them all. Each message is one invocation. The bot drops it
+before any database read, unless it is a command, a reply, a link or one of the bot's words. The
+bot's words include "in", "out", "who's in …?" and "times?". Such a word costs one read of the chat's row by its
+key, because only that row says whether the bot reads the group. A busy group of 200 messages
 a day is 6,000 invocations a month, so 160 such groups would spend the whole 1M. `tg_groups_managed`
 is the hourly count of the groups the bot reads now; `tg_groups_started` counts starts a day. A group
 where the bot is an admin without the opt-in, or after /quiet, sends every message too, and nothing
-counts it: no column records the bot's admin rights. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
+counts it: no column records the bot's admin rights. There, such a word also costs that one read, and
+then the bot does nothing. The update from Telegram does not say whether the group opted in. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
 unverified tier — and the definition is the whole of it, because Meta counts only numbers messaged
 *outside* an open 24-hour window, so only templates to people who have gone quiet spend that limit.
 Counted is not the same as free. A message a player sends us costs nothing. Every message we send
@@ -479,13 +495,18 @@ outcome to Vercel's function log as `book_mail` and the outcome, with no address
 `skipped:` and the reason (`sender`, `machine`, `own`, `quote`, `nothing`, `again`, `limit`, `cap`,
 `marked`, `send`). When `book_mail_skipped` climbs and `book_mail_answered` stays at zero, read those
 lines in the runtime log of `/api/inbound/resend`. If book@ gets no mail at all, Resend's receiving
-domain may not route that address: send one test mail and look for `email.received` in Resend.
+domain may not route that address: send one test mail and look for `email.received` in Resend. The
+paste box on the first page names book@ only while `RESEND_WEBHOOK_SECRET` and `RESEND_API_KEY` are
+both set (`bookMailOpen`). On 11 October 2026 no mail had reached book@ yet.
 
 **A booking screenshot.** "Add screenshot" in the landing page's paste box sends one picture to the
 AI model for one read (DECIDING rule 9, the owner, 11 October 2026). The call uses `ANTHROPIC_API_KEY`
 and the model that `LISTEN_MODEL` names, and `recordModelCall` counts its tokens with every other
 call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
-Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call:
+Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call.
+The key and the month's spend come first, so a refused key or a spent month takes nothing from the
+other limits. While the key is refused or the spend is at the cap, the paste box does not show "Add
+screenshot" (`screenshotOffered`: one read for each server instance every five minutes).
 
 | Limit | Number | Row |
 | --- | --- | --- |
@@ -612,7 +633,9 @@ file with the contents API only adds a commit, so the old copies stayed in the h
 after the night's file is written and the old days are pruned, `runBackup` reads the default branch's
 head, makes one new commit with the same tree and no parent ("backups as of <day>"; its body names the
 commit it replaces), and forces the branch onto it. Every older commit is then unreachable, and GitHub
-removes it at a time it does not give, which is why /privacy says "about 60 days". The guards, each
+removes it at a time it does not give. Until then, anybody with access to the repository can still
+read an old commit by its id. The prune keeps the cutoff day, so the folder holds 61 nights. That is
+why /privacy says "about the last 60 days" and says that GitHub deletes the older copies later. The guards, each
 proven in `tests/backup-history.test.ts`: no rebuild when tonight's write failed; the tree must be read
 whole and hold nothing but night files under `backups/` (a README, LICENSE, `.gitignore` or
 `.gitattributes` at the root is allowed, anything else means the token points at the wrong
@@ -621,14 +644,19 @@ the branch must not move between the first read and a second read just before th
 refused, failed or odd answer at any step stops before the update. A night that stops keeps the
 history as it was, still reports the backup as done, and says why in `backup.history` and
 `backup.historyReason` of the hourly job's answer and in its `[backup]` log line. The daily metrics
-`backup_history_rebuilt` and `backup_history_kept` count the nights, and the board's backup row names
-the last of each and turns yellow when a night kept the history and the last rebuild is more than two
-days older, or there was none. A branch protection rule or ruleset that blocks force pushes on that
-branch makes every night `github 422 at move the branch`. **To undo a rebuild**, take the commit the branch pointed at before
-it: the log line (`history rebuilt, <repo> main moved from <old> to <new>; to undo, point main back at
-<old>`), `backup.historyFrom` in the job's answer, or the body of the new commit. Then, while GitHub
-still holds that commit, point the branch back with the backup token:
-`curl -X PATCH -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" -d '{"sha":"<old>","force":true}' https://api.github.com/repos/$BACKUP_GITHUB_REPO/git/refs/heads/main`.
+`backup_history_rebuilt` and `backup_history_kept` count the nights. The board's backup row names the
+last rebuild and the last kept night. It turns yellow when the last rebuild is more than two days older
+than the last backup, or when no rebuild exists. So it also sees a night that counts neither metric:
+a run that the hourly job's 60 seconds stopped after `backup_done` and before the history step. The
+next run answers "already" for that day and does not try again. A branch protection rule or ruleset
+that blocks force pushes on that branch makes every night `github 422 at move the branch`. **To undo a
+rebuild**, take the branch and the commit it pointed at before it. The log line names both
+(`history rebuilt, <repo> <branch> moved from <old> to <new>; to undo, point <branch> back at <old>`).
+`backup.historyFrom` in the job's answer and the body of the new commit also give `<old>`. The branch
+is the repository's default branch, not always `main`:
+`curl -s -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" https://api.github.com/repos/$BACKUP_GITHUB_REPO | grep default_branch`
+shows it. Then, while GitHub still holds that commit, point the branch back with the backup token:
+`curl -X PATCH -H "Authorization: Bearer $BACKUP_GITHUB_TOKEN" -d '{"sha":"<old>","force":true}' https://api.github.com/repos/$BACKUP_GITHUB_REPO/git/refs/heads/<branch>`.
 Fix the cause before the next night, because the next rebuild cuts the history again.
 
 **Bounces and complaints.** Resend's webhook (`/api/inbound/resend`, the same one that carries

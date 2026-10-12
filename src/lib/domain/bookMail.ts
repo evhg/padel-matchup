@@ -1,6 +1,7 @@
 import { detectPlatform } from "@/lib/booking/platforms";
 import { formatEventDay } from "@/lib/dates";
 import { PASTE_LINKS_MAX, PASTE_TEXT_MAX, type BookingRead } from "./bookingPaste";
+import { parseMatchLength } from "./matchLength";
 
 /**
  * book@<apex>, the rules (the owner, 11 October 2026: "A new address answers by itself with the filled
@@ -226,16 +227,20 @@ const plusMinutes = (time: string, minutes: number): string => {
  * only, never in the words of the mail: a sender's address can be faked, so the words of an answer must
  * carry nothing that the sender chose ("Players: Visit claimprize.example" to a stranger). A booking
  * read from its link alone says so in its first line. No sign-in link, no personal link, no match: the
- * form makes the match when the person taps its button. `t` is the translator for the mail's language. Pure.
+ * form makes the match when the person taps its button. `t` is the translator for the mail's language.
+ * The length is one the form takes (60, 90 or 120, `parseMatchLength`), as in the bot's summary: a
+ * booking of 75 minutes shows the start alone and no length, because the form shows its own 90 and
+ * the mail must not say another. Such a length is not named as missing either: the booking gave one. Pure.
  */
 export function bookAnswer(read: BookingRead, formUrl: string, t: T, locale: string): string {
   const day = read.date ? formatEventDay(new Date(`${read.date}T12:00:00Z`), "UTC", locale) : null;
-  const time = read.time ? (read.minutes ? `${read.time}–${plusMinutes(read.time, read.minutes)}` : read.time) : null;
+  const len = parseMatchLength(read.minutes);
+  const time = read.time ? (len ? `${read.time}–${plusMinutes(read.time, len)}` : read.time) : null;
   const fields: [string, string | null][] = [
     [t("email.bookClub"), read.club?.name ?? null],
     [t("email.bookDay"), day],
     [t("email.bookTime"), time],
-    [t("email.bookLength"), read.minutes ? t("email.bookMinutes", { minutes: read.minutes }) : null],
+    ...(len || !read.minutes ? [[t("email.bookLength"), len ? t("email.bookMinutes", { minutes: len }) : null] as [string, string | null]] : []),
   ];
   const got = fields.filter(([, v]) => v).map(([label, v]) => `${label}: ${v}`);
   const missing = fields.filter(([, v]) => !v).map(([label]) => label.toLocaleLowerCase(locale));

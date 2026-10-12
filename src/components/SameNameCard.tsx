@@ -14,9 +14,11 @@ export const NOT_MINE_COOKIE = "ks_notmine";
  * address. Offered only to a person who proved who they are, with the matches themselves shown, so
  * the answer is theirs to give with the facts in front of them (the owner's option A, 24 September
  * 2026). A row that shares a match, an organiser or a club was already folded in at the moment of
- * proof; what reaches this card is the rest. A row that is a member of a group that asks to join
- * shows its matches without "Yes, these are mine": one line says what would let the person add them
- * (the owner, 10 October 2026: "Need a shared match first"; `mayClaim`), and "Not me" stays.
+ * proof; what reaches this card is the rest. A row that is a member of a group that asks to join,
+ * with no match the two sat in together, shows its days only, without "Yes, these are mine" (the
+ * owner, 10 October 2026: "Need a shared match first"; `mayClaim`): no club and no names, because
+ * those would tell a stranger of the same name where to go to pass the guard, and one line says that
+ * a name alone cannot add them. "Not me" stays.
  */
 export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
   if (!proved(player)) return null;
@@ -31,20 +33,24 @@ export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
       <h2 className="text-lg font-extrabold">{t("sameTitle")}</h2>
       <p className="mt-1 text-sm text-muted">{t("sameHelp", { name: player.displayName })}</p>
       <ul className="mt-3 flex flex-col gap-3">
-        {rows.map((r) => (
-          <li key={r.id} className="rounded-2xl border border-line p-3" data-testid={`same-name-${r.id}`}>
-            <div className="font-bold">{t("sameCount", { count: r.matches })}</div>
-            <ul className="mt-1 flex flex-col gap-0.5 text-sm text-muted">
-              {(matches.get(r.id) ?? []).map((m) => (
-                <li key={m.code}>
-                  {formatEventDay(m.startsAt, m.tz, locale)} · {m.venue ?? t("sameNoVenue")}
-                  {m.with.length > 0 ? ` · ${t("sameWith", { names: m.with.join(", ") })}` : ""}
-                </li>
-              ))}
-            </ul>
-            <SameNameButtons rowId={r.id} notMine={[...notMine]} claimable={mayClaim(r)} />
-          </li>
-        ))}
+        {rows.map((r) => {
+          const claimable = mayClaim(r);
+          return (
+            <li key={r.id} className="rounded-2xl border border-line p-3" data-testid={`same-name-${r.id}`}>
+              <div className="font-bold">{t("sameCount", { count: r.matches })}</div>
+              <ul className="mt-1 flex flex-col gap-0.5 text-sm text-muted">
+                {(matches.get(r.id) ?? []).map((m) => (
+                  <li key={m.code}>
+                    {formatEventDay(m.startsAt, m.tz, locale)}
+                    {claimable ? ` · ${m.venue ?? t("sameNoVenue")}` : ""}
+                    {claimable && m.with.length > 0 ? ` · ${t("sameWith", { names: m.with.join(", ") })}` : ""}
+                  </li>
+                ))}
+              </ul>
+              <SameNameButtons rowId={r.id} notMine={[...notMine]} claimable={claimable} />
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

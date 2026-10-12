@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
+import { clubs } from "@/db/schema";
+import { prepareBooking } from "@/lib/booking/prepare";
 import { baseUrl } from "@/lib/config";
 import { formatEventTime } from "@/lib/dates";
 import { lateExitFor, streakLine, winStreakFor, type Streak } from "@/lib/domain/banter";
@@ -10,7 +13,7 @@ import { praiseLine } from "@/lib/domain/praise";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import { cardTitle, strings, whereLine, type BotLocale } from "@/lib/telegram/card";
-import type { CardChannel, PostOptions, ResultSummary, Room } from "./types";
+import type { CardChannel, CardDetail, PostOptions, ResultSummary, Room } from "./types";
 
 /**
  * The one card per match, on any channel: posted once, edited in place, a complete line-up noted once,
@@ -32,6 +35,28 @@ export function materialKey(detail: EventDetail): string {
   return createHash("sha256").update([ev.status, ev.startsAt.toISOString(), ev.venueSlug ?? "", ev.capacity, occupiedOf(detail), result, ...length].join("|")).digest("hex");
 }
 
+/**
+ * "Book this court" on the card (DECIDING rule 36): where the match page's button goes, for a match
+ * still to come, at a club somebody vetted, with no booking link of its own and no court booked yet.
+ * One read of the club by its key, and none for a match that cannot show the link. The link carries
+ * nobody's identity, and a button shows no link preview.
+ */
+export async function courtBookingFor(db: Db, detail: EventDetail, now = new Date()): Promise<{ url: string } | null> {
+  const ev = detail.event;
+  if (!ev.venueSlug || ev.bookingUrl || ev.courtBookedAt || ev.status === "cancelled" || ev.status === "past" || ev.startsAt.getTime() <= now.getTime()) return null;
+  const [club] = await db
+    .select({ bookingUrl: clubs.bookingUrl, bookingPlatform: clubs.bookingPlatform, website: clubs.website, tz: clubs.tz, source: clubs.source, approvedAt: clubs.approvedAt, rejectedAt: clubs.rejectedAt })
+    .from(clubs)
+    .where(eq(clubs.slug, ev.venueSlug))
+    .limit(1);
+  const prepared = club ? prepareBooking(club, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
+  return prepared ? { url: prepared.url } : null;
+}
+
+/** What a channel's card shows beside the match: read once, for a channel that shows it. */
+const withBooking = async <P, R, C>(ch: CardChannel<P, R, C>, db: Db, detail: CardDetail, now: Date): Promise<CardDetail> =>
+  ch.booksCourt ? { ...detail, booking: await courtBookingFor(db, detail, now).catch(() => null) } : detail;
+
 /** Posts the card of a match into a room, or refreshes the one already there. */
 export async function postCard<P, R, C>(ch: CardChannel<P, R, C>, db: Db, detail: EventDetail, room: Room<R>, o: PostOptions = {}, now = new Date()): Promise<"posted" | "refreshed" | "failed"> {
   const ev = detail.event;
@@ -40,7 +65,7 @@ export async function postCard<P, R, C>(ch: CardChannel<P, R, C>, db: Db, detail
     await syncCards(ch, db, ev.code, now);
     return "refreshed";
   }
-  const r = ch.render(detail, room.locale, now);
+  const r = ch.render(await withBooking(ch, db, detail, now), room.locale, now);
   const sent = await ch.post(db, room, r.payload, o);
   if (!sent.ok) return "failed";
   await ch.saveCard(db, ev.id, room, sent.messageId, "card", ch.canEdit ? r.hash : materialKey(detail));
@@ -72,7 +97,7 @@ export async function syncCards<P, R, C>(ch: CardChannel<P, R, C>, db: Db, code:
     const found = await getEventByCode(db, code);
     if (!found) return 0;
     const cards = await ch.cardsOf(db, found.event.id, ["card"]);
-    const detail = cards.length > 0 || ch.syncExtra ? { ...found, lateExit: await lateExitFor(db, found, now).catch(() => null) } : found;
+    const detail = cards.length > 0 || ch.syncExtra ? await withBooking(ch, db, { ...found, lateExit: await lateExitFor(db, found, now).catch(() => null) }, now) : found;
     let edits = 0;
     for (const { card, room } of cards) {
       const r = ch.render(detail, room.locale, now);

@@ -1,9 +1,11 @@
 import { and, asc, eq, gt, gte, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, facts, slots, telegramCards, type TelegramChat } from "@/db/schema";
+import { events, facts, slots, telegramCards, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
 import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
+import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
 import { chatLocale } from "@/lib/channels/telegram";
+import { baseUrl } from "@/lib/config";
 import { formatEventDay, formatEventTime, utcToZonedParts } from "@/lib/dates";
 import { isDomainError } from "@/lib/domain/errors";
 import { recordFact } from "@/lib/domain/facts";
@@ -13,7 +15,7 @@ import { esc, sendMessage, setMessageReaction, telegramBotId, type InlineKeyboar
 import { strings } from "../card";
 import { chatZone, GROUP_TYPES } from "../chats";
 import { findOrCreateTelegramPlayer, findTelegramPlayer } from "../identity";
-import { namesAPlace, parseNewCommand, tzHintFor } from "../parse";
+import { asksNoPlace, parseNewCommand, tzHintFor } from "../parse";
 import { syncTelegram } from "../post";
 import { readWords, type Word } from "../words";
 import { createMatchInChat, knownVenues } from "./new";
@@ -95,6 +97,30 @@ export async function countSeat(db: Db, via: "word" | "tap", outcome: string, pl
   if (taken) await metric(db, "tg_seat_undone_10min");
 }
 
+/**
+ * A chat player's calendar: after a seat taken by a word or a tap in a crew's group, that person alone
+ * gets the button to their calendar feed, once ever (the fact `player.calendar_offered`, read down
+ * `facts_subject_idx`). The feed's page and address sign nobody in (`src/lib/calendarFeed.ts`), so the
+ * message may be forwarded. A player whose address on file brings an invitation per match gets none
+ * (`feedCalendar`), and the group sees nothing: an ephemeral message, which Telegram may not deliver.
+ */
+export async function offerCalendar(db: Db, chat: TelegramChat, player: Player, userId: number, threadId: number | null): Promise<boolean> {
+  if (!isListening(chat) || !GROUP_TYPES.has(chat.type) || !feedCalendar(player)) return false;
+  const [told] = await db
+    .select({ id: facts.id })
+    .from(facts)
+    .where(and(eq(facts.subjectType, "player"), eq(facts.subjectId, player.id), eq(facts.kind, "player.calendar_offered")))
+    .limit(1);
+  if (told) return false;
+  const locale = chatLocale(chat);
+  const s = strings(locale);
+  const page = feedLinks(baseUrl(), await feedKeyFor(db, player), locale).page;
+  const sent = await sendMessage(chat.chatId, esc(s.calendarFeed), { keyboard: { inline_keyboard: [[{ text: s.calendarButton, url: page }]] }, onlyFor: userId, threadId, silent: true });
+  if (!sent.ok) return false;
+  await recordFact(db, { kind: "player.calendar_offered", channel: "telegram", actorPlayerId: player.id, subject: { type: "player", id: player.id } });
+  return true;
+}
+
 /** Takes or frees the sender's seat as the card's ✅ and ❌ do, edits the card, and reacts once. */
 export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, detail: EventDetail, kind: "join" | "leave", ctx: OpContext): Promise<string> {
   // A join finds or creates the player as the ✅ button does; a leave never creates anybody.
@@ -117,6 +143,7 @@ export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, fro
     await sendMessage(chat.chatId, esc(outcome === "requested" ? s.toastRequested : s.toastLevel), { onlyFor: from.id, threadId: msg.message_thread_id ?? null, silent: true });
   }
   if (player) await countSeat(db, "word", outcome, player.id, detail.event);
+  if (player && outcome === "joined") await offerCalendar(db, chat, player, from.id, msg.message_thread_id ?? null);
   return `word_${kind}:${outcome}`;
 }
 
@@ -202,7 +229,8 @@ const UNCLEAR =
   /\d|(?<!\p{L})(?:next|weeks?|weekends?|tonite|january|february|march|april|june|july|august|september|october|november|december|jan|feb|apr|jun|jul|aug|sept?|oct|nov|dec|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|semanas?|finde|pr[óo]xim\p{L}*|следующ\p{L}*|недел\p{L}*|выходн\p{L}*|январ\p{L}*|феврал\p{L}*|март\p{L}*|апрел\p{L}*|ма[йя]|июн\p{L}*|июл\p{L}*|август\p{L}*|сентябр\p{L}*|октябр\p{L}*|ноябр\p{L}*|декабр\p{L}*)(?!\p{L})/iu;
 
 /**
- * "who's in Thursday 7pm Rawai?": the match through the /new path, its card as the reply. Ordinary chat
+ * "who's in Thursday 7pm Rawai?" (or "Let's play Thursday 7pm at Rawai, who's in?"): the match through
+ * the /new path, its card as the reply. Ordinary chat
  * must never become a match, so a question makes one only when everything in it is read: an hour named
  * outright ("7pm", "19:00", "at 19", never a stray number), and a place that is a court the chat knows
  * (its usual court, the sender's, a listed club named in full), or no place at all and a usual court.
@@ -223,7 +251,7 @@ async function askForMatch(db: Db, msg: TgMessage, chat: TelegramChat, from: TgU
   // A tournament, a court that is not a number, a date or a word the parser cannot place: not ours to guess.
   if (parsed.type !== "match" || (parsed.court && !/^\d{1,2}$/.test(parsed.court)) || (parsed.place && UNCLEAR.test(parsed.place))) return unsure("unclear");
   // The place is a court the chat knows, or the crew's usual court when none was named; never the words as typed.
-  const venue = parsed.venueKnown ? parsed.venue : namesAPlace(parsed.place) ? null : chat.venueName;
+  const venue = parsed.venueKnown ? parsed.venue : asksNoPlace(parsed.place) ? chat.venueName : null;
   if (!venue) return unsure("no_place");
   // The card already there answers the question: same hour, or twelve hours on when no am/pm was typed
   // ("who's in Thursday at 7?" is the 19:00 card), on the same day, or any day when none was typed.

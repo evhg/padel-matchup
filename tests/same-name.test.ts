@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { players, slots } from "@/db/schema";
+import { events, players, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { createGroup, getGroupMember, updateGroup } from "@/lib/domain/groups";
 import { restoreByEmail } from "@/lib/domain/identity";
@@ -131,10 +131,12 @@ describe("the same name, one side proved", () => {
     expect(await seatsOf(dana.id)).toBe(1);
   });
 
-  it("with a shared organiser, a row in a crew that asks to join folds as before, at the proof and by claim", async () => {
+  // "Need a shared match first" means a match: a shared organiser or a shared club is not one, and a
+  // match called off is none. Both doors ask it, the claim and the automatic fold at the proof.
+  it("a row in a crew that asks to join does not fold through a shared organiser alone, at the proof or by claim", async () => {
     const org = await makePlayer(db, "Org Seven", { email: "org7@example.com" });
     const boss = await makePlayer(db, "Boss Two", { email: "boss2@example.com" });
-    // At the moment of proof: the automatic fold, unchanged.
+    // At the moment of proof: Eli and the other Eli played for the same organiser, never in one match.
     const eli = await makePlayer(db, "Eli");
     const eli2 = await makePlayer(db, "Eli");
     await match(org, "Rawai Padel Club", 1, eli);
@@ -142,23 +144,100 @@ describe("the same name, one side proved", () => {
     const crew = await createGroup(db, { name: "Asking crew", creatorPlayerId: boss.id, tz: "Asia/Bangkok", memberIds: [eli2.id] });
     await updateGroup(db, crew.id, boss.id, { askToJoin: true });
     await restoreByEmail(db, "eli@example.com", eli.id);
-    expect(await exists(eli2.id)).toBe(false);
-    expect((await getGroupMember(db, crew.id, eli.id))?.role).toBe("member");
+    expect(await exists(eli2.id), "a shared organiser is not a shared match").toBe(true);
+    expect((await getGroupMember(db, crew.id, eli2.id))?.role).toBe("member");
+    expect(await getGroupMember(db, crew.id, eli.id)).toBeNull();
 
-    // By claim: a row that turns up after the proof, sharing the organiser.
+    // By claim: the other Fin runs an asking crew and played at the same club as Fin, never with him.
     const fin = await makePlayer(db, "Fin");
     await match(org, "Rawai Padel Club", 1, fin);
     await restoreByEmail(db, "fin@example.com", fin.id);
     const fin2 = await makePlayer(db, "Fin");
-    await match(org, "Bangkok Padel", 4, fin2);
+    const org2 = await makePlayer(db, "Org Ten", { email: "org10@example.com" });
+    await match(org2, "Rawai Padel Club", 4, fin2);
     const crew2 = await createGroup(db, { name: "Fin's crew", creatorPlayerId: fin2.id, tz: "Asia/Bangkok" });
     await updateGroup(db, crew2.id, fin2.id, { askToJoin: true });
     const [row] = await sameNameRows(db, fin.id);
-    expect(row).toMatchObject({ id: fin2.id, shared: true, inAskingGroup: true });
+    expect(row).toMatchObject({ id: fin2.id, shared: true, sharedMatch: false, inAskingGroup: true });
+    expect(mayClaim(row)).toBe(false);
+    expect(await claimSameNameRow(db, fin.id, fin2.id), "a shared club is not a shared match").toBe(false);
+    expect(await exists(fin2.id)).toBe(true);
+    expect((await getGroupMember(db, crew2.id, fin2.id))?.role).toBe("admin");
+    expect(await getGroupMember(db, crew2.id, fin.id)).toBeNull();
+  });
+
+  it("a match called off is no shared match: a stranger who made one at the row's club and called it off gets nothing", async () => {
+    // The audit's probe of 11 October 2026: the stranger proves an address, makes a match at the club the
+    // card named, calls it off, and asks again. The crew's admin row must stay where it is.
+    const org = await makePlayer(db, "Org Eleven", { email: "org11@example.com" });
+    const hal = await makePlayer(db, "Hal");
+    await match(org, "Kross Padel", 1, hal);
+    const crew = await createGroup(db, { name: "Hal's crew", creatorPlayerId: hal.id, tz: "Asia/Bangkok" });
+    await updateGroup(db, crew.id, hal.id, { askToJoin: true });
+    const stranger = await makePlayer(db, "Hal");
+    await restoreByEmail(db, "stranger-hal@example.com", stranger.id);
+    const made = await match(stranger, "Kross Padel", 5);
+    await db.update(events).set({ status: "cancelled" }).where(eq(events.id, made.id));
+    const [row] = await sameNameRows(db, stranger.id);
+    expect(row).toMatchObject({ id: hal.id, shared: false, sharedMatch: false, inAskingGroup: true });
+    expect(await claimSameNameRow(db, stranger.id, hal.id)).toBe(false);
+    expect(await foldSameNameRows(db, stranger.id)).toEqual([]);
+    expect((await getGroupMember(db, crew.id, hal.id))?.role).toBe("admin");
+    expect(await getGroupMember(db, crew.id, stranger.id)).toBeNull();
+    // And a match the two were both in, called off, is none either.
+    await db.update(events).set({ status: "open" }).where(eq(events.id, made.id));
+    await joinEvent(db, { eventId: made.id, playerId: hal.id, now: NOW });
+    await db.update(events).set({ status: "cancelled" }).where(eq(events.id, made.id));
+    const [again] = await sameNameRows(db, stranger.id);
+    expect(again).toMatchObject({ sharedMatch: false });
+    expect(await claimSameNameRow(db, stranger.id, hal.id)).toBe(false);
+  });
+
+  // "Together" means a seat in one match that is not called off, and a match still to come counts:
+  // both matches below start after NOW. The owner has not decided whether it should (review of
+  // 11 October 2026: a stranger can take a free seat beside the record).
+  it("a row in a crew that asks to join folds once the two sat in one match together, a match still to come included, at the proof and by claim", async () => {
+    const org = await makePlayer(db, "Org Twelve", { email: "org12@example.com" });
+    const boss = await makePlayer(db, "Boss Three", { email: "boss3@example.com" });
+    // At the moment of proof: Ivy's two records sat in one match, from two browsers.
+    const ivy = await makePlayer(db, "Ivy");
+    const ivy2 = await makePlayer(db, "Ivy");
+    await match(org, "Rawai Padel Club", 1, ivy, ivy2);
+    const crew = await createGroup(db, { name: "Ivy's asking crew", creatorPlayerId: boss.id, tz: "Asia/Bangkok", memberIds: [ivy2.id] });
+    await updateGroup(db, crew.id, boss.id, { askToJoin: true });
+    await restoreByEmail(db, "ivy@example.com", ivy.id);
+    expect(await exists(ivy2.id)).toBe(false);
+    expect((await getGroupMember(db, crew.id, ivy.id))?.role).toBe("member");
+
+    // By claim: the other Jo organised a match Jo sat in, and runs an asking crew.
+    const jo = await makePlayer(db, "Jo");
+    await restoreByEmail(db, "jo@example.com", jo.id);
+    const jo2 = await makePlayer(db, "Jo");
+    await match(jo2, "Bangkok Padel", 4, jo);
+    const crew2 = await createGroup(db, { name: "Jo's crew", creatorPlayerId: jo2.id, tz: "Asia/Bangkok" });
+    await updateGroup(db, crew2.id, jo2.id, { askToJoin: true });
+    const [row] = await sameNameRows(db, jo.id);
+    expect(row).toMatchObject({ id: jo2.id, sharedMatch: true, inAskingGroup: true });
     expect(mayClaim(row)).toBe(true);
-    expect(await claimSameNameRow(db, fin.id, fin2.id)).toBe(true);
-    expect(await exists(fin2.id)).toBe(false);
-    expect((await getGroupMember(db, crew2.id, fin.id))?.role).toBe("admin");
+    expect(await claimSameNameRow(db, jo.id, jo2.id)).toBe(true);
+    expect(await exists(jo2.id)).toBe(false);
+    expect((await getGroupMember(db, crew2.id, jo.id))?.role).toBe("admin");
+  });
+
+  it("a place on the waiting list of the same match is not a shared match", async () => {
+    const org = await makePlayer(db, "Org Thirteen", { email: "org13@example.com" });
+    const kim = await makePlayer(db, "Kim");
+    await restoreByEmail(db, "kim@example.com", kim.id);
+    const kim2 = await makePlayer(db, "Kim");
+    const [p2, p3] = [await makePlayer(db, "Lou"), await makePlayer(db, "Max")];
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(2), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Bangkok Padel" });
+    for (const p of [org, p2, p3, kim2, kim]) await joinEvent(db, { eventId: ev.id, playerId: p.id, now: NOW });
+    const crew = await createGroup(db, { name: "Kim's crew", creatorPlayerId: kim2.id, tz: "Asia/Bangkok" });
+    await updateGroup(db, crew.id, kim2.id, { askToJoin: true });
+    const [row] = await sameNameRows(db, kim.id);
+    // Kim waits behind four seats: the two never sat in one match together, although they share it.
+    expect(row).toMatchObject({ id: kim2.id, shared: true, sharedMatch: false, inAskingGroup: true });
+    expect(await claimSameNameRow(db, kim.id, kim2.id)).toBe(false);
   });
 
   it("a crew that does not ask to join behaves exactly as before: the claim folds the row, membership and all", async () => {
@@ -177,7 +256,7 @@ describe("the same name, one side proved", () => {
     expect((await getGroupMember(db, open.id, gus.id))?.role).toBe("member");
   });
 
-  it("folds at a Telegram link too, when the two played together", async () => {
+  it("folds at a Telegram link too, when the two sat in one match together", async () => {
     const org = await makePlayer(db, "Org Four", { email: "org4@example.com" });
     const cy = await makePlayer(db, "Cy");
     const second = await makePlayer(db, "Cy");

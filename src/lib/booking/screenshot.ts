@@ -50,15 +50,47 @@ const SHOT_MAX_TOKENS = 2000;
 
 const keyOf = () => process.env.ANTHROPIC_API_KEY?.trim() || null;
 
+/** How long one server instance trusts its last look at the key: the landing page reads `metrics_daily` once in this time, not on each view. */
+export const OFFER_TTL_MS = 5 * 60_000;
+let offer: { until: number; open: boolean } | null = null;
+
+/**
+ * Does the paste box offer "Add screenshot"? Not while the newest answer to our key is a refusal, and
+ * not while the month's spend is at the owner's cap: what the service board turns red on, read by the
+ * same `modelGate` that holds the read itself, so every tap would only say "not available now". A
+ * deployment with no key at all still offers it, and the tap says so in one line. What it costs (AGENTS.md
+ * rule 12): one read of `metrics_daily` for each server instance every `OFFER_TTL_MS`, whatever the
+ * number of views. A failed read offers the button: the read itself checks again.
+ *
+ * After a new key, the button comes back within `OFFER_TTL_MS` after the first accepted call of any
+ * feature (`anthropic_ok_at`). The hourly listening run makes such a call only when a new item or a
+ * Discord question waits and the day's forty drafts have room (`withinBudget`, which counts the failed
+ * calls of every feature).
+ */
+export async function screenshotOffered(db: Db, now = new Date()): Promise<boolean> {
+  if (offer && now.getTime() < offer.until) return offer.open;
+  const gate = await modelGate(db, now).catch(() => null);
+  const open = !gate || (!gate.refused && gate.usd < gate.cap);
+  offer = { until: now.getTime() + OFFER_TTL_MS, open };
+  return open;
+}
+
+/** Tests only: forget the instance's last look, so one test's key state never reaches another (rule 11). */
+export const forgetScreenshotOffer = () => {
+  offer = null;
+};
+
 /**
  * One booking screenshot, read: the same result as a paste (`pasteBooking`), with the picture's fields
  * under the typed words. What it costs (AGENTS.md rule 12), in order, each step only when the one
  * before passed:
  *
  *   1. the file's first bytes and its size, and the key's presence: no I/O;
- *   2. the paste limit (`takeRate` "paste", thirty a day) and this address's screenshot limit
+ *   2. the key's state and the month's spend (`modelGate`): one read of `metrics_daily`. First of the
+ *      reads, so a refused key or a spent month costs nobody a paste or a screenshot of the day's
+ *      allowance (it cost both until 11 October 2026);
+ *   3. the paste limit (`takeRate` "paste", thirty a day) and this address's screenshot limit
  *      (`takeRate` "shot", five a day): two counter writes;
- *   3. the key's state and the month's spend (`modelGate`): one read of `metrics_daily`;
  *   4. everybody's screenshot limit (`takeRate` "shot" "day", twenty a day): one counter write, given
  *      back when the call is not accepted;
  *   5. one Messages API call with the picture (about 1,600 tokens in for a 1568-pixel screenshot, a
@@ -77,7 +109,8 @@ export async function readScreenshot(
     type: string;
     text: string;
     links?: readonly string[];
-    tz: string;
+    /** The browser's zone, or null when none is known: the form then takes the person's own. */
+    tz: string | null;
     rateKey: string;
     playerId?: string | null;
     selfName?: string | null;
@@ -96,11 +129,11 @@ export async function readScreenshot(
   if (!kind || kind !== input.type) return off("type");
   const key = keyOf();
   if (!key) return off("key");
-  if (!(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
-  if (!(await takeRate(db, "shot", input.rateKey, LIMITS.bookingShotsPerIpPerDay, "day", now))) return off("mine");
   const gate = await modelGate(db, now);
   if (gate.refused) return off("refused");
   if (gate.usd >= gate.cap) return off("cost");
+  if (!(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
+  if (!(await takeRate(db, "shot", input.rateKey, LIMITS.bookingShotsPerIpPerDay, "day", now))) return off("mine");
   if (!(await takeRate(db, "shot", "day", LIMITS.bookingShotsPerDay, "day", now))) return off("all");
   const giveBack = () => takeRate(db, "shot", "day", LIMITS.bookingShotsPerDay, "day", now, -1).catch(() => undefined);
 

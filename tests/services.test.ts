@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { like } from "drizzle-orm";
 import type { Db } from "@/db";
+import { metricsDaily } from "@/db/schema";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
 import { estimateCostUsd, fetchCostReport } from "@/lib/ops/anthropic";
 import { boardHighlights, serviceBoard, stateForPct } from "@/lib/ops/services";
@@ -59,6 +61,7 @@ describe("the service board", () => {
     await setMetric(db, "cron_hourly_at", Math.floor(now.getTime() / 1000) - 600, today);
     await setMetric(db, "cron_push_at", Math.floor(now.getTime() / 1000) - 120, today);
     await setMetric(db, "backup_done", 1, "2026-09-07");
+    await setMetric(db, "backup_history_rebuilt", 1, "2026-09-07");
     await setMetric(db, "domain_expires_at", Math.floor(new Date("2027-09-03T07:11:06Z").getTime() / 1000), today);
     await setMetric(db, "uptime_issue_12_open", 1, "2026-09-06");
     await setMetric(db, "uptime_issue_12_closed", 1, "2026-09-06");
@@ -110,6 +113,31 @@ describe("the service board", () => {
     await setMetric(db, "backup_done", 1, "2026-11-05");
     await setMetric(db, "backup_history_rebuilt", 1, "2026-11-05");
     expect(await backupRow("2026-11-05T12:00:00Z")).toMatchObject({ state: "ok", usage: "last on 2026-11-05 · history rebuilt on 2026-11-05" });
+  });
+
+  it("turns yellow when the last rebuild falls more than two days behind the backup, also for nights that count neither", async () => {
+    // A run that the hourly job's 60 s stops after backup_done and before the history step counts neither
+    // backup_history_rebuilt nor backup_history_kept, and the next run answers "already". Until 11 October
+    // 2026 the row stayed green through any number of such nights. Dates after every other test's.
+    const backupRow = async (at: string) => (await serviceBoard(db, new Date(at))).rows.find((r) => r.key === "backup")!;
+    await setMetric(db, "backup_done", 1, "2026-12-01");
+    await setMetric(db, "backup_history_rebuilt", 1, "2026-12-01");
+    // Two nights stopped after the backup: said, not yet a warning.
+    await setMetric(db, "backup_done", 1, "2026-12-02");
+    await setMetric(db, "backup_done", 1, "2026-12-03");
+    expect(await backupRow("2026-12-03T12:00:00Z")).toMatchObject({ state: "ok", usage: "last on 2026-12-03 · history last rebuilt on 2026-12-01" });
+    // A third: the history is now more than two days behind, so /privacy's "about sixty days" is at risk.
+    await setMetric(db, "backup_done", 1, "2026-12-04");
+    expect(await backupRow("2026-12-04T12:00:00Z")).toMatchObject({ state: "warn", usage: "last on 2026-12-04 · history last rebuilt on 2026-12-01" });
+    await setMetric(db, "backup_history_rebuilt", 1, "2026-12-05");
+    await setMetric(db, "backup_done", 1, "2026-12-05");
+    expect((await backupRow("2026-12-05T12:00:00Z")).state).toBe("ok");
+  });
+
+  it("turns yellow for backups whose history was never rebuilt", async () => {
+    await db.delete(metricsDaily).where(like(metricsDaily.key, "backup_%"));
+    await setMetric(db, "backup_done", 1, "2026-12-10");
+    expect((await serviceBoard(db, new Date("2026-12-10T12:00:00Z"))).rows.find((r) => r.key === "backup")).toMatchObject({ state: "warn", usage: "last on 2026-12-10 · history never rebuilt" });
   });
 
   it("reads a month of real traffic as the few percent of Vercel's allowance it is", async () => {

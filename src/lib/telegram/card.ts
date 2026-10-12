@@ -139,6 +139,7 @@ const STRINGS = {
     newPast: "That was more than a day ago. For a match you already played, give today's or yesterday's date.",
     tooMany: "That is a lot of matches for one day. Try again tomorrow.",
     resultBtn: "🏁 Result",
+    bookCourt: "🎟 Book this court",
     didntPlayBtn: "We didn't play",
     toastDidntPlay: "Marked as cancelled. Nobody is asked for a score.",
     didntPlayDone: (title: string) => `${title}: marked as not played. Nobody is asked for a score.`,
@@ -183,7 +184,14 @@ const STRINGS = {
     coachLinkOther: "This assistant is already linked to another Telegram account.",
     gamesTitle: (city: string) => `Open matches · ${city}`,
     gamesMine: "Your upcoming matches",
-    gamesNone: (city: string) => `No open matches listed in ${city} right now. Create one: /new tomorrow 19:00 <club>.`,
+    gamesNone: (city: string, crew = false) =>
+      crew
+        ? `No open matches listed in ${city} right now. A match made in this crew's group stays off the list unless its line says public: /new tomorrow 19:00 <club> public.`
+        : `No open matches listed in ${city} right now. Create one with a listed club's full name, and it shows here: /new tomorrow 19:00 <club>.`,
+    boardOn: (club: string) => `On ${club}'s board: people who play there can find it, and the club's regulars hear about a free spot.`,
+    boardOff: "Take it off the board",
+    boardOffDone: (club: string) => `Off ${club}'s board. Only people with the link can find it.`,
+    boardBack: "Put it back on the board",
     gamesWhichCity: "Which city? /games phuket or /games singapore.",
     inlineNothing: "No matches to share yet. Create one in a chat with me: /new tomorrow 19:00 <club>.",
     inlineHint: "Create a match",
@@ -193,10 +201,16 @@ const STRINGS = {
     // A crew's own group, run by the bot as an admin (DECIDING rule 31). The notice is the pinned message, and it names
     // exactly what the code keeps: players.display_name and players.telegram_username, the seats, the court and the score.
     crewNotice: "Kicksmash runs matches here. It reads messages in this group to do that. It keeps first names, Telegram usernames, who is in or out, the court and the score. It never keeps the text. A group admin can type /quiet, or remove the bot, to stop.",
-    crewHow: "Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm Rawai?” and I post the card.",
+    // The example asks at the crew's own court, so a member who copies it gets a match where the crew plays.
+    crewHow: (court: string | null) =>
+      court
+        ? `Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm?” and I post the card for ${court}.`
+        : "Say “in” or “out” when one match is open, or reply so to its card. Ask “who's in Thursday 7pm?” with your club's full name, and I post the card.",
     crewLinkBad: "This link is too old. Open the crew's page on kicksma.sh and tap “Run a Telegram group for this crew” again.",
     crewAdminOnly: "Only an admin of this group can tie it to a crew.",
     crewNeedsAdmin: "Tied to the crew. Make me an admin who may pin messages, and I start.",
+    crewOther: "This group already runs matches for another crew. A group admin can type /quiet first.",
+    crewTaken: "This crew already has its Telegram group. To move it here, a group admin there first types /quiet or removes the bot.",
     whichMatch: "Which match?",
     // The best times, only when somebody asks ("times?", /times): DECIDING rule 36. "From" names whose
     // times they are: a platform's, or the clubs' own (DECIDING rule 35); never "this week", because a
@@ -351,6 +365,7 @@ const STRINGS = {
     newPast: "Это больше суток назад. Для уже сыгранного матча укажите сегодняшнюю или вчерашнюю дату.",
     tooMany: "Слишком много матчей за день. Попробуйте завтра.",
     resultBtn: "🏁 Результат",
+    bookCourt: "🎟 Забронировать корт",
     didntPlayBtn: "Мы не играли",
     toastDidntPlay: "Отмечено как отменённый. Счёт никто не спросит.",
     didntPlayDone: (title: string) => `${title}: отмечено как несыгранный. Счёт никто не спросит.`,
@@ -391,7 +406,14 @@ const STRINGS = {
 
     gamesTitle: (city: string) => `Открытые матчи · ${city}`,
     gamesMine: "Ваши ближайшие матчи",
-    gamesNone: (city: string) => `Сейчас в ${city} нет открытых матчей. Создайте: /new завтра 19:00 <клуб>.`,
+    gamesNone: (city: string, crew = false) =>
+      crew
+        ? `Сейчас в ${city} нет открытых матчей. Матч из чата этой группы не попадает в список, если в строке нет слова «публично»: /new завтра 19:00 <клуб> публично.`
+        : `Сейчас в ${city} нет открытых матчей. Создайте матч с полным названием клуба из списка, и он появится здесь: /new завтра 19:00 <клуб>.`,
+    boardOn: (club: string) => `Матч на доске клуба ${club}: его видят те, кто там играет, а постоянные игроки клуба узнают о свободном месте.`,
+    boardOff: "Убрать с доски",
+    boardOffDone: (club: string) => `Матч убран с доски клуба ${club}. Его найдут только по ссылке.`,
+    boardBack: "Вернуть на доску",
     gamesWhichCity: "Какой город? /games пхукет или /games сингапур.",
     inlineNothing: "Пока нечего отправлять. Создайте матч в чате со мной: /new завтра 19:00 <клуб>.",
     inlineHint: "Создать матч",
@@ -399,10 +421,15 @@ const STRINGS = {
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} играет · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} в листе ожидания` : kind === "left" ? `↩️ ${name} больше не играет · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} просится в матч (вне диапазона уровней)` : kind === "confirmed" ? `✅ ${name}: участие подтверждено · ${n}/${cap}` : kind === "declined" ? `❌ ${name}: отказ` : `⬆️ ${name} из листа ожидания в состав · ${n}/${cap}`,
     crewNotice: "Kicksmash ведёт здесь матчи. Для этого он читает сообщения в этой группе. Он хранит имена, имена пользователей в Telegram, кто в игре и кто нет, корт и счёт. Текст сообщений он не хранит никогда. Чтобы остановить, админ группы может написать /quiet или удалить бота.",
-    crewHow: "Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00 Равай?», и я выложу карточку.",
+    crewHow: (court: string | null) =>
+      court
+        ? `Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00?», и я выложу карточку матча, корт: ${court}.`
+        : "Напишите «я в деле» или «не смогу», когда открыт один матч, или ответьте так на его карточку. Спросите «кто играет в четверг в 19:00?» и добавьте полное название клуба, и я выложу карточку.",
     crewLinkBad: "Ссылка устарела. Откройте страницу группы на kicksma.sh и снова нажмите «Завести Telegram-чат для этой группы».",
     crewAdminOnly: "Привязать этот чат к группе может только его админ.",
     crewNeedsAdmin: "Чат привязан к группе. Сделайте меня админом с правом закреплять сообщения, и я начну.",
+    crewOther: "Этот чат уже ведёт матчи другой группы. Сначала админ чата может написать /quiet.",
+    crewTaken: "У этой группы уже есть свой Telegram-чат. Чтобы перенести его сюда, админ того чата сначала пишет там /quiet или удаляет бота.",
     whichMatch: "Какой матч?",
     timesFree: (from: string) => `Свободные корты в ваших клубах, по данным ${from}. Нажмите на время, и я создам матч; бронируете и платите вы, в приложении клуба.`,
     timesTheClubs: "клубов",
@@ -552,6 +579,7 @@ const STRINGS = {
     newPast: "Eso fue hace más de un día. Para un partido ya jugado, pon la fecha de hoy o de ayer.",
     tooMany: "Son muchos partidos para un día. Inténtalo mañana.",
     resultBtn: "🏁 Resultado",
+    bookCourt: "🎟 Reservar esta pista",
     didntPlayBtn: "No jugamos",
     toastDidntPlay: "Marcado como cancelado. Nadie tiene que poner el resultado.",
     didntPlayDone: (title: string) => `${title}: marcado como no jugado. Nadie tiene que poner el resultado.`,
@@ -591,7 +619,14 @@ const STRINGS = {
     coachLinkOther: "Este asistente ya está vinculado a otra cuenta de Telegram.",
     gamesTitle: (city: string) => `Partidos abiertos · ${city}`,
     gamesMine: "Tus próximos partidos",
-    gamesNone: (city: string) => `No hay partidos abiertos en ${city} ahora mismo. Crea uno: /new mañana 19:00 <club>.`,
+    gamesNone: (city: string, crew = false) =>
+      crew
+        ? `No hay partidos abiertos en ${city} ahora mismo. Un partido creado en el chat de este grupo no sale en la lista si la línea no dice public: /new mañana 19:00 <club> public.`
+        : `No hay partidos abiertos en ${city} ahora mismo. Crea uno con el nombre completo de un club de la lista y aparecerá aquí: /new mañana 19:00 <club>.`,
+    boardOn: (club: string) => `En el tablón de ${club}: lo ven quienes juegan allí, y los habituales del club se enteran de una plaza libre.`,
+    boardOff: "Quitar del tablón",
+    boardOffDone: (club: string) => `Fuera del tablón de ${club}. Solo lo encuentra quien tiene el enlace.`,
+    boardBack: "Volver a ponerlo en el tablón",
     gamesWhichCity: "¿Qué ciudad? /games phuket o /games singapore.",
     inlineNothing: "Aún no hay partidos para compartir. Crea uno en un chat conmigo: /new mañana 19:00 <club>.",
     inlineHint: "Crear un partido",
@@ -599,10 +634,15 @@ const STRINGS = {
     orgNote: (kind: string, name: string, n: number, cap: number) =>
       kind === "joined" ? `✅ ${name} se apunta · ${n}/${cap}` : kind === "waitlisted" ? `⏳ ${name} entró en la lista de espera` : kind === "left" ? `↩️ ${name} se fue · ${n}/${cap}` : kind === "requested" ? `🙋 ${name} pide unirse (fuera del rango de nivel)` : kind === "confirmed" ? `✅ ${name} confirmó · ${n}/${cap}` : kind === "declined" ? `❌ ${name} declinó` : `⬆️ ${name} entró desde la lista de espera · ${n}/${cap}`,
     crewNotice: "Kicksmash organiza aquí los partidos. Para eso lee los mensajes de este grupo. Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado. Nunca guarda el texto. Para pararlo, un administrador del grupo puede escribir /quiet o quitar el bot.",
-    crewHow: "Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19 Rawai?» y publico la tarjeta.",
+    crewHow: (court: string | null) =>
+      court
+        ? `Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19?» y publico la tarjeta del partido en ${court}.`
+        : "Escribe «me apunto» o «no puedo» cuando haya un partido abierto, o respóndelo a su tarjeta. Pregunta «¿quién juega el jueves a las 19?» con el nombre completo de tu club y publico la tarjeta.",
     crewLinkBad: "Este enlace ha caducado. Abre la página del grupo en kicksma.sh y toca otra vez «Abrir un chat de Telegram para este grupo».",
     crewAdminOnly: "Solo un administrador de este chat puede vincularlo a un grupo.",
     crewNeedsAdmin: "Vinculado al grupo. Hazme administrador con permiso para fijar mensajes y empiezo.",
+    crewOther: "Este chat ya organiza partidos de otro grupo. Antes, un administrador del chat puede escribir /quiet.",
+    crewTaken: "Este grupo ya tiene su chat de Telegram. Para traerlo aquí, un administrador de ese chat escribe antes /quiet allí o quita el bot.",
     whichMatch: "¿Qué partido?",
     timesFree: (from: string) => `Pistas libres en tus clubs, según ${from}. Toca una y creo el partido; reservas y pagas tú, en la app del club.`,
     timesTheClubs: "los clubs",
@@ -712,8 +752,11 @@ export function bookedLine(detail: EventDetail, locale: BotLocale): string | nul
   return `🎟 ${strings(locale).courtBooked(b.name)}`;
 }
 
-/** The one message per match the bot keeps edited. HTML parse mode. */
-export function renderCard(detail: EventDetail, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
+/**
+ * The one message per match the bot keeps edited. HTML parse mode. `booking` is "Book this court", read
+ * by the card sync (`courtBookingFor` in `src/lib/channels/cards.ts`): a URL button, so no link preview.
+ */
+export function renderCard(detail: EventDetail & { booking?: { url: string } | null }, base: string, locale: BotLocale, now = new Date()): { text: string; keyboard: InlineKeyboard; complete: boolean } {
   const ev = detail.event;
   const s = strings(locale);
   // Inside Telegram the match opens in the Mini App (signed in, no browser) once the owner has created it; the web page otherwise.
@@ -773,6 +816,7 @@ export function renderCard(detail: EventDetail, base: string, locale: BotLocale,
               { text: s.share, switch_inline_query: ev.code },
               ...(ev.venueMapUrl ? [{ text: s.map, url: ev.venueMapUrl }] : []),
             ],
+            ...(detail.booking && !started ? [[{ text: s.bookCourt, url: detail.booking.url }]] : []),
           ],
         };
   return { text: lines.join("\n"), keyboard, complete };

@@ -629,7 +629,7 @@ Everything in this list is live. The README describes each in detail.
   and a crew with fewer than two matches behind it never makes it. Production's one crew has one
   scored match, so nobody sees the table yet.
 - **A group page shows names, not levels, and a crew can ask to join (9 October 2026, decision E,
-  migration 0085).** The owner: "names visible, levels hidden, optional Ask to join", for social
+  migration 0087).** The owner: "names visible, levels hidden, optional Ask to join", for social
   proof and privacy. On the group page's member list a visitor sees the members' first names and
   the count, and members see each other's levels; `GET /api/v1/groups/{code}` and the MCP tool
   `get_group` carry the names and the count, never a level. A match's own roster still shows the
@@ -770,10 +770,11 @@ Everything in this list is live. The README describes each in detail.
   the tag of the one before. The rule is `src/lib/domain/eventTags.ts`. The API and the MCP take
   `category` and `ageMin` on create (anything else is refused with a 422) and every match object and
   board row carries them. Filters on a listing come later.
-- **A crew's own Telegram group (9 October 2026, migrations 0085 and 0086).** The owner's decision:
+- **A crew's own Telegram group (9 October 2026, migrations 0089 and 0090).** The owner's decision:
   a crew can run its own Telegram group with the bot as an admin, opted in group by group (DECIDING
-  rule 31). A crew's admin finds "Run a Telegram group for this crew" on its page: one link picks
-  or makes a group and adds the bot as an admin with two rights (pin, invite links).
+  rule 31). A crew's admin finds "Run a Telegram group for this crew" on its page. A line above the
+  link asks for a new group only for this crew's padel. One link picks the group and adds the bot as
+  an admin with two rights (pin, invite links).
   The bot ties the group to the crew, pins its notice ("It reads messages in this group … It never
   keeps the text"), and makes the invite link the crew page then shows its members ("Join the crew's
   Telegram group"). From then on "in", "+1", "я в деле", "me apunto" take the seat of the one open
@@ -787,6 +788,22 @@ Everything in this list is live. The README describes each in detail.
   sender's, by name or by its area, and a listed club in its zone by the club's own words, never by
   a city or an area alone. /quiet from a group admin stops it acting on words. No message text is
   stored anywhere.
+  Changed on 11 October 2026, after an audit. The first group tied stays the crew's group. The bot
+  refuses a second group of the same crew, and another crew's link, until /quiet there. A session
+  wrote this limit on 11 October 2026; the owner has not decided it. A first group that the bot is no longer in frees the
+  crew. The bot asks Telegram about that group once, when somebody taps the crew link in a new group.
+  The bot stops reading when it loses the right to pin. The invite link follows the right to invite,
+  and it goes at /quiet. The pinned example asks at the crew's own court. The bot also reads the
+  question asked after the match ("Let's play Thursday 7pm at Warehaus, who's in?"). A question with
+  "no" and no court in it makes no match. A seat taken by a word or a tap sends that person alone the
+  calendar feed's button, once. A session added this on 11 October 2026 (option A of the audit);
+  the owner has not decided it. The card carries "Book this court". A /new line names a listed club only in full. A
+  city, an island, a district or an everyday word such as "Asia" never names a club. The owner, 10
+  October 2026: "Yes, but only on the club's own words". Outside a crew's group, such a /new match
+  goes on the club's board when it sits at the club. There the club's regulars hear about a free
+  spot, and the bot's answer has one tap to take it off. A session built this default on 11 October
+  2026 (option A of the audit); the owner has not confirmed it. In a crew's group, only the word "public" puts a /new
+  match on a board.
 - **Fixed pairs (10 October 2026, decision F, migrations 0091 and 0092).** The owner: "Fixed pairs in
   social tournaments (two partners play every round together), as Phuket nights often do." The create
   form's format step has "Fixed pairs", off by default, for americano, mexicano and King of the Court,
@@ -915,7 +932,9 @@ Everything in this list is live. The README describes each in detail.
 - **Paste your booking (11 October 2026).** The owner booked a court at Warehaus in The Padel Society's
   app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
   link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
-  fills the club, the day, the time, the length, the court, the price and the players.
+  fills what the paste gives: the club, the day, the time, the length, the court, the price and the
+  players, where the words, a screenshot or the link's preview carry them. The owner's own Padel Society
+  link alone gives none of them (see the end of this entry).
   `src/lib/domain/bookingPaste.ts` is the reader. `src/lib/booking/unfurl.ts` reads a pasted link once,
   as a chat app's preview robot reads it (DECIDING rule 35). It skips a platform that rests after a
   block or that a switch holds. On the first page, "Booked already? Paste it" opens the form filled. The
@@ -925,11 +944,21 @@ Everything in this list is live. The README describes each in detail.
   words gave the club, the day and the time. The answer then becomes the match's link, ready for the
   WhatsApp group where the fourth player is wanted. "Edit first" opens the same filled form. The Padel
   Society keeps a match's club, day and players in its app's private API, which Kicksmash never calls.
-  Its preview gives the match id only, so the words that the person pastes carry the rest.
+  A session wrote that limit into DECIDING rule 35 on 11 October 2026; the owner has not decided it.
+  Its preview gives the match id only, so the words that the person pastes carry the rest. Since the
+  audit of 11 October 2026: the WhatsApp thread answers a pasted booking with what it read and the
+  filled form (`src/lib/whatsapp/paste.ts`); it does nothing until the owner's WhatsApp number is set.
+  The paste box names book@ ("Or forward the confirmation to book@kicksma.sh"). No door puts UTC in the
+  form's link any more: the zone is the club's, else the browser's or the chat's, else the form takes
+  the person's own. A day or a time the booking did not give keeps the form's own and is marked as not
+  the booking's. The bot shows "Create match" only when the paste gives a club, a day and a time. Such a
+  paste always shows a booking (`showsBooking`), so the mark "court booked" is true.
 - **The one working group repeats itself (11 October 2026, no migration).** The owner's decision,
   option A, "Make the one working group repeat itself", and "Yes, one message each" (DECIDING rule
   37). Production had one group of four or five in Phuket, every full match made by hand with the same
-  people, and no match since 4 October. "Play again" on the score panel now asks for the day and the
+  people. The last one made before this change was EfUa (made on 4 October, played on 9 October). The
+  next, TDsv for 17 October, was made by hand on 11 October, about two hours before this change shipped.
+  "Play again" on the score panel now asks for the day and the
   time in one control above the button, a week on by default; everything else carries over and a
   crew's match stays the crew's. Each player who sat in the last match gets one "Ana made the next
   game: Sat, Oct 17 18:00 at Warehaus. Are you in?" (`notifyPlayAgain`, sender `playAgain`, kind `crew`):
@@ -950,7 +979,30 @@ Everything in this list is live. The README describes each in detail.
   match with the organiser, from before its start (a score typed in at the court counts, and so does a
   scored americano), skips that organiser's level range on every door (`admissionAt` in
   `src/lib/domain/playAgain.ts`; rule 21); a confirmed-levels-only match still takes a confirmed level.
-  No WhatsApp template carries the message yet.
+  A session added this waiver without a decision; the owner chose to keep it on 11 October 2026.
+  No WhatsApp template carries the message yet. After the audit of 11 October 2026: the score panel
+  names the next game when it exists already (the game the round announced, or the organiser's own
+  game at the same club in the next 14 days, made by hand or not, in the last match's crew or with no
+  crew), the control defaults to its day and time, and a tap there lands on it (`nextGameOf`,
+  `organiserGameAt`). Outside Telegram the message has one line under the question, and the line
+  names no button. The email has an "I'm in" button, and a tap on the push opens the same link: the
+  match page at the join step (`?join=1`). A night played again keeps its named courts, and a read
+  that fails after the claim takes the claim back, so the round is never spent on nobody.
+- **The held place by name (11 October 2026, no migration).** The owner asked: "danny clicks on the
+  generic one kicksmash doesn't know its danny and would it let confirm danny's place?" The decision
+  was "Yes, two taps" (DECIDING rule 34). An organiser holds a place for a name with no record, for
+  example with "Paste the names". A person who types that name on the plain match link gets "Take
+  Danny's held place". The first tap asks, and the second tap confirms the place with the personal
+  link's own write, so the organiser hears "Danny confirmed". The place has no email and no phone, and
+  no other record of the name sits in the match (`src/lib/domain/heldByName.ts`). The personal link
+  changed the same day: a viewer who is in the match already gets no "I'm in" on another person's
+  place. After the audit of 11 October 2026, the offer also shows on a full match with a waiting list,
+  in the name field of the waiting list, and to a browser that knows a record of the name, in place of
+  its one-tap Join. A full match with a closed waiting list shows no join, so only the personal link
+  fills the place there. The Go key sends no join while the offer is on the screen. The web's join
+  (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
+  offer, a different person of the same name reads how to get in: a last name on My matches. The
+  Telegram, Discord and LINE joins and `join_match` in the API and MCP do not refuse it yet.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and
@@ -1024,10 +1076,13 @@ linked and four have an email address.
    a 24-hour window, and is not counted against the 250-a-day limit, because that limit rations only
    the messages we start. Our replies in that window are charged from 1 October 2026 (Meta, read 10
    October 2026; docs/OPERATING.md). Since 10 October 2026 the JOIN message takes the seat at once. That first message also hands over the phone number with permission, so nothing has to be
-   collected in advance. Explicitly **never** a card channel: Meta's Groups API only makes its own
-   groups, invite-only, capped at eight, and needs an Official Business Account. What is lost is real
-   and worth saying: nobody sees "three of four" without tapping, and the group cannot enter a score.
-   A separate adapter — the `CardChannel` interface does not fit and must not be bent to it.
+   collected in advance. The thread is not a card channel. A chat that the crew already has never
+   gets a bot. Meta's Groups API makes only the business's own groups, and players join them by an
+   invite link. Such a group holds eight people at most, needs an Official Business Account, and
+   allows no edit of a message ("Next, in order", item 6). What the thread loses is real and worth
+   saying: nobody sees "three of four" without tapping, and the group cannot
+   enter a score. A separate adapter: the `CardChannel` interface does not fit the thread and must not
+   be bent to it.
    The piece of code found missing on 25 September 2026 is built (26 September, under Built): the
    match's changes, a free spot, the score ask and the result card now reach a WhatsApp player as four
    utility templates, and a send that cannot go falls through to email and push. What remains is the
@@ -1065,7 +1120,14 @@ linked and four have an email address.
    than ours to invent.
 5. **Performance analytics by integration.** Shots, positioning and workload from smartwatch and camera
    integrations, with the player's consent. A match will carry sensor sessions.
-6. **WhatsApp in a group chat**, if Meta ever lets a business into a group somebody else made. Today it does not, at any tier.
+6. **A crew's own WhatsApp group (Meta's Groups API).** The owner's decision of 9 October 2026 was
+   "Telegram crew group now, Meta clock starts today". A business cannot join a group that somebody
+   else made. Meta's Groups API lets the business make its own group, and players join it by an
+   invite link. The API needs an Official Business Account. It allows 8 people at most and no edit
+   of a message (Meta's Groups API page, read 11 October 2026). So the card would be a new
+   message at each change that matters, as on LINE (`canEdit: false`). This waits for the owner: the
+   Meta business portfolio, the number, and the request for an Official Business Account. Nothing in
+   the repository or in production shows that these steps started.
 
 ## Open, small, and ready for the next session
 
@@ -1100,6 +1162,26 @@ the player, and invite them to try it.
    1.5 s and then trickles the rest still gives 418 on both builds (main 3 in 20 loads, the lean build
    1 in 15). Start the root cause there, at the `<h1>` under `<main>` on `/me`. Do not relax a browser
    check that already reads order from the elements (`headingOrder` in `e2e/core.mjs`).
+5. **Four more ways to bring in a booked court: not built.** The owner asked "Some other ideas?" on
+   11 October 2026, and a session named four. None is built, and none is decided. To build one is
+   the owner's decision.
+   - **Web Share Target**: "Share" in a platform's app lists Kicksmash, and the share opens the
+     filled form. The web manifest has no `share_target` today.
+   - **An `.ics` file**: a booking's calendar file, read into the form. Kicksmash writes `.ics`
+     files and reads none.
+   - **A slot check**: the paste compares its day and time with the club's free court times, and
+     says when the court shows free. The paste does not read the free-times cache.
+   - **`/booked` in a group**: a command in a crew's Telegram group that pastes a booking there. The
+     paste works in a private chat only.
+6. **The paste doors wait on two outside facts.** No mail has reached book@ (`book_mail_answered`
+   and `book_mail_skipped` are empty on 11 October 2026): one test mail from the owner shows whether
+   Resend routes it. The screenshot read and the other AI features wait on a working
+   `ANTHROPIC_API_KEY`.
+7. **Decision B: a second organiser in Phuket.** The owner chose "A now + B this week" on 11 October
+   2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
+   October 2026 one organiser had made matches since 10 October. The next session counts the
+   organisers with a match since 11 October and reports it to the owner (DECIDING rule 37).
+
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).
 

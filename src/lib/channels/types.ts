@@ -12,6 +12,12 @@ import type { BotLocale } from "@/lib/telegram/card";
 export type ChannelName = "telegram" | "discord" | "line";
 export type MessageId = string | number;
 
+/**
+ * What a card renders: the match, and what the card sync read beside it once for every room. `booking`
+ * is "Book this court" (`prepareBooking`), read only for a channel that shows it (`booksCourt`).
+ */
+export type CardDetail = EventDetail & { booking?: { url: string } | null };
+
 /** A place a card lives. `raw` is the channel's own row (a Telegram chat, a Discord channel). */
 export type Room<R = unknown> = { id: string; locale: BotLocale; groupId: string | null; raw: R };
 /** A card the channel keeps: the live match card, or the result posted once. */
@@ -50,7 +56,9 @@ export interface CardChannel<P = unknown, R = unknown, C = unknown> {
   roomsOfGroup(db: Db, groupId: string): Promise<Room<R>[]>;
   /** The cards of an event with their rooms, rooms the bot has left excluded. */
   cardsOf(db: Db, eventId: string, kinds?: string[]): Promise<{ card: Card<C>; room: Room<R> }[]>;
-  render(detail: EventDetail, locale: BotLocale, now: Date): Rendered<P>;
+  render(detail: CardDetail, locale: BotLocale, now: Date): Rendered<P>;
+  /** The card carries "Book this court" for a match at a vetted club, so the sync reads the club once. */
+  readonly booksCourt?: boolean;
   post(db: Db, room: Room<R>, payload: P, o?: PostOptions): Promise<Sent>;
   /** Edits a card in place; false when the channel refused, in which case the channel has noted why. */
   edit(db: Db, room: Room<R>, card: Card<C>, payload: P): Promise<boolean>;

@@ -48,7 +48,8 @@ async function gamesFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: T
   if (o.mineOnly) {
     if (!mine.length) lines.push(esc(s.gamesMineNone));
   } else if (!city) lines.push(esc(s.gamesWhichCity));
-  else if (board.length === 0) lines.push(esc(s.gamesNone(city.name)));
+  // In a crew's own group a /new stays off the board unless it says "public" (`listedFrom` in new.ts), and the hint says so.
+  else if (board.length === 0) lines.push(esc(s.gamesNone(city.name, Boolean(chat.groupId))));
   else {
     lines.push(`<b>${esc(s.gamesTitle(city.name))}</b>`);
     for (const b of board) lines.push(`• ${esc(shortLine(b.event, locale, b.occupied))}${b.event.cost ? ` · ${esc(b.event.cost)}` : ""}`);

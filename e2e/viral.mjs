@@ -94,6 +94,10 @@ try {
   await kim.getByTestId("paste-door").click();
   const pasteBox = kim.getByLabel("Paste the booking link and the text from your booking app.");
   check("it opens one box with the hint", await pasteBox.isVisible());
+  // The third door, named where people paste (11 October 2026): only the owner knew book@ existed.
+  // This server holds a webhook secret and a send key (e2e/run.mjs), so book@ can answer here.
+  const mailLine = kim.getByTestId("paste-mail");
+  check("the hint names book@ as the other way in, as a mail link", (await mailLine.innerText()).startsWith("Or forward the confirmation to book@") && (await mailLine.getByRole("link").getAttribute("href"))?.startsWith("mailto:book@"), await mailLine.innerText().catch(() => "no paste-mail"));
   await kim.getByRole("button", { name: "Read my booking" }).click();
   check("an empty box answers with a sentence, and stays", (await kim.getByTestId("paste-note").innerText()) === "Paste the link or the text of your booking first." && new URL(kim.url()).search === "");
   // "Add screenshot" (the owner, 11 October 2026, DECIDING rule 9). This server holds no model key
@@ -130,10 +134,24 @@ try {
   check("the players come as 'from your booking', not from a schedule", (await kim.getByTestId("carried-players").innerText()).includes("2 players from your booking") && (await kim.getByTestId("carried-players").innerText()).includes("Danny · Alberto"));
   check("'Court booked by me' stands ticked above the create button", await kim.getByTestId("booked-by-me").isChecked());
   await shot(kim, "v7-paste-form");
-  // What the booking did not say stays empty on the form, and says so in words.
+  // What the booking did not say keeps the form's own day and hour (Kim has no usual slot: tomorrow at
+  // 18:00, in the booking's zone), and the form says in words that they are not the booking's.
   await kim.goto(`${BASE}/?src=paste&venue=Rawai%20Padel%20Club&tz=Asia%2FBangkok&names=Danny&booked=1`);
   await kim.getByTestId("paste-missing-when").waitFor({ timeout: 20000 });
-  check("a booking with no day and no hour leaves both empty and asks for them in place", (await kim.locator('main input[type="date"]').inputValue()) === "" && (await kim.locator('main input[type="time"]').inputValue()) === "" && (await kim.getByText("Your booking did not give the day. Pick it here.").count()) === 1 && (await kim.getByText("Your booking did not give the time. Pick it here.").count()) === 1);
+  const bkkTomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date(Date.now() + 86400 * 1000));
+  const keptWhen = { date: await kim.locator('main input[type="date"]').inputValue(), time: await kim.locator('main input[type="time"]').inputValue() };
+  check(
+    "a booking with no day and no hour keeps the form's own, and says they are not the booking's",
+    JSON.stringify(keptWhen) === JSON.stringify({ date: bkkTomorrow, time: "18:00" }) && (await kim.getByText("Your booking did not give the day. Pick it here.").count()) === 1 && (await kim.getByText("Your booking did not give the time. Pick it here.").count()) === 1,
+    JSON.stringify(keptWhen),
+  );
+  // A booking that came with no zone (book@, a chat with none): the day and the hour it read, in the
+  // person's own zone. Until 11 October 2026 the link said tz=UTC, and 11:00 in Phuket became 18:00.
+  await kim.goto(`${BASE}/?src=paste&date=${bkDay}&time=11%3A00&booked=1`);
+  await kim.getByTestId("booked-by-me").waitFor({ timeout: 20000 });
+  await kim.getByRole("button", { name: kimZone, exact: true }).waitFor({ timeout: 10000 }).catch(() => undefined);
+  const noZone = { date: await kim.locator('main input[type="date"]').inputValue(), time: await kim.locator('main input[type="time"]').inputValue(), zone: await kim.getByRole("button", { name: kimZone, exact: true }).count(), utc: await kim.getByRole("button", { name: "UTC", exact: true }).count() };
+  check("a booking with no zone keeps its day and hour, in the person's own zone and never UTC", JSON.stringify(noZone) === JSON.stringify({ date: bkDay, time: "11:00", zone: 1, utc: 0 }), JSON.stringify(noZone));
   await kim.context().close();
 
   // ---- Result card ----

@@ -98,7 +98,9 @@
     "thatsMeSure": "¿Entrar como {name}?",
     "takeHeld": "Ocupar la plaza guardada para {name}",
     "takeHeldSure": "¿Ocupar la plaza guardada para {name}?",
-    "takeHeldNo": "Esa plaza ya no está guardada para {name}."
+    "takeHeldNo": "Esa plaza ya no está guardada para {name}.",
+    "heldForYou": "En este partido hay un sitio reservado para {name}.",
+    "heldNotYou": "¿No eres {name}? Añade tu apellido en Mis partidos y luego apúntate."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -135,7 +137,8 @@
     "pasteShot": "Añadir captura",
     "pasteShotOff": "Ahora no podemos leer una captura. Pega el enlace o el texto de tu reserva.",
     "pasteShotBad": "No pudimos abrir esa imagen. Añade una captura de tu reserva.",
-    "pasteShotNote": "Un modelo de IA lee tu captura una vez. No la guardamos."
+    "pasteShotNote": "Un modelo de IA lee tu captura una vez. No la guardamos.",
+    "pasteMail": "O reenvía la confirmación a {address}."
   },
   "create": {
     "title": "Nuevo partido",
@@ -358,7 +361,9 @@
     "playAgainWhenRange": "Elige un día y una hora entre ahora y dentro de 90 días.",
     "playAgainPlain": "Un partido más, con la misma configuración.",
     "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
-    "joinBooking": "Únete a esta reserva en {platform}"
+    "joinBooking": "Únete a esta reserva en {platform}",
+    "playAgainNext": "Próximo partido: {when} · {code}",
+    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -478,7 +483,8 @@
     "sameFailed": "No se pudieron añadir. Recarga la página e inténtalo de nuevo.",
     "biggerTextHelp": "Letra más grande en toda la app, en este dispositivo.",
     "sameAskingGroup": "Este nombre es miembro de un grupo que pide aprobación para entrar. Primero juega un partido en el mismo club o con el mismo organizador. Luego podrás añadir estos partidos.",
-    "identityByName": "Entraste tocando tu nombre, así que tu enlace personal queda oculto hasta que confirmes un email con un código o vincules Telegram."
+    "identityByName": "Entraste tocando tu nombre, así que tu enlace personal queda oculto hasta que confirmes un email con un código o vincules Telegram.",
+    "sameNameOnly": "Un nombre solo no basta para añadir estos partidos. Son de un miembro de un grupo que pide aprobación para entrar."
   },
   "notFound": {
     "title": "Enlace no encontrado",
@@ -695,7 +701,9 @@
     "bookMissing": "No está en tu reserva: {fields}.",
     "bookOpen": "Abre el formulario relleno. Revísalo y toca el botón para crear el partido:",
     "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo. Si marcas esta respuesta como spam, guarda tu dirección solo para no volver a escribirte.",
-    "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario."
+    "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario.",
+    "playAgainIn": "Me apunto",
+    "playAgainLine": "{spots}. Un toque abre la página del partido en el paso para unirte."
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",
@@ -725,7 +733,8 @@
     "taken": "Ese jugador ya tiene pareja.",
     "already_paired": "Ya tienes pareja.",
     "not_fixed_pairs": "Este torneo no usa parejas fijas.",
-    "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas."
+    "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas.",
+    "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -1061,7 +1070,7 @@
     "helpersTitle": "Quién nos ayuda",
     "helpersBody": "• Vercel aloja la app en Singapur y cuenta las visitas sin cookies.\n• Supabase guarda la base de datos en Singapur.\n• Resend envía nuestros emails.\n• Telegram, Discord, LINE y WhatsApp (Meta) llevan nuestros mensajes, solo si los usas con nosotros.\n• Telegram también nos trae cada mensaje del formulario de opiniones, con el nombre de quien lo envía.\n• El servicio push de tu navegador (Apple, Google o Mozilla) lleva las notificaciones que activaste.\n• Google, solo si un entrenador conecta un Google Calendar: sus clases, con el nombre del alumno, van allí.\n• Anthropic lee los mensajes del formulario de opiniones y de nuestro servidor de Discord, para ayudarnos a ordenarlos y preparar respuestas. También lee una vez la captura de una reserva que añades en la primera página, para rellenar el formulario del partido. No guardamos ni la imagen ni la respuesta.\n• GitHub guarda nuestra copia de seguridad nocturna y privada de la base de datos.\nTavily busca para nosotros clubes de pádel y conversaciones sobre pádel en la web pública. Nunca recibe tus datos.",
     "keepTitle": "Cuánto tiempo lo guardamos",
-    "keepBody": "• Tus datos: mientras uses Kicksmash, hasta que borres tu cuenta.\n• Un nombre sin partidos, sin forma de contacto y sin nada más detrás: una limpieza diaria lo borra a los {disposableDays, plural, one {# día} other {# días}}.\n• Las claves de límite de peticiones hechas con direcciones IP: {rateDays, plural, one {# día} other {# días}}.\n• Copias de seguridad: cada noche una copia de la base de datos va a un repositorio privado de GitHub, y solo nosotros podemos abrirlo. Cada noche también rehacemos el historial del repositorio, para que solo guarde {backupDays, plural, one {el último día} other {los últimos # días}}.\n• Tu bandeja: cada aviso {inboxDays, plural, one {# día} other {# días}}.",
+    "keepBody": "• Tus datos: mientras uses Kicksmash, hasta que borres tu cuenta.\n• Un nombre sin partidos, sin forma de contacto y sin nada más detrás: una limpieza diaria lo borra a los {disposableDays, plural, one {# día} other {# días}}.\n• Las claves de límite de peticiones hechas con direcciones IP: {rateDays, plural, one {# día} other {# días}}.\n• Copias de seguridad: cada noche una copia de la base de datos va a un repositorio privado de GitHub, y solo nosotros podemos abrirlo. Cada noche también rehacemos el historial del repositorio, para que guarde aproximadamente {backupDays, plural, one {el último día} other {los últimos # días}}. Las copias más antiguas salen entonces de su historial. GitHub las borra más adelante y no dice cuándo. Hasta entonces, todavía podemos abrirlas nosotros, y nadie más.\n• Tu bandeja: cada aviso {inboxDays, plural, one {# día} other {# días}}.",
     "deleteTitle": "Cuando borras tu cuenta",
     "deleteBody": "Bórrala al final de Mis partidos. Al instante borramos tu nombre, email y teléfono (también las copias que un organizador escribió para tu plaza), tu enlace personal, cuentas de chat vinculadas, página pública, dispositivos de notificación, los horarios en que querías jugar, tu bandeja y tu página de entrenador con sus clases. Tus plazas futuras se liberan y los partidos que organizas se cancelan. Tus resultados antiguos y tu nivel quedan como «Jugador eliminado», para que el historial de tus compañeros siga cuadrando. Los mensajes que enviaste por el formulario de opiniones se quedan, con el nombre y el contacto que llevan, porque tratan de la app: pídenoslo y también los borramos. Tu nombre sale de la página de ideas que se hicieron realidad en la app. Las copias hechas antes de borrar la cuenta desaparecen de nuestro repositorio privado de copias de seguridad al cabo de unos {backupDays, plural, one {# día} other {# días}}. Después, las copias más antiguas ya no están en su historial, y GitHub las borra más adelante. Hasta entonces, solo nosotros podemos abrirlas.",
     "rightsTitle": "Tus derechos",
@@ -1341,7 +1350,7 @@
     "askDeclinedNotice": "Por ahora no hay sitio en {group}\nGracias por pedirlo. Esta vez los admins dijeron que no. Puedes volver a pedirlo en una semana.",
     "askToJoinSetting": "Entrar con aprobación",
     "telegramRun": "Abrir un chat de Telegram para este grupo",
-    "telegramRunHelp": "Kicksmash entra como administrador, mantiene allí una tarjeta por partido y lee el chat para entender «me apunto» y «no puedo». Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado, nunca el texto. Para pararlo, un administrador del chat puede escribir /quiet o quitar el bot.",
+    "telegramRunHelp": "Primero crea un chat de Telegram nuevo solo para el pádel de este grupo; luego toca el botón de arriba y elígelo. Kicksmash entra como administrador, mantiene allí una tarjeta por partido y lee el chat para entender «me apunto» y «no puedo». Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado, nunca el texto. Para pararlo, un administrador del chat puede escribir /quiet o quitar el bot.",
     "telegramJoin": "Unirse al chat de Telegram del grupo"
   },
   "venue": {

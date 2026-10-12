@@ -6,9 +6,36 @@ import { joinAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { registerJoinHandler } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
+import { heldNameOf, NameHereLine } from "./TakeHeld";
 
-/** In-flow name (and level, on ranged events) entry for joining the waitlist without an identity. */
-export function JoinInline({ code, label, hasIdentity = false, levelRange = null, myLevel = null }: { code: string; label: string; hasIdentity?: boolean; levelRange?: LevelRange | null; myLevel?: number | null }) {
+/**
+ * In-flow name (and level, on ranged events) entry for joining the waitlist without an identity: the
+ * waiting list's form of a full match. A typed name already in the match gets the same line as the open
+ * spot (`NameHereLine`): "That's me", or "Take Danny's held place", and then the form sends no Join, so
+ * a second Danny never waits beside his held place (DECIDING rule 34).
+ */
+export function JoinInline({
+  code,
+  label,
+  hasIdentity = false,
+  levelRange = null,
+  myLevel = null,
+  namesHere = [],
+  claimable = [],
+  held = [],
+}: {
+  code: string;
+  label: string;
+  hasIdentity?: boolean;
+  levelRange?: LevelRange | null;
+  myLevel?: number | null;
+  /** Everybody already in this match, held places too. */
+  namesHere?: readonly string[];
+  /** Names "That's me" signs in by name (the page asked the rule). */
+  claimable?: readonly string[];
+  /** Names of held places a typed name may take (`heldOffers`). */
+  held?: readonly string[];
+}) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -39,6 +66,8 @@ export function JoinInline({ code, label, hasIdentity = false, levelRange = null
       onSubmit={(e) => {
         e.preventDefault();
         if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
+        // The Go key and the button while "Take Danny's held place" is on screen: a second Danny would close the place for good.
+        if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
         if (levelRange && level == null) return setError(t("errors.level_required"));
         start(async () => {
           setError(null);
@@ -52,12 +81,13 @@ export function JoinInline({ code, label, hasIdentity = false, levelRange = null
       <div className="text-sm font-bold text-court">{hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</div>
       <div className="mt-2 flex flex-col gap-2">
         <div className="flex gap-2">
-          {!hasIdentity && <input ref={input} className="input" placeholder={t("identity.namePlaceholder")} value={name} autoComplete="given-name" maxLength={40} enterKeyHint="go" onChange={(e) => setName(e.target.value)} />}
+          {!hasIdentity && <input ref={input} data-testid="waitlist-name" className="input" placeholder={t("identity.namePlaceholder")} value={name} autoComplete="given-name" maxLength={40} enterKeyHint="go" onChange={(e) => setName(e.target.value)} />}
           {(askLevel || (levelRange && !hasIdentity)) && <LevelSelect value={level} onChange={setLevel} />}
           <button type="submit" className="btn-primary shrink-0" disabled={pending}>
             {pending ? t("common.working") : label}
           </button>
         </div>
+        {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
       </div>
       {error ? <p className="mt-1 text-sm font-semibold text-danger">{error}</p> : <p className="mt-1 text-xs text-faint">{levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</p>}
     </form>

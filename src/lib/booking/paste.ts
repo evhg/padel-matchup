@@ -61,6 +61,8 @@ async function mayRead(db: Db, platform: Platform, now: Date): Promise<boolean> 
  * time is no booking (`nothing`): the form does not open on it, and the last venue is not read.
  *
  * `rateKey` is the caller's key: a hash of the address on the web (`clientKeyFrom`), the account on a bot.
+ * `tz` is the caller's zone (the browser's, the chat's), or null when the door knows none (book@): the
+ * form's link then carries the club's zone, or none, and the form takes the person's own (never UTC).
  * `shot` is what the AI model read from a booking screenshot (`readScreenshot` in `./screenshot.ts`,
  * which took the paste limit itself before the call, so it passes `rated`): the person's words win
  * over it field by field, and a link is read only for what both left out.
@@ -70,7 +72,7 @@ export async function pasteBooking(
   input: {
     text: string;
     links?: readonly string[];
-    tz: string;
+    tz: string | null;
     rateKey: string;
     playerId?: string | null;
     selfName?: string | null;
@@ -88,7 +90,7 @@ export async function pasteBooking(
   if (!text.trim() && links.length === 0 && !input.shot) return { ok: false, reason: "empty" };
   if (!o.rated && !(await takeRate(db, "paste", input.rateKey, LIMITS.bookingPastesPerIpPerDay, "day", now))) return { ok: false, reason: "limit" };
 
-  const tz = isValidTimeZone(input.tz) ? input.tz : "UTC";
+  const tz = input.tz && isValidTimeZone(input.tz) ? input.tz : null;
   const clubs = input.clubs ?? (await listClubsForPaste(db)).map(pickClubOf);
   const base = { text, links, clubs, now, tz, selfName: input.selfName ?? null, shot: input.shot ?? null };
   let preview: BookingPreview | null = null;
@@ -103,14 +105,14 @@ export async function pasteBooking(
     const got = allowed ? await readLinkPreview(link, { fetchImpl: o.fetchImpl }) : null;
     await later(() => bumpMetric(db, !allowed ? "paste_preview_off" : got ? "paste_preview_ok" : "paste_preview_fail", 1, dayKey(now)));
     if (got) {
-      preview = { title: got.title, description: got.description, ref: got.ref };
+      preview = { title: got.title, description: got.description };
       read = readBooking({ ...base, preview });
     }
   }
   if (!read.platform && !read.club && !read.date && !read.time) return { ok: false, reason: "nothing" };
   if (!read.club && input.playerId) {
     const name = await lastVenueOf(db, input.playerId);
-    const club = name ? clubNamed(name, clubs, tz) : null;
+    const club = name ? clubNamed(name, clubs, tz ?? "") : null;
     if (club) read = readBooking({ ...base, preview, fallbackClub: club });
   }
   // Did the preview change any field? Then the organiser checks the form before a match is made.

@@ -23,6 +23,7 @@ export const telegramChannel: CardChannel<TelegramPayload, TelegramChat, Telegra
   name: "telegram",
   enabled: telegramEnabled,
   canEdit: true,
+  booksCourt: true,
   async roomsOfGroup(db, groupId) {
     const chats = await db.select().from(telegramChats).where(and(eq(telegramChats.groupId, groupId), isNull(telegramChats.leftAt))).limit(50);
     return chats.map(telegramRoom);
