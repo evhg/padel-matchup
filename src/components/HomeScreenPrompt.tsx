@@ -17,10 +17,11 @@ type Mode = "hidden" | "prompt" | "ios-steps" | "android-steps" | "done";
  * PWA installed, or once the user walked through the steps on this browser.
  * No "Not now": either add it or ignore it.
  *
- * On an iPhone the icon keeps its own cookies, apart from Safari's, and a link tapped in WhatsApp
- * always opens Safari (or the default browser), never the icon (Apple, WWDC 2023). So the card says
- * it in one line: a player who only ever signed in inside the icon is a stranger to every link from
- * their group.
+ * On an iPhone the icon keeps its own cookies, apart from the browser's. No Apple source says where a
+ * link tapped in WhatsApp opens: Apple's WWDC 2023 talk on web apps covers links inside the web app
+ * only. The phone's default browser is likely, and that can be Chrome as well as Safari (checked 12
+ * October 2026). So the card says "your browser", in one line: a player who only ever signed in
+ * inside the icon is a stranger to every link from their group.
  */
 export function HomeScreenPrompt({ personalPath, installed = false }: { personalPath?: string | null; installed?: boolean }) {
   const t = useTranslations();

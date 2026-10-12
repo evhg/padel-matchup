@@ -771,7 +771,7 @@
     "notSafari": "Open this page in Safari to add it to your home screen.",
     "androidSteps": "Open the browser menu (⋮), then \"Add to Home screen\" or \"Install app\".",
     "gotIt": "Got it",
-    "iosWhatsapp": "Links from WhatsApp open in Safari, not in this icon."
+    "iosWhatsapp": "Links from WhatsApp open in your browser, not in this icon."
   },
   "pairs": {
     "fixed": "Fixed pairs",

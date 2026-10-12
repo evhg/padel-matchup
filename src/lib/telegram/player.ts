@@ -26,6 +26,7 @@ import { findOrCreateTelegramPlayer, linkTelegram } from "./identity";
 import { postCard } from "./post";
 import { sendRoleMenu } from "./coach";
 import { competitionCallback, tournamentsInChat } from "./competitions";
+import { mergesLater } from "@/lib/mergeCount";
 
 /**
  * The plain player's side of the bot as buttons. A coach and a student had a keyboard; a player had
@@ -252,7 +253,7 @@ export async function startClaim(db: Db, chat: TelegramChat, from: NonNullable<T
   const s = strings(locale);
   const player = await findOrCreateTelegramPlayer(db, from);
   try {
-    const pair = await claimPartnerSpot(db, { token, playerId: player.id });
+    const pair = await claimPartnerSpot(db, { token, playerId: player.id, counter: mergesLater(db) });
     const summary = await pairSummary(db, pair.id);
     await sendMessage(chat.chatId, esc(s.claimDone(summary?.categoryName ?? "", summary?.p1Name ?? "")), { silent: true });
     await sendPlayerMenu(chat.chatId, locale);
@@ -286,7 +287,7 @@ export async function startBind(db: Db, chat: TelegramChat, from: NonNullable<Tg
     await sendPlayerMenu(chat.chatId, locale);
     return "bind_bad";
   }
-  const linked = already ? target : await linkTelegram(db, target.id, from);
+  const linked = already ? target : await linkTelegram(db, target.id, from, mergesLater(db));
   const menu = await sendRoleMenu(db, linked, chat.chatId, { pin: true });
   if (!menu) await sendPlayerMenu(chat.chatId, locale, { intro: s.linkedPlayer });
   else await sendMessage(chat.chatId, esc(s.linkedPlayer), { silent: true });

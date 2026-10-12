@@ -32,7 +32,7 @@ describe("merging two rows of one person", () => {
     const [pkg] = await db.insert(lessonPackages).values({ coachId: coach.id, studentPlayerId: dup.id, size: 10 }).returning();
     const [lesson] = await db.insert(lessons).values({ coachId: coach.id, studentPlayerId: dup.id, startsAt: new Date(Date.UTC(2026, 9, 1, 2)), minutes: 60, status: "booked", amount: 800 }).returning();
 
-    await mergePlayers(db, erik.id, [dup.id]);
+    await mergePlayers(db, erik.id, [dup.id], { door: "operator" });
 
     expect((await db.select().from(feedback).where(eq(feedback.id, note.id)))[0].playerId).toBe(erik.id); // set null, before
     expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.playerId, erik.id))).toHaveLength(1); // cascade, before
@@ -52,7 +52,7 @@ describe("merging two rows of one person", () => {
     const both = await createGroup(db, { name: "Rawai crew", creatorPlayerId: erik.id, tz: "Asia/Bangkok", memberIds: [dup.id] });
     const onlyDup = await createGroup(db, { name: "Tuesday", creatorPlayerId: dup.id, tz: "Asia/Bangkok" });
 
-    await mergePlayers(db, erik.id, [dup.id]);
+    await mergePlayers(db, erik.id, [dup.id], { door: "operator" });
 
     const mine = await db.select().from(groupMembers).where(eq(groupMembers.playerId, erik.id));
     expect(mine.map((m) => m.groupId).sort()).toEqual([both.id, onlyDup.id].sort());
@@ -65,7 +65,7 @@ describe("merging two rows of one person", () => {
     const b = await makePlayer(db, "Nok");
     await coachFor(db, a.id, "nok-a");
     await coachFor(db, b.id, "nok-b");
-    await expect(mergePlayers(db, a.id, [b.id])).rejects.toThrow();
+    await expect(mergePlayers(db, a.id, [b.id], { door: "operator" })).rejects.toThrow();
     // Nothing moved: the transaction is whole or nothing.
     expect(await db.select().from(players).where(eq(players.id, b.id))).toHaveLength(1);
   });
@@ -78,7 +78,7 @@ describe("merging two rows of one person", () => {
       const keep = await makePlayer(db, "Keep");
       const dup = await makePlayer(db, "Keep");
       const [want] = await db.insert(demandSignals).values({ playerId: dup.id, weekday: 2, fromTime: "14:00", toTime: "16:00", expiresAt: new Date(Date.UTC(2026, 9, 24)) }).returning();
-      await mergePlayers(db, keep.id, [dup.id]);
+      await mergePlayers(db, keep.id, [dup.id], { door: "operator" });
       const [moved] = await db.select().from(demandSignals).where(eq(demandSignals.id, want.id));
       expect(moved.playerId).toBe(keep.id);
     } finally {
@@ -91,14 +91,14 @@ describe("merging two rows of one person", () => {
     // A fold by name: a stranger called Alex must not get a key to the survivor.
     const alex = await makePlayer(db, "Alex", { telegramId: 5551 });
     const other = await makePlayer(db, "Alex", { personalToken: "Hn4pQr7sTv8w" });
-    await mergePlayers(db, alex.id, [other.id]);
+    await mergePlayers(db, alex.id, [other.id], { door: "operator" });
     expect(await findPlayerByPersonalToken(db, "Hn4pQr7sTv8w")).toBeNull();
     expect((await db.select().from(players).where(eq(players.id, alex.id)))[0].personalToken).toBeNull();
 
     // The same person, proved: the link comes across, and so does the address with its proof.
     const into = await makePlayer(db, "Bea", { telegramId: 5552 });
     const from = await makePlayer(db, "Bea", { personalToken: "Jk5mNp6qRs7t", email: "bea@example.com", emailVerifiedAt: new Date(Date.UTC(2026, 8, 2)) });
-    await mergePlayers(db, into.id, [from.id], { proved: true });
+    await mergePlayers(db, into.id, [from.id], { proved: true, door: "telegram" });
     const [bea] = await db.select().from(players).where(eq(players.id, into.id));
     expect(bea.personalToken).toBe("Jk5mNp6qRs7t");
     expect(bea.email).toBe("bea@example.com");

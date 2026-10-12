@@ -533,7 +533,7 @@ describe("a night played", () => {
     // One person with two accounts in one night (their own seat and a placeholder elsewhere): the snapshot names both.
     await db.update(events).set({ standings: [a.id, b.id, c.id, dup.id, e.id, f.id], scoreLockedByCreator: true }).where(eq(events.id, ev.id));
     const { mergePlayers } = await import("@/lib/domain/merge");
-    await db.transaction(async (tx) => mergePlayers(tx, b.id, [dup.id]));
+    await db.transaction(async (tx) => mergePlayers(tx, b.id, [dup.id], { door: "operator" }));
     const [after] = await db.select().from(events).where(eq(events.id, ev.id));
     expect(placesOf(after)).toEqual([
       [a.id, b.id],

@@ -6,6 +6,7 @@ import { recomputeStatus } from "./events";
 import { recordFact } from "./facts";
 import { wasComplete } from "./joining";
 import { mergePlayers } from "./merge";
+import type { MergeCounter } from "./signins";
 import { bumpMetric } from "./metrics";
 import { LIMITS, takeRate } from "./ratelimit";
 import { lockEvent, vacateAndPromote, type Promotion } from "./slots";
@@ -401,7 +402,7 @@ export async function decideThatsMe(db: Db, input: { code: string; name: string;
  * marks the session, counts the way in (`signin_thats_me`) after answering, and tells the match about
  * any place a fold gave up (`seats`).
  */
-export async function commitThatsMe(db: Db, d: ThatsMeDecision, input: { viewerId: string | null; now?: Date }): Promise<ThatsMeResult> {
+export async function commitThatsMe(db: Db, d: ThatsMeDecision, input: { viewerId: string | null; now?: Date; counter?: MergeCounter }): Promise<ThatsMeResult> {
   const [target] = await db.select().from(players).where(eq(players.id, d.id)).limit(1);
   if (!target || reachedSince(target)) return { ok: false, reason: "nobody" };
   let seats: SeatChange | null = null;
@@ -410,7 +411,7 @@ export async function commitThatsMe(db: Db, d: ThatsMeDecision, input: { viewerI
     // The last word on every pair of records, as everywhere else a merge runs (`same_name_one_address`).
     if (!mine || reachedSince(mine) || !safeToMerge(target, mine).ok) return { ok: false, reason: "not_same_name" };
     seats = await settleFoldSeats(db, d.event.id, target.id, mine.id);
-    await mergePlayers(db, target.id, [mine.id]);
+    await mergePlayers(db, target.id, [mine.id], { door: "thats_me", counter: input.counter });
   }
   await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: target.id, subject: { type: "player", id: target.id }, code: d.event.code, data: { folded: d.fold }, at: input.now });
   const [fresh] = await db.select().from(players).where(eq(players.id, target.id)).limit(1);
@@ -418,7 +419,7 @@ export async function commitThatsMe(db: Db, d: ThatsMeDecision, input: { viewerI
 }
 
 /** The tap: `decideThatsMe`, then `commitThatsMe`. */
-export async function thatsMe(db: Db, input: { code: string; name: string; viewerId: string | null; rateKey: string; now?: Date }): Promise<ThatsMeResult> {
+export async function thatsMe(db: Db, input: { code: string; name: string; viewerId: string | null; rateKey: string; now?: Date; counter?: MergeCounter }): Promise<ThatsMeResult> {
   const d = await decideThatsMe(db, input);
   return d.ok ? commitThatsMe(db, d, input) : d;
 }

@@ -46,6 +46,7 @@ import { getPlayer } from "@/lib/domain/players";
 import { DomainError } from "@/lib/domain/errors";
 import { ActionFailure, assertRate, clientKey, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
+import { mergesLater } from "@/lib/mergeCount";
 
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
 
@@ -71,6 +72,8 @@ export async function joinAction(code: string, name?: string, level?: number | n
     const ev = detail.event;
     // The rules themselves live in the domain, because the web form is no longer the only door in.
     const decision = await joinWithPolicy(db, detail, me, myLevel, partnerName);
+    // `whoJoins` asked this before any record was made; the shared rule asks again for every door.
+    if (decision.kind === "name_held") throw new ActionFailure("name_held");
     if (decision.kind === "level_required") throw new ActionFailure("level_required");
     if (decision.kind === "requested") {
       after(async () => {
@@ -334,7 +337,7 @@ export async function confirmInviteAction(
       }
     }
     const me = viewer ?? (await requirePlayer(db, input.name));
-    const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email });
+    const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email, counter: mergesLater(db) });
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
     // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no

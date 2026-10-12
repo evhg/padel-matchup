@@ -16,10 +16,10 @@ import { sendTemplateMessage, whatsappEnabled, type WaResult } from "./api";
  * template Meta has approved, so each of those four notices is one template in
  * `data/whatsapp-templates.json`, in English, Russian and Spanish.
  *
- * Every one is a UTILITY template. Meta charges per delivered template, but a utility template sent
- * inside an open window is free, and a marketing one never is. So nothing here tracks the window: a
- * utility template costs nothing where a free reply would have been possible, and the price of one
- * outside it where nothing else could arrive at all.
+ * Every one is a UTILITY template, and Meta charges utility templates (Meta's pricing page, checked 12
+ * October 2026). Whether one sent inside an open window is still free is not confirmed
+ * (docs/OPERATING.md). Nothing here tracks the window, so plan on each template sent costing one
+ * utility message; the daily cap below is the cost guard.
  *
  * A template's buttons survive a forward, so a button here never carries a personal link: the URL
  * button's variable part is a match code (`7KQ2`, or `7KQ2/card`), which `templatePayload` refuses

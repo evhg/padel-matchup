@@ -6,6 +6,7 @@ import { emailCodes, players, type Player } from "@/db/schema";
 import { CODE_ALPHABET } from "@/lib/codes";
 import { DomainError } from "./errors";
 import { mergePlayers } from "./merge";
+import type { MergeCounter } from "./signins";
 import { foldSameNameRows } from "./sameName";
 import { normalizeEmail } from "./players";
 import { clearMark } from "./emailMarks";
@@ -160,7 +161,8 @@ export async function consumeEmailCode(db: Db, rawEmail: string, code: string, n
  * every other player with that email plus the current device identity into
  * it, and mark the email verified. Returns the canonical player.
  */
-export async function restoreByEmail(db: Db, email: string, currentPlayerId: string | null, now = new Date()): Promise<Player> {
+/** `counter`: where the merges are counted (`merge_email_code`, `merge_same_name`); a request hands in `mergesLater`. */
+export async function restoreByEmail(db: Db, email: string, currentPlayerId: string | null, now = new Date(), counter?: MergeCounter): Promise<Player> {
   const owners = await playersWithEmail(db, email);
   const current = currentPlayerId ? ((await db.select().from(players).where(eq(players.id, currentPlayerId)).limit(1))[0] ?? null) : null;
   const pool = [...owners];
@@ -171,11 +173,12 @@ export async function restoreByEmail(db: Db, email: string, currentPlayerId: str
     db,
     canonical.id,
     pool.map((p) => p.id),
+    { door: "email_code", counter },
   );
   const [updated] = await db.update(players).set({ email, emailVerifiedAt: canonical.emailVerifiedAt ?? now }).where(eq(players.id, canonical.id)).returning();
   // Proved now: a row of the same name nobody can reach, sharing a match, an organiser or a club,
   // is theirs too (the owner's option A, 24 September 2026). Never throws.
-  await foldSameNameRows(db, updated.id);
+  await foldSameNameRows(db, updated.id, counter);
   return updated;
 }
 
