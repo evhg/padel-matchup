@@ -1,7 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import type { Db } from "@/db";
 import { relativeTime } from "@/lib/dates";
-import { inboxOf } from "@/lib/domain/notices";
+import type { inboxOf } from "@/lib/domain/notices";
 import { INBOX_DAYS } from "@/lib/domain/noticeKinds";
 import { noticeText } from "@/lib/noticeText";
 import { InboxDetails } from "./InboxDetails";
@@ -11,10 +10,11 @@ import { InboxDetails } from "./InboxDetails";
  * for them while a kind was off or quiet hours held it, newest first. Nothing at all until the first
  * notice exists (`docs/DECIDING.md` rule 3), then one line, "Inbox · 2 new", that opens to the list
  * and reads it. Each line is written in the reader's language from the row's key and facts, and opens
- * its match's public page, never a personal link.
+ * its match's public page, never a personal link. The page reads it (`inboxOf`) and puts it first
+ * while it has new notices, so the header's bell ("2 new updates", `/me#inbox`) lands on it.
  */
-export async function NoticeInbox({ db, playerId }: { db: Db; playerId: string }) {
-  const { rows, unread } = await inboxOf(db, playerId);
+export async function NoticeInbox({ inbox }: { inbox: Awaited<ReturnType<typeof inboxOf>> }) {
+  const { rows, unread } = inbox;
   if (rows.length === 0) return null;
   const [t, locale] = await Promise.all([getTranslations(), getLocale()]);
   const say = t as unknown as (key: string, values?: Record<string, string | number>) => string;

@@ -19,7 +19,9 @@ export function InboxDetails({ title, newLabel, unreadLabel, help, items }: { ti
     if (e.currentTarget.open) markRead();
   };
   // A tap before the page has hydrated opens the list with no handler attached yet: read it as soon as one is.
+  // The header's bell ("2 new updates") comes here as `#inbox`: the list opens at once, which reads it.
   useEffect(() => {
+    if (ref.current && !ref.current.open && window.location.hash === "#inbox") ref.current.open = true;
     if (ref.current?.open) markRead();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at hydration
   }, []);

@@ -141,8 +141,42 @@ try {
     await dana.waitForTimeout(500);
   }
   check("the inbox appears on My matches with its new notices counted", (await inbox.count()) === 1 && /^\d+ new$/.test((await inbox.getByTestId("inbox-new").innerText()).toLowerCase()));
-  // The count rides on the door and stays out of its name: "My matches" is still exactly what the link is called.
-  check("the header's My matches carries the unread count", /^[1-9]\+?$/.test(await dana.getByTestId("nav-unread").innerText()) && (await dana.getByRole("link", { name: "My matches", exact: true }).count()) > 0);
+  // The owner, 12 October 2026: "the two notifications in top signifies what? Already one upcoming match."
+  // The count is a bell, a link of its own named as updates, to the inbox; "My matches" keeps its own name.
+  const bellLink = dana.getByTestId("nav-unread");
+  const bellSays = { text: (await bellLink.innerText()).trim(), name: await bellLink.getAttribute("aria-label"), href: await bellLink.getAttribute("href") };
+  check(
+    "the header's bell names the count as new updates and leads to the inbox, and \"My matches\" keeps its own name",
+    /^[1-9]\+?$/.test(bellSays.text) && (bellSays.name === `${bellSays.text} new update${bellSays.text === "1" ? "" : "s"}` || bellSays.name === "More than 9 new updates") && bellSays.href === "/me#inbox" && (await dana.getByRole("link", { name: "My matches", exact: true }).count()) > 0,
+    JSON.stringify(bellSays),
+  );
+  // While it has new notices the inbox is the first thing under the title, above the matches.
+  const inboxY = (await inbox.boundingBox())?.y ?? Infinity;
+  const upcomingY = (await dana.getByRole("heading", { name: "Upcoming", exact: true }).boundingBox())?.y ?? -Infinity;
+  check("with new notices the inbox sits under the title, above the matches", inboxY < upcomingY, JSON.stringify({ inboxY, upcomingY }));
+  // The header at 390 px in all three languages, the bell on: the brand mark, "My matches", the bell, ⋯ and
+  // the language pill each inside the screen, apart from one another, and no sideways scroll.
+  const headerFits = () =>
+    dana.evaluate(() => {
+      const box = (sel) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+      const [bell, play, more, lang] = ['[data-testid="nav-unread"]', '[data-testid="nav-play"]', '[data-testid="nav-more"]', 'header [aria-label="Language"]'].map(box);
+      const vw = document.documentElement.clientWidth;
+      const all = [bell, play, more, lang];
+      const inside = all.every((b) => b && b.left >= 0 && b.right <= vw + 0.5);
+      const apart = inside && bell.right <= more.left + 0.5 && play.right <= more.left + 0.5 && more.right <= lang.left + 0.5;
+      const word = document.querySelector('[data-testid="nav-play"]');
+      const whole = Boolean(word) && word.scrollWidth <= word.clientWidth + 0.5;
+      const edges = (b) => (b ? [Math.round(b.left), Math.round(b.right)] : null);
+      return { ok: inside && apart && whole && document.documentElement.scrollWidth <= vw, vw, play: edges(play), bell: edges(bell), more: edges(more), lang: edges(lang), word: word?.textContent };
+    });
+  for (const l of ["ru", "es", "en"]) {
+    await dana.context().addCookies([{ name: "NEXT_LOCALE", value: l, url: BASE }]);
+    await dana.goto(BASE + "/me");
+    await dana.getByTestId("nav-unread").waitFor({ timeout: 15000 });
+    const fit = await headerFits();
+    check(`the header fits a 390 px phone in ${l} with the bell on`, fit.ok, JSON.stringify(fit));
+    if (l !== "en") await shot(dana, `player-header-bell-${l}`);
+  }
   await inbox.locator("summary").click();
   check("the inbox lists the notice: Kai joined Dana's match", (await inbox.locator("li").filter({ hasText: "Kai joined" }).count()) === 1 && (await inbox.locator(`a[href="/${mine.match?.code}"]`).count()) === 1);
   // The marks go after the tap is handled, not at the instant of the click: wait for them to go, never for long.

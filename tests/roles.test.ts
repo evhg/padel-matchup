@@ -1,10 +1,13 @@
 import { eq } from "drizzle-orm";
+import { createElement } from "react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { clubs, coachManagers, coaches } from "@/db/schema";
 import { createCoach, setStudentStatus } from "@/lib/domain/coaching";
 import { NO_ROLES, roleCount, rolesFor } from "@/lib/domain/roles";
 import { createTestDb, makePlayer } from "./helpers/db";
+import { renderIn } from "./helpers/render";
+import { HeaderNav } from "@/components/AssistantLink";
 
 /**
  * The role set is what replaced the browser cookie that told a player they were a coach.
@@ -97,5 +100,37 @@ describe("the role set", () => {
     await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.id, coach.id));
     // This is the case the cookie could never see: the role ended, the browser did not hear.
     expect((await rolesFor(db, gone.id)).coach).toBeNull();
+  });
+});
+
+/**
+ * The owner, 12 October 2026, on her own match page at 390 px: "the two notifications in top signifies
+ * what? Already one upcoming match." A bare "2" on "My matches" read as a count of matches. The unread
+ * notices now wear a bell, and are a link of their own, named "2 new updates", to the inbox on My matches;
+ * "My matches" is still exactly what its link is called.
+ */
+describe("the header's unread notices", () => {
+  const labels = { myMatches: "My matches", assistant: "Assistant", club: "Club", series: "Series", more: "More", findGame: "Find a game", coaches: "Coaches", clubs: "Clubs", tournaments: "Tournaments", biggerText: "Bigger text", updates: "2 new updates" };
+  const header = (roles: Partial<typeof NO_ROLES>) => renderIn("en", createElement(HeaderNav, { roles: { ...NO_ROLES, ...roles }, labels }));
+  const links = (html: string) => [...html.matchAll(/<a\b([^>]*)>(.*?)<\/a>/g)].map((m) => ({ attrs: m[1], text: m[2].replace(/<[^>]+>/g, "") }));
+
+  it("names the count as updates, links it to the inbox, and leaves \"My matches\" its own name", () => {
+    const html = header({ unread: 2 });
+    const bell = links(html).find((l) => l.attrs.includes('data-testid="nav-unread"'));
+    expect(bell?.attrs).toContain('aria-label="2 new updates"');
+    expect(bell?.attrs).toContain('href="/me#inbox"');
+    expect(bell?.text).toBe("2");
+    expect(links(html).find((l) => l.attrs.includes('data-testid="nav-play"'))?.text).toBe("My matches");
+  });
+
+  it("shows nothing when every notice is read", () => {
+    expect(header({ unread: 0 })).not.toContain("nav-unread");
+  });
+
+  it("keeps the bell outside the menu when \"My matches\" waits inside it", () => {
+    const html = header({ unread: 3, coach: { handle: "olga", as: "coach" } });
+    const menu = html.slice(html.indexOf("<details"));
+    expect(html.indexOf('data-testid="nav-unread"')).toBeGreaterThan(-1);
+    expect(menu).not.toContain('data-testid="nav-unread"');
   });
 });

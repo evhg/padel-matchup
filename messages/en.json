@@ -52,7 +52,9 @@
     "clubs": "Clubs",
     "tournaments": "Tournaments",
     "findGame": "Find a game",
-    "biggerText": "Bigger text"
+    "biggerText": "Bigger text",
+    "newUpdates": "{count, plural, one {# new update} other {# new updates}}",
+    "manyNewUpdates": "More than 9 new updates"
   },
   "identity": {
     "whatsYourName": "What's your name?",

@@ -52,7 +52,9 @@
     "clubs": "Clubes",
     "tournaments": "Torneos",
     "findGame": "Buscar partido",
-    "biggerText": "Texto más grande"
+    "biggerText": "Texto más grande",
+    "newUpdates": "{count, plural, one {# novedad} other {# novedades}}",
+    "manyNewUpdates": "Más de 9 novedades"
   },
   "identity": {
     "whatsYourName": "¿Cómo te llamas?",

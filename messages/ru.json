@@ -52,7 +52,9 @@
     "clubs": "Клубы",
     "tournaments": "Турниры",
     "findGame": "Найти игру",
-    "biggerText": "Крупный текст"
+    "biggerText": "Крупный текст",
+    "newUpdates": "{count, plural, one {# новое обновление} few {# новых обновления} many {# новых обновлений} other {# новых обновления}}",
+    "manyNewUpdates": "Больше 9 новых обновлений"
   },
   "identity": {
     "whatsYourName": "Как вас зовут?",

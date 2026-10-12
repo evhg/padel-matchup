@@ -840,7 +840,9 @@ Everything in this list is live. The README describes each in detail.
   goes as one short message per channel when they end, from the hourly job. The inbox on My matches
   shows the latest twenty, newest first, in the reader's own language (the rows keep a message key
   and plain facts, never words and never a link), reads itself when opened, and counts the unread on
-  the header's My matches. Club matches are off by default (decision B), for push as well as email.
+  the header as a bell with a number, a link of its own named "2 new updates" (since 12 October 2026:
+  a bare "2" on My matches read as a count of matches), which opens the inbox; while it has new
+  notices the inbox sits first on My matches. Club matches are off by default (decision B), for push as well as email.
   Every existing player keeps every other notice; the old activity-email switch keeps its meaning as
   a switch on the email channel. Ninety days, then the hourly job prunes. Proven in
   `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.

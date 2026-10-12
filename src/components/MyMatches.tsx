@@ -11,7 +11,8 @@ import { listStudentCoaches, listStudentLessons, packageLine, type StudentLesson
 import { venueWithCourt } from "@/lib/labels";
 
 /** "My matches": rendered on /me (cookie identity) and /p/{token} (personal link). */
-export async function MyMatches({ player }: { player: Player }) {
+/** `first`: what goes right under the title, before the matches (the inbox while it has new notices). */
+export async function MyMatches({ player, first = null }: { player: Player; first?: React.ReactNode }) {
   const [t, locale, db] = await Promise.all([getTranslations(), getLocale(), getDb()]);
   const now = new Date();
   const [{ upcoming, past }, groups, lessons, coaches] = await Promise.all([getPlayerEvents(db, player.id), getPlayerGroups(db, player.id), listStudentLessons(db, player.id, now), listStudentCoaches(db, player.id, now)]);
@@ -126,6 +127,7 @@ export async function MyMatches({ player }: { player: Player }) {
   return (
     <>
       <h1 className="text-3xl font-extrabold tracking-tight">{t("me.title")}</h1>
+      {first}
 
       {!hasHistory ? (
         <section className="card text-center">

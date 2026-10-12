@@ -34,7 +34,7 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
         <span className={`truncate ${minimal ? "" : "[[data-text=big]_&]:max-sm:hidden"} ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
-        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText") }} />}
+        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText"), updates: roles.unread > 9 ? t("common.manyNewUpdates") : t("common.newUpdates", { count: roles.unread }) }} />}
         <LocaleToggle />
       </div>
     </header>
