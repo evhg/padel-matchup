@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import * as schema from "@/db/schema";
@@ -11,6 +12,7 @@ import { completePasskeySignIn, hasPasskey, mayRegister, passkeyFold, passkeyLab
 import { foldSameNameRows, proved, sameNameRows } from "@/lib/domain/sameName";
 import { joinEvent } from "@/lib/domain/slots";
 import { commitThatsMe, decideThatsMe, thatsMeRows } from "@/lib/domain/thatsMe";
+import { openChallenge, sealChallenge, spendChallenge } from "@/lib/passkeys/webauthn";
 import type { ThatsMeRefusal } from "@/lib/domain/thatsMe";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
@@ -245,6 +247,28 @@ describe("passkeys in the database", () => {
     const res = await completePasskeySignIn(db, { passkey: pk, newCounter: 0, session: { playerId: null, byName: false }, now: NOW });
     expect(res).toMatchObject({ ok: true, folded: false });
     expect(await playerRow(elsewhere.id)).toBeDefined();
+  });
+
+  it("spends a sealed challenge once, also across midnight UTC: yes at 23:59, no at 00:01", async () => {
+    // A rate row belongs to one UTC day. The spend dates its row by the seal's own expiry, never by the
+    // attempt, so a copy of the cookie sent again after 00:00 UTC, inside its five minutes, meets the same
+    // row (review, 12 October 2026). Here on `createTestDb`, so CI's real-Postgres run proves it too.
+    const midnight = Date.UTC(2026, 9, 13);
+    try {
+      vi.setSystemTime(new Date(midnight - 3 * 60_000));
+      const sealed = sealChallenge("signin", randomBytes(32).toString("base64url"), null);
+      vi.setSystemTime(new Date(midnight - 60_000));
+      const first = openChallenge(sealed, "signin", null);
+      expect(first).not.toBeNull();
+      expect(await spendChallenge(db, first!)).toBe(true);
+      vi.setSystemTime(new Date(midnight + 60_000));
+      // Still inside its five minutes, so the seal opens: only the spend stands in the way.
+      const again = openChallenge(sealed, "signin", null);
+      expect(again).not.toBeNull();
+      expect(await spendChallenge(db, again!)).toBe(false);
+    } finally {
+      vi.setSystemTime(NOW);
+    }
   });
 
   it("answers no for a passkey whose record was deleted", async () => {

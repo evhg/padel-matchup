@@ -118,7 +118,6 @@
     "rememberNo": "Tu teléfono no guardó nada. Inténtalo otra vez.",
     "phonesTitle": "Teléfonos que te recuerdan",
     "phonesHelp": "Cada uno te deja entrar con Face ID o tu huella, en cualquiera de sus navegadores. Guarda una llave para Kicksmash. Apple y Google la llaman passkey.",
-    "phonesNone": "Aún no te recuerda ningún teléfono.",
     "phoneSaved": "Guardado el {date}",
     "phoneUsed": "último uso el {date}",
     "phoneUnknown": "Un teléfono o un ordenador",
@@ -127,7 +126,8 @@
     "phoneRemoveHelp": "Si lo quitas aquí, deja de funcionar. Bórralo también de las contraseñas del teléfono.",
     "rememberSavedBefore": "¿Ya lo guardaste en este teléfono?",
     "backInOpen": "¿Jugaste antes? Inicia sesión",
-    "backJoinAsk": "¡Hola de nuevo, {name}! ¿Te apuntas a este partido?"
+    "backJoinAsk": "¡Hola de nuevo, {name}! ¿Te apuntas a este partido?",
+    "rememberAlso": "Recordar también este teléfono"
   },
   "landing": {
     "headline": "Pádel en un enlace.",

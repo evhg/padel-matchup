@@ -69,12 +69,15 @@ try {
   const a = await phoneBrowser();
   const code = await newMatch(a.page, "Rawai Padel");
   check("a match exists for the passkey checks", Boolean(code), String(code));
-  await a.page.goto(`${BASE}/${code}`);
   // Nothing about passkeys reaches the server on a plain view (rule 12): the help opens only with the join form.
+  // The listener stands before the first navigation, so a call made while the page loads or hydrates counts too
+  // (review, 12 October 2026: attached after `goto`, it could not see one).
   let actions = 0;
   a.page.on("request", (r) => {
     if (r.method() === "POST" && r.headers()["next-action"]) actions += 1;
   });
+  await a.page.goto(`${BASE}/${code}`, { waitUntil: "load" });
+  await a.page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
   await a.page.waitForTimeout(500);
   check("a view of the match page sends no call for passkeys", actions === 0 && (await a.page.getByTestId("back-in-open").count()) === 0, `posts=${actions}`);
   check(
@@ -136,6 +139,12 @@ try {
   const phones = a.page.getByTestId("my-phones");
   await phones.waitFor({ timeout: 10000 });
   check("My matches lists the phone under \"Phones that remember you\", with Remove", (await phones.getByTestId("my-phone").count()) === 1 && (await phones.getByRole("button", { name: /^Remove / }).count()) === 1);
+  // A record with a passkey gets no second offer there: only the small link for another phone (DECIDING rule 39).
+  await phones.getByTestId("remember-also").waitFor({ timeout: 10000 });
+  check(
+    "a record with a passkey gets no \"Remember me\" card on My matches, only the small link \"Also remember this phone\"",
+    (await a.page.getByTestId("remember-phone").count()) === 0 && (await phones.getByRole("button", { name: "Also remember this phone", exact: true }).count()) === 1,
+  );
 
   // ---- B: another browser on the same phone, no cookies, signs in with Face ID ----
   const b = await phoneBrowser();
@@ -203,7 +212,7 @@ try {
   check("a browser signed in by name (\"That's me\") is offered no passkey on the match page", (await d.page.getByTestId("remember-phone").count()) === 0);
   await d.page.goto(`${BASE}/me`);
   await d.page.waitForTimeout(1500);
-  check("nor on My matches", (await d.page.getByTestId("my-phones").count()) === 0);
+  check("nor on My matches", (await d.page.getByTestId("my-phones").count()) === 0 && (await d.page.getByTestId("remember-phone").count()) === 0);
   // The control: the browser that made Dee's record, on a phone that can keep one, is offered it.
   const e2 = await phoneBrowser();
   const code4 = await newMatch(e2.page, "Nai Harn Padel");
@@ -214,6 +223,19 @@ try {
   await e2.page.reload();
   await e2.page.waitForTimeout(1500);
   check("\"Not now\" hides the card in this browser", (await e2.page.getByTestId("remember-phone").count()) === 0);
+  // My matches makes the same quiet offer to a record with no passkey, with a "Not now" of its own, so a
+  // "Not now" after a join leaves the page where a player manages their phones its own choice.
+  await e2.page.goto(`${BASE}/me`);
+  const meOffer = e2.page.getByTestId("remember-phone");
+  await meOffer.waitFor({ timeout: 15000 });
+  check(
+    "My matches offers \"Remember me on this phone\" to a record with no passkey, as the same quiet card with \"Not now\", and lists no phones",
+    (await meOffer.getByRole("button", { name: "Remember this phone", exact: true }).count()) === 1 && (await meOffer.getByRole("button", { name: "Not now", exact: true }).count()) === 1 && (await e2.page.getByTestId("my-phones").count()) === 0,
+  );
+  await meOffer.getByRole("button", { name: "Not now", exact: true }).click();
+  await e2.page.reload();
+  await e2.page.waitForTimeout(1500);
+  check("\"Not now\" hides it on My matches too", (await e2.page.getByTestId("remember-phone").count()) === 0);
 
   // ---- Remove: the phone's copy then signs in nobody ----
   await a.page.goto(`${BASE}/me`);

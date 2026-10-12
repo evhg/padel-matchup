@@ -12,6 +12,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { getSessionPlayer, passkeyHandle, signedInByName } from "@/lib/session";
 import { MyPhones } from "@/components/MyPhones";
+import { RememberPhone } from "@/components/RememberPhone";
 import { mayRegister, passkeysOf } from "@/lib/domain/passkeys";
 import { QUIET_FALLBACK_TZ } from "@/lib/domain/noticeKinds";
 import { formatDayMonth } from "@/lib/dates";
@@ -80,7 +81,8 @@ async function MePage({ searchParams }: Props) {
   const inboxCard = <NoticeInbox inbox={inbox} />;
   // "Phones that remember you" (DECIDING rule 39): one read down `passkeys_player_idx`, then a label, two
   // dates and an opaque handle each; the credential id never leaves the server. This browser may save
-  // one, and remove one, unless its session came in by name.
+  // one, and remove one, unless its session came in by name. With no passkey yet, the offer is the
+  // match page's quiet card, "Not now" included; with one, the list and a small "Also remember this phone".
   const locale = await getLocale();
   const tz = me.quietTz ?? QUIET_FALLBACK_TZ;
   const phones = (await passkeysOf(db, me.id)).map((p) => ({ handle: passkeyHandle(me.id, p.id), label: p.label, saved: formatDayMonth(p.createdAt, tz, locale), used: p.lastUsedAt ? formatDayMonth(p.lastUsedAt, tz, locale) : null }));
@@ -96,6 +98,9 @@ async function MePage({ searchParams }: Props) {
         <MyMatches player={me} first={inbox.unread > 0 ? inboxCard : null} />
         {inbox.unread === 0 && inboxCard}
         <SameNameCard db={db} player={me} />
+        {/* The card stays mounted with `offer` false once the record has a passkey, so the save's own
+            confirmation outlives the render that the action's cookie change brings. */}
+        {canSavePasskey && <RememberPhone offer={phones.length === 0} where="me" />}
         <MyPhones rows={phones} canSave={canSavePasskey} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />

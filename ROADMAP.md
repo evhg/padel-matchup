@@ -1091,8 +1091,10 @@ Everything in this list is live. The README describes each in detail.
   player seated from another browser needs no Join. A sign-in signs in the passkey's own record and
   folds the new record that browser made into it, only when nothing proves or reaches that record and
   the names agree; a session by name never saves one.
-  My matches lists "Phones that remember you" with Remove. Kicksmash keeps a public key, a label and
-  two dates, never a face, a fingerprint or a password (`/privacy`). `src/lib/domain/passkeys.ts`,
+  My matches shows the same quiet card, with its own "Not now", until the record has a passkey, then
+  lists "Phones that remember you" with Remove and a small "Also remember this phone". Kicksmash keeps a
+  public key, a label and two dates, never a face, a fingerprint or a password (`/privacy`), and the
+  download of a player's data lists each phone by its label and dates. `src/lib/domain/passkeys.ts`,
   `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in
   `tests/passkey-ceremony.test.ts` and with Chromium's virtual authenticator in `e2e/passkeys.mjs`.
 

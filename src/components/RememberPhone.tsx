@@ -5,8 +5,12 @@ import { startTransition, useEffect, useState, useTransition } from "react";
 import { passkeySaveAction, passkeySaveOptionsAction } from "@/actions/passkeys";
 import { PasskeySignIn } from "./PasskeySignIn";
 
-/** The browser's own "not now" for the offer: per browser, never a row (a convenience, not a setting). */
-const NOT_NOW = "km_passkey_not_now";
+/**
+ * The browser's own "not now" for the offer: per browser, never a row (a convenience, not a setting). One
+ * for the match page and one for My matches, so a "Not now" after a join does not take the offer away from
+ * the page where a player manages their phones.
+ */
+const NOT_NOW = { match: "km_passkey_not_now", me: "km_passkey_not_now_me" } as const;
 
 /** Whether this browser can keep a passkey on the phone itself (Face ID, a fingerprint, the phone's lock). */
 export function usePlatformPasskey(): boolean {
@@ -44,12 +48,13 @@ export async function savePasskeyHere(): Promise<SaveOutcome> {
 
 /**
  * "Remember me on this phone" (DECIDING rule 39): a quiet card after a join, or after a sign-in this
- * browser proved, for a session that may save a passkey (the page renders it only then) and a record
- * that has none (`offer`). It shows only where the phone can keep one, and "Not now" hides it in this browser. Under it,
- * "Saved on this phone before?": a browser that just made a new record of a player whose phone keeps a
- * passkey signs in with it, and the new record folds into the old one.
+ * browser proved, and on My matches (`where: "me"`), for a session that may save a passkey (the page
+ * renders it only then) and a record that has none (`offer`). It shows only where the phone can keep
+ * one, and "Not now" hides it in this browser, on that page. Under it, "Saved on this phone before?": a
+ * browser that just made a new record of a player whose phone keeps a passkey signs in with it, and the
+ * new record folds into the old one.
  */
-export function RememberPhone({ offer }: { offer: boolean }) {
+export function RememberPhone({ offer, where = "match" }: { offer: boolean; where?: "match" | "me" }) {
   const t = useTranslations();
   const platform = usePlatformPasskey();
   const [hidden, setHidden] = useState(true);
@@ -58,16 +63,18 @@ export function RememberPhone({ offer }: { offer: boolean }) {
 
   useEffect(() => {
     try {
-      setHidden(Boolean(localStorage.getItem(NOT_NOW)));
+      setHidden(Boolean(localStorage.getItem(NOT_NOW[where])));
     } catch {
       setHidden(false);
     }
-  }, []);
+  }, [where]);
+  // On the match page the card sits under the join's own cards; on My matches the page's gap spaces it.
+  const gap = where === "match" ? "mt-3 " : "";
 
   if (!platform || hidden) return null;
   if (outcome === "saved" || outcome === "already")
     return (
-      <p className="mt-3 rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok" data-testid="remember-phone-done">
+      <p className={`${gap}rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok`} data-testid="remember-phone-done">
         ✓ {t(outcome === "saved" ? "identity.rememberDone" : "identity.rememberAlready")}
       </p>
     );
@@ -83,7 +90,7 @@ export function RememberPhone({ offer }: { offer: boolean }) {
     });
   const notNow = () => {
     try {
-      localStorage.setItem(NOT_NOW, "1");
+      localStorage.setItem(NOT_NOW[where], "1");
     } catch {
       /* storage unavailable: hidden for this view only */
     }
@@ -91,7 +98,7 @@ export function RememberPhone({ offer }: { offer: boolean }) {
   };
 
   return (
-    <section className="mt-3 rounded-2xl border border-line px-4 py-3" data-testid="remember-phone">
+    <section className={`${gap}rounded-2xl border border-line px-4 py-3`} data-testid="remember-phone">
       <h2 className="text-sm font-extrabold">{t("identity.rememberTitle")}</h2>
       <p className="mt-0.5 text-sm text-muted">{t("identity.rememberHelp")}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">

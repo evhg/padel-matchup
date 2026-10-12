@@ -118,7 +118,6 @@
     "rememberNo": "Your phone saved nothing. Try again.",
     "phonesTitle": "Phones that remember you",
     "phonesHelp": "Each one signs you in with Face ID or fingerprint, in any of its browsers. It keeps a key for Kicksmash. Apple and Google call it a passkey.",
-    "phonesNone": "No phone remembers you yet.",
     "phoneSaved": "Saved {date}",
     "phoneUsed": "last used {date}",
     "phoneUnknown": "A phone or a computer",
@@ -127,7 +126,8 @@
     "phoneRemoveHelp": "Remove it here and it stops working. Delete it from the phone's passwords too.",
     "rememberSavedBefore": "Saved on this phone before?",
     "backInOpen": "Played before? Sign in",
-    "backJoinAsk": "Welcome back, {name}! Join this match?"
+    "backJoinAsk": "Welcome back, {name}! Join this match?",
+    "rememberAlso": "Also remember this phone"
   },
   "landing": {
     "headline": "Padel in one link.",

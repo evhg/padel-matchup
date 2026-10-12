@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events } from "@/db/schema";
+import { events, passkeys } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { LEVEL_SCALES, fromScale } from "@/lib/domain/levels";
 import { canonical, isExpired, keyId, passportKeysDocument, signPassport, verifyPassport, type Passport } from "@/lib/domain/passport";
@@ -121,6 +121,8 @@ describe("public profile, passport and export (db)", () => {
     expect(signed.alg).toBe("Ed25519");
     expect(await verifyPassport(signed as Parameters<typeof verifyPassport>[0], PUB)).toBe(true);
 
+    // A phone that remembers Bo (DECIDING rule 39): held, so /privacy's "download everything" covers it.
+    await db.insert(passkeys).values({ id: "cred-export-bo", playerId: bo.id, publicKey: "pk-export-bo", deviceType: "multiDevice", label: "iPhone, Safari", createdAt: now });
     const data = await exportPlayerData(db, bo, "https://kicksma.sh", now);
     expect(data.format).toBe("kicksmash-export/1");
     expect(data.player.displayName).toBe("Bo");
@@ -130,6 +132,8 @@ describe("public profile, passport and export (db)", () => {
     expect(data.passport.alg).toBe("Ed25519");
     // The notice settings and the inbox are the player's own, so the export carries them (decision D).
     expect(data.notices).toEqual({ kinds: {}, quietFrom: null, quietTo: null, quietTz: null, inbox: [] });
+    // The phones by their words and two dates; never the credential id or the public key.
+    expect({ phones: data.phones, secrets: ["cred-export-bo", "pk-export-bo"].filter((x) => JSON.stringify(data).includes(x)) }).toEqual({ phones: [{ label: "iPhone, Safari", savedAt: now, lastUsedAt: null }], secrets: [] });
     const raw = JSON.stringify(data);
     expect(raw).not.toContain("personalToken");
     expect(raw).not.toContain("manageCode");
