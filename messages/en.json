@@ -364,7 +364,9 @@
     "bookAndPayOn": "Book and pay on {platform}",
     "checkoutSignIn": "{platform} may ask you to sign in first.",
     "courtBookedUndoShort": "Undo",
-    "courtBookedUndoLabel": "Mark the court as not booked"
+    "courtBookedUndoLabel": "Mark the court as not booked",
+    "heldFor": "{count, plural, one {# place held for {names}} other {# places held for {names}}}",
+    "heldCount": "{count, plural, one {# place held} other {# places held}}"
   },
   "creator": {
     "tools": "Organizer tools",

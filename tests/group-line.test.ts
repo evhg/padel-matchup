@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
+import { countParts, heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
+import { createTranslator } from "next-intl";
+import { catalogue } from "./helpers/render";
 import { formatWeekdayTime } from "@/lib/dates";
 import { createRequestStoreForRender } from "next/dist/server/async-storage/request-store";
 import { nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
@@ -162,5 +164,41 @@ describe("every share button says where the link went", () => {
     expect(seen({ "next-action": "7f3a" })).toBe(false);
     // An iframe or an image request is not a view either.
     expect(seen({ "sec-fetch-dest": "iframe" })).toBe(false);
+  });
+});
+
+/**
+ * The owner's TDsv, 12 October 2026, at 390 px: "FULL", "3/4 players" and "No spots left" together, because
+ * one place was held for Alberto. The count line now says so: "3/4 players · 1 place held for Alberto".
+ */
+describe("the match page's count line", () => {
+  const say = (locale: "en" | "ru" | "es", roster: { status: string; name: string | null }[]) => {
+    const t = createTranslator({ locale, messages: catalogue(locale) as never }) as unknown as (key: string, values?: Record<string, string | number>) => string;
+    return countParts(roster).map((p) => t(p.key, p.values)).join(" · ");
+  };
+  const tdsv = [
+    { status: "joined", name: "Erik" },
+    { status: "joined", name: "Danny" },
+    { status: "confirmed", name: "Ana" },
+    { status: "invited", name: "Alberto" },
+  ];
+
+  it("the owner's case: a full line-up with a place held for a name says whose place it is, not \"No spots left\"", () => {
+    expect(say("en", tdsv)).toBe("1 place held for Alberto");
+    expect(say("ru", tdsv)).toBe("1 место забронировано для Alberto");
+    expect(say("es", tdsv)).toBe("1 plaza reservada para Alberto");
+  });
+
+  it("a spot still open comes first, then the held places", () => {
+    const open = [...tdsv.slice(0, 2), { status: "invited", name: "Alberto" }, { status: "invited", name: "Cy" }, { status: "empty", name: null }, { status: "declined", name: "Dee" }];
+    expect(say("en", open)).toBe("2 spots left · 2 places held for Alberto, Cy");
+    expect(say("ru", open)).toBe("2 места свободно · 2 места забронированы для Alberto, Cy");
+  });
+
+  it("nothing held reads as before, and many held places are a count", () => {
+    expect(say("en", [{ status: "joined", name: "Erik" }, { status: "empty", name: null }])).toBe("1 spot left");
+    expect(say("en", tdsv.slice(0, 3).map((s) => ({ ...s, status: "joined" })).concat({ status: "joined", name: "Bo" }))).toBe("No spots left");
+    const night = ["Ana", "Bo", "Cy", "Di"].map((name) => ({ status: "invited", name }));
+    expect(say("en", night)).toBe("4 places held");
   });
 });

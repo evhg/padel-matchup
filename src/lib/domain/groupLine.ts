@@ -30,6 +30,30 @@ export function lineupNames(roster: readonly LineSeat[]): string[] {
 /** How many seats are held for somebody who has not said yes. */
 export const heldSeats = (roster: readonly LineSeat[]): number => roster.filter((s) => s.status === "invited").length;
 
+/** At most this many names in the match page's count line; past it the line is a count ("4 places held"). */
+export const COUNT_NAMES_MAX = 3;
+
+/** One part of the match page's count line, as a message key and its values. */
+export type CountPart = { key: "event.spotsLeft" | "event.heldFor" | "event.heldCount"; values: Record<string, string | number> };
+
+/**
+ * The line beside "3/4 players" on the match page: the spots left, then the places held for a name.
+ * The owner's TDsv (12 October 2026) read "FULL", "3/4 players" and "No spots left" together, because a
+ * place was held for Alberto: the line says "1 place held for Alberto" now. With a spot open too it
+ * reads "1 spot left · 1 place held for Alberto". The page lists those places by name already
+ * ("Reserved for Alberto"), so here, unlike a group's line, the names may show; past
+ * `COUNT_NAMES_MAX` held places the line counts them. Nothing held reads as before.
+ */
+export function countParts(roster: readonly LineSeat[]): CountPart[] {
+  const spots = roster.filter((s) => s.status === "empty" || s.status === "declined").length;
+  const held = roster.filter((s) => s.status === "invited");
+  if (held.length === 0) return [{ key: "event.spotsLeft", values: { count: spots } }];
+  const names = held.map((s) => (s.name ?? "").trim()).filter(Boolean);
+  const heldPart: CountPart =
+    held.length <= COUNT_NAMES_MAX && names.length === held.length ? { key: "event.heldFor", values: { count: held.length, names: names.join(", ") } } : { key: "event.heldCount", values: { count: held.length } };
+  return spots > 0 ? [{ key: "event.spotsLeft", values: { count: spots } }, heldPart] : [heldPart];
+}
+
 /** As many names as fit in `room` characters, then "+N" for the rest, so a long field never pushes the spots and the time out of sight. */
 export function namesThatFit(names: readonly string[], room: number): string {
   const all = names.join(", ");

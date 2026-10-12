@@ -75,7 +75,9 @@ try {
   // Ana holds her own spot; the four others are reserved, each with a link to pass on, and three spots stay open.
   const reserved = ["Bo", "Cy", "Di", "Ed"].every((x) => rows.some((r) => r.includes(`Reserved for ${x}`)));
   const anaOnce = rows.filter((r) => /\bAna\b/.test(r)).length === 1;
-  check("the four carried players are seated with invite links, and Ana is not seated twice", reserved && anaOnce && (await p.getByText("3 spots left").count()) === 1, JSON.stringify(rows.slice(0, 6)).slice(0, 220));
+  // The count line says how many places are held as well as the spots open (the owner, 12 October 2026).
+  const genCount = (await p.getByTestId("count-line").innerText().catch(() => "")).trim();
+  check("the four carried players are seated with invite links, and Ana is not seated twice", reserved && anaOnce && genCount === "3 spots left · 4 places held", JSON.stringify({ count: genCount, rows: rows.slice(0, 6) }).slice(0, 260));
 
   // ---- Paste your booking, the door: the owner's own words (11 October 2026), a court at Warehaus
   // booked in a platform's app with Danny and Alberto, pasted on the landing page. No link, so the

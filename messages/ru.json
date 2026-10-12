@@ -364,7 +364,9 @@
     "bookAndPayOn": "Забронировать и оплатить в {platform}",
     "checkoutSignIn": "{platform} может сначала попросить войти.",
     "courtBookedUndoShort": "Отменить",
-    "courtBookedUndoLabel": "Отметить, что корт не забронирован"
+    "courtBookedUndoLabel": "Отметить, что корт не забронирован",
+    "heldFor": "{count, plural, one {# место забронировано для {names}} few {# места забронированы для {names}} many {# мест забронировано для {names}} other {# места забронированы для {names}}}",
+    "heldCount": "{count, plural, one {# место забронировано} few {# места забронированы} many {# мест забронировано} other {# места забронированы}}"
   },
   "creator": {
     "tools": "Инструменты организатора",

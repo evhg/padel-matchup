@@ -530,7 +530,9 @@ try {
   const pastedCode = page.url().split("/").slice(-2)[0];
   await page.goto(`${BASE}/${pastedCode}`);
   const pastedRows = await page.locator("main li").allInnerTexts();
-  check("one tap made the match with Danny and Alberto held", ["Danny", "Alberto"].every((x) => pastedRows.some((r) => r.includes(`Reserved for ${x}`))) && (await page.getByText("1 spot left").count()) === 1, JSON.stringify(pastedRows.slice(0, 4)).slice(0, 240));
+  // The count line names the held places, so "Full" or "1 spot left" is not the only hint (the owner, 12 October 2026).
+  const pastedCount = (await page.getByTestId("count-line").innerText().catch(() => "")).trim();
+  check("one tap made the match with Danny and Alberto held, and the count line says so", ["Danny", "Alberto"].every((x) => pastedRows.some((r) => r.includes(`Reserved for ${x}`))) && pastedCount === "1 spot left · 2 places held for Danny, Alberto", JSON.stringify({ count: pastedCount, rows: pastedRows.slice(0, 4) }).slice(0, 260));
   check("and the court shows booked by the organiser", (await page.getByTestId("court-booked").innerText().catch(() => "")).includes("Court booked ✓ (by Nok)"), await page.getByTestId("court-booked").innerText().catch(() => "no court-booked"));
   const join = page.getByTestId("join-booking");
   const joinLine = { n: await painted(join), text: await join.innerText().catch(() => ""), href: await join.getAttribute("href").catch(() => null), target: await join.getAttribute("target").catch(() => null) };

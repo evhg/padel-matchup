@@ -364,7 +364,9 @@
     "bookAndPayOn": "Reservar y pagar en {platform}",
     "checkoutSignIn": "{platform} puede pedirte que inicies sesión primero.",
     "courtBookedUndoShort": "Deshacer",
-    "courtBookedUndoLabel": "Marcar la pista como no reservada"
+    "courtBookedUndoLabel": "Marcar la pista como no reservada",
+    "heldFor": "{count, plural, one {# plaza reservada para {names}} other {# plazas reservadas para {names}}}",
+    "heldCount": "{count, plural, one {# plaza reservada} other {# plazas reservadas}}"
   },
   "creator": {
     "tools": "Herramientas de organizador",

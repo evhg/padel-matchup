@@ -77,7 +77,7 @@ import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { eventUrl, inviteUrl, whatsappShareUrl } from "@/lib/share";
-import { heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
+import { countParts, heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
@@ -846,9 +846,16 @@ async function EventPage({ params, searchParams }: Props) {
 
         {/* Players */}
         <section className="card">
-          <div className="flex items-baseline justify-between">
+          {/* "3/4 players · 1 place held for Alberto": a held place is named here, so "Full" is not the only hint (the owner, 12 October 2026). */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <h2 className="text-lg font-extrabold">{t("event.players", { count: occupied, capacity: ev.capacity })}</h2>
-            {!cancelled && !over && <span className="text-sm font-semibold text-muted">{t("event.spotsLeft", { count: spotsLeft })}</span>}
+            {!cancelled && !over && (
+              <span className="text-sm font-semibold text-muted" data-testid="count-line">
+                {countParts(lineSeats)
+                  .map((p) => t(p.key, p.values))
+                  .join(" · ")}
+              </span>
+            )}
           </div>
           <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {pendingRequests.length > 0 && (
