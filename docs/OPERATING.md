@@ -147,11 +147,14 @@ delivers nothing else.
 
 - **What Meta charges.** Since 1 July 2025 Meta charges per delivered template, by category and by
   the recipient's country (Thailand is in "Rest of Asia Pacific"). A marketing template is charged in
-  every window. A utility template inside an open window was free until 30 September 2026; from 1
-  October 2026 it is charged there too. A plain reply in the window is a service message, and the
+  every window, and Meta's pricing page (checked 12 October 2026) says that utility templates are
+  charged. A utility template inside an open window was free until 30 September 2026. Whether it is
+  charged there since 1 October 2026 is not confirmed: this page said so only because it read every
+  reply in the window as charged, and Meta's live page does not say that. Read Meta's page again
+  before planning on either answer. A plain reply in the window is a service message, and the
   first 1,000 of those a month are free (the WhatsApp line under "Ceilings we live under" above).
-  All four of ours are utility, and the code does not track the window: every
-  template costs one utility message. Read the price per message on Meta's rate card; this page does
+  All four of ours are utility, and the code does not track the window, so plan on every template
+  costing one utility message. Read the price per message on Meta's rate card; this page does
   not copy it.
 - **Meta may change the category.** Meta reads each template and can move a utility template to
   marketing when the text looks like promotion. A free spot is the likeliest one. After approval, and
@@ -227,9 +230,10 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   `merge_telegram` and `merge_whatsapp` (an account or a number another record held). Many merges at
   one door say where duplicates come from. Each is written after the answer, as the sign-in counters.
 - **A held place taken by name.** `held_by_name`: somebody took the place the organiser held for
-  their name from the plain match link, in two taps (DECIDING rule 34, 11 October 2026).
-  `held_by_name_refused`: a tap the rule turned down. Both taps share the address's 20 a day with
-  "That's me". A browser that knew nobody also counts its new record under `newid_ua_*`; it is not a
+  their name from the plain match link, in two taps (DECIDING rule 34, 11 October 2026), or a chat
+  account of that name joined and took it (the Telegram ✅ or "+1", Discord, LINE, the WhatsApp JOIN;
+  12 October 2026). `held_by_name_refused`: a web tap the rule turned down. Both web taps share the
+  address's 20 a day with "That's me". A browser that knew nobody also counts its new record under `newid_ua_*`; it is not a
   sign-in, so no `signin_*` counter moves.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an

@@ -1015,9 +1015,13 @@ Everything in this list is live. The README describes each in detail.
   fills the place there. The Go key sends no join while the offer is on the screen. The web's join
   (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
   offer, a different person of the same name reads how to get in: a last name on My matches.
-  Since 12 October 2026 every other door refuses it too, through the rule every door asks
-  (`joinWithPolicy`): the Telegram ✅ and "+1", the Discord and LINE buttons, the WhatsApp JOIN and
-  `join_match` in the API and MCP, each in the player's language (`tests/held-name-doors.test.ts`).
+  Since 12 October 2026 every other door keeps the place too, through the rule every door asks
+  (`joinWithPolicy`, `tests/held-name-doors.test.ts`). `join_match` in the API and MCP refuses, as
+  the web does, and writes nothing. A chat takes the place for the account's own record: the Telegram
+  ✅ and "+1", the Discord and LINE buttons and the WhatsApp JOIN. A chat's link to the match page
+  opens a browser that does not know the player, where a take would make a second record. The answer
+  says whose place it was: "Not Danny? Tap ❌ and tell the organizer." A session chose this after a
+  review; the owner has not decided it (DECIDING rule 34).
 - **The held place keeps a past player's record (11 October 2026, no migration).** The owner asked
   whether a held place may keep the record of a player who played with the organiser before, after
   Danny got a second record; the answer was "Yes, keep the record" (DECIDING rule 34). The open spot
@@ -1127,7 +1131,8 @@ linked and four have an email address.
 
 1. **WhatsApp, one-to-one — built, waiting on an account.** The code is in `src/lib/whatsapp/`: the
    Cloud API client, the signed webhook, the hand-off link and the conversation, all off unless the
-   environment is set. What is left is not code: a Meta business portfolio, a phone number that is not
+   environment is set. What is left: the two faults in the code (below), and the owner's account
+   steps, which are a Meta business portfolio, a phone number that is not
    *currently registered* on WhatsApp — a new number, or an existing one whose WhatsApp account is
    deleted first, which cannot be undone and takes that account's chat history with it — and the
    webhook pointed at `/api/whatsapp/webhook`. That is the owner's to create, and nothing reaches a
@@ -1147,8 +1152,8 @@ linked and four have an email address.
    be bent to it.
    The piece of code found missing on 25 September 2026 is built (26 September, under Built): the
    match's changes, a free spot, the score ask and the result card now reach a WhatsApp player as four
-   utility templates, and a send that cannot go falls through to email and push. What remains is the
-   owner's, in this order: create the four templates in the three languages, with
+   utility templates, and a send that cannot go falls through to email and push. Beside the two faults
+   below, what remains is the owner's, in this order: create the four templates in the three languages, with
    `node scripts/whatsapp-templates.mjs --create --yes` (`WHATSAPP_WABA_ID` and `WHATSAPP_TOKEN` set;
    the result card's picture header needs `--header-handle`, or `--sample` with `--app-id`) or by hand
    in WhatsApp Manager; wait until `--list` shows each one `APPROVED` and `UTILITY`; then set the

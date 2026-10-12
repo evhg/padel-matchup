@@ -233,6 +233,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
   held place while the chat doors still asked it (12 October 2026). Now `joinAsPlayer` calls
   `joinWithPolicy`, and a rule a join must keep goes there once; `tests/held-name-doors.test.ts` drives
   each door. Before adding a check to one door, grep for the other functions that do the same write.
+- **A refusal's way out must work at the door that says it.** The first held-name fix gave every chat
+  the web's two lines: "open the match and take it" and "add your last name on My matches". On
+  Discord, LINE and WhatsApp, and on Telegram without the Mini App, the match link opens a browser that
+  knows nobody, so the take there made a second record, and My matches cannot be reached from those
+  doors at all (review, 12 October 2026). A chat's join now takes the place for its own record
+  (`takeHeld`), and its "Not Danny?" step is one every chat has. Before copying a remedy to another
+  door, follow it from that door: which browser opens, and whom does it know?
 - **A required argument is the check that a new caller counts.** Nothing counted a merge of two
   records, at nine doors. `mergePlayers` now takes `door` as a required option and counts itself, so
   the typecheck refuses a new caller that does not name its door. A count that must wait for the

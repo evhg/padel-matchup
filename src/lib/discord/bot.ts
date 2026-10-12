@@ -219,11 +219,14 @@ async function handleComponent(db: Db, i: DcInteraction, user: DcUser, ctx: OpCo
   const player = await findOrCreateDiscordPlayer(db, user, botLocale(i.locale));
   let toast: string = s.toastError;
   let outcome = "error";
+  let took = false;
   try {
     if (action === "j") {
-      const r = await joinAsPlayer(db, detail, player, ctx);
+      // A place held for this account's name is taken by this tap (`takeHeld`), as the web's "Take Danny's held place".
+      const r = await joinAsPlayer(db, detail, player, ctx, null, { takeHeld: true });
       outcome = r.outcome;
-      toast = r.outcome === "joined" ? s.toastJoined : r.outcome === "waitlisted" ? s.toastWaitlisted : r.outcome === "already_in" ? s.toastAlready : r.outcome === "requested" ? s.toastRequested : s.toastClosed;
+      took = Boolean(r.took && (r.outcome === "joined" || r.outcome === "waitlisted"));
+      toast = took ? s.toastTookHeld(r.took!, r.outcome === "waitlisted") : r.outcome === "joined" ? s.toastJoined : r.outcome === "waitlisted" ? s.toastWaitlisted : r.outcome === "already_in" ? s.toastAlready : r.outcome === "requested" ? s.toastRequested : s.toastClosed;
     } else {
       const r = await leaveAsPlayer(db, detail, player, ctx);
       outcome = r.outcome;
@@ -231,15 +234,16 @@ async function handleComponent(db: Db, i: DcInteraction, user: DcUser, ctx: OpCo
     }
   } catch (e) {
     if (e instanceof ApiError && e.code === "level_required") toast = s.toastLevel;
-    else if (e instanceof NameHeldError) toast = s.toastHeld(e.held);
+    else if (e instanceof NameHeldError) toast = s.toastHeldChanged(e.held);
     else if (isDomainError(e)) toast = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
     outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
   }
   const followUp = async () => {
     await syncDiscord(db, code);
   };
-  // The seat changed: the card they tapped updates in place, no extra message. Anything else gets a private note.
-  if ((outcome === "joined" || outcome === "left") && i.message && channel) {
+  // The seat changed: the card they tapped updates in place, no extra message. Anything else gets a
+  // private note, and so does a held place taken, whose note says whose place it was (`followUp` syncs the card).
+  if ((outcome === "joined" || outcome === "left") && !took && i.message && channel) {
     const fresh = await getEventByCode(db, code);
     if (fresh) {
       const card = renderDiscordCard(fresh, baseUrl(), locale);

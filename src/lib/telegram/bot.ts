@@ -292,11 +292,14 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   const player = await findOrCreateTelegramPlayer(db, cb.from);
   let toast: string = s.toastError;
   let outcome = "error";
+  let took = false;
   try {
     if (action === "j") {
-      const r = await joinAsPlayer(db, detail, player, ctx);
+      // A place held for this account's name is taken by this tap (`takeHeld`), as the web's "Take Danny's held place".
+      const r = await joinAsPlayer(db, detail, player, ctx, null, { takeHeld: true });
       outcome = r.outcome;
-      toast = r.outcome === "joined" ? s.toastJoined : r.outcome === "waitlisted" ? s.toastWaitlisted : r.outcome === "already_in" ? s.toastAlready : r.outcome === "requested" ? s.toastRequested : s.toastClosed;
+      took = Boolean(r.took && (r.outcome === "joined" || r.outcome === "waitlisted"));
+      toast = took ? s.toastTookHeld(r.took!, r.outcome === "waitlisted") : r.outcome === "joined" ? s.toastJoined : r.outcome === "waitlisted" ? s.toastWaitlisted : r.outcome === "already_in" ? s.toastAlready : r.outcome === "requested" ? s.toastRequested : s.toastClosed;
     } else {
       const r = await leaveAsPlayer(db, detail, player, ctx);
       outcome = r.outcome;
@@ -304,12 +307,13 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     }
   } catch (e) {
     if (e instanceof ApiError && e.code === "level_required") toast = s.toastLevel;
-    else if (e instanceof NameHeldError) toast = s.toastHeld(e.held);
+    else if (e instanceof NameHeldError) toast = s.toastHeldChanged(e.held);
     else if (isDomainError(e)) toast = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
     outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
   }
-  // A level to set, or a place held for this name: a box the player closes, because a toast is gone in two seconds.
-  await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") || outcome === "error:name_held" });
+  // A level to set, a held place taken (its "Not Danny?" line) or changed under the tap: a box the
+  // player closes, because a toast is gone in two seconds.
+  await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") || outcome === "error:name_held" || took });
   await syncTelegram(db, code);
   await countSeat(db, "tap", outcome, player.id, detail.event);
   if (chat && outcome === "joined") await offerCalendar(db, chat, player, cb.from.id, cb.message?.message_thread_id ?? null);

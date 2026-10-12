@@ -74,15 +74,16 @@ async function handleEvent(db: Db, ev: LineEvent, ctx: OpContext): Promise<strin
     let text: string;
     try {
       if (action === "j") {
-        const r = await joinAsPlayer(db, detail, player, ctx);
-        text = r.outcome === "joined" ? s.toastJoined : r.outcome === "waitlisted" ? s.toastWaitlisted : r.outcome === "already_in" ? s.toastAlready : r.outcome === "requested" ? s.toastRequested : s.toastClosed;
+        // A place held for this account's name is taken by this tap (`takeHeld`), as the web's "Take Danny's held place".
+        const r = await joinAsPlayer(db, detail, player, ctx, null, { takeHeld: true });
+        text = r.took && (r.outcome === "joined" || r.outcome === "waitlisted") ? s.toastTookHeld(r.took, r.outcome === "waitlisted") : r.outcome === "joined" ? s.toastJoined : r.outcome === "waitlisted" ? s.toastWaitlisted : r.outcome === "already_in" ? s.toastAlready : r.outcome === "requested" ? s.toastRequested : s.toastClosed;
       } else {
         const r = await leaveAsPlayer(db, detail, player, ctx);
         text = r.outcome === "left" ? s.toastLeft : s.toastNotIn;
       }
     } catch (e) {
-      // A place held for this name, or a level to set: what the Telegram and Discord buttons say.
-      if (e instanceof NameHeldError) text = s.toastHeld(e.held);
+      // A held place that changed under the tap, or a level to set: what the Telegram and Discord buttons say.
+      if (e instanceof NameHeldError) text = s.toastHeldChanged(e.held);
       else if (e instanceof ApiError && e.code === "level_required") text = s.toastLevel;
       else if (!isDomainError(e)) throw e;
       else text = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;

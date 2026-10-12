@@ -127,9 +127,13 @@ export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, fro
   const player = kind === "join" ? await findOrCreateTelegramPlayer(db, from) : await findTelegramPlayer(db, from.id);
   let outcome = "not_in";
   let held: string | null = null;
+  let took: string | null = null;
   if (player) {
     try {
-      outcome = kind === "join" ? (await joinAsPlayer(db, detail, player, ctx)).outcome : (await leaveAsPlayer(db, detail, player, ctx)).outcome;
+      // A place held for this account's name is taken by the word (`takeHeld`), as by the card's ✅.
+      const r = kind === "join" ? await joinAsPlayer(db, detail, player, ctx, null, { takeHeld: true }) : await leaveAsPlayer(db, detail, player, ctx);
+      outcome = r.outcome;
+      if ("took" in r && r.took) took = r.took;
     } catch (e) {
       if (e instanceof NameHeldError) held = e.held;
       outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
@@ -139,10 +143,11 @@ export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, fro
   // A waitlist place is not a seat: 🤷 says so, and the card's waitlist line says the rest.
   const emoji = outcome === "joined" || outcome === "already_in" ? REACTION.in : outcome === "left" ? REACTION.out : REACTION.none;
   await setMessageReaction(chat.chatId, msg.message_id, emoji);
-  // A level to set, a request the organiser must accept, or a place held for this name: the button's toast, to that person alone (or nobody).
-  if (outcome === "requested" || outcome === "error:level_required" || held) {
+  // A level to set, a request the organiser must accept, a place held for this name taken or changed
+  // under the word: the button's toast, to that person alone (or nobody).
+  if (outcome === "requested" || outcome === "error:level_required" || held || took) {
     const s = strings(chatLocale(chat));
-    const said = held ? s.toastHeld(held) : outcome === "requested" ? s.toastRequested : s.toastLevel;
+    const said = took ? s.toastTookHeld(took, outcome === "waitlisted") : held ? s.toastHeldChanged(held) : outcome === "requested" ? s.toastRequested : s.toastLevel;
     await sendMessage(chat.chatId, esc(said), { onlyFor: from.id, threadId: msg.message_thread_id ?? null, silent: true });
   }
   if (player) await countSeat(db, "word", outcome, player.id, detail.event);

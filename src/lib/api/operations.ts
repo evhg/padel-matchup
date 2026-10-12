@@ -15,7 +15,8 @@ import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import type { PairJoinOutcome } from "@/lib/domain/pairSeats";
 import { hasLifeOutside, joinEvent, leaveEvent, promotedOf } from "@/lib/domain/slots";
-import { whoJoins } from "@/lib/domain/heldByName";
+import { whoJoins, type HeldKind } from "@/lib/domain/heldByName";
+import { bumpMetric } from "@/lib/domain/metrics";
 import { joinWithPolicy } from "@/lib/domain/joining";
 import { lineupComplete } from "@/lib/lineup";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
@@ -116,14 +117,22 @@ function parseStartsAt(raw: string, tz: string): Date {
   return d;
 }
 
+/** The player of a personal token, read only: nothing is saved yet. */
+async function playerOfToken(db: Db, token: string): Promise<Player> {
+  const p = await findPlayerByPersonalToken(db, token);
+  if (!p) throw new ApiError(404, "unknown_token", "No player has this personal token.", "Omit token and pass a name to create a new player, or use the token from an earlier response.");
+  return p;
+}
+
+/** A token's player with the email and the level the call gave, each saved only where the record has none. */
+async function saveGiven(db: Db, p: Player, input: { email?: string; level?: number }): Promise<Player> {
+  if (input.email && !p.email) await changePlayerEmail(db, p.id, input.email);
+  if (input.level != null && p.level == null) await setPlayerLevel(db, p.id, input.level);
+  return (await getPlayer(db, p.id)) ?? p;
+}
+
 async function resolvePlayer(db: Db, input: { name?: string; token?: string; email?: string; level?: number }, locale = "en") {
-  if (input.token) {
-    const p = await findPlayerByPersonalToken(db, input.token);
-    if (!p) throw new ApiError(404, "unknown_token", "No player has this personal token.", "Omit token and pass a name to create a new player, or use the token from an earlier response.");
-    if (input.email && !p.email) await changePlayerEmail(db, p.id, input.email);
-    if (input.level != null && p.level == null) await setPlayerLevel(db, p.id, input.level);
-    return (await getPlayer(db, p.id)) ?? p;
-  }
+  if (input.token) return saveGiven(db, await playerOfToken(db, input.token), input);
   const name = (input.name ?? "").trim();
   if (!name) throw new ApiError(422, "invalid_request", "name is required when no token is given.", "A first name is enough. The response returns a personal token you can reuse next time.");
   const p = await createPlayer(db, { displayName: name, locale, email: input.email ?? null });
@@ -209,29 +218,35 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
   const detail = await getEventByCode(db, input.code);
   if (!detail) throw new ApiError(404, "not_found", `No match with code ${input.code}.`, "Codes are 4 characters and case-sensitive.");
   if (input.partner && !(detail.event.type === "tournament" && detail.event.fixedPairs)) throw new ApiError(422, "invalid_request", "partner is for a fixed-pairs tournament only.", "Omit partner: on this match every player joins alone.");
-  // A name with no token is a record made from a typed name, as on the web: a place held for that name
-  // (or a place that keeps a past player's record of it) refuses the join before the record is made
-  // (`whoJoins`, DECIDING rule 34). A token's player is asked inside `joinWithPolicy`, as on every door.
-  const who = input.token
-    ? { player: await resolvePlayer(db, input, locale) }
-    : await whoJoins(detail, null, input.name, new Date(), () => resolvePlayer(db, input, locale), (id) => hasLifeOutside(db, id, detail.event.id));
-  if ("held" in who) throw new NameHeldError(who.held);
-  return joinAsPlayer(db, detail, who.player, ctx, input.partner);
+  // A place held for the name refuses the join before anything is written (`whoJoins`, DECIDING rule
+  // 34): a name with no token makes no record (nor does the name of a place that keeps a past player's
+  // record), and a token's player is read only, so the given email and level wait until after the rule.
+  const known = input.token ? await playerOfToken(db, input.token) : null;
+  const who = await whoJoins(detail, known, input.name, new Date(), () => resolvePlayer(db, input, locale), (id) => hasLifeOutside(db, id, detail.event.id));
+  if ("held" in who) throw new NameHeldError(who.held, who.kind);
+  return joinAsPlayer(db, detail, known ? await saveGiven(db, known, input) : who.player, ctx, input.partner);
 }
 
 /**
- * The refusal every door gives a join beside a place held for the player's name (DECIDING rule 34,
- * `name_held` from `joinWithPolicy`). 409, because the match is fine and the name is the conflict.
- * `held` is the held name as the organiser typed it, so a chat can say it in the player's language
- * (`toastHeld` in `src/lib/telegram/card.ts`); the API's own words are the message and the hint.
+ * The refusal of a join beside a place held for the player's name (DECIDING rule 34, `name_held` from
+ * `whoJoins` or `joinWithPolicy`). 409, because the match is fine and the name is the conflict. `held`
+ * is the held name as the organiser typed it, so a chat can say it in the player's language
+ * (`toastHeldChanged` in `src/lib/telegram/card.ts`); the API's own words are the message and the
+ * hint. `kind` says how that person takes the place (`HeldKind`): by name, or as the record the place
+ * keeps. A chat meets this only when the place changed while the tap took it (`takeHeld`).
  */
 export class NameHeldError extends ApiError {
-  constructor(public readonly held: string) {
+  constructor(
+    public readonly held: string,
+    public readonly kind: HeldKind = "by_name",
+  ) {
     super(
       409,
       "name_held",
       `A place in this match is held for ${held}, so a second ${held} cannot join beside it.`,
-      `If this is ${held}, take the held place on the match page (type the name, then tap "Take ${held}'s held place") or through the place's own invite link from the organizer. If it is somebody else: without a token, join with a fuller name, such as a last name; with a token, the player adds a last name on My matches (their personal link), then joins again.`,
+      kind === "record"
+        ? `If this is ${held}, use "That's me" on the match page, or the place's own invite link from the organizer. If it is somebody else, join with a fuller name, such as a last name.`
+        : `If this is ${held}, take the held place on the match page (type the name, then tap "Take ${held}'s held place") or through the place's own invite link from the organizer. If it is somebody else: without a token, join with a fuller name, such as a last name; with a token, the player adds a last name on My matches (their personal link), then joins again.`,
     );
   }
 }
@@ -240,15 +255,16 @@ export class NameHeldError extends ApiError {
  * The join itself, for a player already resolved (API token, Telegram account, Discord, LINE). Same
  * side effects as the web button. `partnerName`: a fixed-pairs night's partner. Who may take the spot
  * is `joinWithPolicy`, the one rule every door asks (a place held for the name, the level range, the
- * organiser's past partners); this function says the answer in the API's words.
+ * organiser's past partners); this function says the answer in the API's words. `takeHeld`: a chat's
+ * join, which takes the place held for the player's name (`joinWithPolicy`); `took` then names it.
  */
-export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext, partnerName?: string | null): Promise<JoinMatchResult> {
+export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext, partnerName?: string | null, o: { takeHeld?: boolean } = {}): Promise<JoinMatchResult & { took?: string }> {
   const ev = detail.event;
   const range = { min: ev.levelMin, max: ev.levelMax };
   const base = baseUrl();
   const before = lineupComplete(detail.roster, ev.capacity);
-  // The level the player holds is the level they join with: the API saved a given level already (`resolvePlayer`).
-  const decision = await joinWithPolicy(db, detail, player, player.level, partnerName);
+  // The level the player holds is the level they join with: the API saved a given level already (`saveGiven`).
+  const decision = await joinWithPolicy(db, detail, player, player.level, partnerName, { takeHeld: o.takeHeld });
   if (decision.kind === "name_held") throw new NameHeldError(decision.name);
   if (decision.kind === "level_required") throw new ApiError(422, "level_required", `This match is for levels ${range.min ?? 0}–${range.max ?? 7}. Pass the player's level (0–7) to join.`, "Levels are self-declared in quarter steps; 3.0 is a consistent intermediate player.");
   const token = await getOrCreatePersonalToken(db, player.id);
@@ -270,9 +286,12 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
   const partner = res.partner?.inviteCode ? { name: res.partner.invitedName ?? "", inviteUrl: inviteUrl(base, ev.code, res.partner.inviteCode) } : null;
   // A single already in who names a partner: a reserved spot changed the line-up.
   if (res.outcome === "already_in" && res.partner) ctx.afterwards(async () => void (await notifyLineupChange(db, res.event, before)));
+  const took = decision.took;
   if (res.outcome === "joined" || res.outcome === "waitlisted") {
     ctx.afterwards(async () => {
-      await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", player.displayName, player.id);
+      // A place held for the name, taken: the organiser hears "Danny confirmed", as from the web's take.
+      if (took) await bumpMetric(db, "held_by_name").catch(() => undefined);
+      await notifyCreator(db, res.event, res.outcome === "joined" ? (took ? "confirmed" : "joined") : "waitlisted", player.displayName, player.id);
       const fresh = await notifyLineupChange(db, res.event, before, player.id);
       if (res.outcome === "joined") await sendCalendarInvite(db, fresh ?? res.event, player);
     });
@@ -297,7 +316,7 @@ export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, 
       : ev.fixedPairs && (res.outcome === "joined" || res.outcome === "waitlisted")
         ? " This is a fixed-pairs night and the player joined alone: they are listed as needing a partner until somebody taps Be their partner on the match page, or they join_match again with partner."
         : "";
-  return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, partner, group: line, next: nextText[res.outcome] + pairNext + asking };
+  return { outcome: res.outcome, match: matchToPublic(fresh, base, group ? { code: group.code, name: group.name } : null), player: me, partner, group: line, next: nextText[res.outcome] + pairNext + asking, ...(took ? { took } : {}) };
 }
 
 export const leaveMatchSchema = z.object({

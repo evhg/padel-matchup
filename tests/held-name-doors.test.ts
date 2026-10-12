@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { joinRequests, players, slots, telegramCards } from "@/db/schema";
+import { joinRequests, metricsDaily, players, slots, telegramCards } from "@/db/schema";
 import { fail } from "@/lib/api/http";
 import { handleMcpPost } from "@/lib/api/mcp";
 import { joinMatch, NameHeldError, NO_SIDE_EFFECTS } from "@/lib/api/operations";
@@ -15,6 +15,7 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { strings } from "@/lib/telegram/card";
+import { REACTION } from "@/lib/telegram/handlers/words";
 import type { TgMessage } from "@/lib/telegram/api";
 import { handleWhatsappMessage } from "@/lib/whatsapp/bot";
 import { freezeClock } from "./helpers/clock";
@@ -26,6 +27,11 @@ import { createTestDb, DAY, makePlayer } from "./helpers/db";
  * Discord and LINE buttons, the WhatsApp JOIN and `join_match` in the API and MCP did not, so a
  * namesake there took a seat beside the place, and after that nobody could take it by name. The check
  * now lives in the rule every door asks (`joinWithPolicy`), and each door says it in its own words.
+ *
+ * The web and the API refuse, because their player reaches the match page signed in and takes the
+ * place there. A chat cannot send its player there signed in (its link opens a browser that knows
+ * nobody, where the take makes a second record), so a chat's join takes the place for the account's
+ * own record (`takeHeld`), and says whose place it was and what a different person of the name does.
  */
 
 // A fixed clock (rule 11): every match starts two days after NOW.
@@ -96,6 +102,14 @@ describe("a place held for a name, on every door", () => {
     (await db.select({ status: slots.status, invitedName: slots.invitedName, name: players.displayName }).from(slots).leftJoin(players, eq(players.id, slots.playerId)).where(eq(slots.eventId, eventId))).filter((s) => s.status !== "empty");
   const dannys = async (eventId: string) => (await places(eventId)).filter((s) => /^danny$/i.test(s.name ?? s.invitedName ?? ""));
   const playerCount = async () => Number((await db.select({ n: sql<number>`count(*)::int` }).from(players))[0].n);
+  /** The held place, taken by the record the door knows: one Danny in the match, on the held row, and it is that account's. */
+  const takenBy = async (eventId: string, playerId: string | undefined) => {
+    expect(await dannys(eventId)).toEqual([{ status: "confirmed", invitedName: "Danny", name: "Danny" }]);
+    const [place] = await db.select().from(slots).where(and(eq(slots.eventId, eventId), eq(slots.invitedName, "Danny")));
+    expect(place.kind).toBe("reserved");
+    expect(place.playerId).toBe(playerId);
+  };
+  const heldByName = async () => Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, "held_by_name")))[0]?.value ?? 0);
 
   describe("the shared rule", () => {
     it("names the held place for a record of the same name, and for nobody else", async () => {
@@ -119,53 +133,89 @@ describe("a place held for a name, on every door", () => {
       const { ev } = await match(["Danny", "Bo", "Cy"], { levelMin: 2, levelMax: 4 });
       const detail = (await getEventByCode(db, ev.code))!;
       const danny = await makePlayer(db, "Danny");
-      expect(await joinWithPolicy(db, detail, danny, null, null, NOW)).toEqual({ kind: "name_held", name: "Danny" });
+      expect(await joinWithPolicy(db, detail, danny, null, null, { now: NOW })).toEqual({ kind: "name_held", name: "Danny" });
       expect(await db.select().from(joinRequests).where(eq(joinRequests.playerId, danny.id))).toEqual([]);
       expect(await db.select().from(slots).where(eq(slots.playerId, danny.id))).toEqual([]);
       // The same step takes Eve, with a level inside the range, to the waiting list: the refusal above is the only thing that kept Danny off it.
       const eve = await makePlayer(db, "Eve", { level: 3 });
-      const d = await joinWithPolicy(db, detail, eve, 3, null, NOW);
+      const d = await joinWithPolicy(db, detail, eve, 3, null, { now: NOW });
       expect(d.kind === "joined" && d.result.outcome).toBe("waitlisted");
+    });
+
+    it("a chat's join takes the held place for the record of the name, before the range, and makes no second Danny", async () => {
+      // A ranged match and a Danny with no level: the organiser chose the name, so the range does not ask (as the web's take).
+      const { ev } = await match(["Danny"], { levelMin: 2, levelMax: 4 });
+      const danny = await makePlayer(db, "Danny");
+      const d = await joinWithPolicy(db, (await getEventByCode(db, ev.code))!, danny, null, null, { now: NOW, takeHeld: true });
+      expect(d.kind === "joined" && [d.result.outcome, d.took]).toEqual(["joined", "Danny"]);
+      await takenBy(ev.id, danny.id);
+      expect(await db.select().from(joinRequests).where(eq(joinRequests.playerId, danny.id))).toEqual([]);
+    });
+
+    it("a place that changed between the read and the take refuses, and writes nothing", async () => {
+      const { ev } = await match();
+      const stale = (await getEventByCode(db, ev.code))!;
+      // After the read, the organiser gives the place an address: it is that address's now, and the take under the lock must see it.
+      await db.update(slots).set({ invitedEmail: "danny@example.com" }).where(and(eq(slots.eventId, ev.id), eq(slots.invitedName, "Danny")));
+      const danny = await makePlayer(db, "Danny");
+      expect(await joinWithPolicy(db, stale, danny, null, null, { now: NOW, takeHeld: true })).toEqual({ kind: "name_held", name: "Danny" });
+      expect(await db.select().from(slots).where(eq(slots.playerId, danny.id))).toEqual([]);
+      expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
+    });
+
+    it("every chat answer about a held place fits Telegram's 200 characters, with the longest name, in three languages", () => {
+      const name = "Abcdefghijklmnopqrstuvwxyzabcdefghijklmn"; // 40 characters, the most a held name has
+      for (const locale of ["en", "ru", "es"] as const) {
+        const s = strings(locale);
+        for (const text of [s.toastTookHeld(name, false), s.toastTookHeld(name, true), s.toastHeldChanged(name)]) expect(text.length, `${locale}: ${text}`).toBeLessThanOrEqual(200);
+      }
     });
   });
 
   describe("Telegram", () => {
     const update = (u: object) => handleTelegramUpdate(db, { update_id: updateId++, ...u }, NO_SIDE_EFFECTS);
 
-    it("the card's ✅ from a Danny: no seat, the place stays held, and a box in the player's language says what to do", async () => {
+    const tgPlayer = async (telegramId: number) => (await db.select().from(players).where(eq(players.telegramId, telegramId)))[0]?.id;
+
+    it("the card's ✅ from a Danny takes the place held for Danny: no second Danny, and a box in the player's language says whose place it was", async () => {
       const { ev } = await match();
       const dm = { id: 3101, type: "private" as const };
-      const tap = (from: ReturnType<typeof tgUser>) => update({ callback_query: { id: `cb${updateId}`, from, message: { message_id: 7, date: 0, chat: dm }, data: `j:${ev.code}` } });
-      expect(await tap(tgUser(3101, "Danny"))).toBe("join:error:name_held");
+      const tap = (code: string, from: ReturnType<typeof tgUser>) => update({ callback_query: { id: `cb${updateId}`, from, message: { message_id: 7, date: 0, chat: dm }, data: `j:${code}` } });
+      expect(await tap(ev.code, tgUser(3101, "Danny"))).toBe("join:joined");
       const [answer] = tg("answerCallbackQuery");
-      expect(answer.body.text).toBe(strings("en").toastHeld("Danny"));
+      expect(answer.body.text).toBe(strings("en").toastTookHeld("Danny", false));
+      expect(String(answer.body.text)).toContain("Not Danny? Tap ❌ and tell the organizer.");
       expect(answer.body.show_alert).toBe(true);
-      // In Russian too, with the same meaning as the web's lines.
+      await takenBy(ev.id, await tgPlayer(3101));
+      // In Russian too.
+      const second = await match();
       calls = [];
-      expect(await tap(tgUser(3102, "Danny", "ru"))).toBe("join:error:name_held");
-      expect(String(tg("answerCallbackQuery")[0].body.text)).toBe(strings("ru").toastHeld("Danny"));
-      expect(String(tg("answerCallbackQuery")[0].body.text)).toContain("В этом матче держат место для Danny");
-      expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
-      // Anybody else's ✅ still seats them.
-      expect(await tap(tgUser(3103, "Petr"))).toBe("join:joined");
+      expect(await tap(second.ev.code, tgUser(3102, "Danny", "ru"))).toBe("join:joined");
+      expect(String(tg("answerCallbackQuery")[0].body.text)).toBe(strings("ru").toastTookHeld("Danny", false));
+      expect(String(tg("answerCallbackQuery")[0].body.text)).toContain("Вы заняли место, которое держали для Danny");
+      await takenBy(second.ev.id, await tgPlayer(3102));
+      // Anybody else's ✅ seats them as before, in a seat of their own.
+      calls = [];
+      expect(await tap(ev.code, tgUser(3103, "Petr"))).toBe("join:joined");
+      expect(tg("answerCallbackQuery")[0].body.text).toBe(strings("en").toastJoined);
     });
 
-    it("a \"+1\" reply to the card from a Danny: no seat, 🤷, and the same words to that person alone", async () => {
+    it("a \"+1\" reply to the card from a Danny takes the held place, 👍, and the words go to that person alone", async () => {
       const { ev } = await match();
       const group = { id: -1003104, type: "supergroup" as const, title: "Thursday padel" };
       await update({ message: { message_id: messageId++, date: 0, chat: group, from: tgUser(3104, "Ana"), text: `/match ${ev.code}` } as TgMessage });
       const [card] = await db.select().from(telegramCards).where(and(eq(telegramCards.eventId, ev.id), eq(telegramCards.chatId, group.id)));
       calls = [];
       const message: TgMessage = { message_id: messageId++, date: 0, chat: group, from: tgUser(3105, "Danny"), text: "+1", reply_to_message: { message_id: card.messageId, date: 0, chat: group, from: BOT } };
-      expect(await update({ message })).toBe("word_join:error:name_held");
-      expect(tg("setMessageReaction").map((c) => (c.body.reaction as { emoji: string }[])[0].emoji)).toEqual(["🤷"]);
+      expect(await update({ message })).toBe("word_join:joined");
+      expect(tg("setMessageReaction").map((c) => (c.body.reaction as { emoji: string }[])[0].emoji)).toEqual([REACTION.in]);
       const told = tg("sendMessage").filter((c) => (c.body.ephemeral_message_parameters as { receiver_user_id?: number } | undefined)?.receiver_user_id === 3105);
-      expect(told.map((c) => c.body.text)).toEqual([strings("en").toastHeld("Danny")]);
-      expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
+      expect(told.map((c) => c.body.text)).toEqual([strings("en").toastTookHeld("Danny", false)]);
+      await takenBy(ev.id, await tgPlayer(3105));
     });
   });
 
-  it("Discord: the join button from a Danny answers privately and seats nobody", async () => {
+  it("Discord: the join button from a Danny takes the held place and says so privately", async () => {
     const { ev } = await match();
     const button: DcInteraction = {
       id: "1",
@@ -179,30 +229,34 @@ describe("a place held for a name, on every door", () => {
       data: { custom_id: `j:${ev.code}`, component_type: 2 },
     };
     const r = await handleInteraction(db, button, NO_SIDE_EFFECTS);
-    expect(r.outcome).toBe("join:error:name_held");
-    expect(r.response.data?.content).toBe(strings("en").toastHeld("Danny"));
+    expect(r.outcome).toBe("join:joined");
+    expect(r.response.data?.content).toBe(strings("en").toastTookHeld("Danny", false));
     expect(r.response.data?.flags).toBe(64);
-    expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
+    await takenBy(ev.id, (await db.select().from(players).where(eq(players.discordId, "3201")))[0]?.id);
   });
 
-  it("LINE: the join button from the LINE account of a Danny answers on the free reply token and seats nobody", async () => {
+  it("LINE: the join button from the LINE account of a Danny takes the held place and says so on the free reply token", async () => {
     const { ev } = await match();
     // A LINE account with no record is "Player"; a record that carries the account and the name Danny is the case.
-    await makePlayer(db, "Danny", { lineId: "U3301" });
+    const danny = await makePlayer(db, "Danny", { lineId: "U3301" });
     const out = await handleLineWebhook(db, { events: [{ type: "postback", replyToken: "rt-held", source: { type: "group", groupId: "C3301", userId: "U3301" }, postback: { data: `j:${ev.code}` } }] }, NO_SIDE_EFFECTS);
     expect(out).toBe("line:join");
     const replies = calls.filter((c) => c.url.endsWith("/message/reply"));
-    expect(replies.map((c) => (c.body.messages as { text: string }[])[0].text)).toEqual([strings("en").toastHeld("Danny")]);
-    expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
+    expect(replies.map((c) => (c.body.messages as { text: string }[])[0].text)).toEqual([strings("en").toastTookHeld("Danny", false)]);
+    await takenBy(ev.id, danny.id);
   });
 
-  it("WhatsApp: a JOIN from a number whose profile is Danny gets the web's words and the match's link, and no seat", async () => {
+  it("WhatsApp: a JOIN from a number whose profile is Danny takes the held place, says whose it was, and counts the take", async () => {
     const { ev } = await match();
+    const counted = await heldByName();
     const out = await handleWhatsappMessage(db, { from: "66810003301", id: "wamid.held1", timestamp: "0", type: "text", text: { body: `JOIN-${ev.code}` } }, { profile: { name: "Danny" }, wa_id: "66810003301" });
-    expect(out).toBe("wa:name_held");
-    const texts = calls.filter((c) => c.url.includes("graph.facebook.com")).map((c) => (c.body.text as { body?: string } | undefined)?.body ?? "");
-    expect(texts.some((t) => t.includes("A place in this match is held for Danny.") && t.includes(`/${ev.code}`) && t.includes("Not Danny? Add your last name on My matches"))).toBe(true);
-    expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
+    expect(out).toBe("wa:took_held");
+    const sent = calls.filter((c) => c.url.includes("graph.facebook.com")).map((c) => JSON.stringify(c.body));
+    expect(sent.some((t) => t.includes("You are in.") && t.includes("This is the place the organiser held for Danny.") && t.includes("Not Danny? Tap \\\"Can't make it\\\" and tell the organiser."))).toBe(true);
+    const [place] = await db.select({ playerId: slots.playerId, phone: players.phone }).from(slots).innerJoin(players, eq(players.id, slots.playerId)).where(and(eq(slots.eventId, ev.id), eq(slots.invitedName, "Danny")));
+    expect(place.phone).toContain("66810003301");
+    await takenBy(ev.id, place.playerId!);
+    expect(await heldByName()).toBe(counted + 1);
   });
 
   describe("the API and MCP (join_match)", () => {
@@ -211,12 +265,33 @@ describe("a place held for a name, on every door", () => {
       const before = await playerCount();
       await expect(joinMatch(db, { code: ev.code, name: " danny " }, NO_SIDE_EFFECTS)).rejects.toMatchObject({ status: 409, code: "name_held", held: "Danny" });
       expect(await playerCount()).toBe(before);
-      // Any other name joins; a token's player named Danny is asked inside the shared rule.
+      // Any other name joins; a token's player named Danny is refused too, before the email and the level it gave are saved.
       const eve = await joinMatch(db, { code: ev.code, name: "Eve" }, NO_SIDE_EFFECTS);
       expect(eve.outcome).toBe("joined");
-      const token = await getOrCreatePersonalToken(db, (await makePlayer(db, "Danny")).id);
-      await expect(joinMatch(db, { code: ev.code, token }, NO_SIDE_EFFECTS)).rejects.toBeInstanceOf(NameHeldError);
+      const tokens = await makePlayer(db, "Danny");
+      const token = await getOrCreatePersonalToken(db, tokens.id);
+      await expect(joinMatch(db, { code: ev.code, token, email: "danny@example.com", level: 3 }, NO_SIDE_EFFECTS)).rejects.toBeInstanceOf(NameHeldError);
+      const [unchanged] = await db.select().from(players).where(eq(players.id, tokens.id));
+      expect([unchanged.email, unchanged.level]).toEqual([null, null]);
       expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
+    });
+
+    it("a place that keeps a past player's record gets its own hint: That's me or the place's link, never the held-place button", async () => {
+      const { ev, org } = await match([]);
+      // Danny played here before (a seat in another match), and the organiser kept his record on a place, as attachHeldRecord writes it.
+      const past = await makePlayer(db, "Danny");
+      await joinEvent(db, { eventId: (await match([])).ev.id, playerId: past.id, now: NOW });
+      await reserveNames(db, { eventId: ev.id, actorPlayerId: org.id, names: ["Danny"], now: NOW });
+      await db.update(slots).set({ playerId: past.id }).where(and(eq(slots.eventId, ev.id), eq(slots.invitedName, "Danny")));
+      const before = await playerCount();
+      const err = await joinMatch(db, { code: ev.code, name: "Danny" }, NO_SIDE_EFFECTS).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(NameHeldError);
+      expect(err).toMatchObject({ status: 409, code: "name_held", held: "Danny", kind: "record" });
+      expect((err as NameHeldError).hint).toContain(`"That's me"`);
+      expect((err as NameHeldError).hint).not.toContain("held place");
+      expect(await playerCount()).toBe(before);
+      // A place held by name keeps the by-name hint.
+      expect(new NameHeldError("Danny").hint).toContain(`"Take Danny's held place"`);
     });
 
     it("says it as an HTTP body and as an MCP tool error an assistant can act on", async () => {

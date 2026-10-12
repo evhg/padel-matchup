@@ -36,10 +36,12 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  * Join. The web's plain join that would seat a second record of the name beside the place is refused
  * (`whoJoins`), because after it no typed name could take the place. So is the plain join of the name
  * of a place that keeps a past player's record, from a browser that knows nobody (`heldRecordNamed`).
- * Every other door asks the same rule, through `joinWithPolicy` in `joining.ts` (`heldNameOf`, since
- * 12 October 2026): the WhatsApp JOIN, and through `joinAsPlayer` the Telegram ✅ and "+1", the
- * Discord and LINE buttons and `join_match` in the API and MCP, which also asks `whoJoins` for a typed
- * name with no token, before it makes a record.
+ * Every other door asks the same rule, through `joinWithPolicy` in `joining.ts` (`heldPlaceOf`, since
+ * 12 October 2026). `join_match` in the API and MCP refuses as the web does, and asks `whoJoins` before
+ * it makes a record or saves a token's email or level. A chat's join takes the place for the account's
+ * own record instead (`takeHeld`: the WhatsApp JOIN, and through `joinAsPlayer` the Telegram ✅ and
+ * "+1", the Discord and LINE buttons), because a chat's link to the match page opens a browser that
+ * knows nobody, where the take would make a second record.
  */
 
 /** A place in the match as the rule reads it: the row, and the name of the record on it when there is one. */
@@ -123,6 +125,13 @@ export function heldNameFor(m: HeldMatch, seats: readonly HeldSeat[], viewer: He
   return v.ok ? v.name : null;
 }
 
+/**
+ * What holds a refused name (`whoJoins`): `by_name`, a place held for the name with no record on it,
+ * which the name takes ("Take Danny's held place"); `record`, a place that keeps a past player's
+ * record, which that player takes with "That's me" or the place's own link.
+ */
+export type HeldKind = "by_name" | "record";
+
 /** A place as a join reads it: the row and the record on it, as `getEventDetail` gives them. */
 type JoinSeat = Omit<HeldSeat, "playerName"> & { player: { displayName: string } | null };
 
@@ -142,13 +151,13 @@ export function heldRecordNamed<S extends Pick<JoinSeat, "kind" | "status" | "pl
  * Who a plain join on the web seats, decided before anything is made or seated: the browser's own
  * record, else a new record from the typed name (`make`, called only then). A join that would put a
  * second record of a held place's name beside it, in a seat or on the waiting list (`heldNameFor`),
- * gets `{ held }` and no record: `joinAction` refuses it with `name_held`. The places are the line-up
+ * gets `{ held, kind: "by_name" }` and no record: `joinAction` refuses it with `name_held`. The places are the line-up
  * and the waiting list the join read already, so there is no read here, but one: a browser that knows
  * nobody, typing the name of a place that keeps a record (a past player picked for it, or "Keep
  * Danny's matches"), is refused the same way when `keepsRecord` says the record is a real player's,
  * because the join would make a second Danny and seat him beside the place (review of 11 October
- * 2026). That one is "That's me" for the record, which the open spot offers under the typed name, or
- * the place's own link. `keepsRecord` costs two lookups that stop at their first row, and only for such
+ * 2026). That one (`kind: "record"`) is "That's me" for the record, which the open spot offers under
+ * the typed name, or the place's own link; the API's hint says so (`NameHeldError`). `keepsRecord` costs two lookups that stop at their first row, and only for such
  * a name; a tournament's placeholder is no player, so its name joins as before.
  */
 export async function whoJoins<P extends { id: string; displayName: string }>(
@@ -158,13 +167,13 @@ export async function whoJoins<P extends { id: string; displayName: string }>(
   now: Date,
   make: () => Promise<P>,
   keepsRecord?: (playerId: string) => Promise<boolean>,
-): Promise<{ held: string } | { player: P }> {
+): Promise<{ held: string; kind: HeldKind } | { player: P }> {
   const seats = [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
   const held = heldNameFor(detail.event, seats, known ? { id: known.id, name: known.displayName } : null, typed, now);
-  if (held) return { held };
+  if (held) return { held, kind: "by_name" };
   if (!known && keepsRecord) {
     const place = heldRecordNamed(seats, typed);
-    if (place?.playerId && (await keepsRecord(place.playerId))) return { held: place.invitedName ?? place.player?.displayName ?? "" };
+    if (place?.playerId && (await keepsRecord(place.playerId))) return { held: place.invitedName ?? place.player?.displayName ?? "", kind: "record" };
   }
   return { player: known ?? (await make()) };
 }
