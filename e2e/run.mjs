@@ -94,7 +94,11 @@ if ((await answers("127.0.0.1")) || (await answers("::1"))) {
   process.exit(2);
 }
 
-const server = spawn("pnpm", ["exec", "next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"] });
+// A process group of its own, so the whole server goes at the end (`stop`): pnpm starts next-server under
+// it, and where `pnpm` is a shim (a node script that starts the real pnpm, as in a Claude Code cloud
+// session) a SIGTERM to the shim alone left next-server holding the port, and the next run refused it
+// (12 October 2026).
+const server = spawn("pnpm", ["exec", "next", "start", "-p", String(PORT)], { env, stdio: ["ignore", "pipe", "pipe"], detached: true });
 server.stdout.on("data", (d) => process.env.E2E_VERBOSE && process.stdout.write(`[server] ${d}`));
 // A client component rendered on the server with a message its page did not hand the browser logs
 // MISSING_MESSAGE here (next-intl's onError is console.error), and the HTML carries the key as text.
@@ -105,11 +109,17 @@ server.stderr.on("data", (d) => {
   process.stderr.write(`[server] ${d}`);
 });
 const stop = () => {
-  if (!server.killed) server.kill("SIGTERM");
+  try {
+    process.kill(-server.pid, "SIGTERM");
+  } catch {
+    if (!server.killed) server.kill("SIGTERM");
+  }
   rmSync(dataDir, { recursive: true, force: true });
 };
 process.on("exit", stop);
 process.on("SIGINT", () => process.exit(130));
+// A runner stopped from outside (`timeout`, a gate that is killed) takes its server with it too.
+process.on("SIGTERM", () => process.exit(143));
 
 const deadline = Date.now() + 120_000;
 let up = false;

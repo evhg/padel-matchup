@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
 
 /**
@@ -11,15 +11,20 @@ import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/log
  * the tab to this page. No widget, no popup, no second tab. Linked accounts
  * see their handle instead.
  */
-export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: { botId: string; linkedUsername: string | null; linked: boolean; lang: string; authUrl: string }) {
-  const t = useTranslations();
-  const [busy, setBusy] = useState(false);
+/**
+ * Back from Telegram: the signed fields are in the hash, on a fresh load or (rarely) a hash change, and
+ * they go to the login route. Every page with a "Sign in with Telegram" must read them on load, also
+ * when the button itself is not on the screen yet: the match page opens its "Played before?" only with
+ * the join form (DECIDING rule 39), so it reads them through `TelegramReturn`.
+ */
+export function useTelegramReturn(authUrl: string, onBack?: () => void): void {
+  const said = useRef(onBack);
+  said.current = onBack;
   useEffect(() => {
-    // Back from Telegram: the signed fields are in the hash, on a fresh load or (rarely) a hash change.
     const back = () => {
       const fields = readAuthResult(window.location.hash);
       if (!fields) return;
-      setBusy(true);
+      said.current?.();
       const here = window.location.pathname + window.location.search;
       history.replaceState(null, "", here);
       // The login route sends the tab back to this page (`loginNext` checks it), not to My matches.
@@ -32,6 +37,18 @@ export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: 
     window.addEventListener("hashchange", back);
     return () => window.removeEventListener("hashchange", back);
   }, [authUrl]);
+}
+
+/** The return from Telegram alone, with no button: for a page whose button is not mounted on load. */
+export function TelegramReturn({ authUrl }: { authUrl: string }) {
+  useTelegramReturn(authUrl);
+  return null;
+}
+
+export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: { botId: string; linkedUsername: string | null; linked: boolean; lang: string; authUrl: string }) {
+  const t = useTranslations();
+  const [busy, setBusy] = useState(false);
+  useTelegramReturn(authUrl, () => setBusy(true));
   const go = () => {
     setBusy(true);
     window.location.assign(telegramAuthUrl(botId, window.location.origin, returnToFor(window.location), lang));

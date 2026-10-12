@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
 import { DeleteAccount } from "@/components/DeleteAccount";
 import { SameNameCard } from "@/components/SameNameCard";
@@ -10,7 +10,12 @@ import { NameGate } from "@/components/NameGate";
 import { canRestore, ReturningPlayer } from "@/components/ReturningPlayer";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
-import { getSessionPlayer } from "@/lib/session";
+import { getSessionPlayer, passkeyHandle, signedInByName } from "@/lib/session";
+import { MyPhones } from "@/components/MyPhones";
+import { RememberPhone } from "@/components/RememberPhone";
+import { mayRegister, passkeysOf } from "@/lib/domain/passkeys";
+import { QUIET_FALLBACK_TZ } from "@/lib/domain/noticeKinds";
+import { formatDayMonth } from "@/lib/dates";
 import { personalTokenFor } from "@/actions/shared";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
@@ -74,6 +79,14 @@ async function MePage({ searchParams }: Props) {
   // nobody reads the count as a count of matches (the owner, 12 October 2026). Read once, here.
   const inbox = await inboxOf(db, me.id);
   const inboxCard = <NoticeInbox inbox={inbox} />;
+  // "Phones that remember you" (DECIDING rule 39): one read down `passkeys_player_idx`, then a label, two
+  // dates and an opaque handle each; the credential id never leaves the server. This browser may save
+  // one, and remove one, unless its session came in by name. With no passkey yet, the offer is the
+  // match page's quiet card, "Not now" included; with one, the list and a small "Also remember this phone".
+  const locale = await getLocale();
+  const tz = me.quietTz ?? QUIET_FALLBACK_TZ;
+  const phones = (await passkeysOf(db, me.id)).map((p) => ({ handle: passkeyHandle(me.id, p.id), label: p.label, saved: formatDayMonth(p.createdAt, tz, locale), used: p.lastUsedAt ? formatDayMonth(p.lastUsedAt, tz, locale) : null }));
+  const canSavePasskey = mayRegister({ playerId: me.id, byName: await signedInByName(me.id) }, me);
   return (
     <>
       {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
@@ -85,6 +98,10 @@ async function MePage({ searchParams }: Props) {
         <MyMatches player={me} first={inbox.unread > 0 ? inboxCard : null} />
         {inbox.unread === 0 && inboxCard}
         <SameNameCard db={db} player={me} />
+        {/* The card stays mounted with `offer` false once the record has a passkey, so the save's own
+            confirmation outlives the render that the action's cookie change brings. */}
+        {canSavePasskey && <RememberPhone offer={phones.length === 0} where="me" />}
+        <MyPhones rows={phones} canSave={canSavePasskey} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />

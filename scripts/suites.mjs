@@ -49,7 +49,11 @@ const RULES = [
   [/^src\/(lib\/coach|app\/coach|app\/c)\//, ["coach", "coach-states"], "the coach's book, and its screens in the states that make sentences false"],
   [/^src\/lib\/domain\/coaching\.ts$/, ["coach"], "the coach's rules"],
   [/^src\/components\/coach\//, ["coach", "coach-states"], "the coach's screens, which only the coach journeys open"],
-  [/^src\/app\/(me|p)\//, ["core", "player-states"], "the player's own screens, and the states that make their sentences false"],
+  [/^src\/app\/(me|p)\//, ["core", "player-states", "passkeys"], "the player's own screens, and the states that make their sentences false"],
+  // Passkeys (DECIDING rule 39): the ceremony and its actions, and the four screens' parts. The rules
+  // (src/lib/domain/passkeys.ts) stay unclaimed: a merge, a deletion and "That's me" read them.
+  [/^src\/(lib\/passkeys\/|actions\/passkeys\.ts$)/, ["passkeys", "core"], "Face ID or a fingerprint: the ceremony and its actions"],
+  [/^src\/components\/(PasskeySignIn|RememberPhone|MyPhones|BackInHelp)\.tsx$/, ["passkeys", "core", "player-states"], "the passkey's buttons, the offer and the open help in the join form"],
   [/^src\/components\/(MyMatches|MySettings|DeleteAccount|FeedbackInline|PersonalLinkCard|WhenIPlay)\.tsx$/, ["core", "player-states"], "what My matches is made of, in the order it is made of it"],
   [/^src\/actions\/coach\.ts$/, ["coach", "telegram"], "the coach's writes, which the bot shares"],
   [/^src\/lib\/domain\/(clubs|venueBoard)\.ts$/, ["clubs", "venues"], "clubs and their boards"],

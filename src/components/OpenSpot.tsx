@@ -5,6 +5,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState, use
 import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { answerKey, askFor, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
+import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { registerJoinHandler } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { PastAsk } from "./PastAsk";
@@ -35,6 +36,8 @@ export function OpenSpot({
   heldForMe = null,
   levelRange = null,
   myLevel = null,
+  myName = null,
+  backIn = null,
 }: {
   code: string;
   slotId: string;
@@ -66,6 +69,10 @@ export function OpenSpot({
   /** Ranged event: joining asks for a level when the player has none yet. */
   levelRange?: LevelRange | null;
   myLevel?: number | null;
+  /** The name of the record this browser holds: the welcome line after a sign-in from the open form. */
+  myName?: string | null;
+  /** For a browser that knows nobody: the ways back in, shown open under the name field ("Played before?", DECIDING rule 39). */
+  backIn?: BackInDoors | null;
 }) {
   const t = useTranslations();
   const errText = (error: string) =>
@@ -218,6 +225,29 @@ export function OpenSpot({
     );
   }
 
+  // Signed in from "Played before?" under the name field (Face ID or a fingerprint, the email code): the
+  // form opened for a browser that knew nobody, and the page now knows a record that needs no level. A
+  // known player's tap joins at once and never opens the form, so only a sign-in gets here. The help
+  // and its own welcome went with the name field, so the welcome is said here, with the one Join
+  // (review, 12 October 2026: the form read "What's your level?" with no level to pick).
+  if (mode === "join" && hasIdentity && !needsLevel) {
+    return (
+      <div ref={box} className="animate-pop" data-testid="open-spot-welcome">
+        <div className="flex items-center gap-3">
+          {avatar}
+          <span className="min-w-0 flex-1 text-sm font-bold text-ok">✓ {t("identity.backJoinAsk", { name: myName ?? "" })}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button type="button" className="btn-primary" disabled={pending} onClick={() => join()}>
+            {pending ? t("common.working") : t("event.joinShort")}
+          </button>
+          {cancel}
+        </div>
+        {error && <p className="mt-1 text-sm font-semibold text-danger">{error}</p>}
+      </div>
+    );
+  }
+
   const hasNames = name.trim().length > 0;
   // The held place this typed name may take, under the name the organiser gave it: while it is offered, the form sends no Join.
   const heldName = mode === "join" && !hasIdentity ? heldNameOf(name, held) : undefined;
@@ -344,6 +374,7 @@ export function OpenSpot({
           {cancel}
         </div>
       </form>
+      {mode === "join" && !hasIdentity && backIn && <BackInHelp doors={backIn} />}
     </div>
   );
 }

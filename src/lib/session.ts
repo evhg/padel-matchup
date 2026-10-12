@@ -147,6 +147,13 @@ export async function signedInByName(playerId: string): Promise<boolean> {
  */
 export const memberHandle = (groupId: string, playerId: string): string => sign(`member:${groupId}:${playerId}`).slice(0, 22);
 
+/**
+ * An opaque name for one of a player's own passkeys, for "Remove" on My matches: the page never carries
+ * the credential id (DECIDING rule 39), and the action finds the passkey among the player's own whose
+ * handle it was given (`removePasskeyAction`), so a handle opens nothing of anybody else's.
+ */
+export const passkeyHandle = (playerId: string, credentialId: string): string => sign(`passkey:${playerId}:${credentialId}`).slice(0, 22);
+
 /** Per-event organizer access granted by visiting /{code}/manage/{manageCode}. */
 export const manageCookieName = (code: string) => `km_manage_${code}`;
 

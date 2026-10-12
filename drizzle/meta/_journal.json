@@ -694,6 +694,20 @@
       "when": 1791773652400,
       "tag": "0098_club_booking_links",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1791812284501,
+      "tag": "0099_passkeys",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1791812300805,
+      "tag": "0100_reader_grants",
+      "breakpoints": true
     }
   ]
 }

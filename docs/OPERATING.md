@@ -186,7 +186,7 @@ Which of these makes the second record is a question for the numbers, so these d
 `metrics_daily` answer it. None holds a name, an address or a token. Read them through
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
 current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'merge_%' or key like
-'join_src_%' or key = 'thats_me_refused' or key like 'held_by_name%') group by 1 order by 1`.
+'join_src_%' or key like 'passkey_%' or key = 'thats_me_refused' or key like 'held_by_name%') group by 1 order by 1`.
 
 - **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
@@ -214,8 +214,12 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   down, the owner's decision of 11 October 2026);
   `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
   11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
-  `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
-  counts only when the cookie changes to another record; a link to a browser already signed in
+  `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`;
+  `signin_passkey` (Face ID or a fingerprint, DECIDING rule 39), with `signin_passkey_fold` when it
+  folded the new record the browser had made into the passkey's own. `passkey_saved` counts a phone
+  that saved one ("Remember me on this phone"), and `passkey_refused` any save or sign-in the server
+  turned down (an unknown passkey, a deleted record, a signature or a challenge that did not check
+  out). Each `signin_*` counts only when the cookie changes to another record; a link to a browser already signed in
   counts nothing. `thats_me_refused` counts a "That's me" the rule turned down. "That's me" takes
   at most 20 taps a day from one address (`thatsMePerIpPerDay`, raised from 10 for a club's Wi-Fi)
   and 3 sign-ins a day into one record from anywhere (`thatsMePerRecordPerDay`). Every counter
@@ -227,7 +231,8 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   Telegram or WhatsApp link, the same-name rows nobody can reach), `merge_same_name_claim` ("These are
   mine"), `merge_claim` (a competition partner's claim link), `merge_thats_me` ("That's me" folds the
   browser's own new record), `merge_held_link` (a held place's link folds a tournament's placeholder),
-  `merge_telegram` and `merge_whatsapp` (an account or a number another record held). Many merges at
+  `merge_telegram` and `merge_whatsapp` (an account or a number another record held), and
+  `merge_passkey` (a sign-in by passkey folds the new record its browser made, DECIDING rule 39). Many merges at
   one door say where duplicates come from. Each is written after the answer, as the sign-in counters.
 - **A held place taken by name.** `held_by_name`: somebody took the place the organiser held for
   their name from the plain match link, in two taps (DECIDING rule 34, 11 October 2026), or a chat

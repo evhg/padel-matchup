@@ -1093,6 +1093,23 @@ Everything in this list is live. The README describes each in detail.
   - **No platform's name in the chat or the chips.** The "times?" answer, the weekly post, the time
     chips, the line under the time and /play name no platform. The booking step and the club page's
     source line still do (`src/lib/domain/bestTimes.ts` carries no name).
+- **Face ID or a fingerprint, from any browser on the phone (12 October 2026, migration 0099).** The
+  owner's decision, DECIDING rule 39: "Passkeys", "Only a proved browser", "Own record only". A link in
+  a WhatsApp group opens the phone's default browser, which may not be the one that knows the player,
+  and six of the eight active players have an email, so "That's me" never helped them. After a join, a
+  quiet card offers "Remember me on this phone"; the phone's password manager keeps a passkey, and
+  every browser on the phone can use it. "Played before?" now stands open under the name field of the
+  match page's join form, with "Sign in with Face ID or fingerprint" first and the email code after it,
+  and a closed line under the line-up, "Played before? Sign in", opens that form and its help, so a
+  player seated from another browser needs no Join. A sign-in signs in the passkey's own record and
+  folds the new record that browser made into it, only when nothing proves or reaches that record and
+  the names agree; a session by name never saves one.
+  My matches shows the same quiet card, with its own "Not now", until the record has a passkey, then
+  lists "Phones that remember you" with Remove and a small "Also remember this phone". Kicksmash keeps a
+  public key, a label and two dates, never a face, a fingerprint or a password (`/privacy`), and the
+  download of a player's data lists each phone by its label and dates. `src/lib/domain/passkeys.ts`,
+  `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in
+  `tests/passkey-ceremony.test.ts` and with Chromium's virtual authenticator in `e2e/passkeys.mjs`.
 
 ## The finish line
 

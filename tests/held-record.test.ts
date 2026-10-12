@@ -104,6 +104,7 @@ const bare: ThatsMeRow = {
   discord: false,
   line: false,
   push: false,
+  passkey: false,
   coachBook: false,
   coachStudent: false,
   claimedClub: false,
@@ -123,6 +124,7 @@ describe("the personal link signs in as the record, inside the \"That's me\" lim
     ["a record with an email", { email: true }, "email"],
     ["a record with a Telegram account", { telegram: true }, "telegram"],
     ["a record with a push subscription", { push: true }, "push"],
+    ["a record with a passkey", { passkey: true }, "passkey"],
     ["a record that organises a match still to come", { organisesMatches: true }, "organises_matches"],
     ["a record that runs a crew", { runsCrew: true }, "runs_a_crew"],
     ["a member of a group that asks to join", { inAskingGroup: true }, "asking_group"],
@@ -150,7 +152,8 @@ describe("the personal link signs in as the record, inside the \"That's me\" lim
   // subscription or a match still to come has neither, so "Sign in first" would send it to a door it
   // cannot open: such a link says whose place it is and points at the organiser.
   it("asks a browser that knows nobody to sign in first only when the record can open the door the page offers", () => {
-    for (const r of ["email", "recovery_email", "telegram"] as const) {
+    // A passkey is a door on every deployment: its button needs no email and no bot (DECIDING rule 39).
+    for (const r of ["email", "recovery_email", "telegram", "passkey"] as const) {
       expect(heldRecordView("actions", "invited", "nobody", r), r).toBe("sign_in_first");
       expect(heldRecordView("declined", "declined", "nobody", r), r).toBe("sign_in_first");
     }
@@ -162,6 +165,7 @@ describe("the personal link signs in as the record, inside the \"That's me\" lim
     expect(heldRecordView("actions", "invited", "nobody", "email", telegramOnly)).toBe("ask_organiser");
     expect(heldRecordView("actions", "invited", "nobody", "telegram", telegramOnly)).toBe("sign_in_first");
     expect(heldRecordView("actions", "invited", "nobody", "telegram", provableHere({ email: false, telegram: false }))).toBe("ask_organiser");
+    expect(heldRecordView("actions", "invited", "nobody", "passkey", provableHere({ email: false, telegram: false }))).toBe("sign_in_first");
   });
 });
 

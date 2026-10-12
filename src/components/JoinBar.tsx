@@ -6,6 +6,7 @@ import { joinAction, leaveAction, withdrawJoinRequestAction } from "@/actions/sl
 import { askLevelCheckAction } from "@/actions/verify";
 import { formatLevel, joinBarLevel, joinStep, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
 import { requestJoin } from "./joinBus";
+import { PasskeySignIn } from "./PasskeySignIn";
 import { LevelSelect } from "./LevelSelect";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 
@@ -228,6 +229,8 @@ export function JoinBar({
                     </button>
                   </div>
                   {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
+                  {/* Played before: Face ID or a fingerprint, in one line, where the bar is the join form (DECIDING rule 39). */}
+                  {!hasIdentity && <PasskeySignIn className="btn-ghost btn-sm w-full whitespace-normal leading-snug" />}
                 </form>
               ) : (
                 <button ref={joinButton} type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>

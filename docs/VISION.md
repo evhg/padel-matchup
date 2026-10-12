@@ -39,7 +39,7 @@ Thailand, then Singapore. Thai joins English, Russian and Spanish; LINE is the f
 
 ## Rules that stay
 
-- No accounts and no passwords for anyone: a coach or a club is a player with a role, reached by their links and by chat sign-in.
+- No accounts and no passwords for anyone: a coach or a club is a player with a role, reached by their links and by chat sign-in. A passkey is not a password: Face ID or a fingerprint lets the phone sign a player in from any of its browsers, and Kicksmash keeps a public key, a label and two dates (the owner, 12 October 2026, DECIDING rule 39).
 - Nothing is paid through Kicksmash. A coach's PromptPay or link is shown; "paid" is a note.
 - Bots stay quiet: one card, edited in place, new messages only for the card, a full line-up, the reminder and the result.
 - The club sees its coaches and does not control them: lessons per week on its courts, who teaches there, no approval and no terms.

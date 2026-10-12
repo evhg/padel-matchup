@@ -20,10 +20,12 @@ import { bumpMetric } from "./metrics";
  *   - `personal_link`: the personal link, on any of its three paths.
  *   - `email_code`: a six-digit code that came back from the address.
  *   - `telegram`: the Telegram login widget; `telegram_miniapp`: the Mini App inside Telegram.
+ *   - `passkey`: Face ID or a fingerprint (DECIDING rule 39); `passkey_fold` as well when it folded the
+ *     new record this browser had made into the passkey's own record.
  *
  * A link of a second channel to a browser already signed in is not a sign-in and is not counted.
  */
-export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp"] as const;
+export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp", "passkey", "passkey_fold"] as const;
 export type SignInWay = (typeof SIGNIN_WAYS)[number];
 
 /** Never throws: a sign-in must not fail because its counter did. */
@@ -48,10 +50,12 @@ export async function countSignIn(db: Db, way: SignInWay): Promise<void> {
  *     (`confirmInvite`, the WhatsApp JOIN of a number's place too).
  *   - `telegram`: a Telegram account another record already held (`linkTelegram`).
  *   - `whatsapp`: a WhatsApp number another record already held (`linkWhatsapp`).
+ *   - `passkey`: a sign-in by passkey folds the new record this browser made into the passkey's own
+ *     record (`completePasskeySignIn`, DECIDING rule 39).
  *
  * `mergePlayers` takes the door, so a new caller cannot leave it out, and counts it itself.
  */
-export const MERGE_DOORS = ["operator", "email_code", "same_name", "same_name_claim", "claim", "thats_me", "held_link", "telegram", "whatsapp"] as const;
+export const MERGE_DOORS = ["operator", "email_code", "same_name", "same_name_claim", "claim", "thats_me", "held_link", "telegram", "whatsapp", "passkey"] as const;
 export type MergeDoor = (typeof MERGE_DOORS)[number];
 
 /**

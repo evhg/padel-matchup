@@ -11,6 +11,7 @@ import { hintCookieOptions } from "@/lib/hintCookie";
 import { BY_NAME_COOKIE, HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE } from "@/lib/session";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
+import { CHALLENGE_COOKIE, challengeCookie } from "@/lib/passkeys/webauthn";
 
 /**
  * /privacy promises things about the code: which cookies it sets, how long it keeps what. A promise
@@ -28,7 +29,7 @@ const notMineCookie = readFileSync(path.resolve(process.cwd(), "src/components/S
 describe("the privacy page tells the truth about the code", () => {
   it("names every cookie the app sets, in every language", () => {
     expect(notMineCookie).toBe("ks_notmine");
-    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE];
+    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE];
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
@@ -41,6 +42,7 @@ describe("the privacy page tells the truth about the code", () => {
     const WORDS: Record<number, Record<(typeof LOCALES)[number], string>> = {
       [365 * 24 * 3600]: { en: "One year", ru: "Один год", es: "Un año" },
       [24 * 3600]: { en: "One day", ru: "Один день", es: "Un día" },
+      [5 * 60]: { en: "Five minutes", ru: "Пять минут", es: "Cinco minutos" },
     };
     const textSizeAge = Number(/max-age=(\d+)/.exec(textSizeCookie("big"))?.[1]);
     const lifetimes: [string, number][] = [
@@ -51,6 +53,7 @@ describe("the privacy page tells the truth about the code", () => {
       [SOURCE_COOKIE, SOURCE_MAX_AGE],
       [COACH_SOURCE_COOKIE, SOURCE_MAX_AGE],
       [TEXT_SIZE_COOKIE, textSizeAge],
+      [CHALLENGE_COOKIE, challengeCookie().maxAge],
     ];
     for (const l of LOCALES) {
       const lines = render(l, "privacy.cookiesBody").split("\n");
@@ -96,6 +99,23 @@ describe("the privacy page tells the truth about the code", () => {
       expect(backups, l).toMatch(new RegExp(`${ABOUT[l]}\\D*${BACKUP_KEEP_DAYS}\\s`));
       expect(backups, l).not.toMatch(/only the last|только последн|solo guarde/);
       expect(backups, l).toContain(LATER[l]);
+    }
+  });
+
+  it("says what a phone that remembers you keeps, never a face, a fingerprint or a password, and that deletion takes it", () => {
+    // Passkeys, the owner's decision of 12 October 2026 (DECIDING rule 39): the passkeys table keeps a
+    // public key, a label and two dates (src/db/schema/players.ts), and `anonymizePlayer` drops them.
+    const KEEPS = {
+      en: ["public key", "the phone and the browser", "the day you saved it", "the day you last used it", "Never your face, your fingerprint or a password"],
+      ru: ["открытый ключ", "телефон и браузер", "день сохранения", "день последнего входа", "Никогда — ваше лицо, отпечаток пальца или пароль"],
+      es: ["clave pública", "el teléfono y el navegador", "el día en que la guardaste", "el día en que la usaste por última vez", "Nunca tu cara, tu huella ni una contraseña"],
+    } as const;
+    const DELETED = { en: "the phones that remember you", ru: "телефоны, которые вас помнят", es: "los teléfonos que te recuerdan" } as const;
+    for (const l of LOCALES) {
+      const line = render(l, "privacy.storeBody").split("\n").find((x) => x.includes("passkey"));
+      expect(line, l).toBeDefined();
+      for (const words of KEEPS[l]) expect(line, `${l}: ${words}`).toContain(words);
+      expect(render(l, "privacy.deleteBody"), l).toContain(DELETED[l]);
     }
   });
 

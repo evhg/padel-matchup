@@ -43,7 +43,7 @@ describe("merges are counted by their door", () => {
   };
 
   it("names the keys it writes, one per door, each a plain word", () => {
-    expect(MERGE_DOORS.map((d) => `merge_${d}`)).toEqual(["merge_operator", "merge_email_code", "merge_same_name", "merge_same_name_claim", "merge_claim", "merge_thats_me", "merge_held_link", "merge_telegram", "merge_whatsapp"]);
+    expect(MERGE_DOORS.map((d) => `merge_${d}`)).toEqual(["merge_operator", "merge_email_code", "merge_same_name", "merge_same_name_claim", "merge_claim", "merge_thats_me", "merge_held_link", "merge_telegram", "merge_whatsapp", "merge_passkey"]);
     for (const d of MERGE_DOORS) expect(d).toMatch(/^[a-z_]+$/);
   });
 

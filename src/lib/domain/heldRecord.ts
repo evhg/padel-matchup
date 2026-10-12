@@ -10,7 +10,7 @@ import { bumpMetric } from "./metrics";
 import { LIMITS, takeRate } from "./ratelimit";
 import { DELETED_PLAYER_NAME } from "./result";
 import { confirmInvite, hasLifeOutside, liveRefusal, lockEvent, type ConfirmOutcome } from "./slots";
-import { reachedSince, thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefusal, type ThatsMeRow } from "./thatsMe";
+import { reachedSince, savedPasskey, thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefusal, type ThatsMeRow } from "./thatsMe";
 
 /**
  * A held place that keeps a past player's record (the owner, 11 October 2026). The question was:
@@ -266,12 +266,13 @@ export async function decideHeldLink(db: Db, input: { inviteCode: string; rateKe
  * The tap's write: the personal link's own (`confirmInvite`) for the record, and the fact, with no name
  * in it, when the place was filled. The caller signs the browser in as the record, marked by name,
  * only on `confirmed`, and counts `signin_held_link`. The record is read again first, as "That's me"
- * reads it (`commitThatsMe`): a record that got an address or an account since the decision now proves
- * itself, so the link refuses it (`held_record`). One read by the primary key.
+ * reads it (`commitThatsMe`): a record that got an address, an account or a passkey since the decision
+ * now proves itself, so the link refuses it (`held_record`). One read by the primary key, and one
+ * lookup down `passkeys_player_idx`.
  */
 export async function takeHeldLink(db: Db, d: Extract<HeldLinkDecision, { ok: true }>, now = new Date()): Promise<ConfirmOutcome> {
   const [record] = await db.select().from(players).where(eq(players.id, d.playerId)).limit(1);
-  if (!record || reachedSince(record)) throw new DomainError("forbidden", "held_record");
+  if (!record || reachedSince(record) || (await savedPasskey(db, record.id))) throw new DomainError("forbidden", "held_record");
   const res = await confirmInvite(db, { inviteCode: d.inviteCode, playerId: d.playerId, now });
   if (res.outcome === "confirmed") {
     await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: d.playerId, subject: { type: "player", id: d.playerId }, code: d.event.code, data: { folded: false, via: "link" }, at: now });
@@ -283,12 +284,14 @@ export async function takeHeldLink(db: Db, d: Extract<HeldLinkDecision, { ok: tr
 export type HeldRecordViewer = "nobody" | "record" | "other";
 
 /**
- * The limits a record can lift on the personal link's page: the page offers the email code and
- * Telegram (`ReturningPlayer bare`), each only where the deployment runs it (rule 4), and these are
- * the records that one of them signs in. Pure.
+ * The limits a record can lift on the personal link's page: the page offers Face ID or a fingerprint
+ * on every deployment (a passkey, DECIDING rule 39), and the email code and Telegram each only where
+ * the deployment runs it (rule 4) (`ReturningPlayer bare`); these are the records that one of them
+ * signs in. Pure.
  */
 export function provableHere(o: { email: boolean; telegram: boolean }): ReadonlySet<ThatsMeRefusal> {
-  return new Set<ThatsMeRefusal>([...(o.email ? (["email", "recovery_email"] as const) : []), ...(o.telegram ? (["telegram"] as const) : [])]);
+  // A passkey is a door on every deployment: Face ID or a fingerprint needs no email and no bot (DECIDING rule 39).
+  return new Set<ThatsMeRefusal>(["passkey", ...(o.email ? (["email", "recovery_email"] as const) : []), ...(o.telegram ? (["telegram"] as const) : [])]);
 }
 const BOTH_DOORS = provableHere({ email: true, telegram: true });
 

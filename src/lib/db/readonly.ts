@@ -61,6 +61,10 @@ export const HIDDEN_COLUMNS: readonly string[] = [
   "endpoint",
   "p256dh",
   "auth",
+  // A passkey's public key (passkeys, DECIDING rule 39). It checks a signature and signs nothing in, so
+  // it is not a secret; it is hidden because no question of the operator needs it, and the owner's
+  // decision keeps it out of every list and log.
+  "public_key",
 ];
 
 /**

@@ -51,6 +51,13 @@ export const LIMITS = {
   groupAskNoticesPerGroupPerDay: 10,
   restoreCodesPerIpPerDay: 20,
   /**
+   * Passkeys (DECIDING rule 39): ceremonies one address may start in a day (a save or a sign-in), and
+   * answers it may hand back for checking. Forty, not twenty: a club's Wi-Fi is one address for every
+   * player on it, and a person who cancels Face ID and taps again starts a second one.
+   */
+  passkeyOptionsPerIpPerDay: 40,
+  passkeyChecksPerIpPerDay: 40,
+  /**
    * "That's me" taps from one address in a day, refused ones too: a name is tried, never guessed in a
    * loop (DECIDING rule 34). Twenty, not ten: a club's Wi-Fi is one address for every player on it.
    */
