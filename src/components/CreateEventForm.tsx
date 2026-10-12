@@ -1,11 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { createEventAction } from "@/actions/events";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { createEventAction, pastPlayersAction } from "@/actions/events";
+import { answerFor, answerKey, askFor, namesTyped, pickOf, type PastAnswer, type PastPick } from "@/lib/domain/pastAsk";
 import { nextOccurrence, tomorrowAt } from "@/lib/dates";
 import { defaultLength } from "@/lib/domain/matchLength";
 import { EventFields, type EventFormValues, type TimePatternInput } from "./EventFields";
+import type { PastNamesState } from "./PastNames";
 import type { VenueOption } from "./VenueCombobox";
 
 export function CreateEventForm({
@@ -113,6 +115,32 @@ export function CreateEventForm({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // The organiser's past players (names, days and clubs only), asked for once, when the names first show,
+  // and only for somebody the app knows: "Played with you", and "Is this Danny…?" under a typed name.
+  const [past, setPast] = useState<PastNamesState | null>(null);
+  const [answers, setAnswers] = useState<Record<string, PastAnswer>>({});
+  const [reveal, setReveal] = useState(0);
+  const pastAsked = useRef(false);
+  const loadPast = useCallback(() => {
+    if (!hasIdentity || pastAsked.current) return;
+    pastAsked.current = true;
+    pastPlayersAction()
+      .then((r) => setPast({ chips: r.chips, views: r.past }))
+      .catch(() => undefined);
+  }, [hasIdentity]);
+  const answer = useCallback((who: string, a: PastAnswer | undefined) => {
+    setAnswers((all) => {
+      const next = { ...all };
+      if (a === undefined) delete next[answerKey(who)];
+      else next[answerKey(who)] = a;
+      return next;
+    });
+  }, []);
+  const addPast = useCallback((who: string) => {
+    touched.current = true;
+    setValues((v) => ({ ...v, haveNames: v.haveNames.trim() ? `${v.haveNames.replace(/\s+$/, "")}\n${who}` : who }));
+    setAnswers((all) => ({ ...all, [answerKey(who)]: true }));
+  }, []);
 
   // No Vercel geo header (local dev / non-Vercel host): fall back to the browser's zone.
   useEffect(() => {
@@ -138,6 +166,15 @@ export function CreateEventForm({
     e.preventDefault();
     setError(null);
     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
+    // "Is this Danny…?" still open: the place is held only once the organiser said who it is.
+    const typed = namesTyped(values.haveNames);
+    const waiting = past ? typed.find((n) => askFor(past.views, n).length > 0 && answerFor(answers, n) === undefined) : undefined;
+    if (waiting) {
+      setReveal((r) => r + 1);
+      return setError(t("create.askPastFirst", { name: waiting }));
+    }
+    // Only "Yes" and a chip travel, as the name, the day and the club; the server finds the record again.
+    const picks = typed.map((n) => pickOf(n, answerFor(answers, n))).filter((p): p is PastPick => p !== null);
     start(async () => {
       const r = await createEventAction({
         name: hasIdentity ? undefined : name,
@@ -167,10 +204,8 @@ export function CreateEventForm({
         groupCode,
         telegramTicket,
         discordTicket,
-        names: (() => {
-          const typed = values.haveNames.split("\n").map((n) => n.trim()).filter(Boolean);
-          return typed.length ? typed : undefined;
-        })(),
+        names: typed.length ? typed : undefined,
+        picks: picks.length ? picks : undefined,
         publicListing: values.publicListing,
         bookingUrl: values.bookingUrl || undefined,
         cost: values.cost || undefined,
@@ -194,7 +229,16 @@ export function CreateEventForm({
         </div>
       )}
       <div className="card">
-        <EventFields values={values} onChange={onChange} venues={venues} patterns={patterns} hasLevel={hasLevel} missing={booking?.missing} check={booking?.check} />
+        <EventFields
+          values={values}
+          onChange={onChange}
+          venues={venues}
+          patterns={patterns}
+          hasLevel={hasLevel}
+          missing={booking?.missing}
+          check={booking?.check}
+          past={hasIdentity ? { state: past, answers, onLoad: loadPast, onAdd: addPast, onAnswer: answer, reveal } : undefined}
+        />
       </div>
       {booking && (
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ok-soft px-4 py-3">

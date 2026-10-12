@@ -1,7 +1,9 @@
 import { and, desc, eq, inArray, lte, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, slots, type Slot } from "@/db/schema";
+import { utcToZonedParts } from "@/lib/dates";
 import { normalName } from "./dupes";
+import { answerOfPick, type PastAnswer, type PastPick, type PastView } from "./pastAsk";
 import { DomainError } from "./errors";
 import { recordFact } from "./facts";
 import { bumpMetric } from "./metrics";
@@ -41,8 +43,8 @@ import { reachedSince, thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefus
  *     `held_record`). A place with a phone keeps no record: it is the WhatsApp number's (`reserveLocked`).
  */
 
-/** A record that played with the organiser: its name and the start of the last match they shared. */
-export type PastPlayer = { id: string; name: string; last: Date };
+/** A record that played with the organiser: its name, and the start, the club and the zone of the last match they shared. */
+export type PastPlayer = { id: string; name: string; last: Date; club: string | null; tz: string };
 
 /** How many of the organiser's matches the read looks back over, and how many names the picker shows. */
 export const PAST_MATCHES = 50;
@@ -77,7 +79,7 @@ export async function pastPlayerRows(db: Db, organiserId: string, now: Date): Pr
     .map((m) => m.id);
   if (ids.length === 0) return [];
   const seats = await db
-    .select({ id: players.id, name: players.displayName, at: events.startsAt })
+    .select({ id: players.id, name: players.displayName, at: events.startsAt, club: events.venueName, tz: events.tz })
     .from(slots)
     .innerJoin(events, eq(events.id, slots.eventId))
     .innerJoin(players, eq(players.id, slots.playerId))
@@ -85,7 +87,7 @@ export async function pastPlayerRows(db: Db, organiserId: string, now: Date): Pr
   const byId = new Map<string, PastPlayer>();
   for (const s of seats) {
     const seen = byId.get(s.id);
-    if (!seen || seen.last.getTime() < s.at.getTime()) byId.set(s.id, { id: s.id, name: s.name, last: s.at });
+    if (!seen || seen.last.getTime() < s.at.getTime()) byId.set(s.id, { id: s.id, name: s.name, last: s.at, club: s.club?.trim() || null, tz: s.tz });
   }
   return [...byId.values()].sort((a, b) => b.last.getTime() - a.last.getTime());
 }
@@ -111,6 +113,60 @@ export function pickable(list: readonly PastPlayer[], here: { ids: ReadonlySet<s
     .filter((p) => count.get(normalName(p.name)) === 1 && !here.ids.has(p.id) && !taken.has(normalName(p.name)))
     .slice(0, PAST_PLAYERS_SHOWN)
     .map((p) => p.name);
+}
+
+/** How many past players the browser gets for the typed-name question: the latest, names, days and clubs only. */
+export const PAST_VIEWS_MAX = 100;
+
+/** The day of the last match together, in that match's own zone, as the question shows it and the answer names it. */
+export const pastDay = (p: Pick<PastPlayer, "last" | "tz">): string => utcToZonedParts(p.last, p.tz).date;
+
+/**
+ * What the browser gets for "Is this Danny, who played with you on Sep 13 at Kross Padel?": a name, a
+ * day and a club for each past player not already in the match (`inEvent`), latest first, at most
+ * `PAST_VIEWS_MAX`. Never an id: the server finds the record again from the answer (`recordForAnswer`).
+ * Pure.
+ */
+export function pastViews(list: readonly PastPlayer[], inEvent: ReadonlySet<string>, max = PAST_VIEWS_MAX): PastView[] {
+  return [...list]
+    .filter((p) => !inEvent.has(p.id))
+    .sort((a, b) => b.last.getTime() - a.last.getTime())
+    .slice(0, max)
+    .map((p) => ({ name: p.name, day: pastDay(p), club: p.club }));
+}
+
+/**
+ * The record an answer names, found again among the organiser's own past players, or null (held by
+ * name). A chip (`true`) is the one record of that name (`pastPlayerNamed`); "Yes, that's Danny" is the
+ * record of that name whose last match together was on that day at that club, and only when exactly one
+ * is; "No, someone new" and no answer are nobody. A name nobody of the list carries is nobody, so a
+ * request cannot attach a record the organiser never played with. Pure.
+ */
+export function recordForAnswer(list: readonly PastPlayer[], name: string, answer: PastAnswer | undefined): PastPlayer | null {
+  if (answer === undefined || answer === "new") return null;
+  if (answer === true) return pastPlayerNamed(list, name);
+  const key = normalName(name);
+  if (!key) return null;
+  const club = answer.club?.trim() || null;
+  const found = list.filter((p) => normalName(p.name) === key && pastDay(p) === answer.day && (p.club ?? null) === club);
+  return found.length === 1 ? found[0] : null;
+}
+
+/**
+ * The records the held names keep, by the name as the server compares it (`normalName`): for each name
+ * that is held and has a pick, the record `recordForAnswer` finds. A pick for a name not held is
+ * ignored. `reserveNames` holds every other name by name. Pure.
+ */
+export function heldRecordsFor(list: readonly PastPlayer[], names: readonly string[], picks: readonly PastPick[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const held = new Set(names.map((n) => normalName(n)).filter(Boolean));
+  for (const p of picks) {
+    const key = normalName(p.name);
+    if (!held.has(key) || out.has(key)) continue;
+    const record = recordForAnswer(list, p.name, answerOfPick(p));
+    if (record) out.set(key, record.id);
+  }
+  return out;
 }
 
 /** A held place as `keepRecordFor` reads it. */

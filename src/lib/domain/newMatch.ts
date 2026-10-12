@@ -22,7 +22,8 @@ export type Settled = { joined: boolean; held: number; booked: boolean };
  */
 export async function settleNewMatch(
   db: Db,
-  input: { event: Event; organiser: Pick<Player, "id" | "displayName">; joinSelf?: boolean; names?: readonly string[]; booked?: boolean; now?: Date },
+  /** `records`: the past players' records the held names keep, found again on the server (`heldRecordsFor`); every other name is held by name. */
+  input: { event: Event; organiser: Pick<Player, "id" | "displayName">; joinSelf?: boolean; names?: readonly string[]; records?: ReadonlyMap<string, string>; booked?: boolean; now?: Date },
 ): Promise<Settled> {
   const now = input.now ?? new Date();
   const eventId = input.event.id;
@@ -34,7 +35,7 @@ export async function settleNewMatch(
   }
   let held = 0;
   if (input.names?.length) {
-    held = await seatNames(db, { eventId, actorPlayerId: input.organiser.id, names: [...input.names], skipName: input.organiser.displayName, now });
+    held = await seatNames(db, { eventId, actorPlayerId: input.organiser.id, names: [...input.names], skipName: input.organiser.displayName, records: input.records, now });
     // Fixed pairs: the names were typed as pairs, the organiser with the first one.
     if (input.event.fixedPairs) await pairInOrder(db, { eventId }).catch(() => 0);
   }

@@ -239,7 +239,19 @@
     "pasteCheckClub": "Мы взяли клуб вашего прошлого матча. Проверьте его здесь.",
     "pasteCheckDay": "День недели и дата в вашей брони не совпадают. Проверьте день.",
     "inviteShown": "Страница матча покажет вашу ссылку-приглашение. Другие игроки тоже смогут присоединиться к брони в {platform}.",
-    "inviteRemove": "Не показывать эту ссылку"
+    "inviteRemove": "Не показывать эту ссылку",
+    "askPastOne": "Это {name}? Вы играли вместе {day} в {club}.",
+    "askPastOneNoClub": "Это {name}? Вы играли вместе {day}.",
+    "askPastMany": "Какой это {name}? С вами играли несколько игроков с этим именем.",
+    "askPastOption": "Играли {day} в {club}",
+    "askPastOptionNoClub": "Играли {day}",
+    "askPastYes": "Да, это {name}",
+    "askPastNew": "Нет, это другой игрок",
+    "askPastNewSet": "{name}: другой игрок",
+    "askPastChange": "Изменить",
+    "askPastFirst": "Сначала ответьте на вопрос про {name}.",
+    "playedWithYou": "Играли с вами",
+    "keepsRecord": "Матчи {name} сохраняются"
   },
   "share": {
     "title": "Матч создан",

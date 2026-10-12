@@ -70,7 +70,7 @@ import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
 import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
-import { keepRecordFor, pastPlayerRows, pickable } from "@/lib/domain/heldRecord";
+import { keepRecordFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
@@ -404,6 +404,10 @@ async function EventPage({ params, searchParams }: Props) {
   // Every record with a row here, a declined place included: one record holds one place per match.
   const idsHere = new Set([...roster, ...waitlist].flatMap((s) => (s.playerId ? [s.playerId] : [])));
   const playedWithYou = pickable(pastPlayers, { ids: idsHere, names: namesHere });
+  // "Is this Danny, who played with you on Sep 13 at Kross Padel?" before a typed or pasted name is held
+  // (the owner, 12 October 2026): names, days and clubs only, the records here left out. One array for
+  // every open spot and the paste box, so the page carries it once.
+  const pastAsk = pastViews(pastPlayers, idsHere);
   const playedKeys = new Set(playedWithYou.map((n) => n.trim().toLowerCase()));
   // The same person twice would be two chips of one name: a past player's chip stands for them.
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()) && !playedKeys.has(r.name.trim().toLowerCase()));
@@ -534,6 +538,7 @@ async function EventPage({ params, searchParams }: Props) {
                 hasIdentity={Boolean(me)}
                 rolodex={viewer.isCreator ? rolodexForBrowser(rolodex, { namesAlone }) : []}
                 played={viewer.isCreator ? playedWithYou : []}
+                past={viewer.isCreator ? pastAsk : []}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
@@ -942,7 +947,7 @@ async function EventPage({ params, searchParams }: Props) {
             manageUrl={organiserManageUrl}
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
-            paste={!cancelled && !over ? { namesHere, spots: spotsLeft } : null}
+            paste={!cancelled && !over ? { namesHere, spots: spotsLeft, past: pastAsk } : null}
           />
         )}
 

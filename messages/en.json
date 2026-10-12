@@ -239,7 +239,19 @@
     "pasteCheckClub": "We took the club of your last match. Check it here.",
     "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day.",
     "inviteShown": "The match page shows your invite link. Other players can then join the booking on {platform} too.",
-    "inviteRemove": "Don't show this link"
+    "inviteRemove": "Don't show this link",
+    "askPastOne": "Is this {name}, who played with you on {day} at {club}?",
+    "askPastOneNoClub": "Is this {name}, who played with you on {day}?",
+    "askPastMany": "Which {name} is it? More than one played with you.",
+    "askPastOption": "Played {day} at {club}",
+    "askPastOptionNoClub": "Played {day}",
+    "askPastYes": "Yes, that's {name}",
+    "askPastNew": "No, someone new",
+    "askPastNewSet": "{name}: someone new",
+    "askPastChange": "Change",
+    "askPastFirst": "Answer the question about {name} first.",
+    "playedWithYou": "Played with you",
+    "keepsRecord": "Keeps {name}'s matches"
   },
   "share": {
     "title": "Your match is live",
