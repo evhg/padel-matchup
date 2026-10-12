@@ -360,7 +360,9 @@
     "playAgainNext": "Следующая игра: {when} · {code}",
     "playAgainLands": "В этот день и час нажатие откроет эту игру. Вторую оно не создаст.",
     "bookAndPayOn": "Забронировать и оплатить в {platform}",
-    "checkoutSignIn": "{platform} может сначала попросить войти."
+    "checkoutSignIn": "{platform} может сначала попросить войти.",
+    "courtBookedUndoShort": "Отменить",
+    "courtBookedUndoLabel": "Отметить, что корт не забронирован"
   },
   "creator": {
     "tools": "Инструменты организатора",

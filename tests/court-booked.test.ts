@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
@@ -9,8 +10,10 @@ import { DELETED_PLAYER_NAME } from "@/lib/domain/result";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
 import { renderCard } from "@/lib/telegram/card";
+import { CourtBooking } from "@/components/CourtBooking";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
+import { renderIn } from "./helpers/render";
 
 /**
  * "I booked it": a player in the match booked and paid in the club's own app, and one tap tells the
@@ -123,5 +126,29 @@ describe("court booked", () => {
     await setCourtBooked(db, d, ana.id, true, NOW);
     await updateEvent(db, d.event.id, olga.id, { venueName: "rawai padel" });
     expect(courtBookedBy(await fresh(d.event.code))?.name).toBe("Ana");
+  });
+});
+
+/**
+ * The owner, 12 October 2026, on TDsv at 390 px: "the not booked button looks confusing". "Court booked ✓
+ * (by Erik)" stood beside a button that said "Not booked", which read as a second status. The way back
+ * is now an action that says what it does: a small "Undo" whose name is "Mark the court as not booked".
+ * "I booked it" stays the other state's button. Any player of the match may still take it back.
+ */
+describe("the court's line on the match page", () => {
+  const page = (props: Parameters<typeof CourtBooking>[0]) => renderIn("en", createElement(CourtBooking, props));
+
+  it("booked: the undo says what it does, and nothing on the line reads as a second status", () => {
+    const html = page({ code: "TDSV", book: null, slotLine: "", booked: { name: "Erik" }, canMark: true });
+    expect(html).toContain("Court booked ✓ (by Erik)");
+    expect(html).toMatch(/<button[^>]*aria-label="Mark the court as not booked"[^>]*>Undo<\/button>/);
+    expect(html).not.toContain("Not booked");
+  });
+
+  it("not booked: \"I booked it\" stays the button, and a viewer with no seat sees the booked line alone", () => {
+    expect(page({ code: "TDSV", book: null, slotLine: "", booked: null, canMark: true })).toContain(">I booked it<");
+    const viewer = page({ code: "TDSV", book: null, slotLine: "", booked: { name: "Erik" }, canMark: false });
+    expect(viewer).toContain("Court booked ✓ (by Erik)");
+    expect(viewer).not.toContain("<button");
   });
 });
