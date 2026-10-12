@@ -137,7 +137,7 @@ describe("passkeys in the database", () => {
     const keep = await makePlayer(db, "Fay");
     const drop = await makePlayer(db, "Fay");
     const pk = await key(drop.id);
-    await mergePlayers(db, keep.id, [drop.id]);
+    await mergePlayers(db, keep.id, [drop.id], { door: "operator" });
     expect(await playerRow(drop.id)).toBeUndefined();
     expect((await db.select().from(passkeys).where(eq(passkeys.id, pk.id)))[0]?.playerId).toBe(keep.id);
   });
@@ -177,8 +177,11 @@ describe("passkeys in the database", () => {
     const pk = await key(ana.id);
     const newAna = await makePlayer(db, "Ana");
     const ev = await match([newAna]);
-    const res = await completePasskeySignIn(db, { passkey: pk, newCounter: 3, session: { playerId: newAna.id, byName: false }, now: NOW });
+    // The fold counts itself by its door, through the counter a request hands in (`mergesLater` in the action).
+    const told: [string, number][] = [];
+    const res = await completePasskeySignIn(db, { passkey: pk, newCounter: 3, session: { playerId: newAna.id, byName: false }, now: NOW, counter: async (door, records) => void told.push([door, records]) });
     expect(res).toMatchObject({ ok: true, folded: true });
+    expect(told).toEqual([["passkey", 1]]);
     expect(res.ok && res.player.id).toBe(ana.id);
     expect(await playerRow(newAna.id)).toBeUndefined();
     // The seat came across: one Ana in the match, and it is the passkey's record.
@@ -208,16 +211,19 @@ describe("passkeys in the database", () => {
   const signInOver = async (current: { id: string }, byName = false) => {
     const owner = await makePlayer(db, "Cy", { email: `cy${++n}@example.com` });
     const pk = await key(owner.id);
-    const res = await completePasskeySignIn(db, { passkey: pk, newCounter: 0, session: { playerId: current.id, byName }, now: NOW });
-    return { res, owner, stays: Boolean(await playerRow(current.id)) };
+    const told: [string, number][] = [];
+    const res = await completePasskeySignIn(db, { passkey: pk, newCounter: 0, session: { playerId: current.id, byName }, now: NOW, counter: async (door, records) => void told.push([door, records]) });
+    return { res, owner, stays: Boolean(await playerRow(current.id)), told };
   };
 
   it("never folds a record the browser holds by name: the session only switches", async () => {
     const cy = await makePlayer(db, "Cy");
-    const { res, owner, stays } = await signInOver(cy, true);
+    const { res, owner, stays, told } = await signInOver(cy, true);
     expect(res).toMatchObject({ ok: true, folded: false });
     expect(res.ok && res.player.id).toBe(owner.id);
     expect(stays).toBe(true);
+    // No merge, so no merge_passkey.
+    expect(told).toEqual([]);
   });
 
   it("never folds a record that proves or reaches somebody: an email, a push subscription, a passkey of its own", async () => {

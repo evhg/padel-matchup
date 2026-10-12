@@ -748,7 +748,7 @@ describe("Play again", () => {
       expect(await admissionAt(db, ev, pal, NOW)).toBe("unverified");
       expect(await admissionAt(db, ev, low, NOW)).toBe("unverified");
       expect(await admissionAt(db, ev, sure, NOW)).toBe("ok");
-      expect(await join(ev, pal)).toEqual({ kind: "requested" });
+      expect(await join(ev, pal)).toEqual({ kind: "requested", why: "unverified" });
       expect(await join(ev, sure)).toMatchObject({ kind: "joined" });
     });
 
@@ -760,7 +760,7 @@ describe("Play again", () => {
       const other = await makePlayer(db, "Other", { level: 2 });
       await played([org, low]);
       const ev = await ranged(org, { levelVerifiedOnly: true });
-      expect(await join(ev, low)).toEqual({ kind: "requested" });
+      expect(await join(ev, low)).toEqual({ kind: "requested", why: "unverified" });
       expect(await join(ev, other)).toMatchObject({ kind: "requested" });
       // The coach confirms both at 2, outside the range: only the past game with Org lets Low in.
       const lowSure = await confirmLevel(db, { playerId: low.id, level: 2, byPlayerId: coach.id, source: "coach", now: NOW });
@@ -831,7 +831,7 @@ describe("Play again", () => {
       const pal = await makePlayer(db, "Pal", { level: 2 });
       await played([org, pal], {}, { scored: false });
       expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
-      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
+      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested", why: "outside" });
     });
 
     it("counts a match scored at the court, before its booked length is over", async () => {
@@ -857,7 +857,7 @@ describe("Play again", () => {
       const ev = await played([org, pal]);
       await db.update(events).set({ status: "cancelled" }).where(eq(events.id, ev.id));
       expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
-      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
+      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested", why: "outside" });
     });
 
     it("still holds a player when the organiser only waited on the list, or declined the seat", async () => {
@@ -869,7 +869,7 @@ describe("Play again", () => {
       for (const p of [pal, x, y, z, org]) await joinEvent(db, { eventId: full.id, playerId: p.id, now: new Date(LAST.getTime() - HOUR) });
       await db.insert(scores).values([{ eventId: full.id, setNumber: 1, sideA: 6, sideB: 3 }]);
       expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
-      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
+      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested", why: "outside" });
       // Org's seat inside the line-up, but declined: not a taken seat either.
       const other = await makePlayer(db, "Pat", { level: 2 });
       const ev = await played([org, other]);
@@ -904,7 +904,7 @@ describe("Play again", () => {
       const full = await played([org, other, await makePlayer(db, "X"), await makePlayer(db, "Y")]);
       await joinEvent(db, { eventId: full.id, playerId: pal.id, now: new Date(LAST.getTime() - HOUR) });
       expect(await playedWithOrganiser(db, org.id, pal.id, NOW)).toBe(false);
-      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested" });
+      expect(await join(await ranged(org), pal)).toEqual({ kind: "requested", why: "outside" });
     });
 
     it("still asks a player with no level for one: nothing else about levels changes", async () => {
@@ -919,7 +919,7 @@ describe("Play again", () => {
       const host = await makePlayer(db, "Host", { level: 3.25 });
       const pal = await makePlayer(db, "Pal", { level: 2 });
       await played([org, pal]);
-      expect(await join(await ranged(host), pal)).toEqual({ kind: "requested" });
+      expect(await join(await ranged(host), pal)).toEqual({ kind: "requested", why: "outside" });
     });
 
     it("reads nothing for a player the range lets in anyway", async () => {

@@ -3,6 +3,7 @@ import type { Db } from "@/db";
 import { players, type Player } from "@/db/schema";
 import { safeToMerge } from "./dupes";
 import { mergePlayers } from "./merge";
+import type { MergeCounter } from "./signins";
 
 /**
  * The same person in two rows: one that proved who it is, and one of the same name that nobody can
@@ -160,7 +161,7 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
  * match together (`mayClaim`). Returns the ids it folded. Never throws: a proof must not fail
  * because a merge could not run.
  */
-export async function foldSameNameRows(db: Db, playerId: string): Promise<string[]> {
+export async function foldSameNameRows(db: Db, playerId: string, counter?: MergeCounter): Promise<string[]> {
   try {
     const [me] = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
     if (!me || !proved(me)) return [];
@@ -170,7 +171,7 @@ export async function foldSameNameRows(db: Db, playerId: string): Promise<string
       const [other] = await db.select().from(players).where(eq(players.id, r.id)).limit(1);
       if (other && safeToMerge(me, other).ok) ids.push(other.id);
     }
-    if (ids.length) await mergePlayers(db, playerId, ids);
+    if (ids.length) await mergePlayers(db, playerId, ids, { door: "same_name", counter });
     return ids;
   } catch (e) {
     console.warn("[identity] folding same-name rows failed", playerId, e);
@@ -185,14 +186,14 @@ export async function foldSameNameRows(db: Db, playerId: string): Promise<string
  * sat in together first). Returns false when any of that no longer holds, and the row, its
  * memberships and any admin role stay where they were.
  */
-export async function claimSameNameRow(db: Db, playerId: string, rowId: string): Promise<boolean> {
+export async function claimSameNameRow(db: Db, playerId: string, rowId: string, counter?: MergeCounter): Promise<boolean> {
   const [me] = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
   if (!me || !proved(me)) return false;
   const row = (await sameNameRows(db, playerId)).find((r) => r.id === rowId);
   if (!row || !mayClaim(row)) return false;
   const [other] = await db.select().from(players).where(eq(players.id, rowId)).limit(1);
   if (!other || !safeToMerge(me, other).ok) return false;
-  await mergePlayers(db, playerId, [rowId]);
+  await mergePlayers(db, playerId, [rowId], { door: "same_name_claim", counter });
   return true;
 }
 

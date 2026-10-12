@@ -120,7 +120,7 @@ export const sendLocation = (to: string, at: { latitude: number; longitude: numb
  * opens by writing to us; a template is what reaches somebody who has gone quiet, and it is what the
  * daily limit actually counts — Meta's definition is unique numbers messaged *outside* a customer
  * service window, so replies inside one are not counted at all. Counted is not the same as free:
- * since 1 October 2026 Meta charges the replies too (link.ts and docs/OPERATING.md say what is known).
+ * past the first 1,000 a month, Meta charges the replies too (link.ts and docs/OPERATING.md say what is known).
  */
 export const sendTemplate = (to: string, name: string, language: string, params: string[]): Promise<WaResult> =>
   send({

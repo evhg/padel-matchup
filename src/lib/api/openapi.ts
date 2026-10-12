@@ -111,11 +111,11 @@ export function openapiDocument(base: string) {
           tags: ["matches"],
           operationId: "joinMatch",
           summary: "Join a match by name (or by an existing personal token)",
-          description: "Outcomes: joined, waitlisted, already_in, full, or requested when the player's level is outside the match's range, or declared but unconfirmed on a match that takes confirmed levels only (the organizer approves on the match page; a coach's or the club's confirmation seats the player). A player who already played a finished, scored match with the organizer is never held by that organizer's range.",
+          description: "Outcomes: joined, waitlisted, already_in, full, or requested when the player's level is outside the match's range, or declared but unconfirmed on a match that takes confirmed levels only (the organizer approves on the match page; a coach's or the club's confirmation seats the player). A player who already played a finished, scored match with the organizer is never held by that organizer's range. A place the organizer holds for the same name (\"Danny\") refuses the join with 409 name_held, and nothing is written: if it is that person, they take the place on the match page; if not, they join with a fuller name, such as a last name.",
           security: [{}, { bearer: [] }],
           parameters: [{ name: "code", in: "path", required: true, schema: { type: "string" } }],
           requestBody: jsonBody(ref("JoinMatch")),
-          responses: { "200": jsonResponse("Result", ref("JoinMatchResult")), "404": jsonResponse("No such match", ref("Error")), ...errors },
+          responses: { "200": jsonResponse("Result", ref("JoinMatchResult")), "404": jsonResponse("No such match", ref("Error")), "409": jsonResponse("A place is held for this name (name_held), or the match is over or called off", ref("Error")), ...errors },
         },
       },
       "/api/v1/boards/{slug}": {

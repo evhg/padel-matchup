@@ -17,6 +17,7 @@ import { slugFrom } from "@/lib/translit";
 import { DomainError } from "./errors";
 import { LEVEL_MAX, LEVEL_MIN } from "./levels";
 import { mergePlayers } from "./merge";
+import type { MergeCounter } from "./signins";
 import { bumpMetric } from "./metrics";
 import { createPlayer, getPlayer, normalizeName } from "./players";
 
@@ -380,7 +381,7 @@ export async function setPairPaid(db: Db, input: { pairId: string; organizerPlay
  * account (every pair it was in moves with it) and the token is spent. Their own partner cannot
  * claim their spot, and a spot already claimed is nobody's to claim again.
  */
-export async function claimPartnerSpot(db: Db, input: { token: string; playerId: string }): Promise<CompetitionPair> {
+export async function claimPartnerSpot(db: Db, input: { token: string; playerId: string; counter?: MergeCounter }): Promise<CompetitionPair> {
   const token = input.token.trim().toLowerCase();
   if (!token) throw new DomainError("not_found", "token");
   const [pair] = await db.select().from(competitionPairs).where(eq(competitionPairs.claimToken, token)).limit(1);
@@ -391,7 +392,7 @@ export async function claimPartnerSpot(db: Db, input: { token: string; playerId:
     // the same name is fine, the same person twice in one category is not.
     const theirs = await entriesOf(db, pair.competitionId, input.playerId);
     if (theirs.some((e) => e.categoryId === pair.categoryId && e.id !== pair.id)) throw new DomainError("already_in", "partner");
-    await mergePlayers(db, input.playerId, [pair.p2PlayerId]);
+    await mergePlayers(db, input.playerId, [pair.p2PlayerId], { door: "claim", counter: input.counter });
   }
   const [claimed] = await db.update(competitionPairs).set({ claimToken: null }).where(eq(competitionPairs.id, pair.id)).returning();
   return claimed;

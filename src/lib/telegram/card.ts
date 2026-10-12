@@ -17,6 +17,13 @@ export const botLocale = (languageCode: string | null | undefined): BotLocale =>
   return c.startsWith("ru") ? "ru" : c.startsWith("es") ? "es" : "en";
 };
 
+/**
+ * A name inside a toast: Telegram shows at most 200 characters in a tap's answer and refuses a longer
+ * one, and the held-place toast says the name twice. A held name has 40 characters at most; 24 keep
+ * the longest language under the limit (`tests/held-name-doors.test.ts` measures it).
+ */
+const toastName = (name: string) => (name.length > 24 ? `${name.slice(0, 23)}…` : name);
+
 /** Bot copy lives here on purpose: short, two languages, no framework. */
 const STRINGS = {
   en: {
@@ -52,6 +59,14 @@ const STRINGS = {
     toastNotIn: "You weren't in this match.",
     toastLevel: "This match has a level range. Open it once to set your level.",
     toastRequested: "Outside the level range: the organizer will approve.",
+    /**
+     * The tap took the place held for this name (DECIDING rule 34, `takeHeld`): the web's "Take Danny's
+     * held place", and its "Not Danny?" line as a step every chat offers (❌, then the organizer).
+     */
+    toastTookHeld: (name: string, waiting: boolean) =>
+      `${waiting ? "You're on the waitlist." : "✅ You're in."} You took the place held for ${toastName(name)}. Not ${toastName(name)}? Tap ❌ and tell the organizer.`,
+    /** The place held for this name changed between the read and the take: nothing was written, and a second tap reads it again. */
+    toastHeldChanged: (name: string) => `The place held for ${toastName(name)} changed just now. Tap ✅ again.`,
     toastClosed: "The match is full and closed.",
     toastPast: "This match is over.",
     toastError: "Something went wrong. Open the match instead.",
@@ -282,6 +297,9 @@ const STRINGS = {
     toastNotIn: "Вы не были записаны.",
     toastLevel: "У матча есть диапазон уровней. Откройте его один раз и укажите свой уровень.",
     toastRequested: "Вне диапазона уровней: организатор подтвердит.",
+    toastTookHeld: (name: string, waiting: boolean) =>
+      `${waiting ? "Вы в листе ожидания." : "✅ Вы в игре."} Вы заняли место, которое держали для ${toastName(name)}. Не ${toastName(name)}? Нажмите ❌ и напишите организатору.`,
+    toastHeldChanged: (name: string) => `Место для ${toastName(name)} только что изменилось. Нажмите ✅ ещё раз.`,
     toastClosed: "Матч заполнен и закрыт.",
     toastPast: "Матч уже прошёл.",
     toastError: "Что-то пошло не так. Откройте матч.",
@@ -495,6 +513,9 @@ const STRINGS = {
     toastNotIn: "No estabas en este partido.",
     toastLevel: "Este partido tiene un rango de nivel. Ábrelo una vez para poner tu nivel.",
     toastRequested: "Fuera del rango de nivel: el organizador lo aprobará.",
+    toastTookHeld: (name: string, waiting: boolean) =>
+      `${waiting ? "Estás en la lista de espera." : "✅ Estás dentro."} Ocupaste el sitio reservado para ${toastName(name)}. ¿No eres ${toastName(name)}? Toca ❌ y avisa al organizador.`,
+    toastHeldChanged: (name: string) => `El sitio reservado para ${toastName(name)} acaba de cambiar. Toca ✅ otra vez.`,
     toastClosed: "El partido está completo y cerrado.",
     toastPast: "Este partido ya terminó.",
     toastError: "Algo salió mal. Abre el partido.",

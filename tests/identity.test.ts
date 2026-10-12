@@ -79,7 +79,7 @@ describe("merge", () => {
     await joinEvent(db, { eventId: evA.id, playerId: laptop.id }); // both identities in the same match
     await joinEvent(db, { eventId: evC.id, playerId: laptop.id });
 
-    await mergePlayers(db, phone.id, [laptop.id]);
+    await mergePlayers(db, phone.id, [laptop.id], { door: "operator" });
 
     expect((await db.select().from(players).where(eq(players.id, laptop.id))).length).toBe(0);
     const [b] = await db.select().from(events).where(eq(events.id, evB.id));

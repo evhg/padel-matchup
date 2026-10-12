@@ -6,6 +6,7 @@ import { getSessionPlayer, setSessionPlayer } from "@/lib/session";
 import { initDataUser, telegramEnabled, verifyInitData } from "@/lib/telegram/api";
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/bot";
 import { miniAppNext } from "@/lib/telegram/login";
+import { mergesLater } from "@/lib/mergeCount";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   if (!fields || !user) return NextResponse.json({ ok: false, error: "invalid" }, { status: 401 });
   const db = await getDb();
   const me = await getSessionPlayer(db);
-  const player = me ? await linkTelegram(db, me.id, user) : await findOrCreateTelegramPlayer(db, user);
+  const player = me ? await linkTelegram(db, me.id, user, mergesLater(db)) : await findOrCreateTelegramPlayer(db, user);
   // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
   if (!me) await later(() => countSignIn(db, "telegram_miniapp"));

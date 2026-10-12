@@ -18,6 +18,7 @@ import { findOrCreateTelegramPlayer, linkTelegram } from "../identity";
 import { sendPlayerMenu, startBind, startClaim, startStudentInvite } from "../player";
 import { postCard } from "../post";
 import { resultPromptKeyboard } from "./result";
+import { mergesLater } from "@/lib/mergeCount";
 
 /** The private chat's doors: /start and its deep links, /help, /coach, and the commands a role adds to the menu. */
 export const ROLE_COMMANDS = new Set(["lessons", "today", "tomorrow", "week", "low"]);
@@ -94,7 +95,7 @@ export async function startCommand(db: Db, chat: TelegramChat, from: TgUser, cmd
       await sendMessage(chat.chatId, esc(s.coachLinkOther), { silent: true });
       return "coach_link_other";
     }
-    const linked = await linkTelegram(db, target.id, from);
+    const linked = await linkTelegram(db, target.id, from, mergesLater(db));
     // One language, the coach's own, through the whole sequence: the confirmation with the way to the book, then the menu with its buttons, pinned.
     const ls = coachStrings(coachBotLocale(linked.locale));
     const token = await getOrCreatePersonalToken(db, linked.id);

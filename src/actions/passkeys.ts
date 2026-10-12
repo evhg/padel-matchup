@@ -10,6 +10,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { completePasskeySignIn, mayRegister, passkeyById, passkeyLabel, passkeysOf, removePasskey, savePasskey } from "@/lib/domain/passkeys";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { countSignIn } from "@/lib/domain/signins";
+import { mergesLater } from "@/lib/mergeCount";
 import { notifyLineupChange, notifyPromotion, notifyRefill } from "@/lib/notify";
 import { isDomainError } from "@/lib/domain/errors";
 import { answerCredentialId, authenticationOptions, CHALLENGE_COOKIE, challengeCookie, openChallenge, quietPasskeyError, registrationOptions, sealChallenge, spendChallenge, verifyAssertion, verifyRegistration } from "@/lib/passkeys/webauthn";
@@ -125,7 +126,8 @@ export async function passkeySignInAction(answer: unknown): Promise<ActionResult
     if (!checked) return refuse();
     const currentId = await getSessionPlayerId();
     const session = { playerId: currentId, byName: currentId ? await signedInByName(currentId) : false };
-    const res = await completePasskeySignIn(db, { passkey, newCounter: checked.newCounter, session });
+    // A fold counts as `merge_passkey` after the answer (`mergesLater`), never in the path the player waits on.
+    const res = await completePasskeySignIn(db, { passkey, newCounter: checked.newCounter, session, counter: mergesLater(db) });
     if (!res.ok) return refuse();
     if (res.player.id !== currentId || session.byName) await setSessionPlayer(res.player.id);
     // Counted when the cookie changes to another record, as every way in is (`countSignIn`).

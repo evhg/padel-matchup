@@ -7,7 +7,7 @@ import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
 import { confirmInvite, leaveEvent } from "@/lib/domain/slots";
 import { joinWithPolicy, wasComplete } from "@/lib/domain/joining";
-import { afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
+import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
 import { isValidShareCode } from "@/lib/codes";
 import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
 import { rangeChoices } from "@/lib/domain/levelAsk";
@@ -26,6 +26,7 @@ import { readInbound, sendButtons, sendText, type WaContact, type WaInboundMessa
 import { bindInText, codeInJoinText, codeInMatchUrl, verifyBindTicket } from "./link";
 import { findOrCreateWhatsappPlayer, findWhatsappPlayer, linkWhatsapp, sameNumber } from "./identity";
 import { pasteInWhatsapp } from "./paste";
+import { mergesLater } from "@/lib/mergeCount";
 
 /**
  * The conversation. One person, one thread, and the whole of a player's loop inside it: see the
@@ -48,6 +49,10 @@ const S = {
     waitlisted: (when: string) => `The match is full, so you are on the waitlist. ${when}. I will tell you if a spot opens.`,
     already: "You are already in this one.",
     heldRecord: "The organiser holds this place for a player with earlier matches here. Ask the organiser for its link.",
+    /** The JOIN took the place held for this profile's name (`takeHeld`); a different person of the name gets a step this thread offers. */
+    tookHeld: (name: string) => `This is the place the organiser held for ${name}. Not ${name}? Tap "Can't make it" and tell the organiser.`,
+    /** The place held for this name changed between the read and the take: nothing was written. */
+    heldChanged: (name: string, code: string) => `The place held for ${name} changed just now. Send JOIN ${code} again.`,
     left: "You are out. I have told the organiser.",
     notIn: "You are not in this match.",
     full: "It filled up while you were tapping. You are on the waitlist.",
@@ -71,6 +76,8 @@ const S = {
     waitlisted: (when: string) => `Мест нет, вы в листе ожидания. ${when}. Сообщу, если место освободится.`,
     already: "Вы уже записаны сюда.",
     heldRecord: "Организатор держит это место для игрока, который уже играл здесь. Попросите у организатора ссылку на это место.",
+    tookHeld: (name: string) => `Это место организатор держал для ${name}. Не ${name}? Нажмите «Не смогу» и напишите организатору.`,
+    heldChanged: (name: string, code: string) => `Место для ${name} только что изменилось. Пришлите JOIN ${code} ещё раз.`,
     left: "Вы вышли. Организатору сообщил.",
     notIn: "Вас нет в этом матче.",
     full: "Место заняли, пока вы нажимали. Вы в листе ожидания.",
@@ -94,6 +101,8 @@ const S = {
     waitlisted: (when: string) => `Está completo, así que estás en la lista de espera. ${when}. Te aviso si se libera una plaza.`,
     already: "Ya estás en este.",
     heldRecord: "El organizador guarda esta plaza para un jugador que ya jugó aquí. Pide al organizador el enlace de la plaza.",
+    tookHeld: (name: string) => `Es el sitio que el organizador reservó para ${name}. ¿No eres ${name}? Toca «No puedo» y avisa al organizador.`,
+    heldChanged: (name: string, code: string) => `El sitio reservado para ${name} acaba de cambiar. Manda JOIN ${code} otra vez.`,
     left: "Estás fuera. Se lo he dicho al organizador.",
     notIn: "No estás en este partido.",
     full: "Se llenó mientras tocabas. Estás en la lista de espera.",
@@ -171,8 +180,8 @@ async function askLevel(to: string, detail: EventDetail, locale: Locale): Promis
 /**
  * A `LINK-` code from the match page's "stay updated" card: this number becomes the web player's, and
  * the answer is their match and their calendar. It is a reply to the message the player just sent, so
- * it needs no template and goes inside the 24-hour window, like every other answer here; since 1
- * October 2026 Meta charges it, as it charges every reply (link.ts says what is known of the price).
+ * it needs no template and goes inside the 24-hour window, like every other answer here: a service
+ * message, free for the first 1,000 a month and charged after that (link.ts says what is known of the price).
  * It runs before the number is looked up, because looking it up creates a player for a new number, and
  * a linked number must not leave a second one behind.
  */
@@ -187,7 +196,7 @@ async function bindFromPage(db: Db, from: string, bind: { ticket: string; code: 
     await sendText(from, s.linkBad);
     return "wa:link_bad";
   }
-  const linked = already ? target : await linkWhatsapp(db, target.id, from);
+  const linked = already ? target : await linkWhatsapp(db, target.id, from, mergesLater(db));
   if (!already) await bumpMetric(db, "stay_linked_whatsapp").catch(() => undefined);
   const detail = bind.code ? await getEventByCode(db, bind.code) : null;
   const match = detail ? `${whenOf(detail, locale)}${detail.event.venueName ? ` · ${detail.event.venueName}` : ""}\n${baseUrl()}/${detail.event.code}` : null;
@@ -299,7 +308,7 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   if (heldForMe) {
     // A place that keeps another player's record refuses the number (`held_record`): the thread says so
     // and stops, because the JOIN below would seat this number a second time beside that place.
-    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from }).catch((e: unknown) => (isDomainError(e) && e.message === "held_record" ? ("held_record" as const) : null));
+    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from, counter: mergesLater(db) }).catch((e: unknown) => (isDomainError(e) && e.message === "held_record" ? ("held_record" as const) : null));
     if (res === "held_record") {
       await sendText(msg.from, s.heldRecord);
       return "wa:held_record";
@@ -326,7 +335,13 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
 
   // JOIN, the "I'm in" tap, and a level just chosen: the seat, through the domain's own rules.
   try {
-    const decision = await joinWithPolicy(db, detail, player, player.level);
+    // A place held for this profile's name (DECIDING rule 34) is taken by the JOIN (`takeHeld`): the
+    // match link would open a browser that knows nobody, where the take makes a second record.
+    const decision = await joinWithPolicy(db, detail, player, player.level, null, { takeHeld: true });
+    if (decision.kind === "name_held") {
+      await sendText(msg.from, s.heldChanged(decision.name, code));
+      return "wa:name_held";
+    }
     if (decision.kind === "level_required") {
       await askLevel(msg.from, detail, locale);
       return "wa:level_required";
@@ -339,10 +354,17 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
     }
     const out = decision.result;
     const now = (await getEventByCode(db, code)) ?? detail;
+    const whose = decision.took ? `\n${s.tookHeld(decision.took)}` : "";
     if (out.outcome === "already_in") await showSeat(msg.from, now, locale, s.already);
     else if (out.outcome === "full") await sendText(msg.from, s.full);
-    else if (out.outcome === "waitlisted") await showSeat(msg.from, now, locale, s.waitlisted(whenOf(now, locale)));
-    else await showSeat(msg.from, now, locale, s.joined(`${whenOf(now, locale)}${whereOf(now)}`, spotsLeft(now)));
+    else if (out.outcome === "waitlisted") await showSeat(msg.from, now, locale, s.waitlisted(whenOf(now, locale)) + whose);
+    else await showSeat(msg.from, now, locale, s.joined(`${whenOf(now, locale)}${whereOf(now)}`, spotsLeft(now)) + whose);
+    if (decision.took && (out.outcome === "joined" || out.outcome === "waitlisted")) {
+      // As the web's take: the organiser hears "Danny confirmed", and the take is counted.
+      await afterConfirm(db, out, player, { wasComplete: before }).catch(() => undefined);
+      await bumpMetric(db, "held_by_name").catch(() => undefined);
+      return "wa:took_held";
+    }
     if (out.outcome === "joined" || out.outcome === "waitlisted") {
       await afterJoin(db, out, player, { wasComplete: before, code, level: player.level }).catch(() => undefined);
     }

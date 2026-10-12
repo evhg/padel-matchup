@@ -4,6 +4,7 @@ import { players, type Player } from "@/db/schema";
 import { mergePlayers } from "@/lib/domain/merge";
 import { createPlayer, normalizePhone } from "@/lib/domain/players";
 import { foldSameNameRows } from "@/lib/domain/sameName";
+import type { MergeCounter } from "@/lib/domain/signins";
 
 /**
  * Who is on the other end of a WhatsApp thread.
@@ -57,17 +58,17 @@ export async function findOrCreateWhatsappPlayer(db: Db, waId: string, profileNa
  * with more history survives (`recordToKeep`). No row is created on the way, so linking never makes a
  * second player, and the caller's player id is still the one that holds the number afterwards.
  */
-export async function linkWhatsapp(db: Db, playerId: string, waId: string): Promise<Player> {
+export async function linkWhatsapp(db: Db, playerId: string, waId: string, counter?: MergeCounter): Promise<Player> {
   const { plus, digits } = shapes(waId);
   const others = await db
     .select({ id: players.id })
     .from(players)
     .where(and(inArray(players.phone, [plus, digits]), ne(players.id, playerId)));
-  if (others.length > 0) await mergePlayers(db, playerId, others.map((o) => o.id));
+  if (others.length > 0) await mergePlayers(db, playerId, others.map((o) => o.id), { door: "whatsapp", counter });
   const [p] = await db.update(players).set({ phone: plus }).where(eq(players.id, playerId)).returning();
   // Not proof on its own: `proved()` counts a verified email or a Telegram account, never a phone, so
   // this folds the same-name rows only of a player who proved themselves another way. Whether a number
   // that wrote to us should count is the owner's decision, open since 10 October 2026. Never throws.
-  await foldSameNameRows(db, p.id);
+  await foldSameNameRows(db, p.id, counter);
   return p;
 }

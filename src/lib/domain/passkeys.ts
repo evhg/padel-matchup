@@ -5,6 +5,7 @@ import { browserClass } from "./browserClass";
 import { safeToMerge, type MergeCandidate } from "./dupes";
 import { recordFact } from "./facts";
 import { mergePlayers } from "./merge";
+import type { MergeCounter } from "./signins";
 import { isDeletedPlayer } from "./result";
 import { heldBack, settleFoldSeats, thatsMeRows, type SeatChange, type ThatsMeMatch, type ThatsMeRefusal } from "./thatsMe";
 
@@ -165,9 +166,10 @@ export type PasskeySignIn = { ok: true; player: Player; folded: boolean; seats: 
  * move, and the browser becomes the passkey's own record. When `passkeyFold` says so, the record the
  * browser held before folds into it: where both hold a place in one match, the passkey's record keeps
  * the better one and the other goes the way a leave goes (`settleFoldSeats`), then `mergePlayers`,
- * never `proved`. A deleted or vanished record answers no. The fact `player.passkey` holds no name.
+ * never `proved`, counted as `merge_passkey` through the `counter` the request hands in (`mergesLater`).
+ * A deleted or vanished record answers no. The fact `player.passkey` holds no name.
  */
-export async function completePasskeySignIn(db: Db, input: { passkey: Passkey; newCounter: number; session: PasskeySession; now?: Date }): Promise<PasskeySignIn> {
+export async function completePasskeySignIn(db: Db, input: { passkey: Passkey; newCounter: number; session: PasskeySession; now?: Date; counter?: MergeCounter }): Promise<PasskeySignIn> {
   const now = input.now ?? new Date();
   const [owner] = await db.select().from(players).where(eq(players.id, input.passkey.playerId)).limit(1);
   if (!owner || isDeletedPlayer(owner)) return { ok: false };
@@ -190,7 +192,7 @@ export async function completePasskeySignIn(db: Db, input: { passkey: Passkey; n
       const change = await settleFoldSeats(db, String(id), owner.id, current.id);
       if (change) seats.push(change);
     }
-    await mergePlayers(db, owner.id, [current.id]);
+    await mergePlayers(db, owner.id, [current.id], { door: "passkey", counter: input.counter });
   }
   await recordFact(db, { kind: "player.passkey", channel: "web", actorPlayerId: owner.id, subject: { type: "player", id: owner.id }, data: { folded: verdict.fold }, at: now });
   const [fresh] = await db.select().from(players).where(eq(players.id, owner.id)).limit(1);
