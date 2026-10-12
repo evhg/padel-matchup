@@ -21,6 +21,7 @@ import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
 import type { BackInDoors } from "@/components/BackInHelp";
+import { BackInOpener } from "@/components/BackInOpener";
 import { RememberPhone } from "@/components/RememberPhone";
 import { TelegramReturn } from "@/components/TelegramLogin";
 import { hasPasskey, mayRegister } from "@/lib/domain/passkeys";
@@ -568,6 +569,7 @@ async function EventPage({ params, searchParams }: Props) {
                 heldForMe={heldForMe}
                 levelRange={ranged ? levelRange : null}
                 myLevel={me?.level ?? null}
+                myName={me?.displayName ?? null}
                 backIn={backIn}
               />
             )}
@@ -912,14 +914,17 @@ async function EventPage({ params, searchParams }: Props) {
             to prove it (DECIDING rule 34); this fold is the way for one that can prove itself. Closed
             by default, so a real first-timer reads one line and the name field above is untouched.
             Since 12 October 2026 (passkeys, DECIDING rule 39) the same doors stand open under the name
-            field of the join form itself (`BackInHelp`), so this line stays only where the page has no
-            join form for this viewer.
+            field of the join form itself (`BackInHelp`), so this fold stays only where the page has no
+            join form for this viewer. Where it has one, a closed line stands here instead, "Played before?
+            Sign in", which opens the join form and its help: a player seated from another browser needs
+            no Join to find the way back in.
           */}
           {!me && !joinFormHere && (
             <div data-testid="event-back-in">
               <ReturningPlayer collapsed />
             </div>
           )}
+          {joinFormHere && <BackInOpener label={t("identity.backInOpen")} doorsOn={Boolean(backIn?.email || backIn?.telegram)} />}
           {/* Back from Telegram: the button lives in the join form, which is closed on load, so the return is read here. */}
           {joinFormHere && backIn?.telegram && <TelegramReturn authUrl={backIn.telegram.authUrl} />}
           {me && me.email && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (

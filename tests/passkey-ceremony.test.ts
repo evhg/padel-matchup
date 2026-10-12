@@ -1,12 +1,12 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createHash, generateKeyPairSync, randomBytes, sign, type KeyObject } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
 import { metricsDaily, passkeys, players, type Player } from "@/db/schema";
 import { passkeySaveAction, passkeySaveOptionsAction, passkeySignInAction, passkeySignInOptionsAction, removePasskeyAction } from "@/actions/passkeys";
 import { createPlayer } from "@/lib/domain/players";
 import { dayKey } from "@/lib/domain/metrics";
-import { CHALLENGE_COOKIE, openChallenge, passkeyUserId, relyingParty, sealChallenge } from "@/lib/passkeys/webauthn";
+import { CHALLENGE_COOKIE, CHALLENGE_TTL_MS, openChallenge, passkeyUserId, relyingParty, sealChallenge } from "@/lib/passkeys/webauthn";
 import { passkeyHandle, PLAYER_COOKIE, sealPlayerId, unsealPlayerId } from "@/lib/session";
 import { asAction } from "./helpers/action";
 
@@ -75,15 +75,17 @@ function newPhoneKey(): PhoneKey {
   return { privateKey, id: randomBytes(16), cose };
 }
 
-type Ceremony = { origin?: string; rpID?: string; uv?: boolean; type?: string };
+/** `authId`: the credential id written inside the authenticator data, when a crafted answer names another one there than its own `id`. */
+type Ceremony = { origin?: string; rpID?: string; uv?: boolean; type?: string; authId?: Buffer };
 
 /** What `navigator.credentials.create` returns for this key: attestation "none", the challenge and the origin in the client data. */
 function registration(k: PhoneKey, challenge: string, o: Ceremony = {}) {
   const rp = relyingParty();
   const flags = UP | (o.uv === false ? 0 : UV) | BE | BS | AT;
+  const inData = o.authId ?? k.id;
   const idLen = Buffer.alloc(2);
-  idLen.writeUInt16BE(k.id.length);
-  const authData = Buffer.concat([sha256(o.rpID ?? rp.rpID), Buffer.from([flags]), counterBytes(0), Buffer.alloc(16), idLen, k.id, k.cose]);
+  idLen.writeUInt16BE(inData.length);
+  const authData = Buffer.concat([sha256(o.rpID ?? rp.rpID), Buffer.from([flags]), counterBytes(0), Buffer.alloc(16), idLen, inData, k.cose]);
   const attestationObject = cbor(
     new Map<string, unknown>([
       ["fmt", "none"],
@@ -170,7 +172,7 @@ describe("the passkey ceremony, with real signatures", () => {
     expect(o.attestation).toBe("none");
     expect(o.excludeCredentials).toEqual([]);
     // The challenge rides in a cookie sealed for this purpose and this player only.
-    expect(openChallenge(cookies[CHALLENGE_COOKIE], "register", ana.id)).toBe(o.challenge);
+    expect(openChallenge(cookies[CHALLENGE_COOKIE], "register", ana.id)?.challenge).toBe(o.challenge);
     expect(openChallenge(cookies[CHALLENGE_COOKIE], "signin", null)).toBeNull();
   });
 
@@ -236,7 +238,7 @@ describe("the passkey ceremony, with real signatures", () => {
     expect(result.data.allowCredentials ?? []).toEqual([]);
     expect(result.data.userVerification).toBe("required");
     expect(result.data.rpId).toBe(relyingParty().rpID);
-    expect(openChallenge(cookies[CHALLENGE_COOKIE], "signin", null)).toBe(result.data.challenge);
+    expect(openChallenge(cookies[CHALLENGE_COOKIE], "signin", null)?.challenge).toBe(result.data.challenge);
   });
 
   it("signs a browser that knows nobody in as the passkey's record, with a full session", async () => {
@@ -330,6 +332,122 @@ describe("the passkey ceremony, with real signatures", () => {
     expect(done.result).toEqual({ ok: true, data: { name: "Ana", folded: false } });
     expect(done.cookies[PLAYER_COOKIE]).toBe(sealPlayerId(ana.id));
     expect(await exists(byNameAna.id)).toBe(true);
+  });
+
+  it("refuses a challenge used again after midnight UTC: the spend belongs to the challenge, not to the day", async () => {
+    // A synced passkey (Apple, Google) reports 0 on every use, so its counter cannot stop a replay; the
+    // spend is the only guard. It was a rate row of the day of the attempt, so a copy of the cookie and
+    // the answer sent again after 00:00 UTC, inside the cookie's five minutes, met a fresh row and passed.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2031-03-04T23:57:00Z"));
+      const hal = await createPlayer(db, { displayName: "Hal", locale: "en" });
+      const k = newPhoneKey();
+      expect((await save(signedIn(hal), k)).done?.result.ok).toBe(true);
+      vi.setSystemTime(new Date("2031-03-04T23:58:00Z"));
+      const opts = await asAction({}, () => passkeySignInOptionsAction());
+      if (!opts.result.ok) throw new Error("no options");
+      const cookie = opts.cookies[CHALLENGE_COOKIE];
+      const answer = assertion(k, opts.result.data.challenge, 0);
+      vi.setSystemTime(new Date("2031-03-04T23:59:00Z"));
+      const first = await asAction({ [CHALLENGE_COOKIE]: cookie }, () => passkeySignInAction(answer));
+      expect(first.result).toEqual({ ok: true, data: { name: "Hal", folded: false } });
+      vi.setSystemTime(new Date("2031-03-05T00:01:00Z"));
+      const replay = await asAction({ [CHALLENGE_COOKIE]: cookie }, () => passkeySignInAction(answer));
+      expect(replay.result).toEqual({ ok: false, error: "invalid" });
+      expect(replay.cookies[PLAYER_COOKIE]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens only a challenge cookie the server sealed, and only inside its five minutes", () => {
+    const t0 = new Date("2031-03-06T10:00:00Z");
+    const c = b64(randomBytes(32));
+    const sealed = sealChallenge("signin", c, null, t0);
+    expect(openChallenge(sealed, "signin", null, t0)?.challenge).toBe(c);
+    expect(openChallenge(sealed, "signin", null, new Date(t0.getTime() + CHALLENGE_TTL_MS))?.challenge).toBe(c);
+    // One millisecond past the five minutes.
+    expect(openChallenge(sealed, "signin", null, new Date(t0.getTime() + CHALLENGE_TTL_MS + 1))).toBeNull();
+    const [v, purpose, who, exp, , sig] = sealed.split(".");
+    // A challenge the server never sealed, under the signature of one it did.
+    expect(openChallenge([v, purpose, who, exp, b64(randomBytes(32)), sig].join("."), "signin", null, t0)).toBeNull();
+    // A later expiry under the old signature: an old cookie made young again.
+    expect(openChallenge([v, purpose, who, String(Number(exp) + 3_600_000), c, sig].join("."), "signin", null, t0)).toBeNull();
+    // The signature with its first character changed. (Not the last: in base64url the last character
+    // of 32 bytes carries two bits nobody reads, so some changes there decode to the same bytes.)
+    expect(openChallenge([v, purpose, who, exp, c, (sig[0] === "A" ? "B" : "A") + sig.slice(1)].join("."), "signin", null, t0)).toBeNull();
+    // A signature of the right length that the server never made.
+    expect(openChallenge([v, purpose, who, exp, c, b64(randomBytes(32))].join("."), "signin", null, t0)).toBeNull();
+  });
+
+  it("refuses a sign-in whose cookie is past its five minutes, or was made young again", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2031-03-07T10:00:00Z"));
+      const ivy = await createPlayer(db, { displayName: "Ivy", locale: "en" });
+      const k = newPhoneKey();
+      expect((await save(signedIn(ivy), k)).done?.result.ok).toBe(true);
+      const opts = await asAction({}, () => passkeySignInOptionsAction());
+      if (!opts.result.ok) throw new Error("no options");
+      const cookie = opts.cookies[CHALLENGE_COOKIE];
+      // A good answer, captured with its cookie and never used.
+      const answer = assertion(k, opts.result.data.challenge, 0);
+      vi.setSystemTime(new Date(Date.parse("2031-03-07T10:00:00Z") + CHALLENGE_TTL_MS + 1_000));
+      const late = await asAction({ [CHALLENGE_COOKIE]: cookie }, () => passkeySignInAction(answer));
+      expect(late.result).toEqual({ ok: false, error: "invalid" });
+      expect(late.cookies[PLAYER_COOKIE]).toBeUndefined();
+      // The same cookie with its expiry moved on, the signature left as it was.
+      const parts = cookie.split(".");
+      parts[3] = String(Date.now() + CHALLENGE_TTL_MS);
+      const young = await asAction({ [CHALLENGE_COOKIE]: parts.join(".") }, () => passkeySignInAction(answer));
+      expect(young.result).toEqual({ ok: false, error: "invalid" });
+      expect(young.cookies[PLAYER_COOKIE]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refuses a save whose authenticator data names another passkey than the answer does, with the one plain refusal", async () => {
+    const jo = await createPlayer(db, { displayName: "Jo", locale: "en" });
+    const before = await count("passkey_refused");
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => void logged.push(args.map((a) => (a instanceof Error ? `${a.message} ${String((a as { cause?: unknown }).cause ?? "")}` : String(a))).join(" ")));
+    try {
+      // An id of 3000 bytes inside the signed data, past the 1023 the standard allows; the answer's own id stays 16 bytes.
+      const long = await save(signedIn(jo), newPhoneKey(), { authId: randomBytes(3000) });
+      expect(long.done?.result).toEqual({ ok: false, error: "invalid" });
+      // Another id of a fine length: the row would keep an id the phone never answers with.
+      const other = await save(signedIn(jo), newPhoneKey(), { authId: randomBytes(16) });
+      expect(other.done?.result).toEqual({ ok: false, error: "invalid" });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await rowsOf(jo.id)).toEqual([]);
+    expect(await count("passkey_refused")).toBe(before + 2);
+    expect(logged).toEqual([]);
+  });
+
+  it("logs no credential id and no public key when a passkey query fails", async () => {
+    const kim = await createPlayer(db, { displayName: "Kim", locale: "en" });
+    const k = newPhoneKey();
+    expect((await save(signedIn(kim), k)).done?.result.ok).toBe(true);
+    const opts = await asAction({}, () => passkeySignInOptionsAction());
+    if (!opts.result.ok) throw new Error("no options");
+    const answer = assertion(k, opts.result.data.challenge, 1);
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => void logged.push(args.map((a) => (a instanceof Error ? `${a.message} ${String((a as { cause?: unknown }).cause ?? "")}` : String(a))).join(" ")));
+    // The table out of reach for one call, as a database that does not answer: the read by credential id fails.
+    await db.execute(sql`alter table passkeys rename to passkeys_away`);
+    try {
+      const r = await asAction({ [CHALLENGE_COOKIE]: opts.cookies[CHALLENGE_COOKIE] }, () => passkeySignInAction(answer));
+      expect(r.result).toEqual({ ok: false, error: "generic" });
+    } finally {
+      await db.execute(sql`alter table passkeys_away rename to passkeys`);
+      spy.mockRestore();
+    }
+    expect(logged.length).toBeGreaterThan(0);
+    expect(logged.join("\n")).not.toContain(b64(k.id));
   });
 
   it("removes a player's own passkey by its handle, never another player's", async () => {

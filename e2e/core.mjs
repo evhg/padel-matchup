@@ -305,12 +305,31 @@ try {
   // one week 29 players arrived and 3 joined anything. The way back in existed on the landing page and
   // on My matches, and not on the one screen every shared link opens.
   // Since 12 October 2026 (passkeys, DECIDING rule 39; the owner accepted the routine change) the way
-  // back stands open beside the name field of the join form, not closed under the line-up.
+  // back stands open beside the name field of the join form. Under the line-up one closed line stays,
+  // "Played before? Sign in", which opens that form and its help: a player seated from another browser,
+  // whose record has an email and so no "That's me", needs no Join to find the way back in.
   const w = await newPage();
   await w.goto(`${BASE}/${code}`);
-  check("a stranger's view shows no way back in before Join: no help and no closed line where the join form will open", (await w.getByTestId("back-in-open").count()) === 0 && (await w.getByTestId("event-back-in").count()) === 0);
+  const backInLine = w.getByRole("button", { name: "Played before? Sign in", exact: true });
+  check(
+    "a stranger's view shows the way back in as one closed line under the line-up, before any Join",
+    (await backInLine.count()) === 1 && (await w.getByTestId("back-in-open").count()) === 0 && (await w.getByTestId("event-back-in").count()) === 0,
+  );
+  await backInLine.click();
+  let backInHere = w.getByTestId("back-in-open");
+  await backInHere.waitFor({ timeout: 10000 });
+  // The line steps aside once the help has mounted (an effect after the paint): wait for it, then count.
+  await backInLine.waitFor({ state: "detached", timeout: 5000 }).catch(() => undefined);
+  check(
+    "the line opens the join form with \"Played before?\" open beside the name field, the email asked for on the match page, and steps aside",
+    (await backInHere.getByText("Played before? Get your matches back.").count()) === 1 &&
+      (await w.getByTestId("open-spot-name").first().isVisible()) &&
+      (await backInHere.getByPlaceholder("you@example.com").isVisible()) &&
+      (await backInLine.count()) === 0,
+  );
+  await w.reload();
   await w.getByRole("button", { name: "Join this match" }).click();
-  const backInHere = w.getByTestId("back-in-open");
+  backInHere = w.getByTestId("back-in-open");
   await backInHere.waitFor({ timeout: 10000 });
   check(
     "Join opens the name field with \"Played before?\" open beside it, the email asked for on the match page",

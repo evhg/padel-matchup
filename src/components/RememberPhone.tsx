@@ -67,7 +67,7 @@ export function RememberPhone({ offer }: { offer: boolean }) {
   if (!platform || hidden) return null;
   if (outcome === "saved" || outcome === "already")
     return (
-      <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok" data-testid="remember-phone-done">
+      <p className="mt-3 rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok" data-testid="remember-phone-done">
         ✓ {t(outcome === "saved" ? "identity.rememberDone" : "identity.rememberAlready")}
       </p>
     );
@@ -91,7 +91,7 @@ export function RememberPhone({ offer }: { offer: boolean }) {
   };
 
   return (
-    <section className="rounded-2xl border border-line px-4 py-3" data-testid="remember-phone">
+    <section className="mt-3 rounded-2xl border border-line px-4 py-3" data-testid="remember-phone">
       <h2 className="text-sm font-extrabold">{t("identity.rememberTitle")}</h2>
       <p className="mt-0.5 text-sm text-muted">{t("identity.rememberHelp")}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">

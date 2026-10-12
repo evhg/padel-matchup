@@ -11,7 +11,8 @@ import { completePasskeySignIn, mayRegister, passkeyById, passkeyLabel, passkeys
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { countSignIn } from "@/lib/domain/signins";
 import { notifyLineupChange, notifyPromotion, notifyRefill } from "@/lib/notify";
-import { answerCredentialId, authenticationOptions, CHALLENGE_COOKIE, challengeCookie, openChallenge, registrationOptions, sealChallenge, spendChallenge, verifyAssertion, verifyRegistration } from "@/lib/passkeys/webauthn";
+import { isDomainError } from "@/lib/domain/errors";
+import { answerCredentialId, authenticationOptions, CHALLENGE_COOKIE, challengeCookie, openChallenge, quietPasskeyError, registrationOptions, sealChallenge, spendChallenge, verifyAssertion, verifyRegistration } from "@/lib/passkeys/webauthn";
 import { getSessionPlayer, getSessionPlayerId, passkeyHandle, setSessionPlayer, signedInByName } from "@/lib/session";
 import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from "./shared";
 
@@ -21,8 +22,19 @@ import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from ".
  * door is two calls: the options (a challenge, sealed into a five-minute cookie for its purpose) and
  * the answer (the cookie deleted first, so a challenge is used once, then checked). Both halves count
  * against the caller's address. A refusal of any kind answers `invalid` and nothing more, and counts
- * `passkey_refused`. No credential id, public key or user handle reaches an answer, a page or a log.
+ * `passkey_refused`. No credential id, public key or user handle reaches an answer, a page or a log:
+ * every action runs through `runP`, which hands the error report a failure without the query's values.
  */
+
+/** `runA`, with any failure but a refusal turned into one that names no value (`quietPasskeyError`) before it is reported. */
+const runP = <T>(fn: () => Promise<T>): Promise<ActionResult<T>> =>
+  runA(async () => {
+    try {
+      return await fn();
+    } catch (e) {
+      throw e instanceof ActionFailure || isDomainError(e) ? e : quietPasskeyError(e);
+    }
+  });
 
 /** The session this browser holds: whose, and whether it came in by name (src/lib/session.ts). */
 async function sessionNow() {
@@ -35,19 +47,20 @@ async function sessionNow() {
  * The challenge this browser was given for `purpose`, taken out of its cookie, and spent. Deleting the
  * cookie stops an honest browser using it twice; a copy of the cookie sent again inside its five
  * minutes is stopped by the spend: one rate row per challenge with a limit of one (`spendChallenge`),
- * in `metrics_daily` like every limit, pruned after two days. No table of its own.
+ * dated by the seal's own expiry so that a use after midnight UTC meets the same row, in
+ * `metrics_daily` like every limit, pruned after two days. No table of its own.
  */
 async function takeChallenge(db: Db, purpose: "register" | "signin", playerId: string | null): Promise<string | null> {
   const store = await cookies();
   const sealed = store.get(CHALLENGE_COOKIE)?.value;
   store.delete(CHALLENGE_COOKIE);
-  const challenge = openChallenge(sealed, purpose, playerId);
-  return challenge && (await spendChallenge(db, challenge)) ? challenge : null;
+  const opened = openChallenge(sealed, purpose, playerId);
+  return opened && (await spendChallenge(db, opened)) ? opened.challenge : null;
 }
 
 /** "Remember me on this phone", first half: the options for `navigator.credentials.create`, for a session that may save one (`mayRegister`). */
 export async function passkeySaveOptionsAction(): Promise<ActionResult<PublicKeyCredentialCreationOptionsJSON>> {
-  return runA(async () => {
+  return runP(async () => {
     const { db, me, session } = await sessionNow();
     if (!me || !mayRegister(session, me)) throw new ActionFailure("forbidden");
     await assertRate(db, "passkey_options", await clientKey(), LIMITS.passkeyOptionsPerIpPerDay);
@@ -59,7 +72,7 @@ export async function passkeySaveOptionsAction(): Promise<ActionResult<PublicKey
 
 /** "Remember me on this phone", second half: the phone's new passkey, checked and kept under the browser's own record. */
 export async function passkeySaveAction(answer: unknown): Promise<ActionResult<{ saved: true }>> {
-  return runA(async () => {
+  return runP(async () => {
     const { db, me, session } = await sessionNow();
     if (!me || !mayRegister(session, me)) throw new ActionFailure("forbidden");
     await assertRate(db, "passkey_check", await clientKey(), LIMITS.passkeyChecksPerIpPerDay);
@@ -80,7 +93,7 @@ export async function passkeySaveAction(answer: unknown): Promise<ActionResult<{
 
 /** "Sign in with Face ID or fingerprint", first half: the options for `navigator.credentials.get`, for anybody (the phone offers its own passkeys). */
 export async function passkeySignInOptionsAction(): Promise<ActionResult<PublicKeyCredentialRequestOptionsJSON>> {
-  return runA(async () => {
+  return runP(async () => {
     const db = await getDb();
     await assertRate(db, "passkey_options", await clientKey(), LIMITS.passkeyOptionsPerIpPerDay);
     const options = await authenticationOptions();
@@ -96,7 +109,7 @@ export async function passkeySignInOptionsAction(): Promise<ActionResult<PublicK
  * only switches. Never "Are these yours?": a passkey folds nothing else (the owner: "Nothing more").
  */
 export async function passkeySignInAction(answer: unknown): Promise<ActionResult<{ name: string; folded: boolean }>> {
-  return runA(async () => {
+  return runP(async () => {
     const db = await getDb();
     await assertRate(db, "passkey_check", await clientKey(), LIMITS.passkeyChecksPerIpPerDay);
     const challenge = await takeChallenge(db, "signin", null);
@@ -139,7 +152,7 @@ export async function passkeySignInAction(answer: unknown): Promise<ActionResult
  * there; it then signs in nobody.
  */
 export async function removePasskeyAction(handle: string): Promise<ActionResult<null>> {
-  return runA(async () => {
+  return runP(async () => {
     const { db, me, session } = await sessionNow();
     if (!me) throw new ActionFailure("no_identity");
     // A session by name proved nothing in this browser, so it may not take the real player's way in away either.

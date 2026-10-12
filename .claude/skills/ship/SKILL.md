@@ -218,6 +218,23 @@ learning can be a test, a gate step or a script, make it one and put the story i
   counter could not catch a replay either. The answer now spends the challenge on the server, once
   (`spendChallenge`, a rate row with a limit of one); `tests/passkey-ceremony.test.ts` replays the cookie
   with the same answer and with a fresh signature.
+- **A rate row is a window, not a "once".** That spend was `takeRate(..., "day", now)`, and a rate row
+  belongs to one UTC day, so the same cookie and answer sent again just after 00:00 UTC, inside the
+  five minutes, met a fresh row and signed in again (review, 12 October 2026). The replay test passed
+  because it never crossed a day. A "once" keyed by a rate row dates the row by the thing itself (the
+  seal's own expiry), never by the attempt, and its test crosses midnight (`vi.setSystemTime` to 23:59,
+  then 00:01).
+- **Change a signature in the middle, never its last character.** A test of "a tampered seal is
+  refused" that changes the last character of 32 bytes in base64url can decode to the same bytes,
+  because that character carries two bits nobody reads. The seal then still opens, and the test goes
+  red by chance with the check in place, which invites somebody to weaken it. Flip the first
+  character, or put another value under the old signature.
+- **A library's check of an answer is the library's list, not yours.** `verifyRegistrationResponse`
+  compares the answer's `id` with its `rawId`, never with the credential id inside the signed data,
+  which is the one it hands back. A crafted save with a 3000-byte id there reached the insert, failed
+  as a server error, and put the public key in the log through the query's "params:". Check what you
+  store against what the request said, and give a failed query of a secret a message of its own
+  (`quietPasskeyError`).
 - **Chromium's virtual authenticator counts each use, and a copy of its passkey keeps the old count.**
   `e2e/passkeys.mjs` copies one passkey into three browsers with `WebAuthn.addCredential`, as a phone's
   password manager does. A real synced passkey reports 0 every time; the virtual one goes up, and the

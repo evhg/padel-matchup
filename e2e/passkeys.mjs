@@ -77,6 +77,11 @@ try {
   });
   await a.page.waitForTimeout(500);
   check("a view of the match page sends no call for passkeys", actions === 0 && (await a.page.getByTestId("back-in-open").count()) === 0, `posts=${actions}`);
+  check(
+    "under the line-up, one closed line \"Played before? Sign in\" stands where the fold was",
+    (await a.page.getByTestId("event-back-in").count()) === 0 && (await a.page.getByTestId("event-back-in-line").getByRole("button", { name: "Played before? Sign in", exact: true }).count()) === 1,
+  );
+  await shot(a.page, "passkeys-00-closed-line");
   await a.page.getByRole("button", { name: "Join this match" }).click();
   const help = a.page.getByTestId("back-in-open");
   await help.waitFor({ timeout: 10000 });
@@ -91,7 +96,10 @@ try {
       (await help.getByPlaceholder("you@example.com").isVisible()),
     helpText.slice(0, 160),
   );
-  check("the closed line under the line-up is gone where the join form opens", (await a.page.getByTestId("event-back-in").count()) === 0);
+  check(
+    "beside the open help, neither the closed fold nor the closed line shows under the line-up: one way back in at a time",
+    (await a.page.getByTestId("event-back-in").count()) === 0 && (await a.page.getByTestId("event-back-in-line").count()) === 0,
+  );
   check("the page never says WebAuthn, credential or authenticator", !/webauthn|credential|authenticator/i.test(await a.page.locator("body").innerText()));
   await shot(a.page, "passkeys-01-join-help");
   check("still no call before a tap", actions === 0, `posts=${actions}`);
@@ -105,6 +113,12 @@ try {
     "after the join, a quiet card offers \"Remember me on this phone\", and says what it does",
     ((await offer.innerText()) ?? "").includes("any browser on this phone signs you in with Face ID or fingerprint") && ((await offer.innerText()) ?? "").includes("never sees your face"),
   );
+  // The card stood flush against the card above it (review, 12 October 2026): measure the gap, since a full-page shot puts the fixed bar over that seam.
+  const gap = await offer.evaluate((el) => {
+    const prev = el.previousElementSibling;
+    return prev ? Math.round(el.getBoundingClientRect().top - prev.getBoundingClientRect().bottom) : null;
+  });
+  check("the card stands apart from the card above it", gap === null || gap >= 8, `gap=${gap}px`);
   await shot(a.page, "passkeys-02-offer");
   await offer.getByRole("button", { name: "Remember this phone", exact: true }).click();
   // The confirmation, or the card's own line saying why not: a wait that names what replaced it.
@@ -128,10 +142,11 @@ try {
   await b.cdp.send("WebAuthn.addCredential", { authenticatorId: b.authenticatorId, credential: credentials[0] });
   await b.page.goto(`${BASE}/${code}`);
   check("a second browser on the phone does not know the player", (await b.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 0);
-  await b.page.getByRole("button", { name: "Join this match" }).click();
+  // The player is seated already, so no Join: the closed line under the line-up opens the help.
+  await b.page.getByRole("button", { name: "Played before? Sign in", exact: true }).click();
   await b.page.getByTestId("back-in-open").getByTestId("passkey-signin").click();
   await b.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
-  check("Face ID in the second browser signs it in as the same player, on the plain match link", (await b.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 1);
+  check("Face ID in the second browser, from the closed line with no Join, signs it in as the same player, on the plain match link", (await b.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 1);
   const lineup = await b.page.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
   check("the line-up holds one of them, and the database one record", (lineup.players ?? []).filter((p) => p.name === NAME).length === 1 && (await recordsNamed(NAME)) === 1, JSON.stringify((lineup.players ?? []).map((p) => p.name)));
   const cookies = await b.ctx.cookies();
@@ -154,6 +169,25 @@ try {
   check("and that record holds both places, the old match's and the new one's", seats[0]?.n === 2, JSON.stringify(seats));
   await c.page.goto(`${BASE}/${code2}`);
   check("the third browser is that player on the new match", (await c.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 1);
+
+  // ---- G: a browser that knows nobody, on a match the player is not in yet, signs in from the join form ----
+  const g = await phoneBrowser();
+  await g.cdp.send("WebAuthn.addCredential", { authenticatorId: g.authenticatorId, credential: await heldBy(c) });
+  const code5 = await newMatch(g.page, "Surin Padel");
+  await g.page.goto(`${BASE}/${code5}`);
+  await g.page.getByRole("button", { name: "Join this match" }).click();
+  await g.page.getByTestId("back-in-open").getByTestId("passkey-signin").click();
+  const welcome = g.page.getByTestId("open-spot-welcome");
+  await welcome.waitFor({ timeout: 20000 });
+  check(
+    "signed in from the join form, the open spot says \"Welcome back\" and asks to join, with no level to pick and no name field",
+    ((await welcome.innerText()) ?? "").includes(`Welcome back, ${NAME}! Join this match?`) && (await g.page.getByText("What's your level?").count()) === 0 && (await g.page.getByTestId("open-spot-name").count()) === 0,
+    ((await welcome.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  await shot(g.page, "passkeys-03-welcome-join");
+  await welcome.getByRole("button", { name: "Join", exact: true }).click();
+  await g.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  check("its Join seats the passkey's own record: one record of the name remains", (await recordsNamed(NAME)) === 1);
 
   // ---- D: a session by name ("That's me") is never offered a passkey ----
   const e = await plainBrowser();
@@ -187,7 +221,7 @@ try {
   await a.page.getByTestId("my-phone").waitFor({ state: "detached", timeout: 20000 });
   check("Remove takes the passkey away", Number((await ask(`select count(*)::int as n from passkeys k join players p on p.id = k.player_id where p.display_name = '${NAME}'`))[0]?.n) === 0);
   const f = await phoneBrowser();
-  await f.cdp.send("WebAuthn.addCredential", { authenticatorId: f.authenticatorId, credential: await heldBy(c) });
+  await f.cdp.send("WebAuthn.addCredential", { authenticatorId: f.authenticatorId, credential: await heldBy(g) });
   await f.page.goto(`${BASE}/${code}`);
   await f.page.getByRole("button", { name: "Join this match" }).click();
   await f.page.getByTestId("back-in-open").getByTestId("passkey-signin").click();

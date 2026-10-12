@@ -1086,9 +1086,11 @@ Everything in this list is live. The README describes each in detail.
   and six of the eight active players have an email, so "That's me" never helped them. After a join, a
   quiet card offers "Remember me on this phone"; the phone's password manager keeps a passkey, and
   every browser on the phone can use it. "Played before?" now stands open under the name field of the
-  match page's join form, with "Sign in with Face ID or fingerprint" first and the email code after it.
-  A sign-in signs in the passkey's own record and folds the new record that browser made into it, only
-  when nothing proves or reaches that record and the names agree; a session by name never saves one.
+  match page's join form, with "Sign in with Face ID or fingerprint" first and the email code after it,
+  and a closed line under the line-up, "Played before? Sign in", opens that form and its help, so a
+  player seated from another browser needs no Join. A sign-in signs in the passkey's own record and
+  folds the new record that browser made into it, only when nothing proves or reaches that record and
+  the names agree; a session by name never saves one.
   My matches lists "Phones that remember you" with Remove. Kicksmash keeps a public key, a label and
   two dates, never a face, a fingerprint or a password (`/privacy`). `src/lib/domain/passkeys.ts`,
   `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in

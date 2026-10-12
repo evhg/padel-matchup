@@ -29,6 +29,14 @@ export function BackInHelp({ doors }: { doors: BackInDoors }) {
       }),
     [],
   );
+  // Neither the email code nor Telegram on this deployment (rule 4): Face ID or a fingerprint alone, with
+  // no box and no heading, so a browser that cannot do it meets no empty "Played before?" box.
+  if (!doors.email && !doors.telegram)
+    return (
+      <div ref={box} data-testid="back-in-open" className="mt-3">
+        <PasskeySignIn />
+      </div>
+    );
   return (
     <div ref={box} data-testid="back-in-open" className="mt-3 rounded-2xl border border-line bg-card px-3 py-3">
       <p className="text-sm font-bold">{t("identity.usedBefore")}</p>

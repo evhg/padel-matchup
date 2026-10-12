@@ -18,7 +18,8 @@ import { sessionSecret } from "@/lib/env";
  * its own (`CHALLENGE_COOKIE`), httpOnly, five minutes, signed with the session secret for one purpose
  * (`register` or `signin`) and, for a save, for one player; the action deletes it and spends it
  * (`spendChallenge`) before it checks the answer, so a challenge is used once, also when somebody sends
- * a copy of the cookie again. Nothing here logs a credential id, a public key or a user handle.
+ * a copy of the cookie again. Nothing here logs a credential id, a public key or a user handle, and a
+ * failed query reaches the log without its values (`quietPasskeyError`).
  */
 
 export const RP_NAME = "Kicksmash";
@@ -61,11 +62,14 @@ export function sealChallenge(purpose: CeremonyPurpose, challenge: string, playe
   return `c1.${purpose}.${who}.${exp}.${challenge}.${sig}`;
 }
 
+/** A challenge the server sealed, with the moment its five minutes end: the seal's own value, so every use of one challenge names the same moment. */
+export type OpenedChallenge = { challenge: string; expiresAt: Date };
+
 /**
  * The challenge a cookie holds, when the server sealed it for this purpose and this player and it has
  * not run out; null for anything else (another purpose, another player, a changed or old value).
  */
-export function openChallenge(value: string | null | undefined, purpose: CeremonyPurpose, playerId: string | null, now = new Date()): string | null {
+export function openChallenge(value: string | null | undefined, purpose: CeremonyPurpose, playerId: string | null, now = new Date()): OpenedChallenge | null {
   if (typeof value !== "string" || value.length > 400) return null;
   const parts = value.split(".");
   if (parts.length !== 6 || parts[0] !== "c1" || parts[1] !== purpose) return null;
@@ -80,17 +84,34 @@ export function openChallenge(value: string | null | undefined, purpose: Ceremon
     return null;
   }
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
-  return challenge;
+  return { challenge, expiresAt: new Date(Number(exp)) };
 }
 
 /**
  * Spends a challenge once: true the first time, false for every use after it. A rate row keyed by a
  * hash of the challenge with a limit of one (`takeRate`), so no table and nothing to clean but what the
- * hourly prune already takes (`pruneRateRows`).
+ * hourly prune already takes (`pruneRateRows`, two days on).
+ *
+ * The row's day is the day of the seal's own expiry, never the day of the attempt. A rate row belongs to
+ * one UTC day, and the cookie lives five minutes: with the attempt's day, a copy of the cookie and its
+ * answer sent again just after 00:00 UTC met a fresh row and signed in a second time (review, 12 October
+ * 2026). A synced passkey reports a counter of 0 every time, so the counter could not stop it either.
  */
-export async function spendChallenge(db: Db, challenge: string, now = new Date()): Promise<boolean> {
-  const key = createHash("sha256").update(challenge).digest("base64url").slice(0, 22);
-  return takeRate(db, "passkey_once", key, 1, "day", now);
+export async function spendChallenge(db: Db, opened: OpenedChallenge): Promise<boolean> {
+  const key = createHash("sha256").update(opened.challenge).digest("base64url").slice(0, 22);
+  return takeRate(db, "passkey_once", key, 1, "day", opened.expiresAt);
+}
+
+/**
+ * A failure of a passkey's query, fit for the log: its kind and the database's code, never its message.
+ * A failed query's message carries the query's values ("params: …"), which here are a credential id or
+ * a public key, and the error report logs, stores and alerts on the message.
+ */
+export function quietPasskeyError(e: unknown): Error {
+  const cause = typeof e === "object" && e !== null ? (e as { cause?: { code?: unknown } }).cause : undefined;
+  const code = typeof cause?.code === "string" && /^[0-9A-Z]{5}$/.test(cause.code) ? ` ${cause.code}` : "";
+  const kind = e instanceof Error && /^[A-Z][A-Za-z]{0,40}$/.test(e.constructor.name) ? e.constructor.name : "unknown";
+  return new Error(`passkey step failed: ${kind}${code}`);
 }
 
 /** The challenge cookie's options: httpOnly, secure in production, sameSite lax, five minutes. */
@@ -123,6 +144,9 @@ export async function authenticationOptions(): Promise<PublicKeyCredentialReques
   return generateAuthenticationOptions({ rpID, userVerification: "required", timeout: CHALLENGE_TTL_MS });
 }
 
+/** The ways a phone says it can be reached (WebAuthn's transports: internal, hybrid, usb, nfc, ble, smart-card, cable): lower-case words only. */
+const TRANSPORT = /^[a-z-]{2,20}$/;
+
 /** A passkey the phone made, as the row keeps it. */
 export type NewPasskey = { id: string; publicKey: string; counter: number; transports: string[]; deviceType: string; backedUp: boolean };
 
@@ -133,6 +157,10 @@ const shaped = (v: unknown): boolean => isObject(v) && typeof v.id === "string" 
 /**
  * The phone's answer to a save, checked against the challenge, this app's origin and host, with Face
  * ID or a fingerprint required. Null for anything that does not check out; the reason is never logged.
+ * The id kept is the one inside the signed authenticator data, so it must be the answer's own id and
+ * have the shape of one: the library compares the answer's `id` with its `rawId` only, and a crafted
+ * save with another id, or one of 3000 bytes, inside the data otherwise reached the insert and failed
+ * there, as a server error with the key in its message (review, 12 October 2026).
  */
 export async function verifyRegistration(response: unknown, challenge: string): Promise<NewPasskey | null> {
   if (!shaped(response)) return null;
@@ -147,7 +175,8 @@ export async function verifyRegistration(response: unknown, challenge: string): 
     });
     if (!r.verified) return null;
     const { credential, credentialDeviceType, credentialBackedUp } = r.registrationInfo;
-    const transports = ((response as RegistrationResponseJSON).response.transports ?? credential.transports ?? []).filter((t): t is string => typeof t === "string" && t.length <= 20).slice(0, 8);
+    if (credential.id !== (response as RegistrationResponseJSON).id || !CREDENTIAL.test(credential.id)) return null;
+    const transports = ((response as RegistrationResponseJSON).response.transports ?? credential.transports ?? []).filter((t): t is string => typeof t === "string" && TRANSPORT.test(t)).slice(0, 8);
     return { id: credential.id, publicKey: Buffer.from(credential.publicKey).toString("base64url"), counter: credential.counter, transports, deviceType: credentialDeviceType, backedUp: credentialBackedUp };
   } catch {
     return null;
