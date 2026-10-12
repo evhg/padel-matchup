@@ -2,7 +2,7 @@ import { and, asc, eq, gt, gte, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, facts, slots, telegramCards, type Player, type TelegramChat } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
-import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
+import { joinAsPlayer, leaveAsPlayer, NameHeldError, type OpContext } from "@/lib/api/operations";
 import { feedCalendar, feedKeyFor, feedLinks } from "@/lib/calendarFeed";
 import { chatLocale } from "@/lib/channels/telegram";
 import { baseUrl } from "@/lib/config";
@@ -126,10 +126,12 @@ export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, fro
   // A join finds or creates the player as the ✅ button does; a leave never creates anybody.
   const player = kind === "join" ? await findOrCreateTelegramPlayer(db, from) : await findTelegramPlayer(db, from.id);
   let outcome = "not_in";
+  let held: string | null = null;
   if (player) {
     try {
       outcome = kind === "join" ? (await joinAsPlayer(db, detail, player, ctx)).outcome : (await leaveAsPlayer(db, detail, player, ctx)).outcome;
     } catch (e) {
+      if (e instanceof NameHeldError) held = e.held;
       outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
     }
   }
@@ -137,10 +139,11 @@ export async function seatByWord(db: Db, msg: TgMessage, chat: TelegramChat, fro
   // A waitlist place is not a seat: 🤷 says so, and the card's waitlist line says the rest.
   const emoji = outcome === "joined" || outcome === "already_in" ? REACTION.in : outcome === "left" ? REACTION.out : REACTION.none;
   await setMessageReaction(chat.chatId, msg.message_id, emoji);
-  // A level to set, or a request the organiser must accept: the button's toast, to that person alone (or nobody).
-  if (outcome === "requested" || outcome === "error:level_required") {
+  // A level to set, a request the organiser must accept, or a place held for this name: the button's toast, to that person alone (or nobody).
+  if (outcome === "requested" || outcome === "error:level_required" || held) {
     const s = strings(chatLocale(chat));
-    await sendMessage(chat.chatId, esc(outcome === "requested" ? s.toastRequested : s.toastLevel), { onlyFor: from.id, threadId: msg.message_thread_id ?? null, silent: true });
+    const said = held ? s.toastHeld(held) : outcome === "requested" ? s.toastRequested : s.toastLevel;
+    await sendMessage(chat.chatId, esc(said), { onlyFor: from.id, threadId: msg.message_thread_id ?? null, silent: true });
   }
   if (player) await countSeat(db, "word", outcome, player.id, detail.event);
   if (player && outcome === "joined") await offerCalendar(db, chat, player, from.id, msg.message_thread_id ?? null);

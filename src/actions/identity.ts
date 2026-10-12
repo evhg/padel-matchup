@@ -24,6 +24,7 @@ import { later } from "@/lib/alerts";
 import { countSignIn } from "@/lib/domain/signins";
 import { thatsMe } from "@/lib/domain/thatsMe";
 import { isDeletedPlayer } from "@/lib/domain/result";
+import { mergesLater } from "@/lib/mergeCount";
 
 /** What an identity action tells the browser about its own player. Never the player id: an id once signed anybody in (`restoreIdentity` until 11 October 2026), and nothing on a screen needs it. */
 export type PublicPlayer = { name: string; email: string | null; locale: string };
@@ -122,7 +123,7 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
     const db = await getDb();
     const verified = await consumeEmailCode(db, email, code);
     const currentId = await getSessionPlayerId();
-    const player = await restoreByEmail(db, verified, currentId);
+    const player = await restoreByEmail(db, verified, currentId, undefined, mergesLater(db));
     await setSessionPlayer(player.id);
     if (player.id !== currentId) await later(() => countSignIn(db, "email_code"));
     revalidatePath("/", "layout");
@@ -140,7 +141,7 @@ export async function claimSameNameAction(rowId: string): Promise<ActionResult<n
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
-    if (!/^[0-9a-f-]{36}$/i.test(rowId ?? "") || !(await claimSameNameRow(db, me.id, rowId))) throw new ActionFailure("invalid");
+    if (!/^[0-9a-f-]{36}$/i.test(rowId ?? "") || !(await claimSameNameRow(db, me.id, rowId, mergesLater(db)))) throw new ActionFailure("invalid");
     revalidatePath("/me");
     return null;
   });
@@ -156,7 +157,7 @@ export async function thatsMeAction(code: string, name: string): Promise<ActionR
   return runA(async () => {
     if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
     const db = await getDb();
-    const res = await thatsMe(db, { code, name, viewerId: await getSessionPlayerId(), rateKey: await clientKey() });
+    const res = await thatsMe(db, { code, name, viewerId: await getSessionPlayerId(), rateKey: await clientKey(), counter: mergesLater(db) });
     if (!res.ok) throw new ActionFailure(res.reason === "too_many" ? "too_many" : "invalid");
     await setSessionPlayer(res.player.id);
     // Marked until the record proves something: no personal link for a sign-in by name.

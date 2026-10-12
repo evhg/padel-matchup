@@ -3,7 +3,8 @@ import type { Db } from "@/db";
 import { lineRooms, players, type Player } from "@/db/schema";
 import { postCard, syncCards } from "@/lib/channels/cards";
 import { lineChannel, lineRoomOf, roomLocale } from "@/lib/channels/line";
-import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
+import { joinAsPlayer, leaveAsPlayer, NameHeldError, type OpContext } from "@/lib/api/operations";
+import { ApiError } from "@/lib/api/http";
 import { baseUrl } from "@/lib/config";
 import { isDomainError } from "@/lib/domain/errors";
 import { createPlayer } from "@/lib/domain/players";
@@ -80,8 +81,11 @@ async function handleEvent(db: Db, ev: LineEvent, ctx: OpContext): Promise<strin
         text = r.outcome === "left" ? s.toastLeft : s.toastNotIn;
       }
     } catch (e) {
-      if (!isDomainError(e)) throw e;
-      text = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
+      // A place held for this name, or a level to set: what the Telegram and Discord buttons say.
+      if (e instanceof NameHeldError) text = s.toastHeld(e.held);
+      else if (e instanceof ApiError && e.code === "level_required") text = s.toastLevel;
+      else if (!isDomainError(e)) throw e;
+      else text = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
     }
     // The answer rides the free reply token; the fresh card that follows is the one metered push,
     // and only when the roster actually moved (the algorithm decides, not this handler).

@@ -4,6 +4,7 @@ import type { Db } from "@/db";
 import * as schema from "@/db/schema";
 import { demandSignals, events, players, scores, slots, tournamentRounds } from "@/db/schema";
 import { DomainError } from "./errors";
+import { countMerge, type MergeCounter, type MergeDoor } from "./signins";
 
 /**
  * Every column in the schema that points at a player, with the other columns of each unique key it
@@ -78,11 +79,17 @@ const count = (r: unknown) => (Array.isArray(r) ? r.length : ((r as { rows?: unk
  * personal link with it. A fold by name or a placeholder never passes `proved`: a stranger with the
  * same name must not get a key to the survivor.
  *
+ * `door` names who folded the records, and the merge counts itself as `merge_<door>` once its
+ * transaction is done (`countMerge` in `signins.ts`): through `counter`, which a request hands in so
+ * the count is written after the answer, else at once on `db`. A caller inside a transaction of its
+ * own hands in a counter that waits for that transaction (`confirmInvite`). Returns the number of
+ * records folded.
+ *
  * Crypto-free on purpose so slot code (reachable from client bundles) can import it.
  */
-export async function mergePlayers(db: Db, into: string, from: string[], o: { proved?: boolean } = {}): Promise<void> {
+export async function mergePlayers(db: Db, into: string, from: string[], o: { proved?: boolean; door: MergeDoor; counter?: MergeCounter }): Promise<number> {
   const sources = [...new Set(from)].filter((id) => id !== into);
-  if (sources.length === 0) return;
+  if (sources.length === 0) return 0;
   await db.transaction(async (tx) => {
     const [target] = await tx.select().from(players).where(eq(players.id, into));
     if (!target) throw new DomainError("not_found");
@@ -198,6 +205,8 @@ export async function mergePlayers(db: Db, into: string, from: string[], o: { pr
     await tx.delete(players).where(inArray(players.id, sources));
     if (Object.keys(patch).length) await tx.update(players).set(patch).where(eq(players.id, into));
   });
+  await (o.counter ?? ((door, records) => countMerge(db, door, records)))(o.door, sources.length);
+  return sources.length;
 }
 
 /**

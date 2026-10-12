@@ -126,14 +126,14 @@ counts it: no column records the bot's admin rights. There, such a word also cos
 then the bot does nothing. The update from Telegram does not say whether the group opted in. Discord: 50 requests a second. WhatsApp: 250 unique numbers a day at the
 unverified tier — and the definition is the whole of it, because Meta counts only numbers messaged
 *outside* an open 24-hour window, so only templates to people who have gone quiet spend that limit.
-Counted is not the same as free. A message a player sends us costs nothing. Every message we send
-back inside the window does cost money from 1 October 2026: "Effective October 1, 2026, Meta will
-charge on a per-message basis for service messages", at the rate of a utility message in the
-player's country, with no volume tiers (Meta's page for non-template messages,
-`developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages`,
-read on 10 October 2026). One reseller, 360dialog, reports the first 1,000 service messages a month
-per number free and no delivery for an account with no payment method on file; Meta's own page says
-neither, so neither is a figure to plan on. A WhatsApp join costs us one reply (the seat with the
+Counted is not the same as free. A message a player sends us costs nothing. A message we send back
+inside the window is a service message: Meta's pricing page (checked 12 October 2026) gives the first
+1,000 service messages a month for each business number free, then US$0.0113 each for a Thai (+66)
+number. Utility templates are charged (below). Until 12 October 2026 this page said, from Meta's page
+for non-template messages (read on 10 October 2026), that every reply was charged from 1 October 2026
+and that Meta's own pages gave no free tier; the live pricing page gives the free 1,000. One reseller,
+360dialog, reports no delivery for an account with no payment method on file; Meta's page does not
+say so, so it is not a fact to plan on. A WhatsApp join costs us one reply (the seat with the
 line-up), or two when a ranged match asks the level first; each later tap costs one more. The
 channel is off on this deployment (no `WHATSAPP_TOKEN`), so
 today it costs nothing at all. GitHub Actions: free on a public repository.
@@ -148,8 +148,9 @@ delivers nothing else.
 - **What Meta charges.** Since 1 July 2025 Meta charges per delivered template, by category and by
   the recipient's country (Thailand is in "Rest of Asia Pacific"). A marketing template is charged in
   every window. A utility template inside an open window was free until 30 September 2026; from 1
-  October 2026 it is charged there too, as every reply in the window is (the WhatsApp line under
-  "Ceilings we live under" above). All four of ours are utility, and the code does not track the window: every
+  October 2026 it is charged there too. A plain reply in the window is a service message, and the
+  first 1,000 of those a month are free (the WhatsApp line under "Ceilings we live under" above).
+  All four of ours are utility, and the code does not track the window: every
   template costs one utility message. Read the price per message on Meta's rate card; this page does
   not copy it.
 - **Meta may change the category.** Meta reads each template and can move a utility template to
@@ -181,8 +182,8 @@ browser keeps its own cookies (Safari, Chrome, an app's own browser, the iPhone'
 Which of these makes the second record is a question for the numbers, so these day counters in
 `metrics_daily` answer it. None holds a name, an address or a token. Read them through
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
-current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'join_src_%' or key =
-'thats_me_refused' or key like 'held_by_name%') group by 1 order by 1`.
+current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'merge_%' or key like
+'join_src_%' or key = 'thats_me_refused' or key like 'held_by_name%') group by 1 order by 1`.
 
 - **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
@@ -216,6 +217,15 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   at most 20 taps a day from one address (`thatsMePerIpPerDay`, raised from 10 for a club's Wi-Fi)
   and 3 sign-ins a day into one record from anywhere (`thatsMePerRecordPerDay`). Every counter
   here is written after the answer (`later`), never in the path a person waits on.
+- **Two records that were one person.** `merge_<door>`: the records folded into another record that
+  day, by the door that found them (`MERGE_DOORS` in `src/lib/domain/signins.ts`; since 12 October
+  2026). `merge_operator` (the operator's `POST /api/admin/merge-players`), `merge_email_code` (a code
+  from an address folds every record of that address), `merge_same_name` (at that proof, or a
+  Telegram or WhatsApp link, the same-name rows nobody can reach), `merge_same_name_claim` ("These are
+  mine"), `merge_claim` (a competition partner's claim link), `merge_thats_me` ("That's me" folds the
+  browser's own new record), `merge_held_link` (a held place's link folds a tournament's placeholder),
+  `merge_telegram` and `merge_whatsapp` (an account or a number another record held). Many merges at
+  one door say where duplicates come from. Each is written after the answer, as the sign-in counters.
 - **A held place taken by name.** `held_by_name`: somebody took the place the organiser held for
   their name from the plain match link, in two taps (DECIDING rule 34, 11 October 2026).
   `held_by_name_refused`: a tap the rule turned down. Both taps share the address's 20 a day with

@@ -3,6 +3,7 @@ import type { Event, Player } from "@/db/schema";
 import type { EventDetail } from "@/lib/domain/queries";
 import { lineupComplete } from "@/lib/lineup";
 import { joinGroup } from "./groups";
+import { heldNameFor } from "./heldByName";
 import { hasRange } from "./levels";
 import { joinPair, type PairJoinOutcome } from "./pairSeats";
 import { admissionAt } from "./playAgain";
@@ -19,13 +20,23 @@ import { isHeldPlace, joinEvent } from "./slots";
  *
  * What stays with each caller is what is genuinely theirs: rate limits, the source cookie, page
  * revalidation, and the words used to say what happened.
+ *
+ * Every door meets here: the web's Join (`joinAction`), the WhatsApp thread, and through
+ * `joinAsPlayer` the Telegram ✅ and "+1", the Discord and LINE buttons and `join_match` in the API
+ * and MCP. So a rule a join must keep is written once, here, and no door can forget it.
  */
 
 export type JoinDecision =
+  /**
+   * A place is held for this player's name, and the join would seat a second record of the name beside
+   * it (DECIDING rule 34, `heldNameFor`). Nothing is written. `name` is the held name as the organiser
+   * typed it; each door says it in its own words: take the place on the match page, or add a last name.
+   */
+  | { kind: "name_held"; name: string }
   /** A level range the player has not declared against: the caller must ask before anything happens. */
   | { kind: "level_required" }
-  /** Outside the range, or unconfirmed: the organiser decides, and has been asked. */
-  | { kind: "requested" }
+  /** Outside the range (`outside`), or a declared level on a confirmed-levels-only match (`unverified`): the organiser decides, and has been asked. */
+  | { kind: "requested"; why: "outside" | "unverified" }
   /** In, waitlisted, already in, or it filled — `outcome` says which; `partner` is the named partner's reserved seat on a fixed-pairs night. */
   | { kind: "joined"; result: PairJoinOutcome };
 
@@ -33,9 +44,27 @@ export type JoinDecision =
 export const wasComplete = (detail: { roster: { status: string; position: number }[]; event: { capacity: number } }) =>
   lineupComplete(detail.roster as Parameters<typeof lineupComplete>[0], detail.event.capacity);
 
+/**
+ * The held place this player's join would leave behind for good: a place the organiser holds for the
+ * player's own name, which the player may take by name (`heldVerdict`). A join would seat a second
+ * record of that name beside it, and after that no typed name could take the place
+ * (`seated_namesake`). The held name, or null. Pure, over the rows the join read already: the
+ * organiser, a player already in the match, a fixed-pairs night and a match that is over or called
+ * off are never refused here, by the same rule the web's join asks (`whoJoins`).
+ */
+export function heldNameOf(detail: Pick<EventDetail, "event" | "roster" | "waitlist">, player: Pick<Player, "id" | "displayName">, now = new Date()): string | null {
+  const seats = [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
+  return heldNameFor(detail.event, seats, { id: player.id, name: player.displayName }, null, now);
+}
+
 /** `partnerName`: a fixed-pairs night only, the partner who signs up with the player (`joinPair`). */
-export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player, level: number | null, partnerName?: string | null): Promise<JoinDecision> {
+export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player, level: number | null, partnerName?: string | null, now = new Date()): Promise<JoinDecision> {
   const ev = detail.event;
+  // A place held for this name (DECIDING rule 34): refused before the range, the request or the seat,
+  // so nothing is written. The web asked the same before it made a record (`whoJoins`); every other
+  // door asks here.
+  const held = heldNameOf(detail, player, now);
+  if (held) return { kind: "name_held", name: held };
   // A place the organiser holds for this very record (a past player picked for it): the organiser chose
   // the player, so the range does not ask again, and the join takes that place (`joinEvent`).
   const mine = [...detail.roster, ...detail.waitlist].find((s) => s.playerId === player.id);
@@ -52,7 +81,7 @@ export async function joinWithPolicy(db: Db, detail: EventDetail, player: Player
       if (held && ev.fixedPairs && partnerName) return { kind: "joined", result: await joinPair(db, { eventId: ev.id, playerId: player.id, partnerName }) };
       if (held) return { kind: "joined", result: { outcome: "already_in", slot: held, event: ev } };
       await createJoinRequest(db, { eventId: ev.id, playerId: player.id, level });
-      return { kind: "requested" };
+      return { kind: "requested", why: fit === "unverified" ? "unverified" : "outside" };
     }
   }
   const result = ev.fixedPairs && partnerName ? await joinPair(db, { eventId: ev.id, playerId: player.id, partnerName }) : await joinEvent(db, { eventId: ev.id, playerId: player.id });

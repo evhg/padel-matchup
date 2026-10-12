@@ -6,18 +6,17 @@ import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
 import { buildSchedule, type ScheduleResult } from "@/lib/domain/schedule";
 import { createEvent } from "@/lib/domain/events";
 import { DEFAULT_POINTS, formatOf } from "@/lib/domain/formats";
-import { getGroupById, getGroupMember, joinGroup } from "@/lib/domain/groups";
+import { getGroupById, getGroupMember } from "@/lib/domain/groups";
 import { changePlayerEmail, findPlayerByPersonalToken, getOrCreatePersonalToken } from "@/lib/domain/identity";
-import { hasRange } from "@/lib/domain/levels";
-import { admissionAt } from "@/lib/domain/playAgain";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
 import { createPlayer, getPlayer } from "@/lib/domain/players";
 import { getEventByCode, type EventDetail } from "@/lib/domain/queries";
 import { setPlayerLevel } from "@/lib/domain/rating";
-import { createJoinRequest } from "@/lib/domain/requests";
-import { joinPair, type PairJoinOutcome } from "@/lib/domain/pairSeats";
-import { joinEvent, leaveEvent, promotedOf } from "@/lib/domain/slots";
+import type { PairJoinOutcome } from "@/lib/domain/pairSeats";
+import { hasLifeOutside, joinEvent, leaveEvent, promotedOf } from "@/lib/domain/slots";
+import { whoJoins } from "@/lib/domain/heldByName";
+import { joinWithPolicy } from "@/lib/domain/joining";
 import { lineupComplete } from "@/lib/lineup";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
 import { personalUrl } from "@/lib/personal";
@@ -210,46 +209,68 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
   const detail = await getEventByCode(db, input.code);
   if (!detail) throw new ApiError(404, "not_found", `No match with code ${input.code}.`, "Codes are 4 characters and case-sensitive.");
   if (input.partner && !(detail.event.type === "tournament" && detail.event.fixedPairs)) throw new ApiError(422, "invalid_request", "partner is for a fixed-pairs tournament only.", "Omit partner: on this match every player joins alone.");
-  const player = await resolvePlayer(db, input, locale);
-  return joinAsPlayer(db, detail, player, ctx, input.partner);
+  // A name with no token is a record made from a typed name, as on the web: a place held for that name
+  // (or a place that keeps a past player's record of it) refuses the join before the record is made
+  // (`whoJoins`, DECIDING rule 34). A token's player is asked inside `joinWithPolicy`, as on every door.
+  const who = input.token
+    ? { player: await resolvePlayer(db, input, locale) }
+    : await whoJoins(detail, null, input.name, new Date(), () => resolvePlayer(db, input, locale), (id) => hasLifeOutside(db, id, detail.event.id));
+  if ("held" in who) throw new NameHeldError(who.held);
+  return joinAsPlayer(db, detail, who.player, ctx, input.partner);
 }
 
-/** The join itself, for a player already resolved (API token, Telegram account, session). Same side effects as the web button. `partnerName`: a fixed-pairs night's partner. */
+/**
+ * The refusal every door gives a join beside a place held for the player's name (DECIDING rule 34,
+ * `name_held` from `joinWithPolicy`). 409, because the match is fine and the name is the conflict.
+ * `held` is the held name as the organiser typed it, so a chat can say it in the player's language
+ * (`toastHeld` in `src/lib/telegram/card.ts`); the API's own words are the message and the hint.
+ */
+export class NameHeldError extends ApiError {
+  constructor(public readonly held: string) {
+    super(
+      409,
+      "name_held",
+      `A place in this match is held for ${held}, so a second ${held} cannot join beside it.`,
+      `If this is ${held}, take the held place on the match page (type the name, then tap "Take ${held}'s held place") or through the place's own invite link from the organizer. If it is somebody else: without a token, join with a fuller name, such as a last name; with a token, the player adds a last name on My matches (their personal link), then joins again.`,
+    );
+  }
+}
+
+/**
+ * The join itself, for a player already resolved (API token, Telegram account, Discord, LINE). Same
+ * side effects as the web button. `partnerName`: a fixed-pairs night's partner. Who may take the spot
+ * is `joinWithPolicy`, the one rule every door asks (a place held for the name, the level range, the
+ * organiser's past partners); this function says the answer in the API's words.
+ */
 export async function joinAsPlayer(db: Db, detail: EventDetail, player: Player, ctx: OpContext, partnerName?: string | null): Promise<JoinMatchResult> {
   const ev = detail.event;
   const range = { min: ev.levelMin, max: ev.levelMax };
   const base = baseUrl();
   const before = lineupComplete(detail.roster, ev.capacity);
+  // The level the player holds is the level they join with: the API saved a given level already (`resolvePlayer`).
+  const decision = await joinWithPolicy(db, detail, player, player.level, partnerName);
+  if (decision.kind === "name_held") throw new NameHeldError(decision.name);
+  if (decision.kind === "level_required") throw new ApiError(422, "level_required", `This match is for levels ${range.min ?? 0}–${range.max ?? 7}. Pass the player's level (0–7) to join.`, "Levels are self-declared in quarter steps; 3.0 is a consistent intermediate player.");
   const token = await getOrCreatePersonalToken(db, player.id);
   const me = { name: player.displayName, personalToken: token, personalUrl: personalUrl(base, token) };
-  if (hasRange(range) && player.id !== ev.creatorPlayerId) {
-    // A player who already played a finished, scored match with the organiser is not held to the range (DECIDING rule 37).
-    const fit = await admissionAt(db, ev, player);
-    if (fit === "unknown") throw new ApiError(422, "level_required", `This match is for levels ${range.min ?? 0}–${range.max ?? 7}. Pass the player's level (0–7) to join.`, "Levels are self-declared in quarter steps; 3.0 is a consistent intermediate player.");
-    if (fit !== "ok") {
-      const already = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === player.id);
-      if (!already) {
-        await createJoinRequest(db, { eventId: ev.id, playerId: player.id, level: player.level });
-        ctx.afterwards(async () => notifyCreator(db, ev, "requested", `${player.displayName} (${player.level})`, player.id));
-        const fresh = (await getEventByCode(db, ev.code))!;
-        const next =
-          fit === "unverified"
-            ? "This match takes confirmed levels only, and nobody has confirmed the player's level, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
-            : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
-        const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
-        // The ask carries no partner: say so, so nobody believes the pair is in.
-        const pairNote = ev.fixedPairs && partnerName ? " The partner was not reserved: once the organizer says yes, call join_match again with partner." : "";
-        return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, partner: null, group: line, next: next + pairNote };
-      }
-    }
+  if (decision.kind === "requested") {
+    ctx.afterwards(async () => notifyCreator(db, ev, "requested", `${player.displayName} (${player.level})`, player.id));
+    const fresh = (await getEventByCode(db, ev.code))!;
+    const next =
+      decision.why === "unverified"
+        ? "This match takes confirmed levels only, and nobody has confirmed the player's level, so the organizer has to approve. On the match page the player can ask a coach at the club, or the club, to confirm their level; a confirmation seats them automatically."
+        : "The player's level is outside the range, so the organizer has to approve. They see the request on the match page; the player sees the answer on the same page.";
+    const { line } = await groupOfJoin(db, fresh.event.groupId, player.id, base);
+    // The ask carries no partner: say so, so nobody believes the pair is in.
+    const pairNote = ev.fixedPairs && partnerName ? " The partner was not reserved: once the organizer says yes, call join_match again with partner." : "";
+    return { outcome: "requested", match: matchToPublic(fresh, base, null), player: me, partner: null, group: line, next: next + pairNote };
   }
-  const res: PairJoinOutcome = ev.fixedPairs && partnerName ? await joinPair(db, { eventId: ev.id, playerId: player.id, partnerName }) : await joinEvent(db, { eventId: ev.id, playerId: player.id });
+  // A seat in a crew's match made the player a member already, where the crew lets anyone in (`joinWithPolicy`).
+  const res: PairJoinOutcome = decision.result;
   const partner = res.partner?.inviteCode ? { name: res.partner.invitedName ?? "", inviteUrl: inviteUrl(base, ev.code, res.partner.inviteCode) } : null;
   // A single already in who names a partner: a reserved spot changed the line-up.
   if (res.outcome === "already_in" && res.partner) ctx.afterwards(async () => void (await notifyLineupChange(db, res.event, before)));
   if (res.outcome === "joined" || res.outcome === "waitlisted") {
-    // A match seat (`via: "match"`): a member of a group that lets anyone in, of no group that asks to join.
-    if (ev.groupId) await joinGroup(db, ev.groupId, player.id, "match").catch(() => undefined);
     ctx.afterwards(async () => {
       await notifyCreator(db, res.event, res.outcome === "joined" ? "joined" : "waitlisted", player.displayName, player.id);
       const fresh = await notifyLineupChange(db, res.event, before, player.id);

@@ -26,6 +26,7 @@ import { readInbound, sendButtons, sendText, type WaContact, type WaInboundMessa
 import { bindInText, codeInJoinText, codeInMatchUrl, verifyBindTicket } from "./link";
 import { findOrCreateWhatsappPlayer, findWhatsappPlayer, linkWhatsapp, sameNumber } from "./identity";
 import { pasteInWhatsapp } from "./paste";
+import { mergesLater } from "@/lib/mergeCount";
 
 /**
  * The conversation. One person, one thread, and the whole of a player's loop inside it: see the
@@ -48,6 +49,7 @@ const S = {
     waitlisted: (when: string) => `The match is full, so you are on the waitlist. ${when}. I will tell you if a spot opens.`,
     already: "You are already in this one.",
     heldRecord: "The organiser holds this place for a player with earlier matches here. Ask the organiser for its link.",
+    nameHeld: (name: string, url: string) => `A place in this match is held for ${name}. If that is you, open the match and take it: ${url}\nNot ${name}? Add your last name on My matches, then join.`,
     left: "You are out. I have told the organiser.",
     notIn: "You are not in this match.",
     full: "It filled up while you were tapping. You are on the waitlist.",
@@ -71,6 +73,7 @@ const S = {
     waitlisted: (when: string) => `Мест нет, вы в листе ожидания. ${when}. Сообщу, если место освободится.`,
     already: "Вы уже записаны сюда.",
     heldRecord: "Организатор держит это место для игрока, который уже играл здесь. Попросите у организатора ссылку на это место.",
+    nameHeld: (name: string, url: string) => `В этом матче держат место для ${name}. Если это вы, откройте матч и займите его: ${url}\nНе ${name}? Добавьте фамилию в «Мои матчи» и запишитесь.`,
     left: "Вы вышли. Организатору сообщил.",
     notIn: "Вас нет в этом матче.",
     full: "Место заняли, пока вы нажимали. Вы в листе ожидания.",
@@ -94,6 +97,7 @@ const S = {
     waitlisted: (when: string) => `Está completo, así que estás en la lista de espera. ${when}. Te aviso si se libera una plaza.`,
     already: "Ya estás en este.",
     heldRecord: "El organizador guarda esta plaza para un jugador que ya jugó aquí. Pide al organizador el enlace de la plaza.",
+    nameHeld: (name: string, url: string) => `En este partido hay un sitio reservado para ${name}. Si eres tú, abre el partido y ocúpalo: ${url}\n¿No eres ${name}? Añade tu apellido en Mis partidos y luego apúntate.`,
     left: "Estás fuera. Se lo he dicho al organizador.",
     notIn: "No estás en este partido.",
     full: "Se llenó mientras tocabas. Estás en la lista de espera.",
@@ -171,8 +175,8 @@ async function askLevel(to: string, detail: EventDetail, locale: Locale): Promis
 /**
  * A `LINK-` code from the match page's "stay updated" card: this number becomes the web player's, and
  * the answer is their match and their calendar. It is a reply to the message the player just sent, so
- * it needs no template and goes inside the 24-hour window, like every other answer here; since 1
- * October 2026 Meta charges it, as it charges every reply (link.ts says what is known of the price).
+ * it needs no template and goes inside the 24-hour window, like every other answer here: a service
+ * message, free for the first 1,000 a month and charged after that (link.ts says what is known of the price).
  * It runs before the number is looked up, because looking it up creates a player for a new number, and
  * a linked number must not leave a second one behind.
  */
@@ -187,7 +191,7 @@ async function bindFromPage(db: Db, from: string, bind: { ticket: string; code: 
     await sendText(from, s.linkBad);
     return "wa:link_bad";
   }
-  const linked = already ? target : await linkWhatsapp(db, target.id, from);
+  const linked = already ? target : await linkWhatsapp(db, target.id, from, mergesLater(db));
   if (!already) await bumpMetric(db, "stay_linked_whatsapp").catch(() => undefined);
   const detail = bind.code ? await getEventByCode(db, bind.code) : null;
   const match = detail ? `${whenOf(detail, locale)}${detail.event.venueName ? ` · ${detail.event.venueName}` : ""}\n${baseUrl()}/${detail.event.code}` : null;
@@ -299,7 +303,7 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   if (heldForMe) {
     // A place that keeps another player's record refuses the number (`held_record`): the thread says so
     // and stops, because the JOIN below would seat this number a second time beside that place.
-    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from }).catch((e: unknown) => (isDomainError(e) && e.message === "held_record" ? ("held_record" as const) : null));
+    const res = await confirmInvite(db, { inviteCode: heldForMe.inviteCode!, playerId: player.id, phone: msg.from, counter: mergesLater(db) }).catch((e: unknown) => (isDomainError(e) && e.message === "held_record" ? ("held_record" as const) : null));
     if (res === "held_record") {
       await sendText(msg.from, s.heldRecord);
       return "wa:held_record";
@@ -327,6 +331,11 @@ export async function handleWhatsappMessage(db: Db, msg: WaInboundMessage, conta
   // JOIN, the "I'm in" tap, and a level just chosen: the seat, through the domain's own rules.
   try {
     const decision = await joinWithPolicy(db, detail, player, player.level);
+    // A place held for this profile's name (DECIDING rule 34): what the web says, with the match's link.
+    if (decision.kind === "name_held") {
+      await sendText(msg.from, s.nameHeld(decision.name, `${baseUrl()}/${code}`));
+      return "wa:name_held";
+    }
     if (decision.kind === "level_required") {
       await askLevel(msg.from, detail, locale);
       return "wa:level_required";

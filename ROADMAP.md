@@ -904,14 +904,20 @@ Everything in this list is live. The README describes each in detail.
     ("1. Ana 2. Bo", "+1 Cy", one name per line, copied messages, emoji, three languages) become one
     reserved spot per name in one request (`reserveManyAction`), names already in skipped, the names shown before
     anything is held. `src/lib/domain/pasteNames.ts`.
-  - **The iPhone's home-screen card** says that links from WhatsApp open in Safari, not in the icon.
+  - **The iPhone's home-screen card** says that links from WhatsApp open in the player's browser, not in
+    the icon. Until 12 October 2026 it said "Safari"; the phone's default browser can be Chrome, and no
+    Apple source says where a WhatsApp link opens.
   - **The WhatsApp bot, still off:** JOIN (`JOIN-7KQ2` or `JOIN 7KQ2`) takes the seat at once and
     answers with the line-up and three buttons (can't make it, who is in, add to calendar); a pasted
     match link shows the match; a ranged match asks the level with three buttons, not a link; the
     help says what the bot does. The match page offers the hand-off only where a reply can come back
-    (`whatsappLinkable`).
+    (`whatsappLinkable`). Two open faults (a second record on the first JOIN, and template buttons
+    that open WhatsApp's own browser) are under "Next, in order", item 1.
   - **What was untrue, corrected:** WhatsApp's own browser does not open group links; a number is
-    not proof to `foldSameNameRows`; replies inside the window are charged from 1 October 2026.
+    not proof to `foldSameNameRows`; replies inside the window are service messages, and Meta charges
+    them past the first 1,000 a month for each business number (US$0.0113 each for a Thai number;
+    Meta's pricing page, checked 12 October 2026). Until 12 October 2026 this line said every reply
+    was charged from 1 October 2026.
 - **The best times, and a court a player books (10 October 2026, migrations 0095, 0096 and 0097).** The
   owner's choice, "Best times + one-tap booking by a player" (DECIDING rule 36). The free courts clubs
   share, or that a platform shows publicly (DECIDING rule 35), are cached on the club's row;
@@ -1008,8 +1014,10 @@ Everything in this list is live. The README describes each in detail.
   its one-tap Join. A full match with a closed waiting list shows no join, so only the personal link
   fills the place there. The Go key sends no join while the offer is on the screen. The web's join
   (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
-  offer, a different person of the same name reads how to get in: a last name on My matches. The
-  Telegram, Discord and LINE joins and `join_match` in the API and MCP do not refuse it yet.
+  offer, a different person of the same name reads how to get in: a last name on My matches.
+  Since 12 October 2026 every other door refuses it too, through the rule every door asks
+  (`joinWithPolicy`): the Telegram ✅ and "+1", the Discord and LINE buttons, the WhatsApp JOIN and
+  `join_match` in the API and MCP, each in the player's language (`tests/held-name-doors.test.ts`).
 - **The held place keeps a past player's record (11 October 2026, no migration).** The owner asked
   whether a held place may keep the record of a player who played with the organiser before, after
   Danny got a second record; the answer was "Yes, keep the record" (DECIDING rule 34). The open spot
@@ -1018,8 +1026,9 @@ Everything in this list is live. The README describes each in detail.
   that record, by name, inside the "That's me" limits; a record with an email or Telegram proves
   itself first, a record with another limit is sent to the organiser, and any other record is refused. A join by the record takes its own place, and a plain join of its name from a browser that knows nobody is refused. A place with a phone keeps no record. A session by name gets no manage link. The same
   day: "That's me" signs in a record that organised only past matches, and "Are these yours?" moves
-  no crew's admin role by name, shared match or not. Danny's two production records are not merged: that
-  is a production action the owner confirms.
+  no crew's admin role by name, shared match or not. Danny's two production records became one on 12
+  October 2026: the newer record was merged into the older one, and production holds one Danny (checked
+  through `/api/admin/sql` on 12 October 2026).
 - **The past player's question, before and after the match is made (12 October 2026, no migration).**
   The owner asked: "As organizer before and after creating the match should be able to select from
   players they played with before, and if manually typed and it matches a previously played person it
@@ -1128,8 +1137,7 @@ linked and four have an email address.
    group part is carried by a person rather than a bot — the organiser pastes a link into the crew's
    chat, and each tap opens a conversation the player started, which costs nothing to receive, opens
    a 24-hour window, and is not counted against the 250-a-day limit, because that limit rations only
-   the messages we start. Our replies in that window are charged from 1 October 2026 (Meta, read 10
-   October 2026; docs/OPERATING.md). Since 10 October 2026 the JOIN message takes the seat at once. That first message also hands over the phone number with permission, so nothing has to be
+   the messages we start. Our replies in that window are service messages: the first 1,000 a month for each business number are free, then US$0.0113 each for a Thai (+66) number (Meta's pricing page, checked 12 October 2026; docs/OPERATING.md). Since 10 October 2026 the JOIN message takes the seat at once. That first message also hands over the phone number with permission, so nothing has to be
    collected in advance. The thread is not a card channel. A chat that the crew already has never
    gets a bot. Meta's Groups API makes only the business's own groups, and players join them by an
    invite link. Such a group holds eight people at most, needs an Official Business Account, and
@@ -1146,6 +1154,18 @@ linked and four have an email address.
    in WhatsApp Manager; wait until `--list` shows each one `APPROVED` and `UTILITY`; then set the
    WhatsApp variables in Vercel. Until then the card's promise is true for Telegram and email only,
    and the WhatsApp choice appears only once the number is set.
+
+   Two open faults in the bot, written down on 12 October 2026 so they are not lost. The bot is off,
+   so neither reaches a player today, and neither is fixed. Fix both before the bot goes on:
+   - **The first JOIN from a current player makes a second record.** `handleWhatsappMessage` in
+     `src/lib/whatsapp/bot.ts` finds the sender by number only (`findOrCreateWhatsappPlayer`). A
+     player who already has a record on the web, and whose number we do not hold yet, gets a new
+     record named by their WhatsApp profile: a duplicate. Only the "Stay updated" hand-off
+     (`LINK-<code>-<ticket>`, `linkWhatsapp`) gives the number to the existing record today.
+   - **The template buttons open a browser that does not know the player.** "Open match", "Enter the
+     score" and "See the card" are URL buttons (`data/whatsapp-templates.json`). Since November 2025
+     WhatsApp opens them in its own browser, which holds no Kicksmash cookie, so the player meets the
+     match page as a stranger. The fix is a one-time sign-in link in the message text.
 2. **LINE — built, waiting on an Official Account.** `src/lib/channels/line.ts` and
    `src/lib/line/`: the card in a group chat, the two taps, a signed webhook, and the two policies a
    platform that cannot edit a message forces — re-send only when something a player would notice

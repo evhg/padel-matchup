@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { players } from "@/db/schema";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { mergePlayers } from "@/lib/domain/merge";
+import { mergesLater } from "@/lib/mergeCount";
 import { safeToMerge } from "@/lib/domain/dupes";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
   if (refused.length) return NextResponse.json({ error: "refused", verdicts }, { status: 409 });
   if (body?.dryRun) return NextResponse.json({ ok: true, dryRun: true, into, from: sources.map((s) => s.id), verdicts });
 
-  await mergePlayers(db, into, sources.map((s) => s.id));
+  await mergePlayers(db, into, sources.map((s) => s.id), { door: "operator", counter: mergesLater(db) });
   const left = await db.select({ id: players.id }).from(players).where(eq(players.id, into));
   return NextResponse.json({ ok: true, into, merged: sources.length, survives: left.length === 1 });
 }

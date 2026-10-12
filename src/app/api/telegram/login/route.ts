@@ -6,6 +6,7 @@ import { getSessionPlayer, setSessionPlayer } from "@/lib/session";
 import { telegramEnabled, verifyLoginWidget } from "@/lib/telegram/api";
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/bot";
 import { loginNext } from "@/lib/telegram/login";
+import { mergesLater } from "@/lib/mergeCount";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export async function GET(req: Request) {
   const user = { id: Number(fields.id), first_name: fields.first_name ?? "Player", last_name: fields.last_name, username: fields.username };
   const db = await getDb();
   const me = await getSessionPlayer(db);
-  const player = me ? await linkTelegram(db, me.id, user) : await findOrCreateTelegramPlayer(db, user);
+  const player = me ? await linkTelegram(db, me.id, user, mergesLater(db)) : await findOrCreateTelegramPlayer(db, user);
   // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
   // A browser that knew nobody is signed in; one that was signed in only linked an account.

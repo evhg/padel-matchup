@@ -14,11 +14,10 @@ import { whatsappAppSecret, whatsappLinkable, whatsappNumber } from "./api";
  *
  * That is what makes it their message rather than ours, and it is worth three things: the 24-hour
  * window opens without a template, the daily limit is not spent (it counts unique numbers messaged
- * *outside* an open window), and their number arrives with consent attached. The replies are not
- * free: from 1 October 2026 Meta charges each message we send inside the window at the utility rate
- * of the player's country, with no volume tiers (Meta's pricing page for non-template messages, read
- * 10 October 2026); one reseller (360dialog) reports the first 1,000 a month per number free, which
- * Meta's own pages do not say. A message the player sends us costs nothing. docs/OPERATING.md.
+ * *outside* an open window), and their number arrives with consent attached. The replies are service
+ * messages: the first 1,000 a month for each business number are free, then each costs US$0.0113 for
+ * a Thai (+66) number (Meta's pricing page, checked 12 October 2026). A message the player sends us
+ * costs nothing. docs/OPERATING.md.
  *
  * Offered only where a reply can come back (`whatsappLinkable`): a number with no send token behind
  * it would open a chat that nobody answers.

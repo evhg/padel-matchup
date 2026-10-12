@@ -36,7 +36,10 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  * Join. The web's plain join that would seat a second record of the name beside the place is refused
  * (`whoJoins`), because after it no typed name could take the place. So is the plain join of the name
  * of a place that keeps a past player's record, from a browser that knows nobody (`heldRecordNamed`).
- * The joins through `joinAsPlayer` (Telegram, Discord, LINE, `join_match`) do not ask yet.
+ * Every other door asks the same rule, through `joinWithPolicy` in `joining.ts` (`heldNameOf`, since
+ * 12 October 2026): the WhatsApp JOIN, and through `joinAsPlayer` the Telegram ✅ and "+1", the
+ * Discord and LINE buttons and `join_match` in the API and MCP, which also asks `whoJoins` for a typed
+ * name with no token, before it makes a record.
  */
 
 /** A place in the match as the rule reads it: the row, and the name of the record on it when there is one. */

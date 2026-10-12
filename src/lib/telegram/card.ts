@@ -17,6 +17,13 @@ export const botLocale = (languageCode: string | null | undefined): BotLocale =>
   return c.startsWith("ru") ? "ru" : c.startsWith("es") ? "es" : "en";
 };
 
+/**
+ * A name inside a toast: Telegram shows at most 200 characters in a tap's answer and refuses a longer
+ * one, and the held-place toast says the name twice. A held name has 40 characters at most; 24 keep
+ * the longest language under the limit.
+ */
+const toastName = (name: string) => (name.length > 24 ? `${name.slice(0, 23)}…` : name);
+
 /** Bot copy lives here on purpose: short, two languages, no framework. */
 const STRINGS = {
   en: {
@@ -52,6 +59,8 @@ const STRINGS = {
     toastNotIn: "You weren't in this match.",
     toastLevel: "This match has a level range. Open it once to set your level.",
     toastRequested: "Outside the level range: the organizer will approve.",
+    /** A place is held for this name (DECIDING rule 34): the web's "held for you" and "Not Danny?" lines, in one toast. */
+    toastHeld: (name: string) => `A place in this match is held for ${toastName(name)}. If that is you, open the match and take it. Not ${toastName(name)}? Add your last name on My matches, then join.`,
     toastClosed: "The match is full and closed.",
     toastPast: "This match is over.",
     toastError: "Something went wrong. Open the match instead.",
@@ -282,6 +291,7 @@ const STRINGS = {
     toastNotIn: "Вы не были записаны.",
     toastLevel: "У матча есть диапазон уровней. Откройте его один раз и укажите свой уровень.",
     toastRequested: "Вне диапазона уровней: организатор подтвердит.",
+    toastHeld: (name: string) => `В этом матче держат место для ${toastName(name)}. Если это вы, откройте матч и займите его. Не ${toastName(name)}? Добавьте фамилию в «Мои матчи» и запишитесь.`,
     toastClosed: "Матч заполнен и закрыт.",
     toastPast: "Матч уже прошёл.",
     toastError: "Что-то пошло не так. Откройте матч.",
@@ -495,6 +505,7 @@ const STRINGS = {
     toastNotIn: "No estabas en este partido.",
     toastLevel: "Este partido tiene un rango de nivel. Ábrelo una vez para poner tu nivel.",
     toastRequested: "Fuera del rango de nivel: el organizador lo aprobará.",
+    toastHeld: (name: string) => `En este partido hay un sitio reservado para ${toastName(name)}. Si eres tú, abre el partido y ocúpalo. ¿No eres ${toastName(name)}? Añade tu apellido en Mis partidos y luego apúntate.`,
     toastClosed: "El partido está completo y cerrado.",
     toastPast: "Este partido ya terminó.",
     toastError: "Algo salió mal. Abre el partido.",

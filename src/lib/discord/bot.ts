@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { discordCards, discordChannels, players, type DiscordChannel, type Player } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
-import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
+import { joinAsPlayer, leaveAsPlayer, NameHeldError, type OpContext } from "@/lib/api/operations";
 import { baseUrl } from "@/lib/config";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
@@ -231,6 +231,7 @@ async function handleComponent(db: Db, i: DcInteraction, user: DcUser, ctx: OpCo
     }
   } catch (e) {
     if (e instanceof ApiError && e.code === "level_required") toast = s.toastLevel;
+    else if (e instanceof NameHeldError) toast = s.toastHeld(e.held);
     else if (isDomainError(e)) toast = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
     outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
   }

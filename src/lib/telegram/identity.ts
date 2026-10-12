@@ -4,6 +4,7 @@ import type { Db } from "@/db";
 import { players, type Player } from "@/db/schema";
 import { mergePlayers, recordToKeep, recordWeights } from "@/lib/domain/merge";
 import { foldSameNameRows } from "@/lib/domain/sameName";
+import type { MergeCounter } from "@/lib/domain/signins";
 import { createPlayer } from "@/lib/domain/players";
 import { telegramWebhookSecret, type TgUser } from "./api";
 import { botLocale } from "./card";
@@ -76,7 +77,7 @@ export async function findOrCreateTelegramPlayer(db: Db, user: TgUser): Promise<
  * token) and its public page. A web record with a home-screen icon that loses to a busier bot
  * record keeps its icon working.
  */
-export async function linkTelegram(db: Db, playerId: string, user: TgUser): Promise<Player> {
+export async function linkTelegram(db: Db, playerId: string, user: TgUser, counter?: MergeCounter): Promise<Player> {
   const other = await findTelegramPlayer(db, user.id);
   let keep = playerId;
   if (other && other.id !== playerId) {
@@ -86,14 +87,14 @@ export async function linkTelegram(db: Db, playerId: string, user: TgUser): Prom
     if (mine && theirs) keep = recordToKeep(mine, theirs);
     if (keep === playerId) {
       await db.update(players).set({ telegramId: null, telegramUsername: null }).where(eq(players.id, other.id));
-      await mergePlayers(db, playerId, [other.id], { proved: true });
+      await mergePlayers(db, playerId, [other.id], { proved: true, door: "telegram", counter });
     } else {
       // The record that holds the account already is the real one: the signed-in record folds into it.
-      await mergePlayers(db, other.id, [playerId], { proved: true });
+      await mergePlayers(db, other.id, [playerId], { proved: true, door: "telegram", counter });
     }
   }
   const [p] = await db.update(players).set({ telegramId: user.id, telegramUsername: user.username ?? null }).where(eq(players.id, keep)).returning();
   // A linked Telegram account is proof, as a code from an address is (`foldSameNameRows`). Never throws.
-  await foldSameNameRows(db, p.id);
+  await foldSameNameRows(db, p.id, counter);
   return p;
 }

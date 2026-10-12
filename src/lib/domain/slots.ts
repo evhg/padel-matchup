@@ -7,6 +7,7 @@ import { DomainError } from "./errors";
 import { recomputeStatus } from "./events";
 import { isNamedSeat, partnerOf, seatUnits } from "./fixedPairs";
 import { mergePlayers } from "./merge";
+import { countMerge, type MergeCounter } from "./signins";
 import { normalizeEmail, normalizeName, normalizePhone } from "./players";
 import { normalName } from "./dupes";
 
@@ -524,11 +525,20 @@ export type ConfirmOutcome =
 
 export async function confirmInvite(
   db: Db,
-  /** `phone`: the number the request came from (the WhatsApp bot), never a number somebody typed. */
-  input: { inviteCode: string; playerId: string; email?: string | null; phone?: string | null; now?: Date },
+  /**
+   * `phone`: the number the request came from (the WhatsApp bot), never a number somebody typed.
+   * `counter`: where a placeholder folded into the player is counted (`merge_held_link`); the count
+   * waits for this transaction, so a request's counter writes it after the answer.
+   */
+  input: { inviteCode: string; playerId: string; email?: string | null; phone?: string | null; now?: Date; counter?: MergeCounter },
 ): Promise<ConfirmOutcome> {
   const now = input.now ?? new Date();
-  return db.transaction(async (tx) => {
+  // A fold inside the transaction is counted once it is done, never on the pool while it holds the lock.
+  let folded = 0;
+  const held: MergeCounter = async (_door, records) => {
+    folded += records;
+  };
+  const out = await db.transaction(async (tx): Promise<ConfirmOutcome> => {
     const [found] = await tx.select().from(slots).where(eq(slots.inviteCode, input.inviteCode)).limit(1);
     if (!found) throw new DomainError("not_found");
     const ev = await lockEvent(tx, found.eventId);
@@ -578,7 +588,7 @@ export async function confirmInvite(
         let mine = elsewhere;
         if (namer && sameSide && !drawn && !partnerOf(all, elsewhere)) [mine] = await tx.update(slots).set({ pairId: slot.pairId }).where(eq(slots.id, elsewhere.id)).returning();
         const [first, ...also] = await vacateSeats(tx, ev, [slot]);
-        if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
+        if (placeholder) await mergePlayers(tx, input.playerId, [placeholder], { door: "held_link", counter: held });
         const status = await recomputeStatus(tx, ev);
         return { outcome: "already_in", slot: mine, event: { ...ev, status }, promotion: first ? { ...first, also } : null };
       }
@@ -586,14 +596,16 @@ export async function confirmInvite(
       // leave goes (`vacateAndPromote`), so the first player waiting moves up and is told; it used to
       // go empty with the waiting list left where it was.
       const promotion = await vacateAndPromote(tx, ev, slot);
-      if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
+      if (placeholder) await mergePlayers(tx, input.playerId, [placeholder], { door: "held_link", counter: held });
       const status = await recomputeStatus(tx, ev);
       return { outcome: "already_in", slot: elsewhere, event: { ...ev, status }, promotion };
     }
 
-    const done = await confirmLocked(tx, ev, slot, { playerId: input.playerId, email: input.email, now });
+    const done = await confirmLocked(tx, ev, slot, { playerId: input.playerId, email: input.email, now, counter: held });
     return { outcome: "confirmed", ...done };
   });
+  if (folded > 0) await (input.counter ?? ((door, records) => countMerge(db, door, records)))("held_link", folded);
+  return out;
 }
 
 /**
@@ -601,7 +613,7 @@ export async function confirmInvite(
  * (`confirmInvite`) and the name typed on the plain link (`takeHeldByName` in `heldByName.ts`) both
  * end here, so the organiser hears the same "Danny confirmed" either way. The lock is the caller's.
  */
-export async function confirmLocked(tx: Db, ev: Event, slot: Slot, input: { playerId: string; email?: string | null; now: Date }): Promise<{ slot: Slot; event: Event }> {
+export async function confirmLocked(tx: Db, ev: Event, slot: Slot, input: { playerId: string; email?: string | null; now: Date; counter?: MergeCounter }): Promise<{ slot: Slot; event: Event }> {
   const email = normalizeEmail(input.email);
   const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
   const [confirmed] = await tx
@@ -618,7 +630,7 @@ export async function confirmLocked(tx: Db, ev: Event, slot: Slot, input: { play
     await tx.update(players).set({ email }).where(and(eq(players.id, input.playerId), sql`${players.email} is null`));
   }
   // Round 1 was generated with a placeholder for this name: hand its matches to the real player.
-  if (placeholder) await mergePlayers(tx, input.playerId, [placeholder]);
+  if (placeholder) await mergePlayers(tx, input.playerId, [placeholder], { door: "held_link", counter: input.counter });
   await tx.insert(activity).values({ eventId: ev.id, actorPlayerId: input.playerId, verb: "confirmed" });
   const status = await recomputeStatus(tx, ev);
   return { slot: confirmed, event: { ...ev, status } };

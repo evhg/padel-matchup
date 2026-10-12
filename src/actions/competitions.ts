@@ -36,6 +36,7 @@ import { claimDeepLink } from "@/lib/telegram/deepLinks";
 import { parseSetsText } from "@/lib/tournamentText";
 import { tellDrawPublished, tellMoved, tellMovedUp, tellOrganizerOfEntry, tellPartnerClaimed, tellSchedule } from "@/lib/tournament/notify";
 import { ActionFailure, requirePlayer, runA, type ActionResult } from "./shared";
+import { mergesLater } from "@/lib/mergeCount";
 
 /**
  * The serious tournament's writes. Every one goes through the domain rules in
@@ -189,7 +190,7 @@ export async function claimSpotAction(slug: string, token: string, name?: string
   const db = await getDb();
   return runA(async () => {
     const player = await requirePlayer(db, name);
-    const pair = await claimPartnerSpot(db, { token, playerId: player.id });
+    const pair = await claimPartnerSpot(db, { token, playerId: player.id, counter: mergesLater(db) });
     const [c] = await db.select().from(competitions).where(eq(competitions.id, pair.competitionId)).limit(1);
     const [cat] = await db.select().from(competitionCategories).where(eq(competitionCategories.id, pair.categoryId)).limit(1);
     if (!c || !cat || c.slug !== slug) throw new DomainError("not_found");

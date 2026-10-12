@@ -771,7 +771,7 @@
     "notSafari": "Abre esta página en Safari para añadirla a tu pantalla de inicio.",
     "androidSteps": "Abre el menú del navegador (⋮) y luego \"Añadir a pantalla de inicio\" o \"Instalar app\".",
     "gotIt": "Entendido",
-    "iosWhatsapp": "Los enlaces de WhatsApp se abren en Safari, no en este icono."
+    "iosWhatsapp": "Los enlaces de WhatsApp se abren en tu navegador, no en este icono."
   },
   "pairs": {
     "fixed": "Parejas fijas",

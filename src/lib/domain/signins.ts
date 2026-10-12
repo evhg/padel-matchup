@@ -32,6 +32,41 @@ export async function countSignIn(db: Db, way: SignInWay): Promise<void> {
 }
 
 /**
+ * Two records found to be one person, folded into one (`mergePlayers`), counted per day by the door
+ * that folded them, as `merge_<door>`, with the number of records that went: the owner cannot see how
+ * often a person ends up with two records, and each door is a different cause. Nothing personal is kept.
+ *
+ *   - `operator`: the operator's own merge (`POST /api/admin/merge-players`).
+ *   - `email_code`: a code that came back from an address folds every record of that address, and the
+ *     browser's own (`restoreByEmail`).
+ *   - `same_name`: at that proof (an email code, Telegram, a WhatsApp number linked), the rows of the
+ *     same name nobody can reach that share a match, an organiser or a club (`foldSameNameRows`).
+ *   - `same_name_claim`: "These are mine" on My matches (`claimSameNameRow`).
+ *   - `claim`: a competition partner's claim link folds the placeholder entered by name (`claimPartnerSpot`).
+ *   - `thats_me`: "That's me" folds the browser's own new record into the old one (`commitThatsMe`).
+ *   - `held_link`: a held place's link folds the placeholder a tournament gave it into whoever confirms
+ *     (`confirmInvite`, the WhatsApp JOIN of a number's place too).
+ *   - `telegram`: a Telegram account another record already held (`linkTelegram`).
+ *   - `whatsapp`: a WhatsApp number another record already held (`linkWhatsapp`).
+ *
+ * `mergePlayers` takes the door, so a new caller cannot leave it out, and counts it itself.
+ */
+export const MERGE_DOORS = ["operator", "email_code", "same_name", "same_name_claim", "claim", "thats_me", "held_link", "telegram", "whatsapp"] as const;
+export type MergeDoor = (typeof MERGE_DOORS)[number];
+
+/**
+ * How a merge's count is written. A request hands in `mergesLater` (`src/lib/mergeCount.ts`), which
+ * writes it after the answer (`later`), never in the path a person waits on; with none, as in a test or
+ * a script, `mergePlayers` writes it at once.
+ */
+export type MergeCounter = (door: MergeDoor, records: number) => Promise<void>;
+
+/** Never throws: a merge must not fail because its counter did. */
+export async function countMerge(db: Db, door: MergeDoor, records = 1): Promise<void> {
+  if (records > 0) await bumpMetric(db, `merge_${door}`, records).catch(() => undefined);
+}
+
+/**
  * A record made from a name alone: a browser that has never seen this person. What can be known about
  * that browser is counted, and nothing personal is kept (docs/OPERATING.md):
  *

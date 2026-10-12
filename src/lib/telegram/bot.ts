@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { telegramChats } from "@/db/schema";
 import { ApiError } from "@/lib/api/http";
-import { joinAsPlayer, leaveAsPlayer, type OpContext } from "@/lib/api/operations";
+import { joinAsPlayer, leaveAsPlayer, NameHeldError, type OpContext } from "@/lib/api/operations";
 import { chatLocale } from "@/lib/channels/telegram";
 import { menuWord } from "@/lib/coach/menu";
 import { isValidShareCode } from "@/lib/codes";
@@ -304,10 +304,12 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
     }
   } catch (e) {
     if (e instanceof ApiError && e.code === "level_required") toast = s.toastLevel;
+    else if (e instanceof NameHeldError) toast = s.toastHeld(e.held);
     else if (isDomainError(e)) toast = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
     outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
   }
-  await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") });
+  // A level to set, or a place held for this name: a box the player closes, because a toast is gone in two seconds.
+  await answerCallbackQuery(cb.id, toast, { alert: outcome.startsWith("error:level") || outcome === "error:name_held" });
   await syncTelegram(db, code);
   await countSeat(db, "tap", outcome, player.id, detail.event);
   if (chat && outcome === "joined") await offerCalendar(db, chat, player, cb.from.id, cb.message?.message_thread_id ?? null);
