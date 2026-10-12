@@ -53,8 +53,8 @@
     "tournaments": "Турниры",
     "findGame": "Найти игру",
     "biggerText": "Крупный текст",
-    "newUpdates": "{count, plural, one {# новое обновление} few {# новых обновления} many {# новых обновлений} other {# новых обновления}}",
-    "manyNewUpdates": "Больше 9 новых обновлений"
+    "newNotices": "{count, plural, one {# новое уведомление} few {# новых уведомления} many {# новых уведомлений} other {# новых уведомления}}",
+    "manyNewNotices": "Больше 9 новых уведомлений"
   },
   "identity": {
     "whatsYourName": "Как вас зовут?",
@@ -375,10 +375,10 @@
     "playAgainLands": "В этот день и час нажатие откроет эту игру. Вторую оно не создаст.",
     "bookAndPayOn": "Забронировать и оплатить в {platform}",
     "checkoutSignIn": "{platform} может сначала попросить войти.",
-    "courtBookedUndoShort": "Отменить",
-    "courtBookedUndoLabel": "Отметить, что корт не забронирован",
     "heldFor": "{count, plural, one {# место забронировано для {names}} few {# места забронированы для {names}} many {# мест забронировано для {names}} other {# места забронированы для {names}}}",
-    "heldCount": "{count, plural, one {# место забронировано} few {# места забронированы} many {# мест забронировано} other {# места забронированы}}"
+    "heldCount": "{count, plural, one {# место забронировано} few {# места забронированы} many {# мест забронировано} other {# места забронированы}}",
+    "courtBookedUndoMark": "Снять отметку",
+    "courtBookedUndoName": "Снять отметку о брони корта"
   },
   "creator": {
     "tools": "Инструменты организатора",

@@ -53,8 +53,8 @@
     "tournaments": "Tournaments",
     "findGame": "Find a game",
     "biggerText": "Bigger text",
-    "newUpdates": "{count, plural, one {# new update} other {# new updates}}",
-    "manyNewUpdates": "More than 9 new updates"
+    "newNotices": "{count, plural, one {# new update} other {# new updates}}",
+    "manyNewNotices": "More than 9 new updates"
   },
   "identity": {
     "whatsYourName": "What's your name?",
@@ -375,10 +375,10 @@
     "playAgainLands": "At that day and time, a tap opens that game. It makes no second one.",
     "bookAndPayOn": "Book and pay on {platform}",
     "checkoutSignIn": "{platform} may ask you to sign in first.",
-    "courtBookedUndoShort": "Undo",
-    "courtBookedUndoLabel": "Mark the court as not booked",
     "heldFor": "{count, plural, one {# place held for {names}} other {# places held for {names}}}",
-    "heldCount": "{count, plural, one {# place held} other {# places held}}"
+    "heldCount": "{count, plural, one {# place held} other {# places held}}",
+    "courtBookedUndoMark": "Undo",
+    "courtBookedUndoName": "Undo: mark the court as not booked"
   },
   "creator": {
     "tools": "Organizer tools",

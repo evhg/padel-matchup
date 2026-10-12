@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect } from "react";
 import { answerFor, answerKey, askFor, namesTyped, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
-import { PastAsk } from "./PastAsk";
+import { PastAnswered, PastAsk } from "./PastAsk";
 
 /** The organiser's past players as the create form holds them: chips (one record of the name) and the views the question reads. */
 export type PastNamesState = { chips: readonly string[]; views: readonly PastView[] };
@@ -62,12 +62,7 @@ export function PastNames({
         r.answer === undefined ? (
           <PastAsk key={answerKey(r.name)} name={r.name} options={r.options} onAnswer={(a) => onAnswer(r.name, a)} />
         ) : (
-          <p key={answerKey(r.name)} className="flex items-center gap-2 text-xs font-semibold" data-testid="past-answered">
-            <span className={r.answer === "new" ? "text-muted" : "text-ok"}>{r.answer === "new" ? t("create.askPastNewSet", { name: r.name }) : `✓ ${t("create.keepsRecord", { name: r.name })}`}</span>
-            <button type="button" className="underline" onClick={() => onAnswer(r.name, undefined)}>
-              {t("create.askPastChange")}
-            </button>
-          </p>
+          <PastAnswered key={answerKey(r.name)} name={r.name} answer={r.answer} onChange={() => onAnswer(r.name, undefined)} />
         ),
       )}
       {chips.length > 0 && (

@@ -110,7 +110,8 @@ try {
   await a.getByTestId("text-size-switch").click();
   check("the switch on My matches raises the text to 18px", (await rootSize()) === "18px");
   // The header's word Kicksmash is whole or gone at the big size, never cut to "Kicksm…".
-  const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.scrollWidth <= e.clientWidth).catch(() => false);
+  // Gone is hidden, or wrapped below the one-line brand where nobody sees it (Header.tsx).
+  const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.getBoundingClientRect().top >= e.parentElement.getBoundingClientRect().bottom - 0.5 || e.scrollWidth <= e.clientWidth).catch(() => false);
   check("with Bigger text the header shows the whole word Kicksmash or the mark alone, never a cut word", brandWhole);
   const emailFields = a.locator('main input[type="email"]');
   const allPlaceholdersFit = await emailFields.evaluateAll((es) => es.every((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; })).catch(() => false);
@@ -915,7 +916,23 @@ try {
   const pasteHold = sofia.getByRole("button", { name: "Reserve 1 spot", exact: true });
   check("a pasted Alex asks \"Is this Alex…?\", and \"Reserve 1 spot\" waits for the answer", ((await pasteAsk.textContent()) ?? "").startsWith(`Is this Alex, who played with you on ${pastDay} at ${pastClub}?`) && (await pasteHold.isDisabled()), ((await pasteAsk.textContent()) ?? "").trim());
   await shot(sofia, "12j2-paste-asks");
+  // A mis-tap on Yes must show, with a way back, before "Reserve 1 spot" attaches that record to the place
+  // and its personal link can sign in as it (review, 12 October 2026): the answer stays on screen with "Change".
+  const pasteBox = sofia.getByTestId("paste-names");
+  const pasteAnswered = pasteBox.getByTestId("past-answered");
+  await pasteAsk.getByRole("button", { name: "Yes, that's Alex", exact: true }).click();
+  await pasteAnswered.first().waitFor({ timeout: 5000 }).catch(() => {});
+  const pasteYes = ((await pasteAnswered.first().textContent().catch(() => "")) ?? "").trim();
+  check("in \"Paste the names\" a Yes stays on screen as \"✓ Keeps Alex's matches\" with Change beside it", /^✓ Keeps Alex's matches\s*Change$/.test(pasteYes) && (await pasteBox.getByTestId("past-ask").count()) === 0, pasteYes);
+  if (pasteYes) {
+    await pasteAnswered.getByRole("button", { name: "Change", exact: true }).click();
+    await pasteAsk.waitFor({ timeout: 5000 });
+  }
+  check("and Change takes the answer back: the question asks again, and the button waits", (await pasteAsk.count()) === 1 && (await pasteAnswered.count()) === 0 && (await pasteHold.isDisabled()));
   await pasteAsk.getByRole("button", { name: "No, someone new", exact: true }).click();
+  const pasteNo = ((await pasteAnswered.first().textContent().catch(() => "")) ?? "").trim();
+  check("a No stays on screen too, as \"Alex: someone new\" with Change", /^Alex: someone new\s*Change$/.test(pasteNo), pasteNo);
+  await shot(sofia, "12j3-paste-answered");
   await pasteHold.click();
   await sofia.getByText("Reserved for Alex", { exact: true }).waitFor({ timeout: 20000 });
   check("\"No, someone new\" holds the pasted Alex by name", (await sofia.locator("main li", { hasText: "Reserved for Alex" }).getByTestId("keeps-record").count()) === 0);

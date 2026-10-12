@@ -481,8 +481,9 @@ try {
   const bookedApi = await fetch(`${BASE}/api/v1/matches/${bookedCode}`).then((r) => r.json());
   check("and the API says so, with the booker's first name", (bookedApi.match ?? bookedApi).courtBooked?.by === "Nok", JSON.stringify((bookedApi.match ?? bookedApi).courtBooked));
   // The owner, 12 October 2026: "the not booked button looks confusing". The undo is an action that says what it does.
-  const undo = page.getByRole("button", { name: "Mark the court as not booked", exact: true });
-  check("the booked line's undo is a small \"Undo\" named \"Mark the court as not booked\", and nothing reads \"Not booked\"", (await undo.count()) === 1 && (await undo.innerText()).trim() === "Undo" && (await page.getByText("Not booked", { exact: true }).count()) === 0, await page.getByTestId("court-booked").innerText());
+  // Its name starts with the word it shows, so a voice user's "tap Undo" finds it (WCAG 2.5.3, review of 12 October 2026).
+  const undo = page.getByRole("button", { name: "Undo: mark the court as not booked", exact: true });
+  check("the booked line's undo is a small \"Undo\" named \"Undo: mark the court as not booked\", and nothing reads \"Not booked\"", (await undo.count()) === 1 && (await undo.innerText()).trim() === "Undo" && (await page.getByText("Not booked", { exact: true }).count()) === 0, await page.getByTestId("court-booked").innerText());
   await shot(page, "clubs-court-booked-undo");
   await undo.click();
   await page.getByTestId("court-booked-mark").waitFor({ timeout: 15000 });

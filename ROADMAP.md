@@ -841,8 +841,10 @@ Everything in this list is live. The README describes each in detail.
   shows the latest twenty, newest first, in the reader's own language (the rows keep a message key
   and plain facts, never words and never a link), reads itself when opened, and counts the unread on
   the header as a bell with a number, a link of its own named "2 new updates" (since 12 October 2026:
-  a bare "2" on My matches read as a count of matches), which opens the inbox; while it has new
-  notices the inbox sits first on My matches. Club matches are off by default (decision B), for push as well as email.
+  a bare "2" on My matches read as a count of matches), which opens the inbox, also when the tap is on
+  My matches itself; while it has new notices the inbox sits first on My matches. The bell sits on the
+  corner of My matches, or of the ⋯ menu when a role's door stands outside, so it takes no width on a
+  phone and is never read as a count for that door. Club matches are off by default (decision B), for push as well as email.
   Every existing player keeps every other notice; the old activity-email switch keeps its meaning as
   a switch on the email channel. Ninety days, then the hourly job prunes. Proven in
   `tests/notice-kinds.test.ts` and `tests/notices.test.ts`.
@@ -1018,6 +1020,24 @@ Everything in this list is live. The README describes each in detail.
   day: "That's me" signs in a record that organised only past matches, and "Are these yours?" moves
   no crew's admin role by name, shared match or not. Danny's two production records are not merged: that
   is a production action the owner confirms.
+- **The past player's question, before and after the match is made (12 October 2026, no migration).**
+  The owner asked: "As organizer before and after creating the match should be able to select from
+  players they played with before, and if manually typed and it matches a previously played person it
+  should ask if its this person to avoid creating dupes." The create form shows "Played with you"
+  under the names, as the open spot does. A typed name that a past player carries asks "Is this Danny,
+  who played with you on Sep 13 at Kross Padel?" before its place is held, on the three web doors: the
+  create form, the open spot on the match page and "Paste the names". Two past players of one name ask
+  "Which Danny is it?". Each answer stays on the screen with "Change" until the place is held. Only a
+  Yes and a chip go to the server, as the name, the day and the club the question showed, and the
+  server finds the record again (`recordForAnswer`; `src/lib/domain/pastAsk.ts`): no id reaches the
+  browser. "No, someone new" holds the place by name. The Telegram bot's match from a pasted booking
+  holds its names with no question yet; book@ and WhatsApp hold no names.
+- **The count line and the court's undo (12 October 2026, no migration).** The line beside "3/4
+  players" names the held places: "1 place held for Alberto", or "1 spot left · 1 place held for
+  Jordi", and past three it counts them (`countParts` in `src/lib/domain/groupLine.ts`). The owner's
+  TDsv read "FULL", "3/4 players" and "No spots left" together. Beside "Court booked ✓ (by Erik)" the
+  way back is "Undo", named "Undo: mark the court as not booked" ("Снять отметку" in Russian), where
+  a button that said "Not booked" read as a second status.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and

@@ -177,7 +177,12 @@ try {
     check(`the header fits a 390 px phone in ${l} with the bell on`, fit.ok, JSON.stringify(fit));
     if (l !== "en") await shot(dana, `player-header-bell-${l}`);
   }
-  await inbox.locator("summary").click();
+  // On My matches itself the bell is a tap to a place on the same page. A same-page hash link remounts
+  // nothing, so the inbox once only scrolled into view and stayed shut and unread (review, 12 October 2026).
+  await dana.getByTestId("nav-unread").click();
+  const bellOpened = await inbox.evaluate((d) => new Promise((ok) => (d.open ? ok(true) : setTimeout(() => ok(d.open), 1500))));
+  check("a tap on the bell on My matches opens the inbox", bellOpened === true);
+  if (!bellOpened) await inbox.locator("summary").click();
   check("the inbox lists the notice: Kai joined Dana's match", (await inbox.locator("li").filter({ hasText: "Kai joined" }).count()) === 1 && (await inbox.locator(`a[href="/${mine.match?.code}"]`).count()) === 1);
   // The marks go after the tap is handled, not at the instant of the click: wait for them to go, never for long.
   await inbox.getByTestId("inbox-new").waitFor({ state: "detached", timeout: 10000 }).catch(() => {});

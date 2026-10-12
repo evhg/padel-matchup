@@ -5,7 +5,7 @@ import { startTransition, useEffect, useMemo, useRef, useState, useTransition } 
 import { reserveManyAction } from "@/actions/slots";
 import { namesFromChat, planPaste } from "@/lib/domain/pasteNames";
 import { answerFor, answerKey, askFor, pickOf, type PastAnswer, type PastPick, type PastView } from "@/lib/domain/pastAsk";
-import { PastAsk } from "./PastAsk";
+import { PastAnswered, PastAsk } from "./PastAsk";
 
 /**
  * "Paste the names from the group", for the organiser: the replies copied out of the crew's WhatsApp
@@ -19,7 +19,8 @@ import { PastAsk } from "./PastAsk";
  *
  * A pasted name that a past player carries asks "Is this Danny, who played with you on Sep 13 at Kross
  * Padel?" first (the owner, 12 October 2026), and the button waits for the answers: Yes keeps that
- * record on the place, No holds it by name.
+ * record on the place, No holds it by name. Each answer stays on screen with "Change" until the place
+ * is held, so a mis-tap on Yes shows before it attaches somebody's record (review, 12 October 2026).
  */
 export function PasteNames({ code, namesHere, spots, past = [] }: { code: string; namesHere: readonly string[]; spots: number; past?: readonly PastView[] }) {
   const t = useTranslations();
@@ -30,8 +31,10 @@ export function PasteNames({ code, namesHere, spots, past = [] }: { code: string
   const [pending, start] = useTransition();
   const [answers, setAnswers] = useState<Record<string, PastAnswer>>({});
   const plan = useMemo(() => planPaste(namesFromChat(text), namesHere, spots), [text, namesHere, spots]);
-  // The names to be held that a past player carries and that have no answer yet.
-  const asks = plan.hold.map((name) => ({ name, options: askFor(past, name) })).filter((a) => a.options.length > 0 && answerFor(answers, a.name) === undefined);
+  // The names to be held that a past player carries, once each: a question until it has an answer, then
+  // the answer with "Change", as on the create form (`PastAnswered`).
+  const rows = [...new Map(plan.hold.map((n) => [answerKey(n), n])).values()].map((name) => ({ name, options: askFor(past, name), answer: answerFor(answers, name) })).filter((r) => r.options.length > 0);
+  const asks = rows.filter((r) => r.answer === undefined);
   // Pasted before the page was interactive: the box kept it, so the preview reads it once on arrival.
   useEffect(() => {
     if (box.current?.value) setText(box.current.value);
@@ -81,11 +84,15 @@ export function PasteNames({ code, namesHere, spots, past = [] }: { code: string
         {plan.noSpot.length > 0 && <p className="font-semibold text-warn">{t("creator.pasteNoSpot", { names: plan.noSpot.join(", ") })}</p>}
         {nothing && <p className="text-muted">{t("creator.pasteNone")}</p>}
       </div>
-      {asks.length > 0 && (
+      {rows.length > 0 && (
         <div className="mt-2 flex flex-col gap-2">
-          {asks.map((a) => (
-            <PastAsk key={answerKey(a.name)} name={a.name} options={a.options} disabled={pending} onAnswer={(answer) => setAnswers((all) => ({ ...all, [answerKey(a.name)]: answer }))} />
-          ))}
+          {rows.map((r) =>
+            r.answer === undefined ? (
+              <PastAsk key={answerKey(r.name)} name={r.name} options={r.options} disabled={pending} onAnswer={(answer) => setAnswers((all) => ({ ...all, [answerKey(r.name)]: answer }))} />
+            ) : (
+              <PastAnswered key={answerKey(r.name)} name={r.name} answer={r.answer} disabled={pending} onChange={() => setAnswers((all) => Object.fromEntries(Object.entries(all).filter(([k]) => k !== answerKey(r.name))))} />
+            ),
+          )}
         </div>
       )}
       <button type="button" className="btn-secondary btn-sm mt-2" disabled={pending || plan.hold.length === 0 || asks.length > 0} onClick={hold}>

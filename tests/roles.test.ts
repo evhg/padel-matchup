@@ -6,8 +6,9 @@ import { clubs, coachManagers, coaches } from "@/db/schema";
 import { createCoach, setStudentStatus } from "@/lib/domain/coaching";
 import { NO_ROLES, roleCount, rolesFor } from "@/lib/domain/roles";
 import { createTestDb, makePlayer } from "./helpers/db";
-import { renderIn } from "./helpers/render";
-import { HeaderNav } from "@/components/AssistantLink";
+import { HeaderNav, updatesLabel } from "@/components/AssistantLink";
+import { createTranslator } from "next-intl";
+import { catalogue, renderIn } from "./helpers/render";
 
 /**
  * The role set is what replaced the browser cookie that told a player they were a coach.
@@ -127,10 +128,50 @@ describe("the header's unread notices", () => {
     expect(header({ unread: 0 })).not.toContain("nav-unread");
   });
 
+  /**
+   * Review, 12 October 2026: beside a coach's "🎾 My assistant" the bell took width, so at 390 px the word
+   * Kicksmash was cut to "Kicks…" (and "Kic…" in Russian), and its number read as a count for the
+   * assistant. The bell is pinned to a corner in every arrangement, so it takes no width: on "My matches"
+   * when that door is outside, and on the menu's ⋯ otherwise, never on a role's door.
+   */
+  it("pins the bell to a corner in every arrangement: on My matches or on the menu, never beside a role door", () => {
+    const coach = { handle: "olga", as: "coach" as const };
+    const club = { slug: "warehaus", name: "Warehaus" };
+    const arrangements: { roles: Partial<typeof NO_ROLES>; current?: "play" | "coach" | "club" | "series"; on: "play" | "menu" }[] = [
+      { roles: {}, on: "play" },
+      { roles: {}, current: "play", on: "play" },
+      { roles: { coach }, on: "menu" },
+      { roles: { coach }, current: "play", on: "menu" },
+      { roles: { coach }, current: "coach", on: "play" },
+      { roles: { clubs: [club] }, on: "menu" },
+      { roles: { coach, clubs: [club] }, on: "menu" },
+    ];
+    for (const a of arrangements) {
+      const html = renderIn("en", createElement(HeaderNav, { roles: { ...NO_ROLES, unread: 2, ...a.roles }, current: a.current, labels }));
+      const bell = links(html).find((l) => l.attrs.includes('data-testid="nav-unread"'));
+      const where = JSON.stringify({ roles: Object.keys(a.roles), current: a.current });
+      expect(bell?.attrs, where).toMatch(/class="[^"]*\babsolute\b/);
+      // The bell comes right after the thing it is pinned to, inside one positioned box.
+      const pinnedTo = a.on === "play" ? /<span class="relative inline-flex"><a [^>]*data-testid="nav-play"[^>]*>My matches<\/a><a [^>]*data-testid="nav-unread"/ : /<span class="relative inline-flex"><details[\s\S]*?<\/details><a [^>]*data-testid="nav-unread"/;
+      expect(html, where).toMatch(pinnedTo);
+    }
+  });
+
   it("keeps the bell outside the menu when \"My matches\" waits inside it", () => {
     const html = header({ unread: 3, coach: { handle: "olga", as: "coach" } });
-    const menu = html.slice(html.indexOf("<details"));
+    const menu = html.slice(html.indexOf("<details"), html.indexOf("</details>"));
     expect(html.indexOf('data-testid="nav-unread"')).toBeGreaterThan(-1);
     expect(menu).not.toContain('data-testid="nav-unread"');
+  });
+
+  /**
+   * Review, 12 October 2026: in a Russian interface "обновление" is an update of the app. The bell's
+   * name in Russian is "2 новых уведомления", as notices are called everywhere else in Russian.
+   */
+  it("names the bell as notices in Russian, never as app updates", () => {
+    const ru = (n: number) => updatesLabel(createTranslator({ locale: "ru", messages: catalogue("ru") as never }) as never, n);
+    expect([1, 3, 5, 12].map(ru)).toEqual(["1 новое уведомление", "3 новых уведомления", "5 новых уведомлений", "Больше 9 новых уведомлений"]);
+    const en = (n: number) => updatesLabel(createTranslator({ locale: "en", messages: catalogue("en") as never }) as never, n);
+    expect([1, 2, 12].map(en)).toEqual(["1 new update", "2 new updates", "More than 9 new updates"]);
   });
 });

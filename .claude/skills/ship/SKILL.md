@@ -1016,6 +1016,22 @@ Wall clock first, credits second. What actually moved it, measured:
 - **The truncating span must not hold the figure.** "Mon, Sep 21 10:00 · 800 THB" truncated to the
   date at 390px because the amount sat inside the same `truncate` span as the label, behind two
   buttons. Put the label in the span that truncates and the figure in a `shrink-0` beside it.
+- **A width rule cannot know the font or the language.** The header hid the word Kicksmash under
+  380 px when one role door stood outside, and at 390 px "🎾 Мой ассистент" still left the word 90 px of
+  the 91 it needs, so Russian read "Kicksma…" (review, 12 October 2026). The brand is one line high now,
+  and it wraps and clips: a word with no room beside the mark goes to a line nobody sees. A check of
+  "whole or gone" asks where the word sits, not only its `display` (`e2e/coach.mjs`).
+- **A badge that takes width is one more item in the row.** The bell sat on the corner of My matches
+  for a player, and beside the coach's door as a chip of its own. There it cut the brand, and its
+  number read as a count for the assistant. Pin a badge (absolute) to the thing it counts, and test
+  every arrangement of the header, not only the plain player's (`tests/roles.test.ts`).
+- **A same-page hash link remounts nothing.** The bell's `/me#inbox` opened the inbox from every page
+  but My matches. There the tap only scrolled: the inbox's open-on-mount effect never ran again, and
+  Next's navigation fires no `hashchange`. A control that opens something on its own page opens it in
+  its click (`InboxBell`), and the suite taps it there, not only reads its `href`.
+- **One question on three doors is one component, its answer included.** The create form showed the
+  answer to "Is this Alex…?" with "Change"; "Paste the names" let the question vanish, so a mis-tap on
+  Yes attached a record with no sign. Share the answer row (`PastAnswered`) with the question.
 
 - **"0/0 suites passed" is not a pass.** `E2E_ONLY=coach.mjs` matched no suite, the runner exited 0,
   and a grep for `✗` found nothing — so a real failure in the coach suite was read as "passes on its

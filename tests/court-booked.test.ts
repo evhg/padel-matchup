@@ -132,7 +132,7 @@ describe("court booked", () => {
 /**
  * The owner, 12 October 2026, on TDsv at 390 px: "the not booked button looks confusing". "Court booked ✓
  * (by Erik)" stood beside a button that said "Not booked", which read as a second status. The way back
- * is now an action that says what it does: a small "Undo" whose name is "Mark the court as not booked".
+ * is now an action that says what it does: a small "Undo" whose name is "Undo: mark the court as not booked".
  * "I booked it" stays the other state's button. Any player of the match may still take it back.
  */
 describe("the court's line on the match page", () => {
@@ -141,8 +141,28 @@ describe("the court's line on the match page", () => {
   it("booked: the undo says what it does, and nothing on the line reads as a second status", () => {
     const html = page({ code: "TDSV", book: null, slotLine: "", booked: { name: "Erik" }, canMark: true });
     expect(html).toContain("Court booked ✓ (by Erik)");
-    expect(html).toMatch(/<button[^>]*aria-label="Mark the court as not booked"[^>]*>Undo<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-label="Undo: mark the court as not booked"[^>]*>Undo<\/button>/);
     expect(html).not.toContain("Not booked");
+  });
+
+  /**
+   * Review, 12 October 2026. A voice-control user says the words they see ("tap Undo"), so the button's
+   * name starts with them (WCAG 2.5.3, Label in Name). And in Russian "Отменить" beside "Корт забронирован ✓"
+   * read as "cancel the court booking", the same word the catalogue uses for cancel: the undo says
+   * "Снять отметку" (take the mark off), which cannot be read as cancelling the booking at the club.
+   */
+  it("in every language the undo's name starts with its visible words, and the Russian one takes the mark off", () => {
+    const undo = (l: "en" | "ru" | "es") => {
+      const m = renderIn(l, createElement(CourtBooking, { code: "TDSV", book: null, slotLine: "", booked: { name: "Erik" }, canMark: true })).match(/<button[^>]*aria-label="([^"]*)"[^>]*>([^<]*)<\/button>/);
+      return { name: m?.[1] ?? "", text: m?.[2] ?? "" };
+    };
+    for (const l of ["en", "ru", "es"] as const) {
+      const u = undo(l);
+      expect(u.text, l).not.toBe("");
+      expect(u.name.startsWith(u.text), `${l}: ${JSON.stringify(u)}`).toBe(true);
+    }
+    expect(undo("ru").text).toBe("Снять отметку");
+    expect(undo("ru").name).not.toMatch(/Отмен/);
   });
 
   it("not booked: \"I booked it\" stays the button, and a viewer with no seat sees the booked line alone", () => {

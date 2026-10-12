@@ -57,3 +57,20 @@ export function PastAsk({ name, options, onAnswer, disabled = false }: { name: s
     </div>
   );
 }
+
+/**
+ * An answer given, with "Change" beside it: "✓ Keeps Danny's matches" or "Danny: someone new". The
+ * create form and "Paste the names" both show it until the place is held, so a mis-tap on Yes is seen,
+ * and undone, before it attaches that player's record to the place (review, 12 October 2026).
+ */
+export function PastAnswered({ name, answer, onChange, disabled = false }: { name: string; answer: PastAnswer; onChange: () => void; disabled?: boolean }) {
+  const t = useTranslations("create");
+  return (
+    <p className="flex items-center gap-2 text-xs font-semibold" data-testid="past-answered">
+      <span className={answer === "new" ? "text-muted" : "text-ok"}>{answer === "new" ? t("askPastNewSet", { name }) : `✓ ${t("keepsRecord", { name })}`}</span>
+      <button type="button" className="underline" disabled={disabled} onClick={onChange}>
+        {t("askPastChange")}
+      </button>
+    </p>
+  );
+}
