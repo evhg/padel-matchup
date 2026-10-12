@@ -480,7 +480,12 @@ try {
   // GET /api/v1/matches/{code} answers with the match itself, not wrapped as a create does.
   const bookedApi = await fetch(`${BASE}/api/v1/matches/${bookedCode}`).then((r) => r.json());
   check("and the API says so, with the booker's first name", (bookedApi.match ?? bookedApi).courtBooked?.by === "Nok", JSON.stringify((bookedApi.match ?? bookedApi).courtBooked));
-  await page.getByTestId("court-booked-undo").click();
+  // The owner, 12 October 2026: "the not booked button looks confusing". The undo is an action that says what it does.
+  // Its name starts with the word it shows, so a voice user's "tap Undo" finds it (WCAG 2.5.3, review of 12 October 2026).
+  const undo = page.getByRole("button", { name: "Undo: mark the court as not booked", exact: true });
+  check("the booked line's undo is a small \"Undo\" named \"Undo: mark the court as not booked\", and nothing reads \"Not booked\"", (await undo.count()) === 1 && (await undo.innerText()).trim() === "Undo" && (await page.getByText("Not booked", { exact: true }).count()) === 0, await page.getByTestId("court-booked").innerText());
+  await shot(page, "clubs-court-booked-undo");
+  await undo.click();
   await page.getByTestId("court-booked-mark").waitFor({ timeout: 15000 });
   check("any player takes it back in one tap", (await page.getByTestId("court-booked").count()) === 0);
 
@@ -530,7 +535,9 @@ try {
   const pastedCode = page.url().split("/").slice(-2)[0];
   await page.goto(`${BASE}/${pastedCode}`);
   const pastedRows = await page.locator("main li").allInnerTexts();
-  check("one tap made the match with Danny and Alberto held", ["Danny", "Alberto"].every((x) => pastedRows.some((r) => r.includes(`Reserved for ${x}`))) && (await page.getByText("1 spot left").count()) === 1, JSON.stringify(pastedRows.slice(0, 4)).slice(0, 240));
+  // The count line names the held places, so "Full" or "1 spot left" is not the only hint (the owner, 12 October 2026).
+  const pastedCount = (await page.getByTestId("count-line").innerText().catch(() => "")).trim();
+  check("one tap made the match with Danny and Alberto held, and the count line says so", ["Danny", "Alberto"].every((x) => pastedRows.some((r) => r.includes(`Reserved for ${x}`))) && pastedCount === "1 spot left · 2 places held for Danny, Alberto", JSON.stringify({ count: pastedCount, rows: pastedRows.slice(0, 4) }).slice(0, 260));
   check("and the court shows booked by the organiser", (await page.getByTestId("court-booked").innerText().catch(() => "")).includes("Court booked ✓ (by Nok)"), await page.getByTestId("court-booked").innerText().catch(() => "no court-booked"));
   const join = page.getByTestId("join-booking");
   const joinLine = { n: await painted(join), text: await join.innerText().catch(() => ""), href: await join.getAttribute("href").catch(() => null), target: await join.getAttribute("target").catch(() => null) };

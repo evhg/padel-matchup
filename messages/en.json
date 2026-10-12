@@ -52,7 +52,9 @@
     "clubs": "Clubs",
     "tournaments": "Tournaments",
     "findGame": "Find a game",
-    "biggerText": "Bigger text"
+    "biggerText": "Bigger text",
+    "newNotices": "{count, plural, one {# new update} other {# new updates}}",
+    "manyNewNotices": "More than 9 new updates"
   },
   "identity": {
     "whatsYourName": "What's your name?",
@@ -237,7 +239,19 @@
     "pasteCheckClub": "We took the club of your last match. Check it here.",
     "pasteCheckDay": "The weekday and the date in your booking do not match. Check the day.",
     "inviteShown": "The match page shows your invite link. Other players can then join the booking on {platform} too.",
-    "inviteRemove": "Don't show this link"
+    "inviteRemove": "Don't show this link",
+    "askPastOne": "Is this {name}, who played with you on {day} at {club}?",
+    "askPastOneNoClub": "Is this {name}, who played with you on {day}?",
+    "askPastMany": "Which {name} is it? More than one played with you.",
+    "askPastOption": "Played {day} at {club}",
+    "askPastOptionNoClub": "Played {day}",
+    "askPastYes": "Yes, that's {name}",
+    "askPastNew": "No, someone new",
+    "askPastNewSet": "{name}: someone new",
+    "askPastChange": "Change",
+    "askPastFirst": "Answer the question about {name} first.",
+    "playedWithYou": "Played with you",
+    "keepsRecord": "Keeps {name}'s matches"
   },
   "share": {
     "title": "Your match is live",
@@ -360,7 +374,11 @@
     "playAgainNext": "Next game: {when} · {code}",
     "playAgainLands": "At that day and time, a tap opens that game. It makes no second one.",
     "bookAndPayOn": "Book and pay on {platform}",
-    "checkoutSignIn": "{platform} may ask you to sign in first."
+    "checkoutSignIn": "{platform} may ask you to sign in first.",
+    "heldFor": "{count, plural, one {# place held for {names}} other {# places held for {names}}}",
+    "heldCount": "{count, plural, one {# place held} other {# places held}}",
+    "courtBookedUndoMark": "Undo",
+    "courtBookedUndoName": "Undo: mark the court as not booked"
   },
   "creator": {
     "tools": "Organizer tools",

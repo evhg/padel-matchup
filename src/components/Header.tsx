@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { APP_NAME } from "@/lib/config";
 import { NO_ROLES, rolesFor } from "@/lib/domain/roles";
 import { getSessionPlayerId } from "@/lib/session";
-import { HeaderNav } from "./AssistantLink";
+import { HeaderNav, updatesLabel } from "./AssistantLink";
 import { LocaleToggle } from "./LocaleToggle";
 
 /**
@@ -22,10 +22,13 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
   const oneRoleDoor = (roles.coach ? 1 : 0) + roles.clubs.length + roles.series.length === 1;
   return (
     <header className="mx-auto flex w-full max-w-xl items-center justify-between px-4 pt-4 pb-2">
-      {/* The brand yields first: a long club name in a door must shorten the word Kicksmash, never
+      {/* The brand yields first: a long club name in a door must take the word Kicksmash away, never
           push the language toggle off a phone. Two chips here once overlapped the logo and broke a
-          click three screens down the page, which is a strange way to find out your header overflows. */}
-      <Link href="/" prefetch={false} className="flex min-w-0 items-center gap-2 font-extrabold tracking-tight text-lg" aria-label={APP_NAME}>
+          click three screens down the page, which is a strange way to find out your header overflows.
+          The word is whole or gone, never cut: one line high, wrapping, clipped, so a word with no room
+          beside the mark wraps onto a second line nobody sees. A width rule cannot know the font or the
+          language: "🎾 Мой ассистент" left it 90 px of the 91 it needs at 390 px (review, 12 October 2026). */}
+      <Link href="/" prefetch={false} className="flex h-8 min-w-0 flex-wrap items-center gap-x-2 overflow-hidden font-extrabold tracking-tight text-lg" aria-label={APP_NAME}>
         <span className="inline-grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-night">
           <span className="h-4 w-4 rounded-full bg-accent" />
         </span>
@@ -34,7 +37,7 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
         <span className={`truncate ${minimal ? "" : "[[data-text=big]_&]:max-sm:hidden"} ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
-        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText") }} />}
+        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText"), updates: updatesLabel((k, v) => t(k as never, v as never), roles.unread) }} />}
         <LocaleToggle />
       </div>
     </header>

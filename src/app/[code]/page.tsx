@@ -70,14 +70,14 @@ import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
 import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
-import { keepRecordFor, pastPlayerRows, pickable } from "@/lib/domain/heldRecord";
+import { keepRecordFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { eventUrl, inviteUrl, whatsappShareUrl } from "@/lib/share";
-import { heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
+import { countParts, heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
@@ -404,6 +404,10 @@ async function EventPage({ params, searchParams }: Props) {
   // Every record with a row here, a declined place included: one record holds one place per match.
   const idsHere = new Set([...roster, ...waitlist].flatMap((s) => (s.playerId ? [s.playerId] : [])));
   const playedWithYou = pickable(pastPlayers, { ids: idsHere, names: namesHere });
+  // "Is this Danny, who played with you on Sep 13 at Kross Padel?" before a typed or pasted name is held
+  // (the owner, 12 October 2026): names, days and clubs only, the records here left out. One array for
+  // every open spot and the paste box, so the page carries it once.
+  const pastAsk = pastViews(pastPlayers, idsHere);
   const playedKeys = new Set(playedWithYou.map((n) => n.trim().toLowerCase()));
   // The same person twice would be two chips of one name: a past player's chip stands for them.
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()) && !playedKeys.has(r.name.trim().toLowerCase()));
@@ -534,6 +538,7 @@ async function EventPage({ params, searchParams }: Props) {
                 hasIdentity={Boolean(me)}
                 rolodex={viewer.isCreator ? rolodexForBrowser(rolodex, { namesAlone }) : []}
                 played={viewer.isCreator ? playedWithYou : []}
+                past={viewer.isCreator ? pastAsk : []}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
@@ -846,9 +851,16 @@ async function EventPage({ params, searchParams }: Props) {
 
         {/* Players */}
         <section className="card">
-          <div className="flex items-baseline justify-between">
+          {/* "3/4 players · 1 place held for Alberto": a held place is named here, so "Full" is not the only hint (the owner, 12 October 2026). */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <h2 className="text-lg font-extrabold">{t("event.players", { count: occupied, capacity: ev.capacity })}</h2>
-            {!cancelled && !over && <span className="text-sm font-semibold text-muted">{t("event.spotsLeft", { count: spotsLeft })}</span>}
+            {!cancelled && !over && (
+              <span className="text-sm font-semibold text-muted" data-testid="count-line">
+                {countParts(lineSeats)
+                  .map((p) => t(p.key, p.values))
+                  .join(" · ")}
+              </span>
+            )}
           </div>
           <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {pendingRequests.length > 0 && (
@@ -935,7 +947,7 @@ async function EventPage({ params, searchParams }: Props) {
             manageUrl={organiserManageUrl}
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
-            paste={!cancelled && !over ? { namesHere, spots: spotsLeft } : null}
+            paste={!cancelled && !over ? { namesHere, spots: spotsLeft, past: pastAsk } : null}
           />
         )}
 

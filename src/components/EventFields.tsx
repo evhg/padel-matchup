@@ -2,7 +2,7 @@
 
 import { CITIES } from "@/lib/domain/cities";
 import { useLocale, useTranslations } from "next-intl";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type ComponentProps } from "react";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import type { TournamentFormat } from "@/db/schema";
 import { AGE_MINS, CATEGORY_KEYS, EVENT_CATEGORIES, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
@@ -18,6 +18,7 @@ import { bestTimes, datesSharingAWeekday, freeLineMessage, freeLineOf, timeChips
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
 import { LevelGuide, LevelSelect } from "./LevelSelect";
 import { VenueCombobox, type VenueOption } from "./VenueCombobox";
+import { PastNames } from "./PastNames";
 
 export type EventFormValues = {
   type: "match" | "tournament";
@@ -110,6 +111,7 @@ export function EventFields({
   missing = [],
   check = [],
   startLocked = false,
+  past,
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
@@ -124,6 +126,8 @@ export function EventFields({
   check?: readonly ("venue" | "date")[];
   /** The match has started and this viewer is not the organiser (`mayMoveStart`): the day, the time and the zone show, and do not change. */
   startLocked?: boolean;
+  /** The create form's past players under the names: "Played with you" and "Is this Danny…?" (`PastNames`). */
+  past?: Omit<ComponentProps<typeof PastNames>, "text">;
 }) {
   const t = useTranslations();
   // A day or a time the booking did not give shows the form's own (the usual slot, else tomorrow at
@@ -205,6 +209,11 @@ export function EventFields({
   }, [pickedFree, values]);
   // "More" opens by itself only when something non-default is already set (editing a match).
   const [moreOpen, setMoreOpen] = useState(Boolean(values.haveNames || values.title || values.note || values.bookingUrl || values.cost || values.payNote || values.publicListing || values.whenFull === "closed"));
+  // Sent with "Is this Danny…?" still open: the names show again, wherever "More" was left.
+  const reveal = past?.reveal ?? 0;
+  useEffect(() => {
+    if (reveal) setMoreOpen(true);
+  }, [reveal]);
   // The level sits one tap from the form, behind its own chip: "looking for a fourth" carries the one
   // fact the fourth needs. The presets stay folded (rule 1); the chip reads what is set.
   const [levelOpen, setLevelOpen] = useState(false);
@@ -603,6 +612,7 @@ export function EventFields({
         <textarea className="textarea" rows={3} value={values.haveNames} maxLength={600} onChange={(e) => onChange({ haveNames: e.target.value })} data-testid="have-already" />
         <p className="mt-1 text-xs text-muted">{t("create.haveAlreadyHelp")}</p>
         {values.type === "tournament" && values.fixedPairs && <p className="mt-1 text-xs text-muted">{t("pairs.namesHelp")}</p>}
+        {past && <PastNames text={values.haveNames} {...past} />}
       </div>
       <div>
         <label className="label">{t("create.whenFull")}</label>

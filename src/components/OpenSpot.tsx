@@ -4,8 +4,10 @@ import { useTranslations } from "next-intl";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
+import { answerKey, askFor, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
 import { registerJoinHandler } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
+import { PastAsk } from "./PastAsk";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
@@ -25,6 +27,7 @@ export function OpenSpot({
   hasIdentity,
   rolodex,
   played = [],
+  past = [],
   emailEnabled,
   namesHere = [],
   claimable = [],
@@ -45,6 +48,12 @@ export function OpenSpot({
    * record appears; typing over the name drops the pick. Names only: the server finds the record again.
    */
   played?: readonly string[];
+  /**
+   * The organiser's past players as names, days and clubs (`pastViews`): a typed name one of them carries
+   * asks "Is this Danny, who played with you on Sep 13 at Kross Padel?" before the place is held (the
+   * owner, 12 October 2026). Yes keeps that record; No holds the place by name.
+   */
+  past?: readonly PastView[];
   emailEnabled: boolean;
   /** Everybody already in this match, so a returning player is recognised before they become a second row. */
   namesHere?: readonly string[];
@@ -71,6 +80,11 @@ export function OpenSpot({
   // A place held for a phone is that number's, and keeps no record (`reserveLocked`): a phone typed after
   // the pick turns it back into a place held by name, and the line under the name says no more than that.
   const keepsPick = picked !== null && picked === name && !phone.trim();
+  /** The answer to "Is this Danny…?", for the name it was given for. */
+  const [answer, setAnswer] = useState<{ key: string; answer: PastAnswer } | null>(null);
+  // A typed name a past player carries asks first; a pick from the chips, or a phone (the number's own place), asks nothing.
+  const asked = mode === "reserve" && !keepsPick && !phone.trim() ? askFor(past, name) : [];
+  const answered = answer && answer.key === answerKey(name) ? answer.answer : undefined;
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLDivElement>(null);
@@ -81,6 +95,7 @@ export function OpenSpot({
     setPhone("");
     setEmail("");
     setPicked(null);
+    setAnswer(null);
     setError(null);
   };
   const expand = useCallback(() => {
@@ -108,11 +123,16 @@ export function OpenSpot({
       });
     });
 
-  const reserve = () => {
+  /** `given`: the answer just tapped, which holds the place at once. */
+  const reserve = (given?: PastAnswer) => {
     if (!name.trim()) return setError(t("identity.nameRequired"));
+    const said = given ?? answered;
+    // Done while "Is this Danny…?" is on screen: the question comes first.
+    if (asked.length > 0 && said === undefined) return setError(t("create.askPastFirst", { name: name.trim() }));
+    const pick = keepsPick ? true : asked.length > 0 && said !== undefined && said !== "new" && said !== true ? said : undefined;
     start(async () => {
       setError(null);
-      const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId, pick: keepsPick });
+      const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId, pick });
       startTransition(() => {
         if (!r.ok) setError(errText(r.error));
         else {
@@ -249,6 +269,17 @@ export function OpenSpot({
           crew member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
         {mode === "join" && !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
+        {mode === "reserve" && asked.length > 0 && answered === undefined && (
+          <PastAsk
+            name={name.trim()}
+            options={asked}
+            disabled={pending}
+            onAnswer={(a) => {
+              setAnswer({ key: answerKey(name), answer: a });
+              reserve(a);
+            }}
+          />
+        )}
         {mode === "reserve" && keepsPick && (
           <p className="text-xs font-semibold text-ok" data-testid="picked-past-player">
             ✓ {t("creator.keepsRecord", { name })}

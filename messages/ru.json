@@ -52,7 +52,9 @@
     "clubs": "Клубы",
     "tournaments": "Турниры",
     "findGame": "Найти игру",
-    "biggerText": "Крупный текст"
+    "biggerText": "Крупный текст",
+    "newNotices": "{count, plural, one {# новое уведомление} few {# новых уведомления} many {# новых уведомлений} other {# новых уведомления}}",
+    "manyNewNotices": "Больше 9 новых уведомлений"
   },
   "identity": {
     "whatsYourName": "Как вас зовут?",
@@ -237,7 +239,19 @@
     "pasteCheckClub": "Мы взяли клуб вашего прошлого матча. Проверьте его здесь.",
     "pasteCheckDay": "День недели и дата в вашей брони не совпадают. Проверьте день.",
     "inviteShown": "Страница матча покажет вашу ссылку-приглашение. Другие игроки тоже смогут присоединиться к брони в {platform}.",
-    "inviteRemove": "Не показывать эту ссылку"
+    "inviteRemove": "Не показывать эту ссылку",
+    "askPastOne": "Это {name}? Вы играли вместе {day} в {club}.",
+    "askPastOneNoClub": "Это {name}? Вы играли вместе {day}.",
+    "askPastMany": "Какой это {name}? С вами играли несколько игроков с этим именем.",
+    "askPastOption": "Играли {day} в {club}",
+    "askPastOptionNoClub": "Играли {day}",
+    "askPastYes": "Да, это {name}",
+    "askPastNew": "Нет, это другой игрок",
+    "askPastNewSet": "{name}: другой игрок",
+    "askPastChange": "Изменить",
+    "askPastFirst": "Сначала ответьте на вопрос про {name}.",
+    "playedWithYou": "Играли с вами",
+    "keepsRecord": "Матчи {name} сохраняются"
   },
   "share": {
     "title": "Матч создан",
@@ -360,7 +374,11 @@
     "playAgainNext": "Следующая игра: {when} · {code}",
     "playAgainLands": "В этот день и час нажатие откроет эту игру. Вторую оно не создаст.",
     "bookAndPayOn": "Забронировать и оплатить в {platform}",
-    "checkoutSignIn": "{platform} может сначала попросить войти."
+    "checkoutSignIn": "{platform} может сначала попросить войти.",
+    "heldFor": "{count, plural, one {# место забронировано для {names}} few {# места забронированы для {names}} many {# мест забронировано для {names}} other {# места забронированы для {names}}}",
+    "heldCount": "{count, plural, one {# место забронировано} few {# места забронированы} many {# мест забронировано} other {# места забронированы}}",
+    "courtBookedUndoMark": "Снять отметку",
+    "courtBookedUndoName": "Снять отметку о брони корта"
   },
   "creator": {
     "tools": "Инструменты организатора",

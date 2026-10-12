@@ -249,6 +249,36 @@ try {
   await mila.getByTestId("owed").waitFor({ timeout: 20000 });
   check("taking a package starts it unpaid, with the figure and the ways to pay on the same screen", (await mila.getByTestId("owed").getByText(/7000 THB/).count()) >= 1 && (await mila.getByTestId("owed-package").count()) === 1 && (await mila.getByTestId("take-offer").count()) === 0 && (await mila.getByText(/10 of 10 left/).count()) >= 1);
 
+  // Olga has new notices now (Ivan asked, Dasha and Mila joined). Away from her own page the header holds
+  // her door, the menu, the bell and the language pill. The bell sat beside "🎾 My assistant" and took
+  // width, so at 390 px the word Kicksmash was cut to "Kicks…", and to "Kic…" in Russian (review, 12
+  // October 2026). The word is whole or gone, never cut, and the bell sits on the menu, not on her door.
+  const coachHeader = () =>
+    olga.evaluate(() => {
+      const box = (sel) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+      // Whole or gone: hidden, or wrapped below the one-line brand where nobody sees it, or shown uncut.
+      const brand = document.querySelector('header a[aria-label="Kicksmash"]');
+      const word = brand?.querySelector("span.truncate");
+      const shown = Boolean(word) && getComputedStyle(word).display !== "none" && word.getBoundingClientRect().top < brand.getBoundingClientRect().bottom - 0.5;
+      const wordOk = Boolean(word) && (!shown || word.scrollWidth <= word.clientWidth + 0.5);
+      const [bell, door, more, lang] = ['[data-testid="nav-unread"]', '[data-testid="assistant-link"]', '[data-testid="nav-more"]', 'header [aria-label="Language"]'].map(box);
+      const vw = document.documentElement.clientWidth;
+      const inside = [bell, door, more, lang].every((b) => b && b.left >= 0 && b.right <= vw + 0.5);
+      // On the menu's corner: the bell overlaps ⋯, and is clear of the door and of the language pill.
+      const onMenu = inside && bell.left < more.right && bell.right > more.left && bell.left >= door.right && bell.right <= lang.left + 0.5;
+      const edges = (b) => (b ? [Math.round(b.left), Math.round(b.right)] : null);
+      return { ok: wordOk && onMenu && document.documentElement.scrollWidth <= vw, word: word ? [word.scrollWidth, word.clientWidth, shown ? "shown" : "gone"] : null, bell: edges(bell), door: edges(door), more: edges(more), lang: edges(lang) };
+    });
+  for (const l of ["ru", "en"]) {
+    await olga.context().addCookies([{ name: "NEXT_LOCALE", value: l, url: BASE }]);
+    await olga.goto(BASE + "/play");
+    const unread = await olga.getByTestId("nav-unread").count();
+    const fit = await coachHeader();
+    check(`a coach with new notices, away from her page, at 390 px in ${l}: the word Kicksmash whole or gone, the bell on the menu`, unread === 1 && fit.ok, JSON.stringify({ unread, ...fit }));
+    await shot(olga, `coach-header-bell-${l}`);
+  }
+  await olga.context().clearCookies({ name: "NEXT_LOCALE" });
+
   // Olga accepts and starts a package of ten.
   await olga.goto(BASE + "/coach/students");
   await olga.getByText("Waiting for your yes").waitFor({ timeout: 20000 });

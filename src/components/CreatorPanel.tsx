@@ -6,6 +6,7 @@ import { cancelEventAction, setBanterAction } from "@/actions/events";
 import { EmailField } from "./EmailField";
 import { EditMatch } from "./EditMatch";
 import { PasteNames } from "./PasteNames";
+import type { PastView } from "@/lib/domain/pastAsk";
 import type { EventFormValues } from "./EventFields";
 import { CopyButton, ShareButtons } from "./ShareSheet";
 import type { VenueOption } from "./VenueCombobox";
@@ -36,7 +37,8 @@ export function CreatorPanel({
   isCancelled: boolean;
   groupInvite: { text: string; count: number; url: string } | null;
   /** The names already in the match and the open spots, while there are any: "Paste the names from the group". */
-  paste?: { namesHere: readonly string[]; spots: number } | null;
+  /** `past`: the organiser's past players as names, days and clubs, for "Is this Danny…?" before a pasted name is held. */
+  paste?: { namesHere: readonly string[]; spots: number; past?: readonly PastView[] } | null;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
@@ -64,7 +66,7 @@ export function CreatorPanel({
         <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
       </div>
 
-      {!isCancelled && paste && paste.spots > 0 && <PasteNames code={code} namesHere={paste.namesHere} spots={paste.spots} />}
+      {!isCancelled && paste && paste.spots > 0 && <PasteNames code={code} namesHere={paste.namesHere} spots={paste.spots} past={paste.past} />}
 
       {!isCancelled && groupInvite && groupInvite.count > 1 && (
         <div className="mt-4 border-t border-line pt-4">

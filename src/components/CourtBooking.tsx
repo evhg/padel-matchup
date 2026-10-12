@@ -8,7 +8,8 @@ import { setCourtBookedAction } from "@/actions/slots";
  * The court on the match page: "Book this court" for the organiser and the players, the chosen day,
  * hour, length and court beside it, and "I booked it" once a player has booked and paid in the club's
  * own app (DECIDING rule 36). Booked, everyone reads "Court booked ✓ (by Ana)", and a player can take it
- * back. The link opens in the player's browser; it carries nobody's identity and signs nobody in.
+ * back with "Undo" ("Undo: mark the court as not booked"). The link opens in the player's browser; it
+ * carries nobody's identity and signs nobody in.
  *
  * `book.checkout` is the platform's name when the link is its checkout, filled in (the owner, 11 October
  * 2026, "Playtomic checkout, filled"): the button says "Book and pay on Playtomic", the one place the
@@ -26,9 +27,13 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
     return (
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-ok-soft px-4 py-2.5" data-testid="court-booked">
         <span className="text-sm font-bold text-ok">{booked.name ? t("courtBookedBy", { name: booked.name }) : t("courtBooked")}</span>
+        {/* An action that says what it does, never a second status beside the first: "Not booked" beside
+            "Court booked ✓" read as two states (the owner, 12 October 2026). Any player may still undo it.
+            Its name starts with the words it shows, so "tap Undo" finds it by voice (WCAG 2.5.3), and in
+            Russian it takes the mark off ("Снять отметку"): "Отменить" read as cancelling the booking. */}
         {canMark && (
-          <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => mark(false)} data-testid="court-booked-undo">
-            {t("courtBookedUndo")}
+          <button type="button" className="min-h-9 shrink-0 px-1 text-sm font-semibold text-muted underline underline-offset-2" disabled={pending} onClick={() => mark(false)} aria-label={t("courtBookedUndoName")} title={t("courtBookedUndoName")} data-testid="court-booked-undo">
+            {t("courtBookedUndoMark")}
           </button>
         )}
       </div>

@@ -51,7 +51,7 @@ freezeClock(NOW);
 
 // ------------------------------------------------------------------ the rules, pure
 
-const pp = (id: string, name: string, days: number): PastPlayer => ({ id, name, last: at(days) });
+const pp = (id: string, name: string, days: number): PastPlayer => ({ id, name, last: at(days), club: "Kross Padel", tz: "Asia/Bangkok" });
 
 describe("who the picker offers, and which record a name finds", () => {
   const list = [pp("d1", "Danny", -28), pp("j1", "Jakob", -10), pp("a1", "Ana", -12), pp("a2", "ana", -30), pp("e1", "Erik", -5)];

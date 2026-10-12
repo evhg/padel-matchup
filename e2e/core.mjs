@@ -110,7 +110,8 @@ try {
   await a.getByTestId("text-size-switch").click();
   check("the switch on My matches raises the text to 18px", (await rootSize()) === "18px");
   // The header's word Kicksmash is whole or gone at the big size, never cut to "Kicksm…".
-  const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.scrollWidth <= e.clientWidth).catch(() => false);
+  // Gone is hidden, or wrapped below the one-line brand where nobody sees it (Header.tsx).
+  const brandWhole = await a.locator('header a[aria-label="Kicksmash"] span.truncate').evaluate((e) => getComputedStyle(e).display === "none" || e.getBoundingClientRect().top >= e.parentElement.getBoundingClientRect().bottom - 0.5 || e.scrollWidth <= e.clientWidth).catch(() => false);
   check("with Bigger text the header shows the whole word Kicksmash or the mark alone, never a cut word", brandWhole);
   const emailFields = a.locator('main input[type="email"]');
   const allPlaceholdersFit = await emailFields.evaluateAll((es) => es.every((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; })).catch(() => false);
@@ -883,6 +884,103 @@ try {
     (await mariaPage.content()).includes('href="/PAST"') && (await mariaPage.getByRole("heading", { name: /Your personal link/ }).count()) === 0,
   );
   await mariaPage.close();
+
+  // ---- A typed name a past player carries asks first (the owner, 12 October 2026: "if manually typed and it matches a previously played person it should ask if its this person to avoid creating dupes") ----
+  // PAST's own day and club, read from the API, as the question names them: the day in PAST's zone, in the browser's language.
+  const pastMatch = await sofia.request.get(`${BASE}/api/v1/matches/PAST`).then((r) => r.json()).then((j) => j.match ?? j);
+  const pastDay = new Intl.DateTimeFormat("en", { timeZone: pastMatch.tz, day: "numeric", month: "short" }).format(new Date(pastMatch.startsAt));
+  const pastClub = pastMatch.venue?.name ?? "Padel Indoor BCN";
+  // The match page: Sofia types "Jordi" in an open spot of her match.
+  await sofia.goto(`${BASE}/${code4}`);
+  await sofia.getByRole("button", { name: /Open spot/ }).first().click();
+  await sofia.getByPlaceholder("Name").fill("Jordi");
+  const spotAsk = sofia.getByTestId("past-ask");
+  await spotAsk.waitFor({ timeout: 10000 });
+  const spotAskText = ((await spotAsk.textContent()) ?? "").trim();
+  check("the open spot asks \"Is this Jordi, who played with you on <day> at <club>?\" before it holds the place", spotAskText.startsWith(`Is this Jordi, who played with you on ${pastDay} at ${pastClub}?`), spotAskText);
+  await sofia.getByRole("button", { name: "Done", exact: true }).click();
+  check("Done waits for the answer, and says so", (await sofia.getByText("Answer the question about Jordi first.").count()) === 1 && (await sofia.getByText("Reserved for Jordi").count()) === 0);
+  await shot(sofia, "12i-open-spot-asks");
+  await spotAsk.getByRole("button", { name: "Yes, that's Jordi", exact: true }).click();
+  await sofia.getByText("Reserved for Jordi").first().waitFor({ timeout: 20000 });
+  const heldJordi = sofia.locator("main li", { hasText: "Reserved for Jordi" });
+  check("\"Yes, that's Jordi\" holds the place with Jordi's record", (await heldJordi.getByTestId("keeps-record").count()) === 1);
+  const count4 = (await sofia.getByTestId("count-line").innerText()).trim();
+  check("the count line names the held place", count4 === "1 spot left · 1 place held for Jordi", count4);
+  await shot(sofia, "12j-held-count-line");
+  // "Paste the names": a pasted Alex asks too, and the button waits for the answer.
+  await sofia.getByTestId("paste-names").locator("summary").click();
+  await sofia.getByTestId("paste-names-box").fill("Alex");
+  const pasteAsk = sofia.getByTestId("paste-names").getByTestId("past-ask");
+  await pasteAsk.waitFor({ timeout: 20000 });
+  const pasteHold = sofia.getByRole("button", { name: "Reserve 1 spot", exact: true });
+  check("a pasted Alex asks \"Is this Alex…?\", and \"Reserve 1 spot\" waits for the answer", ((await pasteAsk.textContent()) ?? "").startsWith(`Is this Alex, who played with you on ${pastDay} at ${pastClub}?`) && (await pasteHold.isDisabled()), ((await pasteAsk.textContent()) ?? "").trim());
+  await shot(sofia, "12j2-paste-asks");
+  // A mis-tap on Yes must show, with a way back, before "Reserve 1 spot" attaches that record to the place
+  // and its personal link can sign in as it (review, 12 October 2026): the answer stays on screen with "Change".
+  const pasteBox = sofia.getByTestId("paste-names");
+  const pasteAnswered = pasteBox.getByTestId("past-answered");
+  await pasteAsk.getByRole("button", { name: "Yes, that's Alex", exact: true }).click();
+  await pasteAnswered.first().waitFor({ timeout: 5000 }).catch(() => {});
+  const pasteYes = ((await pasteAnswered.first().textContent().catch(() => "")) ?? "").trim();
+  check("in \"Paste the names\" a Yes stays on screen as \"✓ Keeps Alex's matches\" with Change beside it", /^✓ Keeps Alex's matches\s*Change$/.test(pasteYes) && (await pasteBox.getByTestId("past-ask").count()) === 0, pasteYes);
+  if (pasteYes) {
+    await pasteAnswered.getByRole("button", { name: "Change", exact: true }).click();
+    await pasteAsk.waitFor({ timeout: 5000 });
+  }
+  check("and Change takes the answer back: the question asks again, and the button waits", (await pasteAsk.count()) === 1 && (await pasteAnswered.count()) === 0 && (await pasteHold.isDisabled()));
+  await pasteAsk.getByRole("button", { name: "No, someone new", exact: true }).click();
+  const pasteNo = ((await pasteAnswered.first().textContent().catch(() => "")) ?? "").trim();
+  check("a No stays on screen too, as \"Alex: someone new\" with Change", /^Alex: someone new\s*Change$/.test(pasteNo), pasteNo);
+  await shot(sofia, "12j3-paste-answered");
+  await pasteHold.click();
+  await sofia.getByText("Reserved for Alex", { exact: true }).waitFor({ timeout: 20000 });
+  check("\"No, someone new\" holds the pasted Alex by name", (await sofia.locator("main li", { hasText: "Reserved for Alex" }).getByTestId("keeps-record").count()) === 0);
+
+  // The create form: "Played with you" under the names, and the question under a typed name.
+  await sofia.goto(BASE + "/new");
+  await sofia.getByRole("button", { name: /More options/ }).click();
+  const createChips = sofia.getByTestId("create-played-with-you");
+  await createChips.waitFor({ timeout: 15000 });
+  const chipCounts = await Promise.all(["Alex", "Maria", "Jordi", "Sofia"].map((x) => createChips.getByRole("button", { name: x, exact: true }).count()));
+  check("the create form offers \"Played with you\" under the names: Sofia's partners from PAST, never Sofia", JSON.stringify(chipCounts) === "[1,1,1,0]", ((await createChips.textContent()) ?? "").trim());
+  await shot(sofia, "12k0-create-chips");
+  await createChips.getByRole("button", { name: "Maria", exact: true }).click();
+  check("a chip puts the name on its own line and keeps that player's record", (await sofia.getByTestId("have-already").inputValue()) === "Maria" && ((await sofia.getByTestId("past-answered").first().textContent()) ?? "").includes("Keeps Maria's matches"));
+  await sofia.getByTestId("have-already").fill("Maria\nJordi\nAlex");
+  const formAsks = sofia.getByTestId("create-names").getByTestId("past-ask");
+  await formAsks.first().waitFor({ timeout: 10000 });
+  const formAskTexts = (await formAsks.allTextContents()).map((x) => x.trim());
+  check(
+    "a typed Jordi and a typed Alex each ask \"Is this …, who played with you on <day> at <club>?\"",
+    formAskTexts.length === 2 && formAskTexts[0].startsWith(`Is this Jordi, who played with you on ${pastDay} at ${pastClub}?`) && formAskTexts[1].startsWith(`Is this Alex, who played with you on ${pastDay} at ${pastClub}?`),
+    JSON.stringify(formAskTexts),
+  );
+  await shot(sofia, "12k-create-asks");
+  const later5 = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+  const lp5 = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(later5);
+  const lg5 = (t) => lp5.find((p) => p.type === t).value;
+  await sofia.locator("input[type=date]").fill(`${lg5("year")}-${lg5("month")}-${lg5("day")}`);
+  await sofia.locator("input[type=time]").fill("19:30");
+  await sofia.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  const beforeAnswer = sofia.url();
+  await sofia.getByRole("button", { name: "Create & get the link" }).click();
+  await sofia.getByTestId("create-error").waitFor({ timeout: 10000 });
+  check("Create waits while a question is open, and names it", (await sofia.getByTestId("create-error").innerText()).trim() === "Answer the question about Jordi first." && sofia.url() === beforeAnswer, await sofia.getByTestId("create-error").innerText());
+  await formAsks.first().getByRole("button", { name: "Yes, that's Jordi", exact: true }).click();
+  await sofia.getByTestId("create-names").getByRole("button", { name: "No, someone new", exact: true }).click();
+  const answered = (await sofia.getByTestId("past-answered").allTextContents()).map((x) => x.trim());
+  check("each answer shows under the names, with Change beside it", answered.length === 3 && answered[1].startsWith("✓ Keeps Jordi's matches") && answered[2].startsWith("Alex: someone new"), JSON.stringify(answered));
+  await shot(sofia, "12l-create-answered");
+  await sofia.getByRole("button", { name: "Create & get the link" }).click();
+  await sofia.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const code5 = sofia.url().split("/").slice(-2)[0];
+  await sofia.goto(`${BASE}/${code5}`);
+  const kept5 = await Promise.all(["Maria", "Jordi", "Alex"].map((x) => sofia.locator("main li", { hasText: `Reserved for ${x}` }).getByTestId("keeps-record").count()));
+  check("the new match holds Maria and Jordi with their records, and Alex by name", JSON.stringify(kept5) === "[1,1,0]", JSON.stringify(kept5));
+  const count5 = (await sofia.getByTestId("count-line").innerText()).trim();
+  check("and its count line names the three held places", count5 === "3 places held for Maria, Jordi, Alex", count5);
+  await shot(sofia, "12m-created-with-records");
   await sofia.close();
 
   // ---- Desktop landing for good measure ----

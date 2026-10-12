@@ -52,7 +52,9 @@
     "clubs": "Clubes",
     "tournaments": "Torneos",
     "findGame": "Buscar partido",
-    "biggerText": "Texto más grande"
+    "biggerText": "Texto más grande",
+    "newNotices": "{count, plural, one {# novedad} other {# novedades}}",
+    "manyNewNotices": "Más de 9 novedades"
   },
   "identity": {
     "whatsYourName": "¿Cómo te llamas?",
@@ -237,7 +239,19 @@
     "pasteCheckClub": "Tomamos el club de tu último partido. Compruébalo aquí.",
     "pasteCheckDay": "El día de la semana y la fecha de tu reserva no coinciden. Comprueba el día.",
     "inviteShown": "La página del partido muestra tu enlace de invitación. Así otros jugadores también se unen a la reserva en {platform}.",
-    "inviteRemove": "No mostrar este enlace"
+    "inviteRemove": "No mostrar este enlace",
+    "askPastOne": "¿Es {name}, que jugó contigo el {day} en {club}?",
+    "askPastOneNoClub": "¿Es {name}, que jugó contigo el {day}?",
+    "askPastMany": "¿Qué {name} es? Jugaste con más de uno.",
+    "askPastOption": "Jugó el {day} en {club}",
+    "askPastOptionNoClub": "Jugó el {day}",
+    "askPastYes": "Sí, es {name}",
+    "askPastNew": "No, es otra persona",
+    "askPastNewSet": "{name}: otra persona",
+    "askPastChange": "Cambiar",
+    "askPastFirst": "Primero responde la pregunta sobre {name}.",
+    "playedWithYou": "Jugaron contigo",
+    "keepsRecord": "Mantiene los partidos de {name}"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -360,7 +374,11 @@
     "playAgainNext": "Próximo partido: {when} · {code}",
     "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro.",
     "bookAndPayOn": "Reservar y pagar en {platform}",
-    "checkoutSignIn": "{platform} puede pedirte que inicies sesión primero."
+    "checkoutSignIn": "{platform} puede pedirte que inicies sesión primero.",
+    "heldFor": "{count, plural, one {# plaza reservada para {names}} other {# plazas reservadas para {names}}}",
+    "heldCount": "{count, plural, one {# plaza reservada} other {# plazas reservadas}}",
+    "courtBookedUndoMark": "Deshacer",
+    "courtBookedUndoName": "Deshacer: marcar la pista como no reservada"
   },
   "creator": {
     "tools": "Herramientas de organizador",

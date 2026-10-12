@@ -16,6 +16,9 @@ export default defineConfig({
     // a test must leave no global state behind: what a test sets on process.env, it unsets.
     isolate: false,
   },
+  // A component test renders a .tsx file. The app's tsconfig leaves JSX to Next.js ("preserve"), which
+  // the test transform cannot run, so the test transform compiles it itself (tests/court-booked.test.ts).
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

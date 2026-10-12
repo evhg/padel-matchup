@@ -39,7 +39,8 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer, markSignedInByName, setSessionPlayer } from "@/lib/session";
-import { attachHeldRecord, decideHeldLink, pastPlayerNamed, pastPlayerRows, takeHeldLink } from "@/lib/domain/heldRecord";
+import { attachHeldRecord, decideHeldLink, heldRecordsFor, pastPlayerRows, recordForAnswer, takeHeldLink } from "@/lib/domain/heldRecord";
+import { answerOfPick, cleanPicks } from "@/lib/domain/pastAsk";
 import { countSignIn } from "@/lib/domain/signins";
 import { getPlayer } from "@/lib/domain/players";
 import { DomainError } from "@/lib/domain/errors";
@@ -218,20 +219,24 @@ export async function removeAction(code: string, slotId: string): Promise<Action
 }
 
 /**
- * The organiser holds a spot for a name. `pick`: the name came from "Played with you", and the place
- * keeps that past player's record (the owner, 11 October 2026: "Yes, keep the record"). The browser
- * sends the name, never a player id: the record is found again here, from the organiser's own past
- * players (`pastPlayerNamed`), and with none or two of that name the place is held by name only.
+ * The organiser holds a spot for a name. `pick`: the name came from "Played with you" (`true`), or the
+ * organiser answered "Yes, that's Danny" to the typed name's question with the day and the club it was
+ * shown; the place then keeps that past player's record (the owner, 11 October 2026: "Yes, keep the
+ * record"; 12 October 2026: "if manually typed and it matches a previously played person it should ask").
+ * The browser sends the name and the answer, never a player id: the record is found again here, among
+ * the organiser's own past players (`recordForAnswer`), and with none, or with an answer that names
+ * nobody there, the place is held by name only.
  */
 export async function reserveAction(
   code: string,
-  input: { name: string; email?: string; phone?: string; slotId?: string; pick?: boolean },
+  input: { name: string; email?: string; phone?: string; slotId?: string; pick?: boolean | { day: string; club: string | null } },
 ): Promise<ActionResult<{ inviteUrl: string; inviteCode: string; name: string; emailed: boolean }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
     await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
     const before = wasComplete(detail);
-    const record = input.pick === true && typeof input.name === "string" ? pastPlayerNamed(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), input.name) : null;
+    const [pick] = typeof input.name !== "string" ? [] : input.pick === true ? [{ name: input.name }] : input.pick && typeof input.pick === "object" ? cleanPicks([{ ...input.pick, name: input.name }]) : [];
+    const record = pick ? recordForAnswer(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), pick.name, answerOfPick(pick)) : null;
     const { slot, event } = await reserveSlot(db, {
       eventId: detail.event.id,
       actorPlayerId: viewer.player?.id ?? null,
@@ -259,7 +264,7 @@ export async function reserveAction(
  * daily limit every reserved spot counts towards, one line-up notice, one page render. Rule 12: a
  * list is one request, never one per name.
  */
-export async function reserveManyAction(code: string, pasted: string): Promise<ActionResult<{ held: string[]; already: string[]; noSpot: string[] }>> {
+export async function reserveManyAction(code: string, pasted: string, picks?: unknown): Promise<ActionResult<{ held: string[]; already: string[]; noSpot: string[] }>> {
   return runA(async () => {
     if (typeof pasted !== "string") throw new ActionFailure("invalid");
     const { db, detail, viewer } = await requireCreator(code);
@@ -268,7 +273,10 @@ export async function reserveManyAction(code: string, pasted: string): Promise<A
     if (plan.hold.length === 0) return { held: [], already: plan.already, noSpot: plan.noSpot };
     await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay, "day", plan.hold.length);
     const before = wasComplete(detail);
-    const { held, event } = await reserveNames(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, names: plan.hold });
+    // A name the organiser answered "Yes, that's Danny" for keeps that record, found again among the organiser's own past players.
+    const answers = cleanPicks(picks);
+    const records = answers.length ? heldRecordsFor(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), plan.hold, answers) : undefined;
+    const { held, event } = await reserveNames(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, names: plan.hold, records });
     after(async () => {
       await notifyLineupChange(db, event, before);
     });

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { RoleSet } from "@/lib/domain/roles";
+import { InboxBell } from "./InboxBell";
 import { TextSizeSwitch } from "./TextSizeSwitch";
 
 /**
@@ -19,7 +20,11 @@ import { TextSizeSwitch } from "./TextSizeSwitch";
 const chip = "btn-ghost btn-xs";
 
 type Door = { key: string; href: string; label: string; kind: "coach" | "club" | "series" | "public"; testId: string };
-export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; findGame: string; coaches: string; clubs: string; tournaments: string; biggerText: string };
+/** `updates`: the unread notices as words ("2 new updates"), the name of the bell; empty when there are none. */
+export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; findGame: string; coaches: string; clubs: string; tournaments: string; biggerText: string; updates?: string };
+
+/** The bell's name from the unread count: "2 new updates", or "More than 9 new updates" past nine. */
+export const updatesLabel = (t: (key: string, values?: Record<string, number>) => string, unread: number): string => (unread > 9 ? t("common.manyNewNotices") : t("common.newNotices", { count: unread }));
 
 /**
  * The public doors every visitor gets, in the More menu: the open games to join (/play), the
@@ -45,58 +50,72 @@ export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?
       {d.label}
     </Link>
   );
-  // Unread notices ride on the door itself, as a dot with a number: no new control and no width on a
-  // phone (absolute), and hidden from the link's name, so "My matches" is still exactly what it is called.
-  const play = (
-    <Link href="/me" prefetch={false} className={`${chip} relative`} data-testid="nav-play">
+  // Unread notices are a bell with a number, and a link of their own to the inbox, named "2 new updates".
+  // A bare "2" on "My matches" read as a count of matches (the owner, 12 October 2026: "the two
+  // notifications in top signifies what? Already one upcoming match."). The bell is pinned to a corner
+  // (absolute: no width on a phone): on "My matches" when that door is outside, else on the menu's ⋯,
+  // where "My matches" waits. Never beside a role's door: there it took width, cut the word Kicksmash to
+  // "Kic…" in Russian, and its number read as a count for "🎾 My assistant" (review, 12 October 2026).
+  const count = roles.unread > 9 ? "9+" : String(roles.unread);
+  const pinned = (el: React.ReactNode) =>
+    roles.unread > 0 ? (
+      <span className="relative inline-flex">
+        {el}
+        <InboxBell label={labels.updates || count} count={count} className="absolute -right-2 -top-2 inline-flex h-5 items-center gap-0.5 rounded-full bg-accent px-1.5 text-[11px] font-extrabold leading-none text-night ring-2 ring-bg" />
+      </span>
+    ) : (
+      el
+    );
+  const playLink = (
+    <Link key="play-link" href="/me" prefetch={false} className={chip} data-testid="nav-play">
       {labels.myMatches}
-      {roles.unread > 0 && (
-        <span aria-hidden="true" data-testid="nav-unread" className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11px] font-extrabold leading-none text-night">
-          {roles.unread > 9 ? "9+" : roles.unread}
-        </span>
-      )}
     </Link>
   );
+  const play = pinned(playLink);
   // The menu is one short glyph, so the header keeps its one word beside it on a phone. Inside: the
   // way to My matches when this is not it, every role door not shown outside, then the public four,
   // then "Bigger text": the one setting a visitor may want before they have an account or a /me.
-  const more = (inside: React.ReactNode[]) => (
-    <details className="relative">
-      <summary className={`${chip} list-none cursor-pointer`} data-testid="nav-more" aria-label={labels.more} title={labels.more}>
-        ⋯
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 flex min-w-52 flex-col gap-1 rounded-xl border border-line bg-card p-2 shadow-lg">
-        {inside}
-        {inside.length > 0 && <div className="my-1 border-t border-line" />}
-        {publicDoors(labels).map(link)}
-        <div className="my-1 border-t border-line" />
-        <TextSizeSwitch label={labels.biggerText} compact />
-      </div>
-    </details>
-  );
+  const more = (inside: React.ReactNode[], bell: boolean) => {
+    const menu = (
+      <details className="relative">
+        <summary className={`${chip} list-none cursor-pointer`} data-testid="nav-more" aria-label={labels.more} title={labels.more}>
+          ⋯
+        </summary>
+        <div className="absolute right-0 z-20 mt-1 flex min-w-52 flex-col gap-1 rounded-xl border border-line bg-card p-2 shadow-lg">
+          {inside}
+          {inside.length > 0 && <div className="my-1 border-t border-line" />}
+          {publicDoors(labels).map(link)}
+          <div className="my-1 border-t border-line" />
+          <TextSizeSwitch label={labels.biggerText} compact />
+        </div>
+      </details>
+    );
+    return bell ? pinned(menu) : menu;
+  };
 
   // A player, and anyone we have never met: My matches, and the menu with the public doors.
   if (doors.length === 0)
     return (
       <>
         {play}
-        {more([])}
+        {more([], false)}
       </>
     );
 
   // One other role: outside, whichever of the two this screen is not; the other one waits in the menu.
+  // When "My matches" is not outside, its bell sits on the menu's corner, or nobody would see it.
   if (doors.length === 1) {
     const d = doors[0];
     const outside = current === d.kind ? play : link(d);
-    const inside = current === d.kind ? [] : current === "play" ? [] : [play];
+    const inside = current === d.kind ? [] : current === "play" ? [] : [playLink];
     return (
       <>
         {outside}
-        {more(inside)}
+        {more(inside, current !== d.kind)}
       </>
     );
   }
 
-  // Several roles: the menu alone, with every door in it.
-  return more([...(current !== "play" ? [play] : []), ...doors.map(link)]);
+  // Several roles: the menu alone, with every door in it, and the bell on its corner.
+  return more([...(current !== "play" ? [playLink] : []), ...doors.map(link)], true);
 }

@@ -21,6 +21,7 @@ import { MomentsStrip } from "@/components/MomentsStrip";
 import { WhenIPlay } from "@/components/WhenIPlay";
 import { listWants } from "@/lib/domain/demand";
 import { getVenues, playerHasEvents } from "@/lib/domain/queries";
+import { inboxOf } from "@/lib/domain/notices";
 import { PassportCard } from "@/components/PassportCard";
 import Link from "next/link";
 import { withClientMessages } from "@/i18n/withClientMessages";
@@ -69,6 +70,10 @@ async function MePage({ searchParams }: Props) {
   const lastVenue = (await getVenues(db, me.id))[0]?.name ?? null;
   // One bounded row: the settings block needs only the yes-or-no, not the list MyMatches fetches.
   const hasMatches = await playerHasEvents(db, me.id);
+  // The inbox goes first while it has new notices: the header's bell ("2 new updates") lands on it, and
+  // nobody reads the count as a count of matches (the owner, 12 October 2026). Read once, here.
+  const inbox = await inboxOf(db, me.id);
+  const inboxCard = <NoticeInbox inbox={inbox} />;
   return (
     <>
       {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
@@ -77,8 +82,8 @@ async function MePage({ searchParams }: Props) {
         {note === "linked" && <p className="rounded-2xl bg-ok-soft px-4 py-3 text-sm font-semibold text-ok">✓ {t("telegram.justLinked")}</p>}
         {note === "invalid" && <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger">{t("telegram.invalid")}</p>}
         {asCoach && <CoachCard db={db} coach={asCoach.coach} />}
-        <MyMatches player={me} />
-        <NoticeInbox db={db} playerId={me.id} />
+        <MyMatches player={me} first={inbox.unread > 0 ? inboxCard : null} />
+        {inbox.unread === 0 && inboxCard}
         <SameNameCard db={db} player={me} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />

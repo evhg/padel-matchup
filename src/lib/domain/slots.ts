@@ -372,8 +372,13 @@ export async function removeFromSlot(
  * in one transaction under the event's lock, so one request and one line-up change carry the whole
  * list. A full match ends the list; the names reserved come back in order. The names already in the
  * match were left out before this (`planPaste`).
+ *
+ * `records`: the past player's record a name's place keeps, by the name as `normalName` reads it, when
+ * the organiser said "Yes, that's Danny" or tapped the chip (`heldRecordsFor` in `heldRecord.ts`, which
+ * found it again on the server). A record already in the match takes no second place: that name is held
+ * by name, as every other name is.
  */
-export async function reserveNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; now?: Date }): Promise<{ held: Slot[]; event: Event }> {
+export async function reserveNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; records?: ReadonlyMap<string, string>; now?: Date }): Promise<{ held: Slot[]; event: Event }> {
   const now = input.now ?? new Date();
   return db.transaction(async (tx) => {
     let ev = await lockEvent(tx, input.eventId);
@@ -381,8 +386,16 @@ export async function reserveNames(db: Db, input: { eventId: string; actorPlayer
     for (const raw of input.names) {
       const name = normalizeName(raw);
       if (!name) continue;
+      const playerId = input.records?.get(normalName(name)) ?? null;
       try {
-        const done = await reserveLocked(tx, ev, { actorPlayerId: input.actorPlayerId, name, now });
+        let done: { slot: Slot; event: Event };
+        try {
+          done = await reserveLocked(tx, ev, { actorPlayerId: input.actorPlayerId, name, playerId, now });
+        } catch (e) {
+          // The record holds a place here already (one place per record and match): this name is held by name.
+          if (!(playerId && e instanceof DomainError && e.message === "already_in")) throw e;
+          done = await reserveLocked(tx, ev, { actorPlayerId: input.actorPlayerId, name, now });
+        }
         held.push(done.slot);
         ev = done.event;
       } catch (e) {
@@ -411,7 +424,7 @@ export const SEAT_NAMES_MAX = 24;
  * one transaction under the event's lock (`reserveNames`, as the organiser's pasted names), where it
  * was one transaction for each name; a pasted booking's players come this way too (`settleNewMatch`).
  */
-export async function seatNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; skipName?: string | null; now?: Date }): Promise<number> {
+export async function seatNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; skipName?: string | null; records?: ReadonlyMap<string, string>; now?: Date }): Promise<number> {
   const skip = normalizeName(input.skipName ?? "").toLowerCase();
   let skipped = false;
   const names: string[] = [];
@@ -427,7 +440,7 @@ export async function seatNames(db: Db, input: { eventId: string; actorPlayerId:
   }
   if (names.length === 0) return 0;
   // A full event ends the list; anything else (a match already over) holds nobody and fails nothing.
-  const done = await reserveNames(db, { eventId: input.eventId, actorPlayerId: input.actorPlayerId, names, now: input.now }).catch(() => null);
+  const done = await reserveNames(db, { eventId: input.eventId, actorPlayerId: input.actorPlayerId, names, records: input.records, now: input.now }).catch(() => null);
   return done?.held.length ?? 0;
 }
 

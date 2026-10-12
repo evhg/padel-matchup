@@ -27,6 +27,8 @@ import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayAgain, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
 import { nextGameFor, playAgainStart } from "@/lib/domain/playAgain";
+import { heldRecordsFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
+import { cleanPicks, type PastView } from "@/lib/domain/pastAsk";
 import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
@@ -34,6 +36,12 @@ const createSchema = z.object({
   name: z.string().optional(),
   /** Players carried from the americano generator; seated as reserved spots on create. */
   names: z.array(z.string().max(60)).max(64).optional(),
+  /**
+   * The organiser's answers for held names: a chip from "Played with you", or "Yes, that's Danny" with
+   * the day and the club it was shown. Held to their shape by `cleanPicks`; the record is found again
+   * among the organiser's own past players (`heldRecordsFor`), and every other name is held by name.
+   */
+  picks: z.unknown().optional(),
   type: z.enum(["match", "tournament"]),
   title: z.string().max(80).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -128,7 +136,11 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
     // americano generator's players, a pasted booking's), and "Court booked by me". `settleNewMatch`
     // says why none of it needs the event's own transaction.
     const { settleNewMatch } = await import("@/lib/domain/newMatch");
-    const settled = await settleNewMatch(db, { event: ev, organiser: me, joinSelf: input.joinSelf, names: input.names, booked: input.booked });
+    // A held name keeps a past player's record only where the organiser answered for it, and only a
+    // record the organiser played with: the past players are read only when an answer came (three bounded reads).
+    const picks = cleanPicks(input.picks);
+    const records = input.names?.length && picks.length ? heldRecordsFor(await pastPlayerRows(db, me.id, new Date()), input.names, picks) : undefined;
+    const settled = await settleNewMatch(db, { event: ev, organiser: me, joinSelf: input.joinSelf, names: input.names, records, booked: input.booked });
     // One event for the new match, and the court booked rides on it: the cards are first drawn after
     // the mark, so they already say "Court booked ✓", and the hooks get `courtBooked` as "I booked it"
     // sends it. A second event for the same moment would sync every card twice (rule 12).
@@ -149,6 +161,21 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
   });
   if (res.ok && code) redirect(`/${code}/share`);
   return res;
+}
+
+/**
+ * "Played with you" and the typed-name question on the create form (the owner, 12 October 2026: "As
+ * organizer before and after creating the match should be able to select from players they played with
+ * before"): the session's past players as names, days and clubs, never an id. The form asks once, when
+ * its names open, so the landing page itself reads nothing more (rule 12): three bounded reads
+ * (`pastPlayerRows`) for an organiser who opens the names, none for anybody else.
+ */
+export async function pastPlayersAction(): Promise<{ chips: string[]; past: PastView[] }> {
+  const db = await getDb();
+  const me = await getSessionPlayer(db);
+  if (!me) return { chips: [], past: [] };
+  const list = await pastPlayerRows(db, me.id, new Date());
+  return { chips: pickable(list, { ids: new Set(), names: [] }), past: pastViews(list, new Set()) };
 }
 
 const updateSchema = z.object({
