@@ -91,18 +91,26 @@ describe("the club directory as a file", () => {
     expect(bySlug.get("sterling")?.name).toBe("Sterling Sport & Wellness");
   });
 
-  it("reaches production as the booking-links migration, row for row, under the same guard", () => {
-    // Migration 0097 carries the file's booking links as one UPDATE, never the import's insert, whose
-    // rows carry manage tokens that must not be in git. A link changed in the file and not here would
-    // be a club page that disagrees with the directory.
-    const name = readdirSync(root("drizzle")).find((f) => f.endsWith("_club_booking_links.sql"));
-    const sql = readFileSync(root(`drizzle/${name}`), "utf8");
-    expect(sql).toContain(`WHERE "clubs"."slug" = v.slug AND "clubs"."source" = 'directory' AND "clubs"."claimed_by" IS NULL;`);
-    expect(sql).not.toMatch(/manage_token|insert into/i);
+  it("reaches production as the booking-links migrations, row for row, under the same guard", () => {
+    // Migrations 0097 and later (each named *_club_booking_links.sql) carry the file's booking links as
+    // UPDATEs, never the import's insert, whose rows carry manage tokens that must not be in git. A later
+    // migration's row wins for its club. A link changed in the file and in no migration would be a club
+    // page that disagrees with the directory.
+    const names = readdirSync(root("drizzle")).filter((f) => f.endsWith("_club_booking_links.sql")).sort();
+    expect(names.length).toBeGreaterThan(0);
     const q = (v: string) => (v === "null" ? null : v.slice(1, -1).replace(/''/g, "'"));
-    const rows = [...sql.matchAll(/^\s+\(('[^']+'), (null|'[^']*'), (null|'[^']*'), (null|'[^']*')\),?$/gm)].map((m) => ({ slug: q(m[1]), bookingUrl: q(m[2]), bookingPlatform: q(m[3]), website: q(m[4]) }));
+    const bySlug = new Map<string, { slug: string; bookingUrl: string | null; bookingPlatform: string | null; website: string | null }>();
+    for (const name of names) {
+      const sql = readFileSync(root(`drizzle/${name}`), "utf8");
+      expect(sql, name).toContain(`WHERE "clubs"."slug" = v.slug AND "clubs"."source" = 'directory' AND "clubs"."claimed_by" IS NULL;`);
+      expect(sql, name).not.toMatch(/manage_token|insert into/i);
+      for (const m of sql.matchAll(/^\s+\(('[^']+'), (null|'[^']*'), (null|'[^']*'), (null|'[^']*')\),?$/gm)) {
+        const slug = q(m[1]) as string;
+        bySlug.set(slug, { slug, bookingUrl: q(m[2]), bookingPlatform: q(m[3]), website: q(m[4]) });
+      }
+    }
     const want = file.clubs.filter((c) => c.bookingPlatform).map((c) => ({ slug: c.slug, bookingUrl: c.bookingUrl ?? null, bookingPlatform: c.bookingPlatform ?? null, website: c.website }));
-    expect(rows).toEqual(want);
+    expect([...bySlug.values()].sort((a, b) => a.slug.localeCompare(b.slug))).toEqual([...want].sort((a, b) => a.slug.localeCompare(b.slug)));
   });
 
   it("turns into one statement that only ever touches the directory's own rows", () => {
@@ -222,7 +230,12 @@ describe("a refused claim on a club the directory listed", () => {
   const LISTED_AT = new Date("2026-09-16T02:21:17.265Z");
   const REFUSED_AT = new Date("2026-09-20T09:45:55.953Z");
   const importSql = execFileSync("node", [root("scripts/import-clubs.mjs"), "--sql"], { encoding: "utf8" });
-  const migration = readFileSync(root(`drizzle/${readdirSync(root("drizzle")).find((f) => f.endsWith("_warehaus_listed_again.sql"))}`), "utf8");
+  const repairName = readdirSync(root("drizzle")).find((f) => f.endsWith("_warehaus_listed_again.sql"))!;
+  const migration = readFileSync(root(`drizzle/${repairName}`), "utf8");
+  const laterLinks = readdirSync(root("drizzle"))
+    .filter((f) => f.endsWith("_club_booking_links.sql") && f > repairName)
+    .sort()
+    .map((f) => readFileSync(root(`drizzle/${f}`), "utf8"));
   const importDirectory = async () => {
     await db.execute(sql.raw(importSql));
     // The import writes both from the database's clock, in one statement; production's are the 16th.
@@ -399,6 +412,9 @@ describe("a refused claim on a club the directory listed", () => {
     // Refused the old way, which is how production holds it: the hour, and nothing handed back.
     await db.update(clubs).set({ rejectedAt: REFUSED_AT, approvedAt: null, founding: false, notifyMessageId: 4242 }).where(eq(clubs.slug, "warehaus"));
     for (const statement of migration.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
+    // Production then ran the later booking-links migrations (0098 gave Warehaus its own booking page),
+    // so the row compared with the directory's is the one after them, in the same order.
+    for (const later of laterLinks) for (const statement of later.split("--> statement-breakpoint")) await db.execute(sql.raw(statement));
     const repaired = (await getClubWithCache(db, "warehaus"))!;
     expect(facts(repaired)).toEqual(facts(listed));
     expect(repaired.manageToken).not.toBe(claimed.manageToken);

@@ -687,6 +687,13 @@
       "when": 1791618921713,
       "tag": "0097_club_booking_links",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1791773652400,
+      "tag": "0098_club_booking_links",
+      "breakpoints": true
     }
   ]
 }
