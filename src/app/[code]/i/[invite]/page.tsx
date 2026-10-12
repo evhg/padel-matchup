@@ -13,6 +13,9 @@ import { emailEnabled } from "@/lib/config";
 import { formatEventDayLong, formatEventTime, tzLabel } from "@/lib/dates";
 import { playersWithEmail } from "@/lib/domain/identity";
 import { inviteView } from "@/lib/domain/heldByName";
+import { heldLinkRefusal, heldRecordOf, heldRecordView, provableHere } from "@/lib/domain/heldRecord";
+import { telegramBotId } from "@/lib/telegram/api";
+import { ReturningPlayer } from "@/components/ReturningPlayer";
 import { getSlotByInviteCode, holdsPlaceIn } from "@/lib/domain/queries";
 import { namedByOf } from "@/lib/domain/pairSeats";
 import { mayUseHeldLink } from "@/lib/domain/slots";
@@ -73,7 +76,18 @@ async function InvitePage({ params, searchParams }: Props) {
   const notMine = state === "invited" || state === "declined" || state === "gone";
   const inAlready = me && notMine ? await holdsPlaceIn(db, code, me.id) : false;
   const theirs = me && inAlready && (state === "invited" || state === "declined") ? await mayUseHeldLink(db, ev, slot, me) : true;
-  const view = inviteView(state, Boolean(inAlready), theirs);
+  // A place that keeps a past player's record (the owner, 11 October 2026: "Yes, keep the record"): the
+  // record itself sees "I'm in"; another record reads whose place it is, and the server refuses its
+  // tap; a browser that knows nobody gets "I'm in" as the record when it passes every "That's me"
+  // limit, else the way to prove who it is first when this deployment offers a door the record can
+  // open, else whose place it is. Two lookups for the record's life outside the match (`heldRecordOf`),
+  // and one bounded read of the limits only for a browser that knows nobody.
+  const recordId = state === "invited" || state === "declined" ? await heldRecordOf(db, slot) : null;
+  const asRecord = Boolean(recordId && !me);
+  const refusal = asRecord ? (slot.player ? await heldLinkRefusal(db, ev, { id: recordId!, name: slot.player.displayName }, new Date()) : "nobody") : null;
+  const baseView = inviteView(state, Boolean(inAlready), theirs);
+  const doors = provableHere({ email: emailEnabled(), telegram: Boolean(telegramBotId()) });
+  const view = recordId ? heldRecordView(baseView, state, !me ? "nobody" : me.id === recordId ? "record" : "other", refusal, doors) : baseView;
   const courtNumber = (n: string) => t("event.courtNumber", { n });
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber });
   // A fixed-pairs night: the player who named them, not the organiser, saved this spot; and a pair can
@@ -139,12 +153,33 @@ async function InvitePage({ params, searchParams }: Props) {
               </Link>
             </>
           )}
-          {view === "actions" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} />}
+          {view === "sign_in_first" && (
+            <div data-testid="held-sign-in-first">
+              <h2 className="text-xl font-extrabold">{t("invitePage.signInFirst", { name })}</h2>
+              <p className="mt-1 text-sm text-muted">{t("invitePage.signInFirstHelp", { name })}</p>
+              <div className="mt-4">
+                <ReturningPlayer bare />
+              </div>
+              <Link href={eventHref} className="btn-ghost mt-4 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </div>
+          )}
+          {view === "ask_organiser" && (
+            <div data-testid="held-ask-organiser">
+              <h2 className="text-xl font-extrabold">{t("invitePage.heldFor", { name })}</h2>
+              <p className="mt-1 text-sm text-muted">{t("invitePage.askOrganiserHelp", { name })}</p>
+              <Link href={eventHref} className="btn-primary mt-4 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </div>
+          )}
+          {view === "actions" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} asRecord={asRecord} />}
           {view === "declined" && (
             <>
               <h2 className="text-xl font-extrabold">{t("invitePage.declined")}</h2>
               <p className="mt-1 mb-4 text-sm text-muted">{t("invitePage.declinedHelp")}</p>
-              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={false} reconfirm />
+              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={false} reconfirm asRecord={asRecord} />
             </>
           )}
           {view === "confirmed" && (
@@ -181,4 +216,4 @@ async function InvitePage({ params, searchParams }: Props) {
   );
 }
 
-export default withClientMessages(["calendar", "common", "creator", "errors", "event", "identity", "invitePage", "share"], InvitePage);
+export default withClientMessages(["calendar", "common", "creator", "errors", "event", "identity", "invitePage", "share", "telegram"], InvitePage);

@@ -823,6 +823,68 @@ try {
   await shot(a, "17-past-result");
   check("past match shows organizer-confirmed result", (await a.getByText("Confirmed by organizer").count()) > 0);
 
+  // ---- A held place keeps a past player's record (the owner, 11 October 2026: "Yes, keep the record") ----
+  // The seeded PAST match: Alex organised it, and Maria, Jordi and Sofia played. Sofia comes back by
+  // "That's me" on PAST (she organises nothing to come), makes a match and picks Maria from "Played with
+  // you". Maria's link, opened in a browser that never saw her, signs it in as the Maria who played
+  // PAST, by name: no name to type, no second Maria, her old match on My matches, and no personal link.
+  const sofia = await newPage();
+  await sofia.goto(`${BASE}/PAST`);
+  // PAST shows its score panel above the line-up, so the row is the one that wears Sofia's button.
+  const sofiaThatsMe = sofia.locator("main li").filter({ hasText: "Sofia" }).getByRole("button", { name: "That's me", exact: true });
+  await sofiaThatsMe.click();
+  await sofia.getByRole("button", { name: "Sign in as Sofia?", exact: true }).click();
+  // Signed in, the browser knows somebody: no row wears "That's me" any more.
+  await sofia.waitForFunction(() => ![...document.querySelectorAll("main button")].some((b) => b.textContent?.trim() === "That's me"), null, { timeout: 20000 });
+  await sofia.goto(BASE + "/new");
+  const later4 = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+  const lp4 = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(later4);
+  const lg4 = (t) => lp4.find((p) => p.type === t).value;
+  await sofia.locator("input[type=date]").fill(`${lg4("year")}-${lg4("month")}-${lg4("day")}`);
+  await sofia.locator("input[type=time]").fill("19:00");
+  await sofia.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  await sofia.getByRole("button", { name: "Create & get the link" }).click();
+  await sofia.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const code4 = sofia.url().split("/").slice(-2)[0];
+  await sofia.goto(`${BASE}/${code4}`);
+  await sofia.getByRole("button", { name: /Open spot/ }).first().click();
+  await sofia.getByText("Reserve this spot for…").waitFor({ timeout: 10000 });
+  const playedChips = sofia.getByTestId("played-with-you");
+  await playedChips.waitFor({ timeout: 10000 });
+  check(
+    "the reserve form offers \"Played with you\": the people Sofia played PAST with, never Sofia herself",
+    (await playedChips.getByRole("button", { name: "Maria", exact: true }).count()) === 1 && (await playedChips.getByRole("button", { name: "Sofia", exact: true }).count()) === 0,
+    ((await playedChips.textContent()) ?? "").trim(),
+  );
+  await playedChips.getByRole("button", { name: "Maria", exact: true }).click();
+  check("a pick says the place keeps Maria's matches", ((await sofia.getByTestId("picked-past-player").textContent()) ?? "").includes("Keeps Maria's matches"));
+  await shot(sofia, "12g-played-with-you");
+  await sofia.getByRole("button", { name: "Done", exact: true }).click();
+  await sofia.getByText("Reserved for Maria").first().waitFor({ timeout: 20000 });
+  check("the held row says it keeps Maria's matches", (await sofia.getByTestId("keeps-record").count()) === 1);
+  const mariaHrefs = await sofia.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  const mariaLink = mariaHrefs.map(decodeURIComponent).map((h) => h.match(new RegExp(`(${BASE_RE}/${code4}/i/[^\\s]{6})`))?.[1]).find(Boolean);
+  check("Maria's personal link is on her row", Boolean(mariaLink), String(mariaLink));
+  const mariaPage = await newPage();
+  await mariaPage.goto(mariaLink);
+  check(
+    "Maria's link in a browser that never saw her asks for no name: it says she joins as Maria, with her matches",
+    (await mariaPage.getByTestId("invite-as-record").count()) === 1 && (await mariaPage.getByText("Your name", { exact: true }).count()) === 0,
+  );
+  await shot(mariaPage, "12h-held-record-link");
+  await mariaPage.getByRole("button", { name: /I'm in/ }).click();
+  await mariaPage.getByText("You're confirmed").waitFor({ timeout: 20000 });
+  const lineup4 = await mariaPage.request.get(`${BASE}/api/v1/matches/${code4}`).then((r) => r.json());
+  const marias = (lineup4.players ?? []).filter((p) => p.name === "Maria");
+  check("the place is Maria's, confirmed, and the match holds one Maria", marias.length === 1 && marias[0].status === "confirmed", JSON.stringify(lineup4.players ?? []));
+  await mariaPage.goto(`${BASE}/me`);
+  check(
+    "that browser is the Maria who played PAST, signed in by name: PAST on My matches, and no personal link",
+    (await mariaPage.content()).includes('href="/PAST"') && (await mariaPage.getByRole("heading", { name: /Your personal link/ }).count()) === 0,
+  );
+  await mariaPage.close();
+  await sofia.close();
+
   // ---- Desktop landing for good measure ----
   const d = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const dp = await d.newPage();

@@ -19,7 +19,8 @@ import { mergePlayers } from "./merge";
  *   - **Otherwise the person decides**: "Are these yours?" on My matches, with the matches shown;
  *     except a row that is a member of a group that asks to join, which needs a match the two sat
  *     in together first, a match still to come included (the owner, 10 October 2026: "Need a shared
- *     match first"; `mayClaim`).
+ *     match first"; `mayClaim`), and never a row that runs a crew (its creator, or an admin of it),
+ *     as "That's me" refuses one (the owner, 11 October 2026: "No admin role by name alone").
  *     The automatic fold asks the same of such a row: a shared organiser or club is not enough there.
  *   - **Never** a row that can be reached (an address, a phone, a chat account, a push subscription):
  *     that is somebody, and a name does not say it is the same somebody.
@@ -32,9 +33,10 @@ import { mergePlayers } from "./merge";
  * `shared`: the row shares a match, an organiser or a club with the person, through matches that were
  * not called off (the automatic fold's test). `sharedMatch`: the two met in one match that was not
  * called off, each in a taken seat inside its capacity or as its organiser (the owner's "shared match").
- * `inAskingGroup`: the row is a member, admin or not, of a group with `ask_to_join` on.
+ * `inAskingGroup`: the row is a member, admin or not, of a group with `ask_to_join` on. `runsCrew`: the
+ * row created a crew or is an admin of one, as "That's me" reads it (`runs_a_crew`).
  */
-export type SameNameRow = { id: string; displayName: string; matches: number; shared: boolean; sharedMatch: boolean; inAskingGroup: boolean; createdAt: Date };
+export type SameNameRow = { id: string; displayName: string; matches: number; shared: boolean; sharedMatch: boolean; inAskingGroup: boolean; runsCrew: boolean; createdAt: Date };
 
 /** Proved: an address that came back with a code, or a Telegram account. */
 export const proved = (p: Pick<Player, "emailVerifiedAt" | "telegramId">) => Boolean(p.emailVerifiedAt || p.telegramId);
@@ -46,10 +48,20 @@ export const proved = (p: Pick<Player, "emailVerifiedAt" | "telegramId">) => Boo
  * crew that no admin approved (DECIDING rule 30). Such a row folds only once the two sat in one match
  * together (`sharedMatch`): a shared organiser or a shared club is not a shared match, and a match
  * called off is no match. A match still to come counts, played or not: the owner has not decided that
- * case (review of 11 October 2026). Every other row is claimed as before. Pure: the card, `claimSameNameRow`
- * and `foldSameNameRows` all ask it, so they cannot disagree.
+ * case (review of 11 October 2026). The owner, 11 October 2026, "No admin role by name alone": in a
+ * crew without "Ask to join" the claim moved the crew's admin role (or its creator's place) by name
+ * alone, and the change refuses that, "as "That's me" already does". "That's me" refuses a record that
+ * runs a crew whatever else it shares (`runs_a_crew`), so this refuses such a row with no exception: a
+ * shared match is none, because a stranger of the same name can make one by taking a free seat beside
+ * the record in a match still to come (review of 11 October 2026). The other reading, a shared match
+ * that started and was not called off, waits for the owner. Every other row is claimed as before.
+ * Pure: the card, `claimSameNameRow` and `foldSameNameRows` all ask it, so they cannot disagree.
  */
-export const mayClaim = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup">): boolean => row.sharedMatch || !row.inAskingGroup;
+export const mayClaim = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup" | "runsCrew">): boolean => !row.runsCrew && (row.sharedMatch || !row.inAskingGroup);
+
+/** Why the card shows a row without "Yes, these are mine": the line it shows in place of the button. Null when the row may be claimed. Pure. */
+export const claimBlock = (row: Pick<SameNameRow, "sharedMatch" | "inAskingGroup" | "runsCrew">): "asking_group" | "runs_crew" | null =>
+  mayClaim(row) ? null : row.runsCrew ? "runs_crew" : "asking_group";
 
 const rowsOf = (r: unknown): Record<string, unknown>[] => (Array.isArray(r) ? r : ((r as { rows?: Record<string, unknown>[] }).rows ?? []));
 const yes = (v: unknown) => v === true || v === "t" || v === "true";
@@ -59,7 +71,8 @@ const yes = (v: unknown) => v === true || v === "t" || v === "true";
  * shares a match, an organiser or a club with this player, whether the two sat in one match together,
  * and whether it is a member of a group that asks to join (more columns of the same bounded read: the
  * row's seats down `slots_player_idx`, its matches down `events_creator_idx`, its groups down
- * `group_members_player_idx`). A match that was called off counts for nothing. Bounded: five rows.
+ * `group_members_player_idx`, the crews it created down `groups_creator_idx`). A match that was called
+ * off counts for nothing. Bounded: five rows.
  *
  * Two reads on purpose (rule 12). The first finds rows of the same name that nobody can reach, which
  * is almost always none, and the page stops there. Only for the few it finds does the second look at
@@ -112,7 +125,9 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
           )
           or exists (select 1 from events e where e.creator_player_id = o.id and e.id in (select id from seated))
         ) as shared_match,
-        exists (select 1 from group_members gm join groups g on g.id = gm.group_id where gm.player_id = o.id and g.ask_to_join) as in_asking_group
+        exists (select 1 from group_members gm join groups g on g.id = gm.group_id where gm.player_id = o.id and g.ask_to_join) as in_asking_group,
+        (exists (select 1 from group_members ga where ga.player_id = o.id and ga.role = 'admin')
+          or exists (select 1 from groups gc where gc.creator_player_id = o.id)) as runs_crew
       from players o
       where o.id in (${ids})`),
   );
@@ -128,6 +143,7 @@ export async function sameNameRows(db: Db, playerId: string): Promise<SameNameRo
         shared: yes(f?.shared),
         sharedMatch: yes(f?.shared_match),
         inAskingGroup: yes(f?.in_asking_group),
+        runsCrew: yes(f?.runs_crew),
       };
     })
     .filter((r) => r.matches > 0);

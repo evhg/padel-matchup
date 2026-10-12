@@ -37,12 +37,6 @@ const metric = (db: Db, key: string) => bumpMetric(db, key).catch(() => undefine
 
 const label = (b: BestTime, locale: BotLocale) => `${formatEventDay(b.start, b.tz, locale)} ${formatEventTime(b.start, b.tz, locale)} · ${b.name}`.slice(0, 60);
 
-/** Whose times the answer offers: the platforms named, and "the clubs" for a club's own feed (DECIDING rule 35). */
-function sourcesOf(times: readonly BestTime[], s: ReturnType<typeof strings>): string {
-  const names = [...new Set(times.map((b) => b.platform ?? s.timesTheClubs))];
-  return names.length ? names.join(s.timesAnd) : s.timesTheClubs;
-}
-
 /** "times?" or /times: the free courts at the chat's clubs, as buttons, once. */
 export async function timesInChat(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, via: "word" | "command", now = new Date()): Promise<string> {
   // One answer a minute in a chat, claimed before anything is read: five asks cost one answer and four upserts.
@@ -71,7 +65,8 @@ export async function timesInChat(db: Db, msg: TgMessage, chat: TelegramChat, fr
     await sendMessage(chat.chatId, esc(s.timesNone), { replyTo: msg.message_id, threadId, silent: true });
     return "times:none";
   }
-  await sendMessage(chat.chatId, esc(s.timesFree(sourcesOf(fit.map((x) => x.b), s))), { keyboard: { inline_keyboard: rows }, replyTo: msg.message_id, threadId, silent: true });
+  // No platform's name: the owner, 11 October 2026, "The chat reply and the time chips show no platform name".
+  await sendMessage(chat.chatId, esc(s.timesFree), { keyboard: { inline_keyboard: rows }, replyTo: msg.message_id, threadId, silent: true });
   return `times:${rows.length}`;
 }
 

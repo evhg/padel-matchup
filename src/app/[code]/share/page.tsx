@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { getViewer, personalTokenFor } from "@/actions/shared";
+import { getViewer, manageUrlFor, personalTokenFor } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
@@ -19,7 +19,7 @@ import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";
-import { eventUrl, manageUrl } from "@/lib/share";
+import { eventUrl } from "@/lib/share";
 import { taggedUrl } from "@/lib/source";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
@@ -53,7 +53,8 @@ async function SharePage({ params }: Props) {
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
   const text = t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  const mUrl = manageUrl(baseUrl(), code, ev.manageCode);
+  // No manage link for a session by name either: it never expires and works in any browser (`manageUrlFor`).
+  const mUrl = await manageUrlFor(viewer.player, ev);
   // No personal link for a session by name that proved nothing (DECIDING rule 34): it would be a full sign-in.
   const token = await personalTokenFor(db, viewer.player);
   const hasPush = viewer.player && pushEnabled() ? await playerHasPush(db, viewer.player.id) : false;
@@ -96,14 +97,16 @@ async function SharePage({ params }: Props) {
           </section>
         )}
 
-        <section className="card">
-          <h2 className="font-extrabold">{t("share.manageTitle")}</h2>
-          <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
-          <div className="mt-2 flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{mUrl}</code>
-            <CopyButton value={mUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
-          </div>
-        </section>
+        {mUrl && (
+          <section className="card">
+            <h2 className="font-extrabold">{t("share.manageTitle")}</h2>
+            <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{mUrl}</code>
+              <CopyButton value={mUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+            </div>
+          </section>
+        )}
       </main>
     </>
   );

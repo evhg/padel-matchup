@@ -205,6 +205,9 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'jo
   browser that does not know them.
 - **How a browser signed in.** `signin_thats_me` ("That's me", DECIDING rule 34), with
   `signin_thats_me_fold` when it folded the browser's own new record into the old one;
+  `signin_held_link` (the personal link of a held place that keeps a past player's record, in a
+  browser that knew nobody, marked by name; `held_link_refused` counts such a tap the limits turned
+  down, the owner's decision of 11 October 2026);
   `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
   11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`. Each
@@ -379,6 +382,22 @@ worst). /play reads at most 30 clubs, and only while a city has fewer than three
 platform at the next run, and `"value":0` starts it again. `SCRAPE_DISABLED` on Vercel takes platform
 ids with commas (`playtomic,matchi`), or `all`. Vercel gives a running deployment the variables it
 was built with, so a change there takes effect only after a redeploy of the same code.
+
+**The checkout.** "Book and pay on Playtomic" on a match page opens Playtomic's own checkout, filled in
+(the owner's decision of 11 October 2026, DECIDING rule 36). It needs the exact starts the reader keeps
+(`offers`, about 1 KB a club, read by the match page only). `POST /api/admin/metrics
+{"key":"checkout_off_playtomic","value":1}` (or `checkout_off_all`) turns it off with no deploy: the
+reader keeps no offers from its next read of each club, and a read that times out over a good read drops
+them too. The match pages then give the day page. A platform at rest, or switched off with `scrape_off_*`,
+writes no rows, and its last offers fill a checkout until they are 90 minutes old (`CHECKOUT_FRESH_MS`).
+So the checkout stops from the next read of each club, and within 90 minutes at most; `"value":0` turns
+it on again. Each read of a club page checks that its script still builds the link. When the known
+script is gone and no script found builds it, the row `checkout_builder_lost_playtomic` is 1, the
+counter `checkout_lost_playtomic` counts the checks, the service board's Playtomic line says "checkout
+off", and the checkout stops the same way (from the next read of each club, within 90 minutes at most)
+until a read finds the builder in a new script (`checkout_found_playtomic`, and
+`checkout_builder_playtomic` then names it).
+A look for the builder costs at most two requests, one read a run.
 
 **The back-off.** A 401, 403 or 429 stops that platform for the run, and so does a challenge: an
 `x-amzn-waf-action` or `cf-mitigated` header, or a 202 or 405 on a GET (AWS WAF's challenge and

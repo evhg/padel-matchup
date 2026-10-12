@@ -97,6 +97,16 @@ export type MyEvent = {
   isCreator: boolean;
 };
 
+/**
+ * Did the player play this match? A place on the line-up, of a match not called off, that they took
+ * (joined or confirmed). A tournament's held name played round 1 as a placeholder record, so a held
+ * place counts there; a match's held place that nobody took was never played. Pure.
+ */
+export function playedIn(m: Pick<MyEvent, "event" | "slot">): boolean {
+  if (m.event.status === "cancelled" || m.slot.position <= 0 || m.slot.position > m.event.capacity) return false;
+  return m.slot.status === "joined" || m.slot.status === "confirmed" || (m.event.type === "tournament" && m.slot.status === "invited");
+}
+
 /** One entry of the /me list: a match or a lesson, with the moment it starts. */
 export type TimelineEntry<M, L> = { kind: "match"; at: number; match: M } | { kind: "lesson"; at: number; lesson: L };
 
@@ -200,6 +210,15 @@ export async function getRolodex(db: Db, creatorPlayerId: string): Promise<Rolod
     }
   }
   return [...byKey.values()];
+}
+
+/**
+ * The organiser's suggestions as the browser gets them. A session by name that proved nothing gets the
+ * names alone (`namesAlone`): since the owner's decision of 11 October 2026, "That's me" may sign in a
+ * record that organised past matches, and the emails and phones on its list are other people's. Pure.
+ */
+export function rolodexForBrowser(entries: readonly Pick<RolodexEntry, "name" | "email" | "phone">[], o: { namesAlone: boolean }): { name: string; email: string | null; phone: string | null }[] {
+  return entries.map((r) => ({ name: r.name, email: o.namesAlone ? null : r.email, phone: o.namesAlone ? null : r.phone }));
 }
 
 export async function getVenues(db: Db, creatorPlayerId: string) {

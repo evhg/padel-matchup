@@ -24,6 +24,7 @@ export function OpenSpot({
   label,
   hasIdentity,
   rolodex,
+  played = [],
   emailEnabled,
   namesHere = [],
   claimable = [],
@@ -38,6 +39,12 @@ export function OpenSpot({
   label: string;
   hasIdentity: boolean;
   rolodex: RolodexItem[];
+  /**
+   * "Played with you": the names of past players the organiser may pick for the place (the owner, 11
+   * October 2026: "Yes, keep the record"). A pick keeps that player's record on the place, so no second
+   * record appears; typing over the name drops the pick. Names only: the server finds the record again.
+   */
+  played?: readonly string[];
   emailEnabled: boolean;
   /** Everybody already in this match, so a returning player is recognised before they become a second row. */
   namesHere?: readonly string[];
@@ -59,6 +66,11 @@ export function OpenSpot({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
+  /** The past player picked from "Played with you", while the name still reads as picked. */
+  const [picked, setPicked] = useState<string | null>(null);
+  // A place held for a phone is that number's, and keeps no record (`reserveLocked`): a phone typed after
+  // the pick turns it back into a place held by name, and the line under the name says no more than that.
+  const keepsPick = picked !== null && picked === name && !phone.trim();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLDivElement>(null);
@@ -68,6 +80,7 @@ export function OpenSpot({
     setName("");
     setPhone("");
     setEmail("");
+    setPicked(null);
     setError(null);
   };
   const expand = useCallback(() => {
@@ -99,7 +112,7 @@ export function OpenSpot({
     if (!name.trim()) return setError(t("identity.nameRequired"));
     start(async () => {
       setError(null);
-      const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId });
+      const r = await reserveAction(code, { name, phone: phone || undefined, email: email || undefined, slotId, pick: keepsPick });
       startTransition(() => {
         if (!r.ok) setError(errText(r.error));
         else {
@@ -115,6 +128,11 @@ export function OpenSpot({
     const q = name.trim().toLowerCase();
     return (q ? rolodex.filter((r) => r.name.toLowerCase().includes(q) && r.name.toLowerCase() !== q) : rolodex).slice(0, 5);
   }, [rolodex, name, mode]);
+  const pastChips = useMemo(() => {
+    if (mode !== "reserve") return [];
+    const q = name.trim().toLowerCase();
+    return (q ? played.filter((n) => n.toLowerCase().includes(q) && n.toLowerCase() !== q) : played).slice(0, 5);
+  }, [played, name, mode]);
 
   // Same email or phone as someone the organizer has played with: offer that name.
   const digits = (v: string) => v.replace(/\D/g, "");
@@ -212,7 +230,10 @@ export function OpenSpot({
               autoComplete={mode === "reserve" ? "off" : "given-name"}
               maxLength={40}
               enterKeyHint={mode === "reserve" ? "done" : "go"}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (picked !== null && e.target.value !== picked) setPicked(null);
+              }}
             />
           )}
           {mode === "join" && levelRange && <LevelSelect value={level} onChange={setLevel} />}
@@ -228,6 +249,32 @@ export function OpenSpot({
           crew member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
         {mode === "join" && !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
+        {mode === "reserve" && keepsPick && (
+          <p className="text-xs font-semibold text-ok" data-testid="picked-past-player">
+            ✓ {t("creator.keepsRecord", { name })}
+          </p>
+        )}
+        {mode === "reserve" && pastChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5" data-testid="played-with-you">
+            <span className="text-xs font-bold uppercase tracking-wider text-faint">{t("creator.playedWithYou")}</span>
+            {pastChips.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="chip-muted min-h-9 px-3 text-sm"
+                onClick={() => {
+                  setName(n);
+                  setPhone("");
+                  setEmail("");
+                  setPicked(n);
+                  input.current?.focus({ preventScroll: true });
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
         {mode === "reserve" && suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((r) => (
@@ -237,6 +284,7 @@ export function OpenSpot({
                 className="chip-muted min-h-9 px-3 text-sm"
                 onClick={() => {
                   setName(r.name);
+                  setPicked(null);
                   setPhone(r.phone ?? "");
                   setEmail(r.email ?? "");
                   input.current?.focus({ preventScroll: true });

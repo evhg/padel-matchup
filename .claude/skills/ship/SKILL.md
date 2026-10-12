@@ -386,6 +386,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and the old club's courts shown under its name, for up to 88 minutes (review, 11 October 2026). The
   cache now keeps `linkKey`, and the run uses nothing from a read of another link (`prevForLink`).
   When a cache stores what a read found, store what it read too, and check it before reuse.
+- **A cheap read leans on a full one, so test it on a row that has none.** The read of today alone skips
+  Playtomic's club page, so it sees no court names, and the merge takes names from the row's offers.
+  Every test began from a full read that had written names. On the first read after the deploy no row
+  had offers, so the checkout booked the lowest court id and the page named no court (review, 11 October
+  2026). Seed the row the way the old code left it, run the cheap read alone, and check the screen's
+  answer (`tests/booking-checkout.test.ts`, "a read of today alone over a row with no offers yet").
 - **A fetch signal aborts the body too, not only the call.** The court-time frame caught its own
   deadline around `fetch()` alone, so a page whose headers came in time and whose body did not was
   written as a plain failure and lost its cache, while the test of a request that never answers stayed
@@ -463,6 +469,20 @@ learning can be a test, a gate step or a script, make it one and put the story i
   thirty answers to one victim; and an Outlook reply quoted the answer, which read as a booking again.
   An auto-answer says only what it read in fixed shapes, opens nothing, counts per recipient, and
   never answers its own words (`tests/book-mail.test.ts`).
+- **A key whose value is `undefined` never reaches a server action.** React's reply decoder deletes it
+  (`void 0 !== v ? (obj[k] = v) : delete obj[k]` in react-server-dom-webpack's `reviveModel`), so
+  `"availabilityUrl" in input` is false on the server. The club's manage form sends
+  `v.availabilityUrl || undefined`, so a club that empties its feed or its booking link and saves keeps
+  the old one (found 11 October 2026, while a browser check tried to take a feed away; not fixed yet).
+  A form that must clear a field sends `null` or `""`, and its test calls the action the way the
+  browser encodes it.
+- **The browser suites' server has a fake Playtomic, for slugs that start with `e2e-` only.**
+  `e2e/fakes/playtomic.mjs` is loaded before Next.js (`--import` in `NODE_OPTIONS`, set by `e2e/run.mjs`)
+  and answers the club page and the day's availability; every other request goes to the real fetch. A
+  check of the platform's free times, the chips or the checkout link sets a club's booking page to
+  `https://playtomic.com/clubs/e2e-<name>`, makes the read due (`cron_scrape_at` to 0 through
+  `POST /api/admin/metrics`) and calls `/api/cron/push`. A club with its own feed is never read: the
+  feed wins. Nothing opens a checkout; a check reads the link.
 - **A server action takes 1 MB, and so does every upload through one.** `serverActions.bodySizeLimit`
   in `next.config.ts` holds every action's body to 1 MB, and a body past it never reaches the action:
   the browser gets an error, and the page says "We could not read it". The screenshot door was briefed
@@ -695,6 +715,23 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### A new kind of row in an old table
 
+- **"Another row of this player" must leave out the row in hand.** `confirmInvite` asked for the
+  player's place "elsewhere" in the match before it filled a held place, with no `id <> this row`.
+  While a held place never carried a record, that row could not match. Once a place kept a past
+  player's record (11 October 2026), the record opening its own link found its own place as
+  "elsewhere", and the tap freed it for the waiting list. When a row gains a player it never had, grep
+  every lookup by that player in the same table and exclude the row in hand (`ne(slots.id, slot.id)`).
+- **A row that names a player is not a seat.** A held place with `player_id` set read as "in" on the
+  match page (Leave instead of Join), as a payer, as "played" on My matches, and as a "you were
+  removed" notice for a place never taken. Every reader that means "took a seat" asks for `joined` or
+  `confirmed`, never for a `player_id` that is not null (`tests/held-record.test.ts` breaks each one).
+- **A new kind of row reaches every state and every door the old kind did.** The held place that keeps
+  a record was built and tested as "invited". The review found it four more ways: declined (the "That's
+  me" read counts no declined place, so the record lost its own link), with a phone typed after the
+  pick (the WhatsApp JOIN was refused and then seated the number a second time), under a typed name
+  (the plain-join guard read it as a placeholder and made a second Danny), and on a fixed-pairs night
+  (the partner was held beside a place still nobody's). For a new kind of row, list its states and the
+  doors that write or read it (web, WhatsApp, API, fixed pairs), and test the row through each one.
 - **The key is whatever production already types, not what the name makes.** The club directory was
   written with `venueSlug(name)` slugs — "warehaus-club" for WAREHAUS.club. Production's eight matches
   and both coaches key on `warehaus`, so every one of those clubs would have got a second page with

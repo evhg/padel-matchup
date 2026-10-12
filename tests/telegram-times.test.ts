@@ -130,7 +130,7 @@ describe("\"times?\" in the chat", () => {
     expect(await asked.outcome).toBe("times:3");
     expect(sent("sendMessage")).toHaveLength(1);
     const answer = sent("sendMessage")[0];
-    expect(answer.body.text).toBe(en.timesFree(en.timesTheClubs));
+    expect(answer.body.text).toBe(en.timesFree);
     expect(answer.body.reply_parameters).toMatchObject({ message_id: asked.id });
     expect(answer.body.link_preview_options).toEqual({ is_disabled: true });
     const buttons = buttonsOf(answer);
@@ -247,14 +247,18 @@ describe("\"times?\" in the chat", () => {
     expect(calls).toEqual([]);
   });
 
-  it("names the platform when the times are a platform's, and asks another bot's command nothing", async () => {
+  // The owner, 11 October 2026: "The chat reply and the time chips show no platform name, and the name
+  // shows only at the booking step." Chalong's times are Playtomic's read, and the answer says nothing of it.
+  it("names no platform when the times are a platform's, and asks another bot's command nothing", async () => {
     const { chat } = await listeningCrew(-301100);
     // Chalong shares no feed now; Playtomic's public page shows its Sunday.
     const chalong = (await db.select({ slug: clubs.slug }).from(clubs).where(eq(clubs.name, "Chalong Padel Club")))[0].slug;
     await db.update(clubs).set({ availabilityUrl: null, availabilityKind: null, availability: { ...feed([hour("2026-10-11", "09:00"), hour("2026-10-11", "10:00")]), source: "scrape:playtomic", platform: "playtomic" } }).where(eq(clubs.slug, chalong));
     expect(await say(chat, user(2, "Petr"), "/times@kicksmash_bot").outcome).toBe("times:3");
-    // In the order of the buttons: Rawai's own feed first, then Chalong on Playtomic.
-    expect(sent("sendMessage")[0].body.text).toBe(en.timesFree(`${en.timesTheClubs}${en.timesAnd}Playtomic`));
+    const answer = sent("sendMessage")[0];
+    expect(buttonsOf(answer).some((b) => b.text.endsWith("Chalong Padel Club"))).toBe(true);
+    expect(answer.body.text).toBe(en.timesFree);
+    expect(JSON.stringify(answer.body)).not.toMatch(/playtomic/i);
   });
 
   it("a club whose slug would not fit a button leaves room for the next one, never a false shrug", async () => {

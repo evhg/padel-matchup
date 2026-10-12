@@ -60,6 +60,9 @@ const env = {
   // proves the paste box's "Add screenshot" says its plain line when reading a screenshot is off.
   ANTHROPIC_API_KEY: "",
   NEXT_TELEMETRY_DISABLED: "1",
+  // A fake Playtomic for clubs whose slug starts with "e2e-" (e2e/fakes/playtomic.mjs): the reader of
+  // free court times reads it, and no suite calls the real platform or opens a checkout.
+  NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import ${path.join(path.dirname(new URL(import.meta.url).pathname), "fakes/playtomic.mjs")}`].filter(Boolean).join(" "),
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
   const webpush = (await import("web-push")).default;

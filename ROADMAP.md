@@ -551,7 +551,9 @@ Everything in this list is live. The README describes each in detail.
   shows those matches (the day, the club, who else played), with "Yes, these are mine" and "Not me";
   "Not me" is remembered in that browser only. A row that is a member of a group that asks to join
   needs the shared context for that answer too (the owner, 10 October 2026: "Need a shared match
-  first"); without it the card says so and offers only "Not me". A row with an address, a phone,
+  first"); without it the card says so and offers only "Not me". A row that created a crew or is an
+  admin of one is never merged by name, shared match or not, in any crew (the owner, 11 October 2026:
+  "No admin role by name alone"; the reading with a played shared match waits for the owner). A row with an address, a phone,
   a chat account or a push subscription is never merged by name. A merge now also moves the
   person's wants, which point at a player without a foreign key and were left behind on the folded
   row until now.
@@ -911,11 +913,12 @@ Everything in this list is live. The README describes each in detail.
   share, or that a platform shows publicly (DECIDING rule 35), are cached on the club's row;
   `src/lib/domain/bestTimes.ts` ranks them: a usual club at a usual time first, then the soonest, one
   time per club and day, at least two hours out, up to the end of the sixth day, inside every free
-  stretch. A club's own feed wins over a platform's read, a platform's read is shown for two hours as on
-  the club page, and a platform's times are named as its own ("on Playtomic"). They show where people
+  stretch. A club's own feed wins over a platform's read, and a platform's read is shown for two hours as on
+  the club page. Its times were named as the platform's ("on Playtomic") until 11 October 2026, when the
+  owner hid the name in the chat and the chips (the entry on the three court-time decisions below). They show where people
   pick a time: on the create form the club's free times lead the row of time chips, the person's usual
   times after them (a tap fills the day, the hour and the club's zone), and a line under the time says
-  whether the club or the platform shows a court free then, in the club's hour when the zones differ;
+  whether the club shows a court free then, in the club's hour when the zones differ;
   on /play, below the games while a city has fewer than three open games, "Free courts", each row one
   link to the form; and in a crew's Telegram group or a private chat only when somebody asks ("times?"
   with its question mark in a group, "when can we play?", /times), as one reply a minute at most
@@ -1003,6 +1006,16 @@ Everything in this list is live. The README describes each in detail.
   (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
   offer, a different person of the same name reads how to get in: a last name on My matches. The
   Telegram, Discord and LINE joins and `join_match` in the API and MCP do not refuse it yet.
+- **The held place keeps a past player's record (11 October 2026, no migration).** The owner asked
+  whether a held place may keep the record of a player who played with the organiser before, after
+  Danny got a second record; the answer was "Yes, keep the record" (DECIDING rule 34). The open spot
+  offers "Played with you", and a held name with one past player of that name offers "Keep Danny's
+  matches" (`src/lib/domain/heldRecord.ts`). The personal link signs a browser that knows nobody in as
+  that record, by name, inside the "That's me" limits; a record with an email or Telegram proves
+  itself first, a record with another limit is sent to the organiser, and any other record is refused. A join by the record takes its own place, and a plain join of its name from a browser that knows nobody is refused. A place with a phone keeps no record. A session by name gets no manage link. The same
+  day: "That's me" signs in a record that organised only past matches, and "Are these yours?" moves
+  no crew's admin role by name, shared match or not. Danny's two production records are not merged: that
+  is a production action the owner confirms.
 - **Two more doors for a booked court (11 October 2026, no migration).** The owner's decisions of
   11 October 2026 (DECIDING rule 36). A person forwards a booking confirmation to book@kicksma.sh, or
   writes the booking in a mail. One answer comes back from book@ with the club, the day, the time and
@@ -1026,6 +1039,25 @@ Everything in this list is live. The README describes each in detail.
   owner's monthly cost cap, or while Anthropic refuses the key. Then the box says so in one line, and
   the text still works (`src/lib/booking/screenshot.ts`). The privacy page names the screenshot under
   Anthropic.
+- **Three court-time decisions (11 October 2026, no migration).** The owner answered "Which court-time
+  changes do you want? Choose any." with three answers (DECIDING rules 5 and 36).
+  - **Playtomic's checkout, filled in.** On the match page, "Book and pay on Playtomic" opens
+    Playtomic's own checkout with the court, the start and the length filled in, when a read at most 90
+    minutes old listed exactly that start and length; else the club's day page, as before. The reader
+    keeps the exact starts Playtomic lists (about 1 KB a club, in the cache, read only by the match
+    page), and each read of a club page checks that its script still builds the link. While it does
+    not, the reader keeps no starts, so the match pages give the day page from the next read of each
+    club, within 90 minutes at most, and a counter and the service board say so. The link holds only a
+    court the read named, so the page always names the court beside the button. The player's browser
+    opens the link; our server never does (`src/lib/booking/prepare.ts`, `offers.ts`).
+  - **The weekly best times.** 24 hours before a crew's weekly slot, the bot posts up to three courts
+    free near the slot in the crew's own Telegram group, once, silently, unasked. A button makes the
+    match, or joins the crew's game when it is on already; a time that overlaps a game of the crew gets
+    no button, so a tap never gives the crew two games at once. Nothing when no court is free or the
+    court is booked; /quiet stops it (`src/lib/telegram/weeklyTimes.ts`).
+  - **No platform's name in the chat or the chips.** The "times?" answer, the weekly post, the time
+    chips, the line under the time and /play name no platform. The booking step and the club page's
+    source line still do (`src/lib/domain/bestTimes.ts` carries no name).
 
 ## The finish line
 

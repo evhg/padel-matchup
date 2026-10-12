@@ -13,6 +13,7 @@ export function InviteActions({
   autoDecline,
   reconfirm,
   knownEmail = null,
+  asRecord = false,
 }: {
   code: string;
   inviteCode: string;
@@ -23,6 +24,11 @@ export function InviteActions({
   reconfirm: boolean;
   /** The viewer's saved email: shown instead of asking again. */
   knownEmail?: string | null;
+  /**
+   * The place keeps a past player's record, and this browser knows nobody: "I'm in" signs it in as that
+   * record (the owner, 11 October 2026). No name to type, and no email asked: the session is by name.
+   */
+  asRecord?: boolean;
 }) {
   const t = useTranslations();
   const [name, setName] = useState(invitedName);
@@ -32,10 +38,11 @@ export function InviteActions({
 
   const confirm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
+    if (!hasIdentity && !asRecord && !name.trim()) return setError(t("identity.nameRequired"));
     start(async () => {
-      const r = await confirmInviteAction(code, inviteCode, { name: hasIdentity ? undefined : name, email: email || undefined });
-      if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+      const r = await confirmInviteAction(code, inviteCode, asRecord ? {} : { name: hasIdentity ? undefined : name, email: email || undefined });
+      // A place that keeps another record (a forwarded link): the server's own words for it.
+      if (!r.ok) setError(r.detail === "held_record" ? t("errors.held_record") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
     });
   };
   const decline = () =>
@@ -46,14 +53,19 @@ export function InviteActions({
 
   return (
     <form onSubmit={confirm} className="flex flex-col gap-3">
-      {!hasIdentity && (
+      {asRecord && (
+        <p className="text-sm text-muted" data-testid="invite-as-record">
+          {t("invitePage.asRecord", { name: invitedName })}
+        </p>
+      )}
+      {!hasIdentity && !asRecord && (
         <div>
           <label className="label">{t("invitePage.nameLabel")}</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="given-name" />
         </div>
       )}
       {emailEnabled && knownEmail && <p className="text-sm text-muted">✉️ {knownEmail}</p>}
-      {emailEnabled && !knownEmail && (
+      {emailEnabled && !knownEmail && !asRecord && (
         <div>
           <div className="flex items-start gap-2">
             <span aria-hidden className="mt-0.5 inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-court-soft text-court text-[0.625rem] font-black">

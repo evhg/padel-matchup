@@ -163,7 +163,9 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
             ? `resting until ${l.restUntil!.toISOString().slice(0, 16).replace("T", " ")} UTC after a block`
             : `fresh: ${fmt(l.fresh)} club${l.fresh === 1 ? "" : "s"} read in the last hour`;
     const unread = l.unread ? ` · ${clubsOf(l.unread)} not read: no link a reader takes` : "";
-    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}${unread}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Today read every 15 minutes, the next two days about hourly, by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" ? "warn" : "ok" });
+    // "Book this court" fills the platform's checkout (DECIDING rule 36) while its club page still builds that link.
+    const checkout = l.checkout === "lost" ? ` · checkout off: ${name}'s page no longer builds its link (match pages give the day page)` : l.checkout === "off" ? " · checkout off (checkout_off_* row)" : l.checkout === "on" ? " · checkout on" : "";
+    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}${unread}${checkout}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Today read every 15 minutes, the next two days about hourly, by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" || l.checkout === "lost" ? "warn" : "ok" });
   }
 
   // Mail

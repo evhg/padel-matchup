@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, groupMembers, groups, players, slots, tournamentRounds, type Event, type Slot } from "@/db/schema";
 import { newInviteCode } from "@/lib/codes";
@@ -92,6 +92,32 @@ export async function mayUseHeldLink(
   return !(await runsMatch(db, ev, player.id));
 }
 
+/**
+ * A place the organiser holds that nobody took yet: reserved, invited or declined, on the line-up. With
+ * a record on it, the record is the person it is held for (the owner, 11 October 2026: "Yes, keep the
+ * record"), or a tournament's placeholder for a name (`hasLifeOutside` tells the two apart). Pure.
+ */
+export const isHeldPlace = (s: Pick<Slot, "kind" | "status" | "position">, capacity: number): boolean => s.kind === "reserved" && (s.status === "invited" || s.status === "declined") && s.position <= capacity;
+
+/**
+ * Has this record a life outside this match: a seat taken in another match, or a match it made? A
+ * past player whom the organiser picked for a held place has one by the picker's own rule (a seat in a
+ * match that started). A tournament's placeholder (`generateRound` makes one for each name that never
+ * confirmed) has none, so the personal link still folds a placeholder into whoever confirms, as
+ * before, and never folds a real player's record. Two lookups, down `slots_player_idx` and
+ * `events_creator_idx`, each stopping at its first row.
+ */
+export async function hasLifeOutside(db: Db, playerId: string, eventId: string): Promise<boolean> {
+  const [seat] = await db
+    .select({ id: slots.id })
+    .from(slots)
+    .where(and(eq(slots.playerId, playerId), ne(slots.eventId, eventId), inArray(slots.status, ["joined", "confirmed"])))
+    .limit(1);
+  if (seat) return true;
+  const [made] = await db.select({ id: events.id }).from(events).where(and(eq(events.creatorPlayerId, playerId), ne(events.id, eventId))).limit(1);
+  return Boolean(made);
+}
+
 /** The same number, with or without its plus and whatever spaces it was typed with. */
 const samePhone = (a: string | null | undefined, b: string | null | undefined): boolean => {
   const digits = (p: string | null | undefined) => (normalizePhone(p) ?? "").replace(/^\+/, "");
@@ -131,6 +157,13 @@ export async function joinEvent(db: Db, input: { eventId: string; playerId: stri
       .from(slots)
       .where(and(eq(slots.eventId, ev.id), eq(slots.playerId, input.playerId)))
       .limit(1);
+    // The place the organiser holds for this very record (a past player picked for it): the join takes
+    // it, on a full match too, the way the personal link does (`confirmLocked`, "Danny confirmed").
+    // Every door that joins ends here: the web's Join, Telegram, WhatsApp, LINE, Discord and the API.
+    if (existing && isHeldPlace(existing, ev.capacity)) {
+      const done = await confirmLocked(tx, ev, existing, { playerId: input.playerId, now });
+      return { outcome: "joined", slot: done.slot, event: done.event };
+    }
     if (existing) return { outcome: "already_in", slot: existing, event: ev };
 
     const [claimed] = await tx
@@ -327,7 +360,10 @@ export async function removeFromSlot(
     // The removed player's unclaimed partner goes too: nobody else holds its link.
     const promotion = await vacateWithNamed(tx, ev, slot, input.actorPlayerId, now);
     const status = await recomputeStatus(tx, ev);
-    return { removedPlayerId: slot.playerId, removedName, promotion, event: { ...ev, status } };
+    // Only somebody who took the place hears "you were removed": a place held for a record that never
+    // took it (a past player the organiser picked, a tournament's placeholder) was never theirs.
+    const took = slot.status === "joined" || slot.status === "confirmed";
+    return { removedPlayerId: took ? slot.playerId : null, removedName, promotion, event: { ...ev, status } };
   });
 }
 
@@ -397,7 +433,8 @@ export async function seatNames(db: Db, input: { eventId: string; actorPlayerId:
 
 export async function reserveSlot(
   db: Db,
-  input: { eventId: string; actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; now?: Date },
+  /** `playerId`: the past player the organiser picked for the place (`pastPlayerNamed` in `heldRecord.ts`); the place keeps that record, unless a phone is given (`reserveLocked`). */
+  input: { eventId: string; actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; playerId?: string | null; now?: Date },
 ): Promise<{ slot: Slot; event: Event }> {
   const now = input.now ?? new Date();
   const name = normalizeName(input.name);
@@ -412,10 +449,20 @@ export async function reserveSlot(
 export async function reserveLocked(
   tx: Db,
   ev: Event,
-  input: { actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; now: Date },
+  input: { actorPlayerId: string | null; name: string; email?: string | null; phone?: string | null; slotId?: string | null; playerId?: string | null; now: Date },
 ): Promise<{ slot: Slot; event: Event }> {
   const { name, now } = input;
   assertLive(ev, now);
+  // A place held for a number is that number's: the WhatsApp JOIN from it takes the place. So it keeps
+  // no record, as "Keep Danny's matches" refuses one (`keepRecordFor`); a record there would refuse the
+  // number (`held_record`), and the bot would seat it a second time (review of 11 October 2026).
+  const playerId = input.playerId && !normalizePhone(input.phone) ? input.playerId : null;
+  // One place per record and match (`slots_event_player_idx`): a record already here is refused by
+  // name, never by the index's error.
+  if (playerId) {
+    const [here] = await tx.select({ id: slots.id }).from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.playerId, playerId))).limit(1);
+    if (here) throw new DomainError("invalid", "already_in");
+  }
   const claimable = and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["empty", "declined"]));
   const [target] = await tx
     .select()
@@ -434,6 +481,7 @@ export async function reserveLocked(
       .update(slots)
       .set({
         ...VACANT,
+        playerId,
         kind: "reserved",
         status: "invited",
         inviteCode,
@@ -480,11 +528,21 @@ export async function confirmInvite(
     }
     if (slot.status === "empty") return { outcome: "gone", event: ev };
 
-    // invited or declined → confirm
+    // A place held for a past player's record (the owner, 11 October 2026: "Yes, keep the record") is
+    // that record's alone: whoever else opens the link, a WhatsApp number included, is refused, and the
+    // record is never folded into them. A tournament's placeholder has no life outside the match, so it
+    // still folds into whoever confirms (below). The link signs a browser that knows nobody in as the
+    // record, inside the "That's me" limits, before it calls this (`decideHeldLink` in `heldRecord.ts`).
+    if (slot.playerId && slot.playerId !== input.playerId && slot.kind === "reserved" && (await hasLifeOutside(tx, slot.playerId, ev.id))) {
+      throw new DomainError("forbidden", "held_record");
+    }
+
+    // invited or declined → confirm. Another place of this record in the match, never the held place
+    // itself: the record it is held for, opening its own link, found that place here and freed it.
     const [elsewhere] = await tx
       .select()
       .from(slots)
-      .where(and(eq(slots.eventId, ev.id), eq(slots.playerId, input.playerId)))
+      .where(and(eq(slots.eventId, ev.id), eq(slots.playerId, input.playerId), ne(slots.id, slot.id)))
       .limit(1);
     const placeholder = slot.playerId && slot.playerId !== input.playerId ? slot.playerId : null;
     if (elsewhere) {
@@ -626,12 +684,15 @@ export async function promoteWaitlists(db: Db, now = new Date()): Promise<Promot
 
 export type SlotPayment = { slotId: string; playerId: string; name: string; claimedAt: Date | null; paidAt: Date | null };
 
+/** Who pays: a place somebody took, never one held for them (a past player picked for it, a placeholder). */
+const PAYING = ["joined", "confirmed"] as const;
+
 /** The player says the money is sent. A claim, not a status: it asks the organiser, it does not answer. */
 export async function claimSlotPaid(db: Db, input: { eventId: string; playerId: string }, now = new Date()): Promise<boolean> {
   const rows = await db
     .update(slots)
     .set({ paidClaimedAt: now })
-    .where(and(eq(slots.eventId, input.eventId), eq(slots.playerId, input.playerId), isNull(slots.paidAt)))
+    .where(and(eq(slots.eventId, input.eventId), eq(slots.playerId, input.playerId), inArray(slots.status, [...PAYING]), isNull(slots.paidAt)))
     .returning({ id: slots.id });
   return rows.length === 1;
 }
@@ -644,7 +705,7 @@ export async function setSlotPaid(db: Db, input: { eventId: string; slotId: stri
   const rows = await db
     .update(slots)
     .set({ paidAt: input.paid ? now : null })
-    .where(and(eq(slots.id, input.slotId), eq(slots.eventId, input.eventId), isNotNull(slots.playerId)))
+    .where(and(eq(slots.id, input.slotId), eq(slots.eventId, input.eventId), isNotNull(slots.playerId), inArray(slots.status, [...PAYING])))
     .returning({ id: slots.id });
   return rows.length === 1;
 }
@@ -655,7 +716,7 @@ export async function paymentsFor(db: Db, eventId: string): Promise<SlotPayment[
     .select({ slotId: slots.id, playerId: slots.playerId, name: players.displayName, claimedAt: slots.paidClaimedAt, paidAt: slots.paidAt, position: slots.position })
     .from(slots)
     .innerJoin(players, eq(players.id, slots.playerId))
-    .where(and(eq(slots.eventId, eventId), isNotNull(slots.playerId)))
+    .where(and(eq(slots.eventId, eventId), isNotNull(slots.playerId), inArray(slots.status, [...PAYING])))
     .orderBy(asc(slots.position));
   return rows.map((r) => ({ slotId: r.slotId, playerId: r.playerId as string, name: r.name, claimedAt: r.claimedAt, paidAt: r.paidAt }));
 }

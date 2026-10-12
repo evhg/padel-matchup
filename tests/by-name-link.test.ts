@@ -3,11 +3,14 @@ import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { players, type Player } from "@/db/schema";
-import { personalTokenFor } from "@/actions/shared";
+import { events, players, type Player } from "@/db/schema";
+import { manageUrlFor, personalTokenFor } from "@/actions/shared";
+import { baseUrl } from "@/lib/config";
+import { manageUrl } from "@/lib/share";
 import { GET as calendarFile } from "@/app/[code]/calendar.ics/route";
 import { createEvent } from "@/lib/domain/events";
 import { createPlayer } from "@/lib/domain/players";
+import { rolodexForBrowser } from "@/lib/domain/queries";
 import { PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
 import { asAction } from "./helpers/action";
 
@@ -62,6 +65,20 @@ describe("a session by name gets no personal link from any screen or file", () =
     expect(named).toContain(`/${code}`);
   });
 
+  // Since the owner's decision of 11 October 2026, "That's me" signs in a record that organised only
+  // past matches. As that organiser, a stranger opens the reserve form of a new match: its suggestions
+  // are the people that record played with, and their emails and phones are not the stranger's to read.
+  it("the organiser's suggestions carry names alone for a session by name: no email and no phone", () => {
+    const list = [{ name: "Jo", email: "jo@example.com", phone: "+66810000000" }];
+    expect(rolodexForBrowser(list, { namesAlone: true })).toEqual([{ name: "Jo", email: null, phone: null }]);
+    expect(rolodexForBrowser(list, { namesAlone: false })).toEqual(list);
+    // The match page hands the open spot only that shape, and asks the session's own mark for it.
+    const page = readFileSync(path.resolve(process.cwd(), "src/app/[code]/page.tsx"), "utf8");
+    expect(page).toContain("rolodexForBrowser(rolodex, { namesAlone })");
+    expect(page).toContain("const namesAlone = reserving && (await nameOnly(me));");
+    expect(page).not.toMatch(/rolodex\.map\(/);
+  });
+
   it("no page, route or component in src/app or src/components mints a personal token itself", () => {
     const files = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : /\.(ts|tsx)$/.test(e.name) ? [path.join(dir, e.name)] : []));
@@ -72,5 +89,25 @@ describe("a session by name gets no personal link from any screen or file", () =
       .map((f) => path.relative(process.cwd(), f))
       .filter((f) => !allowed.has(f) && readFileSync(f, "utf8").includes("getOrCreatePersonalToken("));
     expect(found, "hand the session its personal link through personalTokenFor (src/actions/shared.ts)").toEqual([]);
+  });
+
+  // Since the owner's decisions of 11 October 2026, "That's me" and a held place's link sign in a record
+  // that organised past matches. The manage link of such a match is a credential that never expires and
+  // works in any browser, so a session by name gets it from no screen, as it gets no personal link.
+  it("a session by name gets no manage link for a past match its record made; a full session gets it", async () => {
+    const past = await createEvent(db, { creatorPlayerId: ana.id, type: "match", startsAt: new Date(Date.now() + 86_400_000), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    await db.update(events).set({ startsAt: new Date(Date.now() - 20 * 86_400_000), status: "past" }).where(eq(events.id, past.id));
+    expect((await asAction(byName(), () => manageUrlFor(ana, past))).result).toBeNull();
+    expect((await asAction(full(), () => manageUrlFor(ana, past))).result).toBe(manageUrl(baseUrl(), past.code, past.manageCode));
+  });
+
+  it("no page, route or component in src/app or src/components builds a match's manage link itself", () => {
+    const files = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : /\.(ts|tsx)$/.test(e.name) ? [path.join(dir, e.name)] : []));
+    const found = ["src/app", "src/components"]
+      .flatMap((d) => files(path.resolve(process.cwd(), d)))
+      .map((f) => path.relative(process.cwd(), f))
+      .filter((f) => /\bmanageUrl\(/.test(readFileSync(f, "utf8")));
+    expect(found, "hand a screen the manage link through manageUrlFor (src/actions/shared.ts)").toEqual([]);
   });
 });

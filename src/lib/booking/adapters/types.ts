@@ -13,7 +13,27 @@ export type ScrapedSlot = { start: string; end: string; court: string | null; co
  * back for a read of today alone, so such a read can skip the club page; a reader checks its shape and
  * ignores it when it does not fit.
  */
-export type ScrapeTarget = { clubSlug: string; platform: string; bookingUrl: string; tz: string | null; days: number; ref?: string | null };
+export type ScrapeTarget = {
+  clubSlug: string;
+  platform: string;
+  bookingUrl: string;
+  tz: string | null;
+  days: number;
+  ref?: string | null;
+  /**
+   * For a platform whose checkout "Book this court" fills (`CHECKOUT` in prepare.ts): the script on the
+   * club page known to build that link (`builder`, its path as `fnv1a`; `chunk`, the figures its file
+   * name starts with), and whether this read may fetch a few of the page's scripts to find it again
+   * (`hunt`). A reader that reads the club page reports what it found (`ScrapeResult.builder`).
+   */
+  checkout?: { builder: number; chunk: number | null; hunt: boolean };
+};
+/**
+ * The checkout builder on the club page this read fetched: the known script is still there (`same`), a
+ * script fetched now builds the link (`found`, its key and its figures), or neither (`lost`: `checked`
+ * of the page's `of` scripts read, none builds it). Absent when the read did not fetch the club page.
+ */
+export type BuilderReport = { state: "same" } | { state: "found"; key: number; chunk: number | null } | { state: "lost"; checked: number; of: number };
 export type ScrapeFailure = "blocked" | "not_found" | "changed" | "timeout" | "error" | "not_public";
 /**
  * `tz` on a clean read: the zone the reader read the club's days in. The frame keeps the cache in it.
@@ -21,7 +41,7 @@ export type ScrapeFailure = "blocked" | "not_found" | "changed" | "timeout" | "e
  * hands back as `ScrapeTarget.ref` (letters, figures, "-", "_", ":" and ".", 80 at most; anything else
  * is dropped).
  */
-export type ScrapeResult = { ok: true; slots: ScrapedSlot[]; requests: number; tz?: string; ref?: string } | { ok: false; status: number | null; reason: ScrapeFailure; requests: number; detail: string | null };
+export type ScrapeResult = { ok: true; slots: ScrapedSlot[]; requests: number; tz?: string; ref?: string; builder?: BuilderReport } | { ok: false; status: number | null; reason: ScrapeFailure; requests: number; detail: string | null };
 export interface AvailabilityAdapter {
   /** Matches PLATFORMS[].id in src/lib/booking/platforms.ts. */
   platform: string;

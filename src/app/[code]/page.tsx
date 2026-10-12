@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { detectPlatform, madeToShare } from "@/lib/booking/platforms";
+import { detectPlatform, madeToShare, platformById } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { getViewer } from "@/actions/shared";
+import { getViewer, manageUrlFor, nameOnly } from "@/actions/shared";
 import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/source";
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
@@ -63,19 +63,20 @@ import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
 import { playerHasPush } from "@/lib/domain/push";
 import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
-import { getShownClubLean, venuesForPicking } from "@/lib/domain/clubs";
-import { getEventByCode, getRolodex, type SlotWithPlayer } from "@/lib/domain/queries";
+import { getClubForBooking, venuesForPicking } from "@/lib/domain/clubs";
+import { getEventByCode, getRolodex, rolodexForBrowser, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/push";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
-import { partnerGoesWith } from "@/lib/domain/slots";
+import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
+import { keepRecordFor, pastPlayerRows, pickable } from "@/lib/domain/heldRecord";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
-import { eventUrl, inviteUrl, manageUrl, whatsappShareUrl } from "@/lib/share";
+import { eventUrl, inviteUrl, whatsappShareUrl } from "@/lib/share";
 import { heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
@@ -152,8 +153,12 @@ async function EventPage({ params, searchParams }: Props) {
   const bounced = viewer.isCreator && emailEnabled() ? await markedAmong(db, [...roster, ...waitlist].flatMap((s) => [s.player?.email, s.invitedEmail])) : new Set<string>();
   const didBounce = (a: string | null | undefined) => Boolean(a) && bounced.has(normalAddress(a));
   const mySlot = me ? [...roster, ...waitlist].find((s) => s.playerId === me.id) : undefined;
-  const isMember = Boolean(mySlot && mySlot.position <= ev.capacity);
-  const isWaitlisted = Boolean(mySlot && mySlot.position > ev.capacity);
+  // A place the organiser holds for this very record (a past player picked for it, the owner's decision
+  // of 11 October 2026) is not a seat: the viewer is not in until they take it, and Join takes it
+  // (`joinEvent`), on a full match too. It used to read as "in", with Leave.
+  const myHeld = Boolean(mySlot && isHeldPlace(mySlot, ev.capacity));
+  const isMember = Boolean(mySlot && isOccupied(mySlot) && mySlot.position <= ev.capacity);
+  const isWaitlisted = Boolean(mySlot && isOccupied(mySlot) && mySlot.position > ev.capacity);
   const waitlistPosition = isWaitlisted ? waitlist.findIndex((s) => s.id === mySlot!.id) + 1 : 0;
   // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
   // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
@@ -184,6 +189,7 @@ async function EventPage({ params, searchParams }: Props) {
   else if (over) joinState = "past";
   else if (isMember) joinState = started ? "member_live" : "leave";
   else if (isWaitlisted) joinState = "leave_waitlist";
+  else if (myHeld) joinState = "join";
   else if (myRequest?.status === "pending") joinState = "requested";
   else if (myRequest?.status === "declined") joinState = "request_declined";
   else if (spotsLeft > 0) joinState = "join";
@@ -365,25 +371,49 @@ async function EventPage({ params, searchParams }: Props) {
   const canMarkBooked = !cancelled && !over && mayMarkBooked(detail, me?.id);
   // The booking link is a platform's invitation for strangers when `madeToShare` takes it: "Join this booking on …", never "Book on …".
   const invite = madeToShare(ev.bookingUrl);
-  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getShownClubLean(db, ev.venueSlug) : null;
+  // With the head of its cache for a match inside the three days a read covers: Playtomic's checkout,
+  // filled in, when Playtomic listed exactly this start and length (the owner, 11 October 2026; `checkoutFor`).
+  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getClubForBooking(db, ev.venueSlug, { cache: ev.startsAt.getTime() < now.getTime() + 4 * 24 * 3600_000 }) : null;
   // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
-  const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }) : null;
+  const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }, { cache: venueClub.cache, now }) : null;
   // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.
+  // A checkout names the court it holds, which is the match's own court when the platform listed it.
   const clubTz = venueClub?.tz || ev.tz;
-  const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), ev.court ? (/^\d{1,3}$/.test(ev.court) ? courtNumber(ev.court) : ev.court) : null].filter(Boolean).join(", ");
-  const rolodexAll = viewer.isCreator ? await getRolodex(db, ev.creatorPlayerId) : [];
+  const slotCourt = prepared?.prepared === "checkout" ? (prepared.court ?? null) : ev.court;
+  const slotLine = [formatEventDay(ev.startsAt, clubTz, locale), formatEventTime(ev.startsAt, clubTz, locale), t("event.minutes", { minutes: ev.durationMinutes }), slotCourt ? (/^\d{1,3}$/.test(slotCourt) ? courtNumber(slotCourt) : slotCourt) : null].filter(Boolean).join(", ");
+  // The organiser's suggestions, only while a spot can still be reserved (the open spot takes them in no
+  // other state, and a past match's payload carried them all the same). A session by name that proved
+  // nothing gets the names alone, never an email or a phone: since the owner's decision of 11 October
+  // 2026 "That's me" signs in a record that organised only past matches, and these are other people's.
+  const reserving = viewer.isCreator && !cancelled && !over;
+  const rolodexAll = reserving ? await getRolodex(db, ev.creatorPlayerId) : [];
+  const namesAlone = reserving && (await nameOnly(me));
+  // The manage link is a lasting credential: none for a session by name that proved nothing (`manageUrlFor`).
+  const organiserManageUrl = viewer.isCreator ? await manageUrlFor(me, ev) : null;
   // Suggestions never include people already in this match (joined, confirmed or invited).
   const inEventIds = new Set([...roster, ...waitlist].filter((s) => s.playerId && s.status !== "empty" && s.status !== "declined").map((s) => s.playerId!));
   // The same list twice over: the organiser's suggestions leave these people out, and a stranger
   // typing one of these names is offered the way back in rather than a second row of their own.
   const namesHere = [...roster, ...waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
   const inEventNames = new Set(namesHere.map((n) => n.trim().toLowerCase()));
-  const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()));
+  // "Played with you" (the owner, 11 October 2026: "Yes, keep the record"): the records that sat in a
+  // taken seat beside the organiser, or in the organiser's matches, names only. A pick keeps the record
+  // on the held place, found again on the server from the name. Three bounded reads, for the organiser
+  // only and only while a spot can still be reserved (`pastPlayerRows`).
+  const pastPlayers = reserving ? await pastPlayerRows(db, ev.creatorPlayerId, now) : [];
+  // Every record with a row here, a declined place included: one record holds one place per match.
+  const idsHere = new Set([...roster, ...waitlist].flatMap((s) => (s.playerId ? [s.playerId] : [])));
+  const playedWithYou = pickable(pastPlayers, { ids: idsHere, names: namesHere });
+  const playedKeys = new Set(playedWithYou.map((n) => n.trim().toLowerCase()));
+  // The same person twice would be two chips of one name: a past player's chip stands for them.
+  const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()) && !playedKeys.has(r.name.trim().toLowerCase()));
+  // A held row whose record is one of those past players: it keeps their matches (the line under it).
+  const pastIds = new Set(pastPlayers.map((p) => p.id));
   // "That's me" (DECIDING rule 34): a browser that knows nobody signs in as a record of this match or
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
   // organiser, a manage link included, has their own way in).
-  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere);
+  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere, now);
   const offerOnRoster = (id: string | null) => Boolean(id) && (offer.ids.has(id!) || offer.fold?.id === id);
   // The held place by name (DECIDING rule 34, the owner, 11 October 2026): "Take Danny's held place"
   // for the typed name only, never on the row, wherever `heldVerdict` says yes. Over the rows this page
@@ -477,6 +507,11 @@ async function EventPage({ params, searchParams }: Props) {
             ) : s.status === "invited" ? (
               <div>
                 <div className="font-bold">{t("event.reservedFor", { name })}</div>
+                {viewer.isCreator && s.playerId && pastIds.has(s.playerId) && (
+                  <div className="text-xs font-semibold text-ok" data-testid="keeps-record">
+                    ✓ {t("creator.keepsRecord", { name })}
+                  </div>
+                )}
                 <div className="text-xs font-semibold text-warn">
                   {viewer.isCreator && didBounce(s.invitedEmail)
                     ? t("creator.inviteBounced")
@@ -497,7 +532,8 @@ async function EventPage({ params, searchParams }: Props) {
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
                 slotId={s.id}
                 hasIdentity={Boolean(me)}
-                rolodex={viewer.isCreator ? rolodex.map((r) => ({ name: r.name, email: r.email, phone: r.phone })) : []}
+                rolodex={viewer.isCreator ? rolodexForBrowser(rolodex, { namesAlone }) : []}
+                played={viewer.isCreator ? playedWithYou : []}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
@@ -527,6 +563,7 @@ async function EventPage({ params, searchParams }: Props) {
             stale={stale}
             defaultOpen={justInvited}
             emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
+            keepRecord={keepRecordFor(pastPlayers, s, idsHere)}
           />
         )}
       </li>
@@ -706,7 +743,7 @@ async function EventPage({ params, searchParams }: Props) {
           )}
           {ev.note && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
           {(booked || canMarkBooked) && !cancelled && (
-            <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
+            <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" ? (platformById(prepared.platform)?.name ?? prepared.platform ?? "") : null } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
           )}
           {cancelled && (
             <div className="mt-4 rounded-2xl bg-danger-soft p-4">
@@ -895,7 +932,7 @@ async function EventPage({ params, searchParams }: Props) {
             creatorNotify={creator.emailNotifications}
             banter={creator.banter}
             emailEnabled={emailEnabled()}
-            manageUrl={manageUrl(base, code, ev.manageCode)}
+            manageUrl={organiserManageUrl}
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
             paste={!cancelled && !over ? { namesHere, spots: spotsLeft } : null}

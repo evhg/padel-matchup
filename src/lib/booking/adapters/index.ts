@@ -3,7 +3,7 @@ import { matchiAdapter } from "./matchi";
 import { playtomicAdapter } from "./playtomic";
 import type { AvailabilityAdapter } from "./types";
 
-export type { AvailabilityAdapter, ScrapedSlot, ScrapeFailure, ScrapeResult, ScrapeTarget } from "./types";
+export type { AvailabilityAdapter, BuilderReport, ScrapedSlot, ScrapeFailure, ScrapeResult, ScrapeTarget } from "./types";
 
 /**
  * The platform readers, one file each (`./<platform>.ts`), one line each here. A reader reads only what

@@ -140,10 +140,12 @@ describe("who the best times read, and how much", () => {
     await db.delete(clubs);
   });
 
-  it("the directory's clubs count: a platform's read of a club nobody runs is offered, named as the platform's", async () => {
+  // /play names no platform (the owner, 11 October 2026: "the name shows only at the booking step").
+  it("the directory's clubs count: a platform's read of a club nobody runs is offered, with no platform's name", async () => {
     await listed("Rawai Padel", SAT_3PM, { city: "phuket" });
     const [first] = await courtsFreeInCity(db, phuket, null, NOW);
-    expect(first).toMatchObject({ slug: "rawai-padel", time: "15:00", platform: "Playtomic" });
+    expect(first).toMatchObject({ slug: "rawai-padel", time: "15:00" });
+    expect(JSON.stringify(first)).not.toMatch(/playtomic/i);
   });
 
   it("a club a player listed is not offered: its links are whatever that player typed, as for 'Book this court'", async () => {

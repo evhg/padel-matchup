@@ -17,7 +17,8 @@ export const canRestore = () => emailEnabled() || Boolean(telegramBotId());
  * returning player recognises and nobody else has to read — a `<details>`, which opens with no
  * JavaScript at all and takes nothing away from the name field above it.
  */
-export async function ReturningPlayer({ collapsed = false }: { collapsed?: boolean }) {
+/** `bare`: the doors alone, under a heading of the caller's own (the personal link of a place that keeps a record that can prove itself). */
+export async function ReturningPlayer({ collapsed = false, bare = false }: { collapsed?: boolean; bare?: boolean }) {
   if (!canRestore()) return null;
   const [t, lang] = await Promise.all([getTranslations(), getLocale()]);
   const body = (
@@ -36,6 +37,7 @@ export async function ReturningPlayer({ collapsed = false }: { collapsed?: boole
       )}
     </>
   );
+  if (bare) return body;
   if (!collapsed)
     return (
       <>

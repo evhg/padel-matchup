@@ -104,9 +104,9 @@ describe("bestTimes: a usual club at a usual time first, then the soonest", () =
     expect(said(bestTimes({ clubs: clubs.slice(0, 1), patterns: [THU_7PM], lengthMinutes: 60, now: NOW, limit: 1 }))).toEqual(["Rawai Padel 2026-10-15 19:00 *"]);
   });
 
-  it("carries what a button needs: the instant, the club's own day and hour, its zone, the courts free and whose times they are", () => {
+  it("carries what a button needs: the instant, the club's own day and hour, its zone and the courts free, and no platform's name", () => {
     const [first] = bestTimes({ clubs, patterns: [THU_7PM], lengthMinutes: 90, now: NOW, limit: 1 });
-    expect(first).toEqual({ slug: "rawai-padel", name: "Rawai Padel", tz: TZ, start: at("2026-10-15", "19:00"), date: "2026-10-15", time: "19:00", free: 2, usual: true, platform: "Playtomic" });
+    expect(first).toEqual({ slug: "rawai-padel", name: "Rawai Padel", tz: TZ, start: at("2026-10-15", "19:00"), date: "2026-10-15", time: "19:00", free: 2, usual: true });
   });
 
   it("stays inside seven days, never shows one weekday twice and never offers a court too close to reach", () => {
@@ -279,9 +279,11 @@ describe("freeLineOf: the line under the time, in the club's hour when the form'
     expect(freeLineOf(f, { date: "2026-10-15", time: "11:00", tz: "Europe/Madrid" }, 60, NOW)).toMatchObject({ state: "busy", clubTime: "16:00" });
   });
 
-  it("names the platform when the times are a platform's, and the club when they are its own feed", () => {
-    expect(freeLineMessage(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW))).toEqual({ key: "create.freeThenOn", values: { platform: "Playtomic" } });
-    expect(freeLineMessage(freeLineOf(f, { date: "2026-10-15", time: "11:00", tz: "Europe/Madrid" }, 60, NOW))).toEqual({ key: "create.busyThenOnClub", values: { platform: "Playtomic", time: "16:00" } });
+  // The owner, 11 October 2026: "The chat reply and the time chips show no platform name, and the
+  // name shows only at the booking step." A platform's read and a club's own feed read the same.
+  it("says what the club shows, never a platform's name, whoever published the times", () => {
+    expect(freeLineMessage(freeLineOf(f, { date: "2026-10-15", time: "19:00", tz: TZ }, 90, NOW))).toEqual({ key: "create.freeThen", values: {} });
+    expect(freeLineMessage(freeLineOf(f, { date: "2026-10-15", time: "11:00", tz: "Europe/Madrid" }, 60, NOW))).toEqual({ key: "create.busyThenClub", values: { time: "16:00" } });
     const own = freeFeedOf(feed(TODAY_ONLY, { source: "ics_bookings" }), NOW);
     expect(freeLineMessage(freeLineOf(own, { date: "2026-10-10", time: "15:00", tz: TZ }, 60, NOW))).toEqual({ key: "create.freeThen", values: {} });
     expect(freeLineMessage(freeLineOf(own, { date: "2026-10-10", time: "09:00", tz: "Europe/Madrid" }, 60, NOW))).toEqual({ key: "create.busyThenClub", values: { time: "14:00" } });
@@ -310,10 +312,13 @@ describe("freeFeedOf on a platform's read: the days it covered, each as fresh as
     expect(freeAt(f, at("2026-10-13", "10:00"), 60, NOW)).toBe("unknown");
   });
 
-  it("names the platform, so every screen can say whose times these are", () => {
-    expect(freeFeedOf(read({}), NOW)?.platform).toBe("Playtomic");
-    expect(bestTimes({ clubs: [{ slug: "r", name: "Rawai", feed: freeFeedOf(read({}), NOW) }], patterns: [], lengthMinutes: 60, now: NOW, limit: 1 })[0].platform).toBe("Playtomic");
-    expect(freeFeedOf(feed(TODAY_ONLY, { source: "ics_bookings" }), NOW)?.platform).toBeNull();
+  // What reaches the create form's chips (the browser's own copy of the feed), the chat and /play:
+  // no platform's name anywhere in it, so no screen or chat that reads it can show one.
+  it("carries no platform's name: not in the feed a browser gets, not in a best time", () => {
+    const platformRead = freeFeedOf(read({}), NOW);
+    const best = bestTimes({ clubs: [{ slug: "r", name: "Rawai", feed: platformRead }], patterns: [], lengthMinutes: 60, now: NOW, limit: 1 });
+    expect(best).toHaveLength(1);
+    expect(JSON.stringify([platformRead, best])).not.toMatch(/playtomic/i);
   });
 
   it("the later days only while the full read is fresh: today's own read does not make them new", () => {

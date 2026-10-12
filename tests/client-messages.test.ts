@@ -46,7 +46,7 @@ const DYNAMIC: DynamicTable = {
     // The inline map beside it, one "how it works" line for each format.
     '({ americano: "pairs.howAmericano", mexicano: "pairs.howMexicano", king: "pairs.howKing" } as const)[values.format]': ["pairs.howAmericano", "pairs.howMexicano", "pairs.howKing"],
     // `freeLineMessage` in src/lib/domain/bestTimes.ts: free or busy, with or without the platform and the club's time.
-    "freeThen.key": ["create.freeThen", "create.busyThen", "create.freeThenClub", "create.busyThenClub", "create.freeThenOn", "create.busyThenOn", "create.freeThenOnClub", "create.busyThenOnClub"],
+    "freeThen.key": ["create.freeThen", "create.busyThen", "create.freeThenClub", "create.busyThenClub"],
     // `k` runs over "any", LEVEL_PRESETS (src/lib/domain/levels.ts) and "custom".
     "`level.${k}`": ["level.any", "level.bronze", "level.silver", "level.gold", "level.platinum", "level.custom"],
     // CATEGORY_KEYS in src/lib/domain/eventTags.ts.

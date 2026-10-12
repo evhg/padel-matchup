@@ -8,11 +8,11 @@ import { claimSameNameAction } from "@/actions/identity";
 /**
  * "These are mine" folds the row in (checked again on the server). "Not me" is remembered in this
  * browser only: nothing is written about a row somebody said is a stranger's. A row the person may
- * not claim (`mayClaim`: a member of a group that asks to join, with no match the two sat in together)
- * gets one line in place of the claim button, never a button the server would refuse. The line says
- * that a name alone cannot add the matches, and never how to pass the guard.
+ * not claim (`mayClaim`: a member of a group that asks to join with no match the two sat in together,
+ * or a row that runs a crew) gets one line in place of the claim button, never a button the server would
+ * refuse. The line says that a name alone cannot add the matches, and never how to pass the guard.
  */
-export function SameNameButtons({ rowId, notMine, claimable = true }: { rowId: string; notMine: string[]; claimable?: boolean }) {
+export function SameNameButtons({ rowId, notMine, blocked = null }: { rowId: string; notMine: string[]; blocked?: "asking_group" | "runs_crew" | null }) {
   const t = useTranslations("me");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -34,13 +34,13 @@ export function SameNameButtons({ rowId, notMine, claimable = true }: { rowId: s
   };
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      {claimable ? (
+      {blocked === null ? (
         <button type="button" className="btn-primary btn-sm" disabled={pending} onClick={claim} data-testid="same-name-mine">
           {pending ? "…" : t("sameMine")}
         </button>
       ) : (
-        <p className="w-full text-xs text-muted" data-testid="same-name-asking-group">
-          {t("sameNameOnly")}
+        <p className="w-full text-xs text-muted" data-testid={blocked === "runs_crew" ? "same-name-runs-crew" : "same-name-asking-group"}>
+          {blocked === "runs_crew" ? t("sameRunsCrew") : t("sameNameOnly")}
         </p>
       )}
       <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={dismiss} data-testid="same-name-not-me">

@@ -34,8 +34,9 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  * The offer stands wherever a join could start: the open spot's typed name, the waiting list's typed
  * name on a full match, and, for a browser that knows a record of the name, in place of its one-tap
  * Join. The web's plain join that would seat a second record of the name beside the place is refused
- * (`whoJoins`), because after it no typed name could take the place. The joins through `joinAsPlayer`
- * (Telegram, Discord, LINE, `join_match`) do not ask yet.
+ * (`whoJoins`), because after it no typed name could take the place. So is the plain join of the name
+ * of a place that keeps a past player's record, from a browser that knows nobody (`heldRecordNamed`).
+ * The joins through `joinAsPlayer` (Telegram, Discord, LINE, `join_match`) do not ask yet.
  */
 
 /** A place in the match as the rule reads it: the row, and the name of the record on it when there is one. */
@@ -123,11 +124,29 @@ export function heldNameFor(m: HeldMatch, seats: readonly HeldSeat[], viewer: He
 type JoinSeat = Omit<HeldSeat, "playerName"> & { player: { displayName: string } | null };
 
 /**
+ * The place held for a record that a typed name would sit beside: reserved, invited, with a record on
+ * it, and of the typed name (the name the organiser held, or the record's own). `heldVerdict` reads
+ * such a place as a placeholder, because a tournament's placeholder has the same shape; whether the
+ * record is a real player's (`hasLifeOutside`) is the caller's read. Pure.
+ */
+export function heldRecordNamed<S extends Pick<JoinSeat, "kind" | "status" | "playerId" | "invitedName" | "player">>(seats: readonly S[], typed: string | null | undefined): S | null {
+  const key = normalName(typed);
+  if (key.length < 2) return null;
+  return seats.find((s) => s.kind === "reserved" && s.status === "invited" && s.playerId && (normalName(s.invitedName) === key || normalName(s.player?.displayName) === key)) ?? null;
+}
+
+/**
  * Who a plain join on the web seats, decided before anything is made or seated: the browser's own
  * record, else a new record from the typed name (`make`, called only then). A join that would put a
  * second record of a held place's name beside it, in a seat or on the waiting list (`heldNameFor`),
  * gets `{ held }` and no record: `joinAction` refuses it with `name_held`. The places are the line-up
- * and the waiting list the join read already, so there is no read here.
+ * and the waiting list the join read already, so there is no read here, but one: a browser that knows
+ * nobody, typing the name of a place that keeps a record (a past player picked for it, or "Keep
+ * Danny's matches"), is refused the same way when `keepsRecord` says the record is a real player's,
+ * because the join would make a second Danny and seat him beside the place (review of 11 October
+ * 2026). That one is "That's me" for the record, which the open spot offers under the typed name, or
+ * the place's own link. `keepsRecord` costs two lookups that stop at their first row, and only for such
+ * a name; a tournament's placeholder is no player, so its name joins as before.
  */
 export async function whoJoins<P extends { id: string; displayName: string }>(
   detail: { event: HeldMatch; roster: readonly JoinSeat[]; waitlist: readonly JoinSeat[] },
@@ -135,10 +154,15 @@ export async function whoJoins<P extends { id: string; displayName: string }>(
   typed: string | null | undefined,
   now: Date,
   make: () => Promise<P>,
+  keepsRecord?: (playerId: string) => Promise<boolean>,
 ): Promise<{ held: string } | { player: P }> {
   const seats = [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
   const held = heldNameFor(detail.event, seats, known ? { id: known.id, name: known.displayName } : null, typed, now);
   if (held) return { held };
+  if (!known && keepsRecord) {
+    const place = heldRecordNamed(seats, typed);
+    if (place?.playerId && (await keepsRecord(place.playerId))) return { held: place.invitedName ?? place.player?.displayName ?? "" };
+  }
   return { player: known ?? (await make()) };
 }
 
@@ -206,7 +230,7 @@ export async function takeHeldByName(db: Db, d: HeldDecision, taker: { id: strin
 export type InviteState = "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled";
 
 /** What a personal link's page shows. */
-export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled";
+export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled" | "sign_in_first";
 
 /**
  * What a personal link's page shows. `inMatch`: the viewer's record holds a place in this match

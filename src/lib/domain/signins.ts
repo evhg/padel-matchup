@@ -12,6 +12,8 @@ import { bumpMetric } from "./metrics";
  *
  *   - `thats_me`: "That's me" on a match page, by name, without proof (DECIDING rule 34);
  *     `thats_me_fold` as well when it folded the new record this browser had made into the old one.
+ *   - `held_link`: the personal link of a held place that keeps a past player's record, in a browser
+ *     that knew nobody; marked by name, as "That's me" is (the owner, 11 October 2026).
  *   - `restore`: a lost cookie brought back from the seal the browser kept (`restoreIdentity`). The
  *     person proves nothing; the browser gives back what the server signed for it. Until 11 October
  *     2026 it took a bare player id, which anybody could read off a match page.
@@ -21,7 +23,7 @@ import { bumpMetric } from "./metrics";
  *
  * A link of a second channel to a browser already signed in is not a sign-in and is not counted.
  */
-export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp"] as const;
+export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp"] as const;
 export type SignInWay = (typeof SIGNIN_WAYS)[number];
 
 /** Never throws: a sign-in must not fail because its counter did. */

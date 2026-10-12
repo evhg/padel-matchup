@@ -15,6 +15,8 @@ import { countNewRecord } from "@/lib/domain/signins";
 import { countedSource, SOURCE_COOKIE } from "@/lib/source";
 import { getSessionPlayer, hasManageAccess, setSessionPlayer, signedInByName } from "@/lib/session";
 import { nameOnlySession } from "@/lib/domain/thatsMe";
+import { baseUrl } from "@/lib/config";
+import { manageUrl } from "@/lib/share";
 
 /** `name_held`: the name has a held place this browser may take (DECIDING rule 34); a plain join would leave it behind for good. */
 export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held";
@@ -97,6 +99,19 @@ export async function nameOnly(player: Player | null): Promise<boolean> {
 export async function personalTokenFor(db: Db, player: Player | null): Promise<string | null> {
   if (!player || (await nameOnly(player))) return null;
   return getOrCreatePersonalToken(db, player.id);
+}
+
+/**
+ * The match's manage link for a screen that shows it to its organiser (the organiser's panel, the share
+ * page). Null for a session by name that has proved nothing (`nameOnly`), unless this browser opened
+ * the manage link itself (`hasManageAccess`): the link never expires and works in any browser, and
+ * since the owner's decisions of 11 October 2026 "That's me" and a held place's link sign in a record
+ * that organised past matches. On a finished match it keeps the organiser's powers (levels, scores)
+ * after the real person proves themselves. Two cookie reads, no database read.
+ */
+export async function manageUrlFor(player: Player | null, ev: { code: string; manageCode: string }): Promise<string | null> {
+  if ((await nameOnly(player)) && !(await hasManageAccess(ev.code, ev.manageCode))) return null;
+  return manageUrl(baseUrl(), ev.code, ev.manageCode);
 }
 
 export type Viewer = { player: Player | null; isCreator: boolean };

@@ -229,10 +229,6 @@
     "freeThenClub": "✓ El club muestra una pista libre a esa hora (las {time} en el club).",
     "busyThenClub": "El club no muestra ninguna pista libre a esa hora (las {time} en el club).",
     "freeAndUsualLabel": "✓ Libre en {club}, y tus horarios habituales",
-    "freeThenOn": "✓ {platform} muestra una pista libre a esa hora.",
-    "busyThenOn": "{platform} no muestra ninguna pista libre a esa hora.",
-    "freeThenOnClub": "✓ {platform} muestra una pista libre a esa hora (las {time} en el club).",
-    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club).",
     "bookedByMe": "Pista reservada por mí",
     "bookedByMeHelp": "La página del partido dice a los jugadores que la pista está reservada.",
     "pasteNoDay": "Tu reserva no dice el día. Elígelo aquí.",
@@ -348,7 +344,6 @@
     "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
     "tellGroup": "Avisar al grupo",
     "bookCourt": "Reservar esta pista",
-    "bookAndPay": "Reservar y pagar",
     "bookedIt": "Ya reservé la pista",
     "courtBooked": "Pista reservada ✓",
     "courtBookedBy": "Pista reservada ✓ (por {name})",
@@ -363,7 +358,9 @@
     "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
     "joinBooking": "Únete a esta reserva en {platform}",
     "playAgainNext": "Próximo partido: {when} · {code}",
-    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro."
+    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro.",
+    "bookAndPayOn": "Reservar y pagar en {platform}",
+    "checkoutSignIn": "{platform} puede pedirte que inicies sesión primero."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -414,7 +411,10 @@
     "pasteNoSpot": "No quedan plazas para: {names}",
     "pasteNone": "No hay nombres. Funciona mejor un nombre por línea.",
     "pasteHold": "{count, plural, one {Reservar # plaza} other {Reservar # plazas}}",
-    "pasteDone": "Reservado: {names}"
+    "pasteDone": "Reservado: {names}",
+    "playedWithYou": "Jugaron contigo",
+    "keepRecord": "Mantener los partidos de {name}",
+    "keepsRecord": "Mantiene los partidos de {name}"
   },
   "score": {
     "title": "Resultado",
@@ -484,7 +484,8 @@
     "biggerTextHelp": "Letra más grande en toda la app, en este dispositivo.",
     "sameAskingGroup": "Este nombre es miembro de un grupo que pide aprobación para entrar. Primero juega un partido en el mismo club o con el mismo organizador. Luego podrás añadir estos partidos.",
     "identityByName": "Entraste tocando tu nombre, así que tu enlace personal queda oculto hasta que confirmes un email con un código o vincules Telegram.",
-    "sameNameOnly": "Un nombre solo no basta para añadir estos partidos. Son de un miembro de un grupo que pide aprobación para entrar."
+    "sameNameOnly": "Un nombre solo no basta para añadir estos partidos. Son de un miembro de un grupo que pide aprobación para entrar.",
+    "sameRunsCrew": "Un nombre solo no basta para añadir estos partidos. Son de alguien que lleva un grupo."
   },
   "notFound": {
     "title": "Enlace no encontrado",
@@ -509,7 +510,11 @@
     "playedBefore": "¿Ya jugaste con {email}?",
     "playedBeforeHelp": "Conocemos ese email de un partido anterior. Recupera primero tu historial con un código y confirma esta plaza como tú.",
     "heldFor": "Esta plaza está guardada para {name}.",
-    "heldForHelp": "Envía este enlace a {name}."
+    "heldForHelp": "Envía este enlace a {name}.",
+    "asRecord": "Entras como {name}, con los partidos que ya jugaste.",
+    "signInFirst": "¿Eres {name}? Primero entra con tu cuenta.",
+    "signInFirstHelp": "Esta plaza guarda los partidos de {name}. Vuelve a entrar con el email o el Telegram que usaste antes y pulsa Me apunto.",
+    "askOrganiserHelp": "¿Eres {name}? Abre este enlace en el teléfono que usaste antes o pregunta al organizador."
   },
   "shareText": {
     "event": "🎾 Pádel {day} a las {time} — {venue}. {spots}. Toca para apuntarte: {url}",
@@ -734,7 +739,8 @@
     "already_paired": "Ya tienes pareja.",
     "not_fixed_pairs": "Este torneo no usa parejas fijas.",
     "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas.",
-    "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona."
+    "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona.",
+    "held_record": "Esta plaza está guardada para otra persona. Abre el partido para apuntarte."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -1426,8 +1432,7 @@
     "playClear": "Ver todos",
     "playBy": "organiza {name}",
     "playFreeTitle": "Pistas libres",
-    "playFreeHelp": "Tal como las muestran ahora los clubs y sus apps de reservas. Toca una para organizar un partido allí; reservas y pagas tú, en la app del club.",
-    "playFreeOn": "en {platform}"
+    "playFreeHelp": "Tal como las muestran ahora los clubs y sus apps de reservas. Toca una para organizar un partido allí; reservas y pagas tú, en la app del club."
   },
   "telegram": {
     "title": "Telegram",
