@@ -38,7 +38,19 @@ export type ClubFreeSlot = { start: string; end: string; free: number };
  * made from the link the read came from (`linkKey` in scrape.ts), never the link itself. The run uses
  * `ref` and the kept days only while the club's link gives the same key. No list reads either (`cacheBetween`).
  */
-export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string; ref?: string; linkKey?: string };
+/**
+ * `offers`: the exact starts a platform lists, which "Book this court" needs to open the platform's own
+ * checkout filled in (the owner's decision of 11 October 2026, DECIDING rule 36; `checkoutFor` in
+ * src/lib/booking/prepare.ts). Written by the reader of free court times only for a platform whose
+ * checkout is on (`CHECKOUT`), and only while the platform's page still builds that link
+ * (`builderCheck`). `courts`: a short key (the platform's id, cut to eight characters) to the platform's
+ * id and the court's name, null when the read did not see the name. `days`: the club's local day, then
+ * the court's key, then one figure for each half hour from the club's midnight: 1 for a start of 60
+ * minutes, 2 for 90, 4 for 120, added together; zeros at the end left out. About 1 KB a club. No list
+ * reads it (`cacheBetween`), nor the club page (`getClubWithCache`): only the match page, for one match.
+ */
+export type ClubOffers = { courts: Record<string, [string, string | null]>; days: Record<string, Record<string, string>> };
+export type ClubAvailability = { fetchedAt: string; day: string; tz: string; slots: ClubFreeSlot[]; error: string | null; source: string; days?: string[]; platform?: string; fullAt?: string; why?: string; ref?: string; linkKey?: string; offers?: ClubOffers };
 
 export const clubs = pgTable(
   "clubs",

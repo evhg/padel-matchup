@@ -377,6 +377,66 @@ try {
   const bot = courtPage.locator("#bot");
   const botText = ((await bot.textContent({ timeout: 5000 }).catch(() => "")) ?? "").replace(/\s+/g, " ");
   check("/about says what KicksmashBot reads, how often, and where to write", /KicksmashBot/.test(botText) && /Playtomic/.test(botText) && /15/.test(botText) && (await painted(bot.locator('a[href^="mailto:"]'))) === 1, botText.slice(0, 160));
+  // ---- "Book this court" fills Playtomic's own checkout (the owner, 11 October 2026, DECIDING rule 36) ----
+  // Before the club shares a feed of its own (the next section), because a club's feed wins over a
+  // platform's read: the club moves its booking page to Playtomic for a while, so the reader of free
+  // court times reads the platform. The platform is the suites' fake (e2e/fakes/playtomic.mjs, two
+  // courts free on every half hour), so nothing here calls Playtomic, and nothing opens the checkout:
+  // the checks read the link the page built. The section ends with the club's old link back.
+  const PT_LINK = "https://playtomic.com/clubs/e2e-kata";
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  await page.getByLabel("Booking page").fill(PT_LINK);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText(/^Saved/).waitFor({ timeout: 15000 });
+  const CRON = { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` };
+  // The read rides the five-minute push job and runs once in four minutes: make it due, then tick.
+  await fetch(`${BASE}/api/admin/metrics`, { method: "POST", headers: { ...CRON, "content-type": "application/json" }, body: JSON.stringify({ key: "cron_scrape_at", value: 0 }) });
+  const tick = await fetch(`${BASE}/api/cron/push`, { headers: CRON }).then((r) => r.json());
+  check("the push job reads the club on the platform, and the checkout is on", tick.scrape?.platforms?.playtomic?.ok >= 1 && tick.scrape?.platforms?.playtomic?.checkout === "on", JSON.stringify(tick.scrape ?? tick).slice(0, 300));
+  // The create form: the platform's free times as chips, and no platform's name on them or under the
+  // time (the owner, 11 October 2026: "The chat reply and the time chips show no platform name").
+  await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
+  await page.getByTestId("length-choice").getByRole("button", { name: "90 min" }).click();
+  await page.getByTestId("free-times").waitFor({ timeout: 15000 });
+  const ptChip = page.getByTestId("free-chip").first();
+  const ptLabel = (await ptChip.innerText()).trim();
+  await ptChip.click();
+  const ptRead = async () => [await page.locator('input[type="time"]').inputValue(), (await page.getByTestId("free-then").innerText({ timeout: 1000 }).catch(() => "")).trim()];
+  const ptFilled = await settles(ptRead, (v) => ptLabel.endsWith(v[0]) && v[1] === "✓ The club shows a free court then.");
+  const chipsText = `${await page.getByTestId("free-times").innerText()} | ${ptFilled[1]}`;
+  check("the platform's free times are chips, and neither the chips nor the line under the time name the platform", ptLabel.endsWith(ptFilled[0]) && ptFilled[1] === "✓ The club shows a free court then." && !/playtomic/i.test(chipsText), chipsText);
+  await page.getByRole("button", { name: "Create & get the link" }).click();
+  await page.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const ptCode = page.url().split("/").slice(-2)[0];
+  await page.goto(`${BASE}/${ptCode}`);
+  const ptBook = page.getByTestId("book-court");
+  await ptBook.waitFor({ timeout: 15000 });
+  const ptMatch = await fetch(`${BASE}/api/v1/matches/${ptCode}`).then((r) => r.json()).then((j) => j.match ?? j);
+  const ptHref = new URL((await ptBook.getAttribute("href")) ?? "about:blank");
+  const ptQuery = Object.fromEntries(ptHref.searchParams);
+  check(
+    "'Book and pay on Playtomic' opens Playtomic's own checkout with the club, a court, the start and the length filled in",
+    (await ptBook.innerText()).includes("Book and pay on Playtomic") &&
+      `${ptHref.origin}${ptHref.pathname}` === "https://playtomic.com/api/web-app/payments" &&
+      ptQuery.type === "CUSTOMER_MATCH" &&
+      ptQuery.tenant_id === "e2e0e2e0-0000-4000-8000-000000000001" &&
+      /^e2e0c0c[12]-0000-4000-8000-00000000000[12]$/.test(ptQuery.resource_id ?? "") &&
+      ptQuery.start === ptMatch.startsAt &&
+      ptQuery.duration === "90" &&
+      ptQuery.sport_id === "PADEL" &&
+      (await ptBook.getAttribute("target")) === "_blank",
+    JSON.stringify({ text: await ptBook.innerText(), href: ptHref.toString(), startsAt: ptMatch.startsAt }),
+  );
+  const ptSlot = await page.getByTestId("book-slot").innerText();
+  const ptHint = await page.getByTestId("book-checkout-hint").innerText().catch(() => "");
+  check("beside it, the court the link holds, and that Playtomic may ask for its sign-in first", /Court [12]/.test(ptSlot) && ptSlot.includes("90 min") && ptHint.includes("Playtomic may ask you to sign in first"), JSON.stringify({ ptSlot, ptHint }));
+  await shot(page, "c9-checkout");
+  // The club's old booking page again, which the rest of the suite expects.
+  await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
+  await page.getByLabel("Booking page").fill("https://playtomic.io/kata-center");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText(/^Saved/).waitFor({ timeout: 15000 });
+
   // ---- The best times, and a court a player books (DECIDING rule 36) ----
   // Last in the suite, because it adds a feed and a match at the club that nothing above expects.
   // The club shares a feed of its bookings: its own match calendar, which this build serves and the
@@ -502,6 +562,7 @@ try {
   await page.goto(`${BASE}/${craftedCode}`);
   await page.locator("main h1").first().waitFor({ timeout: 15000 });
   check("and the match it makes shows no invitation", (await page.getByTestId("join-booking").count()) === 0 && craftedCode !== pastedCode, craftedCode);
+
 } finally {
   await browser.close();
 }

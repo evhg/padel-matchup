@@ -1,5 +1,4 @@
 import type { ClubAvailability, ClubFreeSlot } from "@/db/schema";
-import { platformById } from "@/lib/booking/platforms";
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 
 /**
@@ -17,6 +16,12 @@ import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
  * clock of its own, no fetch (rule 12: the hourly job reads the feeds; a request reads the cache).
  * `freeFeedOf` is the one reader of that cache. A player books and pays in the club's own app;
  * Kicksmash never signs in as a player and never pays (DECIDING rule 36).
+ *
+ * Nothing here carries the name of a platform. The owner's decision of 11 October 2026, "Hide the
+ * platform name in chat": "The chat reply and the time chips show no platform name, and the name shows
+ * only at the booking step." So a feed, a best time and the line under the time hold no platform, and
+ * no screen or chat that reads them can name one. The club page's source line reads the cache itself
+ * (`freeCourtsState`), because the rules name where the times come from (DECIDING rule 35).
  */
 const HOUR_MS = 3600_000;
 const MINUTE_MS = 60_000;
@@ -51,8 +56,6 @@ export type FreeFeed = {
   /** The feed speaks up to this instant and no further: a time past it is unknown, never "free". */
   until: string;
   slots: ClubFreeSlot[];
-  /** The platform whose public page these times were read from ("Playtomic"); null for the club's own feed. */
-  platform: string | null;
 };
 
 /** A usual weekday and time: 0 = Sunday, "19:00" in the zone the person plays in. */
@@ -72,8 +75,6 @@ export type BestTime = {
   free: number;
   /** A usual club at a usual time. */
   usual: boolean;
-  /** Whose times these are: the platform's name, or null for the club's own feed (DECIDING rule 35 names the platform). */
-  platform: string | null;
 };
 
 const addDays = (date: string, days: number) => new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10) + days)).toISOString().slice(0, 10);
@@ -159,8 +160,7 @@ export function freeFeedOf(a: ClubAvailability | null | undefined, now: Date): F
   // so a court it could not keep never reads as "no free court".
   if (pieces.length > BEST_TIMES.maxSlots) until = Math.min(until, pieces[BEST_TIMES.maxSlots].a);
   const slots = pieces.slice(0, BEST_TIMES.maxSlots).map((p) => ({ start: new Date(p.a).toISOString(), end: new Date(p.b).toISOString(), free: p.free }));
-  const platformId = scraped ? (a.platform ?? a.source.slice("scrape:".length)) : null;
-  return { tz: a.tz, fetchedAt: a.fetchedAt, until: new Date(until).toISOString(), slots, platform: platformId ? (platformById(platformId)?.name ?? platformId) : null };
+  return { tz: a.tz, fetchedAt: a.fetchedAt, until: new Date(until).toISOString(), slots };
 }
 
 /** The feed's stretches as epochs, once. */
@@ -209,29 +209,25 @@ export function freeAt(feed: FreeFeed | null | undefined, start: Date, minutes: 
  * holds, and the club's own hour when the form's zone is not the club's ("18:00" in Madrid is 23:00 in
  * Bangkok, and the club's feed speaks in Bangkok's hours). Pure.
  */
-export type FreeLine = { state: "free" | "busy" | "unknown"; clubTime: string | null; platform: string | null };
+export type FreeLine = { state: "free" | "busy" | "unknown"; clubTime: string | null };
 export function freeLineOf(feed: FreeFeed | null | undefined, when: { date: string; time: string; tz: string }, minutes: number, now: Date): FreeLine {
-  if (!feed || !when.date || !when.time || !isValidTimeZone(when.tz)) return { state: "unknown", clubTime: null, platform: null };
+  if (!feed || !when.date || !when.time || !isValidTimeZone(when.tz)) return { state: "unknown", clubTime: null };
   const at = zonedTimeToUtc(when.date, when.time, when.tz);
   const state = freeAt(feed, at, minutes, now);
-  return { state, clubTime: state === "unknown" || when.tz === feed.tz ? null : utcToZonedParts(at, feed.tz).time, platform: feed.platform ?? null };
+  return { state, clubTime: state === "unknown" || when.tz === feed.tz ? null : utcToZonedParts(at, feed.tz).time };
 }
 
 /**
- * The words of that line, as a message key and its values: the platform named when the times are a
- * platform's (DECIDING rule 35: we read them; the club did not publish them), "the club" when they are
- * its own feed; the club's hour when the form's zone is not the club's. Null when there is nothing to say.
+ * The words of that line, as a message key and its values: "the club shows", whoever published the
+ * times, and never a platform's name (the owner's decision of 11 October 2026: the time chips show no
+ * platform name); the club's hour when the form's zone is not the club's. Null when there is nothing to say.
  */
 export function freeLineMessage(line: FreeLine):
   | { key: "create.freeThen" | "create.busyThen"; values: Record<string, never> }
   | { key: "create.freeThenClub" | "create.busyThenClub"; values: { time: string } }
-  | { key: "create.freeThenOn" | "create.busyThenOn"; values: { platform: string } }
-  | { key: "create.freeThenOnClub" | "create.busyThenOnClub"; values: { platform: string; time: string } }
   | null {
   if (line.state === "unknown") return null;
   const free = line.state === "free";
-  if (line.platform && line.clubTime) return { key: free ? "create.freeThenOnClub" : "create.busyThenOnClub", values: { platform: line.platform, time: line.clubTime } };
-  if (line.platform) return { key: free ? "create.freeThenOn" : "create.busyThenOn", values: { platform: line.platform } };
   if (line.clubTime) return { key: free ? "create.freeThenClub" : "create.busyThenClub", values: { time: line.clubTime } };
   return { key: free ? "create.freeThen" : "create.busyThen", values: {} };
 }
@@ -276,12 +272,17 @@ function candidatesOf(pieces: readonly Piece[], from: number, last: number, feed
  * a free court for the whole length, at least two hours away, inside what each feed speaks for.
  * Ranked: a usual club at a usual time first (a usual weekday, within the hour), then the soonest.
  * One time per club and local day; on a day with several, the one nearest the usual time, else the
- * earliest. At most `limit`. Each club costs one pass over its stretches and its candidates. Pure.
+ * earliest. At most `limit`. Each club costs one pass over its stretches and its candidates.
+ *
+ * `around`: only starts within `withinMs` of `at` (the crew's weekly slot, for the weekly post in its
+ * group), ranked the person's or the crew's own clubs first, then the nearest to `at`, then the soonest.
+ * Pure.
  */
-export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: readonly TimePattern[]; lengthMinutes: number; now: Date; limit?: number }): BestTime[] {
+export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: readonly TimePattern[]; lengthMinutes: number; now: Date; limit?: number; around?: { at: Date; withinMs: number } }): BestTime[] {
   const limit = input.limit ?? BEST_TIMES.limit;
   const length = input.lengthMinutes * MINUTE_MS;
-  const from = input.now.getTime() + BEST_TIMES.minLeadMs;
+  const around = input.around ? { at: input.around.at.getTime(), within: Math.max(0, input.around.withinMs) } : null;
+  const from = Math.max(input.now.getTime() + BEST_TIMES.minLeadMs, around ? around.at - around.within : -Infinity);
   const to = input.now.getTime() + BEST_TIMES.horizonMs;
   type Candidate = BestTime & { tier: number; distance: number };
   const bestOfDay = new Map<string, Candidate>();
@@ -289,21 +290,24 @@ export function bestTimes(input: { clubs: readonly BestTimesClub[]; patterns: re
     const feed = club.feed;
     if (!feed) continue;
     const pieces = parsed(feed);
-    const last = Math.min(to, new Date(feed.until).getTime()) - length;
+    const last = Math.min(Math.min(to, new Date(feed.until).getTime()) - length, around ? around.at + around.within : Infinity);
     for (const start of candidatesOf(pieces, from, last, feed.tz, input.patterns, input.now)) {
       const free = freeThrough(pieces, start, length);
       if (free < 1) continue;
       const { date, time } = utcToZonedParts(new Date(start), feed.tz);
-      const distance = distanceToUsual(date, time, input.patterns);
+      // Around a slot, every club is ranked by how near it starts; else a usual club by its usual time.
+      const distance = around ? Math.abs(start - around.at) / MINUTE_MS : distanceToUsual(date, time, input.patterns);
       const usual = Boolean(club.usual) && distance <= BEST_TIMES.nearMinutes;
-      const c: Candidate = { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, platform: feed.platform ?? null, tier: usual ? 0 : 1, distance: usual ? distance : Infinity };
+      const c: Candidate = around
+        ? { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, tier: club.usual ? 0 : 1, distance }
+        : { slug: club.slug, name: club.name, tz: feed.tz, start: new Date(start), date, time, free, usual, tier: usual ? 0 : 1, distance: usual ? distance : Infinity };
       const key = `${club.slug}|${date}`;
       const held = bestOfDay.get(key);
       if (!held || c.tier < held.tier || (c.tier === held.tier && (c.distance < held.distance || (c.distance === held.distance && start < held.start.getTime())))) bestOfDay.set(key, c);
     }
   }
   return [...bestOfDay.values()]
-    .sort((a, b) => a.tier - b.tier || a.start.getTime() - b.start.getTime() || a.name.localeCompare(b.name))
+    .sort((a, b) => a.tier - b.tier || (around ? a.distance - b.distance : 0) || a.start.getTime() - b.start.getTime() || a.name.localeCompare(b.name))
     .slice(0, Math.max(0, limit))
     .map(({ tier: _tier, distance: _distance, ...b }) => b);
 }

@@ -17,6 +17,7 @@ import { researchTick, type ResearchSummary } from "@/lib/research/desk";
 import { autoCreateClubEvents } from "@/lib/domain/clubWeek";
 import { refreshAllAvailability } from "@/lib/booking/availability";
 import { autoCreateGroupMatches } from "@/lib/domain/groups";
+import { postWeeklyTimes } from "@/lib/telegram/weeklyTimes";
 import { completePastLessons } from "@/lib/domain/coaching";
 import { syncAllCoachCalendars } from "@/lib/coach/sync";
 import { monthlyWraps } from "@/lib/coach/wrap";
@@ -68,7 +69,7 @@ export async function GET(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, noticeSummaries: 0, noticesPruned: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, weeklyTimes: null as null | { posted: number; none: number; booked: number; cut: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, noticeSummaries: 0, noticesPruned: 0, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -217,6 +218,14 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     summary.errors.push(`groups: ${String(e)}`);
+  }
+
+  try {
+    // The weekly best times in a crew's own Telegram group, 24 hours before its slot (the owner, 11
+    // October 2026; DECIDING rule 36). After the slot's game is made, so a time it holds is its join.
+    summary.weeklyTimes = await postWeeklyTimes(db, now);
+  } catch (e) {
+    summary.errors.push(`weekly times: ${String(e)}`);
   }
 
   try {

@@ -120,9 +120,10 @@ export async function courtsFreeInCity(db: Db, city: City, viewerId: string | nu
 /**
  * The best times for a chat: a crew's own Telegram group (its matches, its usual court, its weekly
  * slot) or a player's private chat (their matches, the chat's usual court). Their own clubs count as
- * usual; the clubs of the city those are in follow. The length is the one they played last.
+ * usual; the clubs of the city those are in follow. The length is the one they played last. `around`:
+ * only the times near one start (the weekly post before the crew's slot, `postWeeklyTimes`).
  */
-export async function bestTimesForChat(db: Db, o: { groupId: string | null; playerId: string | null; venueName: string | null; tz: string | null }, now: Date, limit: number = BEST_TIMES.limit): Promise<{ times: BestTime[]; lengthMinutes: number }> {
+export async function bestTimesForChat(db: Db, o: { groupId: string | null; playerId: string | null; venueName: string | null; tz: string | null; around?: { at: Date; withinMs: number } }, now: Date, limit: number = BEST_TIMES.limit): Promise<{ times: BestTime[]; lengthMinutes: number }> {
   const crew = o.groupId ? (await db.select().from(groups).where(eq(groups.id, o.groupId)).limit(1))[0] ?? null : null;
   const history = crew
     ? await db
@@ -149,5 +150,5 @@ export async function bestTimesForChat(db: Db, o: { groupId: string | null; play
   const own = await feedsForSlugs(db, slugs, now);
   const near = city ? (await feedsInCity(db, city, now)).filter((c) => !slugs.includes(c.slug)) : [];
   const lengthMinutes = parseMatchLength(history[0]?.durationMinutes) ?? 90;
-  return { times: bestTimes({ clubs: [...own.map((c) => ({ ...c, usual: true })), ...near], patterns, lengthMinutes, now, limit }), lengthMinutes };
+  return { times: bestTimes({ clubs: [...own.map((c) => ({ ...c, usual: true })), ...near], patterns, lengthMinutes, now, limit, ...(o.around ? { around: o.around } : {}) }), lengthMinutes };
 }

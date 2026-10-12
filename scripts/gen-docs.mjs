@@ -25,6 +25,7 @@ const IGNORED = {
   E2E_SHARD: "CI splits the browser suites over two jobs",
   E2E_VERBOSE: "print the test server's output",
   EMAIL_SINK_FILE: "the browser suites read the mail the app would have sent",
+  NODE_OPTIONS: "the browser suites' server loads the fake Playtomic (e2e/fakes/playtomic.mjs) after whatever Node options the machine had",
   PGLITE_DATA_DIR: "where the embedded database lives; a temporary directory per test file",
   PLAYWRIGHT_BROWSERS_PATH: "set by the container that preinstalled the browser; e2e/lib.mjs looks there before Playwright's own cache",
   PW_CHROMIUM: "use a Chromium that is already installed",

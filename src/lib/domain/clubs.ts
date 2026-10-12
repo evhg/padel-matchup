@@ -6,7 +6,8 @@ import { localePath } from "@/lib/seo";
 import type { Db } from "@/db";
 import { clubCourts, clubs, clubSlots, coaches, events, venues, type Club, type ClubAvailability } from "@/db/schema";
 import { cleanUrl, detectPlatform } from "@/lib/booking/platforms";
-import { AVAILABILITY_KINDS, cacheBetween, isScraped, scrapeFresh, todaySlots } from "@/lib/booking/availability";
+import { AVAILABILITY_KINDS, cacheBetween, cacheButOffers, isScraped, scrapeFresh, todaySlots } from "@/lib/booking/availability";
+import type { CheckoutCache } from "@/lib/booking/prepare";
 import { CITIES, cityBySlug, cityInText, venueInCity } from "./cities";
 import { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
 import { countryOfTz, isCountryCode } from "./countries";
@@ -126,11 +127,35 @@ export async function getClub(db: Db, slug: string): Promise<PickableClub | null
   return c ?? null;
 }
 
-/** The whole row, the cache of free courts included: only for a page or an answer that shows them (the club page, the API's club). */
+/**
+ * The whole row, the cache of free courts included: only for a page or an answer that shows them (the
+ * club page, the API's club). Not the offers a checkout needs, which only the match page reads.
+ */
 export async function getClubWithCache(db: Db, slug: string): Promise<Club | null> {
   if (!isValidVenueSlug(slug)) return null;
-  const [c] = await db.select().from(clubs).where(eq(clubs.slug, slug)).limit(1);
+  const [c] = await db
+    .select({ ...columnsButCache, availability: cacheButOffers() })
+    .from(clubs)
+    .where(eq(clubs.slug, slug))
+    .limit(1);
   return c ?? null;
+}
+
+/**
+ * The club behind a match's "Book this court" (DECIDING rule 36): `getShownClubLean`'s columns, and, when
+ * `cache` is asked for, the head of its cache with the offers a checkout is filled from (`checkoutFor`
+ * in src/lib/booking/prepare.ts), never the slots. The same one read on the primary key the page made
+ * before; the offers add about 1 KB, and only for the organiser or a seated player of a match within
+ * the three days a read covers.
+ */
+export async function getClubForBooking(db: Db, slug: string, o: { cache: boolean }): Promise<(PickableClub & { cache: CheckoutCache | null }) | null> {
+  if (!isValidVenueSlug(slug)) return null;
+  const [c] = await db
+    .select({ ...columnsButCache, cache: o.cache ? sql<CheckoutCache | null>`(${clubs.availability} - 'slots' - 'why')` : sql<null>`null` })
+    .from(clubs)
+    .where(eq(clubs.slug, slug))
+    .limit(1);
+  return c && isClubListed(c) ? { ...c, cache: (c.cache as CheckoutCache | null) ?? null } : null;
 }
 
 /** The live club behind a slug, or null: what public pages and the API show, its free courts included. */
@@ -158,10 +183,14 @@ export async function getClubByToken(db: Db, token: string): Promise<PickableClu
   return c ?? null;
 }
 
-/** The same with the cache: the manage page, which shows the club its free courts as players see them. */
+/** The same with the cache (not its offers): the manage page, which shows the club its free courts as players see them. */
 export async function getClubByTokenWithCache(db: Db, token: string): Promise<Club | null> {
   if (!/^[A-Za-z0-9_-]{16,40}$/.test(token)) return null;
-  const [c] = await db.select().from(clubs).where(eq(clubs.manageToken, token)).limit(1);
+  const [c] = await db
+    .select({ ...columnsButCache, availability: cacheButOffers() })
+    .from(clubs)
+    .where(eq(clubs.manageToken, token))
+    .limit(1);
   return c ?? null;
 }
 

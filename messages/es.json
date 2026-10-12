@@ -229,10 +229,6 @@
     "freeThenClub": "✓ El club muestra una pista libre a esa hora (las {time} en el club).",
     "busyThenClub": "El club no muestra ninguna pista libre a esa hora (las {time} en el club).",
     "freeAndUsualLabel": "✓ Libre en {club}, y tus horarios habituales",
-    "freeThenOn": "✓ {platform} muestra una pista libre a esa hora.",
-    "busyThenOn": "{platform} no muestra ninguna pista libre a esa hora.",
-    "freeThenOnClub": "✓ {platform} muestra una pista libre a esa hora (las {time} en el club).",
-    "busyThenOnClub": "{platform} no muestra ninguna pista libre a esa hora (las {time} en el club).",
     "bookedByMe": "Pista reservada por mí",
     "bookedByMeHelp": "La página del partido dice a los jugadores que la pista está reservada.",
     "pasteNoDay": "Tu reserva no dice el día. Elígelo aquí.",
@@ -348,7 +344,6 @@
     "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
     "tellGroup": "Avisar al grupo",
     "bookCourt": "Reservar esta pista",
-    "bookAndPay": "Reservar y pagar",
     "bookedIt": "Ya reservé la pista",
     "courtBooked": "Pista reservada ✓",
     "courtBookedBy": "Pista reservada ✓ (por {name})",
@@ -363,7 +358,9 @@
     "startLocked": "Una vez empezado el partido, solo el organizador cambia la hora de inicio.",
     "joinBooking": "Únete a esta reserva en {platform}",
     "playAgainNext": "Próximo partido: {when} · {code}",
-    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro."
+    "playAgainLands": "En ese día y hora, un toque abre ese partido. No crea otro.",
+    "bookAndPayOn": "Reservar y pagar en {platform}",
+    "checkoutSignIn": "{platform} puede pedirte que inicies sesión primero."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -1435,8 +1432,7 @@
     "playClear": "Ver todos",
     "playBy": "organiza {name}",
     "playFreeTitle": "Pistas libres",
-    "playFreeHelp": "Tal como las muestran ahora los clubs y sus apps de reservas. Toca una para organizar un partido allí; reservas y pagas tú, en la app del club.",
-    "playFreeOn": "en {platform}"
+    "playFreeHelp": "Tal como las muestran ahora los clubs y sus apps de reservas. Toca una para organizar un partido allí; reservas y pagas tú, en la app del club."
   },
   "telegram": {
     "title": "Telegram",

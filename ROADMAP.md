@@ -913,11 +913,12 @@ Everything in this list is live. The README describes each in detail.
   share, or that a platform shows publicly (DECIDING rule 35), are cached on the club's row;
   `src/lib/domain/bestTimes.ts` ranks them: a usual club at a usual time first, then the soonest, one
   time per club and day, at least two hours out, up to the end of the sixth day, inside every free
-  stretch. A club's own feed wins over a platform's read, a platform's read is shown for two hours as on
-  the club page, and a platform's times are named as its own ("on Playtomic"). They show where people
+  stretch. A club's own feed wins over a platform's read, and a platform's read is shown for two hours as on
+  the club page. Its times were named as the platform's ("on Playtomic") until 11 October 2026, when the
+  owner hid the name in the chat and the chips (the entry on the three court-time decisions below). They show where people
   pick a time: on the create form the club's free times lead the row of time chips, the person's usual
   times after them (a tap fills the day, the hour and the club's zone), and a line under the time says
-  whether the club or the platform shows a court free then, in the club's hour when the zones differ;
+  whether the club shows a court free then, in the club's hour when the zones differ;
   on /play, below the games while a city has fewer than three open games, "Free courts", each row one
   link to the form; and in a crew's Telegram group or a private chat only when somebody asks ("times?"
   with its question mark in a group, "when can we play?", /times), as one reply a minute at most
@@ -1038,6 +1039,25 @@ Everything in this list is live. The README describes each in detail.
   owner's monthly cost cap, or while Anthropic refuses the key. Then the box says so in one line, and
   the text still works (`src/lib/booking/screenshot.ts`). The privacy page names the screenshot under
   Anthropic.
+- **Three court-time decisions (11 October 2026, no migration).** The owner answered "Which court-time
+  changes do you want? Choose any." with three answers (DECIDING rules 5 and 36).
+  - **Playtomic's checkout, filled in.** On the match page, "Book and pay on Playtomic" opens
+    Playtomic's own checkout with the court, the start and the length filled in, when a read at most 90
+    minutes old listed exactly that start and length; else the club's day page, as before. The reader
+    keeps the exact starts Playtomic lists (about 1 KB a club, in the cache, read only by the match
+    page), and each read of a club page checks that its script still builds the link. While it does
+    not, the reader keeps no starts, so the match pages give the day page from the next read of each
+    club, within 90 minutes at most, and a counter and the service board say so. The link holds only a
+    court the read named, so the page always names the court beside the button. The player's browser
+    opens the link; our server never does (`src/lib/booking/prepare.ts`, `offers.ts`).
+  - **The weekly best times.** 24 hours before a crew's weekly slot, the bot posts up to three courts
+    free near the slot in the crew's own Telegram group, once, silently, unasked. A button makes the
+    match, or joins the crew's game when it is on already; a time that overlaps a game of the crew gets
+    no button, so a tap never gives the crew two games at once. Nothing when no court is free or the
+    court is booked; /quiet stops it (`src/lib/telegram/weeklyTimes.ts`).
+  - **No platform's name in the chat or the chips.** The "times?" answer, the weekly post, the time
+    chips, the line under the time and /play name no platform. The booking step and the club page's
+    source line still do (`src/lib/domain/bestTimes.ts` carries no name).
 
 ## The finish line
 

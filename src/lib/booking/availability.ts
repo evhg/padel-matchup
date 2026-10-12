@@ -276,10 +276,18 @@ export function slotDay(start: string, tz: string): string {
  * rule 12, the Supabase egress in docs/OPERATING.md). Every writer stores instants from `toISOString()`,
  * so comparing the text compares the times. `why` stays behind too: no list reads it, only the row and
  * the run's answer (`failureWhy` in `scrape.ts`). So do `ref`, the platform's id for the club, and
- * `linkKey`, which only the run reads. Null where the row has no cache.
+ * `linkKey`, which only the run reads, and `offers`, the exact starts only the match page reads for one
+ * match (`getClubForBooking`). Null where the row has no cache.
  */
+/**
+ * The whole cache but the offers: what a page that shows a club's free times reads (the club page, the
+ * manage page, the API's club, the chat's tap). The offers are a checkout's, and only the match page
+ * reads them, for one match (`getClubForBooking` in `src/lib/domain/clubs.ts`).
+ */
+export const cacheButOffers = (): SQL<ClubAvailability | null> => sql<ClubAvailability | null>`(${clubs.availability} - 'offers')`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
+
 export function cacheBetween(from: Date, until: Date): SQL<ClubAvailability | null> {
   const lo = from.toISOString();
   const hi = until.toISOString();
-  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why' - 'ref' - 'linkKey') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
+  return sql<ClubAvailability | null>`((${clubs.availability} - 'slots' - 'why' - 'ref' - 'linkKey' - 'offers') || jsonb_build_object('slots', jsonb_path_query_array(coalesce(${clubs.availability}->'slots', '[]'::jsonb), '$[*] ? (@.end > $lo && @.start < $hi)', jsonb_build_object('lo', ${lo}::text, 'hi', ${hi}::text))))`.mapWith(clubs.availability) as SQL<ClubAvailability | null>;
 }
