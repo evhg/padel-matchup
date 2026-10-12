@@ -689,6 +689,13 @@ Wall clock first, credits second. What actually moved it, measured:
   is typed `Record<DomainErrorCode, number>`, so adding `already_paid` to the union broke the API until
   the map learned it. Grep `Record<DomainErrorCode` when a code is added.
 
+- **A screen's words can be a unit test now, and they were not before 12 October 2026.** The app's
+  tsconfig keeps JSX for Next.js ("preserve"), so vitest could not even parse a `.tsx` file and every
+  check of a label waited for a browser suite. `vitest.config.mts` compiles JSX itself, and
+  `renderIn(locale, element)` in `tests/helpers/render.ts` renders a component inside the provider a
+  page gives it, with the shipped catalogue. Use it for a label, a name or an `aria-label`
+  (`tests/court-booked.test.ts`, `tests/roles.test.ts`); a tap still needs the browser.
+
 - **Anchor on the name, never the line number.** Keys have landed in `coach.home` when they were meant
   for `coach.page` because the insertion point was found by counting.
 - **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that
