@@ -31,7 +31,7 @@ import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
-import { decideHeldByName, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
+import { decideHeldByName, seatedNamed, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
 import { later } from "@/lib/alerts";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
@@ -51,7 +51,12 @@ import { mergesLater } from "@/lib/mergeCount";
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
 
 /** `partnerName`: on a fixed-pairs night, the partner who signs up with the player; their name becomes a reserved spot with its own link. */
-export async function joinAction(code: string, name?: string, level?: number | null, partnerName?: string | null): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested"; partner?: { name: string; inviteUrl: string } }>> {
+/**
+ * The plain join on the web. `o.differentPerson`: the person tapped "I'm a different Danny" under "Danny
+ * is in this match. Sign in as Danny?" (the owner's decision of 15 October 2026), so a typed name that a
+ * seated record carries joins as typed; nothing else sets it.
+ */
+export async function joinAction(code: string, name?: string, level?: number | null, partnerName?: string | null, o: { differentPerson?: boolean } = {}): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested"; partner?: { name: string; inviteUrl: string } }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
@@ -63,8 +68,19 @@ export async function joinAction(code: string, name?: string, level?: number | n
     // before any record is made (`whoJoins`).
     // So is the plain join of the name of a place that keeps a past player's record, from a browser that
     // knows nobody: it would make a second Danny beside his place (`hasLifeOutside`, only for such a name).
-    const who = await whoJoins(detail, await getSessionPlayer(db), name, new Date(), () => requirePlayer(db, name, { namesHere }), (id) => hasLifeOutside(db, id, detail.event.id));
+    // And the typed name of a record that holds a seat or a waiting place here, from a browser that knows
+    // nobody: "Danny is in this match. Sign in as Danny?" first, unless the person said they are a
+    // different Danny (`seatedNamed`, the owner's decision of 15 October 2026). Each counted, with no name.
+    const different = o.differentPerson === true;
+    const known = await getSessionPlayer(db);
+    // "I'm a different Danny" beside a seated Danny: counted before the record is made, so the owner sees how often the question meets a real namesake.
+    if (different && !known && seatedNamed([...detail.roster, ...detail.waitlist], null, name)) await bumpMetric(db, "join_name_different").catch(() => undefined);
+    const who = await whoJoins(detail, known, name, new Date(), () => requirePlayer(db, name, { namesHere }), { keepsRecord: (id) => hasLifeOutside(db, id, detail.event.id), different });
     if ("held" in who) throw new ActionFailure("name_held");
+    if ("seated" in who) {
+      await bumpMetric(db, "join_name_seated").catch(() => undefined);
+      throw new ActionFailure("name_seated");
+    }
     const me = who.player;
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     // A level given while joining is the player's declaration (ranged events ask for it once).

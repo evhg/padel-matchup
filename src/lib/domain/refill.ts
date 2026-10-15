@@ -79,8 +79,8 @@ export async function claimRefillNotice(db: Db, eventId: string, now: Date): Pro
   return rows.length === 1;
 }
 
-/** The match admits this player: no range means everyone, a range means an unrated player is not chased. */
-function admits(ev: Pick<Event, "levelMin" | "levelMax">, p: Pick<Player, "level">): boolean {
+/** The match admits this player: no range means everyone, a range means an unrated player is not chased. The organiser's "can't reach" line asks it too (`unreached.ts`). */
+export function admits(ev: Pick<Event, "levelMin" | "levelMax">, p: Pick<Player, "level">): boolean {
   if (ev.levelMin === null && ev.levelMax === null) return true;
   if (p.level === null) return false;
   if (ev.levelMin !== null && p.level < ev.levelMin) return false;
@@ -129,9 +129,10 @@ export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capa
  * Whether a channel reaches this person on this deployment, in the order `channelFor` in
  * `src/lib/coach/notify.ts` tries them: the bot, then the WhatsApp number that wrote to us, then an
  * address they did not mute, then a device. The two must agree, or the cap is spent on somebody the
- * sender then cannot reach.
+ * sender then cannot reach. The organiser's "Kicksmash can't reach Tim" line asks the same function
+ * (`unreached.ts`), so the names it shows are exactly the past partners this offer cannot reach.
  */
-function channelOf(p: Pick<Player, "id" | "telegramId" | "phone" | "email" | "emailNotifications">, reach: RefillReach, devices: Set<string>): "telegram" | "whatsapp" | "email" | "push" | null {
+export function channelOf(p: Pick<Player, "id" | "telegramId" | "phone" | "email" | "emailNotifications">, reach: RefillReach, devices: ReadonlySet<string>): "telegram" | "whatsapp" | "email" | "push" | null {
   if (reach.telegram && p.telegramId) return "telegram";
   if (reach.whatsapp && p.phone) return "whatsapp";
   if (reach.email && p.email && p.emailNotifications) return "email";

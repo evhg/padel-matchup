@@ -7,6 +7,8 @@
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
+/** What a phone shows, 390 px wide, around the element the walk just scrolled to: the full-page shot of a long page is too tall to read. */
+const view = (p, name) => (process.env.SHOTS ? p.screenshot({ path: `${process.env.SHOTS}/${name}.png` }) : Promise.resolve());
 const results = [];
 const check = makeCheck(results);
 
@@ -198,6 +200,33 @@ try {
   await g.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
   check("its Join seats the passkey's own record: one record of the name remains", (await recordsNamed(NAME)) === 1);
 
+  // ---- H: the owner's decision of 15 October 2026 (D2): a browser that knows nobody types the name of a seated record with a passkey, and taps Join ----
+  // Before this, Join made a second record of the name. Now the join answers "Ana Passkey is in this
+  // match. Sign in as Ana Passkey?" with the record's own doors, because "That's me" refuses a record
+  // with a passkey, and Face ID there signs this browser in as the seated record.
+  const h = await phoneBrowser();
+  await h.cdp.send("WebAuthn.addCredential", { authenticatorId: h.authenticatorId, credential: await heldBy(g) });
+  await h.page.goto(`${BASE}/${code}`);
+  await h.page.getByRole("button", { name: "Join this match" }).click();
+  await h.page.getByTestId("open-spot-name").first().fill(NAME.toLowerCase());
+  await h.page.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  const seatedAsk = h.page.getByTestId("seated-ask");
+  await seatedAsk.waitFor({ timeout: 20000 });
+  check(
+    "Join with the typed name of a seated record that has a passkey asks first, with Face ID or fingerprint in the question and no \"That's me\", and makes no record",
+    ((await seatedAsk.innerText()) ?? "").includes(`${NAME} is in this match. Sign in as ${NAME}?`) &&
+      (await seatedAsk.getByTestId("passkey-signin").count()) === 1 &&
+      (await seatedAsk.getByRole("button", { name: "That's me", exact: true }).count()) === 0 &&
+      (await recordsNamed(NAME)) === 1,
+    ((await seatedAsk.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  await shot(h.page, "passkeys-04-seated-ask");
+  await seatedAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(h.page, "passkeys-04-seated-ask-390");
+  await seatedAsk.getByTestId("passkey-signin").click();
+  await h.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  check("Face ID from the question signs the browser in as the seated record: one record of the name", (await recordsNamed(NAME)) === 1);
+
   // ---- D: a session by name ("That's me") is never offered a passkey ----
   const e = await plainBrowser();
   const code3 = await newMatch(e.page, "Chalong Padel");
@@ -243,7 +272,7 @@ try {
   await a.page.getByTestId("my-phone").waitFor({ state: "detached", timeout: 20000 });
   check("Remove takes the passkey away", Number((await ask(`select count(*)::int as n from passkeys k join players p on p.id = k.player_id where p.display_name = '${NAME}'`))[0]?.n) === 0);
   const f = await phoneBrowser();
-  await f.cdp.send("WebAuthn.addCredential", { authenticatorId: f.authenticatorId, credential: await heldBy(g) });
+  await f.cdp.send("WebAuthn.addCredential", { authenticatorId: f.authenticatorId, credential: await heldBy(h) });
   await f.page.goto(`${BASE}/${code}`);
   await f.page.getByRole("button", { name: "Join this match" }).click();
   await f.page.getByTestId("back-in-open").getByTestId("passkey-signin").click();

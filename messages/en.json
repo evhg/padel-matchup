@@ -127,7 +127,9 @@
     "rememberSavedBefore": "Saved on this phone before?",
     "backInOpen": "Played before? Sign in",
     "backJoinAsk": "Welcome back, {name}! Join this match?",
-    "rememberAlso": "Also remember this phone"
+    "rememberAlso": "Also remember this phone",
+    "seatedAsk": "{name} is in this match. Sign in as {name}?",
+    "seatedDifferent": "I'm a different {name}"
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -460,7 +462,10 @@
     "pasteDone": "Reserved: {names}",
     "playedWithYou": "Played with you",
     "keepRecord": "Keep {name}'s matches",
-    "keepsRecord": "Keeps {name}'s matches"
+    "keepsRecord": "Keeps {name}'s matches",
+    "unreached": "Kicksmash can't reach {names}. Send them the link.",
+    "unreachedMore": "{count} more",
+    "unreachedSend": "Send the link on WhatsApp"
   },
   "score": {
     "title": "Score",
@@ -786,7 +791,8 @@
     "not_fixed_pairs": "This tournament doesn't use fixed pairs.",
     "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off.",
     "name_held": "This name has a held place. Take it above, or add your last name to join as somebody else.",
-    "held_record": "This place is held for somebody else. Open the match to join it."
+    "held_record": "This place is held for somebody else. Open the match to join it.",
+    "name_seated": "This name is in this match already. Sign in as that player, or say that you are somebody else."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",

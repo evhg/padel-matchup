@@ -256,6 +256,12 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   12 October 2026). `held_by_name_refused`: a web tap the rule turned down. Both web taps share the
   address's 20 a day with "That's me". A browser that knew nobody also counts its new record under `newid_ua_*`; it is not a
   sign-in, so no `signin_*` counter moves.
+- **A typed name that is already in the match.** `join_name_seated`: a web join from a browser that
+  knew nobody typed the name of a record seated or waiting in the match, and the page asked "Danny is
+  in this match. Sign in as Danny?" (DECIDING rule 34, the owner's decision of 15 October 2026).
+  `join_name_different`: "I'm a different Danny" beside such a record. The yes is counted where it
+  signs in (`signin_thats_me`, `signin_passkey`, `signin_email_code`). Many `join_name_seated` with few
+  sign-ins: the question does not land.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.

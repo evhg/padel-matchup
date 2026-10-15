@@ -9,6 +9,8 @@ import { requestJoin } from "./joinBus";
 import { PasskeySignIn } from "./PasskeySignIn";
 import { LevelSelect } from "./LevelSelect";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
+import { SeatedAsk } from "./SeatedAsk";
+import { normalName } from "@/lib/domain/dupes";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past" | "requested" | "request_declined";
 /** Someone who can confirm the viewer's level for this event: a coach at the club, or the club. */
@@ -100,6 +102,8 @@ export function JoinBar({
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
   const [error, setError] = useState<string | null>(null);
+  /** The typed name the server answered with `name_seated` ("Sign in as Danny?"). */
+  const [seated, setSeated] = useState<string | null>(null);
   const [askedKeys, setAskedKeys] = useState<string[]>(asked);
   const [pending, start] = useTransition();
   // Fixed pairs: the partner's name on the way in, or later for a player who came alone; and who leaves.
@@ -112,11 +116,14 @@ export function JoinBar({
 
   // State updates after an awaited server action are wrapped in startTransition
   // so they join the router's transition instead of interrupting it (React 19).
-  const join = (withName?: string, withLevel?: number | null, withPartner?: string) =>
+  // `different`: "I'm a different Danny", the one tap that sends the join past "Sign in as Danny?".
+  const join = (withName?: string, withLevel?: number | null, withPartner?: string, different = false) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined);
+      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined, different ? { differentPerson: true } : undefined);
       startTransition(() => {
+        setSeated(!r.ok && r.error === "name_seated" && withName ? withName : null);
+        if (!r.ok && r.error === "name_seated") return;
         if (!r.ok) setError(r.error === "name_required" ? t("identity.nameRequired") : r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
         // A player already in alone named a partner and no seat was free: still in, alone.
         else if (withPartner && r.data.outcome === "already_in" && !r.data.partner) setError(t("pairs.noSeat"));
@@ -163,6 +170,9 @@ export function JoinBar({
         else setAskedKeys((k) => (k.includes(v.key) ? k : [...k, v.key]));
       });
     });
+
+  // "Sign in as Danny?" while the field still holds the name the server asked about; the ask carries its own doors.
+  const asking = !hasIdentity && seated !== null && normalName(seated) === normalName(name);
 
   // What Join does for this viewer (`joinStep`): the held place, the bar's form, Join itself, or the open spot.
   const step = joinStep({ heldForMe: Boolean(heldForMe), fixedPairs, hasIdentity, needsLevel });
@@ -234,9 +244,13 @@ export function JoinBar({
                       {pending ? t("common.working") : t("event.joinShort")}
                     </button>
                   </div>
-                  {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
+                  {asking ? (
+                    <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} pending={pending} onDifferent={() => join(name, level, fixedPairs ? partner : undefined, true)} />
+                  ) : (
+                    !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />
+                  )}
                   {/* Played before: Face ID or a fingerprint, in one line, where the bar is the join form (DECIDING rule 39). */}
-                  {!hasIdentity && <PasskeySignIn className="btn-ghost btn-sm w-full whitespace-normal leading-snug" />}
+                  {!hasIdentity && !asking && <PasskeySignIn className="btn-ghost btn-sm w-full whitespace-normal leading-snug" />}
                 </form>
               ) : (
                 <button ref={joinButton} type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>

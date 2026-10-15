@@ -11,12 +11,34 @@
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
+/** What a phone shows, 390 px wide, around the element the walk just scrolled to: the full-page shot of a long page is too tall to read. */
+const view = (p, name) => (process.env.SHOTS ? p.screenshot({ path: `${process.env.SHOTS}/${name}.png` }) : Promise.resolve());
 const results = [];
 const check = makeCheck(results);
 const desktop = { viewport: { width: 1280, height: 900 }, locale: "en-US", timezoneId: "Europe/Madrid", reducedMotion: "reduce" };
 
 const api = (path, body) =>
   fetch(BASE + path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+
+/**
+ * The walks of 15 October 2026 write through a key of their own: without one an address gets twelve
+ * writes a day (`apiWritesPerIpPerDay`), and the walks above, with the other suites that write from
+ * this machine's address, spend most of them. A key gets three hundred.
+ */
+let apiKey = "";
+const keyed = async (path, body) => {
+  if (!apiKey) apiKey = (await api("/api/v1/keys", { name: "player-states walks" })).key ?? "";
+  return fetch(BASE + path, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify(body) }).then((r) => r.json());
+};
+
+const CRON = { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` };
+/** One read through the operator's read-only door: the database's own answer, not the page's. */
+const ask = async (q) => {
+  const r = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(q)}`, { headers: CRON }).then((x) => x.json());
+  if (!r.ok) throw new Error(`${r.error} in: ${q}`);
+  return r.rows;
+};
+const recordsNamed = async (name) => Number((await ask(`select count(*)::int as n from players where display_name = '${name}'`))[0]?.n ?? -1);
 
 const page = async (opts) => {
   const ctx = await browser.newContext(opts);
@@ -268,6 +290,125 @@ try {
     await shot(dana, `player-me-${loc}`);
   }
   await dana.close();
+
+  // ------------------------------------------------- "Kicksmash can't reach Tomasz" (the owner's decision of 15 October 2026, D1)
+  // Rosalind played half an hour ago with Tomasz, who gave Kicksmash no contact, and with Milena, who
+  // gave an email. On her next match, with seats open, her own page names Tomasz and not Milena, whom
+  // the free-seat offer reaches. Nobody else's page carries his name at all, and a full match names nobody.
+  const playedNow = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind" } });
+  const rosaToken = playedNow.organizer?.personalToken ?? "";
+  const tomaszIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Tomasz" });
+  const milenaIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Milena", email: "milena-e2e@example.com" });
+  check("Rosalind's last match has Tomasz and Milena in it", tomaszIn.outcome === "joined" && milenaIn.outcome === "joined", JSON.stringify([tomaszIn.outcome, milenaIn.outcome]));
+  const nextUp = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind", token: rosaToken } });
+  const nextCode = nextUp.match?.code;
+  const rosa = await page(iphone);
+  await rosa.goto(`${BASE}/p/${rosaToken}/go?next=/${nextCode}`);
+  const unreached = rosa.getByTestId("unreached");
+  await unreached.waitFor({ timeout: 20000 });
+  const unreachedText = (await unreached.innerText()).replace(/\s+/g, " ");
+  check("the organiser's page names the past partner Kicksmash cannot reach, and not the one it reaches", unreachedText.includes("Kicksmash can't reach Tomasz. Send them the link.") && !unreachedText.includes("Milena"), unreachedText);
+  const sendHref = (await unreached.getByTestId("unreached-send").getAttribute("href")) ?? "";
+  check("its one action is the match's own WhatsApp share, the link tagged as WhatsApp's", sendHref.startsWith("https://wa.me/?text=") && decodeURIComponent(sendHref).includes(`/${nextCode}?s=wa`), sendHref.slice(0, 120));
+  await unreached.scrollIntoViewIfNeeded();
+  await shot(rosa, "player-unreached-line");
+  await unreached.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(rosa, "player-unreached-line-390");
+  // Nobody else: a stranger's page carries Tomasz nowhere, not even in the data the browser is given.
+  const stranger = await page(iphone);
+  await stranger.goto(`${BASE}/${nextCode}`);
+  await stranger.waitForLoadState("networkidle").catch(() => {});
+  check("a viewer who is not the organiser gets no such line, and the page carries no word of Tomasz", (await stranger.getByTestId("unreached").count()) === 0 && !(await stranger.content()).includes("Tomasz"));
+  const publicMatch = await fetch(`${BASE}/api/v1/matches/${nextCode}`).then((r) => r.text());
+  check("nor does the public API", !publicMatch.includes("Tomasz") && publicMatch.includes(nextCode));
+  await stranger.close();
+  // Every seat taken: the line goes.
+  for (const name of ["Pia", "Quim", "Remy"]) await keyed(`/api/v1/matches/${nextCode}/join`, { name });
+  await rosa.goto(`${BASE}/${nextCode}`);
+  await rosa.getByText("4/4 players").first().waitFor({ timeout: 20000 });
+  // Only the line: the organiser's page carries past players' names anyway, for "Is this Tomasz…?" in "Paste the names".
+  check("once every seat is taken, the organiser's page has no such line", (await rosa.getByTestId("unreached").count()) === 0 && !(await rosa.locator("main").innerText()).includes("can't reach"));
+  await rosa.close();
+
+  // ------------------------------------------------- "Zeno is in this match. Sign in as Zeno?" (the owner's decision of 15 October 2026, D2)
+  // Gus's match holds Zeno, who has nothing to prove him, and Mirta, who gave an email. A link in a
+  // WhatsApp group opens a browser that knows nobody, and the player types the name they always type.
+  const gus = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Gus" } });
+  const gCode = gus.match?.code;
+  const zenoIn = await keyed(`/api/v1/matches/${gCode}/join`, { name: "Zeno" });
+  const mirtaIn = await keyed(`/api/v1/matches/${gCode}/join`, { name: "Mirta", email: "mirta-e2e@example.com" });
+  check("Gus's match holds Zeno and Mirta, with a seat open", zenoIn.outcome === "joined" && mirtaIn.outcome === "joined" && (await recordsNamed("Zeno")) === 1, JSON.stringify([zenoIn.outcome, mirtaIn.outcome]));
+
+  const z1 = await page(iphone);
+  let z1Sends = 0;
+  z1.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) z1Sends += 1;
+  });
+  await z1.goto(`${BASE}/${gCode}`);
+  await z1.getByRole("button", { name: "Join this match" }).click();
+  await z1.getByTestId("open-spot-name").first().fill("zeno");
+  await z1.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  const seatedAsk = z1.getByTestId("seated-ask");
+  await seatedAsk.waitFor({ timeout: 20000 });
+  check(
+    "a browser that knows nobody types a seated player's name and taps Join: it is asked \"Zeno is in this match. Sign in as Zeno?\", and no second Zeno is made",
+    ((await seatedAsk.innerText()) ?? "").includes("Zeno is in this match. Sign in as Zeno?") && (await recordsNamed("Zeno")) === 1,
+    ((await seatedAsk.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  await shot(z1, "player-seated-ask");
+  await seatedAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(z1, "player-seated-ask-390");
+  const thatsMe = seatedAsk.getByRole("button", { name: "That's me", exact: true });
+  z1Sends = 0;
+  await thatsMe.click();
+  const sure = seatedAsk.getByRole("button", { name: "Sign in as Zeno?", exact: true });
+  await sure.waitFor({ timeout: 10000 });
+  check("the first tap asks again and sends nothing", z1Sends === 0, `sends=${z1Sends}`);
+  await shot(z1, "player-seated-ask-armed");
+  await seatedAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(z1, "player-seated-ask-armed-390");
+  await sure.click();
+  await z1.locator("main li", { hasText: "Zeno" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  check("the second tap signs that browser in as Zeno, and the database holds one Zeno", (await recordsNamed("Zeno")) === 1);
+  await z1.close();
+
+  // A record with an email: "That's me" refuses it, so the question carries its own doors.
+  const m1 = await page(iphone);
+  await m1.goto(`${BASE}/${gCode}`);
+  await m1.getByRole("button", { name: "Join this match" }).click();
+  await m1.getByTestId("open-spot-name").first().fill("Mirta");
+  // The fixed "Join this match" sends the open form, so it meets the same question.
+  await m1.getByRole("button", { name: "Join this match" }).click();
+  const mirtaAsk = m1.getByTestId("seated-ask");
+  await mirtaAsk.waitFor({ timeout: 20000 });
+  check(
+    "a seated record with an email gets its own doors under the question, Face ID or fingerprint and the email code, and no \"That's me\"",
+    ((await mirtaAsk.innerText()) ?? "").includes("Mirta is in this match. Sign in as Mirta?") &&
+      (await mirtaAsk.getByTestId("passkey-signin").count()) === 1 &&
+      (await mirtaAsk.getByPlaceholder("you@example.com").isVisible()) &&
+      (await mirtaAsk.getByRole("button", { name: "That's me", exact: true }).count()) === 0 &&
+      (await recordsNamed("Mirta")) === 1,
+    ((await mirtaAsk.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  check("the doors stand once on the page, inside the question", (await m1.getByTestId("back-in-open").count()) === 1);
+  await shot(m1, "player-seated-ask-email");
+  await mirtaAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(m1, "player-seated-ask-email-390");
+  await m1.close();
+
+  // Somebody else called Zeno says so, and joins as typed.
+  const z2 = await page(iphone);
+  await z2.goto(`${BASE}/${gCode}`);
+  await z2.getByRole("button", { name: "Join this match" }).click();
+  await z2.getByTestId("open-spot-name").first().fill("Zeno");
+  await z2.getByTestId("open-spot-name").first().press("Enter");
+  const z2Ask = z2.getByTestId("seated-ask");
+  await z2Ask.waitFor({ timeout: 20000 });
+  await z2Ask.getByRole("button", { name: "I'm a different Zeno", exact: true }).click();
+  await z2.locator("main li", { hasText: "Zeno" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const lineupZ = await fetch(`${BASE}/api/v1/matches/${gCode}`).then((r) => r.json());
+  check("\"I'm a different Zeno\" joins a second Zeno, the name as typed", (await recordsNamed("Zeno")) === 2 && (lineupZ.players ?? []).filter((p) => p.name === "Zeno").length === 2, JSON.stringify((lineupZ.players ?? []).map((p) => p.name)));
+  await z2.close();
 } catch (e) {
   await crashed(browser, results, e, "player-states");
 }

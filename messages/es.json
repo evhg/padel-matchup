@@ -127,7 +127,9 @@
     "rememberSavedBefore": "¿Ya lo guardaste en este teléfono?",
     "backInOpen": "¿Jugaste antes? Inicia sesión",
     "backJoinAsk": "¡Hola de nuevo, {name}! ¿Te apuntas a este partido?",
-    "rememberAlso": "Recordar también este teléfono"
+    "rememberAlso": "Recordar también este teléfono",
+    "seatedAsk": "{name} ya está en este partido. ¿Entrar como {name}?",
+    "seatedDifferent": "Soy otra persona llamada {name}"
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -460,7 +462,10 @@
     "pasteDone": "Reservado: {names}",
     "playedWithYou": "Jugaron contigo",
     "keepRecord": "Mantener los partidos de {name}",
-    "keepsRecord": "Mantiene los partidos de {name}"
+    "keepsRecord": "Mantiene los partidos de {name}",
+    "unreached": "Kicksmash no puede avisar a {names}. Envía tú el enlace.",
+    "unreachedMore": "{count} más",
+    "unreachedSend": "Enviar el enlace por WhatsApp"
   },
   "score": {
     "title": "Resultado",
@@ -786,7 +791,8 @@
     "not_fixed_pairs": "Este torneo no usa parejas fijas.",
     "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas.",
     "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona.",
-    "held_record": "Esta plaza está guardada para otra persona. Abre el partido para apuntarte."
+    "held_record": "Esta plaza está guardada para otra persona. Abre el partido para apuntarte.",
+    "name_seated": "Este nombre ya está en el partido. Entra como esa persona o di que eres otra persona."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",

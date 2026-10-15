@@ -222,8 +222,12 @@ export async function joinMatch(db: Db, raw: unknown, ctx: OpContext, locale = "
   // 34): a name with no token makes no record (nor does the name of a place that keeps a past player's
   // record), and a token's player is read only, so the given email and level wait until after the rule.
   const known = input.token ? await playerOfToken(db, input.token) : null;
-  const who = await whoJoins(detail, known, input.name, new Date(), () => resolvePlayer(db, input, locale), (id) => hasLifeOutside(db, id, detail.event.id));
+  // A typed name that a record seated or waiting here carries asks first, as the web does (`seatedNamed`,
+  // the owner's decision of 15 October 2026): 409 `name_seated`, nothing written. A token is that record's
+  // own proof, so a token's call is never asked; the API has no "different person" flag, a fuller name is the way.
+  const who = await whoJoins(detail, known, input.name, new Date(), () => resolvePlayer(db, input, locale), { keepsRecord: (id) => hasLifeOutside(db, id, detail.event.id) });
   if ("held" in who) throw new NameHeldError(who.held, who.kind);
+  if ("seated" in who) throw new NameSeatedError(who.seated);
   return joinAsPlayer(db, detail, known ? await saveGiven(db, known, input) : who.player, ctx, input.partner);
 }
 
@@ -247,6 +251,23 @@ export class NameHeldError extends ApiError {
       kind === "record"
         ? `If this is ${held}, use "That's me" on the match page, or the place's own invite link from the organizer. If it is somebody else, join with a fuller name, such as a last name.`
         : `If this is ${held}, take the held place on the match page (type the name, then tap "Take ${held}'s held place") or through the place's own invite link from the organizer. If it is somebody else: without a token, join with a fuller name, such as a last name; with a token, the player adds a last name on My matches (their personal link), then joins again.`,
+    );
+  }
+}
+
+/**
+ * The refusal of a typed name that a record holding a seat or a waiting place in this match carries
+ * (`name_seated` from `whoJoins`, the owner's decision of 15 October 2026). 409, as `name_held`: the
+ * match is fine and the name is the conflict. Nothing is written. `seated` is the name as the line-up
+ * shows it, which the match's public data shows already.
+ */
+export class NameSeatedError extends ApiError {
+  constructor(public readonly seated: string) {
+    super(
+      409,
+      "name_seated",
+      `${seated} is in this match already, so a second ${seated} cannot join without saying who they are.`,
+      `If this is ${seated}, call again with ${seated}'s personal token, or sign in on the match page ("That's me", Face ID or fingerprint, or the email code). If it is somebody else, join with a fuller name, such as a last name.`,
     );
   }
 }

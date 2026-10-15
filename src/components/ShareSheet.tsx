@@ -56,9 +56,7 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
   return (
     <div className={`grid gap-2 ${size === "sm" ? "grid-cols-3" : "grid-cols-2"}`}>
       {/* A match link says which button sent it (`?s=wa`, `?s=tg`, `?s=link`, `?s=share`), so what starts from a tap in a group is counted as such. */}
-      <a href={whatsappShareUrl(tagForWhatsapp(text, url), phone)} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#25D366] text-white hover:brightness-95`}>
-        <WhatsAppIcon /> {t("share.whatsapp")}
-      </a>
+      <WhatsAppShare url={url} text={text} phone={phone} className={sm} />
       <a href={telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(text, url, "tg"))} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
         <TelegramIcon /> {t("share.telegram")}
       </a>
@@ -69,6 +67,28 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * The WhatsApp share in WhatsApp's own colour, the link tagged `?s=wa`: the first button of
+ * `ShareButtons`, and, `quiet`, the one link of the organiser's "Kicksmash can't reach Tim" line, which
+ * must not stand beside the page's own Share as a second green button (rule 3). `className` is the size
+ * (" btn-sm") and anything the place adds.
+ */
+export function WhatsAppShare({ url, text, phone, label, className = "", testId, quiet = false }: { url: string; text: string; phone?: string | null; label?: string; className?: string; testId?: string; quiet?: boolean }) {
+  const t = useTranslations();
+  const href = whatsappShareUrl(tagForWhatsapp(text, url), phone);
+  if (quiet)
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={`link inline-flex items-center gap-1.5 text-sm font-semibold${className}`} data-testid={testId}>
+        <WhatsAppIcon /> {label ?? t("share.whatsapp")}
+      </a>
+    );
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={`btn${className} bg-[#25D366] text-white hover:brightness-95`} data-testid={testId}>
+      <WhatsAppIcon /> {label ?? t("share.whatsapp")}
+    </a>
   );
 }
 
