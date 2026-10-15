@@ -7,7 +7,7 @@ import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft
 import { stripHtml } from "@/lib/listen/parse";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
-import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
+import { anthropicHeaders, listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The press desk. Drafts are written here (by the operator endpoint or the
@@ -294,12 +294,12 @@ export async function draftReplyTo(db: Db, inbound: Outreach, now = new Date(), 
     calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
+      headers: anthropicHeaders(process.env.ANTHROPIC_API_KEY!),
       body: JSON.stringify({ model: listenModel(), max_tokens: 600, system: REPLY_SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(45_000),
     });
-    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
-    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
+    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message?: string } } | null;
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, error: json?.error?.message, now }).catch(() => undefined);
     calling = false;
     if (!res.ok || !json) return null;
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("").trim();

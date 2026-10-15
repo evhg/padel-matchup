@@ -273,7 +273,7 @@ export async function listenTick(db: Db, now = new Date(), o: { feeds?: readonly
   const items = fetched.flatMap((f) => f.items);
   const remembered = await rememberCandidates(db, items, now);
   const expired = await expireOld(db, now);
-  // A key the Discord replies found refused is refused here too: no call is made after the first 401 or 403.
+  // A key the Discord replies found refused is refused here too: no call is made after the first refusal (`keyRefused`).
   const drafted = discord?.refused ? { drafted: 0, relevant: 0, errors: 0, refused: true } : await draftPending(db, now, o.fetchImpl);
   const asked = await askOwner(db, now);
   const failed = fetched.filter((f) => f.error);

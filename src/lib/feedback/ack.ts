@@ -3,7 +3,7 @@ import { bumpMetric } from "@/lib/domain/metrics";
 import { PRODUCT_FACTS, draftingEnabled, withinBudget } from "@/lib/listen/draft";
 import type { SaidBefore } from "./store";
 import { feedbackLocale, promisesSomething, type FeedbackLocale } from "./strings";
-import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
+import { anthropicHeaders, listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * The instant reply to a note. Written for that note when the model is
@@ -128,12 +128,12 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
     calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
+      headers: anthropicHeaders(process.env.ANTHROPIC_API_KEY!),
       body: JSON.stringify({ model: listenModel(), max_tokens: 220, system: SYSTEM, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(12_000),
     });
-    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
-    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, now }).catch(() => undefined);
+    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message?: string } } | null;
+    await recordModelCall(db, { status: res.status, ok: res.ok && json !== null, usage: { input: json?.usage?.input_tokens || 0, output: json?.usage?.output_tokens || 0 }, error: json?.error?.message, now }).catch(() => undefined);
     calling = false;
     if (!res.ok || !json) return fallback;
     const parsed = parseAck((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
