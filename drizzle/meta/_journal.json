@@ -708,6 +708,13 @@
       "when": 1791812300805,
       "tag": "0100_reader_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1792039964678,
+      "tag": "0101_cron_log_cleanup",
+      "breakpoints": true
     }
   ]
 }

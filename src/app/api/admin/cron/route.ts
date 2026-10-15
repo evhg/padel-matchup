@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 /**
  * The scheduled jobs, from the operator's side (src/lib/ops/cronJobs.ts has the why).
  *
- *   GET  /api/admin/cron   the jobs that call the app and how each one's last run went
- *   POST /api/admin/cron   store the app's own CRON_SECRET in Vault and schedule the three jobs
+ *   GET  /api/admin/cron   the jobs that call the app, the run log's weekly cleanup, and how each one's last run went
+ *   POST /api/admin/cron   store the app's own CRON_SECRET in Vault and schedule the three jobs that call the app
  *   Authorization: Bearer $CRON_SECRET
  *
  * POST is for two moments: a database that never had the jobs, and the day CRON_SECRET changes on

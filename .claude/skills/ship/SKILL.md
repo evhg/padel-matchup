@@ -944,9 +944,11 @@ Wall clock first, credits second. What actually moved it, measured:
 - **A migration lands in production when its pull request merges, through the Migrate workflow, and
   never by hand.** 0053 was once applied through the Supabase MCP while the browser suite ran; since
   the workflow (AGENTS.md rule 7), a migration applied by hand is one the workflow then skips, so the
-  two disagree about what production holds. After the merge, read the row back through
-  `/api/admin/sql` (`select … from drizzle.__drizzle_migrations order by id desc limit 3`) before
-  writing "applied".
+  two disagree about what production holds. After the merge, read what the migration made back
+  through `/api/admin/sql` (a column, a row, a job: `select jobname, schedule from cron.job` for 0101)
+  before writing "applied". The door cannot read `drizzle.__drizzle_migrations`: it answers
+  "permission denied for schema drizzle" (15 October 2026), and `tests/readonly.test.ts` uses that
+  very refusal as its example. This line used to send sessions to it.
 
 - **A "hidden" element in a Playwright timeout is often a crushed one.** `locator resolved to hidden
   <div …>500 THB · not paid</div>` — the element was there and on screen, but a row built for one
