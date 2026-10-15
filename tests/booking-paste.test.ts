@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bookingHref, linksIn, readBooking, type BookingRead, type PickClub } from "@/lib/domain/bookingPaste";
+import { waPasteAnswer } from "@/lib/whatsapp/paste";
 import { freezeClock } from "./helpers/clock";
 
 /**
@@ -192,12 +193,38 @@ describe("the court and the price", () => {
     expect(read("Court: Center Court, Warehaus 12 Oct 18:00").court).toBe("Center Court");
   });
 
-  it("reads a price beside a currency, as written", () => {
-    expect(read("Warehaus tomorrow 18:00 ฿1,600").cost).toBe("฿1,600");
-    expect(read("Warehaus tomorrow 18:00 1600 THB").cost).toBe("1600 THB");
-    expect(read("Warehaus tomorrow 18:00 S$60").cost).toBe("S$60");
-    expect(read("Warehaus tomorrow 18:00 Court 3 600 THB")).toMatchObject({ court: "3", cost: "600 THB" });
-    expect(read("Warehaus tomorrow 18:00 400 THB/person").cost).toBe("400 THB/person");
+  it("reads a price beside a currency, as written: the court's total, unless it says it is per player", () => {
+    // A bare price is what the court costs: "Cost per player" stays empty, so no page asks each player
+    // for the whole court (a Warehaus paste would have said "1,600 THB per player", four times the share).
+    expect(read("Warehaus tomorrow 18:00 ฿1,600")).toMatchObject({ cost: null, courtTotal: "฿1,600" });
+    expect(read("Warehaus tomorrow 18:00 1600 THB")).toMatchObject({ cost: null, courtTotal: "1600 THB" });
+    expect(read("Warehaus tomorrow 18:00 S$60")).toMatchObject({ cost: null, courtTotal: "S$60" });
+    expect(read("Warehaus tomorrow 18:00 Court 3 600 THB")).toMatchObject({ court: "3", cost: null, courtTotal: "600 THB" });
+    expect(read("Warehaus 12 Oct 18:00\nCourt 2\nTotal: 1,600 THB")).toMatchObject({ court: "2", cost: null, courtTotal: "1,600 THB", time: "18:00", date: "2026-10-12" });
+    // A price that says it is for each player fills "Cost per player", as written, and names no total.
+    expect(read("Warehaus tomorrow 18:00 400 THB/person")).toMatchObject({ cost: "400 THB/person", courtTotal: null });
+    expect(read("Warehaus tomorrow 18:00 ฿400 pp").cost).toBe("฿400 pp");
+    expect(read("Warehaus tomorrow 18:00 400 THB each").cost).toBe("400 THB each");
+    expect(read("Warehaus mañana 18:00 10 € por persona").cost).toBe("10 € por persona");
+    expect(read("Warehaus завтра 18:00 400 бат с человека").cost).toBe("400 бат с человека");
+    expect(read("Warehaus tomorrow 18:00 400 THB/pax").courtTotal).toBeNull();
+    expect(read("Warehaus mañana 18:00 10 €/jugador")).toMatchObject({ cost: "10 €/jugador", courtTotal: null });
+    expect(read("Warehaus mañana 18:00 10 €/persona")).toMatchObject({ cost: "10 €/persona", courtTotal: null });
+    expect(read("Warehaus завтра 18:00 400 бат/человек")).toMatchObject({ cost: "400 бат/человек", courtTotal: null });
+    expect(read("Warehaus завтра 18:00 400 бат/игрок")).toMatchObject({ cost: "400 бат/игрок", courtTotal: null });
+    // A label in front of the amount says it too (review, 15 October 2026: these read as the court's
+    // total, and the bot then said "400 THB for the court"). The label goes after the amount, in the
+    // paste's own words, as every other price per player reads.
+    expect(read("Warehaus tomorrow 18:00\nPrice per person: 400 THB")).toMatchObject({ cost: "400 THB per person", courtTotal: null, time: "18:00" });
+    expect(read("Warehaus tomorrow 18:00 Per player 400 THB")).toMatchObject({ cost: "400 THB per player", courtTotal: null });
+    expect(read("Warehaus tomorrow 18:00 pp: ฿400")).toMatchObject({ cost: "฿400 pp", courtTotal: null });
+    expect(read("Warehaus mañana 18:00\nPrecio por persona: 10 €")).toMatchObject({ cost: "10 € por persona", courtTotal: null });
+    expect(read("Warehaus mañana 18:00 Por jugador: 10 €")).toMatchObject({ cost: "10 € por jugador", courtTotal: null });
+    expect(read("Warehaus завтра 18:00\nЦена с человека: 400 бат")).toMatchObject({ cost: "400 бат с человека", courtTotal: null });
+    expect(read("Warehaus завтра 18:00 С игрока 400 бат")).toMatchObject({ cost: "400 бат с игрока", courtTotal: null });
+    // A label that says nothing about players leaves the price the court's.
+    expect(read("Warehaus tomorrow 18:00\nPrice: 1,600 THB")).toMatchObject({ cost: null, courtTotal: "1,600 THB" });
+    expect(read("Warehaus mañana 18:00 Precio: 40 €")).toMatchObject({ cost: null, courtTotal: "40 €" });
     // A price is no time and no day.
     expect(read("Warehaus tomorrow 18:00 ฿1,600")).toMatchObject({ time: "18:00", date: "2026-10-12" });
   });
@@ -275,7 +302,7 @@ describe("the club", () => {
     expect(read("Join my match at Bangkok Padel on Monday 12 October at 18:00!")).toMatchObject({ club: { slug: "bangkok-padel" }, date: "2026-10-12", time: "18:00" });
     expect(read("warehaus tmrw 7pm 90min with danny")).toMatchObject({ club: { slug: "warehaus" }, time: "19:00", minutes: 90, names: [] });
     const share = "Join my match on The Padel Society at Warehaus\nMon 19 Oct · 6:30 PM - 8:00 PM\nCourt 2 · ฿1,600\nPlayers: Danny, Alberto, Cath";
-    expect(read(share, { selfName: "Cath" })).toMatchObject({ club: { slug: "warehaus" }, date: "2026-10-19", time: "18:30", minutes: 90, court: "2", cost: "฿1,600", names: ["Danny", "Alberto"], missing: [] });
+    expect(read(share, { selfName: "Cath" })).toMatchObject({ club: { slug: "warehaus" }, date: "2026-10-19", time: "18:30", minutes: 90, court: "2", cost: null, courtTotal: "฿1,600", names: ["Danny", "Alberto"], missing: [] });
   });
 
   it("uses the zone of the caller when no club is found, and says what is missing", () => {
@@ -303,7 +330,7 @@ describe("the preview", () => {
   it("fills only what the person's text left out", () => {
     const preview = { title: "Padel at Rawai Padel", description: "Mon 19 Oct, 20:00 - 21:30, Court 2, ฿1,200" };
     const r = read("Warehaus 12 Oct 18:00", { preview });
-    expect(r).toMatchObject({ club: { slug: "warehaus" }, clubFrom: "text", date: "2026-10-12", time: "18:00", court: "2", cost: "฿1,200" });
+    expect(r).toMatchObject({ club: { slug: "warehaus" }, clubFrom: "text", date: "2026-10-12", time: "18:00", court: "2", cost: null, courtTotal: "฿1,200" });
     // The range's length comes from the preview too, because the text gave none.
     expect(r.minutes).toBe(90);
     const empty = read("https://example.com/x", { preview });
@@ -323,8 +350,16 @@ describe("the form's address", () => {
     expect(bookingHref(read("Warehaus tomorrow 18:00"))).toContain("booked=1");
     // An unknown club's booking still shows itself by its court or its price.
     expect(bookingHref(read("Nowhere Padel tomorrow 18:00 court 3"))).toContain("booked=1");
+    expect(bookingHref(read("Nowhere Padel tomorrow 18:00 Total: 1,600 THB"))).toContain("booked=1");
     // The organiser's last venue is a guess, not a booking.
     expect(bookingHref(read("tomorrow 18:00", { fallbackClub: CLUBS[0] }))).not.toContain("booked=1");
+  });
+
+  it("carries a court's total as `total`, never as the cost per player, and a price per player as `cost`", () => {
+    const total = new URLSearchParams(bookingHref(read("Warehaus 12 Oct 18:00 Court 2 Total: 1,600 THB")).slice(2));
+    expect([total.get("total"), total.has("cost")]).toEqual(["1,600 THB", false]);
+    const each = new URLSearchParams(bookingHref(read("Warehaus 12 Oct 18:00 400 THB/person")).slice(2));
+    expect([each.get("cost"), each.has("total")]).toEqual(["400 THB/person", false]);
   });
 
   it("asks the form to have the club checked when it is the last venue, and the day when the weekday disagrees", () => {
@@ -332,6 +367,18 @@ describe("the form's address", () => {
     expect(bookingHref(read("Warehaus Sun 12 Oct 18:00"))).toContain("check=date");
     expect(new URLSearchParams(bookingHref(read("Sun 12 Oct 18:00", { fallbackClub: CLUBS[0] })).slice(2)).get("check")).toBe("venue,date");
     expect(bookingHref(read("Warehaus Mon 12 Oct 18:00"))).not.toContain("check=");
+  });
+});
+
+describe("the WhatsApp thread's answer", () => {
+  it("names a court's total as the court's, and a price per player as written", () => {
+    const total = read("Warehaus 12 Oct 18:00 Total: 1,600 THB");
+    expect(waPasteAnswer(total, "https://kicksma.sh/?src=paste", "en").split("\n")[0]).toBe("📋 WAREHAUS.club, Mon, Oct 12, 18:00, 1,600 THB for the court");
+    expect(waPasteAnswer(total, "https://kicksma.sh/?src=paste", "ru")).toContain("1,600 THB за корт");
+    expect(waPasteAnswer(total, "https://kicksma.sh/?src=paste", "es")).toContain("1,600 THB por la pista");
+    const each = waPasteAnswer(read("Warehaus 12 Oct 18:00 400 THB/person"), "https://kicksma.sh/?src=paste", "en");
+    expect(each).toContain("400 THB/person");
+    expect(each).not.toContain("for the court");
   });
 });
 

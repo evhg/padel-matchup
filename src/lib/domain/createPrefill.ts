@@ -11,7 +11,7 @@ import { SEAT_NAMES_MAX } from "./slots";
  * Three doors write these links. A venue board or a free court offered to a player
  * (`?venue=&date=&time=&tz=`) lists the match on the club's board, as it always did. The americano
  * generator carries `names`. A pasted booking (`bookingHref` in `bookingPaste.ts`: `src=paste` with
- * `len`, `court`, `cost`, `names`, `booked=1` and `invite`) fills what the booking said, keeps the form's
+ * `len`, `court`, `cost`, `total`, `names`, `booked=1` and `invite`) fills what the booking said, keeps the form's
  * own day and time where it said none, says which fields the booking left out, and never lists the
  * match on the board: the organiser booked a
  * court for their own four, and the board is theirs to choose (the switch under More options).
@@ -27,6 +27,7 @@ export type CreateLink = {
   len?: string;
   court?: string;
   cost?: string;
+  total?: string;
   booked?: string;
   check?: string;
   invite?: string;
@@ -42,6 +43,11 @@ export type LinkPrefill = {
   durationMinutes: MatchLength | null;
   court: string | null;
   cost: string | null;
+  /**
+   * A pasted booking only: the price it gave without saying it is for each player, the court's total.
+   * The form names it in one line and leaves "Cost per player" empty.
+   */
+  courtTotal: string | null;
   /** The venue board: on for a club's own link, off for a pasted booking. */
   publicListing: boolean;
   /** `booked=1`: the organiser already booked the court ("Court booked by me" starts ticked). */
@@ -112,6 +118,7 @@ export function readCreateLink(sp: CreateLink): LinkPrefill {
     durationMinutes: parseMatchLength(sp.len ?? null),
     court: field(sp.court, COURT_MAX),
     cost: field(sp.cost, COST_MAX),
+    courtTotal: fromPaste ? field(sp.total, COST_MAX) : null,
     publicListing: Boolean(venue) && !fromPaste,
     booked: sp.booked === "1",
     names,

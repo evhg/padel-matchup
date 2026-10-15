@@ -6,6 +6,7 @@ import { getViewer, manageUrlFor, personalTokenFor } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
+import { KeepTogether } from "@/components/KeepTogether";
 import { PushToggle } from "@/components/PushToggle";
 import { ScrollTop } from "@/components/ScrollTop";
 import { CopyButton, LinkBox, QrFold, ShareButtons } from "@/components/ShareSheet";
@@ -68,6 +69,10 @@ async function SharePage({ params }: Props) {
           <div className="mx-auto inline-grid h-14 w-14 place-items-center rounded-full bg-accent text-2xl">{isTournament ? "🏆" : "🎾"}</div>
           <h1 className="mt-3 text-3xl font-extrabold tracking-tight">{t(isTournament ? "share.titleTournament" : "share.titleMatch")}</h1>
           <p className="mt-1 text-muted">{t(isTournament ? "share.subtitleTournament" : "share.subtitle")}</p>
+          {/* What the link will say, to check before it goes: the day, the time, the club and the court. Data, so no new words. */}
+          <p className="mt-2 break-words font-bold" data-testid="share-summary">
+            <KeepTogether parts={[day, time, ...venue.split(" · ")]} />
+          </p>
         </section>
         <LinkBox url={url} display={`${shortHost()}/${code}`} />
         <ShareButtons url={url} text={text} />

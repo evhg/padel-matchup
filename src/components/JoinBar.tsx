@@ -130,8 +130,14 @@ export function JoinBar({
     });
 
   const leave = () => {
-    // On a fixed-pairs night the question says what happens to the partner.
-    const question = fixedPairs && partnerName ? t(partnerGoes ? "pairs.leaveWithName" : "pairs.leaveKeepsPartner", { name: partnerName }) : t("event.leaveConfirm");
+    // On a fixed-pairs night the question says what happens to the partner. A place on the waiting list
+    // is no spot that goes to the next player: its own question.
+    const question =
+      fixedPairs && partnerName
+        ? t(partnerGoes ? "pairs.leaveWithName" : "pairs.leaveKeepsPartner", { name: partnerName })
+        : state === "leave_waitlist"
+          ? t("event.leaveWaitlistConfirm")
+          : t("event.leaveConfirm");
     if (!confirm(question)) return;
     start(async () => {
       const r = await leaveAction(code);

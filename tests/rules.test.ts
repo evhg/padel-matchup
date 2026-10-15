@@ -223,3 +223,23 @@ describe("work that must outlive the response is handed to after()", () => {
     expect(hourly.indexOf("if (summary.errors.length) await reportError(")).toBeLessThan(hourly.indexOf("await sweepProposals("));
   });
 });
+
+/**
+ * The plain match link is opened by first-time players on old phones too: an iPhone 6s, 7 or first SE
+ * stops at iOS 15, and Safari before 16 has no `HTMLFormElement.requestSubmit`. The fixed Join's second
+ * tap called it, so there it threw and joined nobody (review, 15 October 2026). A form is sent by a click
+ * on its own submit button (`sendForm` in src/components/joinBus.ts); Next.js polyfills neither.
+ */
+describe("the browser code runs on Safari 15", () => {
+  it("no requestSubmit call in src", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(root("src"))) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, i) => {
+          if (/\.requestSubmit\s*\(/.test(line) && !/^\s*(\*|\/\/)/.test(line)) offenders.push(`${path.relative(root("."), file)}:${i + 1}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+  });
+});

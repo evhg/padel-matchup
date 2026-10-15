@@ -100,6 +100,26 @@ export async function markInboxRead(db: Db, playerId: string, now = new Date()):
 }
 
 /**
+ * Opening a match's page reads that match's notices, so the bell counts only what the person has not
+ * seen (the owner's question of 12 October 2026: a bell of 3 on every page for facts the match page
+ * already showed). One update down `notices_player_created_idx`, bounded by the player's ninety-day
+ * inbox; the rows stay (DECIDING rule 33), only their unread mark goes. Nothing reads `read_at` for
+ * delivery: the quiet-hours summary reads `due_at` and `delivered_at`.
+ *
+ * `now` is the moment the page began, before it read the match: a notice made after it (somebody joined
+ * while the page was still reading and streaming) is not on the screen the person saw, so it stays new.
+ * The bound rides the same index (`player_id`, `created_at desc`).
+ */
+export async function markMatchNoticesRead(db: Db, playerId: string, eventId: string, now = new Date()): Promise<number> {
+  const r = await db
+    .update(notices)
+    .set({ readAt: now })
+    .where(and(eq(notices.playerId, playerId), eq(notices.eventId, eventId), isNull(notices.readAt), lte(notices.createdAt, now)))
+    .returning({ id: notices.id });
+  return r.length;
+}
+
+/**
  * The people whose quiet hours have ended with notices waiting, and how many each. Bounded, and read
  * on the partial index `notices_due_idx`; a person past the bound is answered next hour.
  */

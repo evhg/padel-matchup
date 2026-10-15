@@ -276,7 +276,8 @@
     "askPastChange": "Change",
     "askPastFirst": "Answer the question about {name} first.",
     "playedWithYou": "Played with you",
-    "keepsRecord": "Keeps {name}'s matches"
+    "keepsRecord": "Keeps {name}'s matches",
+    "pasteTotal": "The booking says {total} for the court. Add the cost per player under More options."
   },
   "share": {
     "title": "Your match is live",
@@ -403,7 +404,9 @@
     "heldFor": "{count, plural, one {# place held for {names}} other {# places held for {names}}}",
     "heldCount": "{count, plural, one {# place held} other {# places held}}",
     "courtBookedUndoMark": "Undo",
-    "courtBookedUndoName": "Undo: mark the court as not booked"
+    "courtBookedUndoName": "Undo: mark the court as not booked",
+    "startedAgo": "Started {when}",
+    "leaveWaitlistConfirm": "Leave the waiting list?"
   },
   "creator": {
     "tools": "Organizer tools",

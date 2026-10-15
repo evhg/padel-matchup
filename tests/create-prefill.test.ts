@@ -22,6 +22,7 @@ describe("the create form's address", () => {
       durationMinutes: 90,
       court: "3",
       cost: "600 THB",
+      courtTotal: null,
       publicListing: false,
       booked: true,
       names: ["Danny", "Alberto"],
@@ -29,6 +30,14 @@ describe("the create form's address", () => {
       check: [],
       invite: null,
     });
+  });
+
+  it("reads a pasted court's total for its line, never as the cost per player, and only from a paste", () => {
+    expect(readCreateLink(params("/?src=paste&venue=WAREHAUS.club&total=1%2C600%20THB"))).toMatchObject({ cost: null, courtTotal: "1,600 THB" });
+    // A link that is no paste says nothing about a booking's price.
+    expect(readCreateLink(params("/?venue=WAREHAUS.club&total=1%2C600%20THB")).courtTotal).toBeNull();
+    // The form's bounds, as for the cost.
+    expect(readCreateLink({ src: "paste", total: "6".repeat(41) }).courtTotal).toBeNull();
   });
 
   it("a club's own link with a venue still lists the match, as the venue board always did", () => {

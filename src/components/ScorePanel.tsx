@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
-import { checkSets, MAX_SETS, tally } from "@/lib/domain/scores";
+import { checkSets, MAX_SETS, setsComplete, tally, typedSets, type DraftSet } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 import { SameTimeButton } from "./SameTimeButton";
@@ -53,7 +53,10 @@ export function ScorePanel({
   // from each render, so a change of language reaches them (a latched string kept the first language).
   const [weekly] = useState(weeklyOffered);
   const [editing, setEditing] = useState(false);
-  const [sets, setSets] = useState<S[]>(scores.length ? scores : [{ setNumber: 1, sideA: 6, sideB: 4 }]);
+  // A new score starts empty, 6 and 4 only as placeholders: an untouched 6-4 once saved as a real
+  // result. An edit starts from the saved numbers.
+  const [sets, setSets] = useState<DraftSet[]>(scores.length ? scores : [{ setNumber: 1, sideA: null, sideB: null }]);
+  const complete = setsComplete(sets);
   const [teamA, setTeamA] = useState<string[]>(players.filter((p) => p.team === "a").map((p) => p.id));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -75,21 +78,26 @@ export function ScorePanel({
     setTeamA((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 2 ? [cur[1], id] : [...cur, id]));
   };
 
-  const send = () =>
+  const send = () => {
+    const typed = typedSets(sets);
+    if (!typed) return;
     start(async () => {
       setError(null);
       setAsking(null);
-      const r = await saveScoreAction(code, sets, teamA.length === 2 ? teamA : undefined);
+      const r = await saveScoreAction(code, typed, teamA.length === 2 ? teamA : undefined);
       if (!r.ok) {
         setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
         return;
       }
       setEditing(false);
     });
+  };
 
   const save = () => {
-    const filled = sets.filter((s) => Number.isFinite(s.sideA) && Number.isFinite(s.sideB));
-    const check = checkSets(filled);
+    // Every box typed first ("Save score" waits for it); then the 0-0 refusal and "Is 6-5 right?" on what was typed.
+    const typed = typedSets(sets);
+    if (!typed) return;
+    const check = checkSets(typed);
     // A 0-0 set: the message the server would give, before any question (it would refuse after "Yes, save").
     if ("refuse" in check) {
       setAsking(null);
@@ -97,8 +105,8 @@ export function ScorePanel({
       return;
     }
     setError(null);
-    const odd = check.ask.map((i) => sets.indexOf(filled[i]));
-    const key = JSON.stringify(filled.map((s) => [s.sideA, s.sideB]));
+    const odd = check.ask;
+    const key = JSON.stringify(typed.map((s) => [s.sideA, s.sideB]));
     if (odd.length > 0 && key !== askedFor) {
       setAsking(odd);
       setAskedFor(key);
@@ -107,23 +115,24 @@ export function ScorePanel({
     send();
   };
 
-  const setGames = (i: number, side: "sideA" | "sideB", n: number) => {
+  const setGames = (i: number, side: "sideA" | "sideB", n: number | null) => {
     setAsking(null);
     setSets((cur) => cur.map((x, j) => (j === i ? { ...x, [side]: n } : x)));
   };
   // Four or five sets do not fit beside a name at phone width in the big squares.
   const chip = scores.length > 3 ? "h-9 w-9 rounded-lg text-base" : "h-11 w-11 rounded-xl text-xl";
 
-  const numInput = (value: number, onChange: (n: number) => void, label: string, odd: boolean) => (
+  const numInput = (value: number | null, onChange: (n: number | null) => void, label: string, odd: boolean, hint: string) => (
     <input
       aria-label={label}
-      className={`input h-16 min-h-0 w-full px-0 text-center text-3xl font-extrabold tabular-nums ${odd ? "border-warn bg-warn-soft" : ""}`}
+      className={`input h-16 min-h-0 w-full px-0 text-center text-3xl font-extrabold tabular-nums placeholder:font-semibold placeholder:opacity-50 ${odd ? "border-warn bg-warn-soft" : ""}`}
       type="number"
       inputMode="numeric"
       min={0}
       max={30}
-      value={Number.isFinite(value) ? value : ""}
-      onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))}
+      placeholder={hint}
+      value={value !== null && Number.isFinite(value) ? value : ""}
+      onChange={(e) => onChange(e.target.value === "" || !Number.isFinite(Number(e.target.value)) ? null : Number(e.target.value))}
       onFocus={(e) => e.target.select()}
     />
   );
@@ -229,14 +238,14 @@ export function ScorePanel({
             {sets.map((s, i) => (
               <div key={i} className="contents">
                 <div className="text-sm font-bold text-muted">{t("score.set", { n: i + 1 })}</div>
-                {numInput(s.sideA, (n) => setGames(i, "sideA", n), `${t("score.set", { n: i + 1 })} ${t("score.teamA")}`, Boolean(asking?.includes(i)))}
-                {numInput(s.sideB, (n) => setGames(i, "sideB", n), `${t("score.set", { n: i + 1 })} ${t("score.teamB")}`, Boolean(asking?.includes(i)))}
+                {numInput(s.sideA, (n) => setGames(i, "sideA", n), `${t("score.set", { n: i + 1 })} ${t("score.teamA")}`, Boolean(asking?.includes(i)), "6")}
+                {numInput(s.sideB, (n) => setGames(i, "sideB", n), `${t("score.set", { n: i + 1 })} ${t("score.teamB")}`, Boolean(asking?.includes(i)), "4")}
               </div>
             ))}
           </div>
           <div className="flex gap-2">
             {sets.length < MAX_SETS && (
-              <button type="button" className="btn-ghost btn-sm" onClick={() => { setAsking(null); setSets((c) => [...c, { setNumber: c.length + 1, sideA: 6, sideB: 4 }]); }}>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => { setAsking(null); setSets((c) => [...c, { setNumber: c.length + 1, sideA: null, sideB: null }]); }}>
                 + {t("score.addSet")}
               </button>
             )}
@@ -251,7 +260,7 @@ export function ScorePanel({
             <div className="flex flex-col gap-3 rounded-xl border border-warn/40 bg-warn-soft/40 p-3" data-testid="score-check">
               {asking.map((i) => (
                 <p key={i} className="font-bold">
-                  {t("score.unusual", { score: `${sets[i].sideA}-${sets[i].sideB}` })}
+                  {t("score.unusual", { score: `${sets[i].sideA ?? ""}-${sets[i].sideB ?? ""}` })}
                 </p>
               ))}
               <div className="flex gap-2">
@@ -265,7 +274,7 @@ export function ScorePanel({
             </div>
           ) : (
             <div className="flex gap-2">
-              <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>
+              <button type="button" className="btn-primary flex-1" disabled={pending || !complete} onClick={save} data-testid="score-save">
                 {pending ? t("common.saving") : t("score.save")}
               </button>
               <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>

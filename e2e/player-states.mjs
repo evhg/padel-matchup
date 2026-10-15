@@ -189,6 +189,45 @@ try {
   check("opening the inbox reads it", (await inbox.getByTestId("inbox-new").count()) === 0 && (await inbox.locator("li[data-unread]").count()) === 0);
   await shot(dana, "player-inbox");
 
+  // ------------------------------------------------- opening a match reads its notices (the owner's question, 12 October 2026)
+  // Erik's bell said 3 on every page for facts the match page already showed him. Kai joins two more of
+  // Dana's matches: two new notices, one about each. Opening one match reads its notice, so the bell on
+  // /play is one lower; opening the other leaves no bell. The mark is written after the response, and the
+  // header of that same response may still show the old count, so the bell is read on the next page.
+  const twoMore = [];
+  for (const hours of [50, 74]) {
+    const m = await api("/api/v1/matches", { startsAt: new Date(Date.now() + hours * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Dana", token } });
+    await api(`/api/v1/matches/${m.match?.code}/join`, { token: kaiToken });
+    twoMore.push(m.match?.code);
+  }
+  const bellOnPlay = async () => {
+    await dana.goto(BASE + "/play");
+    await dana.waitForLoadState("networkidle").catch(() => {});
+    const b = dana.getByTestId("nav-unread");
+    return (await b.count()) ? Number((await b.innerText()).trim()) : 0;
+  };
+  /** The bell on /play until `done` says yes, a few looks, never for long. */
+  const bellUntil = async (done) => {
+    let n = await bellOnPlay();
+    for (let i = 0; i < 10 && !done(n); i++) {
+      await dana.waitForTimeout(500);
+      n = await bellOnPlay();
+    }
+    return n;
+  };
+  const bellBefore = await bellUntil((n) => n >= 2);
+  await dana.goto(`${BASE}/${twoMore[0]}`);
+  await dana.waitForLoadState("networkidle").catch(() => {});
+  const bellAfterOne = await bellUntil((n) => n < bellBefore);
+  check("opening one match reads its notice: the bell on /play is one lower, the other match's notice still new", bellBefore === 2 && bellAfterOne === 1, `${bellBefore} -> ${bellAfterOne}`);
+  await shot(dana, "player-bell-one-read");
+  await dana.goto(`${BASE}/${twoMore[1]}`);
+  await dana.waitForLoadState("networkidle").catch(() => {});
+  const bellAfterTwo = await bellUntil((n) => n === 0);
+  check("opening the other match too leaves no bell", bellAfterTwo === 0, `${bellAfterOne} -> ${bellAfterTwo}`);
+  await dana.goto(BASE + "/me");
+  check("and the inbox keeps both notices, read", (await dana.getByTestId("inbox").locator("li").filter({ hasText: "Kai joined" }).count()) >= 3 && (await dana.getByTestId("inbox").locator("li[data-unread]").count()) === 0);
+
   const notices = dana.getByTestId("notice-settings");
   check("Notices is one line that says what is set", (await notices.getByTestId("notice-summary").innerText()) === "6 of 7 on · no quiet hours");
   await notices.locator("summary").click();
