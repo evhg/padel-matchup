@@ -283,6 +283,13 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   `join_name_different`: "I'm a different Danny" beside such a record. The yes is counted where it
   signs in (`signin_thats_me`, `signin_passkey`, `signin_email_code`). Many `join_name_seated` with few
   sign-ins: the question does not land.
+- **"Stay updated" after a join.** `stay_asked`: a web join (`joinAction`, a seat or a waiting place)
+  by a player with no channel, so the match page shows the card asking for WhatsApp, Telegram or email.
+  `stay_linked_email`: such a player saved an address on a match page and email now reaches them;
+  `stay_linked_telegram` and `stay_linked_whatsapp`: the card's chat tap linked the account or number.
+  Each is one upsert for each join, save or link, after the answer, never for a view of the page
+  (since 15 October 2026 for the first two). The three `stay_linked_*` together against `stay_asked`
+  say whether the card works.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.

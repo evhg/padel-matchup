@@ -971,7 +971,8 @@
     "feedLead": "Subscribe once. A new match appears, a changed time moves, and a cancelled match is marked.",
     "feedGone": "This calendar link no longer works. Open one of your matches and add the calendar again.",
     "feedName": "{app}: my matches",
-    "viaWhatsapp": "on WhatsApp"
+    "viaWhatsapp": "on WhatsApp",
+    "linkSent": "Your link is in your email. If a place opens, the invitation follows."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

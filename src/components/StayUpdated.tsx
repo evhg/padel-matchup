@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState, useTransition } from "react";
 import { resendCalendarInviteAction } from "@/actions/calendar";
 import { updateMyEmail } from "@/actions/identity";
-import type { StayChannel, StayState } from "@/lib/domain/stayUpdated";
+import type { StayChannel, StayState, WelcomeKind } from "@/lib/domain/stayUpdated";
 import { CalendarSubscribe } from "./CalendarSubscribe";
 import { placeholderWidth } from "@/lib/fieldWidth";
 
@@ -13,6 +13,12 @@ type Props = {
   code: string;
   /** Seated, not waitlisted: only a seat can ask for the invitation again (resendCalendarInviteAction). */
   member: boolean;
+  /**
+   * The address on file brought this player the match's invitation: a seat, a deployment that sends mail,
+   * and not a session by name (DECIDING rule 34). Only then does the card say an invitation went, or offer
+   * it again, before anything is typed here.
+   */
+  invited: boolean;
   email: string | null;
   state: Extract<StayState, { kind: "ask" | "reached" }>;
   /** One tap each into a chat the player already has; null where the deployment does not run it. */
@@ -31,7 +37,7 @@ type Props = {
  * A chat tap leaves the page, so when the person comes back the page asks the server again rather
  * than guessing: the card turns into the quiet line only once the bot has actually linked them.
  */
-export function StayUpdated({ code, member, email, state, links, feed }: Props) {
+export function StayUpdated({ code, member, invited, email, state, links, feed }: Props) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -39,6 +45,10 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
   // What was typed here wins; otherwise the address the server knows, read on every render so a refresh that brings one is not missed.
   const [typed, setTyped] = useState<string | null>(null);
   const sentTo = typed ?? email;
+  // What the save here sent (`updateMyEmail`'s `welcome`); undefined until an address is typed here.
+  const [welcome, setWelcome] = useState<WelcomeKind | null | undefined>(undefined);
+  // The card says only what went: after a save here, the save's own answer; before it, the page's.
+  const inviteSent = welcome === undefined ? invited : welcome === "invite";
   const [emailOpen, setEmailOpen] = useState(false);
   const [waiting, setWaiting] = useState<"whatsapp" | "telegram" | null>(null);
   const [resent, setResent] = useState(false);
@@ -64,40 +74,44 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
     // templates Meta approved (src/lib/whatsapp/templates.ts), Telegram and email as they always did.
     const places = withEmail.map((c) => t(c === "whatsapp" ? "calendar.viaWhatsapp" : c === "telegram" ? "calendar.viaTelegram" : "calendar.viaEmail"));
     const line = t("calendar.reached", { places: new Intl.ListFormat(locale, { type: "conjunction" }).format(places) });
+    // What the address brought, and nothing else: the invitation (and "Send it again" for a seat); on the
+    // waiting list the personal link, whose invitation follows a place; for a session by name no line at
+    // all, because it gets neither (DECIDING rule 34).
+    const mailLine = !sentTo ? null : inviteSent ? (
+      <>
+        <div className="mt-1 text-muted">📅 {t("calendar.sentTo", { email: sentTo })}</div>
+        {member && (
+          <div className="mt-1 text-muted">
+            {resent ? (
+              t("calendar.resent")
+            ) : (
+              <button
+                type="button"
+                className="underline disabled:opacity-60"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const r = await resendCalendarInviteAction(code);
+                    if (r.ok) setResent(true);
+                    else setError(t("common.somethingWrong"));
+                  })
+                }
+              >
+                {pending ? t("common.working") : t("calendar.resend")}
+              </button>
+            )}
+            {error && <span className="ml-2 font-semibold text-danger">{error}</span>}
+          </div>
+        )}
+      </>
+    ) : welcome === "link" ? (
+      <div className="mt-1 text-muted">✉️ {t("calendar.linkSent")}</div>
+    ) : null;
     return (
       <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
         <div className="font-semibold text-ok">{line}</div>
-        {sentTo ? (
-          <>
-            <div className="mt-1 text-muted">📅 {t("calendar.sentTo", { email: sentTo })}</div>
-            {member && (
-              <div className="mt-1 text-muted">
-                {resent ? (
-                  t("calendar.resent")
-                ) : (
-                  <button
-                    type="button"
-                    className="underline disabled:opacity-60"
-                    disabled={pending}
-                    onClick={() =>
-                      start(async () => {
-                        setError(null);
-                        const r = await resendCalendarInviteAction(code);
-                        if (r.ok) setResent(true);
-                        else setError(t("common.somethingWrong"));
-                      })
-                    }
-                  >
-                    {pending ? t("common.working") : t("calendar.resend")}
-                  </button>
-                )}
-                {error && <span className="ml-2 font-semibold text-danger">{error}</span>}
-              </div>
-            )}
-          </>
-        ) : (
-          feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />
-        )}
+        {sentTo ? mailLine : feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />}
       </div>
     );
   }
@@ -141,12 +155,14 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
                 return;
               }
               setTyped(r.data.email);
+              setWelcome(r.data.welcome);
             });
           }}
         >
           <input type="email" inputMode="email" autoComplete="email" className="input flex-1" style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }} placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
           <button type="submit" className="btn-primary shrink-0" disabled={pending || !value.trim()}>
-            {pending ? t("common.working") : t("calendar.send")}
+            {/* "Send invite" only where an invitation goes: a seat, never a session by name. Anybody else saves the address. */}
+            {pending ? t("common.working") : t(invited ? "calendar.send" : "common.save")}
           </button>
         </form>
       )}

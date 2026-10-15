@@ -36,3 +36,20 @@ export function stayUpdated(p: Pick<Player, "email" | "telegramId" | "phone">, r
   const choices = STAY_CHANNELS.filter((c) => runs[c]);
   return choices.length > 0 ? { kind: "ask", choices } : { kind: "hidden" };
 }
+
+/**
+ * What a newly saved address gets at once (`welcomeEmail` in src/lib/notify.ts), decided before
+ * anything goes, so the card can say only what went (15 October 2026: on the waiting list it said
+ * "Calendar invite sent" while the email held only the personal link):
+ *   - `invite`: the match's calendar invitation, for a seat in a match that is not called off;
+ *   - `link`: the personal-link email, for anybody else (the waiting list included: a place that opens
+ *     brings the invitation then);
+ *   - null: nothing, where the deployment sends no mail or the player has no address, and for a session
+ *     by name that proved nothing, because both carry the personal link (DECIDING rule 34).
+ */
+export type WelcomeKind = "invite" | "link";
+
+export function welcomeKind(o: { emailOn: boolean; seated: boolean; cancelled: boolean; byNameOnly: boolean }): WelcomeKind | null {
+  if (!o.emailOn || o.byNameOnly) return null;
+  return o.seated && !o.cancelled ? "invite" : "link";
+}

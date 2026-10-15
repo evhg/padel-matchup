@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stayUpdated } from "@/lib/domain/stayUpdated";
+import { stayUpdated, welcomeKind } from "@/lib/domain/stayUpdated";
 
 /**
  * The "stay updated" card a player meets the moment they join (the owner, 25 September 2026): which
@@ -36,5 +36,28 @@ describe("the stay-updated card", () => {
     expect(stayUpdated({ ...none, email: "a@b.co" }, { ...all, email: false })).toEqual({ kind: "ask", choices: ["whatsapp", "telegram"] });
     expect(stayUpdated({ ...none, telegramId: 42 }, { ...all, telegram: false })).toEqual({ kind: "ask", choices: ["whatsapp", "email"] });
     expect(stayUpdated({ ...none, phone: "+66810000001" }, { ...all, whatsapp: false })).toEqual({ kind: "ask", choices: ["telegram", "email"] });
+  });
+});
+
+/**
+ * What a saved address gets at once, which is also what the card says went out (15 October 2026: on the
+ * waiting list the card said "Calendar invite sent" while the email held only the personal link). Each
+ * line changes one thing from a seated player on a deployment that sends mail.
+ */
+describe("the welcome a saved address gets", () => {
+  const seated = { emailOn: true, seated: true, cancelled: false, byNameOnly: false };
+  it("a seat in a match that is on: the calendar invitation", () => {
+    expect(welcomeKind(seated)).toBe("invite");
+  });
+  it("no seat (the waiting list), or a match called off: the personal-link email, and no invitation", () => {
+    expect(welcomeKind({ ...seated, seated: false })).toBe("link");
+    expect(welcomeKind({ ...seated, cancelled: true })).toBe("link");
+  });
+  it("a deployment that sends no mail, or no address: nothing", () => {
+    expect(welcomeKind({ ...seated, emailOn: false })).toBeNull();
+  });
+  it("a session by name that proved nothing: nothing, seated or not, because both mails carry the personal link (DECIDING rule 34)", () => {
+    expect(welcomeKind({ ...seated, byNameOnly: true })).toBeNull();
+    expect(welcomeKind({ ...seated, seated: false, byNameOnly: true })).toBeNull();
   });
 });

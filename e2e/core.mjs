@@ -842,6 +842,20 @@ try {
     await p.getByPlaceholder("e.g. Alex").fill(n);
     await p.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
     await p.getByText("You're in").waitFor({ timeout: 20000 });
+    if (n === "Bo") {
+      // The first stranger on a fresh match, as in production: the fixed Join, the name, the form's Join,
+      // which scrolls the page. Chromium anchors scrolling, so the join grew the hero by "Stay updated"
+      // while the line-up held the anchor: the page moved 310 px and the card ended above the screen
+      // (15 October 2026). The match page turns anchoring off, as the share page does.
+      const stayAfterJoin = p.getByTestId("stay-updated");
+      await stayAfterJoin.waitFor({ timeout: 20000 });
+      await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      const cardBox = await stayAfterJoin.boundingBox();
+      const barBox = await p.getByText("You're in").locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' fixed ')][1]").boundingBox();
+      const scrolled = await p.evaluate(() => Math.round(window.scrollY));
+      check("right after the join at 390x844 the whole 'Stay updated' card is on the screen, above the fixed join bar", Boolean(cardBox && barBox) && cardBox.y >= 0 && cardBox.y + cardBox.height <= barBox.y, JSON.stringify({ card: cardBox, barTop: barBox?.y, scrollY: scrolled }));
+      if (process.env.SHOTS) await p.screenshot({ path: `${process.env.SHOTS}/05d-stay-after-join-viewport.png` });
+    }
     if (n === "Di") lastJoiner = p;
     else await p.context().close();
   }

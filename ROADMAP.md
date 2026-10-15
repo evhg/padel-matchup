@@ -1146,6 +1146,15 @@ Everything in this list is live. The README describes each in detail.
   "Danny is in this match. Sign in as Danny?" with "That's me", or for a record with an email or a
   passkey its own doors, and "I'm a different Danny" joins as typed; `join_match` with a name and no
   token answers 409 `name_seated` (DECIDING rule 34).
+- **"Stay updated" stays on the screen after a join, and counts its asks (15 October 2026, no
+  migration).** It is the one ask that makes a new player reachable. On Chromium (Android) the page's
+  scroll anchoring moved the page 310 px at the join, and the card ended above the screen. The match
+  page now turns anchoring off, as the share page does, except on a live night. The card says only what
+  went: "Calendar invite sent" for a seat, "Your link is in your email" on the waiting list (the
+  invitation follows a place), and no mail line for a session by name. "Send it again" refuses a session
+  by name, because every invitation carries the personal link (DECIDING rule 34 already said so; this
+  door did not ask). `stay_asked` and `stay_linked_email` count the card beside `stay_linked_telegram`
+  and `stay_linked_whatsapp` (docs/OPERATING.md).
 
 ## The finish line
 

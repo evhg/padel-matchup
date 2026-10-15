@@ -1202,6 +1202,16 @@ Wall clock first, credits second. What actually moved it, measured:
   share page scrolled sideways, while the comment said a wide part "still wraps inside itself"
   (review, 15 October 2026). Only a short part is a block, capped with `max-w-full`; a long one stays
   words (`KeepTogether`). Test a layout rule with the longest value the field takes, not the usual one.
+- **Chromium moves the page when something grows above what the reader looks at; Safari does not.**
+  The join put "Stay updated" into the hero while the line-up held Chromium's scroll anchor, so an
+  Android phone scrolled 310 px with it and the card ended above the screen; every check passed,
+  because each one counted the card or read its words, and an iPhone walk could not show it (Safari
+  has no scroll anchoring). The share page already had `[overflow-anchor:none]`; the match page did not
+  (15 October 2026). When an action adds the thing the person must see above where they stand, check
+  its box on the screen after the action (`e2e/core.mjs`, headless Chromium anchors), not its count.
+  And check it where the page has scrolled: at the top Chromium anchors nothing, so the same check after
+  a join from the fixed bar alone passed with the bug in; after the form's own Join, which scrolls, it
+  failed at -232 px, as on the phone.
 - **"The person saw it" is bounded by the moment the page read.** Opening a match page marks its notices
   read in `after()`, seconds after the reads, and the first version marked a notice of a join made in
   between, which the screen never showed (review, 15 October 2026). The page takes `now` before its
