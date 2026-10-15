@@ -63,7 +63,9 @@ describe("the owner's alert for a red service row", () => {
     expect(line).not.toContain("At the cap");
     expect(line).not.toContain("% of");
     expect(line).not.toContain("your cap");
-    expect(line).toContain("Every AI feature is off until a new ANTHROPIC_API_KEY is in Vercel and the app is deployed again");
+    expect(line).toContain("Every AI feature is off until a new ANTHROPIC_API_KEY, or ANTHROPIC_WORKSPACE_ID when the key has no workspace, is in Vercel and the app is deployed again");
+    // A key with no workspace is refused too, and the one line names both fixes in plain words.
+    expect(line).toContain("set a new ANTHROPIC_API_KEY, or ANTHROPIC_WORKSPACE_ID when the key has no workspace");
     for (const f of AI_FEATURES) expect(line, f).toContain(f);
     expect(await alerted()).toEqual(["svc_alert_anthropic_key_2026-10"]);
     // Once a month: the next hour says nothing more.

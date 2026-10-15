@@ -55,7 +55,7 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
 - `ANTHROPIC_ADMIN_KEY` (an Admin API key from the console) turns the Anthropic row from
   "estimated" into "billed". `ANTHROPIC_MONTHLY_CAP_USD` mirrors the cap set in the console
   (default 20). Both live in Vercel's environment, never in the repository.
-- A refused `ANTHROPIC_API_KEY` (a 401 or a 403) turns the Anthropic row red. The owner gets one
+- A refused `ANTHROPIC_API_KEY` (a 401, a 403, or a key with no workspace: below) turns the Anthropic row red. The owner gets one
   alert for it each month, with its own line and no spending-cap text (`svc_alert_anthropic_key_<month>`).
   Set a new key in Vercel's environment and redeploy. The first call the new key gets accepted puts
   back to `new` the listening items that the refused key failed and that are still inside the 7-day
@@ -73,6 +73,20 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
   feature, so a long refusal can use them all. Then the button waits for an accepted call of another
   feature, or for a new UTC day and a new item. When an item waits and the forty has room, a run of
   the hourly job by hand makes the call at once.
+- A key with no workspace is a refused key too. The Messages API answers it with a 400: "This API
+  key is not scoped to a workspace, so this request must include the anthropic-workspace-id header
+  …". `keyRefused` reads that message beside the status. So the run stops, the items stay `new`, and
+  the row turns red with the same alert. Its line names both fixes: a new `ANTHROPIC_API_KEY`, or
+  `ANTHROPIC_WORKSPACE_ID` when the key has no workspace. The owner chose the second on 15 October
+  2026 and kept the key. The id is in the Claude Console, under Settings, then Workspaces, and starts
+  with `wrkspc_`. Set it in Vercel's environment and redeploy. Every Messages API call then sends it
+  as the `anthropic-workspace-id` header (`anthropicHeaders` in `src/lib/ops/anthropic.ts`). With the
+  variable unset, the calls send the three headers they always sent. The cost report reads the Admin
+  API with the admin key and sends no workspace. On 14 October 2026 the code still read the status
+  alone, so this answer failed listening items as ordinary failures. The SQL of `restoreRefusedItems`
+  matches the answer's words too, in any case (`NO_WORKSPACE_PHRASES`). So the first accepted call
+  puts those items back, as it does for a dead key's items. The dead key's last refusal (12:00:01 UTC on 14
+  October) is newer than any accepted call, so that first call meets the condition.
 - Anything else the owner pastes in chat goes to Vercel's environment through the API, then
   the session redeploys by merging or, when nothing changed in code, leaves it for the next deploy.
 
@@ -110,7 +124,9 @@ counted on the server, crawlers left out, while Vercel counts page views in the 
 Vercel Hobby functions also count time: 4 hours of active CPU and 360 GB-hours of provisioned memory a
 month (Vercel's Hobby figures as read on 10 October 2026; the usage page has the live numbers). A
 function that waits on the network counts against the memory, not the CPU, for every second it waits.
-Supabase: 500 MB database, 5 GB egress a month. Resend: 3,000 emails a month, 100 a day (book@ may
+Supabase: 500 MB database, 5 GB egress a month. On 15 October 2026 the database used 32 MB
+(`pg_database_size`), and its largest relation was pg_cron's run log at 7.27 MB, which a weekly job
+now keeps to 14 to 21 days ("Cron jobs", below). Resend: 3,000 emails a month, 100 a day (book@ may
 spend thirty of them a day, so up to 900 a month: "book@kicksma.sh", below).
 Anthropic: the owner's cap (booking screenshots may use twenty calls a day of it: "A booking
 screenshot", below). Tavily: 1,000 credits a month. Telegram: 30 messages a second,
@@ -284,7 +300,7 @@ The free plan gives a thousand search credits a month. The hourly job spends the
 
 ## Cron jobs
 
-Three jobs run from Supabase `pg_cron` through `pg_net`, and the service board's `pg_cron` row says when each last ran:
+Three jobs call the app from Supabase `pg_cron` through `pg_net`, and the service board's `pg_cron` row says when each last ran. A fourth job clears pg_cron's own run log once a week (below).
 
 - the hourly job → `/api/cron/hourly`. Vercel's own cron also calls it once a day at 07:00 UTC (`vercel.json`), which is all the Hobby plan allows. It has 60 seconds for everything. The score nudges take a 20-second share of that: in Telegram each nudge is the result card as a picture, rendered once per match (3 to 6 seconds cold, measured on 24 September 2026), so about four matches ending in the same hour fit in one run. A match past the share is not marked and goes the next hour; the run's `scoreRemindersDeferred` counts them. When that number is often above zero, the nudges need their own route.
   After it reads the clubs' feeds of free courts, the run offers each free court two to six hours ahead to the players whose want names that club, day and hour (`offerFreeCourts` in `src/lib/notify.ts`, the rules in `src/lib/domain/courtOffers.ts`): at most twenty notices a run, one per player, one court a day for each want, and a want that heard anything in the last six hours hears nothing. The run's `courtOffers` counts them, and each one is a `demand.court_offered` fact. The free courts come from a club's own feed or from a read of its booking platform from the last two hours (below), as the club page shows them (`freeCourtsState`). A club that runs its page here (approved) offers them, and so does a club that the directory lists, as the best times do. A club that only a player listed does not. Until 11 October 2026 only an approved club offered a court. Production had none, so no platform's read ever reached a want.
@@ -298,11 +314,30 @@ held to the migration by `tests/cron-jobs.test.ts`). Before that they existed on
 `cron.job`, typed by hand with the secret in each job's text. No job's text holds it now: each reads
 `kicksmash_cron_secret` from Supabase Vault when it runs.
 
-- `GET /api/admin/cron` lists the jobs and how each one's last run went. The read-only door can see
-  them too (`cron.job` without its `command`, and `cron.job_run_details`).
+- `GET /api/admin/cron` lists the jobs, the run log's cleanup too, and how each one's last run went.
+  The read-only door can see them too (`cron.job` without its `command`, and `cron.job_run_details`).
 - `POST /api/admin/cron` stores the app's own `CRON_SECRET` in Vault and schedules the three jobs,
   replacing any job typed by hand that calls the same routes. Call it once on a new database, and
   again the day `CRON_SECRET` changes on Vercel, or every job gets `unauthorized` from then on.
+
+**pg_cron's run log is cleared once a week** (migration 0101). The owner's decision of 15 October
+2026: "Yes, weekly cleanup (Recommended)". pg_cron writes one row to `cron.job_run_details` for each
+run of each job. That is 456 rows a day: 288 from the push job, 144 from the sync, 24 from the hourly
+job. Nothing deleted them. On 15 October 2026 the table held 18,071 rows and 7.27 MB, the largest
+relation in a 32 MB database, and 11,687 of those rows ended more than 14 days ago.
+
+- `kicksmash-cron-log-cleanup` runs at 03:17 UTC each Sunday. It deletes the rows that ended more
+  than 14 days ago, and nothing else. The log then keeps 14 to 21 days, about 9,600 rows at most.
+- A run that is still going has no `end_time`, so it stays. A job that runs at least once in 14
+  days keeps its last run, which `GET /api/admin/cron` shows. The four scheduled jobs all do that.
+  A job that has not run for 14 days, for example a paused job (`active` false), loses its last run.
+  `GET /api/admin/cron` then shows its `lastStatus` and `lastStart` as null.
+- `CRON_LOG_CLEANUP` in `src/lib/ops/cronJobs.ts` holds the same definition, and
+  `tests/cron-jobs.test.ts` holds it to the migration. The job needs pg_cron only, not a secret, so
+  `POST /api/admin/cron` does not touch it.
+- A delete frees space inside the table for the next rows. It does not give the space back to the
+  disk. The table now stops growing, and `pg_database_size` does not fall. A `vacuum full` gives the
+  space back, but it locks the table while it runs, so the job does not do it.
 
 ## Free court times from the platforms
 
@@ -539,8 +574,8 @@ both set (`bookMailOpen`). On 11 October 2026 no mail had reached book@ yet.
 
 **A booking screenshot.** "Add screenshot" in the landing page's paste box sends one picture to the
 AI model for one read (DECIDING rule 9, the owner, 11 October 2026). The call uses `ANTHROPIC_API_KEY`
-and the model that `LISTEN_MODEL` names, and `recordModelCall` counts its tokens with every other
-call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
+(with `ANTHROPIC_WORKSPACE_ID` when it is set) and the model that `LISTEN_MODEL` names, and
+`recordModelCall` counts its tokens with every other call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
 Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call.
 The key and the month's spend come first, so a refused key or a spent month takes nothing from the
 other limits. While the key is refused or the spend is at the cap, the paste box does not show "Add

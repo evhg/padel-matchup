@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { Db } from "@/db";
 
 /**
- * The three scheduled jobs, in the repository.
+ * The scheduled jobs, in the repository: three that call the app, and one that clears pg_cron's log.
  *
  * Vercel's Hobby plan runs one cron a day, so the frequent work runs from Supabase `pg_cron`, which
  * calls the app through `pg_net`. Until migration 0069 those jobs existed only in the database's
@@ -24,6 +24,22 @@ export const CRON_JOBS = [
   { name: "kicksmash-push", schedule: "*/5 * * * *", path: "/api/cron/push" },
   { name: "kicksmash-sync", schedule: "*/10 * * * *", path: "/api/cron/sync" },
 ] as const;
+
+/**
+ * The fourth job calls nothing: it clears pg_cron's own run log (migration 0101, the owner's decision
+ * of 15 October 2026). pg_cron writes a row to `cron.job_run_details` for each run, 456 a day, and
+ * nothing deleted them: 18,071 rows and 7.27 MB on 15 October, the largest relation in the database.
+ * Each Sunday at 03:17 UTC the job deletes the rows that ended more than 14 days ago, so the log keeps
+ * 14 to 21 days. So `listCronJobs` shows the last run of each job that runs at least once in 14 days,
+ * which the four scheduled jobs do. A job paused for 14 days or more shows no last run (null).
+ * `tests/cron-jobs.test.ts` holds this to the migration. It needs pg_cron only, no secret, so
+ * `POST /api/admin/cron` leaves it alone.
+ */
+export const CRON_LOG_CLEANUP = {
+  name: "kicksmash-cron-log-cleanup",
+  schedule: "17 3 * * 0",
+  command: "delete from cron.job_run_details where end_time < now() - interval '14 days'",
+} as const;
 
 /** As long as the routes may run (`maxDuration = 60`), so a slow run is not recorded as a failure. */
 export const CRON_TIMEOUT_MS = 60_000;
@@ -55,14 +71,14 @@ export async function cronAvailable(db: Db): Promise<boolean> {
 
 export type CronJobRow = { jobid: number; jobname: string | null; schedule: string; active: boolean; lastStatus: string | null; lastStart: string | null };
 
-/** The jobs that call the app, and how each one's last run went. Never a job's text. */
+/** The jobs that call the app and the run log's cleanup, and how each one's last run went. Never a job's text. */
 export async function listCronJobs(db: Db): Promise<CronJobRow[]> {
   return rowsOf<CronJobRow>(
     await db.execute(sql`
       select j.jobid, j.jobname, j.schedule, j.active, r.status as "lastStatus", r.start_time::text as "lastStart"
       from cron.job j
       left join lateral (select status, start_time from cron.job_run_details d where d.jobid = j.jobid order by start_time desc limit 1) r on true
-      where j.command ~ ${CRON_ROUTE}
+      where j.command ~ ${CRON_ROUTE} or j.jobname = ${CRON_LOG_CLEANUP.name}
       order by j.jobname`),
   );
 }

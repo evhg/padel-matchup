@@ -84,6 +84,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `LINE_CHANNEL_TOKEN` / `LINE_CHANNEL_SECRET` | no | Enables the LINE bot: the card in a Thai crew's group chat. Point LINE's webhook at `/api/line/webhook`; every delivery is refused unless signed with `LINE_CHANNEL_SECRET`. LINE cannot edit a sent message, so the card is re-sent only when something a player would notice changed, and a reply (free) is used wherever an answer is possible instead of a push (metered). |
 | `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` | no | Ed25519 pair (raw 32-byte hex each) that signs player passports. Without them a passport carries `alg: "none"`. |
 | `ANTHROPIC_API_KEY` | no | Drafts the replies on the listening desk and the proposal the owner receives for a note. |
+| `ANTHROPIC_WORKSPACE_ID` | no | The workspace for a key that has none of its own: every Messages API call then sends it as the `anthropic-workspace-id` header. Find it in the Claude Console, under Settings, then Workspaces: an id that starts with `wrkspc_`. Leave it empty for a key made inside a workspace. A key with no workspace and no id here is refused, as a dead key is (docs/OPERATING.md). |
 | `LISTEN_MODEL` | no | The model those drafts use. Defaults to `claude-sonnet-5`, which `src/lib/ops/anthropic.ts` also prices. |
 | `ANTHROPIC_MONTHLY_CAP_USD` | no | The ceiling the app keeps itself under, in US dollars. Defaults to 20. |
 | `ANTHROPIC_ADMIN_KEY` | no | An Admin API key, so the service board reads the real spend instead of its own estimate. |

@@ -16,7 +16,7 @@ import { metricsDaily } from "@/db/schema";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { draftingEnabled, withinBudget } from "./draft";
 import { ownerTelegramId } from "./tick";
-import { listenModel, recordModelCall } from "@/lib/ops/anthropic";
+import { anthropicHeaders, listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * Answers: once the owner approved a reply, the same question becomes an
@@ -81,15 +81,15 @@ export async function generateAnswer(db: Db, item: ListenItem, now = new Date(),
     calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
+      headers: anthropicHeaders(process.env.ANTHROPIC_API_KEY!),
       body: JSON.stringify({ model: listenModel(), max_tokens: 900, system: ANSWER_PROMPT, messages: [{ role: "user", content: `Original question (${item.language ?? "en"}):\n${item.title}\n${item.body.slice(0, 1500)}\n\nApproved reply:\n${item.draft}` }] }),
       signal: AbortSignal.timeout(45_000),
     });
-    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number } } | null;
+    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message?: string } } | null;
     calling = false;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
     const ok = res.ok && json !== null;
-    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]);
+    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, error: json?.error?.message, now }), ok ? bumpMetric(db, "listen_drafts", 1, dayKey(now)) : null]);
     if (!ok) return null;
     const gen = parseGenerated((json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join(""));
     if (!gen || gen.skip) return null;

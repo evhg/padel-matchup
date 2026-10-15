@@ -540,6 +540,15 @@ learning can be a test, a gate step or a script, make it one and put the story i
   at "about 1.5 MB" (11 October 2026); the browser now shrinks the picture to 900 KB, and
   `tests/booking-shot.test.ts` fails when the picture and the text together could pass the limit.
   Raising the limit raises it for every action, so a bigger upload gets a route of its own.
+- **A refusal is not always a 401.** On 14 October 2026 the owner's new Anthropic key had no
+  workspace, and every call answered a 400 that said so in words. `keyRefused` read the status alone,
+  so three listening items failed for good and the board stayed as it was. It reads the answer's
+  `error.message` now, and `ANTHROPIC_WORKSPACE_ID` names the workspace (`anthropicHeaders`). When
+  a check decides "is this our setting or this item?", read the words of the answer as well as its
+  status, and write the answer's whole text into the test (`tests/anthropic-workspace.test.ts`).
+  Prove it at every call site that passes the words, not at two of six: a review dropped the message
+  from four desks one at a time, and the suite stayed green each time. A rule kept twice, once in SQL
+  and once in a helper nothing calls, is proven only where it runs, so test the SQL.
 
 ### Wall clock
 
@@ -944,9 +953,11 @@ Wall clock first, credits second. What actually moved it, measured:
 - **A migration lands in production when its pull request merges, through the Migrate workflow, and
   never by hand.** 0053 was once applied through the Supabase MCP while the browser suite ran; since
   the workflow (AGENTS.md rule 7), a migration applied by hand is one the workflow then skips, so the
-  two disagree about what production holds. After the merge, read the row back through
-  `/api/admin/sql` (`select … from drizzle.__drizzle_migrations order by id desc limit 3`) before
-  writing "applied".
+  two disagree about what production holds. After the merge, read what the migration made back
+  through `/api/admin/sql` (a column, a row, a job: `select jobname, schedule from cron.job` for 0101)
+  before writing "applied". The door cannot read `drizzle.__drizzle_migrations`: it answers
+  "permission denied for schema drizzle" (15 October 2026), and `tests/readonly.test.ts` uses that
+  very refusal as its example. This line used to send sessions to it.
 
 - **A "hidden" element in a Playwright timeout is often a crushed one.** `locator resolved to hidden
   <div …>500 THB · not paid</div>` — the element was there and on screen, but a row built for one

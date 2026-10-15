@@ -3,7 +3,7 @@ import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { sql } from "drizzle-orm";
 import { metricsDaily } from "@/db/schema";
 import type { Candidate } from "./parse";
-import { keyRefused, listenModel, recordModelCall } from "@/lib/ops/anthropic";
+import { anthropicHeaders, keyRefused, listenModel, recordModelCall } from "@/lib/ops/anthropic";
 
 /**
  * Drafting: one model call per candidate, strict JSON out, a daily budget
@@ -80,7 +80,8 @@ export async function withinBudget(db: Db, now = new Date()): Promise<boolean> {
 /**
  * One Messages API call with the JSON contract; usage is recorded even when the answer is unusable.
  * A call counts as a draft only when the API accepted it; any other answer counts under
- * `anthropic_failed`, and `refused` says the key itself was refused (401, 403), so the caller stops.
+ * `anthropic_failed`, and `refused` says the key itself was refused (401, 403, or an answer that says
+ * the key needs a workspace: `keyRefused`), so the caller stops and the item stays new.
  * `requeued`: the call drafts an item a refused key held, so it is counted apart as well
  * (`REQUEUED_METRICS`), and the day's budget leaves it out. `timeoutMs` bounds the wait (45 s by default).
  */
@@ -99,7 +100,7 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
     calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
+      headers: anthropicHeaders(process.env.ANTHROPIC_API_KEY!),
       body: JSON.stringify({ model: listenModel(), max_tokens: 700, system: o.system ?? SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(Math.floor(o.timeoutMs ?? 45_000)),
     });
@@ -108,8 +109,8 @@ export async function draftReply(db: Db, c: Pick<Candidate, "source" | "url" | "
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
     const ok = res.ok && json !== null;
     // A metrics write that fails must not turn a refused key into an ordinary failure: the caller stops on `refused`.
-    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, now }), ok ? bumpMetric(db, "listen_drafts", 1, day) : null, ...apart(usage)]).catch(() => undefined);
-    if (!ok) return { draft: null, usage, error: json?.error?.message ?? `HTTP ${res.status}`, refused: keyRefused(res.status) };
+    await Promise.all([recordModelCall(db, { status: res.status, ok, usage, error: json?.error?.message, now }), ok ? bumpMetric(db, "listen_drafts", 1, day) : null, ...apart(usage)]).catch(() => undefined);
+    if (!ok) return { draft: null, usage, error: json?.error?.message ?? `HTTP ${res.status}`, refused: keyRefused(res.status, json?.error?.message) };
     const text = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
     const draft = parseDraft(text);
     return { draft, usage, error: draft ? null : "unparseable answer", refused: false };
